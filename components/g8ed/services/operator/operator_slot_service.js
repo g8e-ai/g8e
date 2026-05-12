@@ -86,59 +86,38 @@ export class OperatorSlotService {
         if (!oldOperator) return OperatorRefreshKeyResponse.forFailure(DeviceLinkError.OPERATOR_NOT_FOUND);
         if (oldOperator.user_id !== userId) return OperatorRefreshKeyResponse.forFailure('Unauthorized');
 
-        const g8eContext = {
-            user_id: userId,
-            organization_id: oldOperator.organization_id,
-            source_component: SourceComponent.G8ED,
-            web_session_id: webSessionId,
-        };
-
-        if (oldOperator.operator_session_id && this.operatorService) {
-            await this.operatorService.relayEndOperatorSessionToG8ee(oldOperator.operator_session_id, g8eContext).catch(err => {
-                logger.error('[OPERATOR-SLOT] Failed to end operator session during refresh', { id, error: err.message });
-            });
-        }
-
-        // Delegate termination and resource cleanup to OperatorService
-        if (this.operatorService) {
-            const termResult = await this.operatorService.terminateOperator(id);
-            if (!termResult.success) {
-                logger.error('[OPERATOR-SLOT] Failed to terminate operator during refresh', { id, error: termResult.error });
-                // We continue anyway to try and restore the slot, but log the failure
+        try {
+            // Call substrate-owned API key rotation route
+            const response = await this.operatorService.internalHttpClient.rotateOperatorApiKey(id, userId);
+            
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to rotate API key via substrate');
             }
-        }
 
-        // Create new slot via g8ee (this will also issue the new API key returned by g8ee)
-        const creationResponse = await this.createOperatorSlot({
-            userId,
-            organizationId: oldOperator.organization_id,
-            slotNumber: oldOperator.slot_number,
-            operatorType: oldOperator.operator_type || OperatorType.SYSTEM,
-            cloudSubtype: oldOperator.cloud_subtype || null,
-            namePrefix: oldOperator.name ? oldOperator.name.split('-')[0] : 'operator',
-            webSessionId,
-        });
+            // Sync local cache
+            await this.operatorDataService.evictOperator(id);
 
-        if (!creationResponse.success) {
-            return OperatorRefreshKeyResponse.forFailure(creationResponse.message || 'Failed to create new operator slot');
-        }
-
-        if (broadcastFn) {
-            const broadcastResult = broadcastFn(userId);
-            if (broadcastResult && typeof broadcastResult.catch === 'function') {
-                await broadcastResult.catch(err => {
-                    logger.error('[OPERATOR-SLOT] Failed to broadcast operator refresh', { userId, error: err.message });
-                });
+            if (broadcastFn) {
+                const broadcastResult = broadcastFn(userId);
+                if (broadcastResult && typeof broadcastResult.catch === 'function') {
+                    await broadcastResult.catch(err => {
+                        logger.error('[OPERATOR-SLOT] Failed to broadcast operator refresh', { userId, error: err.message });
+                    });
+                }
             }
-        }
 
-        return OperatorRefreshKeyResponse.forSuccess(
-            creationResponse.api_key,
-            creationResponse.operator_id,
-            oldOperator.id,
-            oldOperator.slot_number,
-            'API key refreshed'
-        );
+            return OperatorRefreshKeyResponse.forSuccess(
+                response.api_key,
+                id,
+                id,
+                oldOperator.slot_number,
+                'API key refreshed'
+            );
+
+        } catch (err) {
+            logger.error('[OPERATOR-SLOT] Failed to refresh API key via substrate', { id, error: err.message });
+            return OperatorRefreshKeyResponse.forFailure(err.message);
+        }
     }
 
     async createOperatorSlot(params) {

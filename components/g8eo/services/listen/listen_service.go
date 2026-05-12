@@ -39,6 +39,7 @@ type ListenService struct {
 	auth      *AuthService
 	pki       *PKIAuthority
 	reg       *RegistrationService
+	passkey   *PasskeyService
 	server    *http.Server
 	wssServer *http.Server
 
@@ -103,17 +104,25 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 
 	reg := NewRegistrationService(db, pki, logger)
 
+	// Initialize passkey service for L3 brokerage
+	passkeyCfg := &PasskeyConfig{
+		RpID:   "localhost",
+		RpName: "g8e",
+	}
+	passkey := NewPasskeyService(db, logger, passkeyCfg)
+
 	ls := &ListenService{
-		cfg:    cfg,
-		logger: logger,
-		db:     db,
-		pubsub: pubsub,
-		auth:   auth,
-		pki:    pki,
-		reg:    reg,
+		cfg:     cfg,
+		logger:  logger,
+		db:      db,
+		pubsub:  pubsub,
+		auth:    auth,
+		pki:     pki,
+		reg:     reg,
+		passkey: passkey,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -138,16 +147,25 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker) *ListenService {
 	auth := NewAuthService(db, logger, cfg.Listen.SecretsDir)
 	reg := NewRegistrationService(db, nil, logger)
+
+	// Initialize passkey service for L3 brokerage (test configuration)
+	passkeyCfg := &PasskeyConfig{
+		RpID:   "localhost",
+		RpName: "g8e",
+	}
+	passkey := NewPasskeyService(db, logger, passkeyCfg)
+
 	ls := &ListenService{
-		cfg:    cfg,
-		logger: logger,
-		db:     db,
-		pubsub: pubsub,
-		auth:   auth,
-		reg:    reg,
+		cfg:     cfg,
+		logger:  logger,
+		db:      db,
+		pubsub:  pubsub,
+		auth:    auth,
+		reg:     reg,
+		passkey: passkey,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, nil, reg, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, nil, reg, passkey, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,

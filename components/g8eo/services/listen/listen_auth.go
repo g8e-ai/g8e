@@ -61,7 +61,7 @@ func (s *AuthService) defaultTokenProvider() string {
 	}
 
 	// 3. Try to load from DB (fallback)
-	doc, err := s.db.DocGet("settings", "platform_settings")
+	doc, err := s.db.DocGet(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings))
 	if err != nil || doc == nil {
 		return ""
 	}
@@ -92,7 +92,7 @@ func (s *AuthService) ValidateOperatorSession(sessionID string) (*models.Operato
 		{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.Status.OperatorStatus.Active))},
 	}
 
-	docs, err := s.db.DocQuery("operators", filters, "", 1)
+	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (s *AuthService) ValidateAPIKey(apiKey string) (*models.OperatorDocumentGo,
 		{Field: "operator_api_key", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", apiKey))},
 	}
 
-	docs, err := s.db.DocQuery("operators", filters, "", 1)
+	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
 	if err != nil {
 		return nil, err
 	}

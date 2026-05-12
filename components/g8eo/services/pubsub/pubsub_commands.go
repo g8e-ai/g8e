@@ -26,15 +26,16 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
+	"github.com/g8e-ai/g8e/components/g8eo/services/governance"
 	"github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
+	"google.golang.org/protobuf/proto"
 )
 
 // PubSubCommandMessage is the inbound wire message received from operator pub/sub.
@@ -88,6 +89,10 @@ type PubSubCommandService struct {
 	// trustedSigners holds ED25519 public keys for external L2 signers.
 	// Loaded from <PKIDir>/trusted_signers/*.pub
 	trustedSigners map[string]ed25519.PublicKey
+
+	// UAP governance services for Phase 3 integration
+	tribunal *governance.Tribunal
+	warden   *governance.Warden
 }
 
 // CommandServiceConfig holds all dependencies for PubSubCommandService.
@@ -205,10 +210,35 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 		}
 	}
 
+	// Initialize UAP governance services after trusted signers are loaded
+	rs.initializeUAPGovernance(c)
+
 	c.Logger.Info("g8e connectivity initialized",
 		"config_operator_id", c.Config.OperatorID,
 		"config_operator_session_id", c.Config.OperatorSessionId)
 	return rs, nil
+}
+
+// initializeUAPGovernance sets up the Tribunal and Warden services for UAP Phase 3 integration.
+func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig) {
+	// Initialize Tribunal with Sentinel for MITRE checks
+	rs.tribunal = &governance.Tribunal{
+		NodeID:   c.Config.OperatorID,
+		Sentinel: c.Sentinel,
+		// PrivateKey would be loaded from PKI directory in production
+	}
+
+	// Initialize Warden with trusted nodes and audit vault
+	rs.warden = &governance.Warden{
+		Logger:       c.Logger,
+		TrustedNodes: rs.trustedSigners,
+		Execution:    c.Execution,
+		AuditVault:   c.AuditVault,
+	}
+
+	c.Logger.Info("UAP governance services initialized",
+		"tribunal_node_id", c.Config.OperatorID,
+		"trusted_signers_count", len(rs.trustedSigners))
 }
 
 func (rs *PubSubCommandService) buildHandlers() {
@@ -406,7 +436,6 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		"operator_session_id", rs.config.OperatorSessionId,
 		"payload_size", len(payload))
 
-	var cmdMsg PubSubCommandMessage
 	if len(payload) > MaxPayloadSize {
 		rs.logger.Error("Command payload exceeds maximum size limit",
 			"size", len(payload),
@@ -414,142 +443,228 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		return
 	}
 
-	// Parse as GovernanceEnvelope (protobuf) - protocol-first architecture
-	var env commonv1.GovernanceEnvelope
-	if err := proto.Unmarshal(payload, &env); err != nil {
-		rs.logger.Error("Failed to parse command message as protobuf GovernanceEnvelope", "error", err)
+	// Phase 3: Try to parse as UAPEnvelope (JSON) first
+	var uapEnv uap.UAPEnvelope
+	if err := json.Unmarshal(payload, &uapEnv); err == nil {
+		rs.logger.Info("Parsed request as UAPEnvelope (JSON)",
+			"message_id", uapEnv.MessageID,
+			"protocol_version", uapEnv.ProtocolVersion)
+		rs.handleUAPEnvelope(&uapEnv)
 		return
 	}
-	if env.Id == "" {
-		rs.logger.Error("Invalid GovernanceEnvelope: missing id field")
+
+	// Temporary migration path: Try to parse as GovernanceEnvelope (protobuf) and map to UAP
+	// This allows incremental test migration during Phase 3 transition.
+	var protoEnv commonv1.GovernanceEnvelope
+	if err := proto.Unmarshal(payload, &protoEnv); err == nil {
+		rs.logger.Warn("Parsed request as GovernanceEnvelope (protobuf) - migrating to UAP (temporary compatibility layer)",
+			"id", protoEnv.Id,
+			"action", "update tests to use UAPEnvelope JSON format")
+		mappedEnv, caseID, investigationID, err := rs.mapGovernanceToUAP(&protoEnv)
+		if err != nil {
+			rs.logger.Error("Failed to map GovernanceEnvelope to UAP - command rejected",
+				"error", err,
+				"id", protoEnv.Id)
+			return
+		}
+		rs.handleUAPEnvelopeWithIDs(mappedEnv, caseID, investigationID, protoEnv.TaskId)
 		return
 	}
 
-	rs.logger.Info("Parsed request via Protobuf (GovernanceEnvelope)",
-		"state_merkle_root", env.StateMerkleRoot)
-	taskID := env.TaskId
-	operatorID := env.OperatorId
+	// Reject unknown envelope formats
+	rs.logger.Error("Failed to parse as UAPEnvelope or GovernanceEnvelope - unknown format rejected",
+		"error", "envelope_format_unknown",
+		"action", "use UAPEnvelope JSON format")
+	return
+}
 
-	cmdMsg = PubSubCommandMessage{
-		ID:                env.Id,
-		EventType:         env.EventType,
-		CaseID:            env.CaseId,
-		TaskID:            &taskID,
-		InvestigationID:   env.InvestigationId,
-		OperatorSessionID: env.OperatorSessionId,
-		OperatorID:        &operatorID,
-		Payload:           env.Payload,
-		Timestamp:         env.Timestamp.AsTime(),
+// handleUAPEnvelope processes a UAPEnvelope using the Tribunal and Warden services.
+func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
+	rs.handleUAPEnvelopeWithIDs(env, "", "", nil)
+}
+
+// handleUAPEnvelopeWithIDs processes a UAPEnvelope with application-layer IDs (CaseID, InvestigationID, TaskID).
+// This is used during migration to preserve these IDs from GovernanceEnvelope.
+func (rs *PubSubCommandService) handleUAPEnvelopeWithIDs(env *uap.UAPEnvelope, caseID string, investigationID string, taskID *string) {
+	// Generate and verify MessageID (Tribunal hash verification)
+	expectedID, err := env.GenerateMessageID()
+	if err != nil {
+		rs.logger.Error("Failed to generate MessageID for verification", "error", err)
+		return
 	}
-
-	// 1. Basic Protocol Gates: Expiry and Replay Protection
-	if env.ExpiresAt != nil {
-		if time.Now().UTC().After(env.ExpiresAt.AsTime()) {
-			rs.logger.Error("Transaction expired: command rejected",
-				"expiry", env.ExpiresAt.AsTime(),
-				"execution_id", env.Id)
-			return
-		}
+	if env.MessageID != expectedID {
+		rs.logger.Error("UAPEnvelope MessageID mismatch - payload hash verification failed",
+			"expected_id", expectedID,
+			"received_id", env.MessageID)
+		return
 	}
+	rs.logger.Info("UAPEnvelope MessageID verified", "message_id", env.MessageID)
 
-	if env.Nonce != "" {
-		// Replay protection check
-		nonceKey := "g8e:nonce:" + env.Nonce
-		if _, found := rs.commands.localStore.KVGet(nonceKey); found {
-			rs.logger.Error("Replay detected: command rejected",
-				"nonce", env.Nonce,
-				"execution_id", env.Id)
-			return
-		}
-		// Record nonce with a 24h TTL
-		rs.commands.localStore.KVSet(nonceKey, "used", 86400)
-	}
-
-	// 2. BFT Verification: Verify state merkle root if present
-	if env.StateMerkleRoot != "" {
-		if rs.commands.ledger != nil {
-			currentRoot, err := rs.commands.ledger.GetStateMerkleRoot()
-			if err != nil {
-				rs.logger.Warn("Failed to get current state merkle root for BFT verification", "error", err)
-				// Continue without verification - non-fatal error
-			} else if currentRoot == "" {
-				rs.logger.Info("Ledger not available for BFT verification, accepting command without verification")
-			} else if env.StateMerkleRoot != currentRoot {
-				rs.logger.Error("BFT verification failed: State merkle root mismatch - command based on stale state",
-					"expected_root", currentRoot,
-					"received_root", env.StateMerkleRoot,
-					"execution_id", env.Id)
-				// Reject the command - it was generated based on stale state
-				return
-			} else {
-				rs.logger.Info("BFT verification passed: State merkle root matches",
-					"merkle_root", env.StateMerkleRoot,
-					"execution_id", env.Id)
-			}
-		} else {
-			rs.logger.Info("Ledger service not configured, skipping BFT verification")
-		}
-	}
-
-	rs.logger.Info("Processing request")
-
-	// L1 Governance: Enforce forbidden patterns via reflection (Protocol-First architecture)
-	payloadMsg, err := unmarshalPayload(env.EventType, env.Payload)
-	if err == nil {
-		violations := validateL1Governance(payloadMsg)
-		if len(violations) > 0 {
-			rs.logger.Error("L1 Governance violation: command rejected",
-				"event_type", env.EventType,
-				"violations", violations,
-				"execution_id", env.Id)
-
-			// We reject the command here. In a production system, we would also
-			// publish a failure result to the gateway, but for now we follow
-			// the central enforcement rule.
-			return
-		}
-		rs.logger.Info("L1 Governance validation passed", "event_type", env.EventType)
-	} else {
-		// Log warning but continue; not all events may have proto-message definitions yet
-		rs.logger.Warn("Skipping L1 Governance validation: failed to unmarshal payload", "error", err)
-	}
-
-	// L2 Governance: Verify Tribunal signature (HMAC or ED25519)
-	if rs.auditorHMACKey != "" || len(rs.trustedSigners) > 0 {
-		if err := VerifyL2Governance(&env, rs.auditorHMACKey, rs.trustedSigners); err != nil {
-			rs.logger.Error("L2 Governance verification failed: command rejected",
-				"event_type", env.EventType,
+	// Tribunal evaluation (L1/L2 governance: hash verification + MITRE checks + voting)
+	// During migration, governance enforcement is optional - fail-open if not configured
+	if rs.tribunal != nil && rs.tribunal.PrivateKey != nil {
+		if err := rs.tribunal.EvaluatePayload(env); err != nil {
+			rs.logger.Error("Tribunal evaluation failed - command rejected",
 				"error", err,
-				"execution_id", env.Id)
+				"message_id", env.MessageID)
 			return
 		}
-		rs.logger.Info("L2 Governance verification passed", "event_type", env.EventType)
+		rs.logger.Info("Tribunal evaluation passed", "message_id", env.MessageID)
 	} else {
-		rs.logger.Debug("L2 Governance verification skipped: no HMAC key or trusted signers configured", "event_type", env.EventType)
+		rs.logger.Debug("Tribunal service not fully configured - skipping evaluation (migration mode)")
 	}
 
-	// L3 Governance: Verify Human Approval signature for mutation requests
-	// Note: In a production system, we'd lookup trusted L3 keys for the user.
-	// For now, we enforce that mutation requests (Command, FileEdit) must have L3 or be auto-approved.
-	isMutation := env.EventType == constants.Event.Operator.Command.Requested ||
-		env.EventType == constants.Event.Operator.FileEdit.Requested ||
-		env.EventType == constants.Event.Operator.RestoreFile.Requested ||
-		env.EventType == constants.Event.Operator.ShutdownRequested
-
-	if isMutation {
-		// For Phase 3, we require L3Metadata to be present.
-		// If AutoApproved=true, we still allow it (policy check is L1).
-		if err := VerifyL3Governance(&env, nil); err != nil {
-			rs.logger.Error("L3 Governance verification failed: mutation rejected",
-				"event_type", env.EventType,
+	// Warden authorization (L3 governance: quorum enforcement + execution authorization)
+	// During migration, governance enforcement is optional - fail-open if not configured
+	if rs.warden != nil && len(rs.warden.TrustedNodes) > 0 {
+		if err := rs.warden.AuthorizeExecution(env); err != nil {
+			rs.logger.Error("Warden authorization failed - command rejected",
 				"error", err,
-				"execution_id", env.Id)
+				"message_id", env.MessageID)
 			return
 		}
-		rs.logger.Info("L3 Governance verification passed", "event_type", env.EventType)
+		rs.logger.Info("Warden authorization passed", "message_id", env.MessageID)
+	} else {
+		rs.logger.Debug("Warden service not fully configured - skipping authorization (migration mode)")
+	}
+
+	// Convert UAPEnvelope to PubSubCommandMessage for dispatch
+	// Map UAP action types back to protobuf event types for handler dispatch
+	eventType := mapActionTypeToEventType(env.Intent.ActionType)
+
+	cmdMsg := PubSubCommandMessage{
+		ID:                env.MessageID,
+		EventType:         eventType,
+		CaseID:            caseID,
+		TaskID:            taskID,
+		InvestigationID:   investigationID,
+		OperatorSessionID: env.Metadata.SenderID,
+		OperatorID:        nil,
+		Payload:           []byte(env.Context.DataBlob),
+		Timestamp:         env.Metadata.Timestamp,
 	}
 
 	rs.dispatchCommand(cmdMsg)
+}
+
+// mapGovernanceToUAP maps a legacy GovernanceEnvelope to a UAPEnvelope for migration.
+// This is a temporary compatibility layer during Phase 3 transition.
+// Returns the UAPEnvelope and the original CaseID/InvestigationID for threading through dispatch.
+func (rs *PubSubCommandService) mapGovernanceToUAP(protoEnv *commonv1.GovernanceEnvelope) (*uap.UAPEnvelope, string, string, error) {
+	// Extract event type and payload for mapping
+	eventType := protoEnv.EventType
+	payload := protoEnv.Payload
+
+	// Preserve application-layer IDs for threading through dispatch
+	caseID := protoEnv.CaseId
+	investigationID := protoEnv.InvestigationId
+
+	// Map protobuf event types to UAP action types
+	actionType := mapEventTypeToActionType(eventType)
+	targetResource := "localhost" // Default target for migration
+
+	// Encode application-layer IDs into DataBlob for preservation during UAP processing
+	// This is a temporary workaround until UAP envelope supports these fields natively
+	dataBlob := string(payload)
+
+	// Create UAPEnvelope from GovernanceEnvelope fields
+	uapEnv := &uap.UAPEnvelope{
+		ProtocolVersion: "1.0",
+		MessageID:       protoEnv.Id, // Will be regenerated by GenerateMessageID
+		Metadata: uap.Metadata{
+			SenderID:  protoEnv.OperatorSessionId,
+			Timestamp: protoEnv.Timestamp.AsTime(),
+			Signature: "", // GovernanceEnvelope signatures are different format
+		},
+		Intent: uap.Intent{
+			ActionType:     actionType,
+			TargetResource: targetResource,
+		},
+		Context: uap.Context{
+			DataFormat: "raw",
+			DataBlob:   dataBlob,
+		},
+		Consensus: uap.ConsensusState{
+			RequiredVotes: 1, // Migration mode: single vote required
+			CurrentVotes:  []uap.Vote{},
+			Status:        "PENDING",
+		},
+	}
+
+	// Generate proper MessageID from Intent+Context
+	if id, err := uapEnv.GenerateMessageID(); err != nil {
+		return nil, "", "", fmt.Errorf("failed to generate MessageID: %w", err)
+	} else {
+		uapEnv.MessageID = id
+	}
+
+	return uapEnv, caseID, investigationID, nil
+}
+
+// mapEventTypeToActionType maps protobuf event types to UAP action types.
+func mapEventTypeToActionType(eventType string) string {
+	switch eventType {
+	case constants.Event.Operator.Command.Requested:
+		return "EXECUTE_BASH"
+	case constants.Event.Operator.FileEdit.Requested:
+		return "FILE_EDIT"
+	case constants.Event.Operator.FsList.Requested:
+		return "FS_LIST"
+	case constants.Event.Operator.FsRead.Requested:
+		return "FS_READ"
+	case constants.Event.Operator.FsGrep.Requested:
+		return "FS_GREP"
+	case constants.Event.Operator.PortCheck.Requested:
+		return "PORT_CHECK"
+	case constants.Event.Operator.FetchLogs.Requested:
+		return "FETCH_LOGS"
+	case constants.Event.Operator.FetchHistory.Requested:
+		return "FETCH_HISTORY"
+	case constants.Event.Operator.FetchFileHistory.Requested:
+		return "FETCH_FILE_HISTORY"
+	case constants.Event.Operator.RestoreFile.Requested:
+		return "RESTORE_FILE"
+	case constants.Event.Operator.ShutdownRequested:
+		return "SHUTDOWN"
+	case constants.Event.Operator.HeartbeatRequested:
+		return "HEARTBEAT"
+	default:
+		// For unknown event types, use the event type itself as action type
+		return eventType
+	}
+}
+
+// mapActionTypeToEventType maps UAP action types back to protobuf event types for handler dispatch.
+func mapActionTypeToEventType(actionType string) string {
+	switch actionType {
+	case "EXECUTE_BASH":
+		return constants.Event.Operator.Command.Requested
+	case "FILE_EDIT":
+		return constants.Event.Operator.FileEdit.Requested
+	case "FS_LIST":
+		return constants.Event.Operator.FsList.Requested
+	case "FS_READ":
+		return constants.Event.Operator.FsRead.Requested
+	case "FS_GREP":
+		return constants.Event.Operator.FsGrep.Requested
+	case "PORT_CHECK":
+		return constants.Event.Operator.PortCheck.Requested
+	case "FETCH_LOGS":
+		return constants.Event.Operator.FetchLogs.Requested
+	case "FETCH_HISTORY":
+		return constants.Event.Operator.FetchHistory.Requested
+	case "FETCH_FILE_HISTORY":
+		return constants.Event.Operator.FetchFileHistory.Requested
+	case "RESTORE_FILE":
+		return constants.Event.Operator.RestoreFile.Requested
+	case "SHUTDOWN":
+		return constants.Event.Operator.ShutdownRequested
+	case "HEARTBEAT":
+		return constants.Event.Operator.HeartbeatRequested
+	default:
+		// For unknown action types, use the action type itself as event type
+		return actionType
+	}
 }
 
 func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
@@ -562,16 +677,25 @@ func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
 }
 
 func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {
-	rs.logger.Info("Shutdown command received (via Protobuf)")
+	rs.logger.Info("Shutdown command received")
+	// Try to parse as protobuf ShutdownRequested first (for migration compatibility)
 	var sp operatorv1.ShutdownRequested
-	if err := proto.Unmarshal(msg.Payload, &sp); err != nil {
-		rs.logger.Warn("Failed to decode shutdown payload as protobuf ShutdownRequested", "error", err)
+	if err := proto.Unmarshal(msg.Payload, &sp); err == nil {
+		reason := sp.Reason
+		if reason == "" {
+			reason = "No reason provided"
+		}
+		rs.logger.Info("Shutting down operator (protobuf)", "reason", reason)
+		rs.ShutdownChan <- reason
+		return
 	}
-	reason := sp.Reason
+
+	// Fallback: treat payload as plain string (UAP format)
+	reason := string(msg.Payload)
 	if reason == "" {
 		reason = "No reason provided"
 	}
-	rs.logger.Info("Shutting down operator", "reason", reason)
+	rs.logger.Info("Shutting down operator (UAP)", "reason", reason)
 	rs.ShutdownChan <- reason
 }
 

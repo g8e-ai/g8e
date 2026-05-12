@@ -45,10 +45,11 @@ type HTTPHandler struct {
 	auth    *AuthService
 	pki     *PKIAuthority
 	reg     *RegistrationService
+	passkey *PasskeyService
 	isReady func() bool
 }
 
-func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, isReady func() bool) *HTTPHandler {
+func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, isReady func() bool) *HTTPHandler {
 	return &HTTPHandler{
 		cfg:     cfg,
 		logger:  logger,
@@ -57,6 +58,7 @@ func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService
 		auth:    auth,
 		pki:     pki,
 		reg:     reg,
+		passkey: passkey,
 		isReady: isReady,
 	}
 }
@@ -75,6 +77,9 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/operators/rotate-api-key", h.handleRotateAPIKey)
 	mux.HandleFunc("/api/operators/terminate", h.handleTerminateOperator)
 	mux.HandleFunc("/api/operators/reauth", h.handleReauth)
+	mux.HandleFunc("/api/operators/bind", h.handleBindOperators)
+	mux.HandleFunc("/api/operators/unbind", h.handleUnbindOperators)
+	mux.HandleFunc("/api/operators/target", h.handleSetTargetContext)
 	mux.HandleFunc("/db/", h.handleDB)
 	mux.HandleFunc("/kv/", h.handleKV)
 	mux.HandleFunc("/pubsub/publish", h.handlePubSubPublish)
@@ -87,6 +92,15 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	// Actually, pathTraversalGuard should be outermost to catch normalization attempts.
 	mux.HandleFunc("/api/pki/sign-csr", h.handlePKISignCSR)
 	mux.HandleFunc("/api/auth/device-link/register", h.handleDeviceLinkRegister)
+
+	// Passkey / L3 Brokerage Routes
+	mux.HandleFunc("/api/auth/passkey/register-challenge", h.handlePasskeyRegisterChallenge)
+	mux.HandleFunc("/api/auth/passkey/register-verify", h.handlePasskeyRegisterVerify)
+	mux.HandleFunc("/api/auth/passkey/auth-challenge", h.handlePasskeyAuthChallenge)
+	mux.HandleFunc("/api/auth/passkey/auth-verify", h.handlePasskeyAuthVerify)
+	mux.HandleFunc("/api/auth/passkey/credentials", h.handlePasskeyCredentials)
+	mux.HandleFunc("/api/auth/passkey/credentials/", h.handlePasskeyRevokeCredential)
+
 	return pathTraversalGuard(h.auth.Middleware(mux))
 }
 
@@ -137,7 +151,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, err := h.db.DocGet("settings", "platform_settings")
+	doc, err := h.db.DocGet(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings))
 	if err != nil {
 		h.logger.Error("Health check failed to query platform_settings", "error", err)
 		jsonError(w, http.StatusServiceUnavailable, "platform_settings not ready")
@@ -166,7 +180,7 @@ func (h *HTTPHandler) handlePKIRoot(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "failed to read root CA")
 		return
 	}
-	w.Header().Set("Content-Type", "application/x-pem-file")
+	w.Header().Set(constants.HeaderContentType, "application/x-pem-file")
 	w.WriteHeader(http.StatusOK)
 	w.Write(pem)
 }
@@ -181,7 +195,7 @@ func (h *HTTPHandler) handlePKIHubBundle(w http.ResponseWriter, r *http.Request)
 		jsonError(w, http.StatusInternalServerError, "failed to read hub bundle")
 		return
 	}
-	w.Header().Set("Content-Type", "application/x-pem-file")
+	w.Header().Set(constants.HeaderContentType, "application/x-pem-file")
 	w.WriteHeader(http.StatusOK)
 	w.Write(pem)
 }
@@ -298,7 +312,7 @@ func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Re
 func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		doc, err := h.db.DocGet("settings", "platform_settings")
+		doc, err := h.db.DocGet(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings))
 		if err != nil {
 			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -316,15 +330,15 @@ func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		var err2 error
 		if r.Method == http.MethodPut {
-			err2 = h.db.DocSet("settings", "platform_settings", json.RawMessage(body))
+			err2 = h.db.DocSet(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings), json.RawMessage(body))
 		} else {
-			_, err2 = h.db.DocUpdate("settings", "platform_settings", json.RawMessage(body))
+			_, err2 = h.db.DocUpdate(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings), json.RawMessage(body))
 		}
 		if err2 != nil {
 			jsonError(w, http.StatusInternalServerError, err2.Error())
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: "ok"})
+		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.ListenMode.StatusOK})
 	default:
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
@@ -454,6 +468,99 @@ func (h *HTTPHandler) handleTerminateOperator(w http.ResponseWriter, r *http.Req
 		return
 	}
 	jsonResponse(w, http.StatusOK, models.TerminateOperatorResponse{Success: true, Message: "Operator terminated"})
+}
+
+func (h *HTTPHandler) handleBindOperators(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	var req models.BindOperatorsRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	// Validate ownership
+	userID := r.URL.Query().Get("user_id")
+	if userID != "" && req.UserID != userID {
+		jsonError(w, http.StatusForbidden, "user_id mismatch")
+		return
+	}
+
+	resp, err := h.reg.BindOperators(req)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, resp)
+}
+
+func (h *HTTPHandler) handleUnbindOperators(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	var req models.UnbindOperatorsRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	// Validate ownership
+	userID := r.URL.Query().Get("user_id")
+	if userID != "" && req.UserID != userID {
+		jsonError(w, http.StatusForbidden, "user_id mismatch")
+		return
+	}
+
+	resp, err := h.reg.UnbindOperators(req)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, resp)
+}
+
+func (h *HTTPHandler) handleSetTargetContext(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	var req models.SetTargetContextRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	// Validate ownership
+	userID := r.URL.Query().Get("user_id")
+	if userID != "" && req.UserID != userID {
+		jsonError(w, http.StatusForbidden, "user_id mismatch")
+		return
+	}
+
+	resp, err := h.reg.SetTargetContext(req)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, resp)
 }
 
 func (h *HTTPHandler) handleReauth(w http.ResponseWriter, r *http.Request) {
@@ -1060,4 +1167,246 @@ func (h *HTTPHandler) handleDeviceLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, http.StatusOK, resp)
+}
+
+// =============================================================================
+// Passkey / L3 Brokerage Handlers
+// =============================================================================
+
+// handlePasskeyRegisterChallenge generates a WebAuthn registration challenge.
+func (h *HTTPHandler) handlePasskeyRegisterChallenge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		UserID   string `json:"user_id"`
+		Email    string `json:"email"`
+		UserName string `json:"user_name"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	options, err := h.passkey.GenerateRegistrationChallenge(req.UserID, req.Email, req.UserName)
+	if err != nil {
+		h.logger.Warn("Passkey register challenge failed", "error", err, "userID", req.UserID)
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"options": options,
+	})
+}
+
+// handlePasskeyRegisterVerify verifies a WebAuthn registration attestation.
+func (h *HTTPHandler) handlePasskeyRegisterVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		UserID              string               `json:"user_id"`
+		AttestationResponse *AttestationResponse `json:"attestation_response"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	cred, err := h.passkey.VerifyRegistration(req.UserID, req.AttestationResponse)
+	if err != nil {
+		h.logger.Warn("Passkey register verify failed", "error", err, "userID", req.UserID)
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success":    true,
+		"credential": cred,
+	})
+}
+
+// handlePasskeyAuthChallenge generates a WebAuthn authentication challenge.
+func (h *HTTPHandler) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		Email  string `json:"email"`
+		UserID string `json:"user_id"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	userID := req.UserID
+	if userID == "" {
+		jsonError(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	options, err := h.passkey.GenerateAuthenticationChallenge(userID)
+	if err != nil {
+		h.logger.Warn("Passkey auth challenge failed", "error", err, "userID", userID)
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"success":     false,
+			"error":       err.Error(),
+			"needs_setup": err.Error() == "no passkeys registered",
+		})
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"options": options,
+	})
+}
+
+// handlePasskeyAuthVerify verifies a WebAuthn authentication assertion.
+func (h *HTTPHandler) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		Email             string             `json:"email"`
+		UserID            string             `json:"user_id"`
+		AssertionResponse *AssertionResponse `json:"assertion_response"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	userID := req.UserID
+	if userID == "" {
+		jsonError(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	cred, err := h.passkey.VerifyAuthentication(userID, req.AssertionResponse)
+	if err != nil {
+		h.logger.Warn("Passkey auth verify failed", "error", err, "userID", userID)
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	session, err := h.passkey.CreateSession(userID)
+	if err != nil {
+		h.logger.Error("Failed to create session after auth", "error", err, "userID", userID)
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+			"error":   "authentication succeeded but session creation failed",
+		})
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success":    true,
+		"user_id":    userID,
+		"credential": cred,
+		"session": map[string]interface{}{
+			"id":                 session.ID,
+			"expires_at_unix_ms": session.ExpiresAtUnixMs,
+		},
+	})
+}
+
+// handlePasskeyCredentials lists passkey credentials for a user.
+func (h *HTTPHandler) handlePasskeyCredentials(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		jsonError(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	creds, err := h.passkey.ListCredentials(userID)
+	if err != nil {
+		h.logger.Error("Failed to list credentials", "error", err, "userID", userID)
+		jsonError(w, http.StatusInternalServerError, "failed to list credentials")
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success":     true,
+		"credentials": creds,
+	})
+}
+
+// handlePasskeyRevokeCredential revokes a specific passkey credential.
+func (h *HTTPHandler) handlePasskeyRevokeCredential(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		jsonError(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/auth/passkey/credentials/")
+	if path == "" {
+		jsonError(w, http.StatusBadRequest, "credential_id required")
+		return
+	}
+
+	found, remaining, err := h.passkey.RevokeCredential(userID, path)
+	if err != nil {
+		h.logger.Error("Failed to revoke credential", "error", err, "userID", userID)
+		jsonError(w, http.StatusInternalServerError, "failed to revoke credential")
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success":   true,
+		"found":     found,
+		"remaining": remaining,
+	})
 }

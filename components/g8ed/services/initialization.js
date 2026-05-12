@@ -239,7 +239,8 @@ async function _doInitialize() {
         passkeyAuthService = new PasskeyAuthService({
             userService: userService,
             cacheAsideService,
-            settingsService: settingsSvc
+            settingsService: settingsSvc,
+            internalHttpClient: internalHttpClientInstance,
         });
         loginSecurityService = new LoginSecurityService({
             cacheAsideService
@@ -341,6 +342,7 @@ async function _doInitialize() {
             operatorService: operatorServiceInstance,
             webSessionService: webSessionService,
             deviceRegistrationService: deviceRegistrationService,
+            internalHttpClient: internalHttpClientInstance,
         });
         
         setupService = new SetupService({ 
@@ -353,6 +355,7 @@ async function _doInitialize() {
             bindingService: boundSessionsService,
             webSessionService: webSessionService,
             sseService: sseService,
+            internalHttpClient: internalHttpClientInstance,
         });
 
         logger.info('[G8ED-INIT] Phase 6 complete: platform services (SSE, attachments, device links, certificates, console metrics, post-login, setup, operator-bind)');

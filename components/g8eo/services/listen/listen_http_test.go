@@ -59,7 +59,8 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	auth := NewAuthService(db, logger, sslDir)
 	pki := newPKIAuthority(dbDir, sslDir, logger)
 	reg := NewRegistrationService(db, pki, logger)
-	h := newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, func() bool { return true })
+	passkey := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	h := newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, func() bool { return true })
 	return h, cfg
 }
 

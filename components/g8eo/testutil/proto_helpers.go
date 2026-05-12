@@ -16,10 +16,12 @@ package testutil
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 )
@@ -359,4 +361,112 @@ func MustMarshalProtobufShutdownRequested(t *testing.T, reason string) []byte {
 		t.Fatalf("failed to marshal protobuf ShutdownRequested: %v", err)
 	}
 	return b
+}
+
+// =============================================================================
+// UAP Envelope Helpers (Phase 3 - JSON-first protocol)
+// =============================================================================
+
+// MustMarshalUAPEnvelope creates a UAPEnvelope JSON with the given fields.
+func MustMarshalUAPEnvelope(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int) []byte {
+	t.Helper()
+	env := &uap.UAPEnvelope{
+		ProtocolVersion: protocolVersion,
+		MessageID:       messageID,
+		Metadata: uap.Metadata{
+			SenderID:  senderID,
+			Timestamp: time.Now(),
+			Signature: "",
+		},
+		Intent: uap.Intent{
+			ActionType:     actionType,
+			TargetResource: targetResource,
+		},
+		Context: uap.Context{
+			DataFormat: dataFormat,
+			DataBlob:   dataBlob,
+		},
+		Consensus: uap.ConsensusState{
+			RequiredVotes: requiredVotes,
+			CurrentVotes:  []uap.Vote{},
+			Status:        "PENDING",
+		},
+	}
+	b, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("failed to marshal UAPEnvelope JSON: %v", err)
+	}
+	return b
+}
+
+// MustMarshalUAPEnvelopeWithVotes creates a UAPEnvelope JSON with pre-populated votes.
+func MustMarshalUAPEnvelopeWithVotes(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, votes []uap.Vote, status string) []byte {
+	t.Helper()
+	env := &uap.UAPEnvelope{
+		ProtocolVersion: protocolVersion,
+		MessageID:       messageID,
+		Metadata: uap.Metadata{
+			SenderID:  senderID,
+			Timestamp: time.Now(),
+			Signature: "",
+		},
+		Intent: uap.Intent{
+			ActionType:     actionType,
+			TargetResource: targetResource,
+		},
+		Context: uap.Context{
+			DataFormat: dataFormat,
+			DataBlob:   dataBlob,
+		},
+		Consensus: uap.ConsensusState{
+			RequiredVotes: requiredVotes,
+			CurrentVotes:  votes,
+			Status:        status,
+		},
+	}
+	b, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("failed to marshal UAPEnvelope JSON with votes: %v", err)
+	}
+	return b
+}
+
+// MustUnmarshalUAPEnvelope unmarshals bytes to a UAPEnvelope, fatally failing the test on error.
+func MustUnmarshalUAPEnvelope(t *testing.T, data []byte) *uap.UAPEnvelope {
+	t.Helper()
+	env := &uap.UAPEnvelope{}
+	if err := json.Unmarshal(data, env); err != nil {
+		t.Fatalf("failed to unmarshal UAPEnvelope JSON: %v", err)
+	}
+	return env
+}
+
+// MustGenerateUAPMessageID generates a deterministic MessageID from intent and context.
+func MustGenerateUAPMessageID(t *testing.T, actionType string, targetResource string, dataFormat string, dataBlob string) string {
+	t.Helper()
+	env := &uap.UAPEnvelope{
+		Intent: uap.Intent{
+			ActionType:     actionType,
+			TargetResource: targetResource,
+		},
+		Context: uap.Context{
+			DataFormat: dataFormat,
+			DataBlob:   dataBlob,
+		},
+	}
+	id, err := env.GenerateMessageID()
+	if err != nil {
+		t.Fatalf("failed to generate UAP MessageID: %v", err)
+	}
+	return id
+}
+
+// MustCreateUAPVote creates a Vote struct for testing.
+func MustCreateUAPVote(t *testing.T, nodeID string, signature string, decision bool) uap.Vote {
+	t.Helper()
+	return uap.Vote{
+		NodeID:    nodeID,
+		Signature: signature,
+		Decision:  decision,
+	}
 }

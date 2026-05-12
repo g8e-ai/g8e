@@ -70,17 +70,20 @@ class DeviceLinkService {
      * @param {Object} options.operatorService          - OperatorDataService instance
      * @param {Object} options.webSessionService        - WebSessionService instance
      * @param {Object} options.deviceRegistrationService - DeviceRegistrationService instance
+     * @param {Object} options.internalHttpClient       - InternalHttpClient instance
      */
-    constructor({ cacheAsideService, operatorService, webSessionService, deviceRegistrationService } = {}) {
+    constructor({ cacheAsideService, operatorService, webSessionService, deviceRegistrationService, internalHttpClient } = {}) {
         if (!cacheAsideService)         throw new Error('cacheAsideService is required');
         if (!operatorService)           throw new Error('operatorService is required');
         if (!webSessionService)         throw new Error('webSessionService is required');
         if (!deviceRegistrationService) throw new Error('deviceRegistrationService is required');
+        if (!internalHttpClient)       throw new Error('internalHttpClient is required');
 
         this._cache_aside                   = cacheAsideService;
         this._operatorService         = operatorService;
         this._webSessionService       = webSessionService;
         this._deviceRegistration      = deviceRegistrationService;
+        this._internalHttpClient      = internalHttpClient;
     }
 
     async generateLink({ user_id, organization_id, operator_id, web_session_id }) {
@@ -165,43 +168,37 @@ class DeviceLinkService {
             return { success: false, error: DeviceLinkError.TTL_INVALID };
         }
 
-        const token = `dlk_${crypto.randomBytes(24).toString('base64url')}`;
-        const createdAt = now();
-        const expiresAt = addSeconds(createdAt, ttl_seconds);
+        try {
+            // Call substrate-owned create route
+            const response = await this._internalHttpClient.createDeviceLink({
+                user_id,
+                organization_id,
+                name: name ? sanitizeString(name, 100) : null,
+                max_uses,
+                ttl_seconds,
+                web_session_id: webSessionId
+            });
 
-        const linkData = DeviceLinkData.parse({
-            token,
-            user_id,
-            organization_id,
-            name: name ? sanitizeString(name, 100) : null,
-            max_uses,
-            uses: 0,
-            created_at: createdAt,
-            expires_at: expiresAt,
-            status: DeviceLinkStatus.ACTIVE,
-            claims: []
-        });
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to create device link via substrate');
+            }
 
-        await this._cache_aside.kvSetJson(KVKey.deviceLink(token), linkData.forKV(), ttl_seconds);
-        await this._cache_aside.kvSadd(KVKey.deviceLinkList(user_id), token);
+            logger.info('[DEVICE-LINK] Link created via substrate', {
+                token_prefix: response.token.substring(0, 20) + '...',
+                user_id,
+                max_uses,
+                ttl_seconds
+            });
 
-        const operatorCommand = `g8e.operator --device-token ${token}`;
+            return response;
 
-        logger.info('[DEVICE-LINK] Link created', {
-            token_prefix: token.substring(0, 20) + '...',
-            user_id,
-            max_uses,
-            ttl_seconds
-        });
-
-        return {
-            success: true,
-            token,
-            operator_command: operatorCommand,
-            name: linkData.name,
-            max_uses,
-            expires_at: toISOString(linkData.expires_at)
-        };
+        } catch (err) {
+            logger.error('[DEVICE-LINK] Failed to create link via substrate', {
+                user_id,
+                error: err.message,
+            });
+            return { success: false, error: err.message };
+        }
     }
 
     async getLink(token) {
@@ -508,39 +505,23 @@ class DeviceLinkService {
     }
 
     async listLinks(user_id) {
-        const tokens = await this._cache_aside.kvSmembers(KVKey.deviceLinkList(user_id));
-        const links = [];
-        const expiredTokens = [];
-
-        for (const token of tokens) {
-            const stored = await this._cache_aside.kvGetJson(KVKey.deviceLink(token));
-            if (!stored) {
-                expiredTokens.push(token);
-                continue;
+        try {
+            // Call substrate-owned list route
+            const response = await this._internalHttpClient.listDeviceLinks(user_id);
+            
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to list device links via substrate');
             }
 
-            const linkData = DeviceLinkData.fromKV(stored);
-            const isExpired = linkData.expires_at < now();
+            return response;
 
-            const serialized = linkData.forWire();
-            links.push({
-                token: serialized.token,
-                name: serialized.name,
-                max_uses: serialized.max_uses,
-                uses: serialized.uses,
-                status: isExpired ? DeviceLinkStatus.EXPIRED : serialized.status,
-                created_at: serialized.created_at,
-                expires_at: serialized.expires_at
+        } catch (err) {
+            logger.error('[DEVICE-LINK] Failed to list links via substrate', {
+                user_id,
+                error: err.message,
             });
+            return { success: false, error: err.message, links: [] };
         }
-
-        if (expiredTokens.length > 0) {
-            await this._cache_aside.kvSrem(KVKey.deviceLinkList(user_id), ...expiredTokens);
-        }
-
-        links.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-
-        return { success: true, links };
     }
 
     async deleteLink(token, user_id) {
@@ -573,29 +554,28 @@ class DeviceLinkService {
     }
 
     async revokeLink(token, user_id) {
-        const linkResult = await this.getLink(token);
-        if (!linkResult.success) {
-            return linkResult;
+        try {
+            // Call substrate-owned delete route (revoke behavior is default for active links in g8eo)
+            const response = await this._internalHttpClient.deleteDeviceLink(token, user_id);
+            
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to revoke device link via substrate');
+            }
+
+            logger.info('[DEVICE-LINK] Link revoked via substrate', {
+                token_prefix: token.substring(0, 20) + '...',
+            });
+
+            return { success: true };
+
+        } catch (err) {
+            logger.error('[DEVICE-LINK] Failed to revoke link via substrate', {
+                token,
+                user_id,
+                error: err.message,
+            });
+            return { success: false, error: err.message };
         }
-
-        const linkData = linkResult.data;
-
-        if (linkData.user_id !== user_id) {
-            return { success: false, error: DeviceLinkError.UNAUTHORIZED };
-        }
-
-        linkData.status = DeviceLinkStatus.REVOKED;
-        linkData.revoked_at = now();
-
-        await this._cache_aside.kvSetJson(KVKey.deviceLink(token), linkData.forKV(), DEVICE_LINK_TTL_MIN_SECONDS);
-        await this._cache_aside.kvSrem(KVKey.deviceLinkList(user_id), token);
-
-        logger.info('[DEVICE-LINK] Link revoked', {
-            token_prefix: token.substring(0, 20) + '...',
-            uses: `${linkData.uses}/${linkData.max_uses}`
-        });
-
-        return { success: true };
     }
 }
 

@@ -255,6 +255,48 @@ message ListOperatorSlotsResult {
   string error = 3;
 }
 
+message BindOperatorsRequested {
+  repeated string operator_ids = 1;
+  string user_id = 2;
+  string session_id = 3; // The client/web session ID
+}
+
+message BindOperatorsResult {
+  bool success = 1;
+  int32 bound_count = 2;
+  int32 failed_count = 3;
+  repeated string bound_operator_ids = 4;
+  repeated string failed_operator_ids = 5;
+  string error = 6;
+}
+
+message UnbindOperatorsRequested {
+  repeated string operator_ids = 1;
+  string user_id = 2;
+  string session_id = 3;
+}
+
+message UnbindOperatorsResult {
+  bool success = 1;
+  int32 unbound_count = 2;
+  int32 failed_count = 3;
+  repeated string unbound_operator_ids = 4;
+  repeated string failed_operator_ids = 5;
+  string error = 6;
+}
+
+message SetTargetContextRequested {
+  string operator_id = 1;
+  string user_id = 2;
+  string session_id = 3;
+}
+
+message SetTargetContextResult {
+  bool success = 1;
+  string operator_id = 2;
+  string error = 3;
+}
+
 message OperatorDocument {
   string id = 1;
   string user_id = 2;
@@ -637,4 +679,156 @@ message FingerprintDetails {
   string architecture = 2;
   int32 cpu_count = 3;
   string machine_id = 4;
+}
+
+// ============================================================================
+// Passkey / WebAuthn L3 Brokerage
+// ============================================================================
+
+// A stored passkey credential for a user
+message PasskeyCredential {
+  string id = 1;
+  string public_key = 2;  // base64url-encoded public key
+  int64 counter = 3;
+  repeated string transports = 4;
+  int64 created_at_unix_ms = 5;
+  int64 last_used_at_unix_ms = 6;
+}
+
+// ---------------------------------------------------------------------------
+// Registration Challenge
+// ---------------------------------------------------------------------------
+
+message PasskeyRegisterChallengeRequested {
+  string user_id = 1;
+  string email = 2;
+  string user_name = 3;
+}
+
+message PasskeyRegisterChallengeResult {
+  bool success = 1;
+  string error = 2;
+  // WebAuthn PublicKeyCredentialCreationOptions fields
+  string challenge = 3;
+  message RelyingParty {
+    string name = 1;
+    string id = 2;
+  }
+  RelyingParty rp = 4;
+  message UserInfo {
+    string id = 1;
+    string name = 2;
+    string display_name = 3;
+  }
+  UserInfo user = 5;
+  message PublicKeyCredentialParameters {
+    string type = 1;
+    int32 alg = 2;
+  }
+  repeated PublicKeyCredentialParameters pub_key_cred_params = 6;
+  int64 timeout = 7;
+  string attestation = 8;
+  message AuthenticatorSelection {
+    string resident_key = 1;
+    string user_verification = 2;
+  }
+  AuthenticatorSelection authenticator_selection = 9;
+  repeated string exclude_credentials = 10;
+}
+
+// ---------------------------------------------------------------------------
+// Registration Verification
+// ---------------------------------------------------------------------------
+
+message AttestationResponse {
+  string id = 1;
+  string raw_id = 2;
+  string client_data_json = 3;
+  string attestation_object = 4;
+  repeated string transports = 5;
+}
+
+message PasskeyRegisterVerifyRequested {
+  string user_id = 1;
+  AttestationResponse attestation_response = 2;
+}
+
+message PasskeyRegisterVerifyResult {
+  bool success = 1;
+  string error = 2;
+  PasskeyCredential credential = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Authentication Challenge
+// ---------------------------------------------------------------------------
+
+message PasskeyAuthChallengeRequested {
+  string email = 1;
+  string user_id = 2;
+}
+
+message PasskeyAuthChallengeResult {
+  bool success = 1;
+  string error = 2;
+  bool needs_setup = 3;
+  // WebAuthn PublicKeyCredentialRequestOptions fields
+  string challenge = 4;
+  int64 timeout = 5;
+  string rp_id = 6;
+  repeated string allow_credentials = 7;
+  string user_verification = 8;
+}
+
+// ---------------------------------------------------------------------------
+// Authentication Verification
+// ---------------------------------------------------------------------------
+
+message AssertionResponse {
+  string id = 1;
+  string raw_id = 2;
+  string client_data_json = 3;
+  string authenticator_data = 4;
+  string signature = 5;
+  string user_handle = 6;
+}
+
+message PasskeyAuthVerifyRequested {
+  string email = 1;
+  string user_id = 2;
+  AssertionResponse assertion_response = 3;
+}
+
+message PasskeyAuthVerifyResult {
+  bool success = 1;
+  string error = 2;
+  string user_id = 3;
+  string session_id = 4;
+  int64 session_expires_at_unix_ms = 5;
+}
+
+// ---------------------------------------------------------------------------
+// Credential Management
+// ---------------------------------------------------------------------------
+
+message ListPasskeyCredentialsRequested {
+  string user_id = 1;
+}
+
+message ListPasskeyCredentialsResult {
+  bool success = 1;
+  string error = 2;
+  repeated PasskeyCredential credentials = 3;
+}
+
+message RevokePasskeyCredentialRequested {
+  string user_id = 1;
+  string credential_id = 2;
+}
+
+message RevokePasskeyCredentialResult {
+  bool success = 1;
+  string error = 2;
+  bool found = 3;
+  int32 remaining = 4;
 }

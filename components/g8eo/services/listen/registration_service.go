@@ -45,6 +45,11 @@ const (
 	lockTTL                        = 10 * time.Second
 	lockMaxRetries                 = 30
 	lockRetryDelay                 = 50 * time.Millisecond
+
+	// Session binding KV prefixes
+	sessionWebBindPrefix      = "g8e:session:web:"
+	sessionOperatorBindPrefix = "g8e:session:operator:"
+	sessionBindSuffix         = ":bind"
 )
 
 // RegistrationService handles substrate-native device enrollment.
@@ -74,6 +79,14 @@ func deviceLinkFingerprintSetKey(token string) string {
 
 func deviceLinkLockKey(token string) string {
 	return deviceLinkLockPrefix + token
+}
+
+func sessionWebBindKey(webSessionID string) string {
+	return sessionWebBindPrefix + webSessionID + sessionBindSuffix
+}
+
+func sessionOperatorBindKey(operatorSessionID string) string {
+	return sessionOperatorBindPrefix + operatorSessionID + sessionBindSuffix
 }
 
 func isValidDeviceLinkToken(token string) bool {
@@ -222,7 +235,7 @@ func (s *RegistrationService) CreateDeviceLink(req models.CreateDeviceLinkReques
 		return nil, fmt.Errorf("ttl_seconds must be between %d and %d", int(minDeviceLinkTTL.Seconds()), int(maxDeviceLinkTTL.Seconds()))
 	}
 	if req.OperatorID != "" {
-		doc, err := s.db.DocGet("operators", req.OperatorID)
+		doc, err := s.db.DocGet(string(constants.CollectionOperators), req.OperatorID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch operator: %w", err)
 		}
@@ -344,7 +357,7 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.Operato
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 		{Field: "is_slot", Op: "==", Value: json.RawMessage("true")},
 	}
-	docs, err := s.db.DocQuery("operators", filters, "slot_number", 0)
+	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "slot_number", 0)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +376,7 @@ func (s *RegistrationService) RotateOperatorAPIKey(operatorID, userID string) (s
 	if operatorID == "" {
 		return "", fmt.Errorf("operator_id is required")
 	}
-	doc, err := s.db.DocGet("operators", operatorID)
+	doc, err := s.db.DocGet(string(constants.CollectionOperators), operatorID)
 	if err != nil {
 		return "", err
 	}
@@ -388,7 +401,7 @@ func (s *RegistrationService) RotateOperatorAPIKey(operatorID, userID string) (s
 		"updated_at":       time.Now().UTC(),
 	}
 	updateBytes, _ := json.Marshal(update)
-	if _, err := s.db.DocUpdate("operators", operatorID, updateBytes); err != nil {
+	if _, err := s.db.DocUpdate(string(constants.CollectionOperators), operatorID, updateBytes); err != nil {
 		return "", err
 	}
 
@@ -403,7 +416,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return fmt.Errorf("user_id is required")
 	}
 
-	doc, err := s.db.DocGet("operators", operatorID)
+	doc, err := s.db.DocGet(string(constants.CollectionOperators), operatorID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch operator: %w", err)
 	}
@@ -433,7 +446,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		update["termination_reason"] = reason
 	}
 	updateBytes, _ := json.Marshal(update)
-	if _, err := s.db.DocUpdate("operators", operatorID, updateBytes); err != nil {
+	if _, err := s.db.DocUpdate(string(constants.CollectionOperators), operatorID, updateBytes); err != nil {
 		return fmt.Errorf("failed to update operator status: %w", err)
 	}
 
@@ -499,7 +512,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 		if linkData.OperatorID == "" {
 			return nil, fmt.Errorf("pending link missing operator_id")
 		}
-		doc, err := s.db.DocGet("operators", linkData.OperatorID)
+		doc, err := s.db.DocGet(string(constants.CollectionOperators), linkData.OperatorID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch operator: %w", err)
 		}
@@ -533,7 +546,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 	for _, claim := range linkData.Claims {
 		if claim.SystemFingerprint == sanitizedFingerprint {
 			// Device already claimed, reuse the same operator
-			doc, err := s.db.DocGet("operators", claim.OperatorID)
+			doc, err := s.db.DocGet(string(constants.CollectionOperators), claim.OperatorID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch operator: %w", err)
 			}
@@ -562,7 +575,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 				if json.Unmarshal([]byte(freshLinkRaw), &freshLink) == nil {
 					for _, claim := range freshLink.Claims {
 						if claim.SystemFingerprint == sanitizedFingerprint {
-							doc, err := s.db.DocGet("operators", claim.OperatorID)
+							doc, err := s.db.DocGet(string(constants.CollectionOperators), claim.OperatorID)
 							if err == nil && doc != nil {
 								operator, _ := s.toOperatorDoc(doc)
 								if operator != nil {
@@ -605,7 +618,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", linkData.UserID))},
 		{Field: "system_fingerprint", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitizedFingerprint))},
 	}
-	docs, err := s.db.DocQuery("operators", filters, "", 1)
+	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
 	if err == nil && len(docs) > 0 {
 		operator, _ = s.toOperatorDoc(docs[0])
 	}
@@ -616,7 +629,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", linkData.UserID))},
 			{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.Status.OperatorStatus.Offline))},
 		}
-		docs, err = s.db.DocQuery("operators", filters, "", 1)
+		docs, err = s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
 		if err == nil && len(docs) > 0 {
 			operator, _ = s.toOperatorDoc(docs[0])
 		}
@@ -714,7 +727,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 
 	// CSR-based enrollment
 	if req.CSR != "" {
-		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, "operator", linkData.OrganizationID, operator.ID, sessionID)
+		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, linkData.OrganizationID, operator.ID, sessionID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign operator CSR: %w", err)
 		}
@@ -726,7 +739,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	}
 
 	updateBytes, _ := json.Marshal(update)
-	_, err := s.db.DocUpdate("operators", operator.ID, updateBytes)
+	_, err := s.db.DocUpdate(string(constants.CollectionOperators), operator.ID, updateBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update operator status: %w", err)
 	}
@@ -735,7 +748,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	apiKey := operator.OperatorAPIKey
 	if apiKey == "" {
 		apiKey = fmt.Sprintf("g8e_%s_%s", operator.ID[:8], uuid.NewString())
-		s.db.DocUpdate("operators", operator.ID, json.RawMessage(fmt.Sprintf(`{"operator_api_key": %q}`, apiKey)))
+		s.db.DocUpdate(string(constants.CollectionOperators), operator.ID, json.RawMessage(fmt.Sprintf(`{"operator_api_key": %q}`, apiKey)))
 	}
 
 	// Fetch trust bundle
@@ -780,7 +793,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 	filters := []models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 	}
-	docs, err := s.db.DocQuery("operators", filters, "", 0)
+	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 0)
 	if err == nil {
 		slotNumber = len(docs) + 1
 	}
@@ -789,7 +802,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 		ID:             id,
 		UserID:         userID,
 		OrganizationID: orgID,
-		Component:      "g8eo",
+		Component:      constants.Status.ComponentName.G8EO,
 		Name:           fmt.Sprintf("operator-%d", slotNumber),
 		Status:         constants.Status.OperatorStatus.Offline,
 		SlotNumber:     slotNumber,
@@ -800,9 +813,294 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 	}
 
 	b, _ := json.Marshal(op)
-	if err := s.db.DocSet("operators", id, b); err != nil {
+	if err := s.db.DocSet(string(constants.CollectionOperators), id, b); err != nil {
 		return nil, err
 	}
 
 	return op, nil
+}
+
+// BindOperators binds one or more operators to a session.
+func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*models.BindOperatorsResponse, error) {
+	if req.SessionID == "" {
+		return nil, fmt.Errorf("session_id is required")
+	}
+	if req.UserID == "" {
+		return nil, fmt.Errorf("user_id is required")
+	}
+	if len(req.OperatorIDs) == 0 {
+		return nil, fmt.Errorf("operator_ids required")
+	}
+
+	bound := []string{}
+	failed := []string{}
+	var lastErr error
+
+	for _, opID := range req.OperatorIDs {
+		doc, err := s.db.DocGet(string(constants.CollectionOperators), opID)
+		if err != nil {
+			failed = append(failed, opID)
+			lastErr = err
+			continue
+		}
+		if doc == nil {
+			failed = append(failed, opID)
+			lastErr = fmt.Errorf("operator %s not found", opID)
+			continue
+		}
+		op, err := s.toOperatorDoc(doc)
+		if err != nil {
+			failed = append(failed, opID)
+			lastErr = err
+			continue
+		}
+		if op.UserID != req.UserID {
+			failed = append(failed, opID)
+			lastErr = fmt.Errorf("operator %s does not belong to user", opID)
+			continue
+		}
+		if op.OperatorSessionID == "" {
+			failed = append(failed, opID)
+			lastErr = fmt.Errorf("operator %s has no active session", opID)
+			continue
+		}
+
+		// 1. Update KV binding
+		// sessionBindOperators(operatorSessionId) -> webSessionId
+		if err := s.db.KVSet(sessionOperatorBindKey(op.OperatorSessionID), req.SessionID, 0); err != nil {
+			failed = append(failed, opID)
+			lastErr = err
+			continue
+		}
+
+		// sessionWebBind(webSessionId) -> operatorSessionId (SET)
+		// We use a JSON array for the SET since our KV store is simple
+		webBindKey := sessionWebBindKey(req.SessionID)
+		raw, found := s.db.KVGet(webBindKey)
+		var sessionIDs []string
+		if found {
+			json.Unmarshal([]byte(raw), &sessionIDs)
+		}
+		exists := false
+		for _, sid := range sessionIDs {
+			if sid == op.OperatorSessionID {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			sessionIDs = append(sessionIDs, op.OperatorSessionID)
+			body, _ := json.Marshal(sessionIDs)
+			s.db.KVSet(webBindKey, string(body), 0)
+		}
+
+		// 2. Update durability document
+		docID := req.SessionID
+		existingDoc, _ := s.db.DocGet(string(constants.CollectionBoundSessions), docID)
+		if existingDoc == nil {
+			newDoc := models.BoundSessionsDocumentGo{
+				ID:                 docID,
+				WebSessionID:       req.SessionID,
+				UserID:             req.UserID,
+				OperatorSessionIDs: []string{op.OperatorSessionID},
+				OperatorIDs:        []string{opID},
+				BoundAt:            time.Now().UTC(),
+				LastUpdatedAt:      time.Now().UTC(),
+				Status:             constants.Status.OperatorStatus.Active,
+			}
+			body, _ := json.Marshal(newDoc)
+			s.db.DocSet(string(constants.CollectionBoundSessions), docID, body)
+		} else {
+			var bDoc models.BoundSessionsDocumentGo
+			b, _ := json.Marshal(existingDoc.ForWire())
+			json.Unmarshal(b, &bDoc)
+
+			opExists := false
+			for _, id := range bDoc.OperatorIDs {
+				if id == opID {
+					opExists = true
+					break
+				}
+			}
+			if !opExists {
+				bDoc.OperatorIDs = append(bDoc.OperatorIDs, opID)
+				bDoc.OperatorSessionIDs = append(bDoc.OperatorSessionIDs, op.OperatorSessionID)
+				bDoc.LastUpdatedAt = time.Now().UTC()
+				bDoc.Status = constants.Status.OperatorStatus.Active
+				body, _ := json.Marshal(bDoc)
+				s.db.DocUpdate(string(constants.CollectionBoundSessions), docID, body)
+			}
+		}
+
+		// 3. Update operator document itself (for UI)
+		s.db.DocUpdate(string(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.SessionID)))
+
+		bound = append(bound, opID)
+	}
+
+	res := &models.BindOperatorsResponse{
+		Success:           len(bound) > 0,
+		BoundCount:        len(bound),
+		FailedCount:       len(failed),
+		BoundOperatorIDs:  bound,
+		FailedOperatorIDs: failed,
+	}
+	if lastErr != nil && len(bound) == 0 {
+		res.Error = lastErr.Error()
+	}
+	return res, nil
+}
+
+// UnbindOperators unbinds one or more operators from a session.
+func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest) (*models.UnbindOperatorsResponse, error) {
+	if req.SessionID == "" {
+		return nil, fmt.Errorf("session_id is required")
+	}
+	if req.UserID == "" {
+		return nil, fmt.Errorf("user_id is required")
+	}
+
+	unbound := []string{}
+	failed := []string{}
+	var lastErr error
+
+	for _, opID := range req.OperatorIDs {
+		doc, err := s.db.DocGet(string(constants.CollectionOperators), opID)
+		if err != nil {
+			failed = append(failed, opID)
+			lastErr = err
+			continue
+		}
+		if doc == nil {
+			failed = append(failed, opID)
+			lastErr = fmt.Errorf("operator %s not found", opID)
+			continue
+		}
+		op, err := s.toOperatorDoc(doc)
+		if err != nil {
+			failed = append(failed, opID)
+			lastErr = err
+			continue
+		}
+		if op.UserID != req.UserID {
+			failed = append(failed, opID)
+			lastErr = fmt.Errorf("operator %s does not belong to user", opID)
+			continue
+		}
+
+		// 1. Update KV binding
+		if op.OperatorSessionID != "" {
+			s.db.KVDelete(sessionOperatorBindKey(op.OperatorSessionID))
+
+			webBindKey := sessionWebBindKey(req.SessionID)
+			raw, found := s.db.KVGet(webBindKey)
+			if found {
+				var sessionIDs []string
+				json.Unmarshal([]byte(raw), &sessionIDs)
+				newSessionIDs := []string{}
+				for _, sid := range sessionIDs {
+					if sid != op.OperatorSessionID {
+						newSessionIDs = append(newSessionIDs, sid)
+					}
+				}
+				if len(newSessionIDs) == 0 {
+					s.db.KVDelete(webBindKey)
+				} else {
+					body, _ := json.Marshal(newSessionIDs)
+					s.db.KVSet(webBindKey, string(body), 0)
+				}
+			}
+		}
+
+		// 2. Update durability document
+		docID := req.SessionID
+		existingDoc, _ := s.db.DocGet(string(constants.CollectionBoundSessions), docID)
+		if existingDoc != nil {
+			var bDoc models.BoundSessionsDocumentGo
+			b, _ := json.Marshal(existingDoc.ForWire())
+			json.Unmarshal(b, &bDoc)
+
+			newOpIDs := []string{}
+			newSessIDs := []string{}
+			for i, id := range bDoc.OperatorIDs {
+				if id != opID {
+					newOpIDs = append(newOpIDs, id)
+					newSessIDs = append(newSessIDs, bDoc.OperatorSessionIDs[i])
+				}
+			}
+			bDoc.OperatorIDs = newOpIDs
+			bDoc.OperatorSessionIDs = newSessIDs
+			bDoc.LastUpdatedAt = time.Now().UTC()
+			if len(newOpIDs) == 0 {
+				bDoc.Status = "ended"
+			}
+			body, _ := json.Marshal(bDoc)
+			s.db.DocUpdate(string(constants.CollectionBoundSessions), docID, body)
+		}
+
+		// 3. Update operator document itself
+		s.db.DocUpdate(string(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`))
+
+		unbound = append(unbound, opID)
+	}
+
+	res := &models.UnbindOperatorsResponse{
+		Success:            len(unbound) > 0 || len(req.OperatorIDs) == 0,
+		UnboundCount:       len(unbound),
+		FailedCount:        len(failed),
+		UnboundOperatorIDs: unbound,
+		FailedOperatorIDs:  failed,
+	}
+	if lastErr != nil && len(unbound) == 0 {
+		res.Error = lastErr.Error()
+	}
+	return res, nil
+}
+
+// SetTargetContext sets the active target operator for a session.
+func (s *RegistrationService) SetTargetContext(req models.SetTargetContextRequest) (*models.SetTargetContextResponse, error) {
+	if req.SessionID == "" {
+		return nil, fmt.Errorf("session_id is required")
+	}
+	if req.UserID == "" {
+		return nil, fmt.Errorf("user_id is required")
+	}
+
+	// For now, "target context" is just making sure the operator is bound to the session.
+	// In the future, this might set a specific "active" flag in the session state.
+
+	doc, err := s.db.DocGet(string(constants.CollectionOperators), req.OperatorID)
+	if err != nil {
+		return nil, err
+	}
+	if doc == nil {
+		return nil, fmt.Errorf("operator %s not found", req.OperatorID)
+	}
+	op, err := s.toOperatorDoc(doc)
+	if err != nil {
+		return nil, err
+	}
+	if op.UserID != req.UserID {
+		return nil, fmt.Errorf("operator does not belong to user")
+	}
+
+	if op.BoundWebSessionID != req.SessionID {
+		// Not bound, so bind it first
+		bindRes, err := s.BindOperators(models.BindOperatorsRequest{
+			OperatorIDs: []string{req.OperatorID},
+			UserID:      req.UserID,
+			SessionID:   req.SessionID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if !bindRes.Success {
+			return nil, fmt.Errorf("failed to bind operator for target context: %s", bindRes.Error)
+		}
+	}
+
+	return &models.SetTargetContextResponse{
+		Success:    true,
+		OperatorID: req.OperatorID,
+	}, nil
 }

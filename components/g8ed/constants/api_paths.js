@@ -479,6 +479,27 @@ const createG8eePathsProxy = () => {
 
 export const apiPaths = {
     g8ee: createG8eePathsProxy(),
+    substrate: {
+        operators:      () => '/api/operators',
+        rotateApiKey:   () => '/api/operators/rotate-api-key',
+        terminate:      () => '/api/operators/terminate',
+        bind:           () => '/api/operators/bind',
+        unbind:         () => '/api/operators/unbind',
+        target:         () => '/api/operators/target',
+        deviceLinks:    () => '/api/device-links',
+        deviceLink:     (token) => `/api/device-links/${token}`,
+        settings:       () => '/api/settings',
+        pkiRoot:        () => '/.well-known/g8e/pki/root.pem',
+        pkiHubBundle:   () => '/.well-known/g8e/pki/hub-bundle.pem',
+        pkiFingerprint: () => '/.well-known/g8e/pki/fingerprint',
+        pkiSignCsr:     () => '/api/pki/sign-csr',
+        passkeyRegisterChallenge: () => '/api/auth/passkey/register-challenge',
+        passkeyRegisterVerify:    () => '/api/auth/passkey/register-verify',
+        passkeyAuthChallenge:     () => '/api/auth/passkey/auth-challenge',
+        passkeyAuthVerify:        () => '/api/auth/passkey/auth-verify',
+        passkeyCredentials:       () => '/api/auth/passkey/credentials',
+        passkeyRevokeCredential:  (credentialId) => `/api/auth/passkey/credentials/${credentialId}`,
+    },
     operator: {
         bind:           () => `${Operator.BASE}/${Operator.BIND}`,
         unbind:         () => `${Operator.BASE}/${Operator.UNBIND}`,

@@ -175,3 +175,95 @@ type TerminateOperatorResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message,omitempty"`
 }
+
+// BindOperatorsRequest is the inbound body for /api/operators/bind
+type BindOperatorsRequest struct {
+	OperatorIDs []string `json:"operator_ids"`
+	UserID      string   `json:"user_id"`
+	SessionID   string   `json:"session_id"`
+}
+
+// BindOperatorsResponse is the response for /api/operators/bind
+type BindOperatorsResponse struct {
+	Success           bool     `json:"success"`
+	BoundCount        int      `json:"bound_count"`
+	FailedCount       int      `json:"failed_count"`
+	BoundOperatorIDs  []string `json:"bound_operator_ids"`
+	FailedOperatorIDs []string `json:"failed_operator_ids"`
+	Error             string   `json:"error,omitempty"`
+}
+
+// UnbindOperatorsRequest is the inbound body for /api/operators/unbind
+type UnbindOperatorsRequest struct {
+	OperatorIDs []string `json:"operator_ids"`
+	UserID      string   `json:"user_id"`
+	SessionID   string   `json:"session_id"`
+}
+
+// UnbindOperatorsResponse is the response for /api/operators/unbind
+type UnbindOperatorsResponse struct {
+	Success            bool     `json:"success"`
+	UnboundCount       int      `json:"unbound_count"`
+	FailedCount        int      `json:"failed_count"`
+	UnboundOperatorIDs []string `json:"unbound_operator_ids"`
+	FailedOperatorIDs  []string `json:"failed_operator_ids"`
+	Error              string   `json:"error,omitempty"`
+}
+
+// SetTargetContextRequest is the inbound body for /api/operators/target
+type SetTargetContextRequest struct {
+	OperatorID string `json:"operator_id"`
+	UserID     string `json:"user_id"`
+	SessionID  string `json:"session_id"`
+}
+
+// SetTargetContextResponse is the response for /api/operators/target
+type SetTargetContextResponse struct {
+	Success    bool   `json:"success"`
+	OperatorID string `json:"operator_id,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+// BoundSessionsDocumentGo represents the persisted record of the bidirectional binding
+// between a web session and one or more operator sessions.
+type BoundSessionsDocumentGo struct {
+	ID                 string    `json:"id"`
+	WebSessionID       string    `json:"web_session_id"`
+	UserID             string    `json:"user_id"`
+	OperatorSessionIDs []string  `json:"operator_session_ids"`
+	OperatorIDs        []string  `json:"operator_ids"`
+	BoundAt            time.Time `json:"bound_at"`
+	LastUpdatedAt      time.Time `json:"last_updated_at"`
+	Status             string    `json:"status"`
+}
+
+// ============================================================================
+// Passkey / WebAuthn Models
+// ============================================================================
+
+// PasskeyCredential represents a stored WebAuthn credential for a user.
+type PasskeyCredential struct {
+	ID               string   `json:"id"`
+	PublicKey        string   `json:"public_key"`
+	Counter          int64    `json:"counter"`
+	Transports       []string `json:"transports,omitempty"`
+	CreatedAtUnixMs  int64    `json:"created_at_unix_ms"`
+	LastUsedAtUnixMs int64    `json:"last_used_at_unix_ms,omitempty"`
+}
+
+// WebSession represents an authenticated web session after passkey verification.
+type WebSession struct {
+	ID              string `json:"id"`
+	UserID          string `json:"user_id"`
+	CreatedAtUnixMs int64  `json:"created_at_unix_ms"`
+	ExpiresAtUnixMs int64  `json:"expires_at_unix_ms"`
+}
+
+// User represents a platform user with passkey credentials.
+type User struct {
+	ID                 string              `json:"id"`
+	Email              string              `json:"email"`
+	Name               string              `json:"name,omitempty"`
+	PasskeyCredentials []PasskeyCredential `json:"passkey_credentials,omitempty"`
+	Provider           string              `json:"provider,omitempty"`
+}

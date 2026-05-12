@@ -28,7 +28,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from app.constants.settings import (
     CLIENT_CERT_VALIDITY_DAYS,
-    DEFAULT_SSL_DIR,
+    DEFAULT_PKI_DIR,
     CERT_SUBJECT_ORG,
     CERT_SUBJECT_COUNTRY,
     CRL_ISSUER
@@ -47,8 +47,8 @@ class CertificateService:
     rather than reading ca/ca.key directly. See operator-host-transition-finalization.md.
     """
 
-    def __init__(self, ssl_dir: str = DEFAULT_SSL_DIR, data_service: CertificateDataService | None = None):
-        self.ssl_dir = ssl_dir
+    def __init__(self, pki_dir: str = DEFAULT_PKI_DIR, data_service: CertificateDataService | None = None):
+        self.pki_dir = pki_dir
         self.data_service = data_service
         self.ca_cert: x509.Certificate | None = None
         self.ca_key: ec.EllipticCurvePrivateKey | None = None
@@ -76,8 +76,8 @@ class CertificateService:
         # Authority: operator (Operator --listen mode)
         # We no longer read ca.key directly. Key operations are behind the /.well-known/g8e/pki/sign-csr API.
         paths = [
-            os.path.join(self.ssl_dir, "ca.crt"),
-            os.path.join(self.ssl_dir, "ca", "ca.crt")
+            os.path.join(self.pki_dir, "ca.crt"),
+            os.path.join(self.pki_dir, "ca", "ca.crt")
         ]
 
         found_cert_path = None
@@ -96,7 +96,7 @@ class CertificateService:
                 logger.error("[CERT-SERVICE] Failed to load CA certificate: %s", e)
                 raise RuntimeError(f"Failed to load CA cert: {e!s}") from e
         else:
-            logger.error("[CERT-SERVICE] CA certificate not found in %s", self.ssl_dir)
+            logger.error("[CERT-SERVICE] CA certificate not found in %s", self.pki_dir)
             # We let it proceed but some operations might fail if they expect a CA cert local copy
 
     async def generate_operator_certificate(

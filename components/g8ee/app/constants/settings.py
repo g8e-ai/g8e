@@ -492,7 +492,7 @@ MAX_OUTPUT_LENGTH               = 100_000
 
 # Certificates
 CLIENT_CERT_VALIDITY_DAYS = 365
-DEFAULT_SSL_DIR = os.environ.get("G8E_PKI_DIR", "/operator/pki")
+DEFAULT_PKI_DIR = os.environ.get("G8E_PKI_DIR", "/operator/pki")
 CERT_SUBJECT_ORG          = "g8e Operator"
 CERT_SUBJECT_COUNTRY      = "US"
 CRL_ISSUER                = "g8e Platform CA"

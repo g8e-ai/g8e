@@ -722,3 +722,100 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		assert.Contains(t, err.Error(), "user_id is required")
 	})
 }
+
+func TestRegistrationService_Binding(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	dbDir := t.TempDir()
+	sslDir := t.TempDir()
+	db, err := NewListenDBService(dbDir, sslDir, logger)
+	require.NoError(t, err)
+	defer db.Close()
+
+	pki := newPKIAuthority(dbDir, sslDir, logger)
+	reg := NewRegistrationService(db, pki, logger)
+
+	userID := "user-1"
+	sessionID := "sess-1"
+	opID := "op-bind-1"
+	opSessID := "op-sess-1"
+
+	// Create operator slot with active session
+	op := &models.OperatorDocumentGo{
+		ID:                opID,
+		UserID:            userID,
+		OperatorSessionID: opSessID,
+		Status:            constants.Status.OperatorStatus.Active,
+	}
+	opBytes, _ := json.Marshal(op)
+	require.NoError(t, db.DocSet("operators", opID, opBytes))
+
+	t.Run("BindOperators", func(t *testing.T) {
+		req := models.BindOperatorsRequest{
+			OperatorIDs: []string{opID},
+			UserID:      userID,
+			SessionID:   sessionID,
+		}
+		resp, err := reg.BindOperators(req)
+		require.NoError(t, err)
+		assert.True(t, resp.Success)
+		assert.Equal(t, 1, resp.BoundCount)
+		assert.Equal(t, opID, resp.BoundOperatorIDs[0])
+
+		// Verify KV binding
+		val, found := db.KVGet(sessionOperatorBindKey(opSessID))
+		assert.True(t, found)
+		assert.Equal(t, sessionID, val)
+
+		// Verify Web bind (SET)
+		val, found = db.KVGet(sessionWebBindKey(sessionID))
+		assert.True(t, found)
+		var sids []string
+		json.Unmarshal([]byte(val), &sids)
+		assert.Contains(t, sids, opSessID)
+
+		// Verify durability document
+		doc, err := db.DocGet(string(constants.CollectionBoundSessions), sessionID)
+		require.NoError(t, err)
+		require.NotNil(t, doc)
+		assert.Equal(t, sessionID, docFieldString(t, doc, "web_session_id"))
+
+		// Verify operator document updated
+		opDoc, _ := db.DocGet("operators", opID)
+		assert.Equal(t, sessionID, docFieldString(t, opDoc, "bound_web_session_id"))
+	})
+
+	t.Run("SetTargetContext", func(t *testing.T) {
+		req := models.SetTargetContextRequest{
+			OperatorID: opID,
+			UserID:     userID,
+			SessionID:  sessionID,
+		}
+		resp, err := reg.SetTargetContext(req)
+		require.NoError(t, err)
+		assert.True(t, resp.Success)
+		assert.Equal(t, opID, resp.OperatorID)
+	})
+
+	t.Run("UnbindOperators", func(t *testing.T) {
+		req := models.UnbindOperatorsRequest{
+			OperatorIDs: []string{opID},
+			UserID:      userID,
+			SessionID:   sessionID,
+		}
+		resp, err := reg.UnbindOperators(req)
+		require.NoError(t, err)
+		assert.True(t, resp.Success)
+		assert.Equal(t, 1, resp.UnboundCount)
+
+		// Verify KV unbinding
+		_, found := db.KVGet(sessionOperatorBindKey(opSessID))
+		assert.False(t, found)
+
+		_, found = db.KVGet(sessionWebBindKey(sessionID))
+		assert.False(t, found)
+
+		// Verify operator document updated
+		opDoc, _ := db.DocGet("operators", opID)
+		assert.Equal(t, "", docFieldString(t, opDoc, "bound_web_session_id"))
+	})
+}

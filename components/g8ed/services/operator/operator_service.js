@@ -242,13 +242,30 @@ class OperatorService {
 
     async getUserVisibleOperatorStats(userId, allStatuses = false, fresh = false) {
         let operators;
-        if (!allStatuses) {
-            operators = await this.operatorDataService.queryListedOperators([{ field: 'user_id', operator: '==', value: userId }], { fresh });
-        } else {
-            operators = fresh
-                ? await this.operatorDataService.queryOperatorsFresh([{ field: 'user_id', operator: '==', value: userId }])
-                : await this.operatorDataService.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
+        try {
+            // Call substrate-owned list route
+            const response = await this.internalHttpClient.listOperators(userId);
+            
+            if (response.success && response.operators) {
+                operators = response.operators.map(op => OperatorDocument.fromDB(op));
+            } else {
+                throw new Error(response.error || 'Failed to list operators via substrate');
+            }
+        } catch (err) {
+            logger.warn('[OPERATOR-SERVICE] Failed to list operators via substrate, falling back to direct DB query', {
+                userId,
+                error: err.message
+            });
+            // Fallback to legacy query if substrate route fails or is not yet available in environment
+            if (!allStatuses) {
+                operators = await this.operatorDataService.queryListedOperators([{ field: 'user_id', operator: '==', value: userId }], { fresh });
+            } else {
+                operators = fresh
+                    ? await this.operatorDataService.queryOperatorsFresh([{ field: 'user_id', operator: '==', value: userId }])
+                    : await this.operatorDataService.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
+            }
         }
+
         const activeCount = operators.filter(op => op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND).length;
         return { operators, totalCount: operators.length, activeCount };
     }
@@ -372,51 +389,39 @@ class OperatorService {
         const existing = await this.getOperator(operatorId);
         if (!existing) return { success: false, operator: null, error: 'Operator not found' };
 
-        const g8eContext = await this.getOperatorWithSessionContext(operatorId);
-        if (!g8eContext) {
-            // Should be unreachable: getOperatorWithSessionContext only returns null
-            // when the operator does not exist, which we just verified above.
-            return { success: false, error: 'Failed to build g8e context for terminate' };
-        }
-
-        // Authority: g8ee owns the operator document. It writes TERMINATED status
-        // and appends the audit history entry atomically. g8ed must NOT delete the
-        // document afterwards or the audit trail entry just written will be lost.
         try {
-            await this.relayTerminateOperatorToG8ee(operatorId, g8eContext);
+            // Call substrate-owned termination route
+            const response = await this.internalHttpClient.terminateOperatorSubstrate(operatorId, existing.user_id);
+            
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to terminate operator via substrate');
+            }
+
+            // Sync local cache
+            await this.operatorDataService.evictOperator(operatorId);
+
+            // Best-effort resource cleanup in g8ed
+            if (existing.api_key && this.apiKeyService) {
+                await this.apiKeyService.revokeKey(existing.api_key).catch(err => {
+                    logger.warn('[OPERATOR-SERVICE] Failed to revoke API key during termination', { operatorId, error: err.message });
+                });
+            }
+
+            if (existing.operator_cert_serial && this.certificateService) {
+                await this.certificateService.revokeCertificate(existing.operator_cert_serial).catch(err => {
+                    logger.warn('[OPERATOR-SERVICE] Failed to revoke certificate during termination', { operatorId, error: err.message });
+                });
+            }
+
+            return { success: true, id: operatorId, error: null };
+
         } catch (err) {
-            logger.error('[OPERATOR-SERVICE] Failed to relay terminate to g8ee', {
+            logger.error('[OPERATOR-SERVICE] Failed to terminate operator via substrate', {
                 operatorId,
                 error: err.message,
             });
             return { success: false, id: operatorId, error: err.message };
         }
-
-        // Best-effort resource cleanup in g8ed
-        if (existing.api_key && this.apiKeyService) {
-            await this.apiKeyService.revokeKey(existing.api_key).catch(err => {
-                logger.warn('[OPERATOR-SERVICE] Failed to revoke API key during termination', { operatorId, error: err.message });
-            });
-        }
-
-        if (existing.operator_cert_serial && this.certificateService) {
-            await this.certificateService.revokeCertificate(existing.operator_cert_serial).catch(err => {
-                logger.warn('[OPERATOR-SERVICE] Failed to revoke certificate during termination', { operatorId, error: err.message });
-            });
-        }
-
-        try {
-            await this.relay.deregisterOperatorSessionInG8ee(g8eContext);
-        } catch (err) {
-            // Deregistration is best-effort cleanup — operator is already TERMINATED
-            // in the authoritative store, so we surface but do not fail the call.
-            logger.warn('[OPERATOR-SERVICE] Failed to deregister operator session after terminate', {
-                operatorId,
-                error: err.message,
-            });
-        }
-
-        return { success: true, id: operatorId, error: null };
     }
 
     async getGrantedIntentsWithDetails(operatorId) {

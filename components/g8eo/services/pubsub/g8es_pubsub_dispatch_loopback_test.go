@@ -42,7 +42,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	sentinelpkg "github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
-	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
@@ -88,7 +88,7 @@ func newLoopbackService(t *testing.T, f *loopbackFixture) (*PubSubCommandService
 	return svc, resultsSvc
 }
 
-// injectCmdProtobuf publishes a protobuf GovernanceEnvelope on the cmd channel.
+// injectCmdProtobuf publishes a UAPEnvelope JSON containing a protobuf payload on the cmd channel.
 func injectCmdProtobuf(t *testing.T, f *loopbackFixture, svc *PubSubCommandService, envelopeBytes []byte) {
 	t.Helper()
 	cmdCh := constants.CmdChannel(svc.config.OperatorID, svc.config.OperatorSessionId)

@@ -23,15 +23,23 @@ var global =
 
 var common_pb = require('./common_pb.js');
 goog.object.extend(proto, common_pb);
+goog.exportSymbol('proto.g8e.operator.v1.AssertionResponse', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.AttestationResponse', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.AuditEvent', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.AuditFileMutation', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.AuditMsgRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.AuditWebSession', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.BindOperatorsRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.BindOperatorsResult', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.CapabilityFlags', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.CheckPortRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.CommandCancelRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.CommandRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.CommandResult', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.CreateDeviceLinkRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.DeleteDeviceLinkRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.DeviceLink', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.DeviceLinkResult', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.DirectCommandAuditRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.DirectCommandResultAuditRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.DiskDetails', null, global);
@@ -62,19 +70,49 @@ goog.exportSymbol('proto.g8e.operator.v1.FsReadResult', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.HeartbeatRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.HeartbeatResult', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.HeartbeatType', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.ListDeviceLinksRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.ListDeviceLinksResult', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.ListOperatorSlotsRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.ListOperatorSlotsResult', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.ListPasskeyCredentialsRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.ListPasskeyCredentialsResult', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.MemoryDetails', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.NetworkInfo', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.NetworkInterface', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.OSDetails', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.OperatorDocument', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyAuthChallengeRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyAuthChallengeResult', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyAuthVerifyRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyAuthVerifyResult', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyCredential', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyRegisterChallengeRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyRegisterChallengeResult', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyRegisterVerifyRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.PasskeyRegisterVerifyResult', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.PerformanceMetrics', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.PortCheckEntry', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.PortCheckResult', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.RestoreFileRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.RestoreFileResult', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.RevokePasskeyCredentialRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.RevokePasskeyCredentialResult', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.RotateAPIKeyRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.RotateAPIKeyResult', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.SetTargetContextRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.SetTargetContextResult', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.ShutdownRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.SignCertificateRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.SignCertificateResult', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.SystemIdentity', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.TerminateOperatorRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.TerminateOperatorResult', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.UnbindOperatorsRequested', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.UnbindOperatorsResult', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.UptimeInfo', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.UserDetails', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.VersionInfo', null, global);
@@ -455,6 +493,405 @@ if (goog.DEBUG && !COMPILED) {
    * @override
    */
   proto.g8e.operator.v1.SignCertificateResult.displayName = 'proto.g8e.operator.v1.SignCertificateResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.CreateDeviceLinkRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.CreateDeviceLinkRequested.displayName = 'proto.g8e.operator.v1.CreateDeviceLinkRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.DeviceLink = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.DeviceLink, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.DeviceLink.displayName = 'proto.g8e.operator.v1.DeviceLink';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.DeviceLinkResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.DeviceLinkResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.DeviceLinkResult.displayName = 'proto.g8e.operator.v1.DeviceLinkResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.ListDeviceLinksRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.ListDeviceLinksRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.ListDeviceLinksRequested.displayName = 'proto.g8e.operator.v1.ListDeviceLinksRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.g8e.operator.v1.ListDeviceLinksResult.repeatedFields_, null);
+};
+goog.inherits(proto.g8e.operator.v1.ListDeviceLinksResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.ListDeviceLinksResult.displayName = 'proto.g8e.operator.v1.ListDeviceLinksResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.DeleteDeviceLinkRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.DeleteDeviceLinkRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.DeleteDeviceLinkRequested.displayName = 'proto.g8e.operator.v1.DeleteDeviceLinkRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.TerminateOperatorRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.TerminateOperatorRequested.displayName = 'proto.g8e.operator.v1.TerminateOperatorRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.TerminateOperatorResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.TerminateOperatorResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.TerminateOperatorResult.displayName = 'proto.g8e.operator.v1.TerminateOperatorResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.RotateAPIKeyRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.RotateAPIKeyRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.RotateAPIKeyRequested.displayName = 'proto.g8e.operator.v1.RotateAPIKeyRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.RotateAPIKeyResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.RotateAPIKeyResult.displayName = 'proto.g8e.operator.v1.RotateAPIKeyResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.ListOperatorSlotsRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.ListOperatorSlotsRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.ListOperatorSlotsRequested.displayName = 'proto.g8e.operator.v1.ListOperatorSlotsRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.g8e.operator.v1.ListOperatorSlotsResult.repeatedFields_, null);
+};
+goog.inherits(proto.g8e.operator.v1.ListOperatorSlotsResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.ListOperatorSlotsResult.displayName = 'proto.g8e.operator.v1.ListOperatorSlotsResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.BindOperatorsRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.g8e.operator.v1.BindOperatorsRequested.repeatedFields_, null);
+};
+goog.inherits(proto.g8e.operator.v1.BindOperatorsRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.BindOperatorsRequested.displayName = 'proto.g8e.operator.v1.BindOperatorsRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.BindOperatorsResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.g8e.operator.v1.BindOperatorsResult.repeatedFields_, null);
+};
+goog.inherits(proto.g8e.operator.v1.BindOperatorsResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.BindOperatorsResult.displayName = 'proto.g8e.operator.v1.BindOperatorsResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.g8e.operator.v1.UnbindOperatorsRequested.repeatedFields_, null);
+};
+goog.inherits(proto.g8e.operator.v1.UnbindOperatorsRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.UnbindOperatorsRequested.displayName = 'proto.g8e.operator.v1.UnbindOperatorsRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.g8e.operator.v1.UnbindOperatorsResult.repeatedFields_, null);
+};
+goog.inherits(proto.g8e.operator.v1.UnbindOperatorsResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.UnbindOperatorsResult.displayName = 'proto.g8e.operator.v1.UnbindOperatorsResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.SetTargetContextRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.SetTargetContextRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.SetTargetContextRequested.displayName = 'proto.g8e.operator.v1.SetTargetContextRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.SetTargetContextResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.SetTargetContextResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.SetTargetContextResult.displayName = 'proto.g8e.operator.v1.SetTargetContextResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.OperatorDocument = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.OperatorDocument, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.OperatorDocument.displayName = 'proto.g8e.operator.v1.OperatorDocument';
 }
 /**
  * Generated by JsPbCodeGenerator.
@@ -1190,6 +1627,405 @@ if (goog.DEBUG && !COMPILED) {
    * @override
    */
   proto.g8e.operator.v1.FingerprintDetails.displayName = 'proto.g8e.operator.v1.FingerprintDetails';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyCredential = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.g8e.operator.v1.PasskeyCredential.repeatedFields_, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyCredential, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyCredential.displayName = 'proto.g8e.operator.v1.PasskeyCredential';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyRegisterChallengeRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.displayName = 'proto.g8e.operator.v1.PasskeyRegisterChallengeRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.g8e.operator.v1.PasskeyRegisterChallengeResult.repeatedFields_, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyRegisterChallengeResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyRegisterChallengeResult.displayName = 'proto.g8e.operator.v1.PasskeyRegisterChallengeResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.displayName = 'proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.displayName = 'proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.displayName = 'proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.displayName = 'proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.AttestationResponse = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.g8e.operator.v1.AttestationResponse.repeatedFields_, null);
+};
+goog.inherits(proto.g8e.operator.v1.AttestationResponse, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.AttestationResponse.displayName = 'proto.g8e.operator.v1.AttestationResponse';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyRegisterVerifyRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.displayName = 'proto.g8e.operator.v1.PasskeyRegisterVerifyRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyRegisterVerifyResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyRegisterVerifyResult.displayName = 'proto.g8e.operator.v1.PasskeyRegisterVerifyResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyAuthChallengeRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyAuthChallengeRequested.displayName = 'proto.g8e.operator.v1.PasskeyAuthChallengeRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.g8e.operator.v1.PasskeyAuthChallengeResult.repeatedFields_, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyAuthChallengeResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyAuthChallengeResult.displayName = 'proto.g8e.operator.v1.PasskeyAuthChallengeResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.AssertionResponse = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.AssertionResponse, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.AssertionResponse.displayName = 'proto.g8e.operator.v1.AssertionResponse';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyAuthVerifyRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyAuthVerifyRequested.displayName = 'proto.g8e.operator.v1.PasskeyAuthVerifyRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.PasskeyAuthVerifyResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.PasskeyAuthVerifyResult.displayName = 'proto.g8e.operator.v1.PasskeyAuthVerifyResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.ListPasskeyCredentialsRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.ListPasskeyCredentialsRequested.displayName = 'proto.g8e.operator.v1.ListPasskeyCredentialsRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.g8e.operator.v1.ListPasskeyCredentialsResult.repeatedFields_, null);
+};
+goog.inherits(proto.g8e.operator.v1.ListPasskeyCredentialsResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.ListPasskeyCredentialsResult.displayName = 'proto.g8e.operator.v1.ListPasskeyCredentialsResult';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialRequested = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.RevokePasskeyCredentialRequested, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.RevokePasskeyCredentialRequested.displayName = 'proto.g8e.operator.v1.RevokePasskeyCredentialRequested';
+}
+/**
+ * Generated by JsPbCodeGenerator.
+ * @param {Array=} opt_data Optional initial data array, typically from a
+ * server response, or constructed directly in Javascript. The array is used
+ * in place and becomes part of the constructed object. It is not cloned.
+ * If no data is provided, the constructed object will be empty, but still
+ * valid.
+ * @extends {jspb.Message}
+ * @constructor
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult = function(opt_data) {
+  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+};
+goog.inherits(proto.g8e.operator.v1.RevokePasskeyCredentialResult, jspb.Message);
+if (goog.DEBUG && !COMPILED) {
+  /**
+   * @public
+   * @override
+   */
+  proto.g8e.operator.v1.RevokePasskeyCredentialResult.displayName = 'proto.g8e.operator.v1.RevokePasskeyCredentialResult';
 }
 
 
@@ -5479,6 +6315,4739 @@ proto.g8e.operator.v1.SignCertificateResult.prototype.getError = function() {
  */
 proto.g8e.operator.v1.SignCertificateResult.prototype.setError = function(value) {
   return jspb.Message.setProto3StringField(this, 4, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.CreateDeviceLinkRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.CreateDeviceLinkRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    userId: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    organizationId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    operatorId: jspb.Message.getFieldWithDefault(msg, 3, ""),
+    webSessionId: jspb.Message.getFieldWithDefault(msg, 4, ""),
+    name: jspb.Message.getFieldWithDefault(msg, 5, ""),
+    maxUses: jspb.Message.getFieldWithDefault(msg, 6, 0),
+    ttlSeconds: jspb.Message.getFieldWithDefault(msg, 7, 0)
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.CreateDeviceLinkRequested}
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.CreateDeviceLinkRequested;
+  return proto.g8e.operator.v1.CreateDeviceLinkRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.CreateDeviceLinkRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.CreateDeviceLinkRequested}
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOrganizationId(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOperatorId(value);
+      break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setWebSessionId(value);
+      break;
+    case 5:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setName(value);
+      break;
+    case 6:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setMaxUses(value);
+      break;
+    case 7:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setTtlSeconds(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.CreateDeviceLinkRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.CreateDeviceLinkRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getOrganizationId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getOperatorId();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+  f = message.getWebSessionId();
+  if (f.length > 0) {
+    writer.writeString(
+      4,
+      f
+    );
+  }
+  f = message.getName();
+  if (f.length > 0) {
+    writer.writeString(
+      5,
+      f
+    );
+  }
+  f = message.getMaxUses();
+  if (f !== 0) {
+    writer.writeInt32(
+      6,
+      f
+    );
+  }
+  f = message.getTtlSeconds();
+  if (f !== 0) {
+    writer.writeInt32(
+      7,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string user_id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.CreateDeviceLinkRequested} returns this
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string organization_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.getOrganizationId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.CreateDeviceLinkRequested} returns this
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.setOrganizationId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string operator_id = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.getOperatorId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.CreateDeviceLinkRequested} returns this
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.setOperatorId = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+/**
+ * optional string web_session_id = 4;
+ * @return {string}
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.getWebSessionId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 4, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.CreateDeviceLinkRequested} returns this
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.setWebSessionId = function(value) {
+  return jspb.Message.setProto3StringField(this, 4, value);
+};
+
+
+/**
+ * optional string name = 5;
+ * @return {string}
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.getName = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 5, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.CreateDeviceLinkRequested} returns this
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.setName = function(value) {
+  return jspb.Message.setProto3StringField(this, 5, value);
+};
+
+
+/**
+ * optional int32 max_uses = 6;
+ * @return {number}
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.getMaxUses = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 6, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.CreateDeviceLinkRequested} returns this
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.setMaxUses = function(value) {
+  return jspb.Message.setProto3IntField(this, 6, value);
+};
+
+
+/**
+ * optional int32 ttl_seconds = 7;
+ * @return {number}
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.getTtlSeconds = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 7, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.CreateDeviceLinkRequested} returns this
+ */
+proto.g8e.operator.v1.CreateDeviceLinkRequested.prototype.setTtlSeconds = function(value) {
+  return jspb.Message.setProto3IntField(this, 7, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.DeviceLink.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.DeviceLink} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.DeviceLink.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    token: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    userId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    organizationId: jspb.Message.getFieldWithDefault(msg, 3, ""),
+    operatorId: jspb.Message.getFieldWithDefault(msg, 4, ""),
+    webSessionId: jspb.Message.getFieldWithDefault(msg, 5, ""),
+    name: jspb.Message.getFieldWithDefault(msg, 6, ""),
+    maxUses: jspb.Message.getFieldWithDefault(msg, 7, 0),
+    uses: jspb.Message.getFieldWithDefault(msg, 8, 0),
+    status: jspb.Message.getFieldWithDefault(msg, 9, ""),
+    createdAtUnixMs: jspb.Message.getFieldWithDefault(msg, 10, 0),
+    expiresAtUnixMs: jspb.Message.getFieldWithDefault(msg, 11, 0)
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.DeviceLink}
+ */
+proto.g8e.operator.v1.DeviceLink.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.DeviceLink;
+  return proto.g8e.operator.v1.DeviceLink.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.DeviceLink} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.DeviceLink}
+ */
+proto.g8e.operator.v1.DeviceLink.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setToken(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOrganizationId(value);
+      break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOperatorId(value);
+      break;
+    case 5:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setWebSessionId(value);
+      break;
+    case 6:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setName(value);
+      break;
+    case 7:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setMaxUses(value);
+      break;
+    case 8:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setUses(value);
+      break;
+    case 9:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setStatus(value);
+      break;
+    case 10:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setCreatedAtUnixMs(value);
+      break;
+    case 11:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setExpiresAtUnixMs(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.DeviceLink.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.DeviceLink} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.DeviceLink.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getToken();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getOrganizationId();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+  f = message.getOperatorId();
+  if (f.length > 0) {
+    writer.writeString(
+      4,
+      f
+    );
+  }
+  f = message.getWebSessionId();
+  if (f.length > 0) {
+    writer.writeString(
+      5,
+      f
+    );
+  }
+  f = message.getName();
+  if (f.length > 0) {
+    writer.writeString(
+      6,
+      f
+    );
+  }
+  f = message.getMaxUses();
+  if (f !== 0) {
+    writer.writeInt32(
+      7,
+      f
+    );
+  }
+  f = message.getUses();
+  if (f !== 0) {
+    writer.writeInt32(
+      8,
+      f
+    );
+  }
+  f = message.getStatus();
+  if (f.length > 0) {
+    writer.writeString(
+      9,
+      f
+    );
+  }
+  f = message.getCreatedAtUnixMs();
+  if (f !== 0) {
+    writer.writeInt64(
+      10,
+      f
+    );
+  }
+  f = message.getExpiresAtUnixMs();
+  if (f !== 0) {
+    writer.writeInt64(
+      11,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string token = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.getToken = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.DeviceLink} returns this
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.setToken = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string user_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.DeviceLink} returns this
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string organization_id = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.getOrganizationId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.DeviceLink} returns this
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.setOrganizationId = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+/**
+ * optional string operator_id = 4;
+ * @return {string}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.getOperatorId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 4, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.DeviceLink} returns this
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.setOperatorId = function(value) {
+  return jspb.Message.setProto3StringField(this, 4, value);
+};
+
+
+/**
+ * optional string web_session_id = 5;
+ * @return {string}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.getWebSessionId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 5, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.DeviceLink} returns this
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.setWebSessionId = function(value) {
+  return jspb.Message.setProto3StringField(this, 5, value);
+};
+
+
+/**
+ * optional string name = 6;
+ * @return {string}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.getName = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 6, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.DeviceLink} returns this
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.setName = function(value) {
+  return jspb.Message.setProto3StringField(this, 6, value);
+};
+
+
+/**
+ * optional int32 max_uses = 7;
+ * @return {number}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.getMaxUses = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 7, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.DeviceLink} returns this
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.setMaxUses = function(value) {
+  return jspb.Message.setProto3IntField(this, 7, value);
+};
+
+
+/**
+ * optional int32 uses = 8;
+ * @return {number}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.getUses = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 8, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.DeviceLink} returns this
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.setUses = function(value) {
+  return jspb.Message.setProto3IntField(this, 8, value);
+};
+
+
+/**
+ * optional string status = 9;
+ * @return {string}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.getStatus = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 9, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.DeviceLink} returns this
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.setStatus = function(value) {
+  return jspb.Message.setProto3StringField(this, 9, value);
+};
+
+
+/**
+ * optional int64 created_at_unix_ms = 10;
+ * @return {number}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.getCreatedAtUnixMs = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 10, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.DeviceLink} returns this
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.setCreatedAtUnixMs = function(value) {
+  return jspb.Message.setProto3IntField(this, 10, value);
+};
+
+
+/**
+ * optional int64 expires_at_unix_ms = 11;
+ * @return {number}
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.getExpiresAtUnixMs = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 11, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.DeviceLink} returns this
+ */
+proto.g8e.operator.v1.DeviceLink.prototype.setExpiresAtUnixMs = function(value) {
+  return jspb.Message.setProto3IntField(this, 11, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.DeviceLinkResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.DeviceLinkResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.DeviceLinkResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.DeviceLinkResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    link: (f = msg.getLink()) && proto.g8e.operator.v1.DeviceLink.toObject(includeInstance, f),
+    operatorCommand: jspb.Message.getFieldWithDefault(msg, 3, ""),
+    error: jspb.Message.getFieldWithDefault(msg, 4, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.DeviceLinkResult}
+ */
+proto.g8e.operator.v1.DeviceLinkResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.DeviceLinkResult;
+  return proto.g8e.operator.v1.DeviceLinkResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.DeviceLinkResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.DeviceLinkResult}
+ */
+proto.g8e.operator.v1.DeviceLinkResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = new proto.g8e.operator.v1.DeviceLink;
+      reader.readMessage(value,proto.g8e.operator.v1.DeviceLink.deserializeBinaryFromReader);
+      msg.setLink(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOperatorCommand(value);
+      break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.DeviceLinkResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.DeviceLinkResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.DeviceLinkResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.DeviceLinkResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getLink();
+  if (f != null) {
+    writer.writeMessage(
+      2,
+      f,
+      proto.g8e.operator.v1.DeviceLink.serializeBinaryToWriter
+    );
+  }
+  f = message.getOperatorCommand();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      4,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.DeviceLinkResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.DeviceLinkResult} returns this
+ */
+proto.g8e.operator.v1.DeviceLinkResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * optional DeviceLink link = 2;
+ * @return {?proto.g8e.operator.v1.DeviceLink}
+ */
+proto.g8e.operator.v1.DeviceLinkResult.prototype.getLink = function() {
+  return /** @type{?proto.g8e.operator.v1.DeviceLink} */ (
+    jspb.Message.getWrapperField(this, proto.g8e.operator.v1.DeviceLink, 2));
+};
+
+
+/**
+ * @param {?proto.g8e.operator.v1.DeviceLink|undefined} value
+ * @return {!proto.g8e.operator.v1.DeviceLinkResult} returns this
+*/
+proto.g8e.operator.v1.DeviceLinkResult.prototype.setLink = function(value) {
+  return jspb.Message.setWrapperField(this, 2, value);
+};
+
+
+/**
+ * Clears the message field making it undefined.
+ * @return {!proto.g8e.operator.v1.DeviceLinkResult} returns this
+ */
+proto.g8e.operator.v1.DeviceLinkResult.prototype.clearLink = function() {
+  return this.setLink(undefined);
+};
+
+
+/**
+ * Returns whether this field is set.
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.DeviceLinkResult.prototype.hasLink = function() {
+  return jspb.Message.getField(this, 2) != null;
+};
+
+
+/**
+ * optional string operator_command = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.DeviceLinkResult.prototype.getOperatorCommand = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.DeviceLinkResult} returns this
+ */
+proto.g8e.operator.v1.DeviceLinkResult.prototype.setOperatorCommand = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+/**
+ * optional string error = 4;
+ * @return {string}
+ */
+proto.g8e.operator.v1.DeviceLinkResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 4, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.DeviceLinkResult} returns this
+ */
+proto.g8e.operator.v1.DeviceLinkResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 4, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.ListDeviceLinksRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.ListDeviceLinksRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.ListDeviceLinksRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.ListDeviceLinksRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    userId: jspb.Message.getFieldWithDefault(msg, 1, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.ListDeviceLinksRequested}
+ */
+proto.g8e.operator.v1.ListDeviceLinksRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.ListDeviceLinksRequested;
+  return proto.g8e.operator.v1.ListDeviceLinksRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.ListDeviceLinksRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.ListDeviceLinksRequested}
+ */
+proto.g8e.operator.v1.ListDeviceLinksRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.ListDeviceLinksRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.ListDeviceLinksRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.ListDeviceLinksRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.ListDeviceLinksRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string user_id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.ListDeviceLinksRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.ListDeviceLinksRequested} returns this
+ */
+proto.g8e.operator.v1.ListDeviceLinksRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.repeatedFields_ = [2];
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.ListDeviceLinksResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.ListDeviceLinksResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    linksList: jspb.Message.toObjectList(msg.getLinksList(),
+    proto.g8e.operator.v1.DeviceLink.toObject, includeInstance),
+    error: jspb.Message.getFieldWithDefault(msg, 3, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.ListDeviceLinksResult}
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.ListDeviceLinksResult;
+  return proto.g8e.operator.v1.ListDeviceLinksResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.ListDeviceLinksResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.ListDeviceLinksResult}
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = new proto.g8e.operator.v1.DeviceLink;
+      reader.readMessage(value,proto.g8e.operator.v1.DeviceLink.deserializeBinaryFromReader);
+      msg.addLinks(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.ListDeviceLinksResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.ListDeviceLinksResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getLinksList();
+  if (f.length > 0) {
+    writer.writeRepeatedMessage(
+      2,
+      f,
+      proto.g8e.operator.v1.DeviceLink.serializeBinaryToWriter
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.ListDeviceLinksResult} returns this
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * repeated DeviceLink links = 2;
+ * @return {!Array<!proto.g8e.operator.v1.DeviceLink>}
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.prototype.getLinksList = function() {
+  return /** @type{!Array<!proto.g8e.operator.v1.DeviceLink>} */ (
+    jspb.Message.getRepeatedWrapperField(this, proto.g8e.operator.v1.DeviceLink, 2));
+};
+
+
+/**
+ * @param {!Array<!proto.g8e.operator.v1.DeviceLink>} value
+ * @return {!proto.g8e.operator.v1.ListDeviceLinksResult} returns this
+*/
+proto.g8e.operator.v1.ListDeviceLinksResult.prototype.setLinksList = function(value) {
+  return jspb.Message.setRepeatedWrapperField(this, 2, value);
+};
+
+
+/**
+ * @param {!proto.g8e.operator.v1.DeviceLink=} opt_value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.DeviceLink}
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.prototype.addLinks = function(opt_value, opt_index) {
+  return jspb.Message.addToRepeatedWrapperField(this, 2, opt_value, proto.g8e.operator.v1.DeviceLink, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.ListDeviceLinksResult} returns this
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.prototype.clearLinksList = function() {
+  return this.setLinksList([]);
+};
+
+
+/**
+ * optional string error = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.ListDeviceLinksResult} returns this
+ */
+proto.g8e.operator.v1.ListDeviceLinksResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.DeleteDeviceLinkRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.DeleteDeviceLinkRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.DeleteDeviceLinkRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.DeleteDeviceLinkRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    token: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    userId: jspb.Message.getFieldWithDefault(msg, 2, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.DeleteDeviceLinkRequested}
+ */
+proto.g8e.operator.v1.DeleteDeviceLinkRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.DeleteDeviceLinkRequested;
+  return proto.g8e.operator.v1.DeleteDeviceLinkRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.DeleteDeviceLinkRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.DeleteDeviceLinkRequested}
+ */
+proto.g8e.operator.v1.DeleteDeviceLinkRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setToken(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.DeleteDeviceLinkRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.DeleteDeviceLinkRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.DeleteDeviceLinkRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.DeleteDeviceLinkRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getToken();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string token = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.DeleteDeviceLinkRequested.prototype.getToken = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.DeleteDeviceLinkRequested} returns this
+ */
+proto.g8e.operator.v1.DeleteDeviceLinkRequested.prototype.setToken = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string user_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.DeleteDeviceLinkRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.DeleteDeviceLinkRequested} returns this
+ */
+proto.g8e.operator.v1.DeleteDeviceLinkRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.TerminateOperatorRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.TerminateOperatorRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    operatorId: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    userId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    reason: jspb.Message.getFieldWithDefault(msg, 3, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.TerminateOperatorRequested}
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.TerminateOperatorRequested;
+  return proto.g8e.operator.v1.TerminateOperatorRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.TerminateOperatorRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.TerminateOperatorRequested}
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOperatorId(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setReason(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.TerminateOperatorRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.TerminateOperatorRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getOperatorId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getReason();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string operator_id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested.prototype.getOperatorId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.TerminateOperatorRequested} returns this
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested.prototype.setOperatorId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string user_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.TerminateOperatorRequested} returns this
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string reason = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested.prototype.getReason = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.TerminateOperatorRequested} returns this
+ */
+proto.g8e.operator.v1.TerminateOperatorRequested.prototype.setReason = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.TerminateOperatorResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.TerminateOperatorResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.TerminateOperatorResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.TerminateOperatorResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    message: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    error: jspb.Message.getFieldWithDefault(msg, 3, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.TerminateOperatorResult}
+ */
+proto.g8e.operator.v1.TerminateOperatorResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.TerminateOperatorResult;
+  return proto.g8e.operator.v1.TerminateOperatorResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.TerminateOperatorResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.TerminateOperatorResult}
+ */
+proto.g8e.operator.v1.TerminateOperatorResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setMessage(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.TerminateOperatorResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.TerminateOperatorResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.TerminateOperatorResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.TerminateOperatorResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getMessage();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.TerminateOperatorResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.TerminateOperatorResult} returns this
+ */
+proto.g8e.operator.v1.TerminateOperatorResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * optional string message = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.TerminateOperatorResult.prototype.getMessage = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.TerminateOperatorResult} returns this
+ */
+proto.g8e.operator.v1.TerminateOperatorResult.prototype.setMessage = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string error = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.TerminateOperatorResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.TerminateOperatorResult} returns this
+ */
+proto.g8e.operator.v1.TerminateOperatorResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.RotateAPIKeyRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.RotateAPIKeyRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.RotateAPIKeyRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.RotateAPIKeyRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    operatorId: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    userId: jspb.Message.getFieldWithDefault(msg, 2, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.RotateAPIKeyRequested}
+ */
+proto.g8e.operator.v1.RotateAPIKeyRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.RotateAPIKeyRequested;
+  return proto.g8e.operator.v1.RotateAPIKeyRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.RotateAPIKeyRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.RotateAPIKeyRequested}
+ */
+proto.g8e.operator.v1.RotateAPIKeyRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOperatorId(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.RotateAPIKeyRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.RotateAPIKeyRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.RotateAPIKeyRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.RotateAPIKeyRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getOperatorId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string operator_id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.RotateAPIKeyRequested.prototype.getOperatorId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.RotateAPIKeyRequested} returns this
+ */
+proto.g8e.operator.v1.RotateAPIKeyRequested.prototype.setOperatorId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string user_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.RotateAPIKeyRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.RotateAPIKeyRequested} returns this
+ */
+proto.g8e.operator.v1.RotateAPIKeyRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.RotateAPIKeyResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.RotateAPIKeyResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    apiKey: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    error: jspb.Message.getFieldWithDefault(msg, 3, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.RotateAPIKeyResult}
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.RotateAPIKeyResult;
+  return proto.g8e.operator.v1.RotateAPIKeyResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.RotateAPIKeyResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.RotateAPIKeyResult}
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setApiKey(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.RotateAPIKeyResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.RotateAPIKeyResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getApiKey();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.RotateAPIKeyResult} returns this
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * optional string api_key = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult.prototype.getApiKey = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.RotateAPIKeyResult} returns this
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult.prototype.setApiKey = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string error = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.RotateAPIKeyResult} returns this
+ */
+proto.g8e.operator.v1.RotateAPIKeyResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.ListOperatorSlotsRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.ListOperatorSlotsRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.ListOperatorSlotsRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    userId: jspb.Message.getFieldWithDefault(msg, 1, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.ListOperatorSlotsRequested}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.ListOperatorSlotsRequested;
+  return proto.g8e.operator.v1.ListOperatorSlotsRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.ListOperatorSlotsRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.ListOperatorSlotsRequested}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.ListOperatorSlotsRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.ListOperatorSlotsRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.ListOperatorSlotsRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string user_id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.ListOperatorSlotsRequested} returns this
+ */
+proto.g8e.operator.v1.ListOperatorSlotsRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.repeatedFields_ = [2];
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.ListOperatorSlotsResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.ListOperatorSlotsResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    operatorsList: jspb.Message.toObjectList(msg.getOperatorsList(),
+    proto.g8e.operator.v1.OperatorDocument.toObject, includeInstance),
+    error: jspb.Message.getFieldWithDefault(msg, 3, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.ListOperatorSlotsResult}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.ListOperatorSlotsResult;
+  return proto.g8e.operator.v1.ListOperatorSlotsResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.ListOperatorSlotsResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.ListOperatorSlotsResult}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = new proto.g8e.operator.v1.OperatorDocument;
+      reader.readMessage(value,proto.g8e.operator.v1.OperatorDocument.deserializeBinaryFromReader);
+      msg.addOperators(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.ListOperatorSlotsResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.ListOperatorSlotsResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getOperatorsList();
+  if (f.length > 0) {
+    writer.writeRepeatedMessage(
+      2,
+      f,
+      proto.g8e.operator.v1.OperatorDocument.serializeBinaryToWriter
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.ListOperatorSlotsResult} returns this
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * repeated OperatorDocument operators = 2;
+ * @return {!Array<!proto.g8e.operator.v1.OperatorDocument>}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.prototype.getOperatorsList = function() {
+  return /** @type{!Array<!proto.g8e.operator.v1.OperatorDocument>} */ (
+    jspb.Message.getRepeatedWrapperField(this, proto.g8e.operator.v1.OperatorDocument, 2));
+};
+
+
+/**
+ * @param {!Array<!proto.g8e.operator.v1.OperatorDocument>} value
+ * @return {!proto.g8e.operator.v1.ListOperatorSlotsResult} returns this
+*/
+proto.g8e.operator.v1.ListOperatorSlotsResult.prototype.setOperatorsList = function(value) {
+  return jspb.Message.setRepeatedWrapperField(this, 2, value);
+};
+
+
+/**
+ * @param {!proto.g8e.operator.v1.OperatorDocument=} opt_value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.OperatorDocument}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.prototype.addOperators = function(opt_value, opt_index) {
+  return jspb.Message.addToRepeatedWrapperField(this, 2, opt_value, proto.g8e.operator.v1.OperatorDocument, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.ListOperatorSlotsResult} returns this
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.prototype.clearOperatorsList = function() {
+  return this.setOperatorsList([]);
+};
+
+
+/**
+ * optional string error = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.ListOperatorSlotsResult} returns this
+ */
+proto.g8e.operator.v1.ListOperatorSlotsResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.repeatedFields_ = [1];
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.BindOperatorsRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.BindOperatorsRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    operatorIdsList: (f = jspb.Message.getRepeatedField(msg, 1)) == null ? undefined : f,
+    userId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    sessionId: jspb.Message.getFieldWithDefault(msg, 3, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.BindOperatorsRequested}
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.BindOperatorsRequested;
+  return proto.g8e.operator.v1.BindOperatorsRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.BindOperatorsRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.BindOperatorsRequested}
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addOperatorIds(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setSessionId(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.BindOperatorsRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.BindOperatorsRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getOperatorIdsList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      1,
+      f
+    );
+  }
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getSessionId();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+};
+
+
+/**
+ * repeated string operator_ids = 1;
+ * @return {!Array<string>}
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.prototype.getOperatorIdsList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 1));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.g8e.operator.v1.BindOperatorsRequested} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.prototype.setOperatorIdsList = function(value) {
+  return jspb.Message.setField(this, 1, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.BindOperatorsRequested} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.prototype.addOperatorIds = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 1, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.BindOperatorsRequested} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.prototype.clearOperatorIdsList = function() {
+  return this.setOperatorIdsList([]);
+};
+
+
+/**
+ * optional string user_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.BindOperatorsRequested} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string session_id = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.prototype.getSessionId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.BindOperatorsRequested} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsRequested.prototype.setSessionId = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.g8e.operator.v1.BindOperatorsResult.repeatedFields_ = [4,5];
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.BindOperatorsResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.BindOperatorsResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.BindOperatorsResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    boundCount: jspb.Message.getFieldWithDefault(msg, 2, 0),
+    failedCount: jspb.Message.getFieldWithDefault(msg, 3, 0),
+    boundOperatorIdsList: (f = jspb.Message.getRepeatedField(msg, 4)) == null ? undefined : f,
+    failedOperatorIdsList: (f = jspb.Message.getRepeatedField(msg, 5)) == null ? undefined : f,
+    error: jspb.Message.getFieldWithDefault(msg, 6, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.BindOperatorsResult}
+ */
+proto.g8e.operator.v1.BindOperatorsResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.BindOperatorsResult;
+  return proto.g8e.operator.v1.BindOperatorsResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.BindOperatorsResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.BindOperatorsResult}
+ */
+proto.g8e.operator.v1.BindOperatorsResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setBoundCount(value);
+      break;
+    case 3:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setFailedCount(value);
+      break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addBoundOperatorIds(value);
+      break;
+    case 5:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addFailedOperatorIds(value);
+      break;
+    case 6:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.BindOperatorsResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.BindOperatorsResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.BindOperatorsResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getBoundCount();
+  if (f !== 0) {
+    writer.writeInt32(
+      2,
+      f
+    );
+  }
+  f = message.getFailedCount();
+  if (f !== 0) {
+    writer.writeInt32(
+      3,
+      f
+    );
+  }
+  f = message.getBoundOperatorIdsList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      4,
+      f
+    );
+  }
+  f = message.getFailedOperatorIdsList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      5,
+      f
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      6,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.BindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * optional int32 bound_count = 2;
+ * @return {number}
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.getBoundCount = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 2, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.BindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.setBoundCount = function(value) {
+  return jspb.Message.setProto3IntField(this, 2, value);
+};
+
+
+/**
+ * optional int32 failed_count = 3;
+ * @return {number}
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.getFailedCount = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 3, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.BindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.setFailedCount = function(value) {
+  return jspb.Message.setProto3IntField(this, 3, value);
+};
+
+
+/**
+ * repeated string bound_operator_ids = 4;
+ * @return {!Array<string>}
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.getBoundOperatorIdsList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 4));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.g8e.operator.v1.BindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.setBoundOperatorIdsList = function(value) {
+  return jspb.Message.setField(this, 4, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.BindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.addBoundOperatorIds = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 4, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.BindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.clearBoundOperatorIdsList = function() {
+  return this.setBoundOperatorIdsList([]);
+};
+
+
+/**
+ * repeated string failed_operator_ids = 5;
+ * @return {!Array<string>}
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.getFailedOperatorIdsList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 5));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.g8e.operator.v1.BindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.setFailedOperatorIdsList = function(value) {
+  return jspb.Message.setField(this, 5, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.BindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.addFailedOperatorIds = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 5, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.BindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.clearFailedOperatorIdsList = function() {
+  return this.setFailedOperatorIdsList([]);
+};
+
+
+/**
+ * optional string error = 6;
+ * @return {string}
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 6, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.BindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.BindOperatorsResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 6, value);
+};
+
+
+
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.repeatedFields_ = [1];
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.UnbindOperatorsRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.UnbindOperatorsRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    operatorIdsList: (f = jspb.Message.getRepeatedField(msg, 1)) == null ? undefined : f,
+    userId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    sessionId: jspb.Message.getFieldWithDefault(msg, 3, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsRequested}
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.UnbindOperatorsRequested;
+  return proto.g8e.operator.v1.UnbindOperatorsRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.UnbindOperatorsRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsRequested}
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addOperatorIds(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setSessionId(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.UnbindOperatorsRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.UnbindOperatorsRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getOperatorIdsList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      1,
+      f
+    );
+  }
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getSessionId();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+};
+
+
+/**
+ * repeated string operator_ids = 1;
+ * @return {!Array<string>}
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.prototype.getOperatorIdsList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 1));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsRequested} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.prototype.setOperatorIdsList = function(value) {
+  return jspb.Message.setField(this, 1, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsRequested} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.prototype.addOperatorIds = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 1, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsRequested} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.prototype.clearOperatorIdsList = function() {
+  return this.setOperatorIdsList([]);
+};
+
+
+/**
+ * optional string user_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsRequested} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string session_id = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.prototype.getSessionId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsRequested} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsRequested.prototype.setSessionId = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.repeatedFields_ = [4,5];
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.UnbindOperatorsResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.UnbindOperatorsResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    unboundCount: jspb.Message.getFieldWithDefault(msg, 2, 0),
+    failedCount: jspb.Message.getFieldWithDefault(msg, 3, 0),
+    unboundOperatorIdsList: (f = jspb.Message.getRepeatedField(msg, 4)) == null ? undefined : f,
+    failedOperatorIdsList: (f = jspb.Message.getRepeatedField(msg, 5)) == null ? undefined : f,
+    error: jspb.Message.getFieldWithDefault(msg, 6, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsResult}
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.UnbindOperatorsResult;
+  return proto.g8e.operator.v1.UnbindOperatorsResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.UnbindOperatorsResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsResult}
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setUnboundCount(value);
+      break;
+    case 3:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setFailedCount(value);
+      break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addUnboundOperatorIds(value);
+      break;
+    case 5:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addFailedOperatorIds(value);
+      break;
+    case 6:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.UnbindOperatorsResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.UnbindOperatorsResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getUnboundCount();
+  if (f !== 0) {
+    writer.writeInt32(
+      2,
+      f
+    );
+  }
+  f = message.getFailedCount();
+  if (f !== 0) {
+    writer.writeInt32(
+      3,
+      f
+    );
+  }
+  f = message.getUnboundOperatorIdsList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      4,
+      f
+    );
+  }
+  f = message.getFailedOperatorIdsList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      5,
+      f
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      6,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * optional int32 unbound_count = 2;
+ * @return {number}
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.getUnboundCount = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 2, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.setUnboundCount = function(value) {
+  return jspb.Message.setProto3IntField(this, 2, value);
+};
+
+
+/**
+ * optional int32 failed_count = 3;
+ * @return {number}
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.getFailedCount = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 3, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.setFailedCount = function(value) {
+  return jspb.Message.setProto3IntField(this, 3, value);
+};
+
+
+/**
+ * repeated string unbound_operator_ids = 4;
+ * @return {!Array<string>}
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.getUnboundOperatorIdsList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 4));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.setUnboundOperatorIdsList = function(value) {
+  return jspb.Message.setField(this, 4, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.addUnboundOperatorIds = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 4, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.clearUnboundOperatorIdsList = function() {
+  return this.setUnboundOperatorIdsList([]);
+};
+
+
+/**
+ * repeated string failed_operator_ids = 5;
+ * @return {!Array<string>}
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.getFailedOperatorIdsList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 5));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.setFailedOperatorIdsList = function(value) {
+  return jspb.Message.setField(this, 5, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.addFailedOperatorIds = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 5, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.clearFailedOperatorIdsList = function() {
+  return this.setFailedOperatorIdsList([]);
+};
+
+
+/**
+ * optional string error = 6;
+ * @return {string}
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 6, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.UnbindOperatorsResult} returns this
+ */
+proto.g8e.operator.v1.UnbindOperatorsResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 6, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.SetTargetContextRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.SetTargetContextRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.SetTargetContextRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.SetTargetContextRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    operatorId: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    userId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    sessionId: jspb.Message.getFieldWithDefault(msg, 3, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.SetTargetContextRequested}
+ */
+proto.g8e.operator.v1.SetTargetContextRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.SetTargetContextRequested;
+  return proto.g8e.operator.v1.SetTargetContextRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.SetTargetContextRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.SetTargetContextRequested}
+ */
+proto.g8e.operator.v1.SetTargetContextRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOperatorId(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setSessionId(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.SetTargetContextRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.SetTargetContextRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.SetTargetContextRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.SetTargetContextRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getOperatorId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getSessionId();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string operator_id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.SetTargetContextRequested.prototype.getOperatorId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.SetTargetContextRequested} returns this
+ */
+proto.g8e.operator.v1.SetTargetContextRequested.prototype.setOperatorId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string user_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.SetTargetContextRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.SetTargetContextRequested} returns this
+ */
+proto.g8e.operator.v1.SetTargetContextRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string session_id = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.SetTargetContextRequested.prototype.getSessionId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.SetTargetContextRequested} returns this
+ */
+proto.g8e.operator.v1.SetTargetContextRequested.prototype.setSessionId = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.SetTargetContextResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.SetTargetContextResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.SetTargetContextResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.SetTargetContextResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    operatorId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    error: jspb.Message.getFieldWithDefault(msg, 3, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.SetTargetContextResult}
+ */
+proto.g8e.operator.v1.SetTargetContextResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.SetTargetContextResult;
+  return proto.g8e.operator.v1.SetTargetContextResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.SetTargetContextResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.SetTargetContextResult}
+ */
+proto.g8e.operator.v1.SetTargetContextResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOperatorId(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.SetTargetContextResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.SetTargetContextResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.SetTargetContextResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.SetTargetContextResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getOperatorId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.SetTargetContextResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.SetTargetContextResult} returns this
+ */
+proto.g8e.operator.v1.SetTargetContextResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * optional string operator_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.SetTargetContextResult.prototype.getOperatorId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.SetTargetContextResult} returns this
+ */
+proto.g8e.operator.v1.SetTargetContextResult.prototype.setOperatorId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string error = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.SetTargetContextResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.SetTargetContextResult} returns this
+ */
+proto.g8e.operator.v1.SetTargetContextResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.OperatorDocument.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.OperatorDocument} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.OperatorDocument.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    id: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    userId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    organizationId: jspb.Message.getFieldWithDefault(msg, 3, ""),
+    component: jspb.Message.getFieldWithDefault(msg, 4, ""),
+    name: jspb.Message.getFieldWithDefault(msg, 5, ""),
+    status: jspb.Message.getFieldWithDefault(msg, 6, ""),
+    operatorSessionId: jspb.Message.getFieldWithDefault(msg, 7, ""),
+    boundWebSessionId: jspb.Message.getFieldWithDefault(msg, 8, ""),
+    apiKey: jspb.Message.getFieldWithDefault(msg, 9, ""),
+    operatorApiKey: jspb.Message.getFieldWithDefault(msg, 10, ""),
+    operatorCert: jspb.Message.getFieldWithDefault(msg, 11, ""),
+    operatorCertSerial: jspb.Message.getFieldWithDefault(msg, 12, ""),
+    slotNumber: jspb.Message.getFieldWithDefault(msg, 13, 0),
+    isSlot: jspb.Message.getBooleanFieldWithDefault(msg, 14, false),
+    claimed: jspb.Message.getBooleanFieldWithDefault(msg, 15, false),
+    operatorType: jspb.Message.getFieldWithDefault(msg, 16, ""),
+    cloudSubtype: jspb.Message.getFieldWithDefault(msg, 17, ""),
+    systemFingerprint: jspb.Message.getFieldWithDefault(msg, 18, ""),
+    createdAtUnixMs: jspb.Message.getFieldWithDefault(msg, 19, 0),
+    updatedAtUnixMs: jspb.Message.getFieldWithDefault(msg, 20, 0)
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.OperatorDocument}
+ */
+proto.g8e.operator.v1.OperatorDocument.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.OperatorDocument;
+  return proto.g8e.operator.v1.OperatorDocument.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.OperatorDocument} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.OperatorDocument}
+ */
+proto.g8e.operator.v1.OperatorDocument.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setId(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOrganizationId(value);
+      break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setComponent(value);
+      break;
+    case 5:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setName(value);
+      break;
+    case 6:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setStatus(value);
+      break;
+    case 7:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOperatorSessionId(value);
+      break;
+    case 8:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setBoundWebSessionId(value);
+      break;
+    case 9:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setApiKey(value);
+      break;
+    case 10:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOperatorApiKey(value);
+      break;
+    case 11:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOperatorCert(value);
+      break;
+    case 12:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOperatorCertSerial(value);
+      break;
+    case 13:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setSlotNumber(value);
+      break;
+    case 14:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setIsSlot(value);
+      break;
+    case 15:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setClaimed(value);
+      break;
+    case 16:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setOperatorType(value);
+      break;
+    case 17:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setCloudSubtype(value);
+      break;
+    case 18:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setSystemFingerprint(value);
+      break;
+    case 19:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setCreatedAtUnixMs(value);
+      break;
+    case 20:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setUpdatedAtUnixMs(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.OperatorDocument.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.OperatorDocument} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.OperatorDocument.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getOrganizationId();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+  f = message.getComponent();
+  if (f.length > 0) {
+    writer.writeString(
+      4,
+      f
+    );
+  }
+  f = message.getName();
+  if (f.length > 0) {
+    writer.writeString(
+      5,
+      f
+    );
+  }
+  f = message.getStatus();
+  if (f.length > 0) {
+    writer.writeString(
+      6,
+      f
+    );
+  }
+  f = message.getOperatorSessionId();
+  if (f.length > 0) {
+    writer.writeString(
+      7,
+      f
+    );
+  }
+  f = message.getBoundWebSessionId();
+  if (f.length > 0) {
+    writer.writeString(
+      8,
+      f
+    );
+  }
+  f = message.getApiKey();
+  if (f.length > 0) {
+    writer.writeString(
+      9,
+      f
+    );
+  }
+  f = message.getOperatorApiKey();
+  if (f.length > 0) {
+    writer.writeString(
+      10,
+      f
+    );
+  }
+  f = message.getOperatorCert();
+  if (f.length > 0) {
+    writer.writeString(
+      11,
+      f
+    );
+  }
+  f = message.getOperatorCertSerial();
+  if (f.length > 0) {
+    writer.writeString(
+      12,
+      f
+    );
+  }
+  f = message.getSlotNumber();
+  if (f !== 0) {
+    writer.writeInt32(
+      13,
+      f
+    );
+  }
+  f = message.getIsSlot();
+  if (f) {
+    writer.writeBool(
+      14,
+      f
+    );
+  }
+  f = message.getClaimed();
+  if (f) {
+    writer.writeBool(
+      15,
+      f
+    );
+  }
+  f = message.getOperatorType();
+  if (f.length > 0) {
+    writer.writeString(
+      16,
+      f
+    );
+  }
+  f = message.getCloudSubtype();
+  if (f.length > 0) {
+    writer.writeString(
+      17,
+      f
+    );
+  }
+  f = message.getSystemFingerprint();
+  if (f.length > 0) {
+    writer.writeString(
+      18,
+      f
+    );
+  }
+  f = message.getCreatedAtUnixMs();
+  if (f !== 0) {
+    writer.writeInt64(
+      19,
+      f
+    );
+  }
+  f = message.getUpdatedAtUnixMs();
+  if (f !== 0) {
+    writer.writeInt64(
+      20,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string user_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string organization_id = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getOrganizationId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setOrganizationId = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+/**
+ * optional string component = 4;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getComponent = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 4, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setComponent = function(value) {
+  return jspb.Message.setProto3StringField(this, 4, value);
+};
+
+
+/**
+ * optional string name = 5;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getName = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 5, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setName = function(value) {
+  return jspb.Message.setProto3StringField(this, 5, value);
+};
+
+
+/**
+ * optional string status = 6;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getStatus = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 6, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setStatus = function(value) {
+  return jspb.Message.setProto3StringField(this, 6, value);
+};
+
+
+/**
+ * optional string operator_session_id = 7;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getOperatorSessionId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 7, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setOperatorSessionId = function(value) {
+  return jspb.Message.setProto3StringField(this, 7, value);
+};
+
+
+/**
+ * optional string bound_web_session_id = 8;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getBoundWebSessionId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 8, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setBoundWebSessionId = function(value) {
+  return jspb.Message.setProto3StringField(this, 8, value);
+};
+
+
+/**
+ * optional string api_key = 9;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getApiKey = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 9, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setApiKey = function(value) {
+  return jspb.Message.setProto3StringField(this, 9, value);
+};
+
+
+/**
+ * optional string operator_api_key = 10;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getOperatorApiKey = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 10, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setOperatorApiKey = function(value) {
+  return jspb.Message.setProto3StringField(this, 10, value);
+};
+
+
+/**
+ * optional string operator_cert = 11;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getOperatorCert = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 11, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setOperatorCert = function(value) {
+  return jspb.Message.setProto3StringField(this, 11, value);
+};
+
+
+/**
+ * optional string operator_cert_serial = 12;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getOperatorCertSerial = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 12, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setOperatorCertSerial = function(value) {
+  return jspb.Message.setProto3StringField(this, 12, value);
+};
+
+
+/**
+ * optional int32 slot_number = 13;
+ * @return {number}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getSlotNumber = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 13, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setSlotNumber = function(value) {
+  return jspb.Message.setProto3IntField(this, 13, value);
+};
+
+
+/**
+ * optional bool is_slot = 14;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getIsSlot = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 14, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setIsSlot = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 14, value);
+};
+
+
+/**
+ * optional bool claimed = 15;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getClaimed = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 15, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setClaimed = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 15, value);
+};
+
+
+/**
+ * optional string operator_type = 16;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getOperatorType = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 16, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setOperatorType = function(value) {
+  return jspb.Message.setProto3StringField(this, 16, value);
+};
+
+
+/**
+ * optional string cloud_subtype = 17;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getCloudSubtype = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 17, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setCloudSubtype = function(value) {
+  return jspb.Message.setProto3StringField(this, 17, value);
+};
+
+
+/**
+ * optional string system_fingerprint = 18;
+ * @return {string}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getSystemFingerprint = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 18, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setSystemFingerprint = function(value) {
+  return jspb.Message.setProto3StringField(this, 18, value);
+};
+
+
+/**
+ * optional int64 created_at_unix_ms = 19;
+ * @return {number}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getCreatedAtUnixMs = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 19, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setCreatedAtUnixMs = function(value) {
+  return jspb.Message.setProto3IntField(this, 19, value);
+};
+
+
+/**
+ * optional int64 updated_at_unix_ms = 20;
+ * @return {number}
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.getUpdatedAtUnixMs = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 20, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.OperatorDocument} returns this
+ */
+proto.g8e.operator.v1.OperatorDocument.prototype.setUpdatedAtUnixMs = function(value) {
+  return jspb.Message.setProto3IntField(this, 20, value);
 };
 
 
@@ -16563,6 +22132,4349 @@ proto.g8e.operator.v1.FingerprintDetails.prototype.getMachineId = function() {
  */
 proto.g8e.operator.v1.FingerprintDetails.prototype.setMachineId = function(value) {
   return jspb.Message.setProto3StringField(this, 4, value);
+};
+
+
+
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.g8e.operator.v1.PasskeyCredential.repeatedFields_ = [4];
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyCredential.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyCredential} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyCredential.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    id: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    publicKey: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    counter: jspb.Message.getFieldWithDefault(msg, 3, 0),
+    transportsList: (f = jspb.Message.getRepeatedField(msg, 4)) == null ? undefined : f,
+    createdAtUnixMs: jspb.Message.getFieldWithDefault(msg, 5, 0),
+    lastUsedAtUnixMs: jspb.Message.getFieldWithDefault(msg, 6, 0)
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyCredential}
+ */
+proto.g8e.operator.v1.PasskeyCredential.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyCredential;
+  return proto.g8e.operator.v1.PasskeyCredential.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyCredential} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyCredential}
+ */
+proto.g8e.operator.v1.PasskeyCredential.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setId(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setPublicKey(value);
+      break;
+    case 3:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setCounter(value);
+      break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addTransports(value);
+      break;
+    case 5:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setCreatedAtUnixMs(value);
+      break;
+    case 6:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setLastUsedAtUnixMs(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyCredential.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyCredential} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyCredential.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getPublicKey();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getCounter();
+  if (f !== 0) {
+    writer.writeInt64(
+      3,
+      f
+    );
+  }
+  f = message.getTransportsList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      4,
+      f
+    );
+  }
+  f = message.getCreatedAtUnixMs();
+  if (f !== 0) {
+    writer.writeInt64(
+      5,
+      f
+    );
+  }
+  f = message.getLastUsedAtUnixMs();
+  if (f !== 0) {
+    writer.writeInt64(
+      6,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.getId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyCredential} returns this
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.setId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string public_key = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.getPublicKey = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyCredential} returns this
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.setPublicKey = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional int64 counter = 3;
+ * @return {number}
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.getCounter = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 3, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.PasskeyCredential} returns this
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.setCounter = function(value) {
+  return jspb.Message.setProto3IntField(this, 3, value);
+};
+
+
+/**
+ * repeated string transports = 4;
+ * @return {!Array<string>}
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.getTransportsList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 4));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.g8e.operator.v1.PasskeyCredential} returns this
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.setTransportsList = function(value) {
+  return jspb.Message.setField(this, 4, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.PasskeyCredential} returns this
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.addTransports = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 4, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.PasskeyCredential} returns this
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.clearTransportsList = function() {
+  return this.setTransportsList([]);
+};
+
+
+/**
+ * optional int64 created_at_unix_ms = 5;
+ * @return {number}
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.getCreatedAtUnixMs = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 5, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.PasskeyCredential} returns this
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.setCreatedAtUnixMs = function(value) {
+  return jspb.Message.setProto3IntField(this, 5, value);
+};
+
+
+/**
+ * optional int64 last_used_at_unix_ms = 6;
+ * @return {number}
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.getLastUsedAtUnixMs = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 6, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.PasskeyCredential} returns this
+ */
+proto.g8e.operator.v1.PasskeyCredential.prototype.setLastUsedAtUnixMs = function(value) {
+  return jspb.Message.setProto3IntField(this, 6, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    userId: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    email: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    userName: jspb.Message.getFieldWithDefault(msg, 3, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeRequested}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyRegisterChallengeRequested;
+  return proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeRequested}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setEmail(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserName(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getEmail();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getUserName();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string user_id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeRequested} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string email = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.prototype.getEmail = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeRequested} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.prototype.setEmail = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string user_name = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.prototype.getUserName = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeRequested} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeRequested.prototype.setUserName = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.repeatedFields_ = [6,10];
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyRegisterChallengeResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    error: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    challenge: jspb.Message.getFieldWithDefault(msg, 3, ""),
+    rp: (f = msg.getRp()) && proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.toObject(includeInstance, f),
+    user: (f = msg.getUser()) && proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.toObject(includeInstance, f),
+    pubKeyCredParamsList: jspb.Message.toObjectList(msg.getPubKeyCredParamsList(),
+    proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.toObject, includeInstance),
+    timeout: jspb.Message.getFieldWithDefault(msg, 7, 0),
+    attestation: jspb.Message.getFieldWithDefault(msg, 8, ""),
+    authenticatorSelection: (f = msg.getAuthenticatorSelection()) && proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.toObject(includeInstance, f),
+    excludeCredentialsList: (f = jspb.Message.getRepeatedField(msg, 10)) == null ? undefined : f
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyRegisterChallengeResult;
+  return proto.g8e.operator.v1.PasskeyRegisterChallengeResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setChallenge(value);
+      break;
+    case 4:
+      var value = new proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty;
+      reader.readMessage(value,proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.deserializeBinaryFromReader);
+      msg.setRp(value);
+      break;
+    case 5:
+      var value = new proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo;
+      reader.readMessage(value,proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.deserializeBinaryFromReader);
+      msg.setUser(value);
+      break;
+    case 6:
+      var value = new proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters;
+      reader.readMessage(value,proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.deserializeBinaryFromReader);
+      msg.addPubKeyCredParams(value);
+      break;
+    case 7:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setTimeout(value);
+      break;
+    case 8:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setAttestation(value);
+      break;
+    case 9:
+      var value = new proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection;
+      reader.readMessage(value,proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.deserializeBinaryFromReader);
+      msg.setAuthenticatorSelection(value);
+      break;
+    case 10:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addExcludeCredentials(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyRegisterChallengeResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getChallenge();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+  f = message.getRp();
+  if (f != null) {
+    writer.writeMessage(
+      4,
+      f,
+      proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.serializeBinaryToWriter
+    );
+  }
+  f = message.getUser();
+  if (f != null) {
+    writer.writeMessage(
+      5,
+      f,
+      proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.serializeBinaryToWriter
+    );
+  }
+  f = message.getPubKeyCredParamsList();
+  if (f.length > 0) {
+    writer.writeRepeatedMessage(
+      6,
+      f,
+      proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.serializeBinaryToWriter
+    );
+  }
+  f = message.getTimeout();
+  if (f !== 0) {
+    writer.writeInt64(
+      7,
+      f
+    );
+  }
+  f = message.getAttestation();
+  if (f.length > 0) {
+    writer.writeString(
+      8,
+      f
+    );
+  }
+  f = message.getAuthenticatorSelection();
+  if (f != null) {
+    writer.writeMessage(
+      9,
+      f,
+      proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.serializeBinaryToWriter
+    );
+  }
+  f = message.getExcludeCredentialsList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      10,
+      f
+    );
+  }
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    name: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    id: jspb.Message.getFieldWithDefault(msg, 2, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty;
+  return proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setName(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setId(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getName();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string name = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.prototype.getName = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.prototype.setName = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.prototype.getId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty.prototype.setId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    id: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    name: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    displayName: jspb.Message.getFieldWithDefault(msg, 3, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo;
+  return proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setId(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setName(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setDisplayName(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getName();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getDisplayName();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.prototype.getId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.prototype.setId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string name = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.prototype.getName = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.prototype.setName = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string display_name = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.prototype.getDisplayName = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo.prototype.setDisplayName = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    type: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    alg: jspb.Message.getFieldWithDefault(msg, 2, 0)
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters;
+  return proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setType(value);
+      break;
+    case 2:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setAlg(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getType();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getAlg();
+  if (f !== 0) {
+    writer.writeInt32(
+      2,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string type = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.prototype.getType = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.prototype.setType = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional int32 alg = 2;
+ * @return {number}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.prototype.getAlg = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 2, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters.prototype.setAlg = function(value) {
+  return jspb.Message.setProto3IntField(this, 2, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    residentKey: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    userVerification: jspb.Message.getFieldWithDefault(msg, 2, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection;
+  return proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setResidentKey(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserVerification(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getResidentKey();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getUserVerification();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string resident_key = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.prototype.getResidentKey = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.prototype.setResidentKey = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string user_verification = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.prototype.getUserVerification = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection.prototype.setUserVerification = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * optional string error = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string challenge = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.getChallenge = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.setChallenge = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+/**
+ * optional RelyingParty rp = 4;
+ * @return {?proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.getRp = function() {
+  return /** @type{?proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty} */ (
+    jspb.Message.getWrapperField(this, proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty, 4));
+};
+
+
+/**
+ * @param {?proto.g8e.operator.v1.PasskeyRegisterChallengeResult.RelyingParty|undefined} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+*/
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.setRp = function(value) {
+  return jspb.Message.setWrapperField(this, 4, value);
+};
+
+
+/**
+ * Clears the message field making it undefined.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.clearRp = function() {
+  return this.setRp(undefined);
+};
+
+
+/**
+ * Returns whether this field is set.
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.hasRp = function() {
+  return jspb.Message.getField(this, 4) != null;
+};
+
+
+/**
+ * optional UserInfo user = 5;
+ * @return {?proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.getUser = function() {
+  return /** @type{?proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo} */ (
+    jspb.Message.getWrapperField(this, proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo, 5));
+};
+
+
+/**
+ * @param {?proto.g8e.operator.v1.PasskeyRegisterChallengeResult.UserInfo|undefined} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+*/
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.setUser = function(value) {
+  return jspb.Message.setWrapperField(this, 5, value);
+};
+
+
+/**
+ * Clears the message field making it undefined.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.clearUser = function() {
+  return this.setUser(undefined);
+};
+
+
+/**
+ * Returns whether this field is set.
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.hasUser = function() {
+  return jspb.Message.getField(this, 5) != null;
+};
+
+
+/**
+ * repeated PublicKeyCredentialParameters pub_key_cred_params = 6;
+ * @return {!Array<!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters>}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.getPubKeyCredParamsList = function() {
+  return /** @type{!Array<!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters>} */ (
+    jspb.Message.getRepeatedWrapperField(this, proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters, 6));
+};
+
+
+/**
+ * @param {!Array<!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters>} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+*/
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.setPubKeyCredParamsList = function(value) {
+  return jspb.Message.setRepeatedWrapperField(this, 6, value);
+};
+
+
+/**
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters=} opt_value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.addPubKeyCredParams = function(opt_value, opt_index) {
+  return jspb.Message.addToRepeatedWrapperField(this, 6, opt_value, proto.g8e.operator.v1.PasskeyRegisterChallengeResult.PublicKeyCredentialParameters, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.clearPubKeyCredParamsList = function() {
+  return this.setPubKeyCredParamsList([]);
+};
+
+
+/**
+ * optional int64 timeout = 7;
+ * @return {number}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.getTimeout = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 7, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.setTimeout = function(value) {
+  return jspb.Message.setProto3IntField(this, 7, value);
+};
+
+
+/**
+ * optional string attestation = 8;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.getAttestation = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 8, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.setAttestation = function(value) {
+  return jspb.Message.setProto3StringField(this, 8, value);
+};
+
+
+/**
+ * optional AuthenticatorSelection authenticator_selection = 9;
+ * @return {?proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.getAuthenticatorSelection = function() {
+  return /** @type{?proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection} */ (
+    jspb.Message.getWrapperField(this, proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection, 9));
+};
+
+
+/**
+ * @param {?proto.g8e.operator.v1.PasskeyRegisterChallengeResult.AuthenticatorSelection|undefined} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+*/
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.setAuthenticatorSelection = function(value) {
+  return jspb.Message.setWrapperField(this, 9, value);
+};
+
+
+/**
+ * Clears the message field making it undefined.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.clearAuthenticatorSelection = function() {
+  return this.setAuthenticatorSelection(undefined);
+};
+
+
+/**
+ * Returns whether this field is set.
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.hasAuthenticatorSelection = function() {
+  return jspb.Message.getField(this, 9) != null;
+};
+
+
+/**
+ * repeated string exclude_credentials = 10;
+ * @return {!Array<string>}
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.getExcludeCredentialsList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 10));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.setExcludeCredentialsList = function(value) {
+  return jspb.Message.setField(this, 10, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.addExcludeCredentials = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 10, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterChallengeResult.prototype.clearExcludeCredentialsList = function() {
+  return this.setExcludeCredentialsList([]);
+};
+
+
+
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.g8e.operator.v1.AttestationResponse.repeatedFields_ = [5];
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.AttestationResponse.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.AttestationResponse} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.AttestationResponse.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    id: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    rawId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    clientDataJson: jspb.Message.getFieldWithDefault(msg, 3, ""),
+    attestationObject: jspb.Message.getFieldWithDefault(msg, 4, ""),
+    transportsList: (f = jspb.Message.getRepeatedField(msg, 5)) == null ? undefined : f
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.AttestationResponse}
+ */
+proto.g8e.operator.v1.AttestationResponse.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.AttestationResponse;
+  return proto.g8e.operator.v1.AttestationResponse.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.AttestationResponse} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.AttestationResponse}
+ */
+proto.g8e.operator.v1.AttestationResponse.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setId(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setRawId(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setClientDataJson(value);
+      break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setAttestationObject(value);
+      break;
+    case 5:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addTransports(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.AttestationResponse.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.AttestationResponse} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.AttestationResponse.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getRawId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getClientDataJson();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+  f = message.getAttestationObject();
+  if (f.length > 0) {
+    writer.writeString(
+      4,
+      f
+    );
+  }
+  f = message.getTransportsList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      5,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.getId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.AttestationResponse} returns this
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.setId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string raw_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.getRawId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.AttestationResponse} returns this
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.setRawId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string client_data_json = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.getClientDataJson = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.AttestationResponse} returns this
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.setClientDataJson = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+/**
+ * optional string attestation_object = 4;
+ * @return {string}
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.getAttestationObject = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 4, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.AttestationResponse} returns this
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.setAttestationObject = function(value) {
+  return jspb.Message.setProto3StringField(this, 4, value);
+};
+
+
+/**
+ * repeated string transports = 5;
+ * @return {!Array<string>}
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.getTransportsList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 5));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.g8e.operator.v1.AttestationResponse} returns this
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.setTransportsList = function(value) {
+  return jspb.Message.setField(this, 5, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.AttestationResponse} returns this
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.addTransports = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 5, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.AttestationResponse} returns this
+ */
+proto.g8e.operator.v1.AttestationResponse.prototype.clearTransportsList = function() {
+  return this.setTransportsList([]);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterVerifyRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    userId: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    attestationResponse: (f = msg.getAttestationResponse()) && proto.g8e.operator.v1.AttestationResponse.toObject(includeInstance, f)
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterVerifyRequested}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyRegisterVerifyRequested;
+  return proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterVerifyRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterVerifyRequested}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    case 2:
+      var value = new proto.g8e.operator.v1.AttestationResponse;
+      reader.readMessage(value,proto.g8e.operator.v1.AttestationResponse.deserializeBinaryFromReader);
+      msg.setAttestationResponse(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterVerifyRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getAttestationResponse();
+  if (f != null) {
+    writer.writeMessage(
+      2,
+      f,
+      proto.g8e.operator.v1.AttestationResponse.serializeBinaryToWriter
+    );
+  }
+};
+
+
+/**
+ * optional string user_id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterVerifyRequested} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional AttestationResponse attestation_response = 2;
+ * @return {?proto.g8e.operator.v1.AttestationResponse}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.prototype.getAttestationResponse = function() {
+  return /** @type{?proto.g8e.operator.v1.AttestationResponse} */ (
+    jspb.Message.getWrapperField(this, proto.g8e.operator.v1.AttestationResponse, 2));
+};
+
+
+/**
+ * @param {?proto.g8e.operator.v1.AttestationResponse|undefined} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterVerifyRequested} returns this
+*/
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.prototype.setAttestationResponse = function(value) {
+  return jspb.Message.setWrapperField(this, 2, value);
+};
+
+
+/**
+ * Clears the message field making it undefined.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterVerifyRequested} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.prototype.clearAttestationResponse = function() {
+  return this.setAttestationResponse(undefined);
+};
+
+
+/**
+ * Returns whether this field is set.
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyRequested.prototype.hasAttestationResponse = function() {
+  return jspb.Message.getField(this, 2) != null;
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyRegisterVerifyResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterVerifyResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    error: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    credential: (f = msg.getCredential()) && proto.g8e.operator.v1.PasskeyCredential.toObject(includeInstance, f)
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterVerifyResult}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyRegisterVerifyResult;
+  return proto.g8e.operator.v1.PasskeyRegisterVerifyResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterVerifyResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterVerifyResult}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    case 3:
+      var value = new proto.g8e.operator.v1.PasskeyCredential;
+      reader.readMessage(value,proto.g8e.operator.v1.PasskeyCredential.deserializeBinaryFromReader);
+      msg.setCredential(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyRegisterVerifyResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyRegisterVerifyResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getCredential();
+  if (f != null) {
+    writer.writeMessage(
+      3,
+      f,
+      proto.g8e.operator.v1.PasskeyCredential.serializeBinaryToWriter
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterVerifyResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * optional string error = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterVerifyResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional PasskeyCredential credential = 3;
+ * @return {?proto.g8e.operator.v1.PasskeyCredential}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.prototype.getCredential = function() {
+  return /** @type{?proto.g8e.operator.v1.PasskeyCredential} */ (
+    jspb.Message.getWrapperField(this, proto.g8e.operator.v1.PasskeyCredential, 3));
+};
+
+
+/**
+ * @param {?proto.g8e.operator.v1.PasskeyCredential|undefined} value
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterVerifyResult} returns this
+*/
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.prototype.setCredential = function(value) {
+  return jspb.Message.setWrapperField(this, 3, value);
+};
+
+
+/**
+ * Clears the message field making it undefined.
+ * @return {!proto.g8e.operator.v1.PasskeyRegisterVerifyResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.prototype.clearCredential = function() {
+  return this.setCredential(undefined);
+};
+
+
+/**
+ * Returns whether this field is set.
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.PasskeyRegisterVerifyResult.prototype.hasCredential = function() {
+  return jspb.Message.getField(this, 3) != null;
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyAuthChallengeRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyAuthChallengeRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    email: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    userId: jspb.Message.getFieldWithDefault(msg, 2, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeRequested}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyAuthChallengeRequested;
+  return proto.g8e.operator.v1.PasskeyAuthChallengeRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyAuthChallengeRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeRequested}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setEmail(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyAuthChallengeRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyAuthChallengeRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getEmail();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string email = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeRequested.prototype.getEmail = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeRequested} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeRequested.prototype.setEmail = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string user_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeRequested} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.repeatedFields_ = [7];
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyAuthChallengeResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    error: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    needsSetup: jspb.Message.getBooleanFieldWithDefault(msg, 3, false),
+    challenge: jspb.Message.getFieldWithDefault(msg, 4, ""),
+    timeout: jspb.Message.getFieldWithDefault(msg, 5, 0),
+    rpId: jspb.Message.getFieldWithDefault(msg, 6, ""),
+    allowCredentialsList: (f = jspb.Message.getRepeatedField(msg, 7)) == null ? undefined : f,
+    userVerification: jspb.Message.getFieldWithDefault(msg, 8, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeResult}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyAuthChallengeResult;
+  return proto.g8e.operator.v1.PasskeyAuthChallengeResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeResult}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    case 3:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setNeedsSetup(value);
+      break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setChallenge(value);
+      break;
+    case 5:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setTimeout(value);
+      break;
+    case 6:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setRpId(value);
+      break;
+    case 7:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addAllowCredentials(value);
+      break;
+    case 8:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserVerification(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyAuthChallengeResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getNeedsSetup();
+  if (f) {
+    writer.writeBool(
+      3,
+      f
+    );
+  }
+  f = message.getChallenge();
+  if (f.length > 0) {
+    writer.writeString(
+      4,
+      f
+    );
+  }
+  f = message.getTimeout();
+  if (f !== 0) {
+    writer.writeInt64(
+      5,
+      f
+    );
+  }
+  f = message.getRpId();
+  if (f.length > 0) {
+    writer.writeString(
+      6,
+      f
+    );
+  }
+  f = message.getAllowCredentialsList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      7,
+      f
+    );
+  }
+  f = message.getUserVerification();
+  if (f.length > 0) {
+    writer.writeString(
+      8,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * optional string error = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional bool needs_setup = 3;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.getNeedsSetup = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 3, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.setNeedsSetup = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 3, value);
+};
+
+
+/**
+ * optional string challenge = 4;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.getChallenge = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 4, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.setChallenge = function(value) {
+  return jspb.Message.setProto3StringField(this, 4, value);
+};
+
+
+/**
+ * optional int64 timeout = 5;
+ * @return {number}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.getTimeout = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 5, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.setTimeout = function(value) {
+  return jspb.Message.setProto3IntField(this, 5, value);
+};
+
+
+/**
+ * optional string rp_id = 6;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.getRpId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 6, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.setRpId = function(value) {
+  return jspb.Message.setProto3StringField(this, 6, value);
+};
+
+
+/**
+ * repeated string allow_credentials = 7;
+ * @return {!Array<string>}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.getAllowCredentialsList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 7));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.setAllowCredentialsList = function(value) {
+  return jspb.Message.setField(this, 7, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.addAllowCredentials = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 7, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.clearAllowCredentialsList = function() {
+  return this.setAllowCredentialsList([]);
+};
+
+
+/**
+ * optional string user_verification = 8;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.getUserVerification = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 8, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthChallengeResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthChallengeResult.prototype.setUserVerification = function(value) {
+  return jspb.Message.setProto3StringField(this, 8, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.AssertionResponse.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.AssertionResponse} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.AssertionResponse.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    id: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    rawId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    clientDataJson: jspb.Message.getFieldWithDefault(msg, 3, ""),
+    authenticatorData: jspb.Message.getFieldWithDefault(msg, 4, ""),
+    signature: jspb.Message.getFieldWithDefault(msg, 5, ""),
+    userHandle: jspb.Message.getFieldWithDefault(msg, 6, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.AssertionResponse}
+ */
+proto.g8e.operator.v1.AssertionResponse.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.AssertionResponse;
+  return proto.g8e.operator.v1.AssertionResponse.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.AssertionResponse} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.AssertionResponse}
+ */
+proto.g8e.operator.v1.AssertionResponse.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setId(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setRawId(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setClientDataJson(value);
+      break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setAuthenticatorData(value);
+      break;
+    case 5:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setSignature(value);
+      break;
+    case 6:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserHandle(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.AssertionResponse.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.AssertionResponse} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.AssertionResponse.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getRawId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getClientDataJson();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+  f = message.getAuthenticatorData();
+  if (f.length > 0) {
+    writer.writeString(
+      4,
+      f
+    );
+  }
+  f = message.getSignature();
+  if (f.length > 0) {
+    writer.writeString(
+      5,
+      f
+    );
+  }
+  f = message.getUserHandle();
+  if (f.length > 0) {
+    writer.writeString(
+      6,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.getId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.AssertionResponse} returns this
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.setId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string raw_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.getRawId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.AssertionResponse} returns this
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.setRawId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string client_data_json = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.getClientDataJson = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.AssertionResponse} returns this
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.setClientDataJson = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+/**
+ * optional string authenticator_data = 4;
+ * @return {string}
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.getAuthenticatorData = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 4, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.AssertionResponse} returns this
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.setAuthenticatorData = function(value) {
+  return jspb.Message.setProto3StringField(this, 4, value);
+};
+
+
+/**
+ * optional string signature = 5;
+ * @return {string}
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.getSignature = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 5, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.AssertionResponse} returns this
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.setSignature = function(value) {
+  return jspb.Message.setProto3StringField(this, 5, value);
+};
+
+
+/**
+ * optional string user_handle = 6;
+ * @return {string}
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.getUserHandle = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 6, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.AssertionResponse} returns this
+ */
+proto.g8e.operator.v1.AssertionResponse.prototype.setUserHandle = function(value) {
+  return jspb.Message.setProto3StringField(this, 6, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyAuthVerifyRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyAuthVerifyRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    email: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    userId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    assertionResponse: (f = msg.getAssertionResponse()) && proto.g8e.operator.v1.AssertionResponse.toObject(includeInstance, f)
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyRequested}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyAuthVerifyRequested;
+  return proto.g8e.operator.v1.PasskeyAuthVerifyRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyAuthVerifyRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyRequested}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setEmail(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    case 3:
+      var value = new proto.g8e.operator.v1.AssertionResponse;
+      reader.readMessage(value,proto.g8e.operator.v1.AssertionResponse.deserializeBinaryFromReader);
+      msg.setAssertionResponse(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyAuthVerifyRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyAuthVerifyRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getEmail();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getAssertionResponse();
+  if (f != null) {
+    writer.writeMessage(
+      3,
+      f,
+      proto.g8e.operator.v1.AssertionResponse.serializeBinaryToWriter
+    );
+  }
+};
+
+
+/**
+ * optional string email = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.prototype.getEmail = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyRequested} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.prototype.setEmail = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string user_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyRequested} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional AssertionResponse assertion_response = 3;
+ * @return {?proto.g8e.operator.v1.AssertionResponse}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.prototype.getAssertionResponse = function() {
+  return /** @type{?proto.g8e.operator.v1.AssertionResponse} */ (
+    jspb.Message.getWrapperField(this, proto.g8e.operator.v1.AssertionResponse, 3));
+};
+
+
+/**
+ * @param {?proto.g8e.operator.v1.AssertionResponse|undefined} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyRequested} returns this
+*/
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.prototype.setAssertionResponse = function(value) {
+  return jspb.Message.setWrapperField(this, 3, value);
+};
+
+
+/**
+ * Clears the message field making it undefined.
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyRequested} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.prototype.clearAssertionResponse = function() {
+  return this.setAssertionResponse(undefined);
+};
+
+
+/**
+ * Returns whether this field is set.
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyRequested.prototype.hasAssertionResponse = function() {
+  return jspb.Message.getField(this, 3) != null;
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.PasskeyAuthVerifyResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.PasskeyAuthVerifyResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    error: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    userId: jspb.Message.getFieldWithDefault(msg, 3, ""),
+    sessionId: jspb.Message.getFieldWithDefault(msg, 4, ""),
+    sessionExpiresAtUnixMs: jspb.Message.getFieldWithDefault(msg, 5, 0)
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyResult}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.PasskeyAuthVerifyResult;
+  return proto.g8e.operator.v1.PasskeyAuthVerifyResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.PasskeyAuthVerifyResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyResult}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setSessionId(value);
+      break;
+    case 5:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setSessionExpiresAtUnixMs(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.PasskeyAuthVerifyResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.PasskeyAuthVerifyResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
+  f = message.getSessionId();
+  if (f.length > 0) {
+    writer.writeString(
+      4,
+      f
+    );
+  }
+  f = message.getSessionExpiresAtUnixMs();
+  if (f !== 0) {
+    writer.writeInt64(
+      5,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * optional string error = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string user_id = 3;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+/**
+ * optional string session_id = 4;
+ * @return {string}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.prototype.getSessionId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 4, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.prototype.setSessionId = function(value) {
+  return jspb.Message.setProto3StringField(this, 4, value);
+};
+
+
+/**
+ * optional int64 session_expires_at_unix_ms = 5;
+ * @return {number}
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.prototype.getSessionExpiresAtUnixMs = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 5, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.PasskeyAuthVerifyResult} returns this
+ */
+proto.g8e.operator.v1.PasskeyAuthVerifyResult.prototype.setSessionExpiresAtUnixMs = function(value) {
+  return jspb.Message.setProto3IntField(this, 5, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.ListPasskeyCredentialsRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.ListPasskeyCredentialsRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    userId: jspb.Message.getFieldWithDefault(msg, 1, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.ListPasskeyCredentialsRequested}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.ListPasskeyCredentialsRequested;
+  return proto.g8e.operator.v1.ListPasskeyCredentialsRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.ListPasskeyCredentialsRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.ListPasskeyCredentialsRequested}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.ListPasskeyCredentialsRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.ListPasskeyCredentialsRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string user_id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.ListPasskeyCredentialsRequested} returns this
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.repeatedFields_ = [3];
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.ListPasskeyCredentialsResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.ListPasskeyCredentialsResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    error: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    credentialsList: jspb.Message.toObjectList(msg.getCredentialsList(),
+    proto.g8e.operator.v1.PasskeyCredential.toObject, includeInstance)
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.ListPasskeyCredentialsResult}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.ListPasskeyCredentialsResult;
+  return proto.g8e.operator.v1.ListPasskeyCredentialsResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.ListPasskeyCredentialsResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.ListPasskeyCredentialsResult}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    case 3:
+      var value = new proto.g8e.operator.v1.PasskeyCredential;
+      reader.readMessage(value,proto.g8e.operator.v1.PasskeyCredential.deserializeBinaryFromReader);
+      msg.addCredentials(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.ListPasskeyCredentialsResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.ListPasskeyCredentialsResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getCredentialsList();
+  if (f.length > 0) {
+    writer.writeRepeatedMessage(
+      3,
+      f,
+      proto.g8e.operator.v1.PasskeyCredential.serializeBinaryToWriter
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.ListPasskeyCredentialsResult} returns this
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * optional string error = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.ListPasskeyCredentialsResult} returns this
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * repeated PasskeyCredential credentials = 3;
+ * @return {!Array<!proto.g8e.operator.v1.PasskeyCredential>}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.prototype.getCredentialsList = function() {
+  return /** @type{!Array<!proto.g8e.operator.v1.PasskeyCredential>} */ (
+    jspb.Message.getRepeatedWrapperField(this, proto.g8e.operator.v1.PasskeyCredential, 3));
+};
+
+
+/**
+ * @param {!Array<!proto.g8e.operator.v1.PasskeyCredential>} value
+ * @return {!proto.g8e.operator.v1.ListPasskeyCredentialsResult} returns this
+*/
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.prototype.setCredentialsList = function(value) {
+  return jspb.Message.setRepeatedWrapperField(this, 3, value);
+};
+
+
+/**
+ * @param {!proto.g8e.operator.v1.PasskeyCredential=} opt_value
+ * @param {number=} opt_index
+ * @return {!proto.g8e.operator.v1.PasskeyCredential}
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.prototype.addCredentials = function(opt_value, opt_index) {
+  return jspb.Message.addToRepeatedWrapperField(this, 3, opt_value, proto.g8e.operator.v1.PasskeyCredential, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.g8e.operator.v1.ListPasskeyCredentialsResult} returns this
+ */
+proto.g8e.operator.v1.ListPasskeyCredentialsResult.prototype.clearCredentialsList = function() {
+  return this.setCredentialsList([]);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialRequested.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.RevokePasskeyCredentialRequested.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.RevokePasskeyCredentialRequested} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialRequested.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    userId: jspb.Message.getFieldWithDefault(msg, 1, ""),
+    credentialId: jspb.Message.getFieldWithDefault(msg, 2, "")
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.RevokePasskeyCredentialRequested}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialRequested.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.RevokePasskeyCredentialRequested;
+  return proto.g8e.operator.v1.RevokePasskeyCredentialRequested.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.RevokePasskeyCredentialRequested} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.RevokePasskeyCredentialRequested}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialRequested.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setUserId(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setCredentialId(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialRequested.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.RevokePasskeyCredentialRequested.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.RevokePasskeyCredentialRequested} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialRequested.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getUserId();
+  if (f.length > 0) {
+    writer.writeString(
+      1,
+      f
+    );
+  }
+  f = message.getCredentialId();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional string user_id = 1;
+ * @return {string}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialRequested.prototype.getUserId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 1, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.RevokePasskeyCredentialRequested} returns this
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialRequested.prototype.setUserId = function(value) {
+  return jspb.Message.setProto3StringField(this, 1, value);
+};
+
+
+/**
+ * optional string credential_id = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialRequested.prototype.getCredentialId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.RevokePasskeyCredentialRequested} returns this
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialRequested.prototype.setCredentialId = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+
+
+
+if (jspb.Message.GENERATE_TO_OBJECT) {
+/**
+ * Creates an object representation of this proto.
+ * Field names that are reserved in JavaScript and will be renamed to pb_name.
+ * Optional fields that are not set will be set to undefined.
+ * To access a reserved field use, foo.pb_<name>, eg, foo.pb_default.
+ * For the list of reserved names please see:
+ *     net/proto2/compiler/js/internal/generator.cc#kKeyword.
+ * @param {boolean=} opt_includeInstance Deprecated. whether to include the
+ *     JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @return {!Object}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.prototype.toObject = function(opt_includeInstance) {
+  return proto.g8e.operator.v1.RevokePasskeyCredentialResult.toObject(opt_includeInstance, this);
+};
+
+
+/**
+ * Static version of the {@see toObject} method.
+ * @param {boolean|undefined} includeInstance Deprecated. Whether to include
+ *     the JSPB instance for transitional soy proto support:
+ *     http://goto/soy-param-migration
+ * @param {!proto.g8e.operator.v1.RevokePasskeyCredentialResult} msg The msg instance to transform.
+ * @return {!Object}
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.toObject = function(includeInstance, msg) {
+  var f, obj = {
+    success: jspb.Message.getBooleanFieldWithDefault(msg, 1, false),
+    error: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    found: jspb.Message.getBooleanFieldWithDefault(msg, 3, false),
+    remaining: jspb.Message.getFieldWithDefault(msg, 4, 0)
+  };
+
+  if (includeInstance) {
+    obj.$jspbMessageInstance = msg;
+  }
+  return obj;
+};
+}
+
+
+/**
+ * Deserializes binary data (in protobuf wire format).
+ * @param {jspb.ByteSource} bytes The bytes to deserialize.
+ * @return {!proto.g8e.operator.v1.RevokePasskeyCredentialResult}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.deserializeBinary = function(bytes) {
+  var reader = new jspb.BinaryReader(bytes);
+  var msg = new proto.g8e.operator.v1.RevokePasskeyCredentialResult;
+  return proto.g8e.operator.v1.RevokePasskeyCredentialResult.deserializeBinaryFromReader(msg, reader);
+};
+
+
+/**
+ * Deserializes binary data (in protobuf wire format) from the
+ * given reader into the given message object.
+ * @param {!proto.g8e.operator.v1.RevokePasskeyCredentialResult} msg The message object to deserialize into.
+ * @param {!jspb.BinaryReader} reader The BinaryReader to use.
+ * @return {!proto.g8e.operator.v1.RevokePasskeyCredentialResult}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.deserializeBinaryFromReader = function(msg, reader) {
+  while (reader.nextField()) {
+    if (reader.isEndGroup()) {
+      break;
+    }
+    var field = reader.getFieldNumber();
+    switch (field) {
+    case 1:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setSuccess(value);
+      break;
+    case 2:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setError(value);
+      break;
+    case 3:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setFound(value);
+      break;
+    case 4:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setRemaining(value);
+      break;
+    default:
+      reader.skipField();
+      break;
+    }
+  }
+  return msg;
+};
+
+
+/**
+ * Serializes the message to binary data (in protobuf wire format).
+ * @return {!Uint8Array}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.prototype.serializeBinary = function() {
+  var writer = new jspb.BinaryWriter();
+  proto.g8e.operator.v1.RevokePasskeyCredentialResult.serializeBinaryToWriter(this, writer);
+  return writer.getResultBuffer();
+};
+
+
+/**
+ * Serializes the given message to binary data (in protobuf wire
+ * format), writing to the given BinaryWriter.
+ * @param {!proto.g8e.operator.v1.RevokePasskeyCredentialResult} message
+ * @param {!jspb.BinaryWriter} writer
+ * @suppress {unusedLocalVariables} f is only used for nested messages
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.serializeBinaryToWriter = function(message, writer) {
+  var f = undefined;
+  f = message.getSuccess();
+  if (f) {
+    writer.writeBool(
+      1,
+      f
+    );
+  }
+  f = message.getError();
+  if (f.length > 0) {
+    writer.writeString(
+      2,
+      f
+    );
+  }
+  f = message.getFound();
+  if (f) {
+    writer.writeBool(
+      3,
+      f
+    );
+  }
+  f = message.getRemaining();
+  if (f !== 0) {
+    writer.writeInt32(
+      4,
+      f
+    );
+  }
+};
+
+
+/**
+ * optional bool success = 1;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.prototype.getSuccess = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 1, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.RevokePasskeyCredentialResult} returns this
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.prototype.setSuccess = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 1, value);
+};
+
+
+/**
+ * optional string error = 2;
+ * @return {string}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.prototype.getError = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.g8e.operator.v1.RevokePasskeyCredentialResult} returns this
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.prototype.setError = function(value) {
+  return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional bool found = 3;
+ * @return {boolean}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.prototype.getFound = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 3, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.g8e.operator.v1.RevokePasskeyCredentialResult} returns this
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.prototype.setFound = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 3, value);
+};
+
+
+/**
+ * optional int32 remaining = 4;
+ * @return {number}
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.prototype.getRemaining = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 4, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.g8e.operator.v1.RevokePasskeyCredentialResult} returns this
+ */
+proto.g8e.operator.v1.RevokePasskeyCredentialResult.prototype.setRemaining = function(value) {
+  return jspb.Message.setProto3IntField(this, 4, value);
 };
 
 

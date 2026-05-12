@@ -76,6 +76,10 @@ class InternalHttpClient{
             const url = (this._settingsService && this._settingsService.g8ee_url) || G8EE_INTERNAL_URL;
             return url.endsWith('/') ? url.slice(0, -1) : url;
         }
+        if (component === 'g8eo') {
+            const url = (this._settingsService && this._settingsService.operator_url) || OPERATOR_INTERNAL_HTTP_URL;
+            return url.endsWith('/') ? url.slice(0, -1) : url;
+        }
         return G8EE_INTERNAL_URL;
     }
 
@@ -591,6 +595,108 @@ class InternalHttpClient{
             method: 'POST',
             body: new OperatorSessionRegistrationRequest(registrationData).forWire(),
             g8eContext
+        });
+    }
+
+    // =====================================================
+    // g8eo (SUBSTRATE) ENDPOINTS
+    // =====================================================
+
+    async listOperators(userId) {
+        return this.request('g8eo', `${ApiPaths.substrate.operators()}?user_id=${userId}`);
+    }
+
+    async rotateOperatorApiKey(operatorId, userId) {
+        return this.request('g8eo', `${ApiPaths.substrate.rotateApiKey()}?user_id=${userId}`, {
+            method: 'POST',
+            body: { operator_id: operatorId }
+        });
+    }
+
+    async terminateOperatorSubstrate(operatorId, userId, reason = '') {
+        return this.request('g8eo', ApiPaths.substrate.terminate(), {
+            method: 'POST',
+            body: { operator_id: operatorId, user_id: userId, reason }
+        });
+    }
+
+    async bindOperators(operatorIds, userId, sessionId) {
+        return this.request('g8eo', ApiPaths.substrate.bind(), {
+            method: 'POST',
+            body: { operator_ids: operatorIds, user_id: userId, session_id: sessionId }
+        });
+    }
+
+    async unbindOperators(operatorIds, userId, sessionId) {
+        return this.request('g8eo', ApiPaths.substrate.unbind(), {
+            method: 'POST',
+            body: { operator_ids: operatorIds, user_id: userId, session_id: sessionId }
+        });
+    }
+
+    async setTargetContext(operatorId, userId, sessionId) {
+        return this.request('g8eo', ApiPaths.substrate.target(), {
+            method: 'POST',
+            body: { operator_id: operatorId, user_id: userId, session_id: sessionId }
+        });
+    }
+
+    async listDeviceLinks(userId) {
+        return this.request('g8eo', `${ApiPaths.substrate.deviceLinks()}?user_id=${userId}`);
+    }
+
+    async createDeviceLink(data) {
+        return this.request('g8eo', ApiPaths.substrate.deviceLinks(), {
+            method: 'POST',
+            body: data
+        });
+    }
+
+    async deleteDeviceLink(token, userId) {
+        return this.request('g8eo', `${ApiPaths.substrate.deviceLink(token)}?user_id=${userId}`, {
+            method: 'DELETE'
+        });
+    }
+
+    // =====================================================
+    // g8eo PASSKEY ENDPOINTS
+    // =====================================================
+
+    async passkeyRegisterChallenge(data) {
+        return this.request('g8eo', ApiPaths.substrate.passkeyRegisterChallenge(), {
+            method: 'POST',
+            body: data
+        });
+    }
+
+    async passkeyRegisterVerify(data) {
+        return this.request('g8eo', ApiPaths.substrate.passkeyRegisterVerify(), {
+            method: 'POST',
+            body: data
+        });
+    }
+
+    async passkeyAuthChallenge(data) {
+        return this.request('g8eo', ApiPaths.substrate.passkeyAuthChallenge(), {
+            method: 'POST',
+            body: data
+        });
+    }
+
+    async passkeyAuthVerify(data) {
+        return this.request('g8eo', ApiPaths.substrate.passkeyAuthVerify(), {
+            method: 'POST',
+            body: data
+        });
+    }
+
+    async passkeyCredentials(userId) {
+        return this.request('g8eo', `${ApiPaths.substrate.passkeyCredentials()}?user_id=${userId}`);
+    }
+
+    async passkeyRevokeCredential(credentialId, userId) {
+        return this.request('g8eo', `${ApiPaths.substrate.passkeyRevokeCredential(credentialId)}?user_id=${userId}`, {
+            method: 'DELETE'
         });
     }
 

@@ -30,16 +30,19 @@ export class BindOperatorsService {
      * @param {Object} options.bindingService - BoundSessionsService instance
      * @param {Object} options.webSessionService - WebSessionService instance
      * @param {Object} options.sseService - SSEService instance (optional)
+     * @param {Object} options.internalHttpClient - InternalHttpClient instance
      */
-    constructor({ operatorService, bindingService, webSessionService, sseService }) {
+    constructor({ operatorService, bindingService, webSessionService, sseService, internalHttpClient }) {
         if (!operatorService) throw new Error('operatorService is required');
         if (!bindingService) throw new Error('bindingService is required');
         if (!webSessionService) throw new Error('webSessionService is required');
+        if (!internalHttpClient) throw new Error('internalHttpClient is required');
 
         this.operatorService = operatorService;
         this.bindingService = bindingService;
         this.webSessionService = webSessionService;
         this.sseService = sseService;
+        this.internalHttpClient = internalHttpClient;
     }
 
     async bindOperator(bindReq) {
@@ -48,101 +51,58 @@ export class BindOperatorsService {
 
     async bindOperators(bindReq) {
         const { operator_ids: operatorIds, web_session_id: webSessionId, user_id: userId } = bindReq;
-        const currentBoundSessionIds = await this.bindingService.getBoundOperatorSessionIds(webSessionId);
 
-        logger.info('[OPERATOR-BIND-SERVICE] Starting bind operation', {
+        logger.info('[OPERATOR-BIND-SERVICE] Starting bind operation via substrate', {
             user_id: userId,
             operator_count: operatorIds.length,
             web_session_id_tag: sessionIdTag(webSessionId),
         });
 
-        const bound = [];
-        const failed = [];
-        const errors = [];
-
-        for (const operatorId of operatorIds) {
-            try {
-                const operator = await this.operatorService.getOperator(operatorId);
-
-                if (!operator) {
-                    throw new Error(DeviceLinkError.OPERATOR_NOT_FOUND);
-                }
-
-                if (operator.user_id !== userId) {
-                    throw new Error(DeviceLinkError.OPERATOR_WRONG_USER);
-                }
-
-                const operatorSessionId = operator.operator_session_id;
-                if (!operatorSessionId) {
-                    throw new Error('Operator has no active session');
-                }
-
-                if (currentBoundSessionIds.includes(operatorSessionId)) {
-                    bound.push(operatorId);
-                    continue;
-                }
-
-                // 1. Use g8ee for operator binding to enforce architectural boundary
-                // g8ed should not write to operators after auth
-                const g8eContext = G8eHttpContext.parse({
-                    web_session_id: webSessionId,
-                    user_id: userId,
-                    organization_id: operator.organization_id,
-                    source_component: SourceComponent.G8ED,
-                });
-
-                const relayParams = {
-                    operator_ids: [operatorId],
-                    web_session_id: webSessionId,
-                    user_id: userId,
-                };
-
-                const response = await this.operatorService.relayBindOperatorsToG8ee(relayParams, g8eContext);
-                
-                if (!response.success || response.failed_count > 0) {
-                    throw new Error(response.errors?.[0]?.error || 'Failed to bind operator via g8ee');
-                }
-
-                // 2. Update Web Session document
-                await this.webSessionService.bindOperatorToWebSession(webSessionId, operatorId);
-
-                // 3. Link sessions in KV & Durability
-                await this.bindingService.bind(operatorSessionId, webSessionId, userId, operatorId);
-
-                bound.push(operatorId);
-
-            } catch (err) {
-                logger.error('[OPERATOR-BIND-SERVICE] Failed to bind operator', {
-                    operator_id: operatorId,
-                    error: err.message,
-                });
-                failed.push(operatorId);
-                errors.push({ operator_id: operatorId, error: err.message });
+        try {
+            // Call substrate-owned binding route
+            const response = await this.internalHttpClient.bindOperators(operatorIds, userId, webSessionId);
+            
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to bind operators via substrate');
             }
-        }
 
-        const success = bound.length > 0 || failed.length === 0;
-        const statusCode = failed.length === operatorIds.length ? 400 : (failed.length > 0 ? 207 : 200);
-
-        // Emit updated operator list after successful bind
-        if (bound.length > 0 && this.sseService) {
-            try {
-                const operatorList = await this.operatorService.getUserOperators(userId);
-                await this.sseService.publishEvent(webSessionId, operatorList);
-            } catch (error) {
-                logger.warn('[OPERATOR-BIND-SERVICE] Failed to emit operator list after bind', { error: error.message });
+            // Sync local cache/state if needed
+            // For now we still invalidate local cache to ensure next read reflects substrate state
+            for (const operatorId of operatorIds) {
+                await this.bindingService.evictDocument(this.bindingService.collection, webSessionId);
+                await this.operatorService.evictOperator(operatorId);
             }
-        }
 
-        return new BindOperatorsResponse({
-            success,
-            statusCode,
-            bound_count: bound.length,
-            failed_count: failed.length,
-            bound_operator_ids: bound,
-            failed_operator_ids: failed,
-            errors: errors.length > 0 ? errors : [],
-        });
+            // Emit updated operator list after successful bind
+            if (this.sseService) {
+                try {
+                    const operatorList = await this.operatorService.getUserOperators(userId);
+                    await this.sseService.publishEvent(webSessionId, operatorList);
+                } catch (error) {
+                    logger.warn('[OPERATOR-BIND-SERVICE] Failed to emit operator list after bind', { error: error.message });
+                }
+            }
+
+            return new BindOperatorsResponse({
+                success: response.success,
+                statusCode: response.failed_count > 0 ? 207 : 200,
+                bound_count: response.bound_count,
+                failed_count: response.failed_count,
+                bound_operator_ids: response.bound_operator_ids,
+                failed_operator_ids: response.failed_operator_ids,
+                errors: response.error ? [{ error: response.error }] : [],
+            });
+
+        } catch (err) {
+            logger.error('[OPERATOR-BIND-SERVICE] Failed to bind operators via substrate', {
+                error: err.message,
+            });
+            return new BindOperatorsResponse({
+                success: false,
+                statusCode: 500,
+                errors: [{ error: err.message }],
+            });
+        }
     }
 
     async unbindOperator(unbindReq) {
@@ -158,92 +118,55 @@ export class BindOperatorsService {
         }
         const { operator_ids: operatorIds, web_session_id: webSessionId, user_id: userId } = unbindReq;
         
-        logger.info('[OPERATOR-BIND-SERVICE] Starting unbind operation', {
+        logger.info('[OPERATOR-BIND-SERVICE] Starting unbind operation via substrate', {
             user_id: userId,
             operator_count: operatorIds.length,
             web_session_id_tag: sessionIdTag(webSessionId),
         });
 
-        const unbound = [];
-        const failed = [];
-        const errors = [];
-
-        for (const operatorId of operatorIds) {
-            try {
-                const operator = await this.operatorService.getOperator(operatorId);
-
-                if (!operator) {
-                    throw new Error(DeviceLinkError.OPERATOR_NOT_FOUND);
-                }
-
-                if (operator.user_id !== userId) {
-                    throw new Error('Not authorized to unbind this operator');
-                }
-
-                const operatorSessionId = operator.operator_session_id;
-
-                // 1. Use g8ee for operator unbinding to enforce architectural boundary
-                // g8ed should not write to operators after auth
-                const g8eContext = G8eHttpContext.parse({
-                    web_session_id: webSessionId,
-                    user_id: userId,
-                    organization_id: operator.organization_id,
-                    source_component: SourceComponent.G8ED,
-                });
-
-                const relayParams = {
-                    operator_ids: [operatorId],
-                    web_session_id: webSessionId,
-                    user_id: userId,
-                };
-
-                const response = await this.operatorService.relayUnbindOperatorsToG8ee(relayParams, g8eContext);
-                
-                if (!response.success || response.failed_count > 0) {
-                    throw new Error(response.errors?.[0]?.error || 'Failed to unbind operator via g8ee');
-                }
-
-                // 2. Update Web Session document
-                await this.webSessionService.unbindOperatorFromWebSession(webSessionId, operatorId);
-
-                // 3. Unlink sessions in KV & Durability
-                if (operatorSessionId) {
-                    await this.bindingService.unbind(operatorSessionId, webSessionId, operatorId);
-                }
-                
-                unbound.push(operatorId);
-
-            } catch (err) {
-                logger.error('[OPERATOR-BIND-SERVICE] Failed to unbind operator', {
-                    operator_id: operatorId,
-                    error: err.message,
-                });
-                failed.push(operatorId);
-                errors.push({ operator_id: operatorId, error: err.message });
+        try {
+            // Call substrate-owned unbinding route
+            const response = await this.internalHttpClient.unbindOperators(operatorIds, userId, webSessionId);
+            
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to unbind operators via substrate');
             }
-        }
 
-        const success = unbound.length > 0 || failed.length === 0;
-        const statusCode = failed.length === operatorIds.length ? 400 : (failed.length > 0 ? 207 : 200);
-
-        // Emit updated operator list after successful unbind
-        if (unbound.length > 0 && this.sseService) {
-            try {
-                const operatorList = await this.operatorService.getUserOperators(userId);
-                await this.sseService.publishEvent(webSessionId, operatorList);
-            } catch (error) {
-                logger.warn('[OPERATOR-BIND-SERVICE] Failed to emit operator list after unbind', { error: error.message });
+            // Sync local cache/state if needed
+            for (const operatorId of operatorIds) {
+                await this.bindingService.evictDocument(this.bindingService.collection, webSessionId);
+                await this.operatorService.evictOperator(operatorId);
             }
-        }
 
-        return new UnbindOperatorsResponse({
-            success,
-            statusCode,
-            unbound_count: unbound.length,
-            failed_count: failed.length,
-            unbound_operator_ids: unbound,
-            failed_operator_ids: failed,
-            errors: errors.length > 0 ? errors : [],
-        });
+            // Emit updated operator list after successful unbind
+            if (this.sseService) {
+                try {
+                    const operatorList = await this.operatorService.getUserOperators(userId);
+                    await this.sseService.publishEvent(webSessionId, operatorList);
+                } catch (error) {
+                    logger.warn('[OPERATOR-BIND-SERVICE] Failed to emit operator list after unbind', { error: error.message });
+                }
+            }
+
+            return new UnbindOperatorsResponse({
+                success: response.success,
+                statusCode: response.failed_count > 0 ? 207 : 200,
+                unbound_count: response.unbound_count,
+                failed_count: response.failed_count,
+                unbound_operator_ids: response.unbound_operator_ids,
+                failed_operator_ids: response.failed_operator_ids,
+                errors: response.error ? [{ error: response.error }] : [],
+            });
+
+        } catch (err) {
+            logger.error('[OPERATOR-BIND-SERVICE] Failed to unbind operators via substrate', {
+                error: err.message,
+            });
+            return new UnbindOperatorsResponse({
+                success: false,
+                statusCode: 500,
+                errors: [{ error: err.message }],
+            });
+        }
     }
 }
