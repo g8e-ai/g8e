@@ -21,7 +21,7 @@ import { DeviceLinkStatus, DeviceLinkError, DEVICE_LINK_TTL_SECONDS, DEVICE_LINK
 import { OperatorStatus, OperatorType } from '@g8ed/constants/operator.js';
 import { Collections } from '@g8ed/constants/collections.js';
 import { KVKey } from '@g8ed/constants/kv_keys.js';
-import { now, addSeconds } from '@g8ed/models/base.js';
+import { now, addSeconds, toISOString } from '@g8ed/models/base.js';
 
 describe('DeviceLinkService', () => {
     let service;

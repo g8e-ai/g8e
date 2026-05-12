@@ -225,7 +225,7 @@ check: fmt vet lint test
 .PHONY: clean
 clean:
 	@rm -rf build/
-	@rm -f $(BINARY_NAME) coverage.out coverage.html
+	@rm -f $(BINARY_NAME) coverage.out coverage.html *.test
 
 .PHONY: clean-go-cache
 clean-go-cache:

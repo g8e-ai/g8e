@@ -122,53 +122,6 @@ if [[ -z "$COMPONENT" ]]; then
     COMPONENT="g8eo"
 fi
 
-# =============================================================================
-# Container Environment Setup
-# =============================================================================
-
-_install_ca_cert() {
-    local pki_dir="${G8E_PKI_DIR:-$PROJECT_ROOT/.g8e/pki}"
-    local ca_cert="${G8E_TRUST_BUNDLE:-$pki_dir/trust/hub-bundle.pem}"
-    if [[ ! -f "$ca_cert" ]]; then
-        log_warn "Platform trust bundle not found at $ca_cert"
-        return
-    fi
-    export G8E_SSL_CERT_FILE="$ca_cert"
-    export NODE_EXTRA_CA_CERTS="$ca_cert"
-    log_ok "Platform trust bundle set (G8E_SSL_CERT_FILE=$ca_cert)"
-}
-
-_load_platform_secrets() {
-    local secrets_dir="${G8E_SECRETS_DIR:-$PROJECT_ROOT/.g8e/secrets}"
-    local auth_token_file="$secrets_dir/internal_auth_token"
-    local session_key_file="$secrets_dir/session_encryption_key"
-    if [[ -f "$auth_token_file" ]]; then
-        export G8E_INTERNAL_AUTH_TOKEN=$(cat "$auth_token_file" | tr -d ' \n\r')
-        log_ok "G8E_INTERNAL_AUTH_TOKEN loaded from $secrets_dir"
-    fi
-    if [[ -f "$session_key_file" ]]; then
-        export G8E_SESSION_ENCRYPTION_KEY=$(cat "$session_key_file" | tr -d ' \n\r')
-        log_ok "G8E_SESSION_ENCRYPTION_KEY loaded from $secrets_dir"
-    fi
-}
-
-_verify_operator() {
-    local pki_dir="${G8E_PKI_DIR:-$PROJECT_ROOT/.g8e/pki}"
-    local ca_cert="${G8E_TRUST_BUNDLE:-$pki_dir/trust/hub-bundle.pem}"
-
-    if [[ ! -f "$ca_cert" ]]; then
-        log_err "Platform trust bundle not found at $ca_cert"
-        exit 1
-    fi
-    local operator_url="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"
-    local curl_args=("--cacert" "$ca_cert")
-    if ! curl -sf "${curl_args[@]}" "$operator_url/health" 2>/dev/null | grep -q '"status":"ok"'; then
-        log_err "Operator listen mode (operator) not accessible at $operator_url/health"
-        exit 1
-    fi
-    log_ok "Operator listen mode connected"
-}
-
 _prompt_llm_config() {
     # Check for G8E_ prefixed vars and populate standard ones if found
     if [[ -n "${G8E_TEST_LLM_PROVIDER:-}" ]]; then
@@ -410,9 +363,6 @@ run_g8eo() {
 # =============================================================================
 
 export NODE_ENV="test"
-_install_ca_cert
-_load_platform_secrets
-_verify_operator
 
 log_header "run_tests.sh ${COMPONENT} $*"
 

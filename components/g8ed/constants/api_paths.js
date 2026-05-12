@@ -488,6 +488,7 @@ export const apiPaths = {
         target:         () => '/api/operators/target',
         deviceLinks:    () => '/api/device-links',
         deviceLink:     (token) => `/api/device-links/${token}`,
+        deviceLinkRegister: () => '/api/auth/device-link/register',
         settings:       () => '/api/settings',
         pkiRoot:        () => '/.well-known/g8e/pki/root.pem',
         pkiHubBundle:   () => '/.well-known/g8e/pki/hub-bundle.pem',

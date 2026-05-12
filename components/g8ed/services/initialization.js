@@ -331,9 +331,6 @@ async function _doInitialize() {
         // auditService already constructed in Phase 3 for CliSessionService
 
         deviceRegistrationService = new DeviceRegistrationService({
-            operatorService: operatorServiceInstance,
-            userService: userService,
-            sseService: sseService,
             internalHttpClient: internalHttpClientInstance,
         });
         

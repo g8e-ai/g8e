@@ -112,7 +112,7 @@ _menu() {
                 read -p "Select component [1-3]: " tcomp
                 case $tcomp in
                     1) ./g8e test g8eo ;;
-                    2) [[ -z "${TEST_LLM_PROVIDER:-}" ]] && _ensure_llm_config; ./g8e test g8ee ;;
+                    2) ./g8e test g8ee ;;
                     3) ./g8e test g8ed ;;
                 esac ;;
             6)
@@ -156,13 +156,9 @@ TOP="$1"; SUB="${2:-}"
 
 # Commands that require authentication
 OPERATOR_SESSION_ID=""; USER_ID=""; OPERATOR_ID=""
-AUTH_REQUIRED_COMMANDS=("test" "security" "data" "mcp")
+AUTH_REQUIRED_COMMANDS=("security" "data" "mcp")
 if [[ " ${AUTH_REQUIRED_COMMANDS[@]} " =~ " ${TOP} " ]]; then
-    if [[ "$TOP" == "test" && "${CI:-}" == "true" ]]; then
-        : # Skip auth in CI
-    else
-        _ensure_authenticated
-    fi
+    _ensure_authenticated
 fi
 if [[ "$TOP" == "operator" && ("$SUB" == "deploy" || "$SUB" == "stream" || "$SUB" == "reauth") ]]; then _ensure_authenticated; fi
 if [[ "$TOP" == "platform" && "$SUB" == "settings" ]]; then _ensure_authenticated; fi

@@ -231,6 +231,7 @@ class DeviceLinkService {
             deviceInfo,
             operator_type: OperatorType.CLOUD,
             g8eContext,
+            device_link_token: token,
         });
 
         if (!result.success) {
@@ -326,12 +327,11 @@ class DeviceLinkService {
                     user_id: linkData.user_id,
                     organization_id: linkData.organization_id,
                 }),
+                device_link_token: token,
             });
             return result;
         }
 
-        // 2. g8ee is authoritative for slot management - always pass null operator_id
-        // g8ee will find existing slot by fingerprint or create new slot on-demand
         const targetOperatorId = null;
 
         // 3. Acquire distributed lock for fingerprint deduplication
@@ -375,7 +375,6 @@ class DeviceLinkService {
             return { success: false, error: DeviceLinkError.DEVICE_ALREADY_REGISTERED };
         }
 
-        // Atomic usage check before calling g8ee
         const currentUsage = await this._cache_aside.kvScard(fingerprintKey);
         logger.info('[DEVICE-LINK] Usage check', {
             token_prefix: token.substring(0, 20) + '...',
@@ -394,9 +393,6 @@ class DeviceLinkService {
             return { success: false, error: DeviceLinkError.LINK_EXHAUSTED };
         }
 
-        // 4. g8ee is authoritative for slot management.
-        // We call g8ee OUTSIDE the lock to allow high-concurrency parallel registration.
-        // The lock is only used to protect the final linkData JSON update.
         const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
         const g8eContext = G8eHttpContext.parse({
             web_session_id: webSessionId,

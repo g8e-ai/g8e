@@ -42,6 +42,7 @@ import { G8eHeaders, HTTP_INTERNAL_AUTH_HEADER } from '../../constants/headers.j
 import {
     INTERNAL_HTTP_TIMEOUT_MS,
     G8EE_INTERNAL_URL,
+    OPERATOR_INTERNAL_HTTP_URL,
     INTERNAL_HTTP_CLIENT_USER_AGENT,
     NEW_CASE_ID
 } from '../../constants/http_client.js';
@@ -655,6 +656,15 @@ class InternalHttpClient{
     async deleteDeviceLink(token, userId) {
         return this.request('g8eo', `${ApiPaths.substrate.deviceLink(token)}?user_id=${userId}`, {
             method: 'DELETE'
+        });
+    }
+
+    async registerDeviceLink(token, data) {
+        return this.request('g8eo', ApiPaths.substrate.deviceLinkRegister(), {
+            method: 'POST',
+            headers: { [G8eHeaders.DEVICE_TOKEN]: token },
+            body: data,
+            maxRetries: 0
         });
     }
 

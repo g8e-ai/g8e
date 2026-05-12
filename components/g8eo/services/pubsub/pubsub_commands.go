@@ -34,7 +34,6 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
-	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -453,26 +452,17 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		return
 	}
 
-	// Temporary migration path: Try to parse as GovernanceEnvelope (protobuf) and map to UAP
-	// This allows incremental test migration during Phase 3 transition.
+	// Reject legacy GovernanceEnvelope (protobuf)
 	var protoEnv commonv1.GovernanceEnvelope
 	if err := proto.Unmarshal(payload, &protoEnv); err == nil {
-		rs.logger.Warn("Parsed request as GovernanceEnvelope (protobuf) - migrating to UAP (temporary compatibility layer)",
+		rs.logger.Error("Rejected request as legacy GovernanceEnvelope (protobuf) - no backwards compatibility",
 			"id", protoEnv.Id,
-			"action", "update tests to use UAPEnvelope JSON format")
-		mappedEnv, caseID, investigationID, taskID, err := rs.mapGovernanceToUAP(&protoEnv)
-		if err != nil {
-			rs.logger.Error("Failed to map GovernanceEnvelope to UAP - command rejected",
-				"error", err,
-				"id", protoEnv.Id)
-			return
-		}
-		rs.handleUAPEnvelopeWithIDs(mappedEnv, caseID, investigationID, taskID)
+			"action", "update client to use UAPEnvelope JSON format")
 		return
 	}
 
 	// Reject unknown envelope formats
-	rs.logger.Error("Failed to parse as UAPEnvelope or GovernanceEnvelope - unknown format rejected",
+	rs.logger.Error("Failed to parse as UAPEnvelope - unknown format rejected",
 		"error", "envelope_format_unknown",
 		"action", "use UAPEnvelope JSON format")
 	return
@@ -480,12 +470,6 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 
 // handleUAPEnvelope processes a UAPEnvelope using the Tribunal and Warden services.
 func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
-	rs.handleUAPEnvelopeWithIDs(env, env.CaseID, env.InvestigationID, env.TaskID)
-}
-
-// handleUAPEnvelopeWithIDs processes a UAPEnvelope with application-layer IDs (CaseID, InvestigationID, TaskID).
-// This is used during migration to preserve these IDs from GovernanceEnvelope.
-func (rs *PubSubCommandService) handleUAPEnvelopeWithIDs(env *uap.UAPEnvelope, caseID string, investigationID string, taskID *string) {
 	// Generate and verify MessageID (Tribunal hash verification)
 	expectedID, err := env.GenerateMessageID()
 	if err != nil {
@@ -501,8 +485,7 @@ func (rs *PubSubCommandService) handleUAPEnvelopeWithIDs(env *uap.UAPEnvelope, c
 	rs.logger.Info("UAPEnvelope MessageID verified", "message_id", env.MessageID)
 
 	// Tribunal evaluation (L1/L2 governance: hash verification + MITRE checks + voting)
-	// During migration, governance enforcement is optional - fail-open if not configured
-	if rs.tribunal != nil && rs.tribunal.PrivateKey != nil {
+	if rs.tribunal != nil {
 		if err := rs.tribunal.EvaluatePayload(env); err != nil {
 			rs.logger.Error("Tribunal evaluation failed - command rejected",
 				"error", err,
@@ -511,12 +494,12 @@ func (rs *PubSubCommandService) handleUAPEnvelopeWithIDs(env *uap.UAPEnvelope, c
 		}
 		rs.logger.Info("Tribunal evaluation passed", "message_id", env.MessageID)
 	} else {
-		rs.logger.Debug("Tribunal service not fully configured - skipping evaluation (migration mode)")
+		rs.logger.Error("FATAL: Tribunal service missing - command rejected", "message_id", env.MessageID)
+		return
 	}
 
 	// Warden authorization (L3 governance: quorum enforcement + execution authorization)
-	// During migration, governance enforcement is optional - fail-open if not configured
-	if rs.warden != nil && len(rs.warden.TrustedNodes) > 0 {
+	if rs.warden != nil {
 		if err := rs.warden.AuthorizeExecution(env); err != nil {
 			rs.logger.Error("Warden authorization failed - command rejected",
 				"error", err,
@@ -525,7 +508,8 @@ func (rs *PubSubCommandService) handleUAPEnvelopeWithIDs(env *uap.UAPEnvelope, c
 		}
 		rs.logger.Info("Warden authorization passed", "message_id", env.MessageID)
 	} else {
-		rs.logger.Debug("Warden service not fully configured - skipping authorization (migration mode)")
+		rs.logger.Error("FATAL: Warden service missing - command rejected", "message_id", env.MessageID)
+		return
 	}
 
 	// Convert UAPEnvelope to PubSubCommandMessage for dispatch
@@ -534,15 +518,25 @@ func (rs *PubSubCommandService) handleUAPEnvelopeWithIDs(env *uap.UAPEnvelope, c
 
 	payload := env.Payload
 	if len(payload) == 0 {
-		payload = []byte(env.Context.DataBlob)
+		// If IntentData is present (JSON-first), use it as the payload
+		if len(env.IntentData) > 0 {
+			var err error
+			payload, err = json.Marshal(env.IntentData)
+			if err != nil {
+				rs.logger.Error("Failed to marshal IntentData for dispatch", "error", err)
+				return
+			}
+		} else {
+			payload = []byte(env.Context.DataBlob)
+		}
 	}
 
 	cmdMsg := PubSubCommandMessage{
 		ID:                env.MessageID,
 		EventType:         eventType,
-		CaseID:            caseID,
-		TaskID:            taskID,
-		InvestigationID:   investigationID,
+		CaseID:            env.CaseID,
+		TaskID:            env.TaskID,
+		InvestigationID:   env.InvestigationID,
 		OperatorSessionID: env.Metadata.SenderID,
 		OperatorID:        nil,
 		Payload:           payload,
@@ -550,64 +544,6 @@ func (rs *PubSubCommandService) handleUAPEnvelopeWithIDs(env *uap.UAPEnvelope, c
 	}
 
 	rs.dispatchCommand(cmdMsg)
-}
-
-// mapGovernanceToUAP maps a legacy GovernanceEnvelope to a UAPEnvelope for migration.
-// This is a temporary compatibility layer during Phase 3 transition.
-// Returns the UAPEnvelope and the original CaseID/InvestigationID for threading through dispatch.
-func (rs *PubSubCommandService) mapGovernanceToUAP(protoEnv *commonv1.GovernanceEnvelope) (*uap.UAPEnvelope, string, string, *string, error) {
-	// Extract event type and payload for mapping
-	eventType := protoEnv.EventType
-	payload := protoEnv.Payload
-
-	// Preserve application-layer IDs for threading through dispatch
-	caseID := protoEnv.CaseId
-	investigationID := protoEnv.InvestigationId
-	var taskID *string
-	if protoEnv.TaskId != "" {
-		taskID = &protoEnv.TaskId
-	}
-
-	// Map protobuf event types to UAP action types
-	actionType := mapEventTypeToActionType(eventType)
-	targetResource := "localhost" // Default target for migration
-
-	// Encode application-layer IDs into DataBlob for preservation during UAP processing
-	// This is a temporary workaround until UAP envelope supports these fields natively
-	dataBlob := string(payload)
-
-	// Create UAPEnvelope from GovernanceEnvelope fields
-	uapEnv := &uap.UAPEnvelope{
-		ProtocolVersion: "1.0",
-		MessageID:       protoEnv.Id, // Will be regenerated by GenerateMessageID
-		Metadata: uap.Metadata{
-			SenderID:  protoEnv.OperatorSessionId,
-			Timestamp: protoEnv.Timestamp.AsTime(),
-			Signature: "", // GovernanceEnvelope signatures are different format
-		},
-		Intent: uap.Intent{
-			ActionType:     actionType,
-			TargetResource: targetResource,
-		},
-		Context: uap.Context{
-			DataFormat: "raw",
-			DataBlob:   dataBlob,
-		},
-		Consensus: uap.ConsensusState{
-			RequiredVotes: 1, // Migration mode: single vote required
-			CurrentVotes:  []uap.Vote{},
-			Status:        "PENDING",
-		},
-	}
-
-	// Generate proper MessageID from Intent+Context
-	if id, err := uapEnv.GenerateMessageID(); err != nil {
-		return nil, "", "", nil, fmt.Errorf("failed to generate MessageID: %w", err)
-	} else {
-		uapEnv.MessageID = id
-	}
-
-	return uapEnv, caseID, investigationID, taskID, nil
 }
 
 // mapEventTypeToActionType maps protobuf event types to UAP action types.
@@ -687,19 +623,7 @@ func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
 
 func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {
 	rs.logger.Info("Shutdown command received")
-	// Try to parse as protobuf ShutdownRequested first (for migration compatibility)
-	var sp operatorv1.ShutdownRequested
-	if err := proto.Unmarshal(msg.Payload, &sp); err == nil {
-		reason := sp.Reason
-		if reason == "" {
-			reason = "No reason provided"
-		}
-		rs.logger.Info("Shutting down operator (protobuf)", "reason", reason)
-		rs.ShutdownChan <- reason
-		return
-	}
-
-	// Fallback: treat payload as plain string (UAP format)
+	// Treat payload as plain string (UAP format)
 	reason := string(msg.Payload)
 	if reason == "" || reason == "{}" || reason == "invalid" {
 		reason = "No reason provided"

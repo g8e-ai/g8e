@@ -83,20 +83,16 @@ def build_universal_envelope_bytes(
     state_merkle_root: str = "",
     system_fingerprint: str = "",
 ) -> bytes:
-    """Build a Protobuf ``GovernanceEnvelope`` with signed L2 metadata.
+    """Build a Protobuf ``GovernanceEnvelope`` with structured intent data.
 
-    The inner payload MUST implement ``to_protobuf()`` returning a
-    Protobuf message. The resulting bytes are published directly to
-    the operator pub/sub channel for consumption by g8eo.
-
-    The L2 Tribunal signature is always populated. L1 technical
-    validation is performed downstream by g8eo via protobuf reflection
-    on ``forbidden_patterns`` custom options; we set ``l1.validated``
-    here only as a hint and do not short-circuit any enforcement.
+    The payload is serialized as a google.protobuf.Struct in ``intent_data``
+    for JSON-first protocol compatibility. The legacy ``payload`` bytes
+    field is also populated for backward compatibility during the pivot.
     """
     if message.payload is None:
         raise ValueError("G8eMessage.payload is required to build GovernanceEnvelope")
 
+    # Serialize to bytes for legacy payload and L2 signature
     proto_payload = message.payload.to_protobuf()
     payload_bytes = proto_payload.SerializeToString()
 
@@ -118,6 +114,10 @@ def build_universal_envelope_bytes(
     envelope.system_fingerprint = system_fingerprint
     envelope.state_merkle_root = state_merkle_root
     envelope.payload = payload_bytes
+
+    # Populate structured intent_data (JSON-first)
+    payload_dict = message.payload.model_dump(mode="json")
+    envelope.intent_data.update(payload_dict)
 
     # L1 Metadata — technical bedrock validation is enforced downstream
     # via protobuf reflection. This flag is an honest self-report.

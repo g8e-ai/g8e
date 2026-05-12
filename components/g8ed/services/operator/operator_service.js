@@ -188,10 +188,6 @@ class OperatorService {
         return this.relay.relayAuthenticateOperatorToG8ee(params, g8eContext);
     }
 
-    async relayRegisterDeviceLinkToG8ee(params, g8eContext) {
-        return this.relay.relayRegisterDeviceLinkToG8ee(params, g8eContext);
-    }
-
     async relayValidateOperatorSessionToG8ee(operatorSessionId, g8eContext) {
         return this.relay.relayValidateOperatorSessionToG8ee(operatorSessionId, g8eContext);
     }

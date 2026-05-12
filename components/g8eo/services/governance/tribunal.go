@@ -51,7 +51,7 @@ func (t *Tribunal) EvaluatePayload(env *uap.UAPEnvelope) error {
 // RunMITREChecks leverages Sentinel to identify malicious activity patterns.
 func (t *Tribunal) RunMITREChecks(resource string, data string) bool {
 	if t.Sentinel == nil {
-		return true // Fail-open in bootstrap? In production should be fail-closed.
+		return false // Fail-closed: if Sentinel is missing, the payload is NOT safe.
 	}
 	analysis := t.Sentinel.AnalyzeCommand(data)
 	return analysis.Safe
@@ -60,7 +60,7 @@ func (t *Tribunal) RunMITREChecks(resource string, data string) bool {
 // SignDecision creates a cryptographic signature of the decision.
 func (t *Tribunal) SignDecision(messageID string, isSafe bool) string {
 	if t.PrivateKey == nil {
-		return "UNSIGNED"
+		panic("FATAL: Tribunal PrivateKey is nil. Cannot sign governance votes.")
 	}
 	// Sign the message ID and the decision
 	payload := fmt.Sprintf("%s|%v", messageID, isSafe)

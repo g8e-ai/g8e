@@ -16,6 +16,9 @@ type UAPEnvelope struct {
 	Context         Context        `json:"context"`
 	Consensus       ConsensusState `json:"consensus_state"`
 
+	// Structured intent data for JSON-first protocol
+	IntentData map[string]interface{} `json:"intent_data,omitempty"`
+
 	// Application-layer identifiers
 	CaseID          string  `json:"case_id,omitempty"`
 	InvestigationID string  `json:"investigation_id,omitempty"`
@@ -37,8 +40,9 @@ type Intent struct {
 }
 
 type Context struct {
-	DataFormat string `json:"data_format"` // Must be strictly defined, e.g., "markdown", "raw"
-	DataBlob   string `json:"data_blob"`   // The LLM's unstructured output/reasoning
+	DataFormat string                 `json:"data_format"` // Must be strictly defined, e.g., "markdown", "raw", "json"
+	IntentData map[string]interface{} `json:"intent_data"` // Structured intent parameters (replaces DataBlob)
+	DataBlob   string                 `json:"data_blob"`   // DEPRECATED: Use IntentData
 }
 
 type ConsensusState struct {
@@ -55,13 +59,27 @@ type Vote struct {
 
 // GenerateMessageID creates a deterministic hash of the critical payload.
 func (env *UAPEnvelope) GenerateMessageID() (string, error) {
-	payload, err := json.Marshal(struct {
-		Intent  Intent  `json:"intent"`
-		Context Context `json:"context"`
-	}{
-		Intent:  env.Intent,
-		Context: env.Context,
-	})
+	// If IntentData is present, include it in the hash for JSON-first protocol
+	var payload []byte
+	var err error
+
+	if len(env.IntentData) > 0 {
+		payload, err = json.Marshal(struct {
+			Intent     Intent                 `json:"intent"`
+			IntentData map[string]interface{} `json:"intent_data"`
+		}{
+			Intent:     env.Intent,
+			IntentData: env.IntentData,
+		})
+	} else {
+		payload, err = json.Marshal(struct {
+			Intent  Intent  `json:"intent"`
+			Context Context `json:"context"`
+		}{
+			Intent:  env.Intent,
+			Context: env.Context,
+		})
+	}
 
 	if err != nil {
 		return "", err

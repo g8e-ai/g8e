@@ -11,214 +11,99 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DeviceRegistrationService } from '@g8ed/services/auth/device_registration_service.js';
-import { OperatorStatus, OperatorType } from '@g8ed/constants/operator.js';
-import { OperatorSessionRole, DeviceLinkError } from '@g8ed/constants/auth.js';
-import { EventType } from '@g8ed/constants/events.js';
-import { G8eHttpContext } from '@g8ed/models/request_models.js';
-import { getTestServices } from '@test/helpers/test-services.js';
-import { TestCleanupHelper } from '@test/helpers/test-cleanup.js';
+import { DeviceLinkError } from '@g8ed/constants/auth.js';
+import { createMockInternalHttpClient } from '@test/mocks/internal-http-client.mock.js';
 
 describe('DeviceRegistrationService', () => {
     let service;
-    let services;
-    let cleanup;
-    let sseService;
-    let operatorService;
-    let webSessionService;
-    let userService;
+    let internalHttpClient;
 
-    const mockG8eContextRaw = {
-        user_id: 'user-123',
-        web_session_id: 'web-session-456',
-        organization_id: 'org-789'
-    };
-    let mockG8eContext;
+    const token = 'dlk_' + 'a'.repeat(32);
 
     const mockDeviceInfo = {
-        system_fingerprint: 'abc123def456',
+        system_fingerprint: 'ABC123DEF456',
         hostname: 'test-host',
         os: 'linux',
         arch: 'x64',
         username: 'test-user',
-        ip_address: '192.168.1.100'
+        ip_address: '192.168.1.100',
+        csr_pem: '-----BEGIN CERTIFICATE REQUEST-----\nmock\n-----END CERTIFICATE REQUEST-----'
     };
 
-    beforeEach(async () => {
+    beforeEach(() => {
         vi.clearAllMocks();
-        services = await getTestServices();
-        mockG8eContext = G8eHttpContext.parse(mockG8eContextRaw);
-        
-        // Setup real services with spies for verification
-        sseService = services.sseService;
-        operatorService = services.operatorService;
-        webSessionService = services.webSessionService;
-        userService = services.userService;
-
-        vi.spyOn(sseService, 'publishEvent').mockResolvedValue(true);
-        vi.spyOn(operatorService, 'getOperator');
-        vi.spyOn(operatorService, 'claimOperatorSlot');
-        
-        vi.spyOn(webSessionService, 'createWebSession');
-        vi.spyOn(webSessionService, 'endSession').mockResolvedValue(true);
-        
-        vi.spyOn(userService, 'getUser');
-        vi.spyOn(userService, 'updateUserOperator').mockResolvedValue(true);
-        
-        vi.spyOn(operatorService, 'relayRegisterDeviceLinkToG8ee').mockResolvedValue({
-            success: true,
-            operator_session_id: 'test-session-id'
-        });
-        vi.spyOn(operatorService, 'relayListenSessionAuthToG8ee').mockResolvedValue({
-            success: true
-        });
-
-        cleanup = new TestCleanupHelper(services.cacheAsideService, null, {
-            operatorsCollection: services.operatorService.collectionName
-        });
-
-        service = new DeviceRegistrationService({
-            operatorService,
-            userService,
-            sseService,
-            internalHttpClient: services.internalHttpClient
-        });
-    });
-
-    afterEach(async () => {
-        if (cleanup) {
-            await cleanup.cleanup();
-        }
+        internalHttpClient = createMockInternalHttpClient();
+        service = new DeviceRegistrationService({ internalHttpClient });
     });
 
     describe('registerDevice', () => {
         it('should return failure if fingerprint is missing', async () => {
             const result = await service.registerDevice({
-                operator_id: 'op-1',
                 deviceInfo: {},
-                g8eContext: mockG8eContext
+                device_link_token: token
             });
             expect(result.success).toBe(false);
             expect(result.error).toBe(DeviceLinkError.MISSING_FINGERPRINT);
+            expect(internalHttpClient.registerDeviceLink).not.toHaveBeenCalled();
         });
 
-        it('should return failure if operator is not found', async () => {
-            operatorService.getOperator.mockResolvedValue(null);
+        it('should return failure if token is missing', async () => {
             const result = await service.registerDevice({
-                operator_id: 'non-existent',
-                deviceInfo: mockDeviceInfo,
-                g8eContext: mockG8eContext
+                deviceInfo: mockDeviceInfo
             });
             expect(result.success).toBe(false);
-            expect(result.error).toBe(DeviceLinkError.OPERATOR_NOT_FOUND);
+            expect(result.error).toBe(DeviceLinkError.INVALID_TOKEN_FORMAT);
+            expect(internalHttpClient.registerDeviceLink).not.toHaveBeenCalled();
         });
 
-        it('should return failure if user is not found', async () => {
-            operatorService.getOperator.mockResolvedValue({ id: 'op-1' });
-            userService.getUser.mockResolvedValue(null);
+        it('should successfully register a device through the Operator substrate', async () => {
+            internalHttpClient.registerDeviceLink.mockResolvedValue({
+                success: true,
+                operator_session_id: 'op-sess-999',
+                operator_id: 'op-1',
+                api_key: 'g8e_deadbeef_' + 'a'.repeat(64),
+                operator_cert_pem: 'cert',
+                session: { id: 'op-sess-999' },
+                config: { endpoint: 'https://localhost:9000' }
+            });
+
             const result = await service.registerDevice({
                 operator_id: 'op-1',
                 deviceInfo: mockDeviceInfo,
-                g8eContext: mockG8eContext
-            });
-            expect(result.success).toBe(false);
-            expect(result.error).toBe(DeviceLinkError.USER_NOT_FOUND);
-        });
-
-        it('should successfully register a device', async () => {
-            const operatorId = 'op-1';
-            const operatorSessionId = 'op-sess-999';
-            const mockUser = {
-                id: mockG8eContext.user_id,
-                email: 'test@example.com',
-                name: 'Test User',
-                organization_id: mockG8eContext.organization_id,
-                roles: [OperatorSessionRole.OPERATOR]
-            };
-
-            operatorService.getOperator.mockResolvedValue({
-                operator_id: operatorId,
-                status: OperatorStatus.OFFLINE
-            });
-            userService.getUser.mockResolvedValue(mockUser);
-            operatorService.relayRegisterDeviceLinkToG8ee.mockResolvedValue({
-                success: true,
-                operator_session_id: operatorSessionId
-            });
-
-            const result = await service.registerDevice({
-                operator_id: operatorId,
-                deviceInfo: mockDeviceInfo,
-                g8eContext: mockG8eContext
+                device_link_token: token
             });
 
             expect(result.success).toBe(true);
-            expect(result.operator_session_id).toBe(operatorSessionId);
-            
-            expect(operatorService.relayRegisterDeviceLinkToG8ee).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    operator_id: operatorId,
-                    operator_type: OperatorType.SYSTEM,
-                    system_fingerprint: mockDeviceInfo.system_fingerprint
-                }),
-                mockG8eContext
-            );
+            expect(result.operator_session_id).toBe('op-sess-999');
+            expect(result.operator_id).toBe('op-1');
+            expect(result.operator_cert).toBe('cert');
+            expect(result.config).toEqual({ endpoint: 'https://localhost:9000' });
+            expect(internalHttpClient.registerDeviceLink).toHaveBeenCalledWith(token, {
+                csr_pem: mockDeviceInfo.csr_pem,
+                system_fingerprint: 'abc123def456',
+                hostname: 'test-host',
+                os: 'linux',
+                arch: 'x64',
+                username: 'test-user',
+                ip_address: '192.168.1.100',
+            });
         });
 
-        it('should relay G8eHttpContext with bound_operators to g8ee', async () => {
-            const operatorId = 'op-relay';
-            const operatorSessionId = 'op-sess-relay';
-            const mockUser = {
-                id: mockG8eContext.user_id,
-                email: 'test@example.com',
-                organization_id: mockG8eContext.organization_id,
-                roles: [OperatorSessionRole.OPERATOR],
-            };
-
-            operatorService.getOperator.mockResolvedValue({
-                operator_id: operatorId,
-                status: OperatorStatus.OFFLINE,
-            });
-            userService.getUser.mockResolvedValue(mockUser);
-            operatorService.relayRegisterDeviceLinkToG8ee.mockResolvedValue({
-                success: true,
-                operator_session_id: operatorSessionId
-            });
-
-            await service.registerDevice({
-                operator_id: operatorId,
-                deviceInfo: mockDeviceInfo,
-                g8eContext: mockG8eContext,
-            });
-
-            expect(operatorService.relayRegisterDeviceLinkToG8ee).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    operator_id: operatorId,
-                    operator_type: OperatorType.SYSTEM,
-                    system_fingerprint: mockDeviceInfo.system_fingerprint
-                }),
-                mockG8eContext
-            );
-        });
-
-        it('should return failure if g8ee authentication fails', async () => {
-            const operatorId = 'op-1';
-            operatorService.getOperator.mockResolvedValue({ status: OperatorStatus.OFFLINE });
-            userService.getUser.mockResolvedValue({ id: 'u1' });
-            operatorService.relayRegisterDeviceLinkToG8ee.mockResolvedValue({
+        it('should return substrate registration failures directly', async () => {
+            internalHttpClient.registerDeviceLink.mockResolvedValue({
                 success: false,
-                error: 'Authentication failed'
+                error: 'CSR required for operator enrollment'
             });
 
             const result = await service.registerDevice({
-                operator_id: operatorId,
                 deviceInfo: mockDeviceInfo,
-                g8eContext: mockG8eContext
+                device_link_token: token
             });
 
             expect(result.success).toBe(false);
-            expect(result.error).toBe('Authentication failed');
+            expect(result.error).toBe('CSR required for operator enrollment');
         });
     });
 });

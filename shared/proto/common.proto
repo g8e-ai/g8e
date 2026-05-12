@@ -6,6 +6,7 @@ option go_package = "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/descriptor.proto";
+import "google/protobuf/struct.proto";
 
 // Custom options for governance
 extend google.protobuf.FieldOptions {
@@ -58,7 +59,10 @@ message GovernanceEnvelope {
   // Governance Metadata (L1/L2/L3)
   GovernanceMetadata governance = 13;
   
-  // The actual payload (serialized bytes)
+  // Structured intent parameters for JSON-first protocol
+  google.protobuf.Struct intent_data = 17;
+
+  // The actual payload (serialized bytes) - DEPRECATED in favor of intent_data
   bytes payload = 14;
 }
 

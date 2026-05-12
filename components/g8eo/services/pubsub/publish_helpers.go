@@ -15,6 +15,7 @@ package pubsub
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 
 	"google.golang.org/protobuf/proto"
@@ -78,7 +79,7 @@ func protoExecutionStatus(status constants.ExecutionStatus) operatorv1.Execution
 	}
 }
 
-// publishLFAATypedResponseTo builds a GovernanceEnvelope from a typed payload and publishes it to the
+// publishLFAATypedResponseTo builds a UAPEnvelope from a typed payload and publishes it to the
 // results channel. Used by services that hold a PubSubClient directly.
 func publishLFAATypedResponseTo(
 	ctx context.Context,
@@ -92,36 +93,29 @@ func publishLFAATypedResponseTo(
 	executionID := executionIDFromMessage(msg)
 	setExecutionIDOnPayload(payload, executionID)
 
-	env, err := BuildUniversalEnvelope(cfg, eventType, payload, "")
+	actionType := mapEventTypeToResultActionType(eventType)
+	env, err := BuildUAPResultEnvelope(cfg, actionType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID)
 	if err != nil {
-		logger.Error("Failed to build LFAA typed response envelope", "error", err)
+		logger.Error("Failed to build LFAA typed response UAP envelope", "error", err)
 		return
 	}
 
-	// Override envelope metadata from original message
-	env.CaseId = msg.CaseID
-	if msg.TaskID != nil {
-		env.TaskId = *msg.TaskID
-	}
-	env.InvestigationId = msg.InvestigationID
-	env.OperatorSessionId = msg.OperatorSessionID
-
-	data, err := proto.Marshal(env)
+	data, err := json.Marshal(env)
 	if err != nil {
-		logger.Error("Failed to marshal LFAA typed response envelope", "error", err)
+		logger.Error("Failed to marshal LFAA typed response UAP envelope", "error", err)
 		return
 	}
 
-	channelName := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
+	channelName := constants.ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
-		logger.Error("Failed to publish LFAA typed response", "error", err)
+		logger.Error("Failed to publish LFAA typed response UAP", "error", err)
 		return
 	}
 
-	logger.Info("LFAA typed response published (Protocol-First)", "event_type", eventType)
+	logger.Info("LFAA typed response published (UAP)", "event_type", eventType)
 }
 
-// publishLFAAErrorTo builds an error GovernanceEnvelope and publishes it to the results channel.
+// publishLFAAErrorTo builds an error UAPEnvelope and publishes it to the results channel.
 func publishLFAAErrorTo(
 	ctx context.Context,
 	client PubSubClient,
@@ -132,35 +126,28 @@ func publishLFAAErrorTo(
 ) {
 	executionID := executionIDFromMessage(msg)
 
-	// Use CommandResult as a generic error container for Protocol-First
+	// Use CommandResult as a generic error container
 	payload := &operatorv1.CommandResult{
 		ExecutionId: executionID,
 		Status:      protoExecutionStatus(constants.ExecutionStatusFailed),
 		Error:       errorMsg,
 	}
 
-	env, err := BuildUniversalEnvelope(cfg, eventType, payload, "")
+	actionType := mapEventTypeToResultActionType(eventType)
+	env, err := BuildUAPResultEnvelope(cfg, actionType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID)
 	if err != nil {
-		logger.Error("Failed to build LFAA error envelope", "error", err)
+		logger.Error("Failed to build LFAA error UAP envelope", "error", err)
 		return
 	}
 
-	// Override envelope metadata from original message
-	env.CaseId = msg.CaseID
-	if msg.TaskID != nil {
-		env.TaskId = *msg.TaskID
-	}
-	env.InvestigationId = msg.InvestigationID
-	env.OperatorSessionId = msg.OperatorSessionID
-
-	data, err := proto.Marshal(env)
+	data, err := json.Marshal(env)
 	if err != nil {
-		logger.Error("Failed to marshal LFAA error envelope", "error", err)
+		logger.Error("Failed to marshal LFAA error UAP envelope", "error", err)
 		return
 	}
 
-	channelName := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
+	channelName := constants.ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
-		logger.Error("Failed to publish LFAA error", "error", err)
+		logger.Error("Failed to publish LFAA error UAP", "error", err)
 	}
 }

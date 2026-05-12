@@ -15,6 +15,7 @@ package testutil
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -36,8 +37,8 @@ func MustMarshalJSON(t *testing.T, v interface{}) json.RawMessage {
 	return json.RawMessage(b)
 }
 
-// MustMarshalProtobufCommandRequested marshals a CommandRequested protobuf to bytes.
-func MustMarshalProtobufCommandRequested(t *testing.T, cmd string, execID string, justification string, sentinelMode string, timeout int) []byte {
+// MustBuildCommandRequestedPayload builds a CommandRequested payload bytes.
+func MustBuildCommandRequestedPayload(t *testing.T, cmd string, execID string, justification string, sentinelMode string, timeout int) []byte {
 	t.Helper()
 	protoCmd := &operatorv1.CommandRequested{
 		Command:        cmd,
@@ -53,8 +54,8 @@ func MustMarshalProtobufCommandRequested(t *testing.T, cmd string, execID string
 	return b
 }
 
-// MustMarshalProtobufCommandCancelRequested marshals a CommandCancelRequested protobuf to bytes.
-func MustMarshalProtobufCommandCancelRequested(t *testing.T, execID string) []byte {
+// MustBuildCommandCancelRequestedPayload builds a CommandCancelRequested payload bytes.
+func MustBuildCommandCancelRequestedPayload(t *testing.T, execID string) []byte {
 	t.Helper()
 	protoCancel := &operatorv1.CommandCancelRequested{
 		ExecutionId: execID,
@@ -127,7 +128,7 @@ func MustUnmarshalPayload(t *testing.T, data []byte, m proto.Message) {
 	}
 }
 
-// FileEditRequestFields is a helper struct for MustMarshalProtobufFileEditRequested
+// FileEditRequestFields is a helper struct for MustBuildFileEditRequestedPayload
 type FileEditRequestFields struct {
 	FilePath        string
 	Operation       string
@@ -145,8 +146,8 @@ type FileEditRequestFields struct {
 	CreateIfMissing bool
 }
 
-// MustMarshalProtobufFileEditRequested marshals a FileEditRequested protobuf to bytes.
-func MustMarshalProtobufFileEditRequested(t *testing.T, f FileEditRequestFields) []byte {
+// MustBuildFileEditRequestedPayload builds a FileEditRequested payload bytes.
+func MustBuildFileEditRequestedPayload(t *testing.T, f FileEditRequestFields) []byte {
 	t.Helper()
 	protoFileEdit := &operatorv1.FileEditRequested{
 		FilePath:        f.FilePath,
@@ -171,8 +172,8 @@ func MustMarshalProtobufFileEditRequested(t *testing.T, f FileEditRequestFields)
 	return b
 }
 
-// MustMarshalProtobufFsListRequested marshals a FsListRequested protobuf to bytes.
-func MustMarshalProtobufFsListRequested(t *testing.T, path string, execID string, maxEntries int32, maxDepth int32) []byte {
+// MustBuildFsListRequestedPayload builds a FsListRequested payload bytes.
+func MustBuildFsListRequestedPayload(t *testing.T, path string, execID string, maxEntries int32, maxDepth int32) []byte {
 	t.Helper()
 	protoFsList := &operatorv1.FsListRequested{
 		Path:        path,
@@ -187,8 +188,8 @@ func MustMarshalProtobufFsListRequested(t *testing.T, path string, execID string
 	return b
 }
 
-// MustMarshalProtobufCheckPortRequested marshals a CheckPortRequested protobuf to bytes.
-func MustMarshalProtobufCheckPortRequested(t *testing.T, host string, port int32, protocol string, execID string) []byte {
+// MustBuildCheckPortRequestedPayload builds a CheckPortRequested payload bytes.
+func MustBuildCheckPortRequestedPayload(t *testing.T, host string, port int32, protocol string, execID string) []byte {
 	t.Helper()
 	p := &operatorv1.CheckPortRequested{
 		ExecutionId: execID,
@@ -203,8 +204,8 @@ func MustMarshalProtobufCheckPortRequested(t *testing.T, host string, port int32
 	return b
 }
 
-// MustMarshalProtobufFsReadRequested marshals a FsReadRequested protobuf to bytes.
-func MustMarshalProtobufFsReadRequested(t *testing.T, path string, execID string, maxSize int32) []byte {
+// MustBuildFsReadRequestedPayload builds a FsReadRequested payload bytes.
+func MustBuildFsReadRequestedPayload(t *testing.T, path string, execID string, maxSize int32) []byte {
 	t.Helper()
 	protoFsRead := &operatorv1.FsReadRequested{
 		Path:        path,
@@ -218,8 +219,8 @@ func MustMarshalProtobufFsReadRequested(t *testing.T, path string, execID string
 	return b
 }
 
-// MustMarshalProtobufFetchLogsRequested marshals a FetchLogsRequested protobuf to bytes.
-func MustMarshalProtobufFetchLogsRequested(t *testing.T, execID string) []byte {
+// MustBuildFetchLogsRequestedPayload builds a FetchLogsRequested payload bytes.
+func MustBuildFetchLogsRequestedPayload(t *testing.T, execID string) []byte {
 	t.Helper()
 	p := &operatorv1.FetchLogsRequested{
 		ExecutionId: execID,
@@ -231,8 +232,8 @@ func MustMarshalProtobufFetchLogsRequested(t *testing.T, execID string) []byte {
 	return b
 }
 
-// MustMarshalProtobufFetchHistoryRequested marshals a FetchHistoryRequested protobuf to bytes.
-func MustMarshalProtobufFetchHistoryRequested(t *testing.T, execID string, sessionID string, limit int32, offset int32) []byte {
+// MustBuildFetchHistoryRequestedPayload builds a FetchHistoryRequested payload bytes.
+func MustBuildFetchHistoryRequestedPayload(t *testing.T, execID string, sessionID string, limit int32, offset int32) []byte {
 	t.Helper()
 	p := &operatorv1.FetchHistoryRequested{
 		ExecutionId:       execID,
@@ -247,8 +248,8 @@ func MustMarshalProtobufFetchHistoryRequested(t *testing.T, execID string, sessi
 	return b
 }
 
-// MustMarshalProtobufFetchFileHistoryRequested marshals a FetchFileHistoryRequested protobuf to bytes.
-func MustMarshalProtobufFetchFileHistoryRequested(t *testing.T, execID string, filePath string, limit int32) []byte {
+// MustBuildFetchFileHistoryRequestedPayload builds a FetchFileHistoryRequested payload bytes.
+func MustBuildFetchFileHistoryRequestedPayload(t *testing.T, execID string, filePath string, limit int32) []byte {
 	t.Helper()
 	p := &operatorv1.FetchFileHistoryRequested{
 		ExecutionId: execID,
@@ -262,8 +263,8 @@ func MustMarshalProtobufFetchFileHistoryRequested(t *testing.T, execID string, f
 	return b
 }
 
-// MustMarshalProtobufFetchFileDiffRequested marshals a FetchFileDiffRequested protobuf to bytes.
-func MustMarshalProtobufFetchFileDiffRequested(t *testing.T, execID string, filePath string) []byte {
+// MustBuildFetchFileDiffRequestedPayload builds a FetchFileDiffRequested payload bytes.
+func MustBuildFetchFileDiffRequestedPayload(t *testing.T, execID string, filePath string) []byte {
 	t.Helper()
 	p := &operatorv1.FetchFileDiffRequested{
 		ExecutionId: execID,
@@ -276,8 +277,8 @@ func MustMarshalProtobufFetchFileDiffRequested(t *testing.T, execID string, file
 	return b
 }
 
-// MustMarshalProtobufRestoreFileRequested marshals a RestoreFileRequested protobuf to bytes.
-func MustMarshalProtobufRestoreFileRequested(t *testing.T, execID string, filePath string, commitHash string, sessionID string) []byte {
+// MustBuildRestoreFileRequestedPayload builds a RestoreFileRequested payload bytes.
+func MustBuildRestoreFileRequestedPayload(t *testing.T, execID string, filePath string, commitHash string, sessionID string) []byte {
 	t.Helper()
 	p := &operatorv1.RestoreFileRequested{
 		ExecutionId:       execID,
@@ -292,8 +293,8 @@ func MustMarshalProtobufRestoreFileRequested(t *testing.T, execID string, filePa
 	return b
 }
 
-// MustMarshalProtobufAuditMsgRequested marshals an AuditMsgRequested protobuf to bytes.
-func MustMarshalProtobufAuditMsgRequested(t *testing.T, content string) []byte {
+// MustBuildAuditMsgRequestedPayload builds an AuditMsgRequested payload bytes.
+func MustBuildAuditMsgRequestedPayload(t *testing.T, content string) []byte {
 	t.Helper()
 	p := &operatorv1.AuditMsgRequested{
 		Content: content,
@@ -305,8 +306,8 @@ func MustMarshalProtobufAuditMsgRequested(t *testing.T, content string) []byte {
 	return b
 }
 
-// MustMarshalProtobufDirectCommandAuditRequested marshals a DirectCommandAuditRequested protobuf to bytes.
-func MustMarshalProtobufDirectCommandAuditRequested(t *testing.T, cmd string, execID string, sessionID string, typeStr string) []byte {
+// MustBuildDirectCommandAuditRequestedPayload builds a DirectCommandAuditRequested payload bytes.
+func MustBuildDirectCommandAuditRequestedPayload(t *testing.T, cmd string, execID string, sessionID string, typeStr string) []byte {
 	t.Helper()
 	p := &operatorv1.DirectCommandAuditRequested{
 		Command:           cmd,
@@ -321,8 +322,8 @@ func MustMarshalProtobufDirectCommandAuditRequested(t *testing.T, cmd string, ex
 	return b
 }
 
-// MustMarshalProtobufDirectCommandResultAuditRequested marshals a DirectCommandResultAuditRequested protobuf to bytes.
-func MustMarshalProtobufDirectCommandResultAuditRequested(t *testing.T, cmd string, execID string, output string, stderr string, exitCode int32, duration float32) []byte {
+// MustBuildDirectCommandResultAuditRequestedPayload builds a DirectCommandResultAuditRequested payload bytes.
+func MustBuildDirectCommandResultAuditRequestedPayload(t *testing.T, cmd string, execID string, output string, stderr string, exitCode int32, duration float32) []byte {
 	t.Helper()
 	p := &operatorv1.DirectCommandResultAuditRequested{
 		Command:              cmd,
@@ -339,8 +340,8 @@ func MustMarshalProtobufDirectCommandResultAuditRequested(t *testing.T, cmd stri
 	return b
 }
 
-// MustMarshalProtobufHeartbeatRequested marshals an empty HeartbeatRequested protobuf to bytes.
-func MustMarshalProtobufHeartbeatRequested(t *testing.T) []byte {
+// MustBuildHeartbeatRequestedPayload builds an empty HeartbeatRequested payload bytes.
+func MustBuildHeartbeatRequestedPayload(t *testing.T) []byte {
 	t.Helper()
 	protoHb := &operatorv1.HeartbeatRequested{}
 	b, err := proto.Marshal(protoHb)
@@ -350,8 +351,8 @@ func MustMarshalProtobufHeartbeatRequested(t *testing.T) []byte {
 	return b
 }
 
-// MustMarshalProtobufShutdownRequested marshals a ShutdownRequested protobuf to bytes.
-func MustMarshalProtobufShutdownRequested(t *testing.T, reason string) []byte {
+// MustBuildShutdownRequestedPayload builds a ShutdownRequested payload bytes.
+func MustBuildShutdownRequestedPayload(t *testing.T, reason string) []byte {
 	t.Helper()
 	p := &operatorv1.ShutdownRequested{
 		Reason: reason,
@@ -368,7 +369,7 @@ func MustMarshalProtobufShutdownRequested(t *testing.T, reason string) []byte {
 // =============================================================================
 
 // MustMarshalUAPEnvelope creates a UAPEnvelope JSON with the given fields.
-func MustMarshalUAPEnvelope(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int) []byte {
+func MustMarshalUAPEnvelope(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, caseID string, investigationID string, taskID *string) []byte {
 	t.Helper()
 	env := &uap.UAPEnvelope{
 		ProtocolVersion: protocolVersion,
@@ -391,6 +392,9 @@ func MustMarshalUAPEnvelope(t *testing.T, messageID string, protocolVersion stri
 			CurrentVotes:  []uap.Vote{},
 			Status:        "PENDING",
 		},
+		CaseID:          caseID,
+		InvestigationID: investigationID,
+		TaskID:          taskID,
 	}
 	b, err := json.Marshal(env)
 	if err != nil {
@@ -459,6 +463,52 @@ func MustGenerateUAPMessageID(t *testing.T, actionType string, targetResource st
 		t.Fatalf("failed to generate UAP MessageID: %v", err)
 	}
 	return id
+}
+
+// MustMarshalUAPEnvelopeWithNonce creates a UAPEnvelope JSON with the given fields and a nonce.
+func MustMarshalUAPEnvelopeWithNonce(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, caseID string, investigationID string, taskID *string, nonce string) []byte {
+	t.Helper()
+	env := &uap.UAPEnvelope{
+		ProtocolVersion: protocolVersion,
+		MessageID:       messageID,
+		Metadata: uap.Metadata{
+			SenderID:  senderID,
+			Timestamp: time.Now(),
+			Signature: "",
+		},
+		Intent: uap.Intent{
+			ActionType:     actionType,
+			TargetResource: targetResource,
+		},
+		Context: uap.Context{
+			DataFormat: dataFormat,
+			DataBlob:   dataBlob,
+		},
+		Consensus: uap.ConsensusState{
+			RequiredVotes: requiredVotes,
+			CurrentVotes:  []uap.Vote{},
+			Status:        "PENDING",
+		},
+		CaseID:          caseID,
+		InvestigationID: investigationID,
+		TaskID:          taskID,
+	}
+
+	// For replay protection tests, we need to pass the nonce somehow.
+	// Since UAP doesn't have a nonce field yet, we'll encode it in the DataBlob for now
+	// to allow tests to pass while maintaining UAP structure.
+	if nonce != "" {
+		env.Context.DataBlob = fmt.Sprintf("%s:%s", nonce, dataBlob)
+		// Regenerate MessageID since we changed DataBlob
+		id, _ := env.GenerateMessageID()
+		env.MessageID = id
+	}
+
+	b, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("failed to marshal UAPEnvelope JSON: %v", err)
+	}
+	return b
 }
 
 // MustCreateUAPVote creates a Vote struct for testing.

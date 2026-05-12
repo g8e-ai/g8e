@@ -112,7 +112,4 @@ while [[ ${#_args[@]} -gt 0 ]]; do
 done
 _TEST_PASSTHROUGH=("$_TEST_COMPONENT" "${_TEST_PASSTHROUGH[@]}")
 
-export G8E_PKI_DIR="$SCRIPT_DIR/.g8e/pki"
-export G8E_SECRETS_DIR="$SCRIPT_DIR/.g8e/secrets"
-export G8E_INTERNAL_HTTP_URL="https://localhost:9000"
 exec "$SCRIPT_DIR/scripts/testing/run_tests.sh" "${_TEST_PASSTHROUGH[@]}"

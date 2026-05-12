@@ -51,6 +51,7 @@ export class MockInternalHttpClient {
         this.listDeviceLinks = vi.fn().mockResolvedValue({ success: true, links: [] });
         this.createDeviceLink = vi.fn().mockResolvedValue({ success: true, token: 'dlk_mock_token' });
         this.deleteDeviceLink = vi.fn().mockResolvedValue({ success: true });
+        this.registerDeviceLink = vi.fn().mockResolvedValue({ success: true, operator_session_id: 'mock_operator_session_id', operator_id: 'mock_operator_id' });
 
         // g8eo PASSKEY endpoints
         this.passkeyRegisterChallenge = vi.fn().mockResolvedValue({ success: true, challenge: 'mock_reg_challenge' });

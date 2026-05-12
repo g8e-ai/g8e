@@ -32,7 +32,7 @@ func (w *Warden) AuthorizeExecution(env *uap.UAPEnvelope) error {
 	// 2. Count Valid Signatures (Byzantine Check)
 	validApproveVotes := 0
 	for _, vote := range env.Consensus.CurrentVotes {
-		if vote.Decision == true && w.VerifySignature(vote.NodeID, vote.Signature, env.MessageID, vote.Decision) {
+		if vote.Signature != "" && vote.Signature != "UNSIGNED" && vote.Decision == true && w.VerifySignature(vote.NodeID, vote.Signature, env.MessageID, vote.Decision) {
 			validApproveVotes++
 		}
 	}
