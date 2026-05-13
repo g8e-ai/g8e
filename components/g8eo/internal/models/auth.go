@@ -165,8 +165,7 @@ type RotateAPIKeyRequest struct {
 }
 
 type RotateAPIKeyResponse struct {
-	Success bool   `json:"success"`
-	APIKey  string `json:"api_key"`
+	Success bool `json:"success"`
 }
 
 type TerminateOperatorRequest struct {

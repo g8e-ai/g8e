@@ -232,6 +232,43 @@ func TestHandleHealth(t *testing.T) {
 	})
 }
 
+func TestHandleRotateAPIKeyDoesNotReturnSecret(t *testing.T) {
+	h, _ := setupTestHTTPHandler(t)
+	operatorID := "op-1"
+	userID := "user-1"
+	oldKey := "g8e_old_key_123"
+
+	op := &models.OperatorDocumentGo{
+		ID:             operatorID,
+		UserID:         userID,
+		OperatorAPIKey: oldKey,
+		Status:         constants.Status.OperatorStatus.Offline,
+	}
+	require.NoError(t, h.db.DocSet("operators", operatorID, mustDocJSON(t, op)))
+
+	body := mustDocJSON(t, models.RotateAPIKeyRequest{OperatorID: operatorID})
+	req := httptest.NewRequest(http.MethodPost, "/api/operators/rotate-api-key?user_id="+userID, bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	h.handleRotateAPIKey(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.NotContains(t, rr.Body.String(), "api_key")
+	assert.NotContains(t, rr.Body.String(), oldKey)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	assert.Equal(t, true, resp["success"])
+	assert.NotContains(t, resp, "api_key")
+
+	doc, err := h.db.DocGet("operators", operatorID)
+	require.NoError(t, err)
+	newKey := docFieldString(t, doc, "operator_api_key")
+	require.NotEmpty(t, newKey)
+	assert.NotEqual(t, oldKey, newKey)
+	assert.NotContains(t, rr.Body.String(), newKey)
+}
+
 func TestHandleDB(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 

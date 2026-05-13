@@ -386,23 +386,23 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.Operato
 	return slots, nil
 }
 
-func (s *RegistrationService) RotateOperatorAPIKey(operatorID, userID string) (string, error) {
+func (s *RegistrationService) RotateOperatorAPIKey(operatorID, userID string) error {
 	if operatorID == "" {
-		return "", fmt.Errorf("operator_id is required")
+		return fmt.Errorf("operator_id is required")
 	}
 	doc, err := s.db.DocGet(string(constants.CollectionOperators), operatorID)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if doc == nil {
-		return "", fmt.Errorf("operator not found")
+		return fmt.Errorf("operator not found")
 	}
 	op, err := s.toOperatorDoc(doc)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if op.UserID != userID {
-		return "", fmt.Errorf("operator does not belong to user")
+		return fmt.Errorf("operator does not belong to user")
 	}
 
 	prefix := operatorID
@@ -416,10 +416,10 @@ func (s *RegistrationService) RotateOperatorAPIKey(operatorID, userID string) (s
 	}
 	updateBytes, _ := json.Marshal(update)
 	if _, err := s.db.DocUpdate(string(constants.CollectionOperators), operatorID, updateBytes); err != nil {
-		return "", err
+		return err
 	}
 
-	return newKey, nil
+	return nil
 }
 
 func (s *RegistrationService) TerminateOperator(operatorID, userID, reason string) error {

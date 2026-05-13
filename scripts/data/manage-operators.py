@@ -23,7 +23,6 @@ Usage:
     python manage-operator.py operators init-slots --user-id USER_ID
     python manage-operator.py operators init-slots --email user@example.com
     python manage-operator.py operators refresh-key --id OPERATOR_ID
-    python manage-operator.py operators get-key --id OPERATOR_ID
     python manage-operator.py operators terminate --id OPERATOR_ID
 """
 
@@ -31,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import urllib.parse
 from typing import Dict, Any, List
 
 from _lib import (
@@ -39,19 +39,6 @@ from _lib import (
     resolve_user_id,
     operator_request,
 )
-
-OPERATORS_API = f'{OPERATOR_BASE_URL}/api/operators'
-
-
-def _mask_sensitive_value(value: str | None) -> str:
-    """Mask a sensitive value for safe display in CLI output."""
-    if not value:
-        return 'N/A'
-    if len(value) < 8:
-        return '********'
-    # Show first 4 and last 4 characters, with a fixed number of stars in between
-    # to avoid leaking the exact length of the sensitive string.
-    return f"{value[:4]}****************{value[-4:]}"
 
 
 class OperatorManager:
@@ -229,6 +216,7 @@ class OperatorManager:
         print(f"  User ID:  {op.get('user_id', 'N/A')}")
         print()
         print("  This will rotate the operator's API key.")
+        print("  The new key will be stored by the Operator and will not be displayed.")
 
         if not force:
             response = input("\nType 'rotate' to confirm: ")
@@ -242,8 +230,8 @@ class OperatorManager:
 
         result = operator_request(
             'POST',
-            f'{OPERATORS_API}/rotate-api-key',
-            {'operator_id': operator_id, 'user_id': user_id}
+            f'/api/operators/rotate-api-key?user_id={urllib.parse.quote(user_id, safe="")}',
+            {'operator_id': operator_id}
         )
 
         if not result or not result.get('success'):
@@ -251,39 +239,9 @@ class OperatorManager:
 
         print(f"\nAPI key rotated successfully.")
         print(f"  Operator ID:      {operator_id}")
-
-        # Mask the new key before printing to avoid clear-text logging alerts.
-        # Use a generic variable name to help satisfy static analysis.
-        secret_val = result.get('api_key')
-        display_val = _mask_sensitive_value(secret_val)
-        print(f"  New API Key:      {display_val}")
+        print("  New API key:      stored by Operator; not displayed")
         print()
-        return result
-
-    def get_key(self, operator_id: str) -> str | None:
-        op = operator_request('GET', f'/db/operators/{operator_id}')
-        if not op:
-            print(f"\nOperator not found: {operator_id}")
-            return None
-
-        api_key = op.get('operator_api_key') or op.get('api_key')
-
-        if not api_key:
-            print(f"\nOperator {operator_id} has no API key set.")
-            return None
-
-        print(f"\nOperator API Key")
-        print(f"  Operator ID:  {operator_id}")
-        print(f"  Name:         {op.get('name', 'N/A')}")
-        print(f"  Slot:         {op.get('slot_number', 'N/A')}")
-        print(f"  Status:       {op.get('status', 'N/A')}")
-
-        # Mask the key before printing to avoid clear-text logging alerts.
-        secret_val = api_key
-        display_val = _mask_sensitive_value(secret_val)
-        print(f"  API Key:      {display_val}")
-        print()
-        return api_key
+        return {'success': True}
 
     def terminate(self, operator_id: str, force: bool = False) -> Dict | None:
         op = operator_request('GET', f'/db/operators/{operator_id}')
@@ -339,7 +297,6 @@ Examples:
   python manage-operator.py operators init-slots --email user@example.com
   python manage-operator.py operators refresh-key --id OPERATOR_ID
   python manage-operator.py operators refresh-key --id OPERATOR_ID --force
-  python manage-operator.py operators get-key --id OPERATOR_ID
   python manage-operator.py operators terminate --id OPERATOR_ID
   python manage-operator.py operators terminate --id OPERATOR_ID --force
         """
@@ -366,9 +323,6 @@ Examples:
     )
     sp.add_argument('--id', dest='operator_id', required=True, help='Operator ID')
     sp.add_argument('--force', action='store_true', help='Skip confirmation prompt')
-
-    sp = subparsers.add_parser('get-key', help='Fetch current API key for an operator')
-    sp.add_argument('--id', dest='operator_id', required=True, help='Operator ID')
 
     sp = subparsers.add_parser(
         'terminate',
@@ -407,8 +361,6 @@ def run(argv: List[str]) -> int:
             manager.init_slots(user_id=args.user_id, email=args.email)
         elif args.command == 'refresh-key':
             manager.refresh_key(args.operator_id, force=args.force)
-        elif args.command == 'get-key':
-            manager.get_key(args.operator_id)
         elif args.command == 'terminate':
             manager.terminate(args.operator_id, force=args.force)
     except RuntimeError as e:

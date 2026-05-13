@@ -570,29 +570,25 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 	require.NoError(t, db.DocSet("operators", opID, opBytes))
 
 	t.Run("Success", func(t *testing.T) {
-		newKey, err := reg.RotateOperatorAPIKey(opID, userID)
+		require.NoError(t, reg.RotateOperatorAPIKey(opID, userID))
+
+		doc, err := db.DocGet("operators", opID)
 		require.NoError(t, err)
+		newKey := docFieldString(t, doc, "operator_api_key")
 		assert.NotEmpty(t, newKey)
 		assert.NotEqual(t, oldKey, newKey)
 		assert.Contains(t, newKey, "g8e_op-1_")
-
-		// Verify in DB
-		doc, err := db.DocGet("operators", opID)
-		require.NoError(t, err)
-		assert.Equal(t, newKey, docFieldString(t, doc, "operator_api_key"))
 	})
 
 	t.Run("Failure - Wrong user", func(t *testing.T) {
-		newKey, err := reg.RotateOperatorAPIKey(opID, "wrong-user")
+		err := reg.RotateOperatorAPIKey(opID, "wrong-user")
 		assert.Error(t, err)
-		assert.Empty(t, newKey)
 		assert.Contains(t, err.Error(), "does not belong to user")
 	})
 
 	t.Run("Failure - Not found", func(t *testing.T) {
-		newKey, err := reg.RotateOperatorAPIKey("nonexistent", userID)
+		err := reg.RotateOperatorAPIKey("nonexistent", userID)
 		assert.Error(t, err)
-		assert.Empty(t, newKey)
 		assert.Contains(t, err.Error(), "not found")
 	})
 }

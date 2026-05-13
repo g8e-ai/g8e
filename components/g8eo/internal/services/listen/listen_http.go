@@ -660,12 +660,11 @@ func (h *HTTPHandler) handleRotateAPIKey(w http.ResponseWriter, r *http.Request)
 		jsonError(w, http.StatusBadRequest, "user_id required")
 		return
 	}
-	newKey, err := h.reg.RotateOperatorAPIKey(req.OperatorID, userID)
-	if err != nil {
+	if err := h.reg.RotateOperatorAPIKey(req.OperatorID, userID); err != nil {
 		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, models.RotateAPIKeyResponse{Success: true, APIKey: newKey})
+	jsonResponse(w, http.StatusOK, models.RotateAPIKeyResponse{Success: true})
 }
 
 func (h *HTTPHandler) handleTerminateOperator(w http.ResponseWriter, r *http.Request) {

@@ -261,8 +261,7 @@ message RotateAPIKeyRequested {
 
 message RotateAPIKeyResult {
   bool success = 1;
-  string api_key = 2;
-  string error = 3;
+  string error = 2;
 }
 
 message ListOperatorSlotsRequested {
