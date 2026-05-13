@@ -15,27 +15,28 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROTO_SRC_DIR="$PROJECT_ROOT/shared/proto"
 
 # Output directories
-GO_OUT_DIR="$PROJECT_ROOT/components/g8eo/shared/proto"
+GO_OUT_DIR="$PROJECT_ROOT/components/g8eo/internal/shared/proto"
 PY_OUT_DIR="$PROJECT_ROOT/components/g8ee/app/proto"
 
 mkdir -p "$GO_OUT_DIR" "$PY_OUT_DIR"
 
 echo "Generating Protobuf code..."
 
-# We use the g8eo-test-runner container as it has the Go/Python/JS environments
-# installed.
-# We will use docker compose run to execute the protoc commands.
-
 # Go generation
-docker run --rm -u $(id -u):$(id -g) -v "$PROJECT_ROOT:/workspace" -w /workspace namely/protoc-all \
-    -i shared/proto \
-    -d shared/proto \
-    -l go \
-    -o components/g8eo \
-    --go-module-prefix github.com/g8e-ai/g8e/components/g8eo \
-    --go-opt=module=github.com/g8e-ai/g8e/components/g8eo
+# We generate each package explicitly to ensure correct output paths and package names
+for proto in common operator pubsub; do
+    echo "Generating $proto.proto..."
+    docker run --rm -u $(id -u):$(id -g) -v "$PROJECT_ROOT:/workspace" -w /workspace namely/protoc-all \
+        -i shared/proto \
+        -f shared/proto/$proto.proto \
+        -l go \
+        -o components/g8eo/internal \
+        --go-module-prefix github.com/g8e-ai/g8e/components/g8eo/internal \
+        --go-opt=module=github.com/g8e-ai/g8e/components/g8eo/internal
+done
 
 # Python generation
+echo "Generating Python code..."
 docker run --rm -u $(id -u):$(id -g) -v "$PROTO_SRC_DIR:/proto_src" -v "$PY_OUT_DIR:/py_out" namely/protoc-all -i /proto_src -d /proto_src -l python -o /py_out
 
 # Post-process Python files to fix imports for package structure

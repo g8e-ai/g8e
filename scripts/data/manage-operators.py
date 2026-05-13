@@ -319,7 +319,7 @@ Examples:
 
     sp = subparsers.add_parser(
         'refresh-key',
-        help='Refresh operator API key (terminates old operator, creates new one)'
+        help='Refresh operator API key in place'
     )
     sp.add_argument('--id', dest='operator_id', required=True, help='Operator ID')
     sp.add_argument('--force', action='store_true', help='Skip confirmation prompt')

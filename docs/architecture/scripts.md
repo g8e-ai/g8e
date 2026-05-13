@@ -46,7 +46,7 @@ Unified interface for interacting with platform state, dispatched via `scripts/d
 - **Dispatcher Pattern:** `manage-operator.py` routes requests to specialized modules:
     - **`store`**: Document store & KV queries (`manage-store.py`).
     - **`users`**: Platform user management (`manage-users.py`).
-    - **`operators`**: Operator document management (`manage-operators.py`).
+    - **`operators`**: Operator document management (`manage-operators.py`). Note: Operator API keys are write-only operational secrets; they are never displayed or retrieved by this script.
     - **`device-links`**: Device link token management (`manage-device-links.py`).
     - **`settings`**: Platform settings read/write (`manage-settings.py`).
     - **`audit`**: LFAA audit vault queries (`manage-lfaa.py`).
