@@ -48,7 +48,9 @@ def _load_paths() -> dict:
         paths = {
             "infra": {
                 "db_path": "/data/g8e.db",
-                "ca_cert_path": str(Path(default_pki_dir) / "ca.crt"),
+                "ca_cert_path": str(Path(default_pki_dir) / "trust" / "hub-bundle.pem"),
+                "client_cert_path": str(Path(default_pki_dir) / "issued" / "apps" / "g8ee.crt"),
+                "client_key_path": str(Path(default_pki_dir) / "issued" / "apps" / "g8ee.key"),
                 "pki_dir": os.environ.get("G8E_PKI_DIR", default_pki_dir),
                 "secrets_dir": os.environ.get("G8E_SECRETS_DIR", default_secrets_dir),
                 "docs_dir": "/docs",
@@ -73,7 +75,9 @@ def _load_paths() -> dict:
         host_secrets_dir = os.environ.get("G8E_SECRETS_DIR", str(Path(host_runtime_dir) / "secrets"))
         paths["infra"]["pki_dir"] = host_pki_dir
         paths["infra"]["secrets_dir"] = host_secrets_dir
-        paths["infra"]["ca_cert_path"] = str(Path(host_pki_dir) / "ca.crt")
+        paths["infra"]["ca_cert_path"] = str(Path(host_pki_dir) / "trust" / "hub-bundle.pem")
+        paths["infra"]["client_cert_path"] = str(Path(host_pki_dir) / "issued" / "apps" / "g8ee.crt")
+        paths["infra"]["client_key_path"] = str(Path(host_pki_dir) / "issued" / "apps" / "g8ee.key")
 
     return paths
 

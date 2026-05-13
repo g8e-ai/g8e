@@ -197,7 +197,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// We prioritize session auth.
+		// We prioritize session auth for operators.
 		sessionID := r.Header.Get(constants.HeaderOperatorSessionID)
 
 		if sessionID != "" {
@@ -214,15 +214,9 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 							match = true
 							break
 						}
-						// Reference apps use spiffe://g8e.local/app/<app_id>
-						if strings.Contains(uri.String(), "/app/"+constants.Status.ComponentName.G8ED) ||
-							strings.Contains(uri.String(), "/app/"+constants.Status.ComponentName.G8EE) {
-							match = true
-							break
-						}
 					}
 					if !match {
-						s.logger.Warn("mTLS URI SAN mismatch", "path", r.URL.Path, "operator_id", op.ID, "session_id", sessionID)
+						s.logger.Warn("mTLS URI SAN mismatch for operator session", "path", r.URL.Path, "operator_id", op.ID, "session_id", sessionID)
 						s.jsonError(w, http.StatusForbidden, "mTLS identity mismatch")
 						return
 					}
@@ -232,6 +226,20 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				return
 			}
 			s.logger.Warn("Invalid operator session attempt", "session_id", sessionID[:8]+"...")
+		} else {
+			// [PIVOT] System/App Authentication via URI SAN (Phase 6)
+			// If no session ID is provided, we check if the certificate belongs to a trusted system app.
+			if len(r.TLS.PeerCertificates) > 0 {
+				cert := r.TLS.PeerCertificates[0]
+				for _, uri := range cert.URIs {
+					// Reference apps use spiffe://g8e.local/app/<app_id>
+					if strings.Contains(uri.String(), "/app/"+constants.Status.ComponentName.G8ED) ||
+						strings.Contains(uri.String(), "/app/"+constants.Status.ComponentName.G8EE) {
+						next.ServeHTTP(w, r)
+						return
+					}
+				}
+			}
 		}
 
 		// API keys are no longer a valid mutation authority.

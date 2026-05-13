@@ -159,7 +159,7 @@ class BootstrapService:
             return self._cached_ca_path
 
         # Check the canonical location in the PKI directory
-        ca_path = self._pki_dir / "ca.crt"
+        ca_path = self._pki_dir / "trust" / "hub-bundle.pem"
         try:
             if ca_path.exists():
                 self._cached_ca_path = str(ca_path)

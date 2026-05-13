@@ -51,6 +51,8 @@ class BlobClient:
         operator_session_id: str | None = None,
         operator_api_key: str | None = None,
         listen_settings: ListenSettings | None = None,
+        client_cert_path: str | None = None,
+        client_key_path: str | None = None,
     ) -> None:
         if internal_auth_token is None:
             service = SettingsService()
@@ -63,6 +65,8 @@ class BlobClient:
 
         self._base_url = listen_settings.blob_url
         self._ca_cert_path = ca_cert_path
+        self._client_cert_path = client_cert_path
+        self._client_key_path = client_key_path
         self._internal_auth_token = internal_auth_token
         self._operator_session_id = operator_session_id
         self._operator_api_key = operator_api_key
@@ -81,6 +85,8 @@ class BlobClient:
                 None,
                 timeout=aiohttp.ClientTimeout(total=30),
                 ca_cert_path=self._ca_cert_path,
+                client_cert_path=self._client_cert_path,
+                client_key_path=self._client_key_path,
                 headers=headers,
             )
         return self._session

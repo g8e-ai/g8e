@@ -127,6 +127,11 @@ func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
 		return fmt.Errorf("service certificate setup failed: %w", err)
 	}
 
+	// Generate or load certificates for reference apps (g8ee, g8ed)
+	if err := pki.ensureAppCerts(); err != nil {
+		return fmt.Errorf("app certificates setup failed: %w", err)
+	}
+
 	// Generate trust bundles
 	if err := pki.generateTrustBundles(); err != nil {
 		return fmt.Errorf("trust bundle generation failed: %w", err)
@@ -297,7 +302,7 @@ func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
 
 	if needService {
 		pki.logger.Info("[PKI] Generating operator-listen service certificate")
-		if err := pki.generateServiceCert(serviceKeyPath, serviceCertPath, extraIPs); err != nil {
+		if err := pki.generateServiceCert(extraIPs); err != nil {
 			return err
 		}
 		tlsCert, err := tls.LoadX509KeyPair(serviceCertPath, serviceKeyPath)
@@ -705,7 +710,74 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 	return nil
 }
 
-func (pki *PKIAuthority) generateServiceCert(keyPath, certPath string, extraIPs []net.IP) error {
+func (pki *PKIAuthority) ensureAppCerts() error {
+	apps := []string{constants.Status.ComponentName.G8EE, constants.Status.ComponentName.G8ED}
+	for _, app := range apps {
+		keyPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".key")
+		certPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".crt")
+
+		if fileExists(keyPath) && fileExists(certPath) {
+			continue
+		}
+
+		pki.logger.Info("[PKI] Generating certificate for reference app", "app", app)
+		// We use a simplified signing flow for bundled reference apps during bootstrap.
+		// In a BYO world, they would use the SignCSR API.
+		if err := pki.generateAppCert(app, keyPath, certPath); err != nil {
+			return fmt.Errorf("failed to generate cert for %s: %w", app, err)
+		}
+	}
+	return nil
+}
+
+func (pki *PKIAuthority) generateAppCert(app, keyPath, certPath string) error {
+	if pki.hubCert == nil || pki.hubKey == nil {
+		return fmt.Errorf("hub CA not loaded")
+	}
+
+	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		return err
+	}
+
+	serial, _ := randomSerial()
+	now := time.Now().UTC()
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject: pkix.Name{
+			CommonName:   app,
+			Organization: []string{"g8e"},
+		},
+		NotBefore:   now.Add(-1 * time.Minute),
+		NotAfter:    now.Add(time.Duration(serviceValidityDays) * 24 * time.Hour),
+		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		URIs: []*url.URL{
+			{Scheme: "spiffe", Host: trustDomain, Path: "/app/" + app},
+		},
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.hubCert, &priv.PublicKey, pki.hubKey)
+	if err != nil {
+		return err
+	}
+
+	if err := writePEMFile(certPath, "CERTIFICATE", certDER, 0644); err != nil {
+		return err
+	}
+
+	keyDER, _ := x509.MarshalECPrivateKey(priv)
+	if err := writePEMFile(keyPath, "EC PRIVATE KEY", keyDER, 0600); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
+	serviceKeyPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.key")
+	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.crt")
+
 	if pki.hubCert == nil || pki.hubKey == nil {
 		return fmt.Errorf("hub CA not loaded — call EnsurePKI first")
 	}
@@ -762,7 +834,7 @@ func (pki *PKIAuthority) generateServiceCert(keyPath, certPath string, extraIPs 
 		return fmt.Errorf("failed to write chain: %w", err)
 	}
 
-	if err := writePEMFile(certPath, "CERTIFICATE", certDER, 0644); err != nil {
+	if err := writePEMFile(serviceCertPath, "CERTIFICATE", certDER, 0644); err != nil {
 		return err
 	}
 
@@ -770,7 +842,7 @@ func (pki *PKIAuthority) generateServiceCert(keyPath, certPath string, extraIPs 
 	if err != nil {
 		return err
 	}
-	if err := writePEMFile(keyPath, "EC PRIVATE KEY", keyDER, 0600); err != nil {
+	if err := writePEMFile(serviceKeyPath, "EC PRIVATE KEY", keyDER, 0600); err != nil {
 		return err
 	}
 

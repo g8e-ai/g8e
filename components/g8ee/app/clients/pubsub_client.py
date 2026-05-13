@@ -59,6 +59,8 @@ class PubSubClient:
         ca_cert_path: str | None = None,
         internal_auth_token: str | None = None,
         auditor_hmac_key: str | None = None,
+        client_cert_path: str | None = None,
+        client_key_path: str | None = None,
     ):
         _settings = ListenSettings()
         # Use direct internal WSS URL by default for service-to-service
@@ -69,6 +71,8 @@ class PubSubClient:
         self.client_id = f"{component_name.value}-{uuid.uuid4().hex[:8]}"
         self._timeout = timeout
         self._ca_cert_path = ca_cert_path
+        self._client_cert_path = client_cert_path
+        self._client_key_path = client_key_path
         self._internal_auth_token = internal_auth_token
         self._auditor_hmac_key = auditor_hmac_key
 
@@ -119,7 +123,9 @@ class PubSubClient:
 
         ssl_ctx = resolve_pubsub_ssl_context(
             self._ca_cert_path,
-            use_tls=True
+            use_tls=True,
+            certfile=self._client_cert_path,
+            keyfile=self._client_key_path,
         )
 
         ws_session = await self._get_http_ws_session()

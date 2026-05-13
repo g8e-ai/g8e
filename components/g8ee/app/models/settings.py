@@ -387,6 +387,30 @@ class G8eePlatformSettings(G8eBaseModel):
         except OSError:
             return None
 
+    @property
+    def client_cert_path(self) -> str | None:
+        """Client certificate path for mTLS."""
+        cert_path = PATHS["infra"].get("client_cert_path")
+        if not cert_path:
+            return None
+        try:
+            with open(cert_path):
+                return cert_path
+        except OSError:
+            return None
+
+    @property
+    def client_key_path(self) -> str | None:
+        """Client private key path for mTLS."""
+        key_path = PATHS["infra"].get("client_key_path")
+        if not key_path:
+            return None
+        try:
+            with open(key_path):
+                return key_path
+        except OSError:
+            return None
+
     @classmethod
     async def from_db(cls, settings_service: Any) -> G8eePlatformSettings:
         """Load platform settings from DB: Defaults < Env < Platform."""

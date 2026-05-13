@@ -64,6 +64,8 @@ class KVCacheClient:
         operator_session_id: str | None = None,
         operator_api_key: str | None = None,
         listen_settings: ListenSettings | None = None,
+        client_cert_path: str | None = None,
+        client_key_path: str | None = None,
     ):
         if listen_settings is None:
             service = SettingsService()
@@ -73,6 +75,8 @@ class KVCacheClient:
         self.component_name = component_name
         self._timeout = timeout
         self._ca_cert_path = ca_cert_path
+        self._client_cert_path = client_cert_path
+        self._client_key_path = client_key_path
         self._internal_auth_token = internal_auth_token
         self._operator_session_id = operator_session_id
         self._operator_api_key = operator_api_key
@@ -93,6 +97,8 @@ class KVCacheClient:
             base_url=self.http_url,
             timeout=aiohttp.ClientTimeout(total=self._timeout),
             ca_cert_path=self._ca_cert_path,
+            client_cert_path=self._client_cert_path,
+            client_key_path=self._client_key_path,
             headers=headers,
         )
         return self._session

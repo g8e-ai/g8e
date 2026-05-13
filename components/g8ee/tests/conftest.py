@@ -237,6 +237,8 @@ async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = T
         async with asyncio.timeout(timeout):
             db_client = DBClient(
                 ca_cert_path=bootstrap_settings.ca_cert_path,
+                client_cert_path=bootstrap_settings.client_cert_path,
+                client_key_path=bootstrap_settings.client_key_path,
                 internal_auth_token=bootstrap_settings.auth.internal_auth_token
             )
             await db_client.connect()
@@ -244,6 +246,8 @@ async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = T
             kv_client = KVCacheClient(
                 component_name=ComponentName.G8EE,
                 ca_cert_path=bootstrap_settings.ca_cert_path,
+                client_cert_path=bootstrap_settings.client_cert_path,
+                client_key_path=bootstrap_settings.client_key_path,
                 internal_auth_token=bootstrap_settings.auth.internal_auth_token
             )
             await kv_client.connect()
@@ -727,6 +731,8 @@ async def cache_aside_service(test_settings):
 
     raw_kv = KVCacheClient(
         ca_cert_path=settings.ca_cert_path,
+        client_cert_path=settings.client_cert_path,
+        client_key_path=settings.client_key_path,
         internal_auth_token=settings.auth.internal_auth_token,
         component_name=ComponentName.G8EE,
     )
@@ -734,6 +740,8 @@ async def cache_aside_service(test_settings):
 
     raw_db = DBClient(
         ca_cert_path=settings.ca_cert_path,
+        client_cert_path=settings.client_cert_path,
+        client_key_path=settings.client_key_path,
         internal_auth_token=settings.auth.internal_auth_token
     )
     await raw_db.connect()

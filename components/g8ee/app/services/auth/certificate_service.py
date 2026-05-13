@@ -76,8 +76,9 @@ class CertificateService:
         # Authority: operator (Operator --listen mode)
         # We no longer read ca.key directly. Key operations are behind the /.well-known/g8e/pki/sign-csr API.
         paths = [
-            os.path.join(self.pki_dir, "ca.crt"),
-            os.path.join(self.pki_dir, "ca", "ca.crt")
+            os.path.join(self.pki_dir, "trust", "hub-bundle.pem"),
+            os.path.join(self.pki_dir, "authorities", "hub_ca.crt"),
+            os.path.join(self.pki_dir, "root", "root_ca.crt"),
         ]
 
         found_cert_path = None
