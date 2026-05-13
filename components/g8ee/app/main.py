@@ -123,6 +123,8 @@ async def _connect_clients(settings):
     pubsub_client = PubSubClient(
         component_name=ComponentName.G8EE,
         ca_cert_path=ca,
+        client_cert_path=cert,
+        client_key_path=key,
         auditor_hmac_key=auditor_hmac_key,
     )
     await pubsub_client.connect()

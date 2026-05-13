@@ -60,10 +60,10 @@ OPERATOR_LISTEN_PID_FILE="$OPERATOR_LISTEN_PID_DIR/operator-listen.pid"
 OPERATOR_LISTEN_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/operator-listen.log"
 G8EE_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ee.pid"
 G8EE_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ee.log"
-OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-9000}"
-OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-9001}"
-OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-8080}"
-OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-8081}"
+OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-$(jq -r '.ports.operator_http // "9000"' "$PROJECT_ROOT/shared/constants/paths.json" 2>/dev/null || echo "9000")}"
+OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-$(jq -r '.ports.operator_wss // "9001"' "$PROJECT_ROOT/shared/constants/paths.json" 2>/dev/null || echo "9001")}"
+OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(jq -r '.ports.operator_bootstrap // "8080"' "$PROJECT_ROOT/shared/constants/paths.json" 2>/dev/null || echo "8080")}"
+OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(jq -r '.ports.operator_public // "8081"' "$PROJECT_ROOT/shared/constants/paths.json" 2>/dev/null || echo "8081")}"
 OPERATOR_LISTEN_LOG_MAX_BACKUPS=5
 
 DEV_MODE=false
@@ -304,12 +304,14 @@ _start_g8ee() {
         export G8E_SECRETS_DIR="$OPERATOR_LISTEN_SECRETS_DIR"
         export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
         export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
-        export G8E_INTERNAL_HTTP_URL="https://localhost:9000"
-        export G8E_INTERNAL_PUBSUB_URL="wss://localhost:9001"
+        export G8E_INTERNAL_HTTP_URL="https://localhost:${OPERATOR_LISTEN_HTTP_PORT}"
+        export G8E_INTERNAL_PUBSUB_URL="wss://localhost:${OPERATOR_LISTEN_WSS_PORT}"
         
+        local cert_name
+        cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$PROJECT_ROOT/shared/constants/paths.json" 2>/dev/null || echo "g8ee")
         setsid "$venv_dir/bin/uvicorn" app.main:app --host 127.0.0.1 --port 8443 \
-            --ssl-keyfile "$OPERATOR_LISTEN_PKI_DIR/server.key" \
-            --ssl-certfile "$OPERATOR_LISTEN_PKI_DIR/server.crt" \
+            --ssl-keyfile "$OPERATOR_LISTEN_PKI_DIR/issued/apps/${cert_name}.key" \
+            --ssl-certfile "$OPERATOR_LISTEN_PKI_DIR/issued/apps/${cert_name}.crt" \
             > "$G8EE_LOG_FILE" 2>&1 &
         echo $! > "$G8EE_PID_FILE"
     )

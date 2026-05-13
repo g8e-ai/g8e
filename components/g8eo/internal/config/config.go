@@ -228,17 +228,22 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 		}
 	}
 
-	if wssPort <= 0 {
-		wssPort = 9001 // default WSS port
-	}
-	if httpPort <= 0 {
-		httpPort = 9000 // default HTTPS API port
-	}
-	if bootstrapPort <= 0 {
-		bootstrapPort = 8080 // default bootstrap port
-	}
-	if publicPort <= 0 {
-		publicPort = 8081 // default public port
+	// Assign default ports only if they are still 0 AND we are not in test-port-zero mode.
+	// If allowTestPortZero is true and ports are 0, we leave them as 0 so net.Listen can bind to a random port.
+	// Default ports must match shared/constants/paths.json (canonical source of truth).
+	if !allowTestPortZero {
+		if wssPort <= 0 {
+			wssPort = 9001 // default WSS port (must match shared/constants/paths.json ports.operator_wss)
+		}
+		if httpPort <= 0 {
+			httpPort = 9000 // default HTTPS API port (must match shared/constants/paths.json ports.operator_http)
+		}
+		if bootstrapPort <= 0 {
+			bootstrapPort = 8080 // default bootstrap port (must match shared/constants/paths.json ports.operator_bootstrap)
+		}
+		if publicPort <= 0 {
+			publicPort = 8081 // default public port (must match shared/constants/paths.json ports.operator_public)
+		}
 	}
 	if passkeyRpID == "" {
 		passkeyRpID = "localhost"

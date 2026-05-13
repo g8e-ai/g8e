@@ -56,15 +56,26 @@ def _get_cli_cert() -> tuple[str, str] | None:
     Preference order:
     1. G8E_CLI_CERT / G8E_CLI_KEY env vars (set by `g8e login`)
     2. ~/.g8e/cli.crt + ~/.g8e/cli.key
-    3. Platform app cert (.g8e/pki/issued/apps/g8ee.crt) as fallback for
+    3. Platform app cert (.g8e/pki/issued/apps/{cert_name}.crt) as fallback for
        operator-local tooling that has not yet run `g8e login`.
     """
     cert = os.environ.get('G8E_CLI_CERT', str(CREDENTIALS_DIR / 'cli.crt'))
     key = os.environ.get('G8E_CLI_KEY', str(CREDENTIALS_DIR / 'cli.key'))
     if Path(cert).exists() and Path(key).exists():
         return cert, key
-    app_cert = str(PKI_DIR / 'issued' / 'apps' / 'g8ee.crt')
-    app_key = str(PKI_DIR / 'issued' / 'apps' / 'g8ee.key')
+    try:
+        import json
+        paths_file = _PROJECT_ROOT / 'shared' / 'constants' / 'paths.json'
+        if paths_file.exists():
+            with open(paths_file) as f:
+                paths = json.load(f)
+                cert_name = paths.get('g8ee', {}).get('cert_name', 'g8ee')
+        else:
+            cert_name = 'g8ee'
+    except Exception:
+        cert_name = 'g8ee'
+    app_cert = str(PKI_DIR / 'issued' / 'apps' / f'{cert_name}.crt')
+    app_key = str(PKI_DIR / 'issued' / 'apps' / f'{cert_name}.key')
     if Path(app_cert).exists() and Path(app_key).exists():
         return app_cert, app_key
     return None

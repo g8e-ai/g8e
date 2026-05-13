@@ -223,8 +223,8 @@ func TestLoadListen_Defaults(t *testing.T) {
 	require.NotNil(t, cfg)
 
 	assert.True(t, cfg.Listen.Enabled)
-	assert.Equal(t, 9001, cfg.Listen.WSSPort)
-	assert.Equal(t, 9000, cfg.Listen.HTTPPort)
+	assert.Equal(t, 0, cfg.Listen.WSSPort)
+	assert.Equal(t, 0, cfg.Listen.HTTPPort)
 	assert.Equal(t, filepath.Join(cwd, ".g8e", "data"), cfg.Listen.DataDir)
 	assert.True(t, filepath.IsAbs(cfg.Listen.DataDir))
 	assert.Equal(t, "g8eo-listen", cfg.ComponentName)
@@ -259,14 +259,14 @@ func TestLoadListen_PartialDefaults(t *testing.T) {
 		cfg, err := LoadListen(9001, 0, 0, 0, "", "", "", "", "", true)
 		require.NoError(t, err)
 		assert.Equal(t, 9001, cfg.Listen.WSSPort)
-		assert.Equal(t, 9000, cfg.Listen.HTTPPort)
+		assert.Equal(t, 0, cfg.Listen.HTTPPort)
 		assert.Equal(t, filepath.Join(cwd, ".g8e", "data"), cfg.Listen.DataDir)
 	})
 
 	t.Run("only data dir overridden", func(t *testing.T) {
 		cfg, err := LoadListen(0, 0, 0, 0, "/custom/data", "", "", "", "", true)
 		require.NoError(t, err)
-		assert.Equal(t, 9001, cfg.Listen.WSSPort)
+		assert.Equal(t, 0, cfg.Listen.WSSPort)
 		assert.Equal(t, "/custom/data", cfg.Listen.DataDir)
 	})
 

@@ -392,9 +392,7 @@ func (ls *ListenService) Stop(ctx context.Context) error {
 
 	ls.logger.Info("Shutting down listen service...")
 
-	ls.mu.Lock()
 	ls.ready = false
-	ls.mu.Unlock()
 
 	if err := ls.server.Shutdown(ctx); err != nil {
 		ls.logger.Error("HTTP server shutdown error", "error", err)

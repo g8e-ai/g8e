@@ -63,11 +63,15 @@ _operator_curl() {
     local cli_key="${G8E_CLI_KEY:-$G8E_CLI_KEY_FILE}"
     if [[ -f "$cli_cert" && -f "$cli_key" ]]; then
         args+=(--cert "$cli_cert" --key "$cli_key")
-    elif [[ -f "$G8E_PKI_DIR_HOST/issued/apps/g8ee.crt" && -f "$G8E_PKI_DIR_HOST/issued/apps/g8ee.key" ]]; then
-        args+=(--cert "$G8E_PKI_DIR_HOST/issued/apps/g8ee.crt" --key "$G8E_PKI_DIR_HOST/issued/apps/g8ee.key")
     else
-        echo "[g8e] No mTLS client certificate available — run: ./g8e login" >&2
-        return 1
+        local cert_name
+        cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$SCRIPT_DIR/shared/constants/paths.json" 2>/dev/null || echo "g8ee")
+        if [[ -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" && -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key" ]]; then
+            args+=(--cert "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" --key "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key")
+        else
+            echo "[g8e] No mTLS client certificate available — run: ./g8e login" >&2
+            return 1
+        fi
     fi
 
     if [[ -n "$OPERATOR_SESSION_ID" ]]; then

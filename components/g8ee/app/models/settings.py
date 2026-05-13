@@ -391,7 +391,10 @@ class G8eePlatformSettings(G8eBaseModel):
     @property
     def client_cert_path(self) -> str | None:
         """Client certificate path for mTLS."""
-        cert_path = PATHS["infra"].get("client_cert_path")
+        if self._client_cert_path is not None:
+            return self._client_cert_path
+        from app.constants.paths import get_app_cert_paths
+        cert_path, _ = get_app_cert_paths()
         if not cert_path:
             return None
         try:
@@ -403,7 +406,10 @@ class G8eePlatformSettings(G8eBaseModel):
     @property
     def client_key_path(self) -> str | None:
         """Client private key path for mTLS."""
-        key_path = PATHS["infra"].get("client_key_path")
+        if self._client_key_path is not None:
+            return self._client_key_path
+        from app.constants.paths import get_app_cert_paths
+        _, key_path = get_app_cert_paths()
         if not key_path:
             return None
         try:
