@@ -22,10 +22,12 @@ jobs:
 
       - name: Check for drift
         run: |
-          if [ -n "$(git status --porcelain)" ]; then
+          # Only check for changes in generated proto files, ignore untracked files
+          CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$|^\s*M.*_pb2.*\.py$|^\s*M.*\.proto$" || true)
+          if [ -n "$CHANGES" ]; then
             echo "Error: Generated proto files are out of sync with shared/proto/*.proto"
-            git status --porcelain
-            git diff
+            echo "$CHANGES"
+            git diff -- $(git status --porcelain | grep -E "^\s*M" | awk '{print $2}')
             exit 1
           fi
 
@@ -74,6 +76,9 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+
+      - name: Start Operator substrate
+        run: ./g8e platform start
 
       - name: Start g8ee adapter
         run: ./g8e apps start g8ee

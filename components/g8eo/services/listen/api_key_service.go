@@ -59,7 +59,7 @@ func (s *ApiKeyService) IssueDownloadKey(userID, orgID string) (string, error) {
 		"id":              docID,
 		"user_id":         userID,
 		"organization_id": orgID,
-		"status":          "active",
+		"status":          string(constants.Status.OperatorStatus.Active),
 		"created_at":      now,
 		"last_used_at":    0,
 	}
@@ -105,7 +105,7 @@ func (s *ApiKeyService) ValidateKey(rawKey string) (*models.Document, error) {
 		json.Unmarshal(statusVal, &status)
 	}
 
-	if status != "active" {
+	if status != constants.Status.OperatorStatus.Active {
 		return nil, fmt.Errorf("key is %s", status)
 	}
 
