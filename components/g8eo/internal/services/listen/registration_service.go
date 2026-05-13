@@ -675,8 +675,8 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 	lockKey := deviceLinkLockKey(token)
 	lockValue := uuid.NewString()
 	lockAcquired, err := s.acquireLock(lockKey)
-	if !lockAcquired {
-		s.logger.Error("[REGISTRATION] Failed to acquire registration lock", "token", token)
+	if err != nil || !lockAcquired {
+		s.logger.Error("[REGISTRATION] Failed to acquire registration lock", "token", token, "error", err)
 		return resp, nil // Registration succeeded, but claim update failed - device can retry
 	}
 	defer s.releaseLock(lockKey, lockValue)

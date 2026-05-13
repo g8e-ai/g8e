@@ -863,12 +863,17 @@ func randomSerial() (*big.Int, error) {
 	return rand.Int(rand.Reader, limit)
 }
 
-func writePEMFile(path, pemType string, der []byte, mode os.FileMode) error {
+func writePEMFile(path, pemType string, der []byte, mode os.FileMode) (err error) {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		closeErr := f.Close()
+		if err == nil {
+			err = closeErr
+		}
+	}()
 	return pem.Encode(f, &pem.Block{Type: pemType, Bytes: der})
 }
 

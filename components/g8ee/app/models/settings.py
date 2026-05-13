@@ -378,6 +378,10 @@ class G8eePlatformSettings(G8eBaseModel):
     reputation: ReputationSettings = Field(default_factory=ReputationSettings)
     batch_execution: BatchExecutionSettings = Field(default_factory=BatchExecutionSettings)
 
+    # Private fields for overrides (GDD §18.2)
+    _client_cert_path: str | None = None
+    _client_key_path: str | None = None
+
     @property
     def ca_cert_path(self) -> str | None:
         """First valid CA path for internal services."""
