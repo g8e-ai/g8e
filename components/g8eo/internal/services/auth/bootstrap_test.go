@@ -452,24 +452,6 @@ func TestAuthServicesResponse_JSONParsing(t *testing.T) {
 	})
 }
 
-func TestHashAPIKey(t *testing.T) {
-	t.Run("produces consistent hash", func(t *testing.T) {
-		hash1 := HashAPIKey("test-api-key-12345")
-		hash2 := HashAPIKey("test-api-key-12345")
-
-		assert.Equal(t, hash1, hash2)
-		assert.Len(t, hash1, 64)
-	})
-
-	t.Run("different keys produce different hashes", func(t *testing.T) {
-		assert.NotEqual(t, HashAPIKey("key-one"), HashAPIKey("key-two"))
-	})
-
-	t.Run("empty string produces valid hash", func(t *testing.T) {
-		assert.Len(t, HashAPIKey(""), 64)
-	})
-}
-
 func TestSanitizeURL(t *testing.T) {
 	cases := []struct {
 		name     string

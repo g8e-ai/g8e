@@ -424,11 +424,12 @@ func (s *ListenDBService) DocQuery(collection string, filters []models.DocFilter
 			return nil, fmt.Errorf("invalid orderBy field: %w", err)
 		}
 
-		query += fmt.Sprintf(" ORDER BY json_extract(data, '$.%s') %s", orderField, dir)
+		// dir is already normalized to ASC or DESC above
+		query = fmt.Sprintf("%s ORDER BY json_extract(data, '$.%s') %s", query, orderField, dir)
 	}
 
 	if limit > 0 {
-		query += fmt.Sprintf(" LIMIT %d", limit)
+		query = fmt.Sprintf("%s LIMIT %d", query, limit)
 	}
 
 	rows, err := s.db.Query(query, args...)

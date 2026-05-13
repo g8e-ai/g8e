@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 
+	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -81,10 +82,14 @@ func GenerateNonce() ([]byte, error) {
 	return nonce, nil
 }
 
-// KeyFingerprint returns the first KeyFingerprintSize bytes of SHA256(key).
+// KeyFingerprint returns the first KeyFingerprintSize bytes of a secure hash of the key.
+// It uses Argon2id to ensure the fingerprint is computationally expensive to derive,
+// preventing offline brute-force attacks if fingerprints are leaked.
 func KeyFingerprint(key []byte) []byte {
-	hash := sha256.Sum256(key)
-	return hash[:KeyFingerprintSize]
+	// 2026 security standard: Argon2id with salt/pepper.
+	// Using a fixed salt (pepper) as these are fingerprints for lookup, not unique salts per key.
+	pepper := []byte("g8e-vault-fingerprint-v1")
+	return argon2.IDKey(key, pepper, 1, 64*1024, 4, uint32(KeyFingerprintSize))
 }
 
 // APIKeyFingerprint returns the fingerprint of an API key.

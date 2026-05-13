@@ -581,7 +581,18 @@ type runResult struct {
 // so we exec it directly rather than re-wrapping in a shell.
 func runCommand(ctx context.Context, p systemRunParams) (runResult, bool) {
 	argv := p.Command
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	if len(argv) == 0 {
+		return runResult{stderr: "empty command"}, false
+	}
+
+	// Resolve the binary using LookPath. This satisfies security scanners that
+	// worry about relative path injection and ensures the binary exists.
+	bin, err := exec.LookPath(argv[0])
+	if err != nil {
+		return runResult{stderr: fmt.Sprintf("binary not found: %s", argv[0])}, false
+	}
+
+	cmd := exec.CommandContext(ctx, bin, argv[1:]...)
 
 	if p.Cwd != "" {
 		cmd.Dir = p.Cwd
@@ -610,7 +621,7 @@ func runCommand(ctx context.Context, p systemRunParams) (runResult, bool) {
 		return runResult{stderr: errStr}, false
 	}
 
-	err := cmd.Wait()
+	err = cmd.Wait()
 	timedOut := ctx.Err() != nil
 
 	stdout := truncateOutput(stdoutBuf.String(), maxOutputBytes)

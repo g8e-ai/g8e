@@ -16,9 +16,7 @@ package auth
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"crypto/tls"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -329,12 +327,6 @@ func (bs *BootstrapService) rebuildTransportWithOperatorCert(certPEM, keyPEM str
 	bs.httpClient = httpclient.NewWithTLS(operatorTLSConfig)
 
 	return nil
-}
-
-// HashAPIKey creates a SHA-256 hash of the API key for secure routing
-func HashAPIKey(apiKey string) string {
-	hash := sha256.Sum256([]byte(apiKey))
-	return hex.EncodeToString(hash[:])
 }
 
 // SanitizeURL removes credentials from a URL for safe logging

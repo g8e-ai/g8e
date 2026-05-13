@@ -32,7 +32,11 @@ type Document struct {
 // Timestamps are formatted as RFC3339Nano UTC strings. The caller's data fields are
 // merged with system fields (id, created_at, updated_at).
 func (d *Document) ForWire() map[string]json.RawMessage {
-	out := make(map[string]json.RawMessage, len(d.Data)+3)
+	capacity := len(d.Data)
+	if capacity > 1000000 { // Arbitrary sanity limit to prevent massive allocation
+		capacity = 1000000
+	}
+	out := make(map[string]json.RawMessage, capacity+3)
 	for k, v := range d.Data {
 		out[k] = v
 	}
