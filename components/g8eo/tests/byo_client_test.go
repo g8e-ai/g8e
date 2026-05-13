@@ -25,14 +25,14 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/g8e-ai/g8e/components/g8eo/config"
-	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
-	"github.com/g8e-ai/g8e/components/g8eo/services/listen"
-	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
-	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
-	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1"
-	"github.com/g8e-ai/g8e/components/g8eo/testutil"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/config"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/services/listen"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
+	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
+	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/pubsubv1"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/testutil"
 )
 
 func TestBYOClientParity_EndToEnd(t *testing.T) {

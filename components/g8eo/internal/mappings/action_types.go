@@ -14,7 +14,7 @@
 package mappings
 
 import (
-	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
 )
 
 // MapEventTypeToActionType maps protobuf event types to UAP action types.

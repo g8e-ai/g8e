@@ -70,7 +70,7 @@ build:
 		-trimpath \
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
-		-o build/linux-amd64/g8e.operator .
+		-o build/linux-amd64/g8e.operator ./cmd/g8eo
 	@echo 'Built: build/linux-amd64/g8e.operator'
 	@SIZE=$$(ls -lh build/linux-amd64/g8e.operator | awk '{print $$5}') && \
 		echo "  Size: $$SIZE"
@@ -85,7 +85,7 @@ build-all:
 			-trimpath \
 			-buildvcs=false \
 			-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$$arch'" \
-			-o $(BUILD_DIR)/linux-$$arch/g8e.operator . || exit 1; \
+			-o $(BUILD_DIR)/linux-$$arch/g8e.operator ./cmd/g8eo || exit 1; \
 		SIZE=$$(ls -lh $(BUILD_DIR)/linux-$$arch/g8e.operator | awk '{print $$5}'); \
 		echo "  linux/$$arch: $$SIZE (uncompressed)"; \
 	done
@@ -116,7 +116,7 @@ _build-local-binary:
 		-trimpath \
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
-		-o build/linux-amd64/$(BINARY_NAME) .
+		-o build/linux-amd64/$(BINARY_NAME) ./cmd/g8eo
 	@echo "Built: build/linux-amd64/$(BINARY_NAME)"
 
 
@@ -157,7 +157,7 @@ _build-release:
 		-trimpath \
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$(ARCH)'" \
-		-o build/linux-$(ARCH)/$(BINARY_NAME) .
+		-o build/linux-$(ARCH)/$(BINARY_NAME) ./cmd/g8eo
 
 # =============================================================================
 # CODE QUALITY

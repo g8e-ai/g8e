@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 )
 
 // UAPEnvelope is an alias for the canonical UniversalEnvelope proto message.
