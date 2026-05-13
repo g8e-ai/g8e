@@ -18,8 +18,8 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
+	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 )
 
 func main() {
@@ -117,7 +117,6 @@ func main() {
 			Certificate: [][]byte{clientCert.Raw},
 			PrivateKey:  clientPriv,
 		}},
-		InsecureSkipVerify: true, // For demo purposes on localhost
 	}
 
 	client := &http.Client{

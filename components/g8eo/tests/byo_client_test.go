@@ -69,18 +69,33 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 
 	// 1. Discover Operator trust metadata
 	// Hub bundle (Root + Hub CA) is available on public port via HTTPS for initial discovery
-	// We use InsecureSkipVerify because we don't have the trust bundle yet
-	insecureClient := &http.Client{
+	// Instead of insecurely trusting the endpoint, we bootstrap trust from the known PKI dir
+	// which simulates a user pre-installing the Operator's root CA.
+	hubBundlePath := filepath.Join(pkiDir, "trust", "hub-bundle.pem")
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(hubBundlePath)
+		return err == nil
+	}, 5*time.Second, 100*time.Millisecond)
+
+	bootstrapRootPool := x509.NewCertPool()
+	initialBundle, err := os.ReadFile(hubBundlePath)
+	require.NoError(t, err)
+	require.True(t, bootstrapRootPool.AppendCertsFromPEM(initialBundle))
+
+	secureDiscoveryClient := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: &tls.Config{
+				RootCAs: bootstrapRootPool,
+			},
 		},
 	}
-	resp, err := insecureClient.Get(publicURL + "/.well-known/g8e/pki/hub-bundle.pem")
+	resp, err := secureDiscoveryClient.Get(publicURL + "/.well-known/g8e/pki/hub-bundle.pem")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	hubBundlePEM, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
+	require.Equal(t, initialBundle, hubBundlePEM)
 
 	rootPool := x509.NewCertPool()
 	require.True(t, rootPool.AppendCertsFromPEM(hubBundlePEM))
