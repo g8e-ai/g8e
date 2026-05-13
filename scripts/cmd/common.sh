@@ -12,7 +12,6 @@ G8E_PKI_DIR_HOST="${G8E_PKI_DIR:-$G8E_RUNTIME_DIR/pki}"
 G8E_SECRETS_DIR_HOST="${G8E_SECRETS_DIR:-$G8E_RUNTIME_DIR/secrets}"
 OPERATOR_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"
 _OPERATOR_PID_FILE="$G8E_RUNTIME_DIR/pids/operator-listen.pid"
-_G8ED_PID_FILE="$G8E_RUNTIME_DIR/pids/g8ed.pid"
 _G8EE_PID_FILE="$G8E_RUNTIME_DIR/pids/g8ee.pid"
 
 # Local credential store
@@ -28,7 +27,6 @@ _pid_alive() {
     [ -f "$pid_file" ] && ps -p "$(cat "$pid_file")" > /dev/null 2>&1
 }
 
-_g8ed_running()    { _pid_alive "$_G8ED_PID_FILE"; }
 _g8ee_running()    { _pid_alive "$_G8EE_PID_FILE"; }
 _operator_running() { _pid_alive "$_OPERATOR_PID_FILE"; }
 
@@ -78,7 +76,7 @@ _run_host_script() {
     export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"
     export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
     export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
-    export G8ED_INTERNAL_URL="${G8ED_INTERNAL_URL:-https://localhost}"
+    export G8ED_INTERNAL_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"
     export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
     [[ -n "${OPERATOR_SESSION_ID:-}" ]] && export OPERATOR_SESSION_ID
     exec "$@"
@@ -96,8 +94,8 @@ _operator_bin() {
 _load_credentials() {
     if [[ -f "$G8E_CREDENTIALS_FILE" ]]; then
         source "$G8E_CREDENTIALS_FILE"
-        if _g8ed_running && [[ -n "$OPERATOR_SESSION_ID" ]]; then
-            # Validation moved to app_helpers if needed by specific commands
+        if [[ -n "$OPERATOR_SESSION_ID" ]]; then
+            # Credentials loaded, session available
             :
         fi
         return 0

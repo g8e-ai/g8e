@@ -56,46 +56,6 @@ jobs:
         if: always()
         run: ./g8e platform stop
 
-  apps-g8ed:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: components/g8eo/go.mod
-          cache-dependency-path: components/g8eo/go.sum
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: components/g8ed/package-lock.json
-
-      - name: Install g8ed dependencies
-        run: npm ci --prefix components/g8ed
-
-      - name: Start g8ed adapter
-        run: ./g8e apps start g8ed
-
-      - name: Test g8ed adapter
-        run: ./g8e test g8ed
-
-      - name: Show app logs
-        if: failure()
-        run: |
-          tail -n 200 .g8e/logs/operator-listen.log || true
-          tail -n 200 .g8e/logs/g8ed.log || true
-
-      - name: Stop platform
-        if: always()
-        run: ./g8e platform stop
-
   apps-g8ee:
     runs-on: ubuntu-latest
     timeout-minutes: 45

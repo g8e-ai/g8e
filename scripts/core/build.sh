@@ -3,13 +3,12 @@
 #
 # Service categories:
 #   Substrate: Operator listen mode (runs as local operator binary)
-#   Optional application layer: g8ee, g8ed (explicit opt-in only)
+#   Optional application layer: g8ee (explicit opt-in only)
 #   Data volumes:
 #     .g8e/data     (Operator listen mode -- SQLite DB, users, settings; wiped by reset)
 #     .g8e/pki      (Operator listen mode -- TLS/PKI material; preserved by reset and wipe)
 #     .g8e/secrets  (Operator listen mode -- bootstrap secrets; wiped by reset, preserved by wipe)
 #     g8ee-data    (g8ee   -- app data; wiped by reset)
-#     g8ed-data (g8ed  -- app data; wiped by reset)
 #   Excluded from reset: core data services only
 #
 # Prerequisites:
@@ -23,7 +22,7 @@ set -e
 _footer() {
     local rc=$?
     # Ensure any stale PID files are cleaned up if the process is actually gone
-    for pid_file in "$OPERATOR_LISTEN_PID_FILE" "$G8EE_PID_FILE" "$G8ED_PID_FILE"; do
+    for pid_file in "$OPERATOR_LISTEN_PID_FILE" "$G8EE_PID_FILE"; do
         if [ -f "$pid_file" ]; then
             local pid
             pid=$(cat "$pid_file")
@@ -59,8 +58,6 @@ OPERATOR_LISTEN_PID_DIR="${OPERATOR_LISTEN_PID_DIR:-$G8E_RUNTIME_DIR/pids}"
 OPERATOR_LISTEN_LOG_DIR="${OPERATOR_LISTEN_LOG_DIR:-$G8E_RUNTIME_DIR/logs}"
 OPERATOR_LISTEN_PID_FILE="$OPERATOR_LISTEN_PID_DIR/operator-listen.pid"
 OPERATOR_LISTEN_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/operator-listen.log"
-G8ED_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ed.pid"
-G8ED_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ed.log"
 G8EE_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ee.pid"
 G8EE_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ee.log"
 OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-9000}"
@@ -71,7 +68,7 @@ OPERATOR_LISTEN_LOG_MAX_BACKUPS=5
 DEV_MODE=false
 
 MANAGED_SERVICES=(operator)
-OPTIONAL_APPS=(g8ee g8ed)
+OPTIONAL_APPS=(g8ee)
 TEST_RUNNER_SERVICES=()
 WITH_APPS=false
 OPTIONAL_COMPONENTS=()
@@ -84,7 +81,6 @@ fi
 _service_volume() {
     case "$1" in
         g8ee)   echo "g8ee-data" ;;
-        g8ed) echo "g8ed-data" ;;
     esac
 }
 
@@ -117,7 +113,6 @@ _expand_components() {
 _start_optional_app() {
     case "$1" in
         g8ee) _start_g8ee ;;
-        g8ed) _start_g8ed ;;
         *)
             echo "Error: Unknown optional app '$1'" >&2
             exit 1
@@ -128,7 +123,6 @@ _start_optional_app() {
 _stop_optional_app() {
     case "$1" in
         g8ee) _stop_g8ee ;;
-        g8ed) _stop_g8ed ;;
         *)
             echo "Error: Unknown optional app '$1'" >&2
             exit 1
@@ -139,7 +133,6 @@ _stop_optional_app() {
 _wait_optional_app_healthy() {
     case "$1" in
         g8ee) _wait_service_healthy "g8ee" "https://localhost:8443/health" 10 1 "$G8EE_LOG_FILE" ;;
-        g8ed) _wait_service_healthy "g8ed" "https://localhost/health" 10 1 "$G8ED_LOG_FILE" ;;
     esac
 }
 
@@ -155,13 +148,13 @@ Commands:
   status                          Show substrate and optional app process status
   up [component ...] [--with-apps] Start Operator listen mode by default
                                   Default (no components): operator
-                                  Valid: operator g8ee g8ed
-                                  Optional apps require --with-apps, --with-g8ed, or --with-g8ee
+                                  Valid: operator g8ee
+                                  Optional apps require --with-apps or --with-g8ee
   down                            Stop Operator listen mode and optional apps -- nothing is removed
   rebuild [component ...]         Restart Operator listen mode by default
                                   Default (no components): operator
-                                  Valid: operator g8ee g8ed
-                                  Optional apps require --with-apps, --with-g8ed, or --with-g8ee
+                                  Valid: operator g8ee
+                                  Optional apps require --with-apps or --with-g8ee
   reset                           Wipe Operator listen-mode data. PKI certs and secrets are preserved.
   wipe                            Clear app data from the Operator database
                                   Operator listen mode stays up; preserves: platform settings, PKI certs, secrets, auth token
@@ -175,7 +168,6 @@ Examples:
   $(basename "$0") up --with-apps               Start Operator plus optional bundled apps
   $(basename "$0") down                         Stop runtime processes
   $(basename "$0") rebuild                      Restart Operator listen mode
-  $(basename "$0") rebuild --with-g8ed          Restart Operator plus g8ed
   $(basename "$0") wipe                         Clear app data from the Operator database
   $(basename "$0") reset                        Wipe Operator listen-mode data
   $(basename "$0") clean                        Remove host runtime state
@@ -200,11 +192,6 @@ while [[ $# -gt 0 ]]; do
             OPTIONAL_COMPONENTS=("${OPTIONAL_APPS[@]}")
             shift
             ;;
-        --with-g8ed)
-            WITH_APPS=true
-            OPTIONAL_COMPONENTS+=("g8ed")
-            shift
-            ;;
         --with-g8ee)
             WITH_APPS=true
             OPTIONAL_COMPONENTS+=("g8ee")
@@ -214,9 +201,9 @@ while [[ $# -gt 0 ]]; do
             COMMAND="$1"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
-                if ! printf '%s\n' operator g8ee g8ed | grep -qx "$1"; then
+                if ! printf '%s\n' operator g8ee | grep -qx "$1"; then
                     echo "Error: Invalid component '$1'" >&2
-                    echo "Valid: operator g8ee g8ed" >&2
+                    echo "Valid: operator g8ee" >&2
                     exit 1
                 fi
                 REBUILD_COMPONENTS+=("$1")
@@ -227,9 +214,9 @@ while [[ $# -gt 0 ]]; do
             COMMAND="rebuild"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
-                if ! printf '%s\n' operator g8ee g8ed | grep -qx "$1"; then
+                if ! printf '%s\n' operator g8ee | grep -qx "$1"; then
                     echo "Error: Invalid component '$1'" >&2
-                    echo "Valid: operator g8ee g8ed" >&2
+                    echo "Valid: operator g8ee" >&2
                     exit 1
                 fi
                 REBUILD_COMPONENTS+=("$1")
@@ -276,18 +263,6 @@ _g8ee_running() {
             return 0
         fi
         rm -f "$G8EE_PID_FILE"
-    fi
-    return 1
-}
-
-_g8ed_running() {
-    if [ -f "$G8ED_PID_FILE" ]; then
-        local pid
-        pid=$(cat "$G8ED_PID_FILE")
-        if ps -p "$pid" > /dev/null 2>&1; then
-            return 0
-        fi
-        rm -f "$G8ED_PID_FILE"
     fi
     return 1
 }
@@ -351,88 +326,12 @@ _start_g8ee() {
     fi
 }
 
-_ensure_node_capabilities() {
-    local node_bin
-    node_bin=$(which node)
-    if [ -z "$node_bin" ]; then
-        echo "  WARN: node binary not found in PATH"
-        return 0
-    fi
-
-    # Check if node already has cap_net_bind_service
-    if getcap "$node_bin" 2>/dev/null | grep -q "cap_net_bind_service"; then
-        return 0
-    fi
-
-    echo "  Setting cap_net_bind_service=+ep on node binary for privileged ports (80/443)..."
-    if sudo setcap cap_net_bind_service=+ep "$node_bin"; then
-        echo "  Successfully set capabilities on $node_bin"
-    else
-        echo "  WARN: Failed to set capabilities. g8ed may not be able to bind to ports 80/443 without running as root."
-        echo "  Run manually: sudo setcap cap_net_bind_service=+ep $node_bin"
-    fi
-}
-
-_start_g8ed() {
-    if _g8ed_running; then
-        local pid_msg=""
-        if [ -f "$G8ED_PID_FILE" ]; then
-            pid_msg=" (PID: $(cat "$G8ED_PID_FILE"))"
-        fi
-        echo "  g8ed is already running${pid_msg}."
-        return 0
-    fi
-
-    if [ ! -d "$PROJECT_ROOT/components/g8ed/node_modules" ]; then
-        echo "  Installing g8ed dependencies..."
-        (cd "$PROJECT_ROOT/components/g8ed" && npm install)
-    fi
-
-    _ensure_node_capabilities
-
-    echo "  Starting g8ed on port 443 (HTTPS) and 80 (HTTP)..."
-    _rotate_logs "$G8ED_LOG_FILE"
-
-    (
-        cd "$PROJECT_ROOT/components/g8ed"
-        export G8E_PKI_DIR="$OPERATOR_LISTEN_PKI_DIR"
-        export G8E_SECRETS_DIR="$OPERATOR_LISTEN_SECRETS_DIR"
-        export NODE_EXTRA_CA_CERTS="$OPERATOR_LISTEN_PKI_DIR/ca.crt"
-        export G8E_INTERNAL_HTTP_URL="https://localhost:9000"
-        export G8E_INTERNAL_PUBSUB_URL="wss://localhost:9001"
-        export G8EE_INTERNAL_URL="https://localhost:8443"
-        
-        setsid node server.js > "$G8ED_LOG_FILE" 2>&1 &
-        echo $! > "$G8ED_PID_FILE"
-    )
-
-    sleep 2
-    if ! _g8ed_running; then
-        echo "  Error: g8ed failed to start. See $G8ED_LOG_FILE"
-        rm -f "$G8ED_PID_FILE"
-        return 1
-    fi
-}
-
 _stop_g8ee() {
     if [ -f "$G8EE_PID_FILE" ]; then
         local pid=$(cat "$G8EE_PID_FILE")
         echo "  Stopping g8ee (PID: $pid)..."
         kill "$pid" 2>/dev/null || true
         rm -f "$G8EE_PID_FILE"
-    fi
-}
-
-_stop_g8ed() {
-    if [ -f "$G8ED_PID_FILE" ]; then
-        local pid=$(cat "$G8ED_PID_FILE")
-        echo "  Stopping g8ed (PID: $pid)..."
-        kill "$pid" 2>/dev/null || true
-        sleep 1
-        if ps -p "$pid" > /dev/null 2>&1; then
-            kill -9 "$pid" 2>/dev/null || true
-        fi
-        rm -f "$G8ED_PID_FILE"
     fi
 }
 
@@ -642,7 +541,7 @@ _print_platform_info() {
     echo "  Operator Pub/Sub:  wss://localhost:$OPERATOR_LISTEN_WSS_PORT"
     echo "  Runtime dir:       $G8E_RUNTIME_DIR"
     echo "  Protocol schemas:  shared/proto"
-    if _g8ee_running || _g8ed_running; then
+    if _g8ee_running; then
         echo "  Optional apps:     running (see ./g8e platform status)"
     else
         echo "  Optional apps:     not running (use ./g8e apps start to enable)"
@@ -677,12 +576,6 @@ if [[ "$COMMAND" == "status" ]]; then
     echo ""
     echo "Optional Application Layer"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    if _g8ed_running; then
-        printf "  %-14s  %-10s  (PID: %s)\n" "g8ed" "RUNNING" "$(cat "$G8ED_PID_FILE")"
-    else
-        printf "  %-14s  %-10s\n" "g8ed" "NOT RUNNING"
-    fi
-
     if _g8ee_running; then
         printf "  %-14s  %-10s  (PID: %s)\n" "g8ee" "RUNNING" "$(cat "$G8EE_PID_FILE")"
     else
@@ -698,7 +591,6 @@ fi
 if [[ "$COMMAND" == "down" ]]; then
     echo "Stopping Operator listen mode and optional application-layer services..."
     _stop_g8ee
-    _stop_g8ed
     _stop_operator_listen
     echo "Done."
     exit 0
@@ -712,9 +604,6 @@ if [[ "$COMMAND" == "restart" ]]; then
     echo "Restarting substrate components..."
     if printf '%s\n' "${RESTART_COMPONENTS[@]}" | grep -qx g8ee; then
         _stop_g8ee
-    fi
-    if printf '%s\n' "${RESTART_COMPONENTS[@]}" | grep -qx g8ed; then
-        _stop_g8ed
     fi
     _stop_operator_listen
     _start_operator_listen
@@ -748,14 +637,12 @@ if [[ "$COMMAND" == "reset" ]]; then
 
     echo "Wiping Operator listen-mode data and secrets — PKI certs preserved..."
     _stop_g8ee
-    _stop_g8ed
     _stop_operator_listen
     
     # Wipe host data
     rm -rf "$OPERATOR_LISTEN_DATA_DIR/"* 2>/dev/null || true
     rm -rf "$OPERATOR_LISTEN_SECRETS_DIR/"* 2>/dev/null || true
     rm -rf "$PROJECT_ROOT/components/g8ee/data/"* 2>/dev/null || true
-    rm -rf "$PROJECT_ROOT/components/g8ed/data/"* 2>/dev/null || true
 
     echo ""
 
@@ -799,9 +686,6 @@ if [[ "$COMMAND" == "wipe" ]]; then
     if printf '%s\n' "${WIPE_COMPONENTS[@]}" | grep -qx g8ee; then
         _stop_g8ee
     fi
-    if printf '%s\n' "${WIPE_COMPONENTS[@]}" | grep -qx g8ed; then
-        _stop_g8ed
-    fi
     _stop_operator_listen
     echo ""
 
@@ -841,7 +725,6 @@ if [[ "$COMMAND" == "clean" ]]; then
     echo "Cleaning all host services and runtime data..."
 
     _stop_g8ee
-    _stop_g8ed
     _stop_operator_listen
     rm -rf "$G8E_RUNTIME_DIR" 2>/dev/null || true
     
@@ -867,7 +750,6 @@ if [[ "$COMMAND" == "up" ]]; then
         for svc in "${UP_COMPONENTS[@]}"; do
             case "$svc" in
                 g8ee) _start_g8ee ;;
-                g8ed) _start_g8ed ;;
                 *) _start_optional_app "$svc" ;;
             esac
         done
@@ -898,7 +780,6 @@ if [[ "$COMMAND" == "setup" ]]; then
     mapfile -t SETUP_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
     echo "Stopping all runtime services..."
     _stop_g8ee
-    _stop_g8ed
     _stop_operator_listen
 
     echo "Starting substrate services..."
@@ -942,10 +823,6 @@ if [[ "$COMMAND" == "rebuild" ]]; then
                 g8ee)
                     _stop_g8ee
                     _start_g8ee
-                    ;;
-                g8ed)
-                    _stop_g8ed
-                    _start_g8ed
                     ;;
                 *) _start_optional_app "$svc" ;;
             esac

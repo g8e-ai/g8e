@@ -38,7 +38,6 @@ The default substrate is the Operator plus the shared protocol. Bundled apps rem
 |-----------|-----------|----------|---------|
 | **Substrate** | **Operator (g8eo)** | Go | Protocol hub, policy enforcement, execution, audit, receipts, persistence, and pub/sub in listen mode. |
 | **Protocol** | **shared/proto** | Protobuf | Canonical transaction schemas, typed payloads, and envelope contracts. |
-| **Application Layer** | **g8ed** | Node.js | Optional reference Dashboard adapter for UI and approval workflows. |
 | **Application Layer** | **g8ee** | Python | Optional reference Engine adapter for agentic proposal and L2 proof generation. |
 
 ### Agent Terminology
@@ -99,7 +98,6 @@ When no operator is connected:
 ./g8e test           # Go Operator substrate tests
 ./g8e test g8eo      # Go Operator substrate tests
 ./g8e test g8ee      # Optional Python Engine adapter tests
-./g8e test g8ed      # Optional Dashboard adapter tests
 ```
 
 ## Command Reference
@@ -115,9 +113,9 @@ When no operator is connected:
 - `unset <key>`: Remove a variable from `.g8e/.env`
 
 ### platform
-- `start [--with-apps|--with-g8ed|--with-g8ee]`: Start Operator listen mode by default; optional apps require explicit opt-in
+- `start [--with-apps|--with-g8ee]`: Start Operator listen mode by default; optional apps require explicit opt-in
 - `stop`: Stop Operator listen mode and any optional app processes
-- `restart [--with-apps|--with-g8ed|--with-g8ee]`: Restart Operator listen mode by default; optional apps require explicit opt-in
+- `restart [--with-apps|--with-g8ee]`: Restart Operator listen mode by default; optional apps require explicit opt-in
 - `status`: Show substrate health first and optional application-layer status separately
 - `reset`: Destructive. Wipes Dashboard/Engine data, Operator listen-mode data, and bootstrap secrets while preserving PKI material in `.g8e/pki`
 - `wipe`: Clears application data via the Operator listen-mode API. Preserves platform settings, PKI material, secrets, and authentication state
@@ -126,11 +124,11 @@ When no operator is connected:
 - `settings`: Manage platform configuration (sections: general, llm, etc.)
 
 ### apps
-- `start [g8ed|g8ee|all]`: Start optional bundled app adapters
-- `stop [g8ed|g8ee|all]`: Stop optional bundled app adapters
-- `restart [g8ed|g8ee|all]`: Restart optional bundled app adapters
+- `start [g8ee|all]`: Start optional bundled app adapters
+- `stop [g8ee|all]`: Stop optional bundled app adapters
+- `restart [g8ee|all]`: Restart optional bundled app adapters
 - `status`: Show optional app status alongside substrate status
-- `build [g8ed|g8ee|all]`: Install optional app dependencies
+- `build [g8ee|all]`: Install optional app dependencies
 
 ### operator
 - `init`: Build local operator binary
@@ -144,7 +142,6 @@ When no operator is connected:
 ### test
 - `g8eo [path]`: Go Operator substrate tests with race detection. This is the default when no component is provided.
 - `g8ee [path]`: Optional Python Engine adapter tests with LLM provider support.
-- `g8ed [path]`: Optional Dashboard adapter and API tests.
 
 ### security
 - `validate`: Check TLS integrity and volume permissions

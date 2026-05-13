@@ -24,7 +24,7 @@ The platform maintains distinct test harnesses with strictly separated lifecycle
 
 ### 1. Substrate Tests (Operator/Protocol Path)
 **Command:** `./g8e test` or `./g8e test g8eo`
-**Purpose:** Validates the Operator/protocol substrate without requiring Node, Python, g8ed, or g8ee.
+**Purpose:** Validates the Operator/protocol substrate without requiring Node, Python, or g8ee.
 - **Pattern:** Uses Operator listen mode and unified command/result paths.
 - **Rationale:** Keeps the required platform boundary small and independently verifiable.
 
@@ -49,7 +49,6 @@ All tests are orchestrated via the `./g8e` CLI, which handles environment config
 | `./g8e test` | Host Go | `go test` | Default substrate test run |
 | `./g8e test g8eo` | Host Go | `go test` | Operator listen mode, blob store, pub/sub |
 | `./g8e test g8ee` | Host venv | `pytest` | Optional Engine adapter, AI reasoning, tool translation |
-| `./g8e test g8ed` | Host Node.js | `vitest` | Optional Dashboard adapter, UI/API behavior |
 
 ### Common Workflow
 
@@ -110,11 +109,6 @@ The `evals` subsystem manages a dedicated fleet of simulated operator nodes to t
 - **Race Detection**: Always enabled via `-race`.
 - **Parallelism**: Runs with `-parallel 4` and a `180s` timeout by default.
 
-### Node.js (g8ed)
-- **Vitest**: Runs in `forks` pool for isolation.
-- **Cleanup**: Uses `TestCleanupHelper` to ensure no database pollution between runs.
-- **Coverage**: Uses the `v8` provider; reports generated in `components/g8ed/coverage`.
-
 ### Python (g8ee)
 - **Type Safety**: `--pyright` runs strict AST-level type checking using `pyrightconfig.services.json`.
 - **Linting**: `--ruff` (and `--ruff-fix`) enforces the project style guide.
@@ -134,5 +128,5 @@ The platform includes automated verification of its own security posture:
 
 GitHub Actions (`.github/workflows/build-and-test.yml`) enforce these standards on every PR:
 - **Substrate Job**: The blocking `test-g8eo` job installs Go only, starts `./g8e platform start`, and runs `./g8e test`.
-- **Application Jobs**: `apps-g8ed` and `apps-g8ee` install their own Node/Python toolchains, start only the relevant optional adapter, and are non-blocking.
+- **Application Jobs**: `apps-g8ee` installs its own Python toolchain, starts only the relevant optional adapter, and is non-blocking.
 - **Diagnostic Logging**: Operator logs are printed for substrate failures; app jobs also print their adapter logs.
