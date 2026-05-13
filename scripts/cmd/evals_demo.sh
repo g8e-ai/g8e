@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -e
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/app_helpers.sh"
 
 # --- Eval Fleet Helpers ---
 _eval_fleet_container_ids() {
@@ -184,58 +183,16 @@ case "$TOP" in
                 if ! _eval_fleet_running; then
                     echo "[g8e] eval fleet is not running" >&2; exit 1
                 fi
-                if [[ -z "$operator_session_id" ]] && operator_session_id="$(_eval_bound_operator_session_id)"; then
-                    run_args+=("--operator-session-id" "$operator_session_id")
-                fi
                 if [[ -z "$operator_session_id" ]]; then
-                    echo "[g8e] Error: No bound eval operator session found" >&2; exit 1
+                    echo "[g8e] Error: --operator-session-id is required (auto-discovery removed with g8ed)" >&2
+                    exit 1
                 fi
                 if [[ "$operator_session_id" == dlk_* ]]; then
                     echo "[g8e] Error: evals run requires a bound operator session id, not a device link token" >&2; exit 1
                 fi
-                if ! _validate_session "$operator_session_id"; then
-                    echo "[g8e] Error: eval operator session is not valid or not bound to a web session" >&2; exit 1
-                fi
                 if [[ ${#eval_llm_args[@]} -gt 0 ]]; then
-                    user_id="$(_eval_operator_user_id "$operator_session_id")"
-                    [[ -z "$user_id" ]] && { echo "[g8e] Error: Could not resolve user_id from operator session" >&2; exit 1; }
-                    settings_args=()
-                    i=0
-                    while [[ $i -lt ${#eval_llm_args[@]} ]]; do
-                        flag="${eval_llm_args[$i]}"; value="${eval_llm_args[$((i+1))]}"
-                        case "$flag" in
-                            -p) settings_args+=("llm_provider=$value") ;;
-                            -m) settings_args+=("llm_model=$value") ;;
-                            -a) settings_args+=("llm_assistant_model=$value") ;;
-                            -l) settings_args+=("llm_lite_model=$value") ;;
-                            -e) settings_args+=("llm_endpoint=$value") ;;
-                            -k) 
-                                provider=""
-                                for j in "${!eval_llm_args[@]}"; do
-                                    if [[ "${eval_llm_args[$j]}" == "-p" && $j -lt ${#eval_llm_args[@]} ]]; then
-                                        provider="${eval_llm_args[$((j+1))]}"; break
-                                    fi
-                                done
-                                case "$provider" in
-                                    gemini) settings_args+=("gemini_api_key=$value") ;;
-                                    openai) settings_args+=("openai_api_key=$value") ;;
-                                    anthropic) settings_args+=("anthropic_api_key=$value") ;;
-                                    ollama) settings_args+=("ollama_api_key=$value") ;;
-                                    *) settings_args+=("gemini_api_key=$value") ;;
-                                esac
-                                ;;
-                        esac
-                        i=$((i+2))
-                    done
-                    if [[ ${#settings_args[@]} -gt 0 ]]; then
-                        _ensure_g8ed
-                        (
-                            export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"; export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
-                            export G8E_TRUST_BUNDLE="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"; export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
-                            export G8ED_INTERNAL_URL="$G8ED_URL"; export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
-                            python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" settings set --user-id "$user_id" "${settings_args[@]}"
-                        )
-                    fi
+                    echo "[g8e] Warning: LLM settings via evals run is temporarily disabled (g8ed removed)." >&2
+                    echo "[g8e] Set LLM settings via the Operator API or g8ee adapter directly." >&2
                 fi
                 _banner "evals run"
                 _venv="$SCRIPT_DIR/components/g8ee/.venv"
@@ -244,7 +201,7 @@ case "$TOP" in
                     cd "$SCRIPT_DIR/components/g8ee"; export PYTHONPATH="$SCRIPT_DIR/components/g8ee:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
                     export G8E_SHARED_DIR="$SCRIPT_DIR/shared"; export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"; export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
                     export G8E_TRUST_BUNDLE="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
-                    export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"; export G8ED_URL="$G8ED_URL"; export G8EE_URL="$G8EE_URL"
+                    export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"; export G8EE_URL="$G8EE_URL"
                     "$_venv/bin/python" -m app.evals.runner.cli run "${run_args[@]}"
                 )
                 ;;

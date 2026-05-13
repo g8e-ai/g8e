@@ -1,93 +1,9 @@
 #!/usr/bin/env bash
 
-# Application-layer helpers (g8ed, g8ee, evals)
-# These are decoupled from the core Operator substrate.
+# This file previously contained g8ed (Dashboard) helper functions.
+# g8ed has been removed from the platform; the Operator (g8eo) now
+# provides all substrate services directly. This file is kept as a
+# placeholder for future application-layer helpers if needed.
 
-_ensure_g8ed() {
-    if ! _g8ed_running; then
-        echo "[g8e] g8ed is not running — start the optional dashboard adapter: ./g8e apps start g8ed" >&2
-        exit 1
-    fi
-}
-
-_g8ed_curl() {
-    local method="$1" path="$2" body="${3:-}"
-    local g8ed_url="${G8ED_INTERNAL_URL:-https://localhost}"
-    local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
-    if [[ ! -f "$trust_bundle" ]]; then
-        echo "[g8e] g8ed trust bundle not found at $trust_bundle — recreate runtime PKI with ./g8e platform clean && ./g8e platform start" >&2
-        return 1
-    fi
-    local args=(-sS -X "$method" --cacert "$trust_bundle")
-    [[ -n "$OPERATOR_SESSION_ID" ]] && args+=(-H "x-operator-session-id: $OPERATOR_SESSION_ID")
-    args+=(-H "Content-Type: application/json")
-    [[ -n "$body" ]] && args+=(-d "$body")
-    curl "${args[@]}" "$g8ed_url$path"
-}
-
-_validate_session() {
-    local operator_session_id="$1"
-    local response
-    response=$(_g8ed_curl POST '/api/auth/operator/validate' \
-        "{\"operator_session_id\":\"$operator_session_id\"}" 2>/dev/null || true)
-    [[ -z "$response" ]] && return 1
-    echo "$response" | grep -q '"valid":true'
-}
-
-# --- Eval Fleet Helpers (App-coupled) ---
-
-_eval_bound_operator_session_id() {
-    local response
-    response=$(_g8ed_curl GET '/api/internal/operators' 2>/dev/null || true)
-    [[ -z "$response" ]] && return 1
-    local session_id
-    session_id=$(python3 -c '
-import sys, json
-try:
-    data = json.loads(sys.argv[1])
-    if not data.get("success"):
-        sys.exit(1)
-    for op in data.get("data", []):
-        hb = op.get("latest_heartbeat_snapshot") or {}
-        si = hb.get("system_identity") or {}
-        hn = si.get("hostname") or ""
-        if op.get("status") == "BOUND" and hn.startswith("evals-eval-node-"):
-            print(op["operator_session_id"])
-            sys.exit(0)
-except Exception:
-    sys.exit(1)
-sys.exit(1)
-' "$response" 2>/dev/null)
-    if [[ -n "$session_id" ]]; then
-        echo "$session_id"
-        return 0
-    fi
-    return 1
-}
-
-_eval_operator_user_id() {
-    local session_id="$1"
-    local response
-    response=$(_g8ed_curl GET '/api/internal/operators' 2>/dev/null || true)
-    [[ -z "$response" ]] && return 1
-    local user_id
-    user_id=$(python3 -c '
-import sys, json
-try:
-    data = json.loads(sys.argv[2])
-    if not data.get("success"):
-        sys.exit(1)
-    for op in data.get("data", []):
-        if op.get("operator_session_id") == sys.argv[1]:
-            print(op["user_id"])
-            sys.exit(0)
-except Exception:
-    sys.exit(1)
-sys.exit(1)
-' "$session_id" "$response")
-    if [[ -n "$user_id" ]]; then
-        echo "$user_id"
-        return 0
-    fi
-    return 1
-}
+# Deprecated: All g8ed helper functions have been removed.
+# Use the Operator's public API directly via g8eo.

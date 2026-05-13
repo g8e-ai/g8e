@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
         --help|-h)
             echo "Usage: run_tests.sh [COMPONENT] [OPTIONS] [-- EXTRA_ARGS]"
             echo ""
-            echo "Components: g8eo (default substrate), g8ed, g8ee"
+            echo "Components: g8eo (default substrate), g8ee"
             echo ""
             echo "Options:"
             echo "  --coverage                Generate coverage reports"
@@ -76,7 +76,7 @@ while [[ $# -gt 0 ]]; do
             echo "  ./g8e test g8ee --pyright --ruff"
             echo "  ./g8e test g8ee --e2e"
             echo "  ./g8e test g8ee -j auto"
-            echo "  ./g8e test g8ed test/services"
+            echo "  ./g8e test g8eo services/listen"
             echo "  ./g8e test g8eo ./cmd/server"
             echo ""
             echo "LLM/Web Search configuration (g8ee only):"
@@ -108,7 +108,7 @@ while [[ $# -gt 0 ]]; do
             break
             ;;
         *)
-            if [[ "$1" =~ ^(g8ee|g8ed|g8eo)$ ]]; then
+            if [[ "$1" =~ ^(g8ee|g8eo)$ ]]; then
                 COMPONENT="$1"
             else
                 EXTRA_ARGS+=("$1")
@@ -243,18 +243,6 @@ run_e2e() {
     "$venv_dir/bin/pytest" -rs -m e2e tests/e2e/ "${EXTRA_ARGS[@]}"
 }
 
-run_g8ed() {
-    log_header "Running g8ed tests (host)"
-    if [[ ! -d "$PROJECT_ROOT/components/g8ed/node_modules" ]]; then
-        log_err "g8ed node_modules not found. Run ./g8e platform start first."
-        exit 1
-    fi
-    cd "$PROJECT_ROOT/components/g8ed"
-    local cov_flag=""
-    [[ "$COVERAGE" == "true" ]] && cov_flag="--coverage"
-    npx vitest run --config ./vitest.config.js $cov_flag "${EXTRA_ARGS[@]}"
-}
-
 run_g8eo() {
     log_header "Running g8eo tests (host)"
     cd "$PROJECT_ROOT/components/g8eo"
@@ -311,7 +299,6 @@ if [[ "$E2E" == "true" && "$COMPONENT" == "g8ee" ]]; then
 else
     case "$COMPONENT" in
         g8ee) run_g8ee ;;
-        g8ed) run_g8ed ;;
         g8eo) run_g8eo ;;
     esac
 fi
