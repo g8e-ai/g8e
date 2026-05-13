@@ -15,6 +15,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -65,7 +66,7 @@ type G8eoService struct {
 	startTime time.Time
 }
 
-func productionSentinelConfig() *sentinel.SentinelConfig {
+func ProductionSentinelConfig() *sentinel.SentinelConfig {
 	return &sentinel.SentinelConfig{
 		Enabled:                true,
 		StrictMode:             true,
@@ -218,21 +219,30 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize results service: %w", err)
 	}
 
+	// Create governance dependencies for transaction verification
+	// For outbound mode, the platform (listen mode) is the authoritative verifier
+	stateRootProvider := &governance.SimpleStateRootProvider{Root: vs.config.SystemFingerprint}
+	transactionAudit := &auditVaultTransactionStore{vault: vs.auditVault}
+	l3Verifier := &governance.NoOpL3Verifier{} // L3 verified at platform level
+
 	// PubSubCommandService Construction
 	psConfig := pubsub.CommandServiceConfig{
-		Config:         vs.config,
-		Logger:         vs.logger,
-		Execution:      vs.execution,
-		FileEdit:       vs.fileEdit,
-		PubSubClient:   vs.pubSubClient,
-		ResultsService: vs.pubSubResults,
-		LocalStore:     vs.localStore,
-		RawVault:       vs.rawVault,
-		AuditVault:     vs.auditVault,
-		Ledger:         vs.ledger,
-		HistoryHandler: vs.historyHandler,
-		Sentinel:       sentinel.NewSentinel(productionSentinelConfig(), vs.logger),
-		ReplayStore:    vs.replayStore,
+		Config:            vs.config,
+		Logger:            vs.logger,
+		Execution:         vs.execution,
+		FileEdit:          vs.fileEdit,
+		PubSubClient:      vs.pubSubClient,
+		ResultsService:    vs.pubSubResults,
+		LocalStore:        vs.localStore,
+		RawVault:          vs.rawVault,
+		AuditVault:        vs.auditVault,
+		Ledger:            vs.ledger,
+		HistoryHandler:    vs.historyHandler,
+		Sentinel:          sentinel.NewSentinel(ProductionSentinelConfig(), vs.logger),
+		ReplayStore:       vs.replayStore,
+		StateRootProvider: stateRootProvider,
+		TransactionAudit:  transactionAudit,
+		L3Verifier:        l3Verifier,
 	}
 
 	vs.pubSubCommands, err = pubsub.NewPubSubCommandService(psConfig)
@@ -320,4 +330,24 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 	vs.running = false
 	vs.logger.Info("g8e Operator stopped")
 	return nil
+}
+
+// auditVaultTransactionStore wraps AuditVaultService to implement governance.TransactionAuditStore.
+type auditVaultTransactionStore struct {
+	vault *storage.AuditVaultService
+}
+
+func (a *auditVaultTransactionStore) DocSet(collection, id string, data json.RawMessage) error {
+	if a.vault == nil {
+		return nil
+	}
+	// Use the vault's database connection through a simple event recording
+	event := &storage.Event{
+		OperatorSessionID: id,
+		Timestamp:         time.Now(),
+		Type:              storage.EventType("transaction_audit"),
+		ContentText:       string(data),
+	}
+	_, err := a.vault.RecordEvent(event)
+	return err
 }

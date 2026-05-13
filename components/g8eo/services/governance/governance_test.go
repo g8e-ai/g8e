@@ -1,13 +1,25 @@
 package governance
 
 import (
+	"context"
 	"crypto/ed25519"
+	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
-	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+type mockExecutionHandler struct {
+	executed bool
+	err      error
+}
+
+func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) error {
+	m.executed = true
+	return m.err
+}
 
 func TestGovernanceFlow(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(nil)
@@ -19,6 +31,7 @@ func TestGovernanceFlow(t *testing.T) {
 	}
 
 	warden := &Warden{
+		Logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
 		TrustedNodes: map[string]ed25519.PublicKey{
 			nodeID: pub,
 		},
@@ -51,31 +64,34 @@ func TestGovernanceFlow(t *testing.T) {
 	env.Governance.L1.Validated = true
 	env.Governance.L2.TribunalSignature = tribunal.SignDecision(env.Id, true)
 
-	// 3. Warden Authorization
-	err = warden.AuthorizeExecution(env)
+	handler := &mockExecutionHandler{}
+	warden.ExecutionHandler = handler
+	warden.SigningKey = priv
+	warden.KeyID = nodeID
+	warden.Ctx = context.Background()
+
+	vt := &VerifiedTransaction{
+		Envelope:   env,
+		ActionType: env.ActionType,
+	}
+
+	// 3. Warden Execution
+	receipt, err := warden.Execute(context.Background(), vt, nil)
 	if err != nil {
-		t.Fatalf("Warden authorization failed: %v", err)
+		t.Fatalf("Warden execution failed: %v", err)
 	}
 
-	// 4. Test Hash Mismatch
-	env.Id = "wrong-hash"
-	err = tribunal.EvaluatePayload(env)
-	if err == nil {
-		t.Error("Expected error on hash mismatch, got nil")
+	if !handler.executed {
+		t.Error("Expected handler to be executed")
 	}
 
-	// 5. Test Insufficient Quorum
-	env.Id = id // Reset
-	env.Governance.L2.AgentIds = nil
-	env.Governance.L2.TribunalSignature = ""
-	err = warden.AuthorizeExecution(env)
-	if err == nil {
-		t.Error("Expected error on insufficient quorum, got nil")
+	if receipt.TransactionId != env.Id {
+		t.Errorf("Expected receipt tx id %s, got %s", env.Id, receipt.TransactionId)
 	}
 }
 
 func TestGovernanceFailClosed(t *testing.T) {
-	pub, priv, _ := ed25519.GenerateKey(nil)
+	_, priv, _ := ed25519.GenerateKey(nil)
 	nodeID := "test-node-1"
 
 	t.Run("SentinelNil_FailClosed", func(t *testing.T) {
@@ -87,44 +103,6 @@ func TestGovernanceFailClosed(t *testing.T) {
 		isSafe := tribunal.RunMITREChecks("test", "echo 'hello'")
 		if isSafe {
 			t.Error("Expected fail-closed (Safe=false) when Sentinel is nil")
-		}
-	})
-
-	t.Run("UnsignedVote_Blocked", func(t *testing.T) {
-		warden := &Warden{
-			TrustedNodes: map[string]ed25519.PublicKey{nodeID: pub},
-		}
-		env := &uap.UAPEnvelope{
-			Id: "test-id",
-			Governance: &commonv1.GovernanceMetadata{
-				L2: &commonv1.L2Metadata{
-					AgentIds:          []string{nodeID},
-					TribunalSignature: "", // Missing signature
-				},
-			},
-		}
-		err := warden.AuthorizeExecution(env)
-		if err == nil || err.Error() != "execution blocked: required consensus votes not met" {
-			t.Errorf("Expected unsigned vote to be blocked, got: %v", err)
-		}
-	})
-
-	t.Run("InvalidSignature_Blocked", func(t *testing.T) {
-		warden := &Warden{
-			TrustedNodes: map[string]ed25519.PublicKey{nodeID: pub},
-		}
-		env := &uap.UAPEnvelope{
-			Id: "test-id",
-			Governance: &commonv1.GovernanceMetadata{
-				L2: &commonv1.L2Metadata{
-					AgentIds:          []string{nodeID},
-					TribunalSignature: "deadbeef",
-				},
-			},
-		}
-		err := warden.AuthorizeExecution(env)
-		if err == nil || err.Error() != "execution blocked: required consensus votes not met" {
-			t.Errorf("Expected invalid signature to be blocked, got: %v", err)
 		}
 	})
 

@@ -54,7 +54,7 @@ The Consensus layer converts high-level intent into executable commands using an
 3.  **Auditor Verification**: The winner is reviewed against intent.
 4.  **L2 Signature**: 
     The client (e.g., `g8ee` or BYO agent) attaches an ED25519 signature from a trusted L2 signer over `transaction_hash|true`.
-    `g8eo` verifies this signature in `@/home/bob/g8e/components/g8eo/services/governance/transaction_verifier.go`.
+    `g8eo` verifies this signature in `@/home/bob/g8e/components/g8eo/services/governance/transaction_verifier.go`. First boot is allowed before trusted signers exist, but the verifier rejects every missing-key or unknown-key transaction until signer material is provisioned.
 
 ### L3: Authorization (Human Gate)
 L3 involves human authorization, governed by the **Auditor-User Partition**.
@@ -74,6 +74,25 @@ The governance hierarchy is bound to the command protocol via `@/home/bob/g8e/sh
 | L2 Consensus | `governance.l2.tribunal_signature` | `g8eo` signature verification |
 | L3 Authorization | `governance.l3.human_signature`, `governance.l3.auto_approved` | `g8eo` L3 enforcement for mutations |
 | State Freshness | `state_merkle_root` | `g8eo` comparison to local ledger root |
+
+## Wire Format and Signing Invariant
+
+The canonical wire format for all client-facing surfaces (HTTPS APIs, WSS pub/sub command channels, receipts, audit exports) is **canonical JSON (protojson)** for `UniversalEnvelope`. Binary protobuf bytes on the wire are rejected with a clear error.
+
+**Schema source of truth**: `.proto` files (typed, versioned, L1 field-option reflection).
+
+**Signing basis**: Deterministic `transaction_hash` computed from normalized envelope fields. Wire encoding is irrelevant because the verifier enforces `id == computed transaction_hash`.
+
+**Canonicalization rules** (implemented in `components/g8eo/pkg/uap/types.go`):
+- Field names in proto definition order
+- Strings as UTF-8
+- Numbers as decimal integers
+- Absent optional fields omitted
+- Nested messages recursed
+- Bytes as base64
+- Result hashed with SHA-256
+
+This invariant ensures that BYO clients (MCP, A2A, OpenAI, Anthropic, LangChain) can interact with g8eo using standard JSON-RPC/HTTP, while maintaining cryptographic integrity through the hash-based signing scheme.
 
 ## Reputation & Stakes
 

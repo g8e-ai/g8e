@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
+	"github.com/g8e-ai/g8e/components/g8eo/services/governance"
 )
 
 // ListenService is the top-level orchestrator for --listen mode (operator).
@@ -229,9 +230,24 @@ func (ls *ListenService) GetDB() *ListenDBService {
 	return ls.db
 }
 
+// GetSecretManager returns the secret manager.
+func (ls *ListenService) GetSecretManager() *SecretManager {
+	return NewSecretManager(ls.db.db, ls.cfg.Listen.SecretsDir, ls.logger)
+}
+
 // GetPKIAuthority returns the underlying PKI authority.
 func (ls *ListenService) GetPKIAuthority() *PKIAuthority {
 	return ls.pki
+}
+
+// GetHTTPHandler returns the HTTP handler.
+func (ls *ListenService) GetHTTPHandler() *HTTPHandler {
+	return ls.handler
+}
+
+// GetPubSubBroker returns the PubSub broker.
+func (h *HTTPHandler) GetPubSubBroker() *PubSubBroker {
+	return h.pubsub
 }
 
 // GetHTTPPort returns the assigned port for the HTTP server.
@@ -272,6 +288,27 @@ func (ls *ListenService) GetPublicPort() int {
 	_, portStr, _ := net.SplitHostPort(ls.publicServer.Addr)
 	p, _ := strconv.Atoi(portStr)
 	return p
+}
+
+// GovernanceDeps holds the governance dependencies required for transaction verification.
+// These interfaces are implemented by ListenDBService (ReplayStore, StateRootProvider,
+// TransactionAuditStore) and PasskeyService (L3Verifier).
+type GovernanceDeps struct {
+	ReplayStore       governance.ReplayStore
+	StateRootProvider governance.StateRootProvider
+	TransactionAudit  governance.TransactionAuditStore
+	L3Verifier        governance.L3Verifier
+}
+
+// GetGovernanceDeps returns the governance dependencies for transaction verification.
+// This enables the in-process PubSubCommandService to perform fail-closed verification.
+func (ls *ListenService) GetGovernanceDeps() *GovernanceDeps {
+	return &GovernanceDeps{
+		ReplayStore:       ls.db,
+		StateRootProvider: ls.db,
+		TransactionAudit:  ls.db,
+		L3Verifier:        ls.passkey,
+	}
 }
 
 // Start begins serving HTTP/WS requests. Blocks until the context is cancelled

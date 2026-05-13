@@ -67,19 +67,23 @@ func NewTestConfig(t *testing.T) *config.Config {
 	}
 
 	return &config.Config{
-		ProjectID:          "test-project",
-		ComponentName:      constants.Status.ComponentName.G8EO,
-		Version:            "test",
-		APIKey:             "test-api-key",
-		OperatorID:         operatorID,
-		OperatorSessionId:  operatorSessionID,
-		PubSubURL:          GetTestOperatorDirectURL(),
-		MaxConcurrentTasks: 25,
-		MaxMemoryMB:        2048,
-		HeartbeatInterval:  30 * time.Second,
-		WorkDir:            workDir,
-		PKIDir:             pkiDir,
-		SecretsDir:         secretsDir,
+		ProjectID:               "test-project",
+		ComponentName:           constants.Status.ComponentName.G8EO,
+		Version:                 "test",
+		APIKey:                  "test-api-key",
+		OperatorID:              operatorID,
+		OperatorSessionId:       operatorSessionID,
+		PubSubURL:               GetTestOperatorDirectURL(),
+		MaxConcurrentTasks:      25,
+		MaxMemoryMB:             2048,
+		HeartbeatInterval:       30 * time.Second,
+		WorkDir:                 workDir,
+		PKIDir:                  pkiDir,
+		SecretsDir:              secretsDir,
+		LocalStoreEnabled:       true,
+		LocalStoreDBPath:        filepath.Join(workDir, ".g8e", "local_state.db"),
+		LocalStoreMaxSizeMB:     1024,
+		LocalStoreRetentionDays: 30,
 	}
 }
 

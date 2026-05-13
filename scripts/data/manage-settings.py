@@ -75,7 +75,7 @@ def _infer_section(key: str) -> str:
         return 'llm'
     if key.startswith('vertex_') or key.startswith('google_'):
         return 'search'
-    if key in ['internal_auth_token', 'session_encryption_key', 'passkey_rp_id', 'passkey_origin']:
+    if key in ['session_encryption_key', 'passkey_rp_id', 'passkey_origin']:
         return 'security'
     return 'general'
 
@@ -110,7 +110,6 @@ _KEY_ORDER = [
     'app_url',
     'passkey_rp_id',
     'passkey_origin',
-    'internal_auth_token',
     'session_encryption_key',
     'g8e_operator_endpoint',
 
@@ -228,8 +227,8 @@ def _operator_put_platform_settings(doc: Dict[str, Any]) -> None:
     operator_request('PUT', f'/db/{OPERATOR_SETTINGS_COLLECTION}/{PLATFORM_SETTINGS_ID}', doc)
 
 
-def exec_rotate_token(_args: argparse.Namespace) -> None:
-    new_token = secrets.token_hex(32)
+def exec_rotate_session_key(_args: argparse.Namespace) -> None:
+    new_key = secrets.token_hex(32)
     now = datetime.now(timezone.utc).isoformat()
 
     # 1. Update operator document
@@ -243,21 +242,12 @@ def exec_rotate_token(_args: argparse.Namespace) -> None:
         }
 
     doc.setdefault('settings', {})
-    doc['settings']['internal_auth_token'] = new_token
+    doc['settings']['session_encryption_key'] = new_key
     doc['updated_at'] = now
 
     _operator_put_platform_settings(doc)
 
-    # 2. Update token file in secrets directory
-    secrets_dir = Path(os.environ.get('G8E_SECRETS_DIR', '.g8e/secrets'))
-    token_path = secrets_dir / 'internal_auth_token'
-    if token_path.parent.exists():
-        try:
-            token_path.write_text(new_token)
-        except Exception as e:
-            print(f"[settings] Warning: Failed to write new token to {token_path}: {e}", file=sys.stderr)
-
-    print(new_token, end='')
+    print(new_key, end='')
 
 
 def _parse_assignments(assignments: list) -> Dict[str, str]:
@@ -382,9 +372,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=exec_export)
 
     subparsers.add_parser(
-        'rotate-token',
-        help='Generate a new internal_auth_token and write it directly to operator',
-    ).set_defaults(func=exec_rotate_token)
+        'rotate-session-key',
+        help='Generate a new session_encryption_key and write it directly to operator',
+    ).set_defaults(func=exec_rotate_session_key)
 
     return parser
 
@@ -396,7 +386,7 @@ def run(argv: List[str]) -> int:
         parser.print_help()
         return 1
 
-    _machine_readable = args.command in ('get', 'rotate-token')
+    _machine_readable = args.command in ('get', 'rotate-session-key')
     if not _machine_readable:
         print_banner('manage-operator.py settings', ' '.join(argv))
 

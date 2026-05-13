@@ -12,13 +12,12 @@ Alternatively, if an API key is known out of band, it can be provided directly v
 
 If we consider `g8eo` running in `--listen` mode (acting as `operator`), it manages platform secrets itself.
 In `components/g8eo/services/listen/secret_manager.go`, `InitPlatformSettings` handles generating the:
-- `internal_auth_token`
 - `session_encryption_key`
 - `auditor_hmac_key`
 
 If these secrets are not already present in the local `.g8e/data/ssl` directory or the SQLite database, it generates new secure tokens (using `generateSecureToken`) and saves them:
 1.  Into the SQLite database `documents` table (`collection = 'settings', id = 'platform_settings'`).
-2.  Into local volume files using `writeSecretFile()`: `internal_auth_token`, `session_encryption_key`, and `auditor_hmac_key`.
+2.  Into local volume files using `writeSecretFile()`: `session_encryption_key` and `auditor_hmac_key`.
 3.  A `bootstrap_digest.json` manifest is written.
 
 These files are then accessed by other platform components (like `g8ed` and `g8ee`) to securely authenticate with `operator`. If docker is eliminated, they can just read the generated files directly from the configured `--ssl-dir` directory on the host machine.

@@ -39,7 +39,6 @@ _list() {
         "G8E_SECRETS_DIR"
         "G8E_TRUST_BUNDLE"
         "G8E_DATA_DIR"
-        "G8E_INTERNAL_AUTH_TOKEN"
         "G8E_SESSION_ENCRYPTION_KEY"
         "G8E_INTERNAL_HTTP_URL"
         "G8E_INTERNAL_PUBSUB_URL"

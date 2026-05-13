@@ -15,8 +15,10 @@ package listen
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -82,8 +84,13 @@ func (s *ListenDBService) initStateRoot() error {
 		return err
 	}
 	if count == 0 {
+		root, err := s.calculateStateRoot()
+		if err != nil {
+			return err
+		}
 		_, err = s.db.Exec(
-			"INSERT INTO state_root (id, root, updated_at) VALUES (1, '', ?)",
+			"INSERT INTO state_root (id, root, updated_at) VALUES (1, ?, ?)",
+			root,
 			sqliteutil.FormatTimestamp(time.Now().UTC()),
 		)
 		return err
@@ -93,12 +100,93 @@ func (s *ListenDBService) initStateRoot() error {
 
 // GetCurrentStateRoot returns the current state merkle root.
 func (s *ListenDBService) GetCurrentStateRoot() (string, error) {
-	var root string
-	err := s.db.QueryRow("SELECT root FROM state_root WHERE id = 1").Scan(&root)
-	if err == sql.ErrNoRows {
-		return "", nil
+	root, err := s.calculateStateRoot()
+	if err != nil {
+		return "", err
 	}
-	return root, err
+	_, err = s.db.Exec(
+		`INSERT INTO state_root (id, root, updated_at)
+		 VALUES (1, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET root = excluded.root, updated_at = excluded.updated_at`,
+		root,
+		sqliteutil.FormatTimestamp(time.Now().UTC()),
+	)
+	if err != nil {
+		return "", err
+	}
+	return root, nil
+}
+
+func (s *ListenDBService) calculateStateRoot() (string, error) {
+	type row struct {
+		Table  string        `json:"table"`
+		Values []interface{} `json:"values"`
+	}
+
+	rowsToHash := make([]row, 0)
+
+	docRows, err := s.db.Query("SELECT collection, id, data, created_at, updated_at FROM documents ORDER BY collection, id")
+	if err != nil {
+		return "", err
+	}
+	for docRows.Next() {
+		var collection, id, data, createdAt, updatedAt string
+		if err := docRows.Scan(&collection, &id, &data, &createdAt, &updatedAt); err != nil {
+			docRows.Close()
+			return "", err
+		}
+		rowsToHash = append(rowsToHash, row{"documents", []interface{}{collection, id, data, createdAt, updatedAt}})
+	}
+	if err := docRows.Err(); err != nil {
+		docRows.Close()
+		return "", err
+	}
+	docRows.Close()
+
+	now := sqliteutil.NowTimestamp()
+	kvRows, err := s.db.Query("SELECT key, value, created_at, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", now)
+	if err != nil {
+		return "", err
+	}
+	for kvRows.Next() {
+		var key, value, createdAt, expiresAt string
+		if err := kvRows.Scan(&key, &value, &createdAt, &expiresAt); err != nil {
+			kvRows.Close()
+			return "", err
+		}
+		rowsToHash = append(rowsToHash, row{"kv_store", []interface{}{key, value, createdAt, expiresAt}})
+	}
+	if err := kvRows.Err(); err != nil {
+		kvRows.Close()
+		return "", err
+	}
+	kvRows.Close()
+
+	blobRows, err := s.db.Query("SELECT namespace, id, size, content_type, hex(data), created_at, COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", now)
+	if err != nil {
+		return "", err
+	}
+	for blobRows.Next() {
+		var namespace, id, contentType, dataHex, createdAt, expiresAt string
+		var size int64
+		if err := blobRows.Scan(&namespace, &id, &size, &contentType, &dataHex, &createdAt, &expiresAt); err != nil {
+			blobRows.Close()
+			return "", err
+		}
+		rowsToHash = append(rowsToHash, row{"blobs", []interface{}{namespace, id, size, contentType, dataHex, createdAt, expiresAt}})
+	}
+	if err := blobRows.Err(); err != nil {
+		blobRows.Close()
+		return "", err
+	}
+	blobRows.Close()
+
+	payload, err := json.Marshal(rowsToHash)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // CheckAndSetNonce returns true if the nonce was already used (replay detected).

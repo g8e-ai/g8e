@@ -68,6 +68,19 @@ type StateRootProvider interface {
 	GetCurrentStateRoot() (string, error)
 }
 
+// SimpleStateRootProvider is a basic implementation that returns a fixed root.
+// Used for outbound mode where state root verification happens at the platform level.
+type SimpleStateRootProvider struct {
+	Root string
+}
+
+func (s *SimpleStateRootProvider) GetCurrentStateRoot() (string, error) {
+	if s.Root == "" {
+		return "outbound-mode-root", nil
+	}
+	return s.Root, nil
+}
+
 // VerifiedTransaction represents a fully verified transaction ready for execution.
 type VerifiedTransaction struct {
 	Envelope       *uap.UAPEnvelope

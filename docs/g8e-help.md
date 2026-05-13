@@ -79,8 +79,8 @@ When no operator is connected:
 
 ### Daily Operations
 ```bash
-./g8e platform start    # Start Operator listen mode only
-./g8e platform status   # Check service health and PIDs
+./g8e platform start    # Start Operator listen mode only (exposes 4 ports: 9001, 9000, 8080, 8081)
+./g8e platform status   # Check service health and PIDs (shows all four endpoints)
 ./g8e platform logs     # Stream aggregated logs
 ./g8e platform settings # View or update platform configuration
 ./g8e apps start all    # Start optional bundled Engine adapter
@@ -147,7 +147,6 @@ When no operator is connected:
 - `validate`: Check TLS integrity and volume permissions
 - `certs`: Manage platform CA and certificates (generate, rotate, status, trust)
 - `passkeys`: Manage FIDO2/WebAuthn credentials
-- `rotate-internal-token`: Refresh shared secret between components
 - `mtls-test`: Verify mTLS connectivity
 
 ### data

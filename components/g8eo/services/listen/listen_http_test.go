@@ -20,7 +20,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -39,10 +38,6 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	// Clear environment to avoid interfering with tests
-	tokenEnv := string(constants.EnvVar.InternalAuthToken)
-	os.Unsetenv(tokenEnv)
-
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -50,9 +45,9 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	// Remove the secrets file written by InitPlatformSettings so tests can control
-	// token via DB without file precedence interfering
-	os.Remove(filepath.Join(secretsDir, "internal_auth_token"))
+	// Remove the secrets directory written by InitPlatformSettings
+	os.RemoveAll(secretsDir)
+	os.MkdirAll(secretsDir, 0755)
 
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
@@ -72,9 +67,6 @@ func setupTestListenService(t *testing.T) (*ListenService, *config.Config) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	// Clear environment to avoid interfering with tests
-	os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
-
 	// Create a real DB service for the tests to use
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -82,9 +74,9 @@ func setupTestListenService(t *testing.T) (*ListenService, *config.Config) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	// Remove the secrets file written by InitPlatformSettings so tests can control
-	// token via DB without file precedence interfering
-	os.Remove(filepath.Join(secretsDir, "internal_auth_token"))
+	// Remove the secrets directory written by InitPlatformSettings
+	os.RemoveAll(secretsDir)
+	os.MkdirAll(secretsDir, 0755)
 
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
@@ -132,11 +124,10 @@ func TestPathTraversalGuard(t *testing.T) {
 
 func TestAuthMiddleware(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
-	token := "test-token"
 
-	// Seed token in DB
+	// Seed platform settings
 	err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
-		"internal_auth_token": token,
+		"session_encryption_key": "test-key",
 	}))
 	require.NoError(t, err)
 
@@ -167,68 +158,14 @@ func TestAuthWebSocket(t *testing.T) {
 	})
 }
 
-func TestGetInternalAuthToken(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-	token := "env-token"
-
-	// Ensure we start clean
-	os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
-	h.db.DocDelete("settings", "platform_settings")
-
-	t.Run("From environment", func(t *testing.T) {
-		os.Setenv(string(constants.EnvVar.InternalAuthToken), token)
-		defer os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
-		assert.Equal(t, token, h.auth.GetInternalAuthToken())
-	})
-
-	t.Run("From DB", func(t *testing.T) {
-		dbToken := "db-token"
-		// DocSet uses json.RawMessage, so we must provide valid JSON
-		err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
-			"internal_auth_token": dbToken,
-		}))
-		require.NoError(t, err)
-		assert.Equal(t, dbToken, h.auth.GetInternalAuthToken())
-	})
-
-	t.Run("Environment takes precedence over DB", func(t *testing.T) {
-		os.Setenv(string(constants.EnvVar.InternalAuthToken), "env-priority")
-		defer os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
-
-		h.db.DocDelete("settings", "platform_settings")
-		err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
-			"internal_auth_token": "db-token",
-		}))
-		require.NoError(t, err)
-
-		assert.Equal(t, "env-priority", h.auth.GetInternalAuthToken())
-	})
-
-	t.Run("Malformed DB settings returns empty", func(t *testing.T) {
-		// Set a document that doesn't match the expected structure (internal_auth_token is not a string)
-		err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
-			"internal_auth_token": 123,
-		}))
-		require.NoError(t, err)
-		assert.Equal(t, "", h.auth.GetInternalAuthToken())
-	})
-
-	t.Run("Missing DB settings returns empty", func(t *testing.T) {
-		h.db.DocDelete("settings", "platform_settings")
-		assert.Equal(t, "", h.auth.GetInternalAuthToken())
-	})
-}
-
 func TestAuthMiddlewareDeep(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
-	token := "secret-token"
 
 	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	t.Run("Uninitialized token - Native Registration Path - allow without token", func(t *testing.T) {
-		os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
 		h.db.DocDelete("settings", "platform_settings")
 
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/device-link/register", nil)
@@ -240,7 +177,6 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 	})
 
 	t.Run("Uninitialized token - deny legacy bypasses", func(t *testing.T) {
-		os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
 		h.db.DocDelete("settings", "platform_settings")
 
 		paths := []string{
@@ -262,28 +198,6 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 			assert.Contains(t, rr.Body.String(), "mTLS client certificate required", "Path %s should require mTLS", path)
 		}
 	})
-
-	t.Run("Initialized token - Valid", func(t *testing.T) {
-		os.Setenv(string(constants.EnvVar.InternalAuthToken), token)
-		defer os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
-
-		req := httptest.NewRequest(http.MethodGet, "/db/users/u1", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		// Now returns 401 because X-Internal-Auth is ignored
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-	})
-
-	t.Run("Initialized token - Invalid", func(t *testing.T) {
-		os.Setenv(string(constants.EnvVar.InternalAuthToken), token)
-		defer os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
-
-		req := httptest.NewRequest(http.MethodGet, "/db/users/u1", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "mTLS client certificate required")
-	})
 }
 
 func TestHandleHealth(t *testing.T) {
@@ -301,7 +215,7 @@ func TestHandleHealth(t *testing.T) {
 
 	t.Run("Returns 200 when platform_settings exists", func(t *testing.T) {
 		err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
-			"internal_auth_token": "test-token",
+			"session_encryption_key": "test-key",
 		}))
 		require.NoError(t, err)
 

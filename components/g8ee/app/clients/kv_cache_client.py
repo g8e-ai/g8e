@@ -34,7 +34,6 @@ from app.utils.aiohttp_session import new_kv_http_session
 from app.constants import (
     ComponentName,
     ErrorCode,
-    INTERNAL_AUTH_HEADER,
     OPERATOR_SESSION_ID_HEADER,
     OPERATOR_API_KEY_HEADER,
     HTTP_CONTENT_TYPE_HEADER,
@@ -60,7 +59,6 @@ class KVCacheClient:
         component_name: ComponentName = ComponentName.G8EE,
         timeout: float = 10.0,
         ca_cert_path: str | None = None,
-        internal_auth_token: str | None = None,
         operator_session_id: str | None = None,
         operator_api_key: str | None = None,
         listen_settings: ListenSettings | None = None,
@@ -77,7 +75,6 @@ class KVCacheClient:
         self._ca_cert_path = ca_cert_path
         self._client_cert_path = client_cert_path
         self._client_key_path = client_key_path
-        self._internal_auth_token = internal_auth_token
         self._operator_session_id = operator_session_id
         self._operator_api_key = operator_api_key
         self._session: aiohttp.ClientSession | None = None

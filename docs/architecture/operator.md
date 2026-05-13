@@ -72,6 +72,19 @@ Transforms the operator into the platform's backbone. Started with the `--listen
 - **Security**: Manages the platform's Encryption Vault and secret rotation.
 - **Gateway**: Provides the public Operator HTTP/WSS protocol surface for all clients.
 
+#### Four-Port Contract
+Listen Mode exposes four distinct ports for different protocol surfaces:
+
+| Port | Default | Purpose | Authentication |
+|------|---------|---------|----------------|
+| **WSS Port** | 9001 | Pub/Sub broker for operator connections | mTLS (operator session via URI SAN) |
+| **HTTP Port** | 9000 | mTLS API for authenticated substrate operations | mTLS (operator session via URI SAN) |
+| **Bootstrap Port** | 8080 | Device-link enrollment and CSR-based registration | Plain TLS (public) |
+| **Public Port** | 8081 | Browser-based auth and BYO bootstrap | Plain TLS (public) |
+
+- **mTLS Ports (WSS, HTTP)**: Require valid operator certificates with URI SAN binding to operator session IDs. Used for substrate operations and command dispatch.
+- **Public Ports (Bootstrap, Public)**: Plain TLS endpoints for enrollment and browser-based flows. These are the sovereign entry points for new operators and BYO clients.
+
 ### 2. Standard Mode (Target)
 The default mode for execution on target hosts. The operator initiates an outbound connection and waits for protocol-governed UAP JSON envelopes.
 
@@ -121,7 +134,9 @@ When local storage is enabled (`-s`), the Operator maintains a **Local-First Aud
 | `-e`, `--endpoint` | Hub endpoint address (IP or hostname). |
 | `--listen` | Start in Listen Mode (Substrate Hub). |
 | `--wss-listen-port` | Port for Pub/Sub connections (default: 9001). |
-| `--http-listen-port` | Port for Operator HTTP protocol traffic (default: 9000). |
+| `--http-listen-port` | Port for mTLS API (default: 9000). |
+| `--bootstrap-listen-port` | Port for device-link enrollment (default: 8080). |
+| `--public-listen-port` | Port for browser/BYO bootstrap (default: 8081). |
 | `--data-dir` | Directory for persistence (default: `.g8e/data`). |
 | `--pki-dir` | Directory for PKI hierarchy (default: `.g8e/pki`). |
 | `--secrets-dir` | Directory for platform secrets (default: `.g8e/secrets`). |

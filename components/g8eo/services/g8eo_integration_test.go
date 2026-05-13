@@ -15,6 +15,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -24,6 +25,31 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Mock governance dependencies for testing
+type mockReplayStore struct{}
+
+func (m *mockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
+	return false, nil // Never replay in tests
+}
+
+type mockStateRootProvider struct{}
+
+func (m *mockStateRootProvider) GetCurrentStateRoot() (string, error) {
+	return "test-state-root", nil
+}
+
+type mockTransactionAudit struct{}
+
+func (m *mockTransactionAudit) DocSet(collection, id string, data json.RawMessage) error {
+	return nil
+}
+
+type mockL3Verifier struct{}
+
+func (m *mockL3Verifier) VerifyL3Proof(userID, messageID, signatureHex, pubKeyHex string) (bool, error) {
+	return true, nil // Always verify in tests
+}
 
 func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
 
@@ -73,10 +99,14 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 
 		cmdSvc, err := pubsub.NewPubSubCommandService(pubsub.CommandServiceConfig{
-			Config:    cfg,
-			Logger:    logger,
-			Execution: execSvc,
-			FileEdit:  fileEditSvc,
+			Config:            cfg,
+			Logger:            logger,
+			Execution:         execSvc,
+			FileEdit:          fileEditSvc,
+			ReplayStore:       &mockReplayStore{},
+			StateRootProvider: &mockStateRootProvider{},
+			TransactionAudit:  &mockTransactionAudit{},
+			L3Verifier:        &mockL3Verifier{},
 		})
 		require.NoError(t, err)
 		require.NotNil(t, cmdSvc)

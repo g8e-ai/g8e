@@ -153,7 +153,7 @@ g8ee maintains 5 core data clients, each with exactly one handler service:
 |--------|-----------------|----------------|
 | `DBClient` | `DBService` | Authoritative document persistence (SQLite `documents` via operator) |
 | `KVCacheClient` | `KVService` | High-frequency state and session data (SQLite `kv_store` via operator) |
-| `PubSubClient` | `PubSubService` | Event-driven messaging and UAP JSON command dispatch |
+| `PubSubClient` | `PubSubService` | Event-driven messaging and UAP command dispatch |
 | `BlobClient` | `BlobService` | Binary data storage and retrieval (SQLite `blobs` via operator) |
 | `InternalHttpClient` | `HTTPService` | External API communication (via `ServiceFactory`) |
 
@@ -405,7 +405,7 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 | `gemini-3.1-pro-preview` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
 | `gemini-3.1-pro-preview-customtools` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
 | `gemini-3-flash-preview` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
-| `gemini-3.1-flash-lite-preview` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-flash-lite` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 1,000,000 | 64,000 |
 
 #### OpenAI Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
@@ -824,8 +824,8 @@ g8ee uses three distinct clients for data operations.
 
 | Client | Transport | Purpose |
 |--------|-----------|---------|
-| `DBClient` | HTTP | Document store — cases, investigations, operators, memories. All requests authenticated via `X-Internal-Auth` header. |
-| `KVClient` | HTTP + WebSocket | KV store operations and pub/sub (command dispatch, results, heartbeats). All requests authenticated via `X-Internal-Auth` header. |
+| `DBClient` | HTTP | Document store — cases, investigations, operators, memories. All requests authenticated via mTLS with operator session. |
+| `KVClient` | HTTP + WebSocket | KV store operations and pub/sub (command dispatch, results, heartbeats). All requests authenticated via mTLS with operator session. |
 | `InternalHttpClient ` | HTTP | g8ee → g8ed internal API — SSE push, operator queries, heartbeat forwarding, intent management |
 
 ### KV Key Structure
@@ -856,7 +856,7 @@ This is enforced by `KVClient.subscribe()` (`app/clients/db_client.py`):
 
 ### Internal HTTP Communication (g8ed → g8ee)
 
-g8ee communicates with other components via direct HTTP using `X-Internal-Auth` for authentication and standard `G8eHttpContext` headers.
+g8ee communicates with other components via direct HTTP using mTLS with operator session authentication and standard `G8eHttpContext` headers.
 
 #### Key Internal Endpoints
 
@@ -869,7 +869,7 @@ g8ee communicates with other components via direct HTTP using `X-Internal-Auth` 
 | `/api/internal/operators/register-operator-session` | POST | Subscribes g8ee to heartbeat/result channels for a new session |
 
 #### Authentication Discovery
-g8ee discovers the authoritative `internal_auth_token` by reading from `G8E_SECRETS_DIR` (default `.g8e/secrets/internal_auth_token`) at startup (or via `INTERNAL_AUTH_TOKEN` env var). This is the absolute source of truth for service-to-service authentication.
+g8ee uses mTLS with URI SAN workload identity to communicate with the Operator. Identity is established via the client certificates issued during the bootstrap process.
 
 #### Context Propagation
 The canonical header list and ownership rules are in [components/g8ed.md — Internal HTTP Communication](g8ed.md#internal-http-communication-g8ed--g8ee).
@@ -1123,7 +1123,6 @@ The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_se
 
 | Key | Default | Purpose |
 |-----|---------|---------|
-| `internal_auth_token` | — | Component-to-component auth (`X-Internal-Auth` header); required before g8ee accepts requests |
 | `g8e_api_key` | — | Optional API key for external client authentication |
 
 **Command Validation Settings** (per-user, in `G8eeUserSettings.command_validation`):

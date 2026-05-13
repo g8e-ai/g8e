@@ -546,7 +546,7 @@
     "gemini": {
       "3.1.pro": "gemini-3.1-pro-preview",
       "3.flash": "gemini-3-flash-preview",
-      "3.1.flash.lite": "gemini-3.1-flash-lite-preview"
+      "3.1.flash.lite": "gemini-3.1-flash-lite"
     },
     "openai": {
       "gpt.5.4": "gpt-5.4",

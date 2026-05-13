@@ -106,6 +106,11 @@ type CommandServiceConfig struct {
 	L3Verifier        governance.L3Verifier
 	ReplayStore       governance.ReplayStore
 	StateRootProvider governance.StateRootProvider
+	TransactionAudit  governance.TransactionAuditStore
+
+	// Warden configuration
+	WardenSigningKey ed25519.PrivateKey
+	WardenKeyID      string
 }
 
 // NewPubSubCommandService creates the dispatcher and all first-class sub-services using the provided config.
@@ -165,28 +170,29 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.buildHandlers()
 
-	// Initialize trusted signers map
-	rs.trustedSigners = make(map[string]ed25519.PublicKey)
-
-	// Load ED25519 trusted signers from <PKIDir>/trusted_signers/*.pub
 	signersDir := filepath.Join(c.Config.PKIDir, "trusted_signers")
-	if entries, err := os.ReadDir(signersDir); err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pub") {
-				pubPath := filepath.Join(signersDir, entry.Name())
-				if pubHex, err := os.ReadFile(pubPath); err == nil {
-					pubBytes, err := hex.DecodeString(strings.TrimSpace(string(pubHex)))
-					if err == nil && len(pubBytes) == ed25519.PublicKeySize {
-						name := strings.TrimSuffix(entry.Name(), ".pub")
-						rs.trustedSigners[name] = ed25519.PublicKey(pubBytes)
-						c.Logger.Info("Loaded trusted L2 signer", "name", name, "path", pubPath)
-					}
-				}
-			}
+	trustedSigners, err := loadTrustedSigners(signersDir)
+	if err != nil {
+		return nil, err
+	}
+	rs.trustedSigners = trustedSigners
+	if len(rs.trustedSigners) == 0 {
+		c.Logger.Warn("No trusted L2 ED25519 signers configured; signed transactions will be rejected until a signer is provisioned", "path", signersDir)
+	} else {
+		for name := range rs.trustedSigners {
+			c.Logger.Info("Loaded trusted L2 signer", "name", name, "path", filepath.Join(signersDir, name+".pub"))
 		}
 	}
-	if len(rs.trustedSigners) == 0 {
-		return nil, fmt.Errorf("no trusted L2 ED25519 signers configured in %s", signersDir)
+
+	// Validate required governance dependencies (fail-closed: missing deps = fatal error)
+	if c.ReplayStore == nil {
+		return nil, fmt.Errorf("ReplayStore is required for transaction verification")
+	}
+	if c.StateRootProvider == nil {
+		return nil, fmt.Errorf("StateRootProvider is required for transaction verification")
+	}
+	if c.L3Verifier == nil {
+		return nil, fmt.Errorf("L3Verifier is required for transaction verification (mutations cannot execute without L3)")
 	}
 
 	// Initialize UAP governance services after trusted signers are loaded
@@ -196,6 +202,37 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 		"config_operator_id", c.Config.OperatorID,
 		"config_operator_session_id", c.Config.OperatorSessionId)
 	return rs, nil
+}
+
+func loadTrustedSigners(signersDir string) (map[string]ed25519.PublicKey, error) {
+	trustedSigners := make(map[string]ed25519.PublicKey)
+	entries, err := os.ReadDir(signersDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return trustedSigners, nil
+		}
+		return nil, fmt.Errorf("read trusted L2 signers directory %s: %w", signersDir, err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".pub") {
+			continue
+		}
+		pubPath := filepath.Join(signersDir, entry.Name())
+		pubHex, err := os.ReadFile(pubPath)
+		if err != nil {
+			return nil, fmt.Errorf("read trusted L2 signer %s: %w", pubPath, err)
+		}
+		pubBytes, err := hex.DecodeString(strings.TrimSpace(string(pubHex)))
+		if err != nil {
+			return nil, fmt.Errorf("decode trusted L2 signer %s: %w", pubPath, err)
+		}
+		if len(pubBytes) != ed25519.PublicKeySize {
+			return nil, fmt.Errorf("trusted L2 signer %s decoded to %d bytes; expected %d", pubPath, len(pubBytes), ed25519.PublicKeySize)
+		}
+		name := strings.TrimSuffix(entry.Name(), ".pub")
+		trustedSigners[name] = ed25519.PublicKey(pubBytes)
+	}
+	return trustedSigners, nil
 }
 
 // initializeUAPGovernance sets up the Tribunal and Warden services for UAP Phase 3 integration.
@@ -209,13 +246,17 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 
 	// Initialize Warden with trusted nodes and audit vault
 	rs.warden = &governance.Warden{
-		Logger:           c.Logger,
-		TrustedNodes:     rs.trustedSigners,
-		Execution:        c.Execution,
-		AuditVault:       c.AuditVault,
-		L3Verifier:       c.L3Verifier,
-		Ctx:              serviceCtx,
-		ExecutionHandler: rs, // PubSubCommandService implements ExecutionHandler
+		Logger:            c.Logger,
+		TrustedNodes:      rs.trustedSigners,
+		Execution:         c.Execution,
+		AuditVault:        c.AuditVault,
+		AuditStore:        c.TransactionAudit,
+		L3Verifier:        c.L3Verifier,
+		StateRootProvider: c.StateRootProvider,
+		Ctx:               serviceCtx,
+		ExecutionHandler:  rs, // PubSubCommandService implements ExecutionHandler
+		SigningKey:        c.WardenSigningKey,
+		KeyID:             c.WardenKeyID,
 	}
 
 	// Initialize TransactionVerifier for strict pre-dispatch verification
@@ -233,7 +274,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 	rs.transactionVerifier = governance.NewTransactionVerifier(
 		c.Logger,
 		c.ReplayStore,
-		nil, // StateRootProvider not used in listen mode (state_root table in schema.sql)
+		c.StateRootProvider,
 		rs.trustedSigners,
 		c.L3Verifier,
 		knownActionTypes,
@@ -282,20 +323,28 @@ func (rs *PubSubCommandService) Start(ctx context.Context) error {
 	rs.heartbeat.ctx = rs.ctx
 
 	channelName := constants.CmdChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
-	rs.logger.Info("Establishing connection with g8ed",
-		"operator_id", rs.config.OperatorID,
-		"operator_session_id", rs.config.OperatorSessionId,
-		"cmd_channel", channelName)
 
-	rs.wg.Add(1)
-	go func() {
-		defer rs.wg.Done()
-		rs.listenForCommands(channelName)
-	}()
+	// Only subscribe to pub/sub channel when running as a traditional operator (with identity)
+	// In listen mode, commands arrive via HTTP/WebSocket endpoints directly
+	if rs.config.OperatorID != "" && rs.config.OperatorSessionId != "" {
+		rs.logger.Info("Command service subscribing to operator channel",
+			"operator_id", rs.config.OperatorID,
+			"operator_session_id", rs.config.OperatorSessionId,
+			"cmd_channel", channelName)
+
+		rs.wg.Add(1)
+		go func() {
+			defer rs.wg.Done()
+			rs.listenForCommands(channelName)
+		}()
+	} else {
+		rs.logger.Info("Command service starting in substrate mode (no pub/sub subscription)",
+			"mode", "listen")
+	}
 
 	rs.heartbeat.StartSchedulerUnlocked()
 
-	rs.logger.Info("Connection established - Standing by")
+	rs.logger.Info("Command service ready")
 	return nil
 }
 
@@ -307,7 +356,7 @@ func (rs *PubSubCommandService) Stop() error {
 		return nil
 	}
 
-	rs.logger.Info("Disconnecting from g8e...")
+	rs.logger.Info("Command service shutting down...")
 	rs.heartbeat.StopSchedulerUnlocked()
 
 	if rs.cancel != nil {
@@ -322,9 +371,9 @@ func (rs *PubSubCommandService) Stop() error {
 
 	select {
 	case <-shutdownDone:
-		rs.logger.Info("g8e connection closed gracefully")
+		rs.logger.Info("Command service stopped gracefully")
 	case <-time.After(10 * time.Second):
-		rs.logger.Error("g8e disconnection timeout")
+		rs.logger.Error("Command service shutdown timeout")
 	}
 
 	if rs.client != nil {
@@ -448,11 +497,12 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 	}
 
 	// Decode as UAP JSON envelope - this is the only canonical mutation transport.
+	// Binary protobuf bytes and other formats are explicitly rejected.
 	envelope := &uap.UAPEnvelope{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, (*commonv1.UniversalEnvelope)(envelope)); err != nil {
-		rs.logger.Error("Failed to decode as UAP JSON envelope - unknown format rejected",
+		rs.logger.Error("envelope: non-JSON payload rejected",
 			"error", err,
-			"action", "use UAP JSON")
+			"action", "use canonical JSON (protojson) UniversalEnvelope")
 		return
 	}
 
@@ -506,11 +556,12 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 
 	// Execute through Warden (execution boundary)
 	if rs.warden != nil {
-		if err := rs.warden.ExecuteVerifiedTransaction(verified, cmdMsg); err != nil {
+		receipt, err := rs.warden.Execute(rs.ctx, verified, cmdMsg)
+		if err != nil {
 			rs.logger.Error("Warden execution failed", "error", err, "message_id", env.Id)
 			return
 		}
-		rs.logger.Info("Warden execution succeeded", "message_id", env.Id)
+		rs.logger.Info("Warden execution succeeded", "message_id", env.Id, "receipt_status", receipt.Status)
 	} else {
 		rs.logger.Error("FATAL: Warden service missing - cannot execute", "message_id", env.Id)
 		return

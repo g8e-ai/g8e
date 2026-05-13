@@ -11,10 +11,6 @@ SECRETS_DIR="${G8E_SECRETS_DIR:-${G8E_PROJECT_ROOT}/.g8e/secrets}"
 PKI_DIR="${G8E_PKI_DIR:-${G8E_PROJECT_ROOT}/.g8e/pki}"
 
 # Load security tokens into environment if files exist
-if [ -f "${SECRETS_DIR}/internal_auth_token" ]; then
-    export G8E_INTERNAL_AUTH_TOKEN=$(cat "${SECRETS_DIR}/internal_auth_token" | tr -d ' \n\r')
-fi
-
 if [ -f "${SECRETS_DIR}/session_encryption_key" ]; then
     export G8E_SESSION_ENCRYPTION_KEY=$(cat "${SECRETS_DIR}/session_encryption_key" | tr -d ' \n\r')
 fi

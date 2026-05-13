@@ -14,6 +14,7 @@
 package listen
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -30,8 +31,9 @@ import (
 )
 
 var requiredBootstrapSecrets = []string{
-	"internal_auth_token",
 	"session_encryption_key",
+	"warden_signing_key",
+	"warden_key_id",
 }
 
 // SecretManager handles generation and validation of platform security secrets.
@@ -121,15 +123,31 @@ func (m *SecretManager) createPlatformSettings(now time.Time) error {
 		return fmt.Errorf("create bootstrap secrets directory %s: %w", m.secretsDir, err)
 	}
 
+	// Generate Warden signing key and compute its KeyID once
+	wardenSeedBytes, err := m.generateSecureTokenBytes(ed25519.SeedSize)
+	if err != nil {
+		return err
+	}
+	wardenSeed := hex.EncodeToString(wardenSeedBytes)
+	wardenPriv := ed25519.NewKeyFromSeed(wardenSeedBytes)
+	wardenPub := wardenPriv.Public().(ed25519.PublicKey)
+	wardenKeyID := hex.EncodeToString(wardenPub)
+	sessionEncryptionKey, err := m.generateSecureToken(32)
+	if err != nil {
+		return err
+	}
+
 	secrets := map[string]string{
-		"internal_auth_token":    m.generateSecureToken(32),
-		"session_encryption_key": m.generateSecureToken(32),
+		"session_encryption_key": sessionEncryptionKey,
+		"warden_signing_key":     wardenSeed, // Seed for ED25519
+		"warden_key_id":          wardenKeyID,
 	}
 
 	platformSettings := models.SettingsDocument{}
 	platformSettings.Settings = map[string]interface{}{
-		"internal_auth_token":    secrets["internal_auth_token"],
 		"session_encryption_key": secrets["session_encryption_key"],
+		"warden_signing_key":     secrets["warden_signing_key"],
+		"warden_key_id":          secrets["warden_key_id"],
 	}
 	platformSettings.CreatedAt = now
 	platformSettings.UpdatedAt = now
@@ -376,11 +394,56 @@ func (m *SecretManager) writeSecretFile(path, value, name string) error {
 	return nil
 }
 
-func (m *SecretManager) generateSecureToken(bytes int) string {
-	tokenBytes := make([]byte, bytes)
-	_, err := rand.Read(tokenBytes)
+func (m *SecretManager) generateSecureToken(bytes int) (string, error) {
+	tokenBytes, err := m.generateSecureTokenBytes(bytes)
 	if err != nil {
-		return fmt.Sprintf("%0*x", bytes*2, time.Now().UnixNano())
+		return "", err
 	}
-	return hex.EncodeToString(tokenBytes)
+	return hex.EncodeToString(tokenBytes), nil
+}
+
+func (m *SecretManager) generateSecureTokenBytes(bytes int) ([]byte, error) {
+	if bytes <= 0 {
+		return nil, fmt.Errorf("secure token byte length must be positive")
+	}
+	tokenBytes := make([]byte, bytes)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return nil, fmt.Errorf("generate secure random token: %w", err)
+	}
+	return tokenBytes, nil
+}
+
+// GetWardenKey retrieves the Warden's ED25519 signing key and its KeyID.
+// The KeyID is stored explicitly in platform_settings to avoid recomputation.
+func (m *SecretManager) GetWardenKey() (ed25519.PrivateKey, string, error) {
+	secrets, err := m.loadRequiredDBSecrets()
+	if err != nil {
+		return nil, "", err
+	}
+
+	seedHex, ok := secrets["warden_signing_key"]
+	if !ok {
+		return nil, "", fmt.Errorf("warden_signing_key not found in platform_settings")
+	}
+
+	seed, err := hex.DecodeString(seedHex)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to decode warden_signing_key: %w", err)
+	}
+	if len(seed) != ed25519.SeedSize {
+		return nil, "", fmt.Errorf("warden_signing_key decoded to %d bytes; expected %d; delete and recreate runtime state", len(seed), ed25519.SeedSize)
+	}
+
+	priv := ed25519.NewKeyFromSeed(seed)
+
+	keyID, ok := secrets["warden_key_id"]
+	if !ok {
+		return nil, "", fmt.Errorf("warden_key_id not found in platform_settings")
+	}
+	expectedKeyID := hex.EncodeToString(priv.Public().(ed25519.PublicKey))
+	if keyID != expectedKeyID {
+		return nil, "", fmt.Errorf("warden_key_id does not match warden_signing_key; delete and recreate runtime state")
+	}
+
+	return priv, keyID, nil
 }

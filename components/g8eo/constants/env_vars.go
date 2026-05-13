@@ -64,7 +64,6 @@ var EnvVar = envVarKeys{
 	OperatorAPIKey:          "G8E_OPERATOR_API_KEY",
 	OperatorSessionID:       "G8E_OPERATOR_SESSION_ID",
 	OperatorEndpoint:        "G8E_OPERATOR_ENDPOINT",
-	InternalAuthToken:       "G8E_INTERNAL_AUTH_TOKEN",
 	PKIDir:                  "G8E_PKI_DIR",
 	SecretsDir:              "G8E_SECRETS_DIR",
 	PubSubCACert:            "G8E_PUBSUB_CA_CERT",

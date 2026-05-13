@@ -48,7 +48,7 @@ L1 provides hardcoded, non-negotiable safety invariants enforced at the Operator
 ### L2: Consensus (Tribunal)
 The Consensus layer converts intent into executable commands using a verifiable proof of consensus from an ensemble of independent agents.
 -   **Tribunal Signature**: An Ed25519 signature from a trusted L2 signer (e.g., an agent ensemble).
--   **Trusted Signers**: `g8eo` maintains a map of trusted public keys in `.g8e/pki/trusted_signers/`.
+-   **Trusted Signers**: `g8eo` loads trusted public keys from `.g8e/pki/trusted_signers/*.pub`. A first-boot Operator can start before signers are provisioned, but every transaction with a missing or unknown L2 key is rejected.
 -   **Quorum Enforcement**: The Warden ensures that the required number of valid consensus votes are present.
 
 ### L3: Authorization (PHP Gate)

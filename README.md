@@ -2,9 +2,9 @@
 
 **AI-powered, human-driven infrastructure.**
 
-g8e is a governance-first agentic platform for trustless infrastructure management. Every actor — Engine, Operator, User — operates under a mutual adversarial assumption: verify every intent, sign every state change, and anchor every output to a host-authoritative ledger. 
+g8e is a governance-first substrate for trustless infrastructure management. It provides a mandatory, host-authoritative protocol layer that ensures every mutation — whether from a human or an AI agent — is verified, signed, and anchored to a local ledger.
 
-The architecture is a host-authoritative substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. Its foundation is a unified `UniversalEnvelope` (UAP JSON) contract that binds typed payloads to canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3).
+The core of the platform is the **Operator (g8eo)** and the **g8e Protocol**: a unified `UniversalEnvelope` (UAP JSON) contract that binds typed payloads to canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3). 
 
 Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state.
 
@@ -17,7 +17,7 @@ Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal o
 
 ## Why
 
-The user's time is the only stake the system can't fake. Everything upstream of human approval exists to spend it well.
+g8e lets any AI assistant investigate infrastructure, but only governed, signed, auditable actions can change it.
 
 Two architectures dominate agentic AI in 2026, and both fail at infrastructure scale.
 
@@ -31,86 +31,52 @@ The machine handles what is machine-checkable — consistency, grounding, falsif
 
 Full treatment: [position paper](docs/architecture/position_paper.md).
 
-## How a request flows
+## Protocol Transaction Flow
+
+The g8e substrate enforces safety at the point of execution. Every mutation reaches the Operator as a signed `UniversalEnvelope` transaction.
 
 ```mermaid
 flowchart TD
-    User([User Message]) --> Triage
-
-    subgraph Phase_1 [Phase 1: Triage]
-        Triage[Triage Agent<br>Classifies Complexity, Intent, and Posture]
-        Scribe[Scribe<br>Async Case Titling]
-        Triage -.-> Scribe
+    TX[Signed UniversalEnvelope<br>JSON Transaction] --> L1
+    
+    subgraph Substrate [Substrate Verification - g8eo]
+        L1{L1: Technical Bedrock<br>Forbidden Patterns?}
+        L1 -- "Violated" --> Reject
+        
+        L1 -- "Passed" --> L2{L2: Consensus<br>Tribunal Signature?}
+        L2 -- "Invalid/Missing" --> Reject
+        
+        L2 -- "Passed" --> L3{L3: Authorization<br>Human Presence?}
+        L3 -- "Denied" --> Reject
+        
+        L3 -- "Authorized" --> State{State Check<br>Merkle Root Fresh?}
+        State -- "Stale" --> Reject
+        
+        State -- "Fresh" --> Exec[Warden Execution<br>Isolated Process]
     end
-
-    Triage -- "Simple" --> Dash[Dash<br>Fast-path Responder]
-    Dash --> Output([Direct Resolution])
-
-    Triage -- "Complex" --> Context[Context Enrichment<br>History, Metadata, Memories]
-    Context --> Sage[Sage<br>Senior Reasoner]
-
-    Codex[Codex<br>Async Memory & Preference Extraction]
-    Sage -.-> Codex
-
-    subgraph Phase_2 [Phase 2: Reasoning]
-        Sage -- "Articulates Intent" --> Tribunal
-    end
-
-    subgraph Phase_3 [Phase 3: The Tribunal]
-        Tribunal[Parallel Blind Generation<br>Axiom, Concord, Variance, Pragma, Nemesis]
-        Tribunal --> Consensus[Uniform Voting & Consensus Check]
-        Consensus -- "Low Consensus" --> R2[Round 2: Anonymized Peer Review]
-        R2 --> Consensus
-        Consensus -- "Deadlock" --> Sage
-    end
-
-    Consensus -- "Winner Selected" --> Warden
-
-    subgraph Phase_4 [Phase 4: Safety]
-        Warden[Warden<br>Pre-Execution Risk Assessment]
-        Warden -- "Cleared" --> Auditor
-    end
-
-    subgraph Phase_5 [Phase 5: Judgment]
-        Auditor[Auditor<br>Final Consistency & Commitment]
-        Auditor --> PHP{Proof of Human Presence}
-        PHP -- "Signed" --> Operator[Operator<br>Executes via LFAA]
-        Operator -- "Results" --> Sage
-    end
-
-    PHP -- "Rejected" --> Sage
+    
+    Exec --> Receipt[Signed Action Receipt<br>Audit Commitment]
+    Reject[Fail Closed<br>Error + Audit Entry] --> Client
+    Receipt --> Client([Client / Hub])
 ```
 
-1. **Triage** classifies the request. Trivial questions go to **Dash** (fast-path responder). Complex or state-changing requests are enriched with operator context and routed to **Sage**.
-2. **Sage** articulates the intent — goals, constraints, and success criteria — and hands it to the Tribunal.
-3. **The Tribunal** (Axiom, Concord, Variance, Pragma, Nemesis) generates five independent candidate commands. A winner is selected via plurality consensus (≥2 of 5). If no consensus is reached, an anonymized peer-review round (Round 2) runs before potentially failing back to Sage.
-4. **The Warden** performs pre-execution risk assessment. It orchestrates specialized sub-agents (`command_risk`, `file_risk`, `error`) to classify the command's blast radius and potential for harm.
-5. **The Auditor** performs the final consistency check and Merkle commitment. It verifies the Tribunal's choice against Sage's intent and judges the Nemesis.
-6. **Proof of Human Presence (PHP)**: The user reviews the command and risk assessment and provides a hardware-bound signature (FIDO2/WebAuthn). This is **Layer 3** authorization; it never bypasses L1 or L2 gates.
-7. **The Operator** receives the serialized `UniversalEnvelope` (UAP JSON), verifies the L2 signature, enforces L1 forbidden-patterns, checks state freshness, and executes the command in an isolated process group. Results are captured in the local LFAA ledger.
-8. **Codex** (async) extracts durable preferences and scrubbed summaries from history to build the system's long-term memory.
-
-The point of steps 1–5 is to minimize what reaches step 6. Your time is the only stake the system can't fake; everything upstream exists to spend it well.
+1. **L1 (Hard Gates)**: The Operator boundary enforces forbidden patterns (e.g., `sudo`, `su`) and system-level allowlists via reflected Protobuf options.
+2. **L2 (Consensus)**: The transaction must carry a valid cryptographic signature from a trusted consensus panel (The Tribunal).
+3. **L3 (Authorization)**: State-changing mutations require a hardware-bound signature (FIDO2/WebAuthn) or match an explicit auto-approval policy for benign diagnostics.
+4. **State Freshness**: The `state_merkle_root` binds the command to the host state at generation time; the Operator rejects stale or replayed transactions.
+5. **Warden Execution**: The Warden (on-host execution boundary) executes the command in an isolated environment and captures results into the local LFAA ledger.
+6. **Signed Receipt**: Every execution (success or failure) emits a signed `ActionReceipt` providing an immutable proof of the mutation.
 
 ---
 
 ## Protocol Foundation
 
-The protocol is the foundation layer of g8e. UI flows, agent workflows, and storage services can evolve, but operator command/result traffic is governed by a single wire contract:
+The protocol is the foundation layer of g8e. While AI agents and UI flows can evolve, every interaction is governed by a single wire contract:
 
-```text
-typed operator.proto payload
-  -> UniversalEnvelope.payload (JSON)
-  -> UniversalEnvelope JSON bytes
-  -> operator pub/sub data
-```
-
-Protocol-level enforcement is deliberately fail-closed:
-
-- **L1 Technical Bedrock** — Hard technical gates (forbidden patterns) enforced at the Operator boundary via reflected Protobuf options.
-- **L2 Consensus Integrity** — Commands carry a `tribunal_signature` (HMAC over event type and payload); the Operator rejects invalid or missing signatures.
-- **L3 Authorization State** — Evidence of human approval (PHP) or auto-approval. L3 metadata is for authorization only and never bypasses L1 or L2 checks.
-- **State Freshness** — `state_merkle_root` binds commands to the host state at generation time; stale commands are rejected.
+- **Canonical JSON (protojson)**: All client-facing surfaces (HTTP, PubSub, receipts) use JSON for maximum ecosystem compatibility (MCP, A2A, LLMs).
+- **UniversalEnvelope (UAP)**: A unified container binding identity, intent, state, and governance proofs.
+- **Hash-Based Signing**: Signatures are computed over a deterministic transaction hash; wire encoding is irrelevant to the security invariant.
+- **Internal Storage**: Protobuf bytes are used internally for high-performance persistence and audit vaults.
 
 Full contract: [protocol.md](docs/architecture/protocol.md).
 
@@ -120,14 +86,14 @@ Full contract: [protocol.md](docs/architecture/protocol.md).
 
 ```mermaid
 flowchart LR
-    User([User<br>FIDO2 Passkeys])
+    User([User<br>BYO Client])
 
     subgraph Exec_Plane [Execution Plane / Managed Host]
         direction TB
         g8eo[g8eo<br>Operator<br>Go Binary]
 
         HostOS[Target System / Shell]
-        g8eo -- "Sentinel<br>Pre-Execution Analysis" --> HostOS
+        g8eo -- "Warden<br>Execution Boundary" --> HostOS
 
         subgraph LFAA [Local-First Audit Architecture]
             direction LR
@@ -140,36 +106,60 @@ flowchart LR
         g8eo --- Scrubbed & Raw & Audit & Ledger
     end
 
-    subgraph Hub [Control & Persistence Plane / Self-Hosted Hub]
+    subgraph Substrate_Hub [Substrate Hub / g8eo --listen]
         direction TB
-        g8ee[g8ee<br>Optional Engine Adapter<br>Python]
+        Listen[(g8eo Substrate)]
+        DS[(Document Store)]
+        KS[(KV Store & TTL)]
+        PS((PubSub))
 
-        subgraph Operator_Listen [Operator Listen Mode]
-            direction LR
-            Listen[(g8eo --listen)]
-            DS[(Document Store)]
-            KS[(KV Store & TTL)]
-            PS((PubSub))
+        Listen --- DS & KS & PS
+    end
 
-            Listen --- DS & KS & PS
-        end
-
-        g8ee -- "Public Protocol" --> Listen
+    subgraph Optional_Apps [Optional Application Layer]
+        g8ed[g8ed<br>Dashboard]
+        g8ee[g8ee<br>AI Engine]
     end
 
     LLM((External LLM<br>Providers))
 
-    User -- "TLS 1.3" --> Listen
+    User -- "TLS 1.3 / mTLS" --> Listen
     g8eo -- "Outbound mTLS WebSocket" --> Listen
+    Optional_Apps -- "Public Protocol" --> Listen
     g8ee -. "Scrubbed metadata only" .-> LLM
 ```
 
 | Component | Stack | Role |
 |---|---|---|
-| **Operator (g8eo)** | Go | The sovereign "Satellite Agent" and mandatory substrate. Runs on managed hosts, executes commands, and owns the LFAA ledger. Provides listen-mode persistence, policy enforcement, and pub/sub runtime. |
-| **AI Engine (g8ee)** | Python | Optional application-layer adapter. Orchestrates the Tribunal, Warden, and Auditor. Stateless abstraction for multi-provider LLM access. |
+| **Operator (g8eo)** | Go | **The Substrate.** Provides the mandatory persistence, PKI, messaging (PubSub), and governance backbone. Runs as a sovereign satellite on managed hosts or as a central Hub in listen mode. |
+| **Dashboard (g8ed)** | Node | **Optional.** A reference web application for managing operators, viewing audit logs, and interacting with agents. |
+| **AI Engine (g8ee)** | Python | **Optional.** A reference agentic reasoning engine that orchestrates the Tribunal, Warden, and Auditor workflows. |
 
-User to `g8eo --listen` over TLS 1.3 with encrypted cookies. Operator to Gateway via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection is mutually authenticated; state-changing workflows pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
+Every interaction with the substrate is mutually authenticated via TLS 1.3 and mTLS. State-changing workflows must pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
+
+---
+
+## Reference Application Stack
+
+While the g8e substrate is self-contained and protocol-agnostic, the repository includes two optional reference applications that demonstrate the protocol's capabilities:
+
+### g8ee (AI Engine)
+A Python-based agentic reasoning engine. It provides the reference implementation for the **Tribunal** consensus model and multi-provider LLM orchestration.
+
+The Tribunal uses five specialized LLM personas to generate candidate commands in parallel, blind to each other:
+
+| Persona | Lens | Responsibility |
+|---|---|---|
+| **Axiom** | Composition | Clean multi-stage pipelines, resource efficiency. |
+| **Concord** | Safety | Defensive flags, read-only discipline. |
+| **Variance** | Edge cases | Robustness against spaces, locales, and nulls. |
+| **Pragma** | Convention | Idiomatic, OS-specific "best practices". |
+| **Nemesis** | Adversary | Calibrated stress-test; tries to trick the system. |
+
+### g8ed (Dashboard)
+A stateless React/Node adapter that consumes the g8e protocol to provide a unified UI for fleet management, audit log visualization, and human-in-the-loop (L3) authorization.
+
+To start the platform with these applications enabled, use `./g8e platform start --with-apps`.
 
 ---
 
@@ -181,36 +171,25 @@ g8e uses a 3-layer command validation hierarchy to ensure safety and minimize cl
 2. **L2 (Consensus)**: The Tribunal ensemble must reach consensus on the command. Signature-verified by the Operator.
 3. **L3 (Authorization)**: Human-in-the-loop by default. Benign diagnostic commands may be auto-approved, but only if they have already passed L1 and L2.
 
-## The Tribunal
 
-Five specialized LLM personas generate candidate commands in parallel, blind to each other:
+## The Operator (g8eo)
 
-| Persona | Lens | Responsibility |
-|---|---|---|
-| **Axiom** | Composition | Clean multi-stage pipelines, resource efficiency. |
-| **Concord** | Safety | Defensive flags, read-only discipline. |
-| **Variance** | Edge cases | Robustness against spaces, locales, and nulls. |
-| **Pragma** | Convention | Idiomatic, OS-specific "best practices". |
-| **Nemesis** | Adversary | Calibrated stress-test; tries to trick the system with flawed commands. |
+The **Operator** is the sovereign engine of the g8e platform. It is a single Go binary that can run in two modes: **Listen (Hub)** or **Satellite**.
 
-**Information Isolation** is the load-bearing safety property: each agent operates in a sealed information environment. Triage doesn't know Sage exists; Sage doesn't know the Tribunal exists; the Tribunal members don't know who is the Nemesis. Collusion is structurally unprofitable.
+### Core Substrate Capabilities
 
-Reputation staking, slashing tiers, and the full mechanism design: [governance.md](docs/architecture/governance.md).
+- **Protocol Enforcement**: Verifies every inbound transaction against the L1/L2/L3 governance hierarchy before execution.
+- **PKI Authority**: Owns the platform's Certificate Authority (CA). Handles CSR signing, certificate revocation (CRL/OCSP), and mTLS trust brokerage.
+- **Identity & Access**: Manages hardware-bound device links, user registration, and WebAuthn/FIDO2 passkey brokerage for Layer 3 authorization.
+- **Local-First Storage**: Provides a high-performance Document Store (SQLite), KV Store, and Blob storage for all platform components.
+- **LFAA (Local-First Audit Architecture)**: Every mutation is anchored to a local, git-backed ledger on the host, providing an immutable chain of custody.
+- **Real-time Messaging**: A built-in PubSub broker and WebSocket gateway orchestrate traffic between satellites, hubs, and clients.
+- **Sentinel Defense**: 46 MITRE ATT&CK detectors and 27 scrubbing patterns perform on-host pre-execution analysis of every command.
 
----
+### Deployment Modes
 
-## The Operator
-
-The **Operator** is a sovereign "Satellite Agent" designed for global-scale fleet management. It delivers remote execution anywhere in the world using only an outbound connection, managing hundreds or thousands of devices within a single conversation context.
-
-1. **Context Injection**: Bundles a signed snapshot of host state (OS, shell, hardware, history) into the reasoning loop.
-2. **Receives** the typed `GovernanceEnvelope` command via outbound mTLS WebSocket.
-3. **Pre-screens** with the Sentinel — 46 MITRE ATT&CK detectors and 27 scrubbing patterns.
-4. **Executes** in an isolated process group with closed stdin.
-5. **Captures** output into a Raw Vault (host-only) and a Scrubbed Vault (AI-accessible).
-6. **Snapshots** state into a local git-backed ledger (LFAA) for immutable audit.
-
-System fingerprint binding ties the Operator's mTLS certificate to the host hardware. A stolen certificate is useless from a different machine.
+- **Hub Mode (`--listen`)**: Acts as the central persistence and messaging backbone for the fleet. No inbound ports are required on satellite hosts.
+- **Satellite Mode**: Runs on managed infrastructure. It establishes an outbound-only mTLS connection to the Hub, receives signed transactions, and executes them in an isolated environment.
 
 ---
 
@@ -219,7 +198,7 @@ System fingerprint binding ties the Operator's mTLS certificate to the host hard
 - **Auth** — Proof of Human Presence (PHP) via FIDO2 / WebAuthn passkeys. Hardware-bound approval is the default Layer 3 state for mutations; auto-approval is restricted to benign commands that already passed L1 and L2. Passwords are unsupported by design.
 - **Transport** — TLS 1.3 for the Control Plane; outbound-only mTLS for Operators. Platform-generated ECDSA P-384 CA.
 - **Sentinel** — On-host defensive analysis: 46 MITRE-mapped detectors, 27 scrubbing patterns, and command allowlist/denylist enforcement.
-- **Warden** — Engine-side defensive coordination: command, error, and file risk classifiers applied before human approval.
+- **Warden** — Defensive coordination: command, error, and file risk classifiers applied before execution. In the reference Engine, this orchestrates specialized sub-agents.
 - **Sovereignty** — Raw command output never leaves the host. Only Sentinel-scrubbed metadata reaches model providers. Engine outage does not erase host-local history.
 - **LFAA** — Local-First Audit Architecture. All state changes are committed to a local git ledger and SQLite vaults on the managed host.
 - **Compliance** — NSA Zero Trust (exceeds requirements in 6 of 7 pillars), HIPAA-ready, FedRAMP-aligned controls.

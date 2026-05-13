@@ -138,7 +138,7 @@ type L2Metadata struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	TribunalSignature string   `protobuf:"bytes,1,opt,name=tribunal_signature,json=tribunalSignature,proto3" json:"tribunal_signature,omitempty"` // HMAC-SHA256 signature
+	TribunalSignature string   `protobuf:"bytes,1,opt,name=tribunal_signature,json=tribunalSignature,proto3" json:"tribunal_signature,omitempty"` // ED25519 signature over transaction_hash|decision
 	AgentIds          []string `protobuf:"bytes,2,rep,name=agent_ids,json=agentIds,proto3" json:"agent_ids,omitempty"`                            // IDs of agents that voted
 	KeyId             string   `protobuf:"bytes,3,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`                                     // ID of the key used for signature
 }

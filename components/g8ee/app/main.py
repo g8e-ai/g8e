@@ -103,14 +103,12 @@ async def _connect_clients(settings):
     ca = settings.ca_cert_path
     cert = settings.client_cert_path
     key = settings.client_key_path
-    token = settings.auth.internal_auth_token
     auditor_hmac_key = settings.auth.auditor_hmac_key
 
     db_client = DBClient(
         ca_cert_path=ca,
         client_cert_path=cert,
-        client_key_path=key,
-        internal_auth_token=token
+        client_key_path=key
     )
     await db_client.connect()
 
@@ -119,14 +117,12 @@ async def _connect_clients(settings):
         ca_cert_path=ca,
         client_cert_path=cert,
         client_key_path=key,
-        internal_auth_token=token,
     )
     await kv_cache_client.connect()
 
     pubsub_client = PubSubClient(
         component_name=ComponentName.G8EE,
         ca_cert_path=ca,
-        internal_auth_token=token,
         auditor_hmac_key=auditor_hmac_key,
     )
     await pubsub_client.connect()
@@ -134,8 +130,7 @@ async def _connect_clients(settings):
     blob_client = BlobClient(
         ca_cert_path=ca,
         client_cert_path=cert,
-        client_key_path=key,
-        internal_auth_token=token
+        client_key_path=key
     )
     await blob_client.connect()
 

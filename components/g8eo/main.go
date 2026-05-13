@@ -33,8 +33,12 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/services"
 	auth "github.com/g8e-ai/g8e/components/g8eo/services/auth"
+	"github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	listen "github.com/g8e-ai/g8e/components/g8eo/services/listen"
 	openclaw "github.com/g8e-ai/g8e/components/g8eo/services/openclaw"
+	"github.com/g8e-ai/g8e/components/g8eo/services/pubsub"
+	"github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
+	"github.com/g8e-ai/g8e/components/g8eo/services/system"
 	vault "github.com/g8e-ai/g8e/components/g8eo/services/vault"
 )
 
@@ -79,6 +83,8 @@ func main() {
 	var listenMode bool
 	var listenWSSPort int
 	var listenHTTPPort int
+	var listenBootstrapPort int
+	var listenPublicPort int
 	var listenDataDir string
 	var listenPKIDir string
 	var listenSecretsDir string
@@ -121,7 +127,9 @@ func main() {
 
 	flag.BoolVar(&listenMode, "listen", false, "Listen mode: platform persistence + pub/sub broker")
 	flag.IntVar(&listenWSSPort, "wss-listen-port", 9001, "WSS/TLS port for operator pub/sub connections (default: 9001)")
-	flag.IntVar(&listenHTTPPort, "http-listen-port", 9000, "HTTPS port for internal g8ee/g8ed service traffic (default: 9000)")
+	flag.IntVar(&listenHTTPPort, "http-listen-port", 9000, "HTTPS port for mTLS API (default: 9000)")
+	flag.IntVar(&listenBootstrapPort, "bootstrap-listen-port", 8080, "Bootstrap TLS port for device-link enrollment (default: 8080)")
+	flag.IntVar(&listenPublicPort, "public-listen-port", 8081, "Public browser/BYO bootstrap port (default: 8081)")
 	flag.StringVar(&listenDataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
 	flag.StringVar(&listenPKIDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
 	flag.StringVar(&listenSecretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
@@ -163,7 +171,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nListen Mode (platform persistence + pub/sub broker):\n")
 		fmt.Fprintf(os.Stderr, "  --listen                    Listen mode: local persistence + pub/sub broker\n")
 		fmt.Fprintf(os.Stderr, "  --wss-listen-port <port>    WSS/TLS port for operator pub/sub connections (default: 9001)\n")
-		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for internal g8ee/g8ed traffic (default: 9000)\n")
+		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for mTLS API (default: 9000)\n")
+		fmt.Fprintf(os.Stderr, "  --bootstrap-listen-port <port> Bootstrap TLS port for device-link enrollment (default: 8080)\n")
+		fmt.Fprintf(os.Stderr, "  --public-listen-port <port> Public browser/BYO bootstrap port (default: 8081)\n")
 		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: .g8e/data in working directory)\n")
 		fmt.Fprintf(os.Stderr, "  --pki-dir <dir>             Directory for TLS certificates (default: .g8e/pki)\n")
 		fmt.Fprintf(os.Stderr, "  --secrets-dir <dir>         Directory for platform secrets (default: .g8e/secrets)\n")
@@ -199,7 +209,7 @@ func main() {
 	}
 
 	if listenMode {
-		runListenMode(listenWSSPort, listenHTTPPort, listenDataDir, listenPKIDir, listenSecretsDir, listenPasskeyRpID, listenPasskeyRpName, logLevel)
+		runListenMode(listenWSSPort, listenHTTPPort, listenBootstrapPort, listenPublicPort, listenDataDir, listenPKIDir, listenSecretsDir, listenPasskeyRpID, listenPasskeyRpName, logLevel)
 		return
 	}
 
@@ -523,11 +533,9 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 }
 
 // runListenMode starts the Operator in listen mode — the platform's central
-// persistence (operator) and pub/sub broker. In this mode, the Operator does
-// NOT execute commands, initiate outbound connections, or perform
-// authentication against a remote hub. It is strictly an inbound service
-// for g8ee, g8ed, and Outbound Operators.
-func runListenMode(wssPort, httpPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, logLevel string) {
+// persistence (operator) and pub/sub broker. In this mode, the Operator also
+// runs an in-process command service to act as the sovereign execution substrate.
+func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
@@ -536,7 +544,7 @@ func runListenMode(wssPort, httpPort int, dataDir, pkiDir, secretsDir, passkeyRp
 
 	logger.Info("g8e Operator — Listen Mode (operator)", "version", version, "build", buildID)
 
-	cfg, err := config.LoadListen(wssPort, httpPort, 0, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName)
+	cfg, err := config.LoadListen(wssPort, httpPort, bootstrapPort, publicPort, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName, false)
 	if err != nil {
 		logger.Error("Failed to load listen configuration", "error", err)
 		os.Exit(constants.ExitConfigError)
@@ -552,10 +560,74 @@ func runListenMode(wssPort, httpPort int, dataDir, pkiDir, secretsDir, passkeyRp
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Initialize In-Process Execution Substrate
+	logger.Info("Initializing in-process execution substrate...")
+	execSvc := execution.NewExecutionService(cfg, logger)
+	fileSvc := execution.NewFileEditService(cfg, logger)
+
+	// Resolve Git for ledger
+	gitPath := system.ResolveGitBinary(logger)
+	cfg.GitPath = gitPath
+	cfg.GitAvailable = gitPath != ""
+
+	// Use the listen-mode database for everything
+	govDeps := svc.GetGovernanceDeps()
+	sm := svc.GetSecretManager()
+
+	wardenPriv, wardenKeyID, err := sm.GetWardenKey()
+	if err != nil {
+		logger.Error("Failed to load Warden signing key - mutations will fail", "error", err)
+		os.Exit(constants.ExitConfigError)
+	}
+
+	// Loopback Pub/Sub for in-process command dispatch
+	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetHTTPHandler().GetPubSubBroker())
+
+	psConfig := pubsub.CommandServiceConfig{
+		Config:            cfg,
+		Logger:            logger,
+		Execution:         execSvc,
+		FileEdit:          fileSvc,
+		PubSubClient:      loopbackClient,
+		ResultsService:    nil, // Results handled via direct loopback publish if needed
+		LocalStore:        nil, // Not used in listen mode
+		RawVault:          nil, // Not used in listen mode
+		AuditVault:        nil, // Handled by Warden direct audit
+		Ledger:            nil, // P1: Ledger in listen mode
+		HistoryHandler:    nil, // P1: History in listen mode
+		Sentinel:          sentinel.NewSentinel(services.ProductionSentinelConfig(), logger),
+		ReplayStore:       govDeps.ReplayStore,
+		StateRootProvider: govDeps.StateRootProvider,
+		TransactionAudit:  govDeps.TransactionAudit,
+		L3Verifier:        govDeps.L3Verifier,
+		WardenSigningKey:  wardenPriv,
+		WardenKeyID:       wardenKeyID,
+	}
+
+	cmdSvc, err := pubsub.NewPubSubCommandService(psConfig)
+	if err != nil {
+		logger.Error("Failed to initialize in-process command service", "error", err)
+		os.Exit(constants.ExitCodeFromError(err))
+	}
+
 	go func() {
 		if err := svc.Start(ctx); err != nil {
 			logger.Error("Listen service failed", "error", err)
 			os.Exit(constants.ExitCodeFromError(err))
+		}
+	}()
+
+	// Start the command service once the listen service is ready
+	go func() {
+		for !svc.IsReady() {
+			time.Sleep(100 * time.Millisecond)
+			if ctx.Err() != nil {
+				return
+			}
+		}
+		logger.Info("Listen service ready, starting in-process command service")
+		if err := cmdSvc.Start(ctx); err != nil {
+			logger.Error("In-process command service failed to start", "error", err)
 		}
 	}()
 
@@ -567,6 +639,11 @@ func runListenMode(wssPort, httpPort int, dataDir, pkiDir, secretsDir, passkeyRp
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
+
+	if cmdSvc != nil {
+		cmdSvc.Stop()
+	}
+
 	if err := svc.Stop(shutdownCtx); err != nil {
 		logger.Error("Listen shutdown error", "error", err)
 	}

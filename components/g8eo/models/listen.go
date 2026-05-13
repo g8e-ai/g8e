@@ -125,6 +125,23 @@ type PubSubPublishResponse struct {
 	Receivers int `json:"receivers"`
 }
 
+type ActionReceiptRecord struct {
+	TransactionID     string    `json:"transaction_id"`
+	TransactionHash   string    `json:"transaction_hash"`
+	OperatorID        string    `json:"operator_id"`
+	OperatorSessionID string    `json:"operator_session_id"`
+	ActionType        string    `json:"action_type"`
+	TargetResource    string    `json:"target_resource"`
+	Status            string    `json:"status"`
+	ResultSummary     string    `json:"result_summary"`
+	StateRootBefore   string    `json:"state_root_before"`
+	StateRootAfter    string    `json:"state_root_after"`
+	ExecutedAt        time.Time `json:"executed_at"`
+	SignerKeyID       string    `json:"signer_key_id"`
+	Signature         string    `json:"signature"`
+	Timestamp         time.Time `json:"timestamp"`
+}
+
 // BlobMetaResponse is the typed response for GET /blob/{namespace}/{id}/meta.
 type BlobMetaResponse struct {
 	ID          string    `json:"id"`

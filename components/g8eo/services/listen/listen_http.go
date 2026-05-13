@@ -78,6 +78,7 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux.HandleFunc("/.well-known/g8e/pki/hub-bundle.pem", h.handlePKIHubBundle)
 	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.handlePKIFingerprint)
 	mux.HandleFunc("/api/auth/device-link/register", h.handleDeviceLinkRegister)
+	mux.HandleFunc("/api/auth/device-link/request", h.handleDeviceLinkRequest)
 
 	// Trust Portal
 	mux.HandleFunc("/ca.crt", h.handlePKIRoot)
@@ -371,6 +372,38 @@ func (h *HTTPHandler) handlePKIRevocationBundle(w http.ResponseWriter, r *http.R
 		"bundle_json": bundleJSON,
 		"signature":   signature,
 	})
+}
+
+func (h *HTTPHandler) handleDeviceLinkRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req models.CreateDeviceLinkRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	// For bootstrap/public requests, we enforce some constraints
+	// e.g. cannot specify a custom UserID directly if we want to be safe,
+	// but CreateDeviceLink handles email-to-UserID resolution.
+	// We might want to flag these as 'CLI' or 'Bootstrap' requests.
+
+	resp, err := h.reg.CreateDeviceLink(req)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusCreated, resp)
 }
 
 func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Request) {

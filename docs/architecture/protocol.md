@@ -14,11 +14,12 @@ While g8e includes bundled application-layer adapters—**Dashboard (g8ed)** and
 
 # Core Invariants
 
-1. **UAP JSON Mutation Envelope**: All mutation commands MUST use the UAP JSON envelope (`components/g8eo/pkg/uap/types.go`). Binary Protobuf envelopes and legacy formats are rejected.
-2. **Identity Persistence**: Every message must carry `id`, `operator_id`, and `operator_session_id`.
-3. **Immutable Governance**: Governance metadata (L1/L2/L3) is baked into the envelope and verified by the Operator before any action is taken.
-4. **BFT State Binding**: Commands are bound to a specific fleet state via `state_merkle_root`.
-5. **No Private Channels**: Bundled apps use the same public protocol surface as BYO clients. There is no internal "trust" shortcut for bundled components.
+1. **Canonical JSON Wire Format**: All mutation commands MUST use canonical JSON (protojson) `UniversalEnvelope` on all client-facing surfaces (HTTPS APIs, WSS pub/sub command channels, receipts, audit exports). Binary protobuf bytes on the wire are rejected with a clear error. Schema source of truth is `.proto` files (typed, versioned, L1 field-option reflection).
+2. **Hash-Based Signing**: The signing basis is a deterministic `transaction_hash` computed from normalized envelope fields (action_type, target_resource, payload as base64, state_merkle_root, nonce, expires_at, intent_data). Wire encoding is irrelevant because the verifier enforces `id == computed transaction_hash`. Canonicalization rules: field names in proto definition order, strings as UTF-8, numbers as decimal integers, absent optional fields omitted, nested messages recursed, bytes as base64, result hashed with SHA-256.
+3. **Identity Persistence**: Every message must carry `id`, `operator_id`, and `operator_session_id`.
+4. **Immutable Governance**: Governance metadata (L1/L2/L3) is baked into the envelope and verified by the Operator before any action is taken.
+5. **BFT State Binding**: Commands are bound to a specific fleet state via `state_merkle_root`.
+6. **No Private Channels**: Bundled apps use the same public protocol surface as BYO clients. There is no internal "trust" shortcut for bundled components.
 
 ---
 

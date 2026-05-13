@@ -39,10 +39,6 @@ class BootstrapSecretTamperError(RuntimeError):
 class BootstrapServiceProtocol(Protocol):
     """Protocol for bootstrap services that load host bootstrap data."""
 
-    def load_internal_auth_token(self) -> str | None:
-        """Load internal auth token from host bootstrap directory."""
-        ...
-
     def load_session_encryption_key(self) -> str | None:
         """Load session encryption key from host bootstrap directory."""
         ...
@@ -91,27 +87,9 @@ class BootstrapService:
         self._pki_dir = Path(pki_dir)
 
         self._logger = logging.getLogger(__name__)
-        self._cached_token: str | None = None
         self._cached_key: str | None = None
         self._cached_auditor_hmac_key: str | None = None
         self._cached_ca_path: str | None = None
-
-    def load_internal_auth_token(self) -> str | None:
-        """Load internal auth token from host secrets directory."""
-        if self._cached_token is not None:
-            return self._cached_token
-
-        token_path = self._secrets_dir / "internal_auth_token"
-        try:
-            if token_path.exists():
-                self._cached_token = token_path.read_text().strip()
-                self._logger.info("Loaded internal auth token from host secrets directory")
-                return self._cached_token
-            self._logger.info("Internal auth token not found in host secrets directory")
-            return None
-        except Exception as e:
-            self._logger.warning("Failed to read internal auth token: %s", e)
-            return None
 
     def load_session_encryption_key(self) -> str | None:
         """Load session encryption key from host secrets directory."""
@@ -133,7 +111,7 @@ class BootstrapService:
     def load_auditor_hmac_key(self) -> str | None:
         """Load Tribunal auditor HMAC-SHA256 signing key from host secrets directory.
 
-        Paired with ``internal_auth_token`` / ``session_encryption_key``:
+        Paired with ``session_encryption_key``:
         the same SecretManager pattern on the g8eo side generates and
         persists this key, and the same bootstrap_digest.json entry is
         used for tamper verification by the caller.
@@ -175,15 +153,13 @@ class BootstrapService:
         """Check if bootstrap data is available."""
         return (
             self._secrets_dir.exists() and
-            (self.load_internal_auth_token() is not None or
-             self.load_session_encryption_key() is not None or
+            (self.load_session_encryption_key() is not None or
              self.load_auditor_hmac_key() is not None or
              self.load_ca_cert_path() is not None)
         )
 
     def clear_cache(self) -> None:
         """Clear cached values - useful for testing or re-initialization."""
-        self._cached_token = None
         self._cached_key = None
         self._cached_auditor_hmac_key = None
         self._cached_ca_path = None
@@ -205,8 +181,7 @@ class BootstrapService:
             return.
 
         Args:
-            secret_name: logical secret name
-                (``internal_auth_token`` or ``session_encryption_key``).
+            secret_name: logical secret name.
             value: value loaded from the volume (already stripped).
 
         Raises:

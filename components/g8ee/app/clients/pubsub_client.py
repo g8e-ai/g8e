@@ -57,7 +57,6 @@ class PubSubClient:
         component_name: ComponentName = ComponentName.G8EE,
         timeout: float = 10.0,
         ca_cert_path: str | None = None,
-        internal_auth_token: str | None = None,
         auditor_hmac_key: str | None = None,
         client_cert_path: str | None = None,
         client_key_path: str | None = None,
@@ -73,7 +72,6 @@ class PubSubClient:
         self._ca_cert_path = ca_cert_path
         self._client_cert_path = client_cert_path
         self._client_key_path = client_key_path
-        self._internal_auth_token = internal_auth_token
         self._auditor_hmac_key = auditor_hmac_key
 
         self._ws_session: aiohttp.ClientSession | None = None
@@ -118,9 +116,6 @@ class PubSubClient:
             if not ws_url.startswith("wss://"):
                 ws_url = "wss://" + ws_url.split("://")[-1]
 
-        if self._internal_auth_token:
-            ws_url += f"?token={self._internal_auth_token}"
-
         ssl_ctx = resolve_pubsub_ssl_context(
             self._ca_cert_path,
             use_tls=True,
@@ -131,8 +126,6 @@ class PubSubClient:
         ws_session = await self._get_http_ws_session()
 
         headers = {}
-        if self._internal_auth_token:
-            headers["X-Internal-Auth"] = self._internal_auth_token
 
         self._ws = await ws_session.ws_connect(ws_url, ssl=ssl_ctx, headers=headers)
         logger.info("[PUBSUB-CLIENT] Pub/sub WebSocket connected")

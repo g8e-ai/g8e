@@ -60,7 +60,6 @@ Manages the platform's root of trust and security invariants.
 - **`pki`:** Operator-owned PKI management and trust bundle operations.
 - **`mtls-test`:** Connectivity test for mTLS between components.
 - **`passkeys`:** Manages FIDO2/WebAuthn credentials via `manage-passkeys.py`.
-- **`rotate-internal-token`:** Rotates the `X-Internal-Auth` token used for service-to-service communication.
 
 ### Testing (`./g8e test`)
 Runs component-specific test suites using native toolchains via `scripts/testing/run_tests.sh`.
@@ -113,9 +112,6 @@ scripts/
 ---
 
 ## Technical Invariants
-
-### [DEPRECATED] Internal Authentication
-Internal scripts previously authenticated to Operator listen mode and Dashboard using a shared `X-Internal-Auth` token. This token is being removed in favor of the **Protocol Pivot** model, where every caller authenticates via public enrollment or session primitives.
 
 ### 2. Path Resolution
 All scripts must resolve `PROJECT_ROOT` relative to their own location to ensure they work regardless of the user's current working directory.

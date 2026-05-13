@@ -14,6 +14,7 @@
 package listen
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -57,6 +58,25 @@ func readSecretFromDB(t *testing.T, db *sqliteutil.DB, name string) string {
 	return value
 }
 
+func updatePlatformSetting(t *testing.T, db *sqliteutil.DB, name string, value string) {
+	t.Helper()
+	var dataJSON string
+	require.NoError(t, db.QueryRow(
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+	).Scan(&dataJSON))
+	var doc models.SettingsDocument
+	require.NoError(t, json.Unmarshal([]byte(dataJSON), &doc))
+	require.NotNil(t, doc.Settings)
+	doc.Settings[name] = value
+	mutated, err := json.Marshal(doc)
+	require.NoError(t, err)
+	_, err = db.Exec(
+		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'platform_settings'",
+		string(mutated),
+	)
+	require.NoError(t, err)
+}
+
 func TestSecretManager_InitPlatformSettings_CreatesSecretsAndFiles(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
@@ -64,18 +84,61 @@ func TestSecretManager_InitPlatformSettings_CreatesSecretsAndFiles(t *testing.T)
 
 	require.NoError(t, sm.InitPlatformSettings())
 
-	tokenBytes, err := os.ReadFile(filepath.Join(secretsDir, "internal_auth_token"))
-	require.NoError(t, err)
-	token := strings.TrimSpace(string(tokenBytes))
-	assert.NotEmpty(t, token)
-	assert.Equal(t, token, readSecretFromDB(t, db, "internal_auth_token"))
-
 	keyBytes, err := os.ReadFile(filepath.Join(secretsDir, "session_encryption_key"))
 	require.NoError(t, err)
 	key := strings.TrimSpace(string(keyBytes))
 	assert.NotEmpty(t, key)
 	assert.Equal(t, key, readSecretFromDB(t, db, "session_encryption_key"))
 
+}
+
+func TestSecretManager_InitPlatformSettings_CreatesValidWardenKey(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := NewSecretManager(db, secretsDir, testutil.NewTestLogger())
+
+	require.NoError(t, sm.InitPlatformSettings())
+
+	seedHex := readSecretFromDB(t, db, "warden_signing_key")
+	seed, err := hex.DecodeString(seedHex)
+	require.NoError(t, err)
+	require.Len(t, seed, ed25519.SeedSize)
+
+	seedBytes, err := os.ReadFile(filepath.Join(secretsDir, "warden_signing_key"))
+	require.NoError(t, err)
+	assert.Equal(t, seedHex, strings.TrimSpace(string(seedBytes)))
+
+	priv, keyID, err := sm.GetWardenKey()
+	require.NoError(t, err)
+	require.Len(t, priv, ed25519.PrivateKeySize)
+	assert.Equal(t, readSecretFromDB(t, db, "warden_key_id"), keyID)
+	assert.Equal(t, hex.EncodeToString(priv.Public().(ed25519.PublicKey)), keyID)
+}
+
+func TestSecretManager_GetWardenKey_RejectsMalformedSeedLength(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := NewSecretManager(db, secretsDir, testutil.NewTestLogger())
+	require.NoError(t, sm.InitPlatformSettings())
+
+	updatePlatformSetting(t, db, "warden_signing_key", strings.Repeat("a", ed25519.PrivateKeySize*2))
+
+	_, _, err := sm.GetWardenKey()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "warden_signing_key decoded to 64 bytes; expected 32")
+}
+
+func TestSecretManager_GetWardenKey_RejectsMismatchedKeyID(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := NewSecretManager(db, secretsDir, testutil.NewTestLogger())
+	require.NoError(t, sm.InitPlatformSettings())
+
+	updatePlatformSetting(t, db, "warden_key_id", strings.Repeat("b", ed25519.PublicKeySize*2))
+
+	_, _, err := sm.GetWardenKey()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "warden_key_id does not match warden_signing_key")
 }
 
 func TestSecretManager_InitPlatformSettings_FailsWhenFileWriteFails(t *testing.T) {
@@ -103,7 +166,7 @@ func TestSecretManager_InitPlatformSettings_DetectsDBFileDivergence(t *testing.T
 	).Scan(&dataJSON))
 	var doc models.SettingsDocument
 	require.NoError(t, json.Unmarshal([]byte(dataJSON), &doc))
-	doc.Settings["internal_auth_token"] = "divergent-db-only-value"
+	doc.Settings["session_encryption_key"] = "divergent-db-only-value"
 	mutated, err := json.Marshal(doc)
 	require.NoError(t, err)
 	_, err = db.Exec(
@@ -133,7 +196,7 @@ func TestSecretManager_InitPlatformSettings_WritesDigestManifest(t *testing.T) {
 	assert.Equal(t, 1, manifest.Version)
 	assert.NotEmpty(t, manifest.UpdatedAt)
 
-	for _, name := range []string{"internal_auth_token", "session_encryption_key"} {
+	for _, name := range []string{"session_encryption_key"} {
 		secret := readSecretFromDB(t, db, name)
 		require.NotEmpty(t, secret)
 		sum := sha256.Sum256([]byte(secret))
@@ -163,7 +226,7 @@ func TestSecretManager_InitPlatformSettings_RejectsUncoordinatedSecretRotation(t
 	require.NoError(t, NewSecretManager(db, secretsDir, logger).InitPlatformSettings())
 
 	rotated := strings.Repeat("a", 64)
-	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "internal_auth_token"), []byte(rotated), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "session_encryption_key"), []byte(rotated), 0600))
 
 	err := NewSecretManager(db, secretsDir, logger).InitPlatformSettings()
 	require.Error(t, err)
@@ -176,11 +239,11 @@ func TestSecretManager_InitPlatformSettings_RejectsPreexistingSecretWithoutPlatf
 	logger := testutil.NewTestLogger()
 
 	preSeeded := strings.Repeat("c", 64)
-	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "internal_auth_token"), []byte(preSeeded), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "session_encryption_key"), []byte(preSeeded), 0600))
 
 	err := NewSecretManager(db, secretsDir, logger).InitPlatformSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "found preexisting bootstrap secret internal_auth_token without platform_settings")
+	assert.Contains(t, err.Error(), "found preexisting bootstrap secret session_encryption_key without platform_settings")
 }
 
 func TestSecretManager_InitPlatformSettings_FailsWhenRequiredSecretFileMissing(t *testing.T) {

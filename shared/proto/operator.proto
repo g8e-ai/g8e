@@ -344,6 +344,37 @@ message ShutdownRequested {
   string reason = 1;
 }
 
+// ActionReceipt is the signed proof of a completed or failed mutation.
+// It is emitted by the Warden after execution.
+message ActionReceipt {
+  // Original UniversalEnvelope ID
+  string transaction_id = 1;
+  
+  // Original UniversalEnvelope hash
+  string transaction_hash = 2;
+  
+  // Final execution status
+  ExecutionStatus status = 3;
+  
+  // Concise summary of the result (e.g. "exit code 0", "file written")
+  string result_summary = 4;
+  
+  // State root before execution
+  string state_root_before = 5;
+  
+  // State root after execution
+  string state_root_after = 6;
+  
+  // Timestamp when execution finished
+  int64 executed_at_unix_ms = 7;
+  
+  // ID of the Warden's signing key
+  string signer_key_id = 8;
+  
+  // ED25519 signature over canonical serialization of fields 1-8
+  string signature = 9;
+}
+
 // Result payload for g8e.v1.operator.command.completed or failed
 message CommandResult {
   string execution_id = 1;

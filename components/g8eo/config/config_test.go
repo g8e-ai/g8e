@@ -218,7 +218,7 @@ func TestLoadListen_Defaults(t *testing.T) {
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 
-	cfg, err := LoadListen(0, 0, 0, "", "", "", "", "")
+	cfg, err := LoadListen(0, 0, 0, 0, "", "", "", "", "", true)
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
@@ -235,11 +235,13 @@ func TestLoadListen_ExplicitValues(t *testing.T) {
 		9443,
 		8080,
 		0,
+		0,
 		"/var/data",
 		"/var/pki",
 		"/var/secrets",
 		"example.com",
 		"Example RP",
+		true,
 	)
 	require.NoError(t, err)
 
@@ -254,7 +256,7 @@ func TestLoadListen_PartialDefaults(t *testing.T) {
 	t.Run("only wss port overridden", func(t *testing.T) {
 		cwd, err := os.Getwd()
 		require.NoError(t, err)
-		cfg, err := LoadListen(9001, 0, 0, "", "", "", "", "")
+		cfg, err := LoadListen(9001, 0, 0, 0, "", "", "", "", "", true)
 		require.NoError(t, err)
 		assert.Equal(t, 9001, cfg.Listen.WSSPort)
 		assert.Equal(t, 9000, cfg.Listen.HTTPPort)
@@ -262,14 +264,14 @@ func TestLoadListen_PartialDefaults(t *testing.T) {
 	})
 
 	t.Run("only data dir overridden", func(t *testing.T) {
-		cfg, err := LoadListen(0, 0, 0, "/custom/data", "", "", "", "")
+		cfg, err := LoadListen(0, 0, 0, 0, "/custom/data", "", "", "", "", true)
 		require.NoError(t, err)
 		assert.Equal(t, 9001, cfg.Listen.WSSPort)
 		assert.Equal(t, "/custom/data", cfg.Listen.DataDir)
 	})
 
 	t.Run("no operator fields set", func(t *testing.T) {
-		cfg, err := LoadListen(0, 0, 0, "", "", "", "", "")
+		cfg, err := LoadListen(0, 0, 0, 0, "", "", "", "", "", true)
 		require.NoError(t, err)
 		assert.Empty(t, cfg.APIKey)
 		assert.Empty(t, cfg.Endpoint)
@@ -278,8 +280,39 @@ func TestLoadListen_PartialDefaults(t *testing.T) {
 }
 
 func TestLoadListen_SucceedsWithAllDefaults(t *testing.T) {
-	_, err := LoadListen(0, 0, 0, "", "", "", "", "")
+	_, err := LoadListen(0, 0, 0, 0, "", "", "", "", "", true)
 	require.NoError(t, err)
+}
+
+func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
+	t.Run("reject wssPort 0", func(t *testing.T) {
+		_, err := LoadListen(0, 9000, 8080, 8081, "", "", "", "", "", false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "wssPort cannot be 0 in production")
+	})
+
+	t.Run("reject httpPort 0", func(t *testing.T) {
+		_, err := LoadListen(9001, 0, 8080, 8081, "", "", "", "", "", false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "httpPort cannot be 0 in production")
+	})
+
+	t.Run("reject bootstrapPort 0", func(t *testing.T) {
+		_, err := LoadListen(9001, 9000, 0, 8081, "", "", "", "", "", false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "bootstrapPort cannot be 0 in production")
+	})
+
+	t.Run("reject publicPort 0", func(t *testing.T) {
+		_, err := LoadListen(9001, 9000, 8080, 0, "", "", "", "", "", false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "publicPort cannot be 0 in production")
+	})
+
+	t.Run("accept all non-zero ports in production", func(t *testing.T) {
+		_, err := LoadListen(9001, 9000, 8080, 8081, "", "", "", "", "", false)
+		require.NoError(t, err)
+	})
 }
 
 // ---------------------------------------------------------------------------

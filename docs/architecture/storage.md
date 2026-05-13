@@ -116,7 +116,7 @@ This document explains the unified storage architecture for the g8e platform. It
 |---|---|---|---|
 | **Platform Hub (Substrate)** | SQLite | `.g8e/data/g8e.db` | Central platform state (Coordination Store). |
 | **Platform Hub (PKI)** | TLS Certs | `.g8e/pki` | CA hierarchy, intermediate CAs, trust bundles. **Root of Trust**. |
-| **Platform Hub (Secrets)** | Bootstrap Secrets | `.g8e/secrets` | Internal auth token, session encryption key with tamper-evidence manifest. |
+| **Platform Hub (Secrets)** | Bootstrap Secrets | `.g8e/secrets` | Session encryption key with tamper-evidence manifest. |
 | **Optional Adapters** | None | - | Stateless clients; use `DBClient` and `KVCacheClient`. |
 | **Operator (Scrubbed)** | SQLite | `.g8e/local_state.db` | Sentinel-scrubbed AI context. |
 | **Operator (Raw)** | SQLite | `.g8e/raw_vault.db` | Customer-only unscrubbed forensic record. |
@@ -144,7 +144,7 @@ The `.g8e/pki` and `.g8e/secrets` directories form the platform's root of trust.
 2. **Issued Certificates**: Server and workload certificates signed by intermediate CAs.
 
 **Secrets Directory (`.g8e/secrets/`)** stores:
-1. **Bootstrap Secrets**: `internal_auth_token`, `session_encryption_key`.
+1. **Bootstrap Secrets**: `session_encryption_key`, `warden_signing_key`, and `warden_key_id`.
 2. **Tamper-Evidence Manifest**: `bootstrap_digest.json` with SHA-256 digests of each secret.
 
 On startup, `g8eo` SecretManager validates that secrets match the bootstrap digest manifest. If a conflict occurs, startup fails hard with actionable error messages.

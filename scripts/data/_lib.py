@@ -48,7 +48,6 @@ PKI_DIR = Path(os.environ.get('G8E_PKI_DIR', _DEFAULT_PKI_DIR))
 SECRETS_DIR = Path(os.environ.get('G8E_SECRETS_DIR', _DEFAULT_SECRETS_DIR))
 CREDENTIALS_DIR = Path(os.environ.get('G8E_CREDENTIALS_DIR', _DEFAULT_CREDENTIALS_DIR))
 TRUST_BUNDLE_PATH = PKI_DIR / 'trust' / 'hub-bundle.pem'
-INTERNAL_AUTH_TOKEN_PATH = SECRETS_DIR / 'internal_auth_token'
 
 
 def _get_cli_cert() -> tuple[str, str] | None:
@@ -91,27 +90,8 @@ def get_auth_token() -> str:
 
     The wrapper gates `g8e data` on a valid operator session before invoking
     this script, so OPERATOR_SESSION_ID is expected to be present.
-    Operator calls use the internal auth token (see get_internal_auth_token).
     """
     return os.environ.get('OPERATOR_SESSION_ID', '')
-
-
-def get_internal_auth_token() -> str:
-    """Return the platform internal auth token.
-
-    The Operator (listen mode) authenticates every internal request with
-    `X-Internal-Auth`. The token is written by the Operator on first start to
-    $G8E_SECRETS_DIR/internal_auth_token (default: $PROJECT_ROOT/.g8e/secrets/).
-    Falls back to the G8E_INTERNAL_AUTH_TOKEN env var for test-runner contexts.
-    """
-    try:
-        if INTERNAL_AUTH_TOKEN_PATH.exists():
-            token = INTERNAL_AUTH_TOKEN_PATH.read_text().strip()
-            if token:
-                return token
-    except OSError:
-        pass
-    return os.environ.get('G8E_INTERNAL_AUTH_TOKEN', '')
 
 
 def get_auditor_hmac_key() -> str:

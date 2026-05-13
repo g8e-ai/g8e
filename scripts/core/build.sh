@@ -63,6 +63,7 @@ G8EE_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ee.log"
 OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-9000}"
 OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-9001}"
 OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-8080}"
+OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-8081}"
 OPERATOR_LISTEN_LOG_MAX_BACKUPS=5
 
 DEV_MODE=false
@@ -296,16 +297,11 @@ _start_g8ee() {
 
     echo "  Starting g8ee on port 8443 (HTTPS)..."
     _rotate_logs "$G8EE_LOG_FILE"
-    
-    # g8ee requires internal auth token and session encryption key from bootstrap
-    local auth_token
-    auth_token=$(cat "$OPERATOR_LISTEN_SECRETS_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
-    
+
     (
         cd "$PROJECT_ROOT/components/g8ee"
         export G8E_PKI_DIR="$OPERATOR_LISTEN_PKI_DIR"
         export G8E_SECRETS_DIR="$OPERATOR_LISTEN_SECRETS_DIR"
-        export G8E_INTERNAL_AUTH_TOKEN="$auth_token"
         export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
         export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
         export G8E_INTERNAL_HTTP_URL="https://localhost:9000"
@@ -370,10 +366,6 @@ _start_operator_listen() {
 
     _rotate_logs "$OPERATOR_LISTEN_LOG_FILE"
 
-    local auth_token
-    auth_token=$(cat "$OPERATOR_LISTEN_SECRETS_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
-
-    export G8E_INTERNAL_AUTH_TOKEN="$auth_token"
     export G8E_PKI_DIR="$OPERATOR_LISTEN_PKI_DIR"
     export G8E_SECRETS_DIR="$OPERATOR_LISTEN_SECRETS_DIR"
 
@@ -437,39 +429,8 @@ _stop_operator_listen() {
 }
 
 _sync_operator_binaries() {
-    echo "  Syncing operator binaries to blob store..."
-    local auth_token
-    auth_token=$(cat "$OPERATOR_LISTEN_SECRETS_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
-
-    if [ -z "$auth_token" ]; then
-        echo "  Warning: No internal auth token found, skipping binary sync."
-        return 0
-    fi
-
-    local bin_dir="$PROJECT_ROOT/components/g8eo/build"
-    if [ ! -d "$bin_dir" ]; then
-        echo "  No operator binaries found at $bin_dir, skipping sync."
-        return 0
-    fi
-    local trust_bundle="${G8E_TRUST_BUNDLE:-$OPERATOR_LISTEN_PKI_DIR/trust/hub-bundle.pem}"
-    if [ ! -f "$trust_bundle" ]; then
-        echo "  Warning: Operator trust bundle missing at $trust_bundle, skipping binary sync."
-        return 0
-    fi
-
-    for arch in amd64 arm64 386; do
-        local bin_path="$bin_dir/linux-$arch/g8e.operator"
-        if [ -f "$bin_path" ]; then
-            echo "    Uploading linux/$arch..."
-            curl -sf -o /dev/null \
-                -X PUT \
-                --cacert "$trust_bundle" \
-                -H 'Content-Type: application/octet-stream' \
-                -H "X-Internal-Auth: $auth_token" \
-                --data-binary "@$bin_path" \
-                "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/api/internal/blob/operator-binary/linux-$arch" || echo "      Warning: Failed to upload linux/$arch"
-        fi
-    done
+    echo "  Binary sync disabled - X-Internal-Auth and /api/internal/* routes removed"
+    return 0
 }
 
 _wait_operator_listen_healthy() {
@@ -537,14 +498,16 @@ _print_platform_info() {
     echo "  g8e Operator/protocol substrate ready"
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "  Operator HTTP API: https://localhost:$OPERATOR_LISTEN_HTTP_PORT"
-    echo "  Operator Pub/Sub:  wss://localhost:$OPERATOR_LISTEN_WSS_PORT"
-    echo "  Runtime dir:       $G8E_RUNTIME_DIR"
-    echo "  Protocol schemas:  shared/proto"
+    echo "  Operator mTLS API:     https://localhost:$OPERATOR_LISTEN_HTTP_PORT"
+    echo "  Operator Pub/Sub:       wss://localhost:$OPERATOR_LISTEN_WSS_PORT"
+    echo "  Bootstrap (device-link): https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT"
+    echo "  Public (browser/BYO):   https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT"
+    echo "  Runtime dir:            $G8E_RUNTIME_DIR"
+    echo "  Protocol schemas:       shared/proto"
     if _g8ee_running; then
-        echo "  Optional apps:     running (see ./g8e platform status)"
+        echo "  Optional apps:          running (see ./g8e platform status)"
     else
-        echo "  Optional apps:     not running (use ./g8e apps start to enable)"
+        echo "  Optional apps:          not running (use ./g8e apps start to enable)"
     fi
 }
 
@@ -695,9 +658,8 @@ if [[ "$COMMAND" == "wipe" ]]; then
     _sync_operator_binaries
 
     echo "Clearing app data from Operator listen mode..."
-    _wipe_trust_bundle="${G8E_TRUST_BUNDLE:-$OPERATOR_LISTEN_PKI_DIR/trust/hub-bundle.pem}"
-    curl -sf --cacert "$_wipe_trust_bundle" -X POST -H "X-Internal-Auth: $(cat "$OPERATOR_LISTEN_SECRETS_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r')" \
-        "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/api/internal/store/wipe" || echo "  Warning: wipe endpoint failed"
+    echo "  Warning: wipe endpoint removed - X-Internal-Auth and /api/internal/* routes deprecated"
+    echo "  Use './g8e platform reset' to wipe data volumes instead"
     echo ""
 
     for svc in "${WIPE_COMPONENTS[@]}"; do

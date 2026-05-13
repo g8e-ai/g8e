@@ -186,7 +186,9 @@ type Config struct {
 // LoadListen creates configuration for --listen mode.
 // Listen mode skips all operator-mode validation — no API key, no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
-func LoadListen(wssPort, httpPort, bootstrapPort int, dataDir, pkiDir, secretsDir string, passkeyRpID, passkeyRpName string) (*Config, error) {
+// allowTestPortZero should be true only when called from Go tests; when false,
+// port 0 is rejected to prevent dynamic port assignment in production.
+func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir string, passkeyRpID, passkeyRpName string, allowTestPortZero bool) (*Config, error) {
 	if dataDir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -208,14 +210,35 @@ func LoadListen(wssPort, httpPort, bootstrapPort int, dataDir, pkiDir, secretsDi
 		}
 		secretsDir = filepath.Join(cwd, ".g8e", "secrets")
 	}
+
+	// Reject port 0 in production (only allowed for Go tests)
+	// This check must happen before default assignment to validate actual input
+	if !allowTestPortZero {
+		if wssPort == 0 {
+			return nil, fmt.Errorf("wssPort cannot be 0 in production")
+		}
+		if httpPort == 0 {
+			return nil, fmt.Errorf("httpPort cannot be 0 in production")
+		}
+		if bootstrapPort == 0 {
+			return nil, fmt.Errorf("bootstrapPort cannot be 0 in production")
+		}
+		if publicPort == 0 {
+			return nil, fmt.Errorf("publicPort cannot be 0 in production")
+		}
+	}
+
 	if wssPort <= 0 {
-		wssPort = 0 // use dynamic port if <= 0
+		wssPort = 9001 // default WSS port
 	}
 	if httpPort <= 0 {
-		httpPort = 0 // use dynamic port if <= 0
+		httpPort = 9000 // default HTTPS API port
 	}
 	if bootstrapPort <= 0 {
-		bootstrapPort = 0 // use dynamic port if <= 0
+		bootstrapPort = 8080 // default bootstrap port
+	}
+	if publicPort <= 0 {
+		publicPort = 8081 // default public port
 	}
 	if passkeyRpID == "" {
 		passkeyRpID = "localhost"
@@ -223,10 +246,11 @@ func LoadListen(wssPort, httpPort, bootstrapPort int, dataDir, pkiDir, secretsDi
 	if passkeyRpName == "" {
 		passkeyRpName = "g8e"
 	}
-	publicPort := 0 // use dynamic port
 
 	return &Config{
 		ComponentName: "g8eo-listen",
+		PKIDir:        pkiDir,     // Also set top-level for services that use Config.PKIDir
+		SecretsDir:    secretsDir, // Also set top-level for services that use Config.SecretsDir
 		Listen: ListenConfig{
 			Enabled:       true,
 			WSSPort:       wssPort,

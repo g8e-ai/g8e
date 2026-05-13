@@ -555,9 +555,7 @@ class TestPubSubClientCoverage:
         args, kwargs = mock_session.ws_connect.call_args
         assert args[0].startswith("wss://")
 
-    async def test_ensure_ws_with_token(self, disconnected_client):
-        """Test token inclusion in URL and headers."""
-        disconnected_client._internal_auth_token = "secret-token"
+    async def test_ensure_ws_uses_mtls_without_internal_token(self, disconnected_client):
         mock_session = MagicMock(spec=aiohttp.ClientSession)
         mock_ws = AsyncMock(spec=aiohttp.ClientWebSocketResponse)
         mock_ws.closed = False
@@ -573,8 +571,8 @@ class TestPubSubClientCoverage:
             await disconnected_client._ensure_ws()
 
         args, kwargs = mock_session.ws_connect.call_args
-        assert "token=secret-token" in args[0]
-        assert kwargs["headers"]["X-Internal-Auth"] == "secret-token"
+        assert "token=" not in args[0]
+        assert kwargs["headers"] == {}
 
     async def test_ws_reader_unknown_event_type(self, connected_client, task_tracker):
         """Test logging of unknown wire event types."""

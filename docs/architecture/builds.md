@@ -16,7 +16,7 @@ This document explains the g8e component dependency chain, the lifecycle of a bu
 
 g8e is architected as a clean split between a mandatory **Substrate** and an optional **Application Layer**.
 
-- **Substrate (Mandatory)**: The Operator (`g8eo`) in `--listen` mode is the foundational service. It generates the platform CA and internal auth tokens and provides the protocol API.
+- **Substrate (Mandatory)**: The Operator (`g8eo`) in `--listen` mode is the foundational service. It generates the platform CA and foundational secrets and provides the protocol API.
 - **Application Layer (Optional)**: Optional adapters like the Dashboard (`g8ed`) and Engine (`g8ee`) consume the substrate's protocol surface.
 - **Host-Native Execution**: Core components run as native processes on the host.
 - **Zero-Config Discovery**: Services use a standardized local runtime directory (`.g8e/`) for discovery and configuration sharing.
@@ -50,11 +50,11 @@ graph TD
 ### 1. Root of Trust Generation
 On the first boot (or after a `clean`), the Operator in listen mode generates:
 - **ECDSA P-384 CA Hierarchy**: A root CA, intermediate CAs, and trust bundles stored in `.g8e/pki/`.
-- **Internal Auth Token**: A cryptographically secure token (`internal_auth_token`) used for service-to-service authentication.
+- **Session Key**: A cryptographically secure key (`session_encryption_key`) used for encrypting session state.
 - **Server Certificates**: Leaf certificates for the API and Dashboard.
 
 ### 2. Service Initialization (Optional)
-- **Engine (g8ee)**: Starts using its local Python virtual environment. It reads the `internal_auth_token` and trusts the `ca.crt` to communicate with the Operator's internal HTTPS API.
+- **Engine (g8ee)**: Starts using its local Python virtual environment. It uses mTLS and URI SAN identity to communicate with the Operator's internal HTTPS API.
 - **Dashboard (g8ed)**: Starts using Node.js. It requires `cap_net_bind_service` on the `node` binary to bind to privileged ports (80/443).
 
 ### 3. Asynchronous Convergence
@@ -82,7 +82,7 @@ Data is organized within the `.g8e/` directory to balance persistence with the a
 | Path | Purpose | Wipe Policy |
 | :--- | :--- | :--- |
 | **`.g8e/pki/`** | PKI hierarchy (CA, intermediates, trust bundles) | **Preserved** by `reset` and `wipe`. |
-| **`.g8e/secrets/`** | Bootstrap secrets (internal auth token, session key) with tamper-evidence manifest | Wiped by `reset`, preserved by `wipe`. |
+| **`.g8e/secrets/`** | Bootstrap secrets (session key) with tamper-evidence manifest | Wiped by `reset`, preserved by `wipe`. |
 | **`.g8e/data/`** | SQLite DB (`g8e.db`) and blob storage | Wiped by `reset`. |
 | **`.g8e/logs/`** | Service logs (rotated automatically) | Cleared by `clean`. |
 | **`.g8e/pids/`** | Process ID files for lifecycle management | Cleared on `stop`. |

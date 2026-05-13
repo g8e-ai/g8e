@@ -104,7 +104,7 @@ func TestG8eoService_Start_AlreadyRunning(t *testing.T) {
 }
 
 func TestG8eoService_ProductionSentinelConfig(t *testing.T) {
-	cfg := productionSentinelConfig()
+	cfg := ProductionSentinelConfig()
 
 	assert.True(t, cfg.Enabled, "production sentinel must be enabled")
 	assert.True(t, cfg.StrictMode, "production sentinel must use strict mode")

@@ -19,7 +19,6 @@ from fastapi import Request
 from app.constants import (
     HTTP_FORWARDED_FOR_HEADER,
     HTTP_USER_AGENT_HEADER,
-    INTERNAL_AUTH_HEADER,
     PROXY_ORGANIZATION_ID_HEADER,
     PROXY_USER_EMAIL_HEADER,
     PROXY_USER_ID_HEADER,
@@ -386,7 +385,6 @@ def _make_internal_request(client_ip, path, headers=None, settings_token=None):
     request.app = MagicMock()
     if settings_token is not None:
         settings = MagicMock()
-        settings.auth.internal_auth_token = settings_token
         request.app.state.settings = settings
     else:
         del request.app.state.settings
@@ -407,21 +405,16 @@ class TestRequireProxyAuth:
         assert result.organization_id == "org-xyz"
         assert result.auth_method == AuthMethod.PROXY
 
-    async def test_internal_token_with_g8e_headers_return_authenticated_user(self, mock_request):
-        token = "internal-secret"
+    async def test_g8e_headers_without_proxy_identity_raise_authentication_error(self, mock_request):
         settings = MagicMock()
-        settings.auth.internal_auth_token = token
         mock_request.headers = {
             **TEST_G8E_HEADERS,
-            INTERNAL_AUTH_HEADER: token,
             G8eHeaders.USER_ID.lower(): "internal-user",
             G8eHeaders.WEB_SESSION_ID.lower(): "sess-abc",
             G8eHeaders.ORGANIZATION_ID.lower(): "org-internal",
         }
-        result = await require_proxy_auth(mock_request, settings)
-        assert result.uid == "internal-user"
-        assert result.web_session_id == "sess-abc"
-        assert result.auth_method == AuthMethod.INTERNAL
+        with pytest.raises(AuthenticationError, match="Authentication required"):
+            await require_proxy_auth(mock_request, settings)
 
     async def test_no_auth_raises_authentication_error(self, mock_request, mock_settings):
         mock_request.headers = {}

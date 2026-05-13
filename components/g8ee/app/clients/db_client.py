@@ -34,7 +34,7 @@ import aiohttp
 
 from app.models.settings import ListenSettings
 from app.services.infra.settings_service import SettingsService
-from app.constants import BatchWriteOpType, INTERNAL_AUTH_HEADER, OPERATOR_SESSION_ID_HEADER, OPERATOR_API_KEY_HEADER
+from app.constants import BatchWriteOpType, OPERATOR_SESSION_ID_HEADER, OPERATOR_API_KEY_HEADER
 from app.errors import (
     DatabaseError,
     ErrorCode,
@@ -54,18 +54,12 @@ class DBClient:
     def __init__(
         self,
         ca_cert_path: str,
-        internal_auth_token: str | None = None,
         operator_session_id: str | None = None,
         operator_api_key: str | None = None,
         listen_settings: ListenSettings | None = None,
         client_cert_path: str | None = None,
         client_key_path: str | None = None,
     ) -> None:
-        if internal_auth_token is None:
-            service = SettingsService()
-            local_settings = service.get_local_settings()
-            internal_auth_token = local_settings.auth.internal_auth_token
-
         if listen_settings is None:
             service = SettingsService()
             listen_settings = ListenSettings.from_bootstrap(service)
@@ -74,7 +68,6 @@ class DBClient:
         self._ca_cert_path = ca_cert_path
         self._client_cert_path = client_cert_path
         self._client_key_path = client_key_path
-        self._internal_auth_token = internal_auth_token
         self._operator_session_id = operator_session_id
         self._operator_api_key = operator_api_key
         self._session: aiohttp.ClientSession | None = None

@@ -19,7 +19,6 @@ from fastapi import Request
 from app.constants import (
     HTTP_FORWARDED_FOR_HEADER,
     HTTP_USER_AGENT_HEADER,
-    INTERNAL_AUTH_HEADER,
     PROXY_ORGANIZATION_ID_HEADER,
     PROXY_USER_EMAIL_HEADER,
     PROXY_USER_ID_HEADER,
@@ -33,15 +32,6 @@ from app.models.settings import G8eePlatformSettings
 from app.models.state import G8eeAppState
 
 logger = logging.getLogger(__name__)
-
-
-def verify_internal_auth_token(request: Request, settings: G8eePlatformSettings) -> bool:
-    """Verify the internal authentication token from headers."""
-    provided = request.headers.get(INTERNAL_AUTH_HEADER)
-    expected = settings.auth.internal_auth_token
-    if provided and expected:
-        return hmac.compare_digest(provided, expected)
-    return False
 
 
 def is_infrastructure_health_check_ip(ip: str) -> bool:
@@ -71,7 +61,7 @@ def is_infrastructure_health_check_ip(ip: str) -> bool:
 
 
 async def authenticate_proxy_or_internal(request: Request, settings: G8eePlatformSettings) -> AuthenticatedUser:
-    """Authenticate the user via proxy headers or internal auth token."""
+    """Authenticate the user via proxy headers."""
     proxy_user_id = request.headers.get(PROXY_USER_ID_HEADER)
     proxy_user_email = request.headers.get(PROXY_USER_EMAIL_HEADER)
     proxy_org_id = request.headers.get(PROXY_ORGANIZATION_ID_HEADER)
@@ -92,26 +82,5 @@ async def authenticate_proxy_or_internal(request: Request, settings: G8eePlatfor
             organization_id=proxy_org_id,
             auth_method=AuthMethod.PROXY,
         )
-
-    if verify_internal_auth_token(request, settings):
-        g8e_user_id = request.headers.get(G8eHeaders.USER_ID.lower())
-        g8e_session_id = request.headers.get(G8eHeaders.WEB_SESSION_ID.lower())
-        g8e_org_id = request.headers.get(G8eHeaders.ORGANIZATION_ID.lower())
-
-        if g8e_user_id:
-            logger.info(
-                "[g8ee] Authenticated via internal auth token",
-                extra={
-                    "user_id": g8e_user_id,
-                    "web_session_id": g8e_session_id[:12] + "..." if g8e_session_id else None
-                }
-            )
-            return AuthenticatedUser(
-                uid=g8e_user_id,
-                user_id=g8e_user_id,
-                organization_id=g8e_org_id,
-                web_session_id=g8e_session_id,
-                auth_method=AuthMethod.INTERNAL,
-            )
 
     raise AuthenticationError("Authentication required", component=ComponentName.G8EE)

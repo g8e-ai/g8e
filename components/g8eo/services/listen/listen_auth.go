@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,61 +26,22 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 )
 
-// AuthService handles internal authentication for the Listen service.
+// AuthService handles authentication for the Listen service.
 type AuthService struct {
-	db            *ListenDBService
-	pki           *PKIAuthority
-	logger        *slog.Logger
-	secretsDir    string
-	tokenProvider func() string
+	db         *ListenDBService
+	pki        *PKIAuthority
+	logger     *slog.Logger
+	secretsDir string
 }
 
 // NewAuthService creates a new AuthService.
 func NewAuthService(db *ListenDBService, pki *PKIAuthority, logger *slog.Logger, secretsDir string) *AuthService {
-	s := &AuthService{
+	return &AuthService{
 		db:         db,
 		pki:        pki,
 		logger:     logger,
 		secretsDir: secretsDir,
 	}
-	s.tokenProvider = s.defaultTokenProvider
-	return s
-}
-
-// defaultTokenProvider is the default implementation that checks env, SSL volume, and DB.
-func (s *AuthService) defaultTokenProvider() string {
-	// 1. Try environment variable first (deployer override)
-	if token := os.Getenv(string(constants.EnvVar.InternalAuthToken)); token != "" {
-		return token
-	}
-
-	// 2. Try secrets volume file (authoritative source for bootstrap secrets)
-	tokenPath := filepath.Join(s.secretsDir, "internal_auth_token")
-	if tokenBytes, err := os.ReadFile(tokenPath); err == nil {
-		if token := strings.TrimSpace(string(tokenBytes)); token != "" {
-			return token
-		}
-	}
-
-	// 3. Try to load from DB (fallback)
-	doc, err := s.db.DocGet(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings))
-	if err != nil || doc == nil {
-		return ""
-	}
-
-	if tokenVal, ok := doc.Data["internal_auth_token"]; ok {
-		var val string
-		if err := json.Unmarshal(tokenVal, &val); err == nil {
-			return val
-		}
-	}
-
-	return ""
-}
-
-// GetInternalAuthToken retrieves the current internal auth token via the configured provider.
-func (s *AuthService) GetInternalAuthToken() string {
-	return s.tokenProvider()
 }
 
 // ValidateOperatorSession checks if a session ID is valid and returns the operator document.
@@ -229,6 +188,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		} else {
 			// [PIVOT] System/App Authentication via URI SAN (Phase 6)
 			// If no session ID is provided, we check if the certificate belongs to a trusted system app.
+			// Note: /_query requires operator session authentication - no app bypass allowed.
 			if len(r.TLS.PeerCertificates) > 0 {
 				cert := r.TLS.PeerCertificates[0]
 				for _, uri := range cert.URIs {

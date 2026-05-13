@@ -43,7 +43,6 @@
   "http.x-forwarded-proto":          "X-Forwarded-Proto",
   "http.x-forwarded-host":           "X-Forwarded-Host",
   "http.x-forwarded-for":            "X-Forwarded-For",
-  "http.x-internal-auth":            "X-Internal-Auth",
   "http.x-session-id":               "X-Session-Id",
   "http.x-request-timestamp":        "X-Request-Timestamp",
   "http.x-proxy-user-id":            "X-Proxy-User-Id",

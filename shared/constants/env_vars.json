@@ -16,7 +16,6 @@
     "G8E_LLM_COMMAND_GEN_PASSES": "llm.command_gen_passes"
   },
   "auth": {
-    "G8E_INTERNAL_AUTH_TOKEN": "auth.internal_auth_token",
     "G8E_SESSION_ENCRYPTION_KEY": "auth.session_encryption_key",
     "G8E_API_KEY": "auth.g8e_api_key"
   },

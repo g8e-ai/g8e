@@ -30,7 +30,7 @@ The following are in scope for security reports:
 - **Operator (g8eo)** -- Execution plane, L1 technical bedrock enforcement, and output scrubbing.
 - **Governance layers** -- L1 (Hard Gates), L2 (Consensus), and L3 (Human-in-the-loop).
 - **Universal Envelope** -- Cryptographic binding of identity, context, and governance metadata.
-- **Inter-service communication** -- mTLS (TLS 1.3) and `X-Internal-Auth` token enforcement.
+- **Inter-service communication** -- mTLS (TLS 1.3) only. `X-Internal-Auth` and internal-origin trust have been removed in favor of strict workload identity.
 - **Local-First Audit Architecture (LFAA)** -- Encrypted SQLite audit vaults and the Git ledger.
 
 The following are out of scope:

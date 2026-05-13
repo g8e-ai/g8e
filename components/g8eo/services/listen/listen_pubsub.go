@@ -26,6 +26,9 @@ import (
 	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1"
 )
 
+// MessageHandler is a callback for in-process message processing (e.g., governance command handling).
+type MessageHandler func(channel string, data []byte)
+
 // PubSubBroker manages WebSocket-based publish/subscribe channels.
 type PubSubBroker struct {
 	logger *slog.Logger
@@ -33,6 +36,10 @@ type PubSubBroker struct {
 	mu          sync.RWMutex
 	subscribers map[string]map[*wsSubscriber]struct{}
 	patterns    map[string]map[*wsSubscriber]struct{}
+
+	// In-process handlers for governance command processing
+	handlersMu sync.RWMutex
+	handlers   map[string]MessageHandler
 }
 
 // wsSubscriber represents a single WebSocket connection.
@@ -87,6 +94,7 @@ func NewPubSubBroker(logger *slog.Logger) *PubSubBroker {
 		logger:      logger,
 		subscribers: make(map[string]map[*wsSubscriber]struct{}),
 		patterns:    make(map[string]map[*wsSubscriber]struct{}),
+		handlers:    make(map[string]MessageHandler),
 	}
 }
 
@@ -140,7 +148,40 @@ func (b *PubSubBroker) Publish(channel string, data []byte) int {
 			count++
 		}
 	}
+
+	// Dispatch to in-process handlers (governance command processing)
+	b.handlersMu.RLock()
+	if handler, ok := b.handlers[channel]; ok {
+		b.handlersMu.RUnlock()
+		handler(channel, data)
+		count++
+	} else {
+		b.handlersMu.RUnlock()
+	}
+
 	return count
+}
+
+// RegisterHandler registers an in-process handler for a channel.
+// Used for governance command processing in listen mode.
+// Returns true if registered, false if a handler already exists for the channel.
+func (b *PubSubBroker) RegisterHandler(channel string, handler func(string, []byte)) bool {
+	b.handlersMu.Lock()
+	defer b.handlersMu.Unlock()
+	if _, exists := b.handlers[channel]; exists {
+		return false
+	}
+	b.handlers[channel] = handler
+	b.logger.Info("Registered in-process handler for channel", "channel", channel)
+	return true
+}
+
+// UnregisterHandler removes an in-process handler for a channel.
+func (b *PubSubBroker) UnregisterHandler(channel string) {
+	b.handlersMu.Lock()
+	defer b.handlersMu.Unlock()
+	delete(b.handlers, channel)
+	b.logger.Info("Unregistered in-process handler for channel", "channel", channel)
 }
 
 // HandleWebSocket upgrades the HTTP connection and passes it to a new session handler.

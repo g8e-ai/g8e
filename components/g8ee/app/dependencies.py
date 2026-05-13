@@ -66,13 +66,7 @@ from .services.operator.session_auth_listener import SessionAuthListener
 from .services.auth.api_key_service import ApiKeyService
 from .services.auth.certificate_service import CertificateService
 from .services.infra.settings_service import SettingsService
-from app.security.auth import verify_internal_auth_token
 logger = logging.getLogger(__name__)
-
-
-def _verify_internal_auth_token(request: Request, settings: G8eePlatformSettings) -> bool:
-    return verify_internal_auth_token(request, settings)
-
 
 __all__ = [
     "get_g8e_http_context",

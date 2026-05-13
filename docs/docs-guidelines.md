@@ -68,7 +68,6 @@ docs/
 | Pub/sub channel names and wire format | `docs/components/g8eo.md` | `g8ed.md`, `g8ee.md`, `testing.md` |
 | KV key namespace and patterns | `docs/components/g8eo.md` | `g8ed.md`, `g8ee.md` |
 | `G8eHttpContext` internal HTTP header full listing | `docs/components/g8ed.md` | `g8ee.md` cross-references; do not restate in other component docs |
-| `X-Internal-Auth` shared secret (generation and discovery) | `docs/architecture/security.md` | `developer.md`, `g8eo.md`, `g8ee.md`, `g8ed.md` |
 | Heartbeat end-to-end flow | `docs/components/g8ed.md` | `g8eo.md`, `g8ee.md` |
 | Shared constants and models (`shared/`) | `docs/developer.md` | `testing.md` |
 | Universal code quality rules | `docs/developer.md` | do not restate in component docs |

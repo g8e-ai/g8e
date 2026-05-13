@@ -4,14 +4,19 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
+	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/mappings"
+	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/services/storage"
+	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 )
 
 type L3Verifier interface {
@@ -24,137 +29,185 @@ type ExecutionHandler interface {
 	ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) error
 }
 
+type TransactionAuditStore interface {
+	DocSet(collection, id string, data json.RawMessage) error
+}
+
 // Warden is the execution gateway. It is the final stop for all UAP envelopes.
-// It ensures that consensus has been reached and quorum is met before execution.
 type Warden struct {
-	Logger           *slog.Logger
-	TrustedNodes     map[string]ed25519.PublicKey
-	Execution        *execution.ExecutionService
-	AuditVault       *storage.AuditVaultService
-	L3Verifier       L3Verifier
-	Ctx              context.Context
-	ExecutionHandler ExecutionHandler
+	Logger            *slog.Logger
+	TrustedNodes      map[string]ed25519.PublicKey
+	Execution         *execution.ExecutionService
+	AuditVault        *storage.AuditVaultService
+	AuditStore        TransactionAuditStore
+	L3Verifier        L3Verifier
+	StateRootProvider StateRootProvider
+	Ctx               context.Context
+	ExecutionHandler  ExecutionHandler
+
+	// Warden's own signing identity for ActionReceipts
+	SigningKey ed25519.PrivateKey
+	KeyID      string
 }
 
-// AuthorizeExecution is the Warden's gatekeeper function.
-func (w *Warden) AuthorizeExecution(env *uap.UAPEnvelope) error {
-	// 1. Check L1 Technical Bedrock
-	if env.Governance != nil && env.Governance.L1 != nil && !env.Governance.L1.Validated {
-		w.LogToSQLite(env, "BLOCKED_BY_L1")
-		return fmt.Errorf("execution blocked: L1 validation failed: %v", env.Governance.L1.Violations)
-	}
-
-	// 2. Count Valid Signatures (L2 Consensus)
-	validApproveVotes := 0
-	if env.Governance != nil && env.Governance.L2 != nil {
-		// In proto-first, we use TribunalSignature as proof of consensus
-		// For transition, we check if ANY agent ID signed it
-		if env.Governance.L2.TribunalSignature != "" {
-			for _, agentID := range env.Governance.L2.AgentIds {
-				if w.VerifySignature(agentID, env.Governance.L2.TribunalSignature, env.Id, true) {
-					validApproveVotes++
-				}
-			}
-		}
-	}
-
-	// 3. Enforce Quorum (Placeholder: 1 vote required during transition)
-	requiredVotes := 1
-	if validApproveVotes < requiredVotes {
-		w.LogToSQLite(env, "BLOCKED_INSUFFICIENT_QUORUM")
-		return errors.New("execution blocked: required consensus votes not met")
-	}
-
-	// 4. Verify L3 Human Proof (Sovereign Authority)
-	if w.IsMutation(env.ActionType) {
-		if env.Governance == nil || env.Governance.L3 == nil || env.Governance.L3.HumanSignature == "" {
-			w.LogToSQLite(env, "BLOCKED_L3_MISSING")
-			return errors.New("execution blocked: L3 human signature missing for mutation")
-		}
-		if w.L3Verifier != nil {
-			ok, err := w.L3Verifier.VerifyL3Proof(env.OperatorId, env.Id, env.Governance.L3.HumanSignature, env.Governance.L3.PublicKey)
-			if err != nil || !ok {
-				w.LogToSQLite(env, "BLOCKED_L3_INVALID")
-				return fmt.Errorf("execution blocked: L3 human proof failed: %v", err)
-			}
-		}
-	}
-
-	// 5. Execute and Commit Receipt
-	w.LogToSQLite(env, "EXECUTED")
-
-	return nil
-}
-
-// VerifySignature checks a node's signature on the message ID and decision.
-func (w *Warden) VerifySignature(nodeID, signature, messageID string, decision bool) bool {
-	pub, ok := w.TrustedNodes[nodeID]
-	if !ok {
-		return false
-	}
-	if signature == "" || signature == "UNSIGNED" {
-		return false
-	}
-	sigBytes, err := hex.DecodeString(signature)
-	if err != nil {
-		return false
-	}
-	// Verify that the node signed (messageID | decision)
-	payload := fmt.Sprintf("%s|%v", messageID, decision)
-	return ed25519.Verify(pub, []byte(payload), sigBytes)
-}
-
-// IsMutation returns true if the action type modifies the system state.
-func (w *Warden) IsMutation(actionType string) bool {
-	switch actionType {
-	case "EXECUTE_BASH", "FILE_EDIT", "RESTORE_FILE", "SHUTDOWN":
-		return true
-	default:
-		return false
-	}
-}
-
-// LogToSQLite records the UAP transaction result in the audit vault.
-func (w *Warden) LogToSQLite(env *uap.UAPEnvelope, status string) {
-	if w.AuditVault == nil {
-		return
-	}
-
-	// For proto-first, we use fields directly
-	var cmdData string
-	if env.IntentData != nil && len(env.IntentData.Fields) > 0 {
-		jsonBytes, _ := env.IntentData.MarshalJSON()
-		cmdData = string(jsonBytes)
-	} else {
-		cmdData = string(env.Payload)
-	}
-
-	event := &storage.Event{
-		OperatorSessionID: env.OperatorId,
-		Timestamp:         env.Timestamp.AsTime(),
-		Type:              storage.EventType("uap_transaction"),
-		ContentText:       fmt.Sprintf("UAP Action: %s on %s (Status: %s)", env.ActionType, env.TargetResource, status),
-		CommandRaw:        cmdData,
-	}
-
-	if _, err := w.AuditVault.RecordEvent(event); err != nil {
-		if w.Logger != nil {
-			w.Logger.Error("Failed to record UAP transaction in audit vault", "error", err)
-		}
-	}
-}
-
-// ExecuteVerifiedTransaction executes a verified transaction through the execution handler.
-// This makes Warden the execution boundary - mutations only execute through this method.
-func (w *Warden) ExecuteVerifiedTransaction(vt *VerifiedTransaction, cmdMsg interface{}) error {
+// Execute is the single execution boundary for all verified transactions.
+// It dispatches to the registered handler, captures status, writes a console_audit row,
+// signs and persists an ActionReceipt, and returns it.
+func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg interface{}) (*operatorv1.ActionReceipt, error) {
 	if w.ExecutionHandler == nil {
-		return errors.New("Warden ExecutionHandler not set")
+		return nil, errors.New("Warden ExecutionHandler not set")
+	}
+	if len(w.SigningKey) == 0 {
+		return nil, errors.New("Warden signing key missing - cannot execute mutations")
+	}
+
+	stateBefore := ""
+	if w.StateRootProvider != nil {
+		var err error
+		stateBefore, err = w.StateRootProvider.GetCurrentStateRoot()
+		if err != nil {
+			w.Logger.Warn("Failed to get state root before execution", "error", err)
+		}
 	}
 
 	// Map action type to event type for handler lookup
 	eventType := mappings.MapActionTypeToEventType(vt.ActionType)
 
-	// Invoke the handler through Warden (execution boundary)
-	w.Logger.Info("Warden executing transaction", "event_type", eventType, "message_id", vt.Envelope.Id)
-	return w.ExecutionHandler.ExecuteVerifiedTransaction(w.Ctx, eventType, cmdMsg)
+	w.Logger.Info("Warden executing transaction",
+		"message_id", vt.Envelope.Id,
+		"action_type", vt.ActionType,
+		"event_type", eventType)
+
+	// Execute through the handler
+	err := w.ExecutionHandler.ExecuteVerifiedTransaction(ctx, eventType, cmdMsg)
+
+	status := operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
+	summary := "completed"
+	if err != nil {
+		status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
+		summary = fmt.Sprintf("failed: %v", err)
+	}
+
+	stateAfter := ""
+	if w.StateRootProvider != nil {
+		var err error
+		stateAfter, err = w.StateRootProvider.GetCurrentStateRoot()
+		if err != nil {
+			w.Logger.Warn("Failed to get state root after execution", "error", err)
+		}
+	}
+
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId:    vt.Envelope.Id,
+		TransactionHash:  vt.Envelope.TransactionHash,
+		Status:           status,
+		ResultSummary:    summary,
+		StateRootBefore:  stateBefore,
+		StateRootAfter:   stateAfter,
+		ExecutedAtUnixMs: time.Now().UnixMilli(),
+		SignerKeyId:      w.KeyID,
+	}
+
+	// Sign the receipt
+	sig, signErr := w.signReceipt(receipt)
+	if signErr != nil {
+		w.Logger.Error("Failed to sign action receipt", "error", signErr, "message_id", vt.Envelope.Id)
+		// We still have the execution result, but the receipt is broken
+	} else {
+		receipt.Signature = sig
+	}
+
+	// Persist to audit
+	w.LogReceipt(vt.Envelope, receipt)
+
+	return receipt, err
+}
+
+func (w *Warden) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
+	if len(w.SigningKey) == 0 {
+		return "", errors.New("signing key missing")
+	}
+
+	// Canonical serialization for signing (simplified for now: pipe-delimited)
+	payload := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%d|%s",
+		r.TransactionId,
+		r.TransactionHash,
+		int32(r.Status),
+		r.ResultSummary,
+		r.StateRootBefore,
+		r.StateRootAfter,
+		r.ExecutedAtUnixMs,
+		r.SignerKeyId,
+	)
+
+	sig := ed25519.Sign(w.SigningKey, []byte(payload))
+	return hex.EncodeToString(sig), nil
+}
+
+// LogReceipt records the signed action receipt in the audit vault and console_audit.
+func (w *Warden) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) {
+	w.logReceiptDocument(env, r)
+
+	if w.AuditVault == nil {
+		return
+	}
+
+	event := &storage.Event{
+		OperatorSessionID: env.OperatorId,
+		Timestamp:         time.Now(),
+		Type:              storage.EventType("action_receipt"),
+		ContentText:       fmt.Sprintf("ActionReceipt: %s (Status: %s, Summary: %s)", r.TransactionId, r.Status, r.ResultSummary),
+		CommandRaw:        fmt.Sprintf("tx_hash: %s, state_before: %s, state_after: %s", r.TransactionHash, r.StateRootBefore, r.StateRootAfter),
+	}
+
+	if _, err := w.AuditVault.RecordEvent(event); err != nil {
+		if w.Logger != nil {
+			w.Logger.Error("Failed to record ActionReceipt in audit vault", "error", err)
+		}
+	}
+}
+
+func (w *Warden) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) {
+	if w.AuditStore == nil || env == nil {
+		return
+	}
+
+	record := models.ActionReceiptRecord{
+		TransactionID:     r.TransactionId,
+		TransactionHash:   r.TransactionHash,
+		OperatorID:        env.OperatorId,
+		OperatorSessionID: env.OperatorSessionId,
+		ActionType:        env.ActionType,
+		TargetResource:    env.TargetResource,
+		Status:            r.Status.String(),
+		ResultSummary:     r.ResultSummary,
+		StateRootBefore:   r.StateRootBefore,
+		StateRootAfter:    r.StateRootAfter,
+		ExecutedAt:        time.UnixMilli(r.ExecutedAtUnixMs),
+		SignerKeyID:       r.SignerKeyId,
+		Signature:         r.Signature,
+		Timestamp:         time.Now().UTC(),
+	}
+
+	body, err := json.Marshal(record)
+	if err != nil {
+		if w.Logger != nil {
+			w.Logger.Error("Failed to marshal action receipt record", "error", err, "message_id", r.TransactionId)
+		}
+		return
+	}
+
+	if err := w.AuditStore.DocSet(string(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
+		if w.Logger != nil {
+			w.Logger.Error("Failed to record action receipt document", "error", err, "message_id", r.TransactionId)
+		}
+	}
+}
+
+// NoOpL3Verifier is an L3 verifier that always returns true.
+// Used for outbound mode where L3 verification happens at the platform level.
+type NoOpL3Verifier struct{}
+
+func (n *NoOpL3Verifier) VerifyL3Proof(userID, messageID, signatureHex, pubKeyHex string) (bool, error) {
+	return true, nil
 }

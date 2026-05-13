@@ -39,27 +39,20 @@ case "$TOP" in
 
         _trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
         _bootstrap_url="${G8E_BOOTSTRAP_URL:-https://localhost:8080}"
-        _app_cert="$G8E_PKI_DIR_HOST/issued/apps/g8ee.crt"
-        _app_key="$G8E_PKI_DIR_HOST/issued/apps/g8ee.key"
 
         if [[ ! -f "$_trust_bundle" ]]; then
             echo "[g8e] Trust bundle not found at $_trust_bundle — start the platform first: ./g8e platform start" >&2
             exit 1
         fi
-        if [[ ! -f "$_app_cert" || ! -f "$_app_key" ]]; then
-            echo "[g8e] Platform app certificate not found — start the platform first: ./g8e platform start" >&2
-            exit 1
-        fi
 
-        # 1. Create a single-use device-link token — server resolves email to user_id
-        echo "[g8e] Creating device-link token..."
+        # 1. Request a device-link token via bootstrap port (unauthenticated)
+        echo "[g8e] Requesting device-link token..."
         _fingerprint=$(echo "g8e-cli-$(hostname)-$(whoami)" | sha256sum | awk '{print $1}')
         _dl_body=$(python3 -c "import json,sys; print(json.dumps({'email':sys.argv[1],'name':'cli-'+__import__('socket').gethostname(),'max_uses':2}))" "$_login_email")
         _dl_resp=$( curl -sS --cacert "$_trust_bundle" \
-            --cert "$_app_cert" --key "$_app_key" \
             -X POST -H "Content-Type: application/json" \
             -d "$_dl_body" \
-            "$OPERATOR_HTTP_URL/api/device-links" 2>&1 )
+            "$_bootstrap_url/api/auth/device-link/request" 2>&1 )
         _dl_token=$(echo "$_dl_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('token',''))" 2>/dev/null)
         _login_user_id=$(echo "$_dl_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('user_id',''))" 2>/dev/null)
         if [[ -z "$_dl_token" ]]; then

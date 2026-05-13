@@ -17,6 +17,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -741,6 +742,12 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 
 	// CSR-based enrollment
 	if req.CSR != "" {
+		// Basic CSR validation
+		block, _ := pem.Decode([]byte(req.CSR))
+		if block == nil || block.Type != "CERTIFICATE REQUEST" {
+			return nil, fmt.Errorf("invalid CSR PEM format")
+		}
+
 		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, linkData.OrganizationID, operator.ID, sessionID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign operator CSR: %w", err)

@@ -353,7 +353,7 @@ ANTHROPIC_CLAUDE_HAIKU_4_5      = "claude-haiku-4-5"
 
 GEMINI_3_1_PRO                  = "gemini-3.1-pro-preview"
 GEMINI_3_1_PRO_CUSTOM_TOOLS     = "gemini-3.1-pro-preview-customtools"
-GEMINI_3_1_FLASH_LITE           = "gemini-3.1-flash-lite-preview"
+GEMINI_3_1_FLASH_LITE           = "gemini-3.1-flash-lite"
 GEMINI_3_FLASH                  = "gemini-3-flash-preview"
 
 OLLAMA_QWEN3_5_122B             = "qwen3.5:122b"
