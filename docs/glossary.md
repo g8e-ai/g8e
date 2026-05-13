@@ -408,7 +408,7 @@ The remote LLM inference component. g8e supports any remote Ollama server that p
 
 The language-agnostic, platform-agnostic execution binary that runs on target systems and receives commands from the g8e control plane. The current ~4MB Go binary (`g8eo`) is the reference implementation for Linux and macOS. When running in `--listen` mode, the Operator serves as the platform's **Coordination Store**, providing the document store, KV, and pub/sub broker for g8ed and g8ee.
 
-Operator command/result traffic follows the g8e protocol: UAP JSON `UniversalEnvelope` bytes carry typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport.
+Operator command/result traffic follows the g8e protocol: UAP JSON `GovernanceEnvelope` bytes carry typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport.
 
 ---
 
@@ -544,7 +544,7 @@ The batch execution approval dialog in g8ed that allows a single user approval t
 
 ---
 
-## Universal Envelope
+## Governance Envelope
 
 The Protobuf root container for cross-component operator protocol messages. It binds a canonical `event_type` to typed payload bytes, operator/session context, optional state root data, and **L1/L2/L3 governance metadata**.
 

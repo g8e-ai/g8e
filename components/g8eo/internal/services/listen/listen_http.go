@@ -1339,7 +1339,7 @@ func (h *HTTPHandler) handlePubSubPublish(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// If Data is a JSON string, it might be base64-encoded binary (e.g. UniversalEnvelope).
+	// If Data is a JSON string, it might be base64-encoded binary (e.g. GovernanceEnvelope).
 	// Try to unmarshal it as []byte first (which handles base64 strings).
 	var binData []byte
 	var receivers int

@@ -7,11 +7,12 @@
 package operatorv1
 
 import (
+	reflect "reflect"
+	sync "sync"
+
 	_ "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	reflect "reflect"
-	sync "sync"
 )
 
 const (
@@ -3198,9 +3199,9 @@ type ActionReceipt struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Original UniversalEnvelope ID
+	// Original GovernanceEnvelope ID
 	TransactionId string `protobuf:"bytes,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	// Original UniversalEnvelope hash
+	// Original GovernanceEnvelope hash
 	TransactionHash string `protobuf:"bytes,2,opt,name=transaction_hash,json=transactionHash,proto3" json:"transaction_hash,omitempty"`
 	// Final execution status
 	Status ExecutionStatus `protobuf:"varint,3,opt,name=status,proto3,enum=g8e.operator.v1.ExecutionStatus" json:"status,omitempty"`

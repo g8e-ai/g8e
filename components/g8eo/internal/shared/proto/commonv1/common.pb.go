@@ -7,13 +7,14 @@
 package commonv1
 
 import (
+	reflect "reflect"
+	sync "sync"
+
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
-	reflect "reflect"
-	sync "sync"
 )
 
 const (
@@ -324,9 +325,9 @@ func (x *GovernanceMetadata) GetL3() *L3Metadata {
 	return nil
 }
 
-// UniversalEnvelope is the single canonical container for all g8e mutations.
+// GovernanceEnvelope is the single canonical container for all g8e mutations.
 // It binds identity, intent, state, and governance proofs into one transaction.
-type UniversalEnvelope struct {
+type GovernanceEnvelope struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -359,8 +360,8 @@ type UniversalEnvelope struct {
 	SystemFingerprint string `protobuf:"bytes,18,opt,name=system_fingerprint,json=systemFingerprint,proto3" json:"system_fingerprint,omitempty"`
 }
 
-func (x *UniversalEnvelope) Reset() {
-	*x = UniversalEnvelope{}
+func (x *GovernanceEnvelope) Reset() {
+	*x = GovernanceEnvelope{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_shared_proto_common_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -368,13 +369,13 @@ func (x *UniversalEnvelope) Reset() {
 	}
 }
 
-func (x *UniversalEnvelope) String() string {
+func (x *GovernanceEnvelope) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*UniversalEnvelope) ProtoMessage() {}
+func (*GovernanceEnvelope) ProtoMessage() {}
 
-func (x *UniversalEnvelope) ProtoReflect() protoreflect.Message {
+func (x *GovernanceEnvelope) ProtoReflect() protoreflect.Message {
 	mi := &file_shared_proto_common_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -386,152 +387,152 @@ func (x *UniversalEnvelope) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UniversalEnvelope.ProtoReflect.Descriptor instead.
-func (*UniversalEnvelope) Descriptor() ([]byte, []int) {
+// Deprecated: Use GovernanceEnvelope.ProtoReflect.Descriptor instead.
+func (*GovernanceEnvelope) Descriptor() ([]byte, []int) {
 	return file_shared_proto_common_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *UniversalEnvelope) GetId() string {
+func (x *GovernanceEnvelope) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetTimestamp() *timestamppb.Timestamp {
+func (x *GovernanceEnvelope) GetTimestamp() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Timestamp
 	}
 	return nil
 }
 
-func (x *UniversalEnvelope) GetExpiresAt() *timestamppb.Timestamp {
+func (x *GovernanceEnvelope) GetExpiresAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.ExpiresAt
 	}
 	return nil
 }
 
-func (x *UniversalEnvelope) GetSourceComponent() Component {
+func (x *GovernanceEnvelope) GetSourceComponent() Component {
 	if x != nil {
 		return x.SourceComponent
 	}
 	return Component_COMPONENT_UNSPECIFIED
 }
 
-func (x *UniversalEnvelope) GetOperatorId() string {
+func (x *GovernanceEnvelope) GetOperatorId() string {
 	if x != nil {
 		return x.OperatorId
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetOperatorSessionId() string {
+func (x *GovernanceEnvelope) GetOperatorSessionId() string {
 	if x != nil {
 		return x.OperatorSessionId
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetWebSessionId() string {
+func (x *GovernanceEnvelope) GetWebSessionId() string {
 	if x != nil {
 		return x.WebSessionId
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetEventType() string {
+func (x *GovernanceEnvelope) GetEventType() string {
 	if x != nil {
 		return x.EventType
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetPayload() []byte {
+func (x *GovernanceEnvelope) GetPayload() []byte {
 	if x != nil {
 		return x.Payload
 	}
 	return nil
 }
 
-func (x *UniversalEnvelope) GetIntentData() *structpb.Struct {
+func (x *GovernanceEnvelope) GetIntentData() *structpb.Struct {
 	if x != nil {
 		return x.IntentData
 	}
 	return nil
 }
 
-func (x *UniversalEnvelope) GetActionType() string {
+func (x *GovernanceEnvelope) GetActionType() string {
 	if x != nil {
 		return x.ActionType
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetTargetResource() string {
+func (x *GovernanceEnvelope) GetTargetResource() string {
 	if x != nil {
 		return x.TargetResource
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetStateMerkleRoot() string {
+func (x *GovernanceEnvelope) GetStateMerkleRoot() string {
 	if x != nil {
 		return x.StateMerkleRoot
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetNonce() string {
+func (x *GovernanceEnvelope) GetNonce() string {
 	if x != nil {
 		return x.Nonce
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetTransactionHash() string {
+func (x *GovernanceEnvelope) GetTransactionHash() string {
 	if x != nil {
 		return x.TransactionHash
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetProtocolVersion() string {
+func (x *GovernanceEnvelope) GetProtocolVersion() string {
 	if x != nil {
 		return x.ProtocolVersion
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetGovernance() *GovernanceMetadata {
+func (x *GovernanceEnvelope) GetGovernance() *GovernanceMetadata {
 	if x != nil {
 		return x.Governance
 	}
 	return nil
 }
 
-func (x *UniversalEnvelope) GetCaseId() string {
+func (x *GovernanceEnvelope) GetCaseId() string {
 	if x != nil {
 		return x.CaseId
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetInvestigationId() string {
+func (x *GovernanceEnvelope) GetInvestigationId() string {
 	if x != nil {
 		return x.InvestigationId
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetTaskId() string {
+func (x *GovernanceEnvelope) GetTaskId() string {
 	if x != nil {
 		return x.TaskId
 	}
 	return ""
 }
 
-func (x *UniversalEnvelope) GetSystemFingerprint() string {
+func (x *GovernanceEnvelope) GetSystemFingerprint() string {
 	if x != nil {
 		return x.SystemFingerprint
 	}
@@ -692,7 +693,7 @@ var file_shared_proto_common_proto_goTypes = []interface{}{
 	(*L2Metadata)(nil),                // 2: g8e.common.v1.L2Metadata
 	(*L3Metadata)(nil),                // 3: g8e.common.v1.L3Metadata
 	(*GovernanceMetadata)(nil),        // 4: g8e.common.v1.GovernanceMetadata
-	(*UniversalEnvelope)(nil),         // 5: g8e.common.v1.UniversalEnvelope
+	(*GovernanceEnvelope)(nil),        // 5: g8e.common.v1.GovernanceEnvelope
 	(*timestamppb.Timestamp)(nil),     // 6: google.protobuf.Timestamp
 	(*structpb.Struct)(nil),           // 7: google.protobuf.Struct
 	(*descriptorpb.FieldOptions)(nil), // 8: google.protobuf.FieldOptions
@@ -701,11 +702,11 @@ var file_shared_proto_common_proto_depIdxs = []int32{
 	1, // 0: g8e.common.v1.GovernanceMetadata.l1:type_name -> g8e.common.v1.L1Metadata
 	2, // 1: g8e.common.v1.GovernanceMetadata.l2:type_name -> g8e.common.v1.L2Metadata
 	3, // 2: g8e.common.v1.GovernanceMetadata.l3:type_name -> g8e.common.v1.L3Metadata
-	6, // 3: g8e.common.v1.UniversalEnvelope.timestamp:type_name -> google.protobuf.Timestamp
-	6, // 4: g8e.common.v1.UniversalEnvelope.expires_at:type_name -> google.protobuf.Timestamp
-	0, // 5: g8e.common.v1.UniversalEnvelope.source_component:type_name -> g8e.common.v1.Component
-	7, // 6: g8e.common.v1.UniversalEnvelope.intent_data:type_name -> google.protobuf.Struct
-	4, // 7: g8e.common.v1.UniversalEnvelope.governance:type_name -> g8e.common.v1.GovernanceMetadata
+	6, // 3: g8e.common.v1.GovernanceEnvelope.timestamp:type_name -> google.protobuf.Timestamp
+	6, // 4: g8e.common.v1.GovernanceEnvelope.expires_at:type_name -> google.protobuf.Timestamp
+	0, // 5: g8e.common.v1.GovernanceEnvelope.source_component:type_name -> g8e.common.v1.Component
+	7, // 6: g8e.common.v1.GovernanceEnvelope.intent_data:type_name -> google.protobuf.Struct
+	4, // 7: g8e.common.v1.GovernanceEnvelope.governance:type_name -> g8e.common.v1.GovernanceMetadata
 	8, // 8: g8e.common.v1.forbidden_patterns:extendee -> google.protobuf.FieldOptions
 	9, // [9:9] is the sub-list for method output_type
 	9, // [9:9] is the sub-list for method input_type
@@ -769,7 +770,7 @@ func file_shared_proto_common_proto_init() {
 			}
 		}
 		file_shared_proto_common_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*UniversalEnvelope); i {
+			switch v := v.(*GovernanceEnvelope); i {
 			case 0:
 				return &v.state
 			case 1:

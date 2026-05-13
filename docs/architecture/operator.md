@@ -15,7 +15,7 @@ The Operator is the platform's mandatory **substrate**, data plane, execution en
 - **Single Binary, Multi-Mode**: The same binary runs as the Hub (Listen Mode), Target (Standard Mode), and Fleet Utility (Stream Mode).
 - **mTLS-Everywhere**: All communication is outbound-only from the target and strictly gated by Operator-owned mutual TLS. No inbound ports are required on managed hosts.
 - **Local-First Audit (LFAA)**: The host is the single source of truth for command history and file mutations, stored in a tamper-evident ledger.
-- **UAP JSON-First (UniversalEnvelope)**: Every mutation action is governed by a UAP JSON `UniversalEnvelope`. This is the *only* canonical mutation envelope, ensuring transparency and flexibility for audit.
+- **UAP JSON-First (GovernanceEnvelope)**: Every mutation action is governed by a UAP JSON `GovernanceEnvelope`. This is the *only* canonical mutation envelope, ensuring transparency and flexibility for audit.
 - **3-Layer Governance**: Hard gates at the bedrock (L1), consensus in the middle (L2), and human authorization at the top (L3).
 - **Substrate vs Application**: g8e separates the mandatory Operator substrate from optional application-layer adapters (like the Engine).
 
@@ -67,7 +67,7 @@ Transforms the operator into the platform's backbone. Started with the `--listen
 
 - **Substrate Role**: Mandatory hub for all platform operations.
 - **Persistence**: Document-store and TTL-aware KV store backed by SQLite.
-- **Messaging**: High-performance WebSocket Pub/Sub broker using UAP JSON `UniversalEnvelope` messages.
+- **Messaging**: High-performance WebSocket Pub/Sub broker using UAP JSON `GovernanceEnvelope` messages.
 - **Identity (PKI)**: Acts as the platform's root Certificate Authority, issuing mTLS certificates via CSR-based enrollment.
 - **Security**: Manages the platform's Encryption Vault and secret rotation.
 - **Gateway**: Provides the public Operator HTTP/WSS protocol surface for all clients.
@@ -94,7 +94,7 @@ The default mode for execution on target hosts. The operator initiates an outbou
 3. **Enrollment**: Authenticates via `POST /api/auth/operator` using a Device Token for initial CSR signing.
 4. **mTLS Upgrade**: Receives an mTLS certificate and upgrades the transport to secure WSS.
 5. **Vault Unlock**: API key unlocks the local **Encryption Vault** to retrieve the Data Encryption Key (DEK).
-6. **Steady State**: Subscribes to its dedicated command channel for UAP JSON `UniversalEnvelope` mutation commands.
+6. **Steady State**: Subscribes to its dedicated command channel for UAP JSON `GovernanceEnvelope` mutation commands.
 
 ### 3. Stream Mode (Fleet)
 A utility for concurrent deployment over SSH. It streams itself into memory on remote hosts and manages the remote lifecycle via SSH.

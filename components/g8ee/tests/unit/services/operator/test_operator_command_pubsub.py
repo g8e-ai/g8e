@@ -204,9 +204,9 @@ class TestDispatchResultsMessage:
     """Test _dispatch_results_message routing."""
 
     async def test_routes_to_result_handler_uap(self, command_service):
-        """Test dispatches parsed Protobuf UniversalEnvelope to _handle_pubsub_result_message."""
+        """Test dispatches parsed Protobuf GovernanceEnvelope to _handle_pubsub_result_message."""
         with patch.object(command_service._pubsub_service, "_handle_pubsub_result_message", new=AsyncMock()) as mock_handle:  # noqa: SLF001
-            # Build a valid Protobuf UniversalEnvelope JSON format
+            # Build a valid Protobuf GovernanceEnvelope JSON format
             envelope_data = {
                 "id": "test-id",
                 "event_type": EventType.OPERATOR_COMMAND_RESULT,
@@ -254,7 +254,7 @@ class TestDispatchResultsMessage:
             side_effect=Exception("boom")
         )
         
-        # Build a valid Protobuf UniversalEnvelope to reach the handler
+        # Build a valid Protobuf GovernanceEnvelope to reach the handler
         envelope_data = {
             "id": "test-id",
             "event_type": EventType.OPERATOR_COMMAND_RESULT,

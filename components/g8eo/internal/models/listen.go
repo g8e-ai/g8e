@@ -36,12 +36,12 @@ func (d *Document) ForWire() map[string]json.RawMessage {
 	const systemFields = 3
 	const maxTotalCapacity = 1000000
 
-	capacity := len(d.Data)
-	if capacity > maxTotalCapacity-systemFields {
-		capacity = maxTotalCapacity - systemFields
+	allocSize := maxTotalCapacity
+	if len(d.Data) < maxTotalCapacity-systemFields {
+		allocSize = len(d.Data) + systemFields
 	}
 
-	out := make(map[string]json.RawMessage, capacity+systemFields)
+	out := make(map[string]json.RawMessage, allocSize)
 	for k, v := range d.Data {
 		out[k] = v
 	}

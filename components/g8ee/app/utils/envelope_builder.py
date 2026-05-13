@@ -185,7 +185,7 @@ def _convert_value(value: Any) -> Any:
 
 
 def decode_g8eo_result_envelope(envelope_data: bytes | str | Dict[str, Any]) -> Dict[str, Any]:
-    """Decode a g8eo result UniversalEnvelope (JSON or bytes) and convert to a Pydantic-compatible dict.
+    """Decode a g8eo result GovernanceEnvelope (JSON or bytes) and convert to a Pydantic-compatible dict.
     
     This is the strict protojson unmarshaling path that replaces legacy dictionary fallback logic.
     """
@@ -194,8 +194,8 @@ def decode_g8eo_result_envelope(envelope_data: bytes | str | Dict[str, Any]) -> 
     else:
         raw_json = json.dumps(envelope_data)
 
-    # 1. Unmarshal into UniversalEnvelope protobuf model (strict)
-    envelope = common_pb2.UniversalEnvelope()
+    # 1. Unmarshal into GovernanceEnvelope protobuf model (strict)
+    envelope = common_pb2.GovernanceEnvelope()
     ParseDict(json.loads(raw_json), envelope, ignore_unknown_fields=True)
 
     # 2. Extract metadata

@@ -198,7 +198,7 @@ class HeartbeatSnapshotService:
                 return
 
             if isinstance(data, bytes):
-                # UAP/Universal Action Protocol: Heartbeats are now UniversalEnvelopes containing HeartbeatResult
+                # UAP/Universal Action Protocol: Heartbeats are now GovernanceEnvelopes containing HeartbeatResult
                 logger.debug("[HEARTBEAT] Decoding binary heartbeat envelope")
                 envelope_dict = decode_g8eo_result_envelope(data)
                 raw = envelope_dict.get("payload", {})

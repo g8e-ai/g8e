@@ -4,7 +4,7 @@
 
 g8e is a governance-first substrate for trustless infrastructure management. It provides a mandatory, host-authoritative protocol layer that ensures every mutation — whether from a human or an AI agent — is verified, signed, and anchored to a local ledger.
 
-The core of the platform is the **Operator (g8eo)** and the **g8e Protocol**: a unified `UniversalEnvelope` (UAP JSON) contract that binds typed payloads to canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3). 
+The core of the platform is the **Operator (g8eo)** and the **g8e Protocol**: a unified `GovernanceEnvelope` (UAP JSON) contract that binds typed payloads to canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3). 
 
 Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state.
 
@@ -33,11 +33,11 @@ Full treatment: [position paper](docs/architecture/position_paper.md).
 
 ## Protocol Transaction Flow
 
-The g8e substrate enforces safety at the point of execution. Every mutation reaches the Operator as a signed `UniversalEnvelope` transaction.
+The g8e substrate enforces safety at the point of execution. Every mutation reaches the Operator as a signed `GovernanceEnvelope` transaction.
 
 ```mermaid
 flowchart TD
-    TX[Signed UniversalEnvelope<br>JSON Transaction] --> L1
+    TX[Signed GovernanceEnvelope<br>JSON Transaction] --> L1
     
     subgraph Substrate [Substrate Verification - g8eo]
         L1{L1: Technical Bedrock<br>Forbidden Patterns?}
@@ -74,7 +74,7 @@ flowchart TD
 The protocol is the foundation layer of g8e. While AI agents and UI flows can evolve, every interaction is governed by a single wire contract:
 
 - **Canonical JSON (protojson)**: All client-facing surfaces (HTTP, PubSub, receipts) use JSON for maximum ecosystem compatibility (MCP, A2A, LLMs).
-- **UniversalEnvelope (UAP)**: A unified container binding identity, intent, state, and governance proofs.
+- **GovernanceEnvelope (UAP)**: A unified container binding identity, intent, state, and governance proofs.
 - **Hash-Based Signing**: Signatures are computed over a deterministic transaction hash; wire encoding is irrelevant to the security invariant.
 - **Internal Storage**: Protobuf bytes are used internally for high-performance persistence and audit vaults.
 
@@ -117,7 +117,6 @@ flowchart LR
     end
 
     subgraph Optional_Apps [Optional Application Layer]
-        g8ed[g8ed<br>Dashboard]
         g8ee[g8ee<br>AI Engine]
     end
 
@@ -132,8 +131,7 @@ flowchart LR
 | Component | Stack | Role |
 |---|---|---|
 | **Operator (g8eo)** | Go | **The Substrate.** Provides the mandatory persistence, PKI, messaging (PubSub), and governance backbone. Runs as a sovereign satellite on managed hosts or as a central Hub in listen mode. |
-| **Dashboard (g8ed)** | Node | **Optional.** A reference web application for managing operators, viewing audit logs, and interacting with agents. |
-| **AI Engine (g8ee)** | Python | **Optional.** A reference agentic reasoning engine that orchestrates the Tribunal, Warden, and Auditor workflows. |
+| **AI Engine (g8ee)** | Python | **Optional.** A reference agentic reasoning engine that orchestrates the Tribunal and Auditor workflows. |
 
 Every interaction with the substrate is mutually authenticated via TLS 1.3 and mTLS. State-changing workflows must pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
 
@@ -141,7 +139,7 @@ Every interaction with the substrate is mutually authenticated via TLS 1.3 and m
 
 ## Reference Application Stack
 
-While the g8e substrate is self-contained and protocol-agnostic, the repository includes two optional reference applications that demonstrate the protocol's capabilities:
+While the g8e substrate is self-contained and protocol-agnostic, the repository includes an optional reference application that demonstrates the protocol\'s capabilities:
 
 ### g8ee (AI Engine)
 A Python-based agentic reasoning engine. It provides the reference implementation for the **Tribunal** consensus model and multi-provider LLM orchestration.
@@ -156,10 +154,7 @@ The Tribunal uses five specialized LLM personas to generate candidate commands i
 | **Pragma** | Convention | Idiomatic, OS-specific "best practices". |
 | **Nemesis** | Adversary | Calibrated stress-test; tries to trick the system. |
 
-### g8ed (Dashboard)
-A stateless React/Node adapter that consumes the g8e protocol to provide a unified UI for fleet management, audit log visualization, and human-in-the-loop (L3) authorization.
-
-To start the platform with these applications enabled, use `./g8e platform start --with-apps`.
+To start the platform with this application enabled, use `./g8e platform start --with-apps`.
 
 ---
 
@@ -198,7 +193,7 @@ The **Operator** is the sovereign engine of the g8e platform. It is a single Go 
 - **Auth** — Proof of Human Presence (PHP) via FIDO2 / WebAuthn passkeys. Hardware-bound approval is the default Layer 3 state for mutations; auto-approval is restricted to benign commands that already passed L1 and L2. Passwords are unsupported by design.
 - **Transport** — TLS 1.3 for the Control Plane; outbound-only mTLS for Operators. Platform-generated ECDSA P-384 CA.
 - **Sentinel** — On-host defensive analysis: 46 MITRE-mapped detectors, 27 scrubbing patterns, and command allowlist/denylist enforcement.
-- **Warden** — Defensive coordination: command, error, and file risk classifiers applied before execution. In the reference Engine, this orchestrates specialized sub-agents.
+- **Warden** — Defensive execution: The on-host execution boundary inside the Operator that executes transactions, enforces state-root freshness, and emits signed ActionReceipts.
 - **Sovereignty** — Raw command output never leaves the host. Only Sentinel-scrubbed metadata reaches model providers. Engine outage does not erase host-local history.
 - **LFAA** — Local-First Audit Architecture. All state changes are committed to a local git ledger and SQLite vaults on the managed host.
 - **Compliance** — NSA Zero Trust (exceeds requirements in 6 of 7 pillars), HIPAA-ready, FedRAMP-aligned controls.
@@ -230,7 +225,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 
 ```bash
 ./g8e platform start       # Start Operator substrate only
-./g8e platform start --with-apps  # Start Operator plus optional Engine
+./g8e platform start --with-apps  # Start Operator plus optional applications
 ./g8e apps start g8ee     # Start optional Engine adapter
 ./g8e platform status      # Show substrate health and optional app status
 ./g8e platform stop        # Stop Operator and optional apps
@@ -277,7 +272,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 |---|---|
 | [Position Paper](docs/architecture/position_paper.md) | The thesis: AI-Powered, Human-Driven Infrastructure |
 | [Architecture](docs/architecture/about.md) | Origins, governance philosophy, core principles |
-| [Protocol](docs/architecture/protocol.md) | Bedrock UAP JSON `UniversalEnvelope` contract, typed operator payloads, and protocol-level governance enforcement |
+| [Protocol](docs/architecture/protocol.md) | Bedrock UAP JSON `GovernanceEnvelope` contract, typed operator payloads, and protocol-level governance enforcement |
 | [Governance](docs/architecture/governance.md) | L1/L2/L3 validation hierarchy, Tribunal mechanics, and protocol binding |
 | [Security](docs/architecture/security.md) | Authentication, Sentinel, LFAA, threat model |
 | [AI Control Plane](docs/architecture/ai_control_plane.md) | ReAct loop, Tribunal, prompts, tools, providers |

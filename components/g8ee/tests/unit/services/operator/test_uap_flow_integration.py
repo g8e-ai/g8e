@@ -36,7 +36,7 @@ def pubsub_service():
     return svc
 
 async def test_uap_envelope_flow_integration(pubsub_service):
-    """Verify full flow from UAP JSON UniversalEnvelope bytes to completed Future with converted enums."""
+    """Verify full flow from UAP JSON GovernanceEnvelope bytes to completed Future with converted enums."""
     operator_id = "op-test-1"
     session_id = "sess-test-1"
     execution_id = "exec-test-1"
@@ -44,7 +44,7 @@ async def test_uap_envelope_flow_integration(pubsub_service):
     # 1. Register a future for the execution
     future = pubsub_service.register_future(execution_id)
     
-    # 2. Simulate g8eo publishing a Protobuf UniversalEnvelope JSON format
+    # 2. Simulate g8eo publishing a Protobuf GovernanceEnvelope JSON format
     envelope_data = {
         "id": execution_id,
         "event_type": EventType.OPERATOR_COMMAND_RESULT,
@@ -84,14 +84,14 @@ async def test_uap_envelope_flow_integration(pubsub_service):
     assert payload.return_code == 0
 
 async def test_uap_envelope_flow_status_update(pubsub_service):
-    """Verify flow for EXECUTE_STATUS_UPDATE Protobuf UniversalEnvelope messages."""
+    """Verify flow for EXECUTE_STATUS_UPDATE Protobuf GovernanceEnvelope messages."""
     operator_id = "op-test-2"
     session_id = "sess-test-2"
     execution_id = "exec-test-2"
     
     future = pubsub_service.register_future(execution_id)
     
-    # Build status update Protobuf UniversalEnvelope
+    # Build status update Protobuf GovernanceEnvelope
     envelope_data = {
         "id": "msg-status-1",
         "event_type": EventType.OPERATOR_COMMAND_STATUS_UPDATED,

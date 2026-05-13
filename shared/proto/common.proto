@@ -49,9 +49,9 @@ message GovernanceMetadata {
   L3Metadata l3 = 3;
 }
 
-// UniversalEnvelope is the single canonical container for all g8e mutations.
+// GovernanceEnvelope is the single canonical container for all g8e mutations.
 // It binds identity, intent, state, and governance proofs into one transaction.
-message UniversalEnvelope {
+message GovernanceEnvelope {
   // Identity & Metadata
   string id = 1;
   google.protobuf.Timestamp timestamp = 2;

@@ -16,7 +16,7 @@ The platform is explicitly split into a mandatory **Substrate** (g8eo/Operator) 
 
 1.  **Proof of Human Presence (PHP)**: The AI proposes; the human signs. No state-changing operation executes without an explicit, hardware-bound signature (Passkey/WebAuthn) appended to the transaction envelope.
 2.  **Substrate Sovereignty**: The Operator (`g8eo`) is the mandatory substrate. It is the final arbiter of execution, enforcing hard gates and protocol invariants locally on the target host.
-3.  **Protocol-First Zero Trust**: No component or connection is implicitly trusted. Every request is carried by a Protobuf `UniversalEnvelope` that binds identity, context, and cryptographic governance evidence.
+3.  **Protocol-First Zero Trust**: No component or connection is implicitly trusted. Every request is carried by a Protobuf `GovernanceEnvelope` that binds identity, context, and cryptographic governance evidence.
 4.  **Fail-Closed Invariants**: Malformed envelopes, invalid signatures, or stale state roots result in immediate rejection. The system never "fails open".
 
 ## Technical Positioning
@@ -31,7 +31,7 @@ All system mutations must pass through the **Warden** — the final stop for all
 
 ### Fail-Closed Transaction Gate
 Before reaching the Warden, every inbound request passes through a strict `TransactionVerifier` that enforces:
--   **Protobuf Integrity**: Decodes the canonical `UniversalEnvelope`.
+-   **Protobuf Integrity**: Decodes the canonical `GovernanceEnvelope`.
 -   **Action Type Validation**: Rejects unknown or unauthorized action types.
 -   **Hash Verification**: Validates the `id` (hash) of the entire envelope.
 -   **Replay Protection**: Enforces expiry (`expires_at`) and nonce uniqueness.
@@ -56,9 +56,9 @@ L3 involves explicit human authorization, governed by the **Auditor-User Partiti
 -   **Proof of Human Presence (PHP)**: Hardware-bound Passkey/WebAuthn signatures.
 -   **Auto-Approval**: Benign diagnostic commands (e.g., `uptime`, `df`) can be auto-approved, but only *after* passing L1 and L2. Auto-approval **NEVER** bypasses hard gates.
 
-## The Universal Envelope
+## The Governance Envelope
 
-The `UniversalEnvelope` is the single canonical BFT transaction container for all g8e mutations.
+The `GovernanceEnvelope` is the single canonical BFT transaction container for all g8e mutations.
 
 | Field | Purpose |
 |---|---|

@@ -95,13 +95,13 @@ func publishLFAATypedResponseTo(
 
 	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID)
 	if err != nil {
-		logger.Error("Failed to build LFAA typed response Universal envelope", "error", err)
+		logger.Error("Failed to build LFAA typed response Governance Envelope", "error", err)
 		return
 	}
 
 	data, err := json.Marshal(env)
 	if err != nil {
-		logger.Error("Failed to marshal LFAA typed response Universal envelope", "error", err)
+		logger.Error("Failed to marshal LFAA typed response Governance Envelope", "error", err)
 		return
 	}
 
@@ -134,13 +134,13 @@ func publishLFAAErrorTo(
 
 	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID)
 	if err != nil {
-		logger.Error("Failed to build LFAA error Universal envelope", "error", err)
+		logger.Error("Failed to build LFAA error Governance Envelope", "error", err)
 		return
 	}
 
 	data, err := json.Marshal(env)
 	if err != nil {
-		logger.Error("Failed to marshal LFAA error Universal envelope", "error", err)
+		logger.Error("Failed to marshal LFAA error Governance Envelope", "error", err)
 		return
 	}
 

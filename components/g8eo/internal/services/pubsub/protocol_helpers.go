@@ -91,7 +91,7 @@ func mapProtoToPayloadType(msg proto.Message) string {
 	}
 }
 
-// BuildUniversalResultEnvelope constructs a UniversalEnvelope for result publishing.
+// BuildUniversalResultEnvelope constructs a GovernanceEnvelope for result publishing.
 // It preserves the original command's MessageID for correlation.
 func BuildUniversalResultEnvelope(
 	cfg *config.Config,
@@ -102,7 +102,7 @@ func BuildUniversalResultEnvelope(
 	caseID string,
 	investigationID string,
 	taskID *string,
-) (*commonv1.UniversalEnvelope, error) {
+) (*commonv1.GovernanceEnvelope, error) {
 	payloadBytes, err := proto.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
@@ -122,7 +122,7 @@ func BuildUniversalResultEnvelope(
 		}
 	}
 
-	// Convert map to structpb.Struct for UniversalEnvelope
+	// Convert map to structpb.Struct for GovernanceEnvelope
 	var intentDataStruct *structpb.Struct
 	if intentData != nil {
 		if structBytes, err := json.Marshal(intentData); err == nil {
@@ -131,7 +131,7 @@ func BuildUniversalResultEnvelope(
 		}
 	}
 
-	env := &commonv1.UniversalEnvelope{
+	env := &commonv1.GovernanceEnvelope{
 		Id:                originalMessageID, // Will be regenerated if empty
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),

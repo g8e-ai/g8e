@@ -227,4 +227,4 @@ The following collections are defined in `shared/constants/collections.json` and
 - [../components/g8ee.md](../components/g8ee.md) — g8ee component reference
 - [../components/g8ed.md](../components/g8ed.md) — g8ed component reference
 - [security.md](security.md) — Full security model: mTLS, Sentinel patterns, LFAA encryption, threat detection
-- [protocol.md](protocol.md) — Universal Envelope and communication protocol
+- [protocol.md](protocol.md) — Governance Envelope and communication protocol

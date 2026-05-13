@@ -60,9 +60,9 @@ Broadcasting system-wide state changes to all listeners (primarily for the UI).
 
 ---
 
-## Universal Envelope & Protocol
+## Governance Envelope & Protocol
 
-All inter-component communication is governed by the **Universal Envelope** protocol defined in `@/shared/proto/common.proto`.
+All inter-component communication is governed by the **Governance Envelope** protocol defined in `@/shared/proto/common.proto`.
 
 ### Why the Envelope?
 The envelope provides a cryptographic and technical contract that separates routing from logic:

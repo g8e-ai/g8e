@@ -7,7 +7,7 @@ Version: v0.2.4
 
 *Danny Barbour · [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*
 
-**Abstract:** We propose a distributed governance architecture for agentic infrastructure built on mutual adversarial assumption. We treat LLM-driven automation as a Byzantine Fault Tolerance (BFT) problem. The platform is composed of a mandatory **Operator Substrate** (`g8eo`) providing execution, audit, and protocol services, and an optional **Application Layer** consisting of bundled reference adapters—**Engine** (`g8ee`) and **Dashboard** (`g8ed`)—or any Bring-Your-Own (BYO) client. Governance evidence travels with execution intent in a UAP JSON `UniversalEnvelope`, binding event names, operator payloads, state roots, and L1/L2/L3 metadata into a single transaction. The AI is structurally prevented from auto-regressive collapse, and the human operator is elevated from a rubber-stamp supervisor to a first-class co-validator whose explicit stake is time.
+**Abstract:** We propose a distributed governance architecture for agentic infrastructure built on mutual adversarial assumption. We treat LLM-driven automation as a Byzantine Fault Tolerance (BFT) problem. The platform is composed of a mandatory **Operator Substrate** (`g8eo`) providing execution, audit, and protocol services, and an optional **Application Layer** consisting of bundled reference adapters—**Engine** (`g8ee`) and **Dashboard** (`g8ed`)—or any Bring-Your-Own (BYO) client. Governance evidence travels with execution intent in a UAP JSON `GovernanceEnvelope`, binding event names, operator payloads, state roots, and L1/L2/L3 metadata into a single transaction. The AI is structurally prevented from auto-regressive collapse, and the human operator is elevated from a rubber-stamp supervisor to a first-class co-validator whose explicit stake is time.
 
 ## **1. The Fallacy of the Single Agent**
 
@@ -65,7 +65,7 @@ $$
 \text{Safe}(a) \iff \sigma_{\text{machine}}(a) \land \sigma_{\text{human}}(a)
 $$
 
-Neither signature is sufficient alone. We enforce explicit friction through **Proof of Human Presence (PHP)**. The **Governance Gateway** is the only path to the human, enforced by FIDO2 passkeys or verifiable approval proofs. At the protocol layer, `UniversalEnvelope.governance.l3` carries the human signature, or an `auto_approved` flag for benign diagnostic commands that have already passed L1 and L2.
+Neither signature is sufficient alone. We enforce explicit friction through **Proof of Human Presence (PHP)**. The **Governance Gateway** is the only path to the human, enforced by FIDO2 passkeys or verifiable approval proofs. At the protocol layer, `GovernanceEnvelope.governance.l3` carries the human signature, or an `auto_approved` flag for benign diagnostic commands that have already passed L1 and L2.
 
 To ensure seamless onboarding, the Dashboard serves a **Trust Portal** on Port 80, providing the platform CA and automated trust scripts to bootstrap the secure mTLS environment.
 

@@ -346,10 +346,10 @@ message ShutdownRequested {
 // ActionReceipt is the signed proof of a completed or failed mutation.
 // It is emitted by the Warden after execution.
 message ActionReceipt {
-  // Original UniversalEnvelope ID
+  // Original GovernanceEnvelope ID
   string transaction_id = 1;
   
-  // Original UniversalEnvelope hash
+  // Original GovernanceEnvelope hash
   string transaction_hash = 2;
   
   // Final execution status

@@ -14,7 +14,7 @@ While g8e includes bundled application-layer adapters—**Dashboard (g8ed)** and
 
 # Core Invariants
 
-1. **Canonical JSON Wire Format**: All mutation commands MUST use canonical JSON (protojson) `UniversalEnvelope` on all client-facing surfaces (HTTPS APIs, WSS pub/sub command channels, receipts, audit exports). Binary protobuf bytes on the wire are rejected with a clear error. Schema source of truth is `.proto` files (typed, versioned, L1 field-option reflection).
+1. **Canonical JSON Wire Format**: All mutation commands MUST use canonical JSON (protojson) `GovernanceEnvelope` on all client-facing surfaces (HTTPS APIs, WSS pub/sub command channels, receipts, audit exports). Binary protobuf bytes on the wire are rejected with a clear error. Schema source of truth is `.proto` files (typed, versioned, L1 field-option reflection).
 2. **Hash-Based Signing**: The signing basis is a deterministic `transaction_hash` computed from normalized envelope fields (action_type, target_resource, payload as base64, state_merkle_root, nonce, expires_at, intent_data). Wire encoding is irrelevant because the verifier enforces `id == computed transaction_hash`. Canonicalization rules: field names in proto definition order, strings as UTF-8, numbers as decimal integers, absent optional fields omitted, nested messages recursed, bytes as base64, result hashed with SHA-256.
 3. **Identity Persistence**: Every message must carry `id`, `operator_id`, and `operator_session_id`.
 4. **Immutable Governance**: Governance metadata (L1/L2/L3) is baked into the envelope and verified by the Operator before any action is taken.
@@ -60,7 +60,7 @@ The UAP envelope is the only canonical mutation transport. It is JSON on the wir
 ## 1. Request Phase (Client -> Operator)
 
 1. **Generation**: A client (e.g., `g8ee` or a BYO agent) generates a typed payload (e.g., `CommandRequestPayload`).
-2. **Envelope Building**: The payload is wrapped in a UAP JSON `UniversalEnvelope`.
+2. **Envelope Building**: The payload is wrapped in a UAP JSON `GovernanceEnvelope`.
 3. **L2 Signing**: The trusted L2 signer signs `transaction_hash|true` with ED25519 and sets `governance.l2.key_id` plus `governance.l2.tribunal_signature`.
 4. **Publication**: The serialized envelope is published to the Operator's command channel (WSS) or submitted via HTTPS.
 
@@ -68,7 +68,7 @@ The UAP envelope is the only canonical mutation transport. It is JSON on the wir
 
 Upon receiving an envelope, `g8eo` performs these checks in `@/home/bob/g8e/components/g8eo/services/pubsub/pubsub_commands.go`:
 
-1. **Parsing**: Rejects any payload that is not a valid UAP JSON `UniversalEnvelope`.
+1. **Parsing**: Rejects any payload that is not a valid UAP JSON `GovernanceEnvelope`.
 2. **Expiry Check**: Rejects any transaction if `expires_at` is in the past.
 3. **Replay Protection**: Rejects missing or reused `nonce` values using the durable replay store.
 4. **State Check**: Requires `state_merkle_root` and compares it against the Operator-local current state root. Missing or mismatched roots reject.
@@ -80,7 +80,7 @@ Upon receiving an envelope, `g8eo` performs these checks in `@/home/bob/g8e/comp
 ## 3. Result Phase (Operator -> Client)
 
 1. **Execution**: The handler executes the requested action and captures results.
-2. **Envelope Building**: `g8eo` wraps the result payload (e.g., `CommandResult`) in a UAP JSON `UniversalEnvelope`.
+2. **Envelope Building**: `g8eo` wraps the result payload (e.g., `CommandResult`) in a UAP JSON `GovernanceEnvelope`.
 3. **Publication**: The result envelope is published to the results channel for the subscribed client(s).
 
 ---
@@ -110,7 +110,7 @@ Human-in-the-loop authorization via Passkeys or BYO approval systems.
 
 # Data Conversions
 
-When `g8ee` decodes a result from `g8eo`, it parses the UAP JSON `UniversalEnvelope` and then parses the typed payload:
+When `g8ee` decodes a result from `g8eo`, it parses the UAP JSON `GovernanceEnvelope` and then parses the typed payload:
 
 Compatibility field shims are not part of the substrate protocol.
 

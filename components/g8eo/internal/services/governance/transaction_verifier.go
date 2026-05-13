@@ -23,15 +23,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
+	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 var (
-	ErrInvalidEnvelope         = errors.New("TX_INVALID_ENVELOPE: failed to decode UAP JSON UniversalEnvelope")
+	ErrInvalidEnvelope         = errors.New("TX_INVALID_ENVELOPE: failed to decode UAP JSON GovernanceEnvelope")
 	ErrUnknownActionType       = errors.New("TX_UNKNOWN_ACTION: action type not recognized")
 	ErrPayloadDecodeFailed     = errors.New("TX_PAYLOAD_DECODE: failed to decode typed payload")
 	ErrTransactionHashMismatch = errors.New("TX_HASH_MISMATCH: transaction_hash does not match computed hash")
@@ -126,7 +126,7 @@ func NewTransactionVerifier(
 	}
 }
 
-// VerifyEnvelope performs all required verification checks on a decoded UAP JSON UniversalEnvelope.
+// VerifyEnvelope performs all required verification checks on a decoded UAP JSON GovernanceEnvelope.
 func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*VerifiedTransaction, error) {
 	if envelope == nil {
 		return nil, ErrInvalidEnvelope

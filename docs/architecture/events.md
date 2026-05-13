@@ -8,7 +8,7 @@ parent: Architecture
 Last Updated: 2026-05-12
 Version: v0.2.4
 
-The g8e platform uses a unified, hierarchical event system to drive state transitions and lifecycle signals. All cross-component traffic is governed by the **Universal Envelope**, a UAP JSON transport wrapper that carries governance metadata, state roots, and typed payloads.
+The g8e platform uses a unified, hierarchical event system to drive state transitions and lifecycle signals. All cross-component traffic is governed by the **Governance Envelope**, a UAP JSON transport wrapper that carries governance metadata, state roots, and typed payloads.
 
 ---
 
@@ -32,16 +32,16 @@ Events in g8e are the heartbeat of the system's reactivity. The architecture fol
 - **`g8ed` (Dashboard)**: The platform service. Emits lifecycle events (auth, session management) and proxies third-party events.
 
 ### 3. Delivery Lifecycle
-1. **Emission**: A producer serializes a **Universal Envelope** (UAP JSON) containing a typed Protobuf payload.
+1. **Emission**: A producer serializes a **Governance Envelope** (UAP JSON) containing a typed Protobuf payload.
 2. **Ingestion**: The substrate (`g8eo`) or relay (`g8ed`) receives the envelope via Pub/Sub or HTTP.
 3. **Routing**: The event is distributed based on the **Routing Tuple** defined in the envelope.
 4. **Delivery**: The event is pushed to the client via WSS/SSE or persisted to the audit log.
 
 ---
 
-## The Universal Envelope
+## The Governance Envelope
 
-The `UniversalEnvelope` (UAP JSON, defined in `shared/proto/common.proto`) is the canonical wrapper for all platform transactions.
+The `GovernanceEnvelope` (UAP JSON, defined in `shared/proto/common.proto`) is the canonical wrapper for all platform transactions.
 
 | Field | Description |
 |-------|-------------|

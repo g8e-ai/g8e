@@ -22,11 +22,11 @@ func requireLastPublishedUniversal(t *testing.T, db *MockOperatorPubSubClient) [
 	return published.Data
 }
 
-func mustUnmarshalUniversalEnvelope(t *testing.T, data []byte) *commonv1.UniversalEnvelope {
+func mustUnmarshalGovernanceEnvelope(t *testing.T, data []byte) *commonv1.GovernanceEnvelope {
 	t.Helper()
-	var env commonv1.UniversalEnvelope
+	var env commonv1.GovernanceEnvelope
 	err := json.Unmarshal(data, &env)
-	require.NoError(t, err, "failed to unmarshal UniversalEnvelope")
+	require.NoError(t, err, "failed to unmarshal GovernanceEnvelope")
 	return &env
 }
 
@@ -68,7 +68,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublishedUniversal(t, db)
-		env := mustUnmarshalUniversalEnvelope(t, receivedMsg)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
 
 		assert.Equal(t, constants.Event.Operator.Command.Completed, env.EventType)
 		assert.Equal(t, "EXECUTE_BASH_RESULT", env.ActionType)
@@ -112,7 +112,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublishedUniversal(t, db)
-		env := mustUnmarshalUniversalEnvelope(t, receivedMsg)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
 		assert.Equal(t, constants.Event.Operator.FileEdit.Completed, env.EventType)
 	})
 }
@@ -136,7 +136,7 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublishedUniversal(t, db)
-		env := mustUnmarshalUniversalEnvelope(t, receivedMsg)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
 		assert.Equal(t, "HEARTBEAT_RESULT", env.EventType)
 	})
 }

@@ -13,10 +13,10 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 )
 
-// UAPEnvelope is an alias for the canonical UniversalEnvelope proto message.
+// UAPEnvelope is an alias for the canonical GovernanceEnvelope proto message.
 // This preserves JSON compatibility for inbound requests while enforcing
 // a single schema for both directions.
-type UAPEnvelope = commonv1.UniversalEnvelope
+type UAPEnvelope = commonv1.GovernanceEnvelope
 
 // GenerateMessageID creates a deterministic hash of the critical envelope fields.
 // Canonicalization rules (from docs/architecture/governance.md):

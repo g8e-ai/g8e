@@ -37,7 +37,7 @@ class Context(BaseModel):
 
 class UAPEnvelope(BaseModel):
     protocol_version: str = "1.0"
-    id: str = "" # Canonical UniversalEnvelope ID
+    id: str = "" # Canonical GovernanceEnvelope ID
     timestamp: Union[datetime, str] = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Union[datetime, str] = Field(default_factory=lambda: datetime.now(timezone.utc))
     

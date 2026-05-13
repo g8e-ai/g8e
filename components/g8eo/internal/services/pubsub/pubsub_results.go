@@ -248,11 +248,11 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 	return nil
 }
 
-// publishUniversal marshals a UniversalEnvelope as JSON and publishes it to the results channel.
-func (rr *PubSubResultsService) publishUniversal(ctx context.Context, env *commonv1.UniversalEnvelope, operatorSessionID string) error {
+// publishUniversal marshals a GovernanceEnvelope as JSON and publishes it to the results channel.
+func (rr *PubSubResultsService) publishUniversal(ctx context.Context, env *commonv1.GovernanceEnvelope, operatorSessionID string) error {
 	data, err := json.Marshal(env)
 	if err != nil {
-		return fmt.Errorf("failed to marshal Universal envelope: %w", err)
+		return fmt.Errorf("failed to marshal Governance Envelope: %w", err)
 	}
 	channel := rr.resultsChannel(operatorSessionID)
 	rr.logger.Info("Publishing result (Universal)",
@@ -262,7 +262,7 @@ func (rr *PubSubResultsService) publishUniversal(ctx context.Context, env *commo
 	return rr.client.Publish(ctx, channel, data)
 }
 
-// publishResultEnvelopeUniversal builds a UniversalEnvelope for result publishing.
+// publishResultEnvelopeUniversal builds a GovernanceEnvelope for result publishing.
 func (rr *PubSubResultsService) publishResultEnvelopeUniversal(
 	ctx context.Context,
 	eventType, caseID string,
@@ -280,7 +280,7 @@ func (rr *PubSubResultsService) publishResultEnvelopeUniversal(
 
 	env, err := BuildUniversalResultEnvelope(rr.config, eventType, payload, originalMessageID, senderID, caseID, investigationID, taskID)
 	if err != nil {
-		return fmt.Errorf("failed to build Universal envelope: %w", err)
+		return fmt.Errorf("failed to build Governance Envelope: %w", err)
 	}
 
 	return rr.publishUniversal(ctx, env, originalMsg.OperatorSessionID)

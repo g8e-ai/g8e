@@ -29,13 +29,13 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/mappings"
-	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	execution "github.com/g8e-ai/g8e/components/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/sentinel"
 	storage "github.com/g8e-ai/g8e/components/g8eo/internal/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
+	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -499,10 +499,10 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 	// Decode as UAP JSON envelope - this is the only canonical mutation transport.
 	// Binary protobuf bytes and other formats are explicitly rejected.
 	envelope := &uap.UAPEnvelope{}
-	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, (*commonv1.UniversalEnvelope)(envelope)); err != nil {
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, (*commonv1.GovernanceEnvelope)(envelope)); err != nil {
 		rs.logger.Error("envelope: non-JSON payload rejected",
 			"error", err,
-			"action", "use canonical JSON (protojson) UniversalEnvelope")
+			"action", "use canonical JSON (protojson) GovernanceEnvelope")
 		return
 	}
 

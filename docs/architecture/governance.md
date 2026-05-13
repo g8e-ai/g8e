@@ -5,7 +5,7 @@ Version: v0.2.4
 
 Agentic AI safety in g8e is framed as a **consensus problem**: given a population of LLM-instantiated personas with different lenses, a calibrated adversary among them, and a human user with finite attention, how do we converge on an executable command that is safe, audited, and minimally costly?
 
-The mechanism operates through a strictly ordered L1/L2/L3 validation hierarchy where each layer provides a unique type of safety guarantee. On operator pub/sub paths, this hierarchy is carried in the Protobuf `UniversalEnvelope` as governance metadata beside the typed payload.
+The mechanism operates through a strictly ordered L1/L2/L3 validation hierarchy where each layer provides a unique type of safety guarantee. On operator pub/sub paths, this hierarchy is carried in the Protobuf `GovernanceEnvelope` as governance metadata beside the typed payload.
 
 g8e defines a mandatory **Substrate** (Operator + Protocol) that enforces these layers, and an optional **Application Layer** (bundled Engine or BYO) that produces the proofs required to pass them.
 
@@ -77,7 +77,7 @@ The governance hierarchy is bound to the command protocol via `@/home/bob/g8e/sh
 
 ## Wire Format and Signing Invariant
 
-The canonical wire format for all client-facing surfaces (HTTPS APIs, WSS pub/sub command channels, receipts, audit exports) is **canonical JSON (protojson)** for `UniversalEnvelope`. Binary protobuf bytes on the wire are rejected with a clear error.
+The canonical wire format for all client-facing surfaces (HTTPS APIs, WSS pub/sub command channels, receipts, audit exports) is **canonical JSON (protojson)** for `GovernanceEnvelope`. Binary protobuf bytes on the wire are rejected with a clear error.
 
 **Schema source of truth**: `.proto` files (typed, versioned, L1 field-option reflection).
 
@@ -121,4 +121,4 @@ Agent performance is tracked via an EMA scalar `[0.0, 1.0]` in the `reputation_s
 
 1.  **Fail Closed**: Any inconclusive risk analysis defaults to `HIGH` risk.
 2.  **Auditor-User Partition**: The machine handles correctness; the human handles intent. Neither is sufficient alone.
-3.  **UniversalEnvelope Integrity**: Every mutation command is wrapped in a `UniversalEnvelope` that carries immutable evidence of its journey through the L1/L2/L3 hierarchy.
+3.  **GovernanceEnvelope Integrity**: Every mutation command is wrapped in a `GovernanceEnvelope` that carries immutable evidence of its journey through the L1/L2/L3 hierarchy.

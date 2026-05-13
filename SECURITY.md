@@ -29,7 +29,7 @@ The following are in scope for security reports:
 - **Engine (g8ee)** -- Reasoning plane, the Tribunal consensus ensemble, and L2 signature generation.
 - **Operator (g8eo)** -- Execution plane, L1 technical bedrock enforcement, and output scrubbing.
 - **Governance layers** -- L1 (Hard Gates), L2 (Consensus), and L3 (Human-in-the-loop).
-- **Universal Envelope** -- Cryptographic binding of identity, context, and governance metadata.
+- **Governance Envelope** -- Cryptographic binding of identity, context, and governance metadata.
 - **Inter-service communication** -- mTLS (TLS 1.3) only. `X-Internal-Auth` and internal-origin trust have been removed in favor of strict workload identity.
 - **Local-First Audit Architecture (LFAA)** -- Encrypted SQLite audit vaults and the Git ledger.
 

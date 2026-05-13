@@ -196,7 +196,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	cmdPayload, _ := proto.Marshal(cmdReq)
 
 	nonce := "nonce-1"
-	envelope := &commonv1.UniversalEnvelope{
+	envelope := &commonv1.GovernanceEnvelope{
 		Id:                "msg-1",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
@@ -318,9 +318,9 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	}
 	resBytes, _ := proto.Marshal(executorResult)
 
-	// Construct a UniversalEnvelope for the result (simulating Warden's output)
+	// Construct a GovernanceEnvelope for the result (simulating Warden's output)
 	// Canonical JSON wire format: envelope is protojson-encoded directly
-	resEnvelope := &commonv1.UniversalEnvelope{
+	resEnvelope := &commonv1.GovernanceEnvelope{
 		Id:                "res-1",
 		Timestamp:         timestamppb.Now(),
 		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
@@ -360,7 +360,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	require.Equal(t, constants.PubSubEventMessage, pubsubEvent.Type)
 	require.Equal(t, resultsChannel, pubsubEvent.Channel)
 
-	var receivedEnv commonv1.UniversalEnvelope
+	var receivedEnv commonv1.GovernanceEnvelope
 	err = protojson.Unmarshal(pubsubEvent.Data, &receivedEnv)
 	require.NoError(t, err)
 	require.Equal(t, "res-1", receivedEnv.Id)
