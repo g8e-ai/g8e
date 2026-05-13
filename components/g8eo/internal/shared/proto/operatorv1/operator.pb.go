@@ -7,12 +7,11 @@
 package operatorv1
 
 import (
-	reflect "reflect"
-	sync "sync"
-
 	_ "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	reflect "reflect"
+	sync "sync"
 )
 
 const (
