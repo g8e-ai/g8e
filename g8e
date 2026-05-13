@@ -127,6 +127,7 @@ case "$TOP" in
     operator)   exec bash "$SCRIPT_DIR/scripts/cmd/operator.sh" "$SUB" "${@:3}" ;;
     test)       exec bash "$SCRIPT_DIR/scripts/cmd/tests.sh" "$SUB" "${@:3}" ;;
     evals|demo) exec bash "$SCRIPT_DIR/scripts/cmd/evals_demo.sh" "$TOP" "$SUB" "${@:3}" ;;
+    user)       exec bash "$SCRIPT_DIR/scripts/cmd/user.sh" "$SUB" "${@:3}" ;;
     vars|login|logout|ssh|aws|search|llm|security|data|mcp)
                 exec bash "$SCRIPT_DIR/scripts/cmd/infra.sh" "$TOP" "$SUB" "${@:3}" ;;
     *)

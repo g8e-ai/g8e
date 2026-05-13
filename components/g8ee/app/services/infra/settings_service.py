@@ -89,7 +89,6 @@ class SettingsService:
             session_ttl=3600,
             absolute_session_timeout=86400,
             docs_dir="/docs",
-            supervisor_port=9001,
             app_url="http://localhost:8443",
             allowed_origins="*",
             passkey_rp_name="g8e",

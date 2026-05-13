@@ -166,7 +166,7 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 			c := pki.serviceCert
 			return &c, nil
 		},
-		ClientAuth: tls.VerifyClientCertIfGiven,
+		ClientAuth: tls.RequireAndVerifyClientCert,
 		ClientCAs:  pool,
 		MinVersion: tls.VersionTLS13,
 	}

@@ -320,9 +320,7 @@ func (s *PasskeyService) VerifyL3Proof(userID, messageID, signatureHex, pubKeyHe
 		}
 	}
 
-	// For transition/bootstrap, if user has NO credentials, we might allow it
-	// BUT for a sovereign host, we should probably enforce it if required.
-	if !found && len(user.PasskeyCredentials) > 0 {
+	if !found {
 		return false, fmt.Errorf("public key not registered for user")
 	}
 

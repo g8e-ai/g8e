@@ -40,34 +40,32 @@ func readBody(r *http.Request) ([]byte, error) {
 
 // HTTPHandler manages the web API for the listen service.
 type HTTPHandler struct {
-	cfg      *config.Config
-	logger   *slog.Logger
-	db       *ListenDBService
-	pubsub   *PubSubBroker
-	auth     *AuthService
-	pki      *PKIAuthority
-	reg      *RegistrationService
-	passkey  *PasskeyService
-	userSvc  *UserService
-	setupSvc *SetupService
-	apiKey   *ApiKeyService
-	isReady  func() bool
+	cfg     *config.Config
+	logger  *slog.Logger
+	db      *ListenDBService
+	pubsub  *PubSubBroker
+	auth    *AuthService
+	pki     *PKIAuthority
+	reg     *RegistrationService
+	passkey *PasskeyService
+	userSvc *UserService
+	apiKey  *ApiKeyService
+	isReady func() bool
 }
 
-func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, setupSvc *SetupService, apiKey *ApiKeyService, isReady func() bool) *HTTPHandler {
+func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, isReady func() bool) *HTTPHandler {
 	return &HTTPHandler{
-		cfg:      cfg,
-		logger:   logger,
-		db:       db,
-		pubsub:   pubsub,
-		auth:     auth,
-		pki:      pki,
-		reg:      reg,
-		passkey:  passkey,
-		userSvc:  userSvc,
-		setupSvc: setupSvc,
-		apiKey:   apiKey,
-		isReady:  isReady,
+		cfg:     cfg,
+		logger:  logger,
+		db:      db,
+		pubsub:  pubsub,
+		auth:    auth,
+		pki:     pki,
+		reg:     reg,
+		passkey: passkey,
+		userSvc: userSvc,
+		apiKey:  apiKey,
+		isReady: isReady,
 	}
 }
 
@@ -117,6 +115,9 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/pki/revoke", h.handlePKIRevoke)
 	mux.HandleFunc("/api/pki/revocation-bundle", h.handlePKIRevocationBundle)
 
+	// User management routes (require mTLS)
+	mux.HandleFunc("/api/users", h.handleUsers)
+
 	// Passkey / L3 Brokerage Routes (require mTLS)
 	mux.HandleFunc("/api/auth/passkey/register-challenge", h.handlePasskeyRegisterChallenge)
 	mux.HandleFunc("/api/auth/passkey/register-verify", h.handlePasskeyRegisterVerify)
@@ -132,7 +133,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	// Public auth routes (browser-reachable, no mTLS, uses session cookies)
-	mux.HandleFunc("/api/auth/register", h.handleAuthRegister)
 	mux.HandleFunc("/api/auth/login/challenge", h.handleAuthLoginChallenge)
 	mux.HandleFunc("/api/auth/login/verify", h.handleAuthLoginVerify)
 	mux.HandleFunc("/api/auth/logout", h.handleAuthLogout)
@@ -1545,24 +1545,11 @@ func (h *HTTPHandler) handlePasskeyRevokeCredential(w http.ResponseWriter, r *ht
 	})
 }
 
-// =============================================================================
-// Browser Auth Handlers (Public Router)
-// =============================================================================
-
-// handleAuthRegister handles first-run setup and admin user creation.
-func (h *HTTPHandler) handleAuthRegister(w http.ResponseWriter, r *http.Request) {
+// handleUsers handles user management (POST to create a user).
+// Requires mTLS — only CLI/internal callers with a signed certificate can create users.
+func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	isFirstRun, err := h.setupSvc.IsFirstRun()
-	if err != nil {
-		jsonError(w, http.StatusInternalServerError, "failed to check setup status")
-		return
-	}
-	if !isFirstRun {
-		jsonError(w, http.StatusForbidden, "setup already complete")
 		return
 	}
 
@@ -1573,23 +1560,25 @@ func (h *HTTPHandler) handleAuthRegister(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
+		Email string   `json:"email"`
+		Name  string   `json:"name"`
+		Roles []string `json:"roles,omitempty"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
-	user, err := h.setupSvc.PerformFirstRunSetup(req.Email, req.Name, r)
-	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+	if req.Email == "" {
+		jsonError(w, http.StatusBadRequest, "email required")
 		return
 	}
 
-	// Mark setup as complete after creating first user
-	if err := h.setupSvc.CompleteSetup(); err != nil {
-		h.logger.Error("Failed to mark setup complete", "error", err)
+	user, err := h.userSvc.CreateUser(req.Email, req.Name, req.Roles)
+	if err != nil {
+		h.logger.Warn("Failed to create user", "error", err, "email", req.Email)
+		jsonError(w, http.StatusConflict, err.Error())
+		return
 	}
 
 	jsonResponse(w, http.StatusCreated, map[string]interface{}{
@@ -1597,6 +1586,10 @@ func (h *HTTPHandler) handleAuthRegister(w http.ResponseWriter, r *http.Request)
 		"user":    user,
 	})
 }
+
+// =============================================================================
+// Browser Auth Handlers (Public Router)
+// =============================================================================
 
 // handleAuthLoginChallenge generates an auth challenge for a user email.
 func (h *HTTPHandler) handleAuthLoginChallenge(w http.ResponseWriter, r *http.Request) {

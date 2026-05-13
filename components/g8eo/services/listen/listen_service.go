@@ -41,7 +41,6 @@ type ListenService struct {
 	reg             *RegistrationService
 	passkey         *PasskeyService
 	userSvc         *UserService
-	setupSvc        *SetupService
 	apiKeySvc       *ApiKeyService
 	server          *http.Server
 	wssServer       *http.Server
@@ -97,17 +96,15 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 
 	// Initialize passkey service for L3 brokerage
 	passkeyCfg := &PasskeyConfig{
-		RpID:   "localhost",
-		RpName: "g8e",
+		RpID:   cfg.Listen.PasskeyRpID,
+		RpName: cfg.Listen.PasskeyRpName,
 	}
 	passkey, err := NewPasskeyService(db, logger, passkeyCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize passkey service: %w", err)
 	}
 
-	// Initialize user and setup services
 	userSvc := NewUserService(db, logger)
-	setupSvc := NewSetupService(db, userSvc, logger)
 	apiKeySvc := NewApiKeyService(db, logger)
 
 	ls := &ListenService{
@@ -120,11 +117,10 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		reg:       reg,
 		passkey:   passkey,
 		userSvc:   userSvc,
-		setupSvc:  setupSvc,
 		apiKeySvc: apiKeySvc,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, setupSvc, apiKeySvc, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -169,14 +165,12 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 
 	// Initialize passkey service for L3 brokerage (test configuration)
 	passkeyCfg := &PasskeyConfig{
-		RpID:   "localhost",
-		RpName: "g8e",
+		RpID:   cfg.Listen.PasskeyRpID,
+		RpName: cfg.Listen.PasskeyRpName,
 	}
 	passkey, _ := NewPasskeyService(db, logger, passkeyCfg)
 
-	// Initialize user and setup services
 	userSvc := NewUserService(db, logger)
-	setupSvc := NewSetupService(db, userSvc, logger)
 	apiKeySvc := NewApiKeyService(db, logger)
 
 	ls := &ListenService{
@@ -189,11 +183,10 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		reg:       reg,
 		passkey:   passkey,
 		userSvc:   userSvc,
-		setupSvc:  setupSvc,
 		apiKeySvc: apiKeySvc,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, setupSvc, apiKeySvc, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,

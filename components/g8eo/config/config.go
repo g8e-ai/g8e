@@ -76,6 +76,8 @@ type ListenConfig struct {
 	DataDir       string // Root directory for SQLite database (default: .g8e/data in working directory)
 	PKIDir        string // Directory for TLS certificates (default: .g8e/pki)
 	SecretsDir    string // Directory for platform secrets (default: .g8e/secrets)
+	PasskeyRpID   string // RP ID for passkey operations (default: localhost)
+	PasskeyRpName string // RP Name for passkey operations (default: g8e)
 }
 
 // OpenClawConfig holds configuration for --openclaw mode.
@@ -184,7 +186,7 @@ type Config struct {
 // LoadListen creates configuration for --listen mode.
 // Listen mode skips all operator-mode validation — no API key, no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
-func LoadListen(wssPort, httpPort, bootstrapPort int, dataDir, pkiDir, secretsDir string) (*Config, error) {
+func LoadListen(wssPort, httpPort, bootstrapPort int, dataDir, pkiDir, secretsDir string, passkeyRpID, passkeyRpName string) (*Config, error) {
 	if dataDir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -215,6 +217,12 @@ func LoadListen(wssPort, httpPort, bootstrapPort int, dataDir, pkiDir, secretsDi
 	if bootstrapPort == 0 {
 		bootstrapPort = 8080
 	}
+	if passkeyRpID == "" {
+		passkeyRpID = "localhost"
+	}
+	if passkeyRpName == "" {
+		passkeyRpName = "g8e"
+	}
 	publicPort := 8081
 
 	return &Config{
@@ -228,6 +236,8 @@ func LoadListen(wssPort, httpPort, bootstrapPort int, dataDir, pkiDir, secretsDi
 			DataDir:       dataDir,
 			PKIDir:        pkiDir,
 			SecretsDir:    secretsDir,
+			PasskeyRpID:   passkeyRpID,
+			PasskeyRpName: passkeyRpName,
 		},
 	}, nil
 }
