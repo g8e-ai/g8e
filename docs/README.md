@@ -29,7 +29,6 @@ Optional reference adapters that consume the public g8e protocol.
 
 | Document | Description |
 |----------|-------------|
-| [architecture/dashboard.md](architecture/dashboard.md) | **Dashboard Adapter**: Optional g8ed UI and relay behavior as an application-layer client. |
 | [architecture/ai_agents.md](architecture/ai_agents.md) | **Agentic AI**: Optional application-layer LLM adapter behavior, the 5-member Tribunal ensemble, and tool-loop proposal generation. |
 | [architecture/prompts.md](architecture/prompts.md) | **Prompt Engineering**: Schema and logic for agent persona assembly. |
 | [architecture/thinking.md](architecture/thinking.md) | **Thinking & Reasoning**: Dual-layer architecture for structural reasoning (Tribunal) and provider-native reasoning (thinking levels). |
@@ -43,7 +42,6 @@ Technical deep-dives into the required Operator substrate and optional bundled a
 |-----------|------|------------------------|
 | [**g8eo**](components/g8eo.md) | **Substrate Operator** | Go-based secure execution agent, protocol hub, listen-mode persistence, pub/sub runtime, policy enforcement, and audit. |
 | [**g8ee**](components/g8ee.md) | **Optional Engine Adapter** | Python (FastAPI) agentic adapter for LLM interactions, proposal generation, and proof production. |
-| [**g8ed**](components/g8ed.md) | **Optional Dashboard Adapter** | Node.js (Express) application-layer UI, approval UX, and receipt display. |
 
 ## Guides & Standards
 
