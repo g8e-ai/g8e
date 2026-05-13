@@ -13,11 +13,126 @@ case "$TOP" in
 
     login)
         _banner "login"
-        export OPERATOR_SESSION_ID="default-session-id"
-        export USER_ID="default-user-id"
-        export OPERATOR_ID="default-operator-id"
-        _save_credentials "$OPERATOR_SESSION_ID" "$USER_ID" "$OPERATOR_ID"
-        echo "[g8e] Session saved to $G8E_CREDENTIALS_FILE"
+        _ensure_operator
+
+        # Parse --email flag
+        _login_email=""
+        for _arg in "${@:2}"; do
+            case "$_arg" in
+                --email=*) _login_email="${_arg#--email=}" ;;
+                --email)   : ;; # handled by next iteration
+            esac
+        done
+        # Handle "--email value" (two-arg form)
+        _prev=""
+        for _arg in "${@:2}"; do
+            if [[ "$_prev" == "--email" ]]; then
+                _login_email="$_arg"
+            fi
+            _prev="$_arg"
+        done
+
+        if [[ -z "$_login_email" ]]; then
+            echo "[g8e] Usage: ./g8e login --email <your@email.com>" >&2
+            exit 1
+        fi
+
+        _trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
+        _bootstrap_url="${G8E_BOOTSTRAP_URL:-https://localhost:8080}"
+        _app_cert="$G8E_PKI_DIR_HOST/issued/apps/g8ee.crt"
+        _app_key="$G8E_PKI_DIR_HOST/issued/apps/g8ee.key"
+
+        if [[ ! -f "$_trust_bundle" ]]; then
+            echo "[g8e] Trust bundle not found at $_trust_bundle — start the platform first: ./g8e platform start" >&2
+            exit 1
+        fi
+        if [[ ! -f "$_app_cert" || ! -f "$_app_key" ]]; then
+            echo "[g8e] Platform app certificate not found — start the platform first: ./g8e platform start" >&2
+            exit 1
+        fi
+
+        # 1. Create a single-use device-link token — server resolves email to user_id
+        echo "[g8e] Creating device-link token..."
+        _fingerprint=$(echo "g8e-cli-$(hostname)-$(whoami)" | sha256sum | awk '{print $1}')
+        _dl_body=$(python3 -c "import json,sys; print(json.dumps({'email':sys.argv[1],'name':'cli-'+__import__('socket').gethostname(),'max_uses':2}))" "$_login_email")
+        _dl_resp=$( curl -sS --cacert "$_trust_bundle" \
+            --cert "$_app_cert" --key "$_app_key" \
+            -X POST -H "Content-Type: application/json" \
+            -d "$_dl_body" \
+            "$OPERATOR_HTTP_URL/api/device-links" 2>&1 )
+        _dl_token=$(echo "$_dl_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('token',''))" 2>/dev/null)
+        _login_user_id=$(echo "$_dl_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('user_id',''))" 2>/dev/null)
+        if [[ -z "$_dl_token" ]]; then
+            echo "[g8e] Failed to create device-link: $_dl_resp" >&2
+            exit 1
+        fi
+        echo "[g8e] Device-link token obtained"
+
+        # 3. Generate ECDSA private key + CSR
+        echo "[g8e] Generating client key and CSR..."
+        mkdir -p "$G8E_CREDENTIALS_DIR"
+        openssl ecparam -name prime256v1 -genkey -noout -out "$G8E_CLI_KEY_FILE" 2>/dev/null
+        chmod 600 "$G8E_CLI_KEY_FILE"
+        _csr_pem=$(openssl req -new -key "$G8E_CLI_KEY_FILE" \
+            -subj "/CN=g8e-cli-$(hostname)/O=g8e" 2>/dev/null)
+        if [[ -z "$_csr_pem" ]]; then
+            echo "[g8e] Failed to generate CSR" >&2
+            exit 1
+        fi
+
+        # 4. Register via bootstrap port (no mTLS required on this route)
+        echo "[g8e] Registering with operator..."
+        _csr_json=$(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$_csr_pem")
+        _reg_body=$(python3 -c "
+import json, socket, os
+print(json.dumps({
+    'system_fingerprint': '${_fingerprint}',
+    'hostname': socket.gethostname(),
+    'os': 'linux',
+    'arch': os.uname().machine,
+    'username': os.environ.get('USER', os.environ.get('LOGNAME', 'unknown')),
+    'csr_pem': $(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$_csr_pem"),
+}))")
+        _reg_resp=$( curl -sS --cacert "$_trust_bundle" \
+            -X POST -H "Content-Type: application/json" \
+            -H "X-G8E-Device-Token: $_dl_token" \
+            -d "$_reg_body" \
+            "$_bootstrap_url/api/auth/device-link/register" 2>&1 )
+
+        _reg_error=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('error',''))" 2>/dev/null)
+        if [[ -n "$_reg_error" ]]; then
+            echo "[g8e] Registration failed: $_reg_error" >&2
+            exit 1
+        fi
+
+        # 5. Extract and save results
+        _session_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_session_id',''))" 2>/dev/null)
+        _operator_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_id',''))" 2>/dev/null)
+        _cert_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_cert',''))" 2>/dev/null)
+        _chain_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_cert_chain',''))" 2>/dev/null)
+        _hub_bundle=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('hub_trust_bundle',''))" 2>/dev/null)
+
+        if [[ -z "$_session_id" || -z "$_operator_id" || -z "$_cert_pem" ]]; then
+            echo "[g8e] Unexpected registration response: $_reg_resp" >&2
+            exit 1
+        fi
+
+        # Write CLI cert (leaf + chain)
+        printf '%s\n' "$_cert_pem" > "$G8E_CLI_CERT_FILE"
+        if [[ -n "$_chain_pem" ]]; then
+            printf '%s\n' "$_chain_pem" >> "$G8E_CLI_CERT_FILE"
+        fi
+        chmod 600 "$G8E_CLI_CERT_FILE"
+
+        # Update trust bundle if operator returned a fresher one
+        if [[ -n "$_hub_bundle" ]]; then
+            printf '%s\n' "$_hub_bundle" > "$G8E_CREDENTIALS_DIR/hub-bundle.pem"
+            chmod 600 "$G8E_CREDENTIALS_DIR/hub-bundle.pem"
+        fi
+
+        _save_credentials "$_session_id" "$_login_user_id" "$_operator_id"
+        echo "[g8e] Authenticated — operator_id=$_operator_id session=$_session_id"
+        echo "[g8e] Credentials saved to $G8E_CREDENTIALS_FILE"
         exit 0 ;;
 
     logout)
@@ -134,8 +249,24 @@ case "$TOP" in
                     echo "[g8e] Help file not found: $help_file" >&2; exit 1
                 fi
                 [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
-            users|operators|store|settings|audit|device-links)
-                _banner "data $SUB ${@:3}"; _ensure_operator; _moved_to_operator_protocol "data $SUB" ;;
+            users)
+                _banner "data users ${@:3}"; _ensure_operator
+                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-users.py" "${@:3}" ;;
+            operators)
+                _banner "data operators ${@:3}"; _ensure_operator
+                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-operators.py" "${@:3}" ;;
+            store)
+                _banner "data store ${@:3}"; _ensure_operator
+                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-store.py" "${@:3}" ;;
+            settings)
+                _banner "data settings ${@:3}"; _ensure_operator
+                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-settings.py" "${@:3}" ;;
+            device-links)
+                _banner "data device-links ${@:3}"; _ensure_operator
+                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-device-links.py" "${@:3}" ;;
+            audit)
+                _banner "data audit ${@:3}"; _ensure_operator
+                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-lfaa.py" "${@:3}" ;;
             *)
                 echo "[g8e] unknown data subcommand: '$SUB'" >&2; exit 1 ;;
         esac ;;

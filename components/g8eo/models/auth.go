@@ -43,6 +43,7 @@ type DeviceLinkData struct {
 
 type CreateDeviceLinkRequest struct {
 	UserID         string `json:"user_id"`
+	Email          string `json:"email,omitempty"`
 	OrganizationID string `json:"organization_id,omitempty"`
 	OperatorID     string `json:"operator_id,omitempty"`
 	WebSessionID   string `json:"web_session_id,omitempty"`
@@ -54,6 +55,7 @@ type CreateDeviceLinkRequest struct {
 type DeviceLinkResponse struct {
 	Success         bool      `json:"success"`
 	Token           string    `json:"token"`
+	UserID          string    `json:"user_id,omitempty"`
 	OperatorCommand string    `json:"operator_command"`
 	Name            string    `json:"name,omitempty"`
 	MaxUses         int       `json:"max_uses,omitempty"`

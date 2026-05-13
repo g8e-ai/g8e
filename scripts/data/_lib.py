@@ -38,6 +38,7 @@ with open(_SHARED_CONSTANTS / 'collections.json') as _f:
 
 _DEFAULT_PKI_DIR = str(PROJECT_ROOT / '.g8e' / 'pki')
 _DEFAULT_SECRETS_DIR = str(PROJECT_ROOT / '.g8e' / 'secrets')
+_DEFAULT_CREDENTIALS_DIR = str(Path.home() / '.g8e')
 
 OPERATOR_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', 'https://localhost:9000')
 COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
@@ -45,8 +46,29 @@ PRESERVE_COLLECTIONS = {'settings'}
 
 PKI_DIR = Path(os.environ.get('G8E_PKI_DIR', _DEFAULT_PKI_DIR))
 SECRETS_DIR = Path(os.environ.get('G8E_SECRETS_DIR', _DEFAULT_SECRETS_DIR))
+CREDENTIALS_DIR = Path(os.environ.get('G8E_CREDENTIALS_DIR', _DEFAULT_CREDENTIALS_DIR))
 TRUST_BUNDLE_PATH = PKI_DIR / 'trust' / 'hub-bundle.pem'
 INTERNAL_AUTH_TOKEN_PATH = SECRETS_DIR / 'internal_auth_token'
+
+
+def _get_cli_cert() -> tuple[str, str] | None:
+    """Return (cert_path, key_path) for the CLI mTLS client certificate.
+
+    Preference order:
+    1. G8E_CLI_CERT / G8E_CLI_KEY env vars (set by `g8e login`)
+    2. ~/.g8e/cli.crt + ~/.g8e/cli.key
+    3. Platform app cert (.g8e/pki/issued/apps/g8ee.crt) as fallback for
+       operator-local tooling that has not yet run `g8e login`.
+    """
+    cert = os.environ.get('G8E_CLI_CERT', str(CREDENTIALS_DIR / 'cli.crt'))
+    key = os.environ.get('G8E_CLI_KEY', str(CREDENTIALS_DIR / 'cli.key'))
+    if Path(cert).exists() and Path(key).exists():
+        return cert, key
+    app_cert = str(PKI_DIR / 'issued' / 'apps' / 'g8ee.crt')
+    app_key = str(PKI_DIR / 'issued' / 'apps' / 'g8ee.key')
+    if Path(app_cert).exists() and Path(app_key).exists():
+        return app_cert, app_key
+    return None
 
 
 def _create_ssl_context() -> ssl.SSLContext | None:
@@ -54,6 +76,9 @@ def _create_ssl_context() -> ssl.SSLContext | None:
     ctx = ssl.create_default_context()
     if TRUST_BUNDLE_PATH.exists():
         ctx.load_verify_locations(str(TRUST_BUNDLE_PATH))
+    cli_cert = _get_cli_cert()
+    if cli_cert:
+        ctx.load_cert_chain(cli_cert[0], cli_cert[1])
     return ctx
 
 
@@ -114,14 +139,6 @@ def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
     url = f'{OPERATOR_BASE_URL}{path}'
     data = json.dumps(body).encode() if body is not None else None
     headers = {'Content-Type': 'application/json'} if data is not None else {}
-
-    # The Operator listen-mode HTTP API requires X-Internal-Auth on all
-    # non-health endpoints. The operator session from `g8e login` gates the
-    # wrapper; the script reads the internal auth token written by the
-    # Operator at $G8E_SECRETS_DIR/internal_auth_token.
-    internal_token = get_internal_auth_token()
-    if internal_token:
-        headers['X-Internal-Auth'] = internal_token
 
     session_token = get_auth_token()
     if session_token:
@@ -190,8 +207,10 @@ def resolve_user_id(user_id: str | None, email: str | None) -> str | None:
         return user_id
     if not email:
         return None
-    # Query users collection by email
-    result = operator_request('POST', '/db/users/_query', {'email': email})
+    # Query users collection by email using DocFilter format
+    result = operator_request('POST', '/db/users/_query', {
+        'filters': [{'field': 'email', 'op': '==', 'value': json.dumps(email)}]
+    })
     if not isinstance(result, list) or len(result) == 0:
         print(f"\nUser not found with email: {email}")
         return None

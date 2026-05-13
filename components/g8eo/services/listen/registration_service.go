@@ -217,8 +217,21 @@ func (s *RegistrationService) releaseLock(lockKey, lockValue string) error {
 }
 
 func (s *RegistrationService) CreateDeviceLink(req models.CreateDeviceLinkRequest) (*models.DeviceLinkResponse, error) {
+	if req.UserID == "" && req.Email != "" {
+		sanitized := strings.TrimSpace(strings.ToLower(req.Email))
+		docs, err := s.db.DocQuery(string(constants.CollectionUsers), []models.DocFilter{
+			{Field: "email", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitized))},
+		}, "", 1)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve email: %w", err)
+		}
+		if len(docs) == 0 {
+			return nil, fmt.Errorf("user not found: %s", sanitized)
+		}
+		req.UserID = docs[0].ID
+	}
 	if req.UserID == "" {
-		return nil, fmt.Errorf("user_id is required")
+		return nil, fmt.Errorf("user_id or email is required")
 	}
 	maxUses := req.MaxUses
 	if maxUses == 0 {
@@ -462,6 +475,7 @@ func deviceLinkResponse(link models.DeviceLinkData) *models.DeviceLinkResponse {
 	return &models.DeviceLinkResponse{
 		Success:         true,
 		Token:           link.Token,
+		UserID:          link.UserID,
 		OperatorCommand: "g8e.operator --device-token " + link.Token,
 		Name:            link.Name,
 		MaxUses:         link.MaxUses,

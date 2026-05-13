@@ -233,8 +233,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				cert := r.TLS.PeerCertificates[0]
 				for _, uri := range cert.URIs {
 					// Reference apps use spiffe://g8e.local/app/<app_id>
-					if strings.Contains(uri.String(), "/app/"+constants.Status.ComponentName.G8ED) ||
-						strings.Contains(uri.String(), "/app/"+constants.Status.ComponentName.G8EE) {
+					if strings.Contains(uri.String(), "/app/"+constants.Status.ComponentName.G8EE) {
 						next.ServeHTTP(w, r)
 						return
 					}

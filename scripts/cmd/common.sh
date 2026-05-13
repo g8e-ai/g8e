@@ -17,6 +17,8 @@ _G8EE_PID_FILE="$G8E_RUNTIME_DIR/pids/g8ee.pid"
 # Local credential store
 G8E_CREDENTIALS_DIR="$HOME/.g8e"
 G8E_CREDENTIALS_FILE="$G8E_CREDENTIALS_DIR/credentials"
+G8E_CLI_CERT_FILE="$G8E_CREDENTIALS_DIR/cli.crt"
+G8E_CLI_KEY_FILE="$G8E_CREDENTIALS_DIR/cli.key"
 
 _banner() {
     echo -e "\033[1;34m[g8e]\033[0m $*"
@@ -55,16 +57,21 @@ _operator_curl() {
         return 1
     fi
     local args=(-sS --cacert "$trust_bundle" -X "$method")
-    
+
+    # mTLS client certificate: prefer CLI cert, fall back to app cert
+    local cli_cert="${G8E_CLI_CERT:-$G8E_CLI_CERT_FILE}"
+    local cli_key="${G8E_CLI_KEY:-$G8E_CLI_KEY_FILE}"
+    if [[ -f "$cli_cert" && -f "$cli_key" ]]; then
+        args+=(--cert "$cli_cert" --key "$cli_key")
+    elif [[ -f "$G8E_PKI_DIR_HOST/issued/apps/g8ee.crt" && -f "$G8E_PKI_DIR_HOST/issued/apps/g8ee.key" ]]; then
+        args+=(--cert "$G8E_PKI_DIR_HOST/issued/apps/g8ee.crt" --key "$G8E_PKI_DIR_HOST/issued/apps/g8ee.key")
+    else
+        echo "[g8e] No mTLS client certificate available — run: ./g8e login" >&2
+        return 1
+    fi
+
     if [[ -n "$OPERATOR_SESSION_ID" ]]; then
         args+=(-H "X-G8E-Operator-Session-ID: $OPERATOR_SESSION_ID")
-    elif [[ -n "$OPERATOR_API_KEY" ]]; then
-        args+=(-H "X-G8E-Operator-API-Key: $OPERATOR_API_KEY")
-    else
-        # Fallback to internal token if no session/key (bootstrap phase)
-        local token
-        token=$(cat "$G8E_SECRETS_DIR_HOST/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
-        [[ -n "$token" ]] && args+=(-H "X-Internal-Auth: $token")
     fi
 
     args+=(-H "Content-Type: application/json")
@@ -112,6 +119,8 @@ export OPERATOR_SESSION_ID="$operator_session_id"
 export USER_ID="$user_id"
 export OPERATOR_ID="$operator_id"
 export G8E_AUTH_TIMESTAMP="$(date +%s)"
+export G8E_CLI_CERT="$G8E_CLI_CERT_FILE"
+export G8E_CLI_KEY="$G8E_CLI_KEY_FILE"
 EOF
     chmod 600 "$G8E_CREDENTIALS_FILE"
 }
@@ -120,7 +129,8 @@ _clear_credentials() {
     if [[ -f "$G8E_CREDENTIALS_FILE" ]]; then
         rm -f "$G8E_CREDENTIALS_FILE"
     fi
-    unset OPERATOR_SESSION_ID USER_ID OPERATOR_ID G8E_AUTH_TIMESTAMP
+    rm -f "$G8E_CLI_CERT_FILE" "$G8E_CLI_KEY_FILE"
+    unset OPERATOR_SESSION_ID USER_ID OPERATOR_ID G8E_AUTH_TIMESTAMP G8E_CLI_CERT G8E_CLI_KEY
 }
 
 _credentials_exist() {
@@ -129,13 +139,11 @@ _credentials_exist() {
 
 _ensure_authenticated() {
     if _load_credentials; then
-        export OPERATOR_SESSION_ID USER_ID OPERATOR_ID
+        export OPERATOR_SESSION_ID USER_ID OPERATOR_ID G8E_CLI_CERT G8E_CLI_KEY
         return 0
     fi
-    export OPERATOR_SESSION_ID="default-session-id"
-    export USER_ID="default-user-id"
-    export OPERATOR_ID="default-operator-id"
-    return 0
+    echo "[g8e] Not authenticated. Run: ./g8e login" >&2
+    exit 1
 }
 
 _help() {

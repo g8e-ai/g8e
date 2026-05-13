@@ -127,7 +127,7 @@ func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
 		return fmt.Errorf("service certificate setup failed: %w", err)
 	}
 
-	// Generate or load certificates for reference apps (g8ee, g8ed)
+	// Generate or load certificates for reference apps
 	if err := pki.ensureAppCerts(); err != nil {
 		return fmt.Errorf("app certificates setup failed: %w", err)
 	}
@@ -711,7 +711,7 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 }
 
 func (pki *PKIAuthority) ensureAppCerts() error {
-	apps := []string{constants.Status.ComponentName.G8EE, constants.Status.ComponentName.G8ED}
+	apps := []string{constants.Status.ComponentName.G8EE}
 	for _, app := range apps {
 		keyPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".key")
 		certPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".crt")
@@ -792,7 +792,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 		return err
 	}
 
-	dnsNames := []string{"localhost", "g8e.local", "operator", constants.Status.ComponentName.G8EE, constants.Status.ComponentName.G8ED}
+	dnsNames := []string{"localhost", "g8e.local", "operator", constants.Status.ComponentName.G8EE}
 	ipAddresses := append([]net.IP{net.ParseIP("127.0.0.1")}, extraIPs...)
 
 	// Add URI SAN for workload identity
