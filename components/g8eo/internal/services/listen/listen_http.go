@@ -1610,9 +1610,8 @@ func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Email string   `json:"email"`
-		Name  string   `json:"name"`
-		Roles []string `json:"roles,omitempty"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid JSON")
@@ -1624,7 +1623,7 @@ func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.userSvc.CreateUser(req.Email, req.Name, req.Roles)
+	user, err := h.userSvc.CreateUser(req.Email, req.Name)
 	if err != nil {
 		h.logger.Warn("Failed to create user", "error", err, "email", req.Email)
 		jsonError(w, http.StatusConflict, err.Error())

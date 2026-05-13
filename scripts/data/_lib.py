@@ -122,7 +122,7 @@ def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
 
     session_token = get_auth_token()
     if session_token:
-        headers['X-Operator-Session-Id'] = session_token
+        headers['X-G8E-Operator-Session-ID'] = session_token
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     ctx = _create_ssl_context()

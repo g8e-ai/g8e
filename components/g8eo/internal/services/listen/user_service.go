@@ -42,8 +42,7 @@ func NewUserService(db *ListenDBService, logger *slog.Logger) *UserService {
 }
 
 // CreateUser creates a new user with email uniqueness enforcement.
-// The first user automatically receives SUPERADMIN role.
-func (s *UserService) CreateUser(email, name string, roles []string) (*models.User, error) {
+func (s *UserService) CreateUser(email, name string) (*models.User, error) {
 	sanitizedEmail := strings.TrimSpace(strings.ToLower(email))
 	if sanitizedEmail == "" {
 		return nil, fmt.Errorf("email is required")
@@ -58,19 +57,6 @@ func (s *UserService) CreateUser(email, name string, roles []string) (*models.Us
 	}
 	if existing != nil {
 		return nil, fmt.Errorf("user with email %s already exists", sanitizedEmail)
-	}
-
-	// Determine roles: first user gets SUPERADMIN
-	if roles == nil {
-		hasAny, err := s.HasAnyUsers()
-		if err != nil {
-			return nil, fmt.Errorf("failed to check existing users: %w", err)
-		}
-		if !hasAny {
-			roles = []string{"SUPERADMIN"}
-		} else {
-			roles = []string{"USER"}
-		}
 	}
 
 	userID := uuid.New().String()
