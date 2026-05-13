@@ -53,10 +53,10 @@ func init() {
 }
 
 // scanDirs are the directories to scan for violations (relative to g8eo root)
-var scanDirs = []string{"services", "models", "config"}
+var scanDirs = []string{"internal/services", "internal/models", "internal/config"}
 
 // scanRootFiles are individual root-level files to scan
-var scanRootFiles = []string{"main.go", "terminal_darwin.go", "terminal_linux.go"}
+var scanRootFiles = []string{"cmd/g8eo/main.go", "cmd/g8eo/terminal_linux.go"}
 
 // excludePatterns are path substrings that exclude a file from scanning
 var excludePatterns = []string{
@@ -71,9 +71,9 @@ var excludePatterns = []string{
 // constantSourceFiles are the files that define constants (relative to g8eo root).
 // Map key is the display name, value is the relative path.
 var constantSourceFiles = map[string]string{
-	"events.go":    "constants/events.go",
-	"status.go":    "constants/status.go",
-	"file_edit.go": "models/file_edit.go",
+	"events.go":    "internal/constants/events.go",
+	"status.go":    "internal/constants/status.go",
+	"file_edit.go": "internal/models/file_edit.go",
 }
 
 // allowlistedValues are constant values too generic/short to enforce.
@@ -351,7 +351,7 @@ func findViolationsInFile(filePath string, enforced map[string]constantInfo) ([]
 // =============================================================================
 
 func TestExtractConstantsFromEvents(t *testing.T) {
-	fullPath := filepath.Join(g8eoRoot, "constants/events.go")
+	fullPath := filepath.Join(g8eoRoot, "internal/constants/events.go")
 	constants, err := extractConstantsFromFile(fullPath, "events.go")
 	require.NoError(t, err)
 	require.NotEmpty(t, constants, "should extract constants from events.go")
@@ -367,7 +367,7 @@ func TestExtractConstantsFromEvents(t *testing.T) {
 }
 
 func TestExtractConstantsFromVault(t *testing.T) {
-	fullPath := filepath.Join(g8eoRoot, "constants/status.go")
+	fullPath := filepath.Join(g8eoRoot, "internal/constants/status.go")
 	constants, err := extractConstantsFromFile(fullPath, "status.go")
 	require.NoError(t, err)
 	require.NotEmpty(t, constants, "should extract constants from status.go")
@@ -383,13 +383,13 @@ func TestExtractConstantsFromVault(t *testing.T) {
 
 func TestExtractConstantsFromModels(t *testing.T) {
 	t.Run("base.go execution statuses", func(t *testing.T) {
-		fullPath := filepath.Join(g8eoRoot, "models/base.go")
+		fullPath := filepath.Join(g8eoRoot, "internal/models/base.go")
 		_, err := extractConstantsFromFile(fullPath, "base.go")
 		require.NoError(t, err, "base.go must parse without error")
 	})
 
 	t.Run("file_edit.go operations", func(t *testing.T) {
-		fullPath := filepath.Join(g8eoRoot, "models/file_edit.go")
+		fullPath := filepath.Join(g8eoRoot, "internal/models/file_edit.go")
 		constants, err := extractConstantsFromFile(fullPath, "file_edit.go")
 		require.NoError(t, err)
 		require.NotEmpty(t, constants, "should extract constants from file_edit.go")
