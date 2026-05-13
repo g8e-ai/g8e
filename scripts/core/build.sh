@@ -65,6 +65,7 @@ G8EE_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ee.pid"
 G8EE_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ee.log"
 OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-9000}"
 OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-9001}"
+OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-8080}"
 OPERATOR_LISTEN_LOG_MAX_BACKUPS=5
 
 DEV_MODE=false
@@ -723,7 +724,7 @@ if [[ "$COMMAND" == "restart" ]]; then
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 60 1
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 60 1
     _sync_operator_binaries
     for svc in "${RESTART_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -768,7 +769,7 @@ if [[ "$COMMAND" == "reset" ]]; then
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 300 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
     _sync_operator_binaries
 
     for svc in "${RESET_COMPONENTS[@]}"; do
@@ -806,7 +807,7 @@ if [[ "$COMMAND" == "wipe" ]]; then
 
     echo "Restarting Operator listen mode..."
     _start_operator_listen
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 120 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 120 2
     _sync_operator_binaries
 
     echo "Clearing app data from Operator listen mode..."
@@ -873,7 +874,7 @@ if [[ "$COMMAND" == "up" ]]; then
     fi
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 60 1
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 60 1
     _sync_operator_binaries
     
     for svc in "${UP_COMPONENTS[@]}"; do
@@ -908,7 +909,7 @@ if [[ "$COMMAND" == "setup" ]]; then
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 300 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
     _sync_operator_binaries
 
     for svc in "${SETUP_COMPONENTS[@]}"; do
@@ -952,7 +953,7 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     fi
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 300 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
     _sync_operator_binaries
 
     for svc in "${REBUILD_COMPONENTS[@]}"; do
