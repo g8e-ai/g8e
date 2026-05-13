@@ -29,10 +29,10 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 g8eo supports four primary operating modes to balance security, performance, and deployment flexibility:
 
 ### 1. Outbound Mode (Default)
-**The standard deployment.** g8eo acts as a remote Operator that dials into the platform (g8ed/g8eo listen mode). This enables execution on machines behind strict firewalls without requiring inbound firewall rules.
+**The standard deployment.** g8eo acts as a remote Operator that dials into the platform (g8eo listen mode). This enables execution on machines behind strict firewalls without requiring inbound firewall rules.
 
 ### 2. Listen Mode (`--listen`)
-**Platform Persistence & Messaging.** In this mode, g8eo provides the central document store, KV store, blob storage, and pub/sub broker for the Dashboard (g8ed) and Engine (g8ee). It does **not** execute commands or initiate outbound connections.
+**Platform Persistence & Messaging.** In this mode, g8eo provides the central document store, KV store, blob storage, and pub/sub broker for application-layer adapters like the Engine (g8ee). It does **not** execute commands or initiate outbound connections.
 
 ### 3. SSH Stream Mode (`stream` subcommand)
 **Agentless fleet operations.** A Go-native concurrent SSH engine that allows g8e to "stream" itself onto remote hosts. This is used for temporary operations on hosts where a permanent g8eo installation is not desired.

@@ -23,7 +23,7 @@ The Operator is the platform's data plane, execution engine, and persistence lay
 g8e now separates the mandatory **Operator/protocol substrate** from optional application-layer adapters. 
 
 - **Substrate (Mandatory)**: `g8eo` in **Listen Mode** is the platform's backbone. It is the protocol hub, persistence layer, pub/sub broker, policy enforcer, and audit authority. It must be sufficient on its own to receive, verify, and execute protocol-governed transactions.
-- **Application Layer (Optional)**: Optional adapters like the Dashboard (`g8ed`) and Engine (`g8ee`) consume the public Operator protocol surface. They have no substrate responsibilities and no private access channels.
+- **Application Layer (Optional)**: Optional adapters like the Engine (`g8ee`) consume the public Operator protocol surface. They have no substrate responsibilities and no private access channels.
 
 ```mermaid
 flowchart TD
@@ -42,11 +42,9 @@ flowchart TD
     end
 
     subgraph Apps ["Optional Application Layer"]
-        g8ed["g8ed Dashboard Adapter"]
         g8ee["g8ee Engine Adapter"]
     end
 
-    g8ed -. "public protocol" .-> listen
     g8ee -. "public protocol" .-> listen
 
     subgraph EP_A ["Managed Host A"]
