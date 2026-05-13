@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.4] - 2026-05-13
+
+### Added
+- **Operator-Owned PKI/TLS:** Transitioned from legacy SSL to a robust CSR-based mTLS infrastructure owned by `g8eo`.
+- **mTLS Enrollment:** New CSR and mTLS enrollment flow for operators and clients.
+- **BYO Client Support:** Consolidated state root and added end-to-end support for "Bring Your Own" clients.
+- **CLI Login:** Added first-class CLI login support via the operator.
+
+### Changed
+- **Substrate/App Layer Split:** Formalized `g8eo` as the mandatory substrate and moved `g8ed`/`g8ee` to optional application-layer adapters.
+- **g8ed Elimination:** Removed `g8ed` Dashboard as a mandatory component; migrated data management scripts to `g8eo` API.
+- **Universal Envelope Hardening:** Improved UAP and proto definitions for better transaction integrity.
+- **Reorganized g8eo:** Directory restructuring for better modularity and maintainability.
+- **Passkey & Setup Refactor:** Migrated passkey and setup logic to the operator substrate.
+
+### Fixed
+- **Settings Model Paths:** Fixed inconsistencies in settings model resolution.
+- **Split Brain Config:** Resolved configuration synchronization issues.
+- **Startup Health Check:** Fixed issues with platform startup health verification.
+- **PKIDir Bug:** Fixed bug in `PKIDir` path resolution.
+- **Security & Testing:** Addressed CodeQL findings and improved test security headers.
+
 ## [0.2.3] - 2026-05-11
 
 ### Added
