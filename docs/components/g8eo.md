@@ -17,7 +17,7 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 ## Core Principles
 
 - **Zero-trust security**: Every operation requires authentication; nothing is implicitly trusted.
-- **Protocol-governed execution**: Every command is carried as a serialized Protobuf `GovernanceEnvelope` with typed `operator.proto` payload bytes and L1/L2/L3 governance metadata.
+- **Protocol-governed execution**: Every command is carried as a UAP JSON `UniversalEnvelope` with typed `operator.proto` payload bytes and L1/L2/L3 governance metadata.
 - **Data sovereignty**: Command output stays local by default; only metadata travels to the cloud.
 - **Defense in depth**: Multiple security layers — mTLS, certificate pinning, and Sentinel platform-wide protection.
 - **Outbound-only connectivity**: In default mode, g8eo initiates all connections; no inbound ports required.
@@ -59,13 +59,13 @@ g8eo initialization ensures security before any core logic is loaded:
    - **Sentinel**: Activates pre-execution threat detection and post-execution output scrubbing.
 
 ### Command Pipeline & Governance
-g8eo treats all input as untrusted at the protocol boundary. Commands are processed through a strict 3-layer validation hierarchy carried within the `GovernanceEnvelope`:
+g8eo treats all input as untrusted at the protocol boundary. Commands are processed through a strict 3-layer validation hierarchy carried within the `UniversalEnvelope`:
 
 1. **L1 Technical Bedrock (Hard Gates)**: Enforced via Protobuf reflection. g8eo inspects the `operator.proto` payload for fields with `forbidden_patterns` (e.g., `sudo`, `su`, `rm -rf /`). Violations result in immediate rejection.
-2. **L2 Consensus (Tribunal)**: Verified via HMAC-SHA256 signature. When an `auditor_hmac_key` is present in the `ssl/` directory, g8eo rejects any envelope without a valid signature from the AI Tribunal.
+2. **L2 Consensus (Tribunal)**: Verified via ED25519 signatures from trusted keys in `.g8e/pki/trusted_signers/`. g8eo rejects any envelope without `governance.l2.key_id` and a valid signature.
 3. **L3 Authorization (Approval)**: Human-in-the-loop or auto-approval metadata. Auto-approval is authorization state only and **never** bypasses L1 or L2 gates.
 
-**BFT Verification**: If a `state_merkle_root` is present in the envelope, g8eo verifies it against its local Git-backed Ledger to ensure the command is not based on stale system state.
+**State Verification**: `state_merkle_root` is mandatory and g8eo verifies it against the Operator-local state root to ensure the command is not based on stale system state.
 
 ---
 

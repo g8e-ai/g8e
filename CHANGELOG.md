@@ -68,8 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-05-07
 
 ### Added
-- **Protobuf-First Architecture:** Massively migrated the platform to a robust, typed Protobuf-first architecture for all component-to-component communication.
-- **Universal Envelope:** Introduced the `GovernanceEnvelope` for all BFT transactions, binding event metadata, state roots, and hardware-bound fingerprints.
+- **Protobuf-Driven Architecture:** Massively migrated the platform to a robust, typed Protobuf-driven architecture for payloads, while maintaining a UAP JSON-first transport for mutation envelopes.
+- **Universal Envelope:** Introduced the JSON `UniversalEnvelope` (UAP) for all BFT transactions, binding event metadata, state roots, and hardware-bound fingerprints.
 - **L1/L2/L3 Governance:** Integrated a 3-layer command validation hierarchy (L1 Technical Bedrock, L2 Consensus/Tribunal, L3 Authorization/Human) directly into the message envelope.
 - **Recursive Grep Tool:** Introduced `recursive_grep_search` for high-efficiency filesystem exploration across operator fleets.
 - **Interrogation Gate:** Implemented a new gate in the agent loop that detects `<interrogation>` blocks and suppresses pending tool calls to prioritize user input.

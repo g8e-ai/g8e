@@ -35,7 +35,8 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
-	"google.golang.org/protobuf/proto"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // PubSubCommandMessage is the inbound wire message received from operator pub/sub.
@@ -77,14 +78,6 @@ type PubSubCommandService struct {
 	mu      sync.RWMutex
 
 	reconnectBaseDelay time.Duration
-
-	// auditorHMACKey is the shared Tribunal signing key used for L2
-	// governance verification. Loaded once at startup from
-	// <SecretsDir>/auditor_hmac_key. When absent the dispatcher logs a
-	// warning and accepts envelopes without L2 enforcement (deployment
-	// bootstrap phase). When present, all inbound envelopes are
-	// strictly verified and rejected on signature mismatch.
-	auditorHMACKey string
 
 	// trustedSigners holds ED25519 public keys for external L2 signers.
 	// Loaded from <PKIDir>/trusted_signers/*.pub
@@ -175,27 +168,6 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	// Initialize trusted signers map
 	rs.trustedSigners = make(map[string]ed25519.PublicKey)
 
-	// Load L2 Tribunal HMAC key for governance verification
-	auditorHMACKeyPath := filepath.Join(c.Config.SecretsDir, "auditor_hmac_key")
-	keyBytes, err := os.ReadFile(auditorHMACKeyPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			c.Logger.Warn("L2 Tribunal HMAC key not found - L2 governance enforcement disabled (deployment bootstrap)",
-				"path", auditorHMACKeyPath,
-				"action", "commands will be accepted without L2 signature verification")
-			rs.auditorHMACKey = ""
-		} else {
-			c.Logger.Error("Failed to read L2 Tribunal HMAC key",
-				"path", auditorHMACKeyPath,
-				"error", err)
-			return nil, fmt.Errorf("failed to read auditor_hmac_key: %w", err)
-		}
-	} else {
-		rs.auditorHMACKey = strings.TrimSpace(string(keyBytes))
-		c.Logger.Info("L2 Tribunal HMAC key loaded - L2 governance enforcement enabled",
-			"path", auditorHMACKeyPath)
-	}
-
 	// Load ED25519 trusted signers from <PKIDir>/trusted_signers/*.pub
 	signersDir := filepath.Join(c.Config.PKIDir, "trusted_signers")
 	if entries, err := os.ReadDir(signersDir); err == nil {
@@ -212,6 +184,9 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 				}
 			}
 		}
+	}
+	if len(rs.trustedSigners) == 0 {
+		return nil, fmt.Errorf("no trusted L2 ED25519 signers configured in %s", signersDir)
 	}
 
 	// Initialize UAP governance services after trusted signers are loaded
@@ -258,7 +233,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 	rs.transactionVerifier = governance.NewTransactionVerifier(
 		c.Logger,
 		c.ReplayStore,
-		c.StateRootProvider,
+		nil, // StateRootProvider not used in listen mode (state_root table in schema.sql)
 		rs.trustedSigners,
 		c.L3Verifier,
 		knownActionTypes,
@@ -472,16 +447,16 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		return
 	}
 
-	// Decode as Protobuf UniversalEnvelope - this is the only canonical mutation envelope
-	envelope := &commonv1.UniversalEnvelope{}
-	if err := proto.Unmarshal(payload, envelope); err != nil {
-		rs.logger.Error("Failed to decode as Protobuf UniversalEnvelope - unknown format rejected",
+	// Decode as UAP JSON envelope - this is the only canonical mutation transport.
+	envelope := &uap.UAPEnvelope{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, (*commonv1.UniversalEnvelope)(envelope)); err != nil {
+		rs.logger.Error("Failed to decode as UAP JSON envelope - unknown format rejected",
 			"error", err,
-			"action", "use Protobuf UniversalEnvelope bytes")
+			"action", "use UAP JSON")
 		return
 	}
 
-	rs.logger.Info("Decoded request as Protobuf UniversalEnvelope",
+	rs.logger.Info("Decoded request as UAP JSON envelope",
 		"message_id", envelope.Id,
 		"protocol_version", envelope.ProtocolVersion)
 	rs.handleUAPEnvelope((*uap.UAPEnvelope)(envelope))
@@ -489,17 +464,12 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 
 // handleUAPEnvelope processes a UAPEnvelope using the TransactionVerifier, Tribunal and Warden services.
 func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
+	var verified *governance.VerifiedTransaction
+
 	// Strict transaction verification (P0: fail-closed gate before any dispatch)
 	if rs.transactionVerifier != nil {
-		// Re-serialize to Protobuf bytes for verification
-		envelopeProto := (*commonv1.UniversalEnvelope)(env)
-		envelopeBytes, err := proto.Marshal(envelopeProto)
-		if err != nil {
-			rs.logger.Error("Failed to serialize envelope for verification", "error", err, "message_id", env.Id)
-			return
-		}
-
-		verified, err := rs.transactionVerifier.VerifyTransaction(envelopeBytes)
+		var err error
+		verified, err = rs.transactionVerifier.VerifyEnvelope(env)
 		if err != nil {
 			rs.logger.Error("Transaction verification failed - command rejected",
 				"error", err,
@@ -508,48 +478,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		}
 		rs.logger.Info("Transaction verification passed", "message_id", verified.Envelope.Id)
 	} else {
-		rs.logger.Warn("TransactionVerifier not configured - skipping strict verification", "message_id", env.Id)
-	}
-
-	// Generate and verify MessageID (Tribunal hash verification)
-	expectedID, err := uap.GenerateMessageID(env)
-	if err != nil {
-		rs.logger.Error("Failed to generate MessageID for verification", "error", err)
-		return
-	}
-	if env.Id != expectedID {
-		rs.logger.Error("UAPEnvelope MessageID mismatch - payload hash verification failed",
-			"expected_id", expectedID,
-			"received_id", env.Id)
-		return
-	}
-	rs.logger.Info("UAPEnvelope MessageID verified", "message_id", env.Id)
-
-	// Tribunal evaluation (L1/L2 governance: hash verification + MITRE checks + voting)
-	if rs.tribunal != nil {
-		if err := rs.tribunal.EvaluatePayload(env); err != nil {
-			rs.logger.Error("Tribunal evaluation failed - command rejected",
-				"error", err,
-				"message_id", env.Id)
-			return
-		}
-		rs.logger.Info("Tribunal evaluation passed", "message_id", env.Id)
-	} else {
-		rs.logger.Error("FATAL: Tribunal service missing - command rejected", "message_id", env.Id)
-		return
-	}
-
-	// Warden authorization (L3 governance: quorum enforcement + execution authorization)
-	if rs.warden != nil {
-		if err := rs.warden.AuthorizeExecution(env); err != nil {
-			rs.logger.Error("Warden authorization failed - command rejected",
-				"error", err,
-				"message_id", env.Id)
-			return
-		}
-		rs.logger.Info("Warden authorization passed", "message_id", env.Id)
-	} else {
-		rs.logger.Error("FATAL: Warden service missing - command rejected", "message_id", env.Id)
+		rs.logger.Error("FATAL: TransactionVerifier missing - command rejected", "message_id", env.Id)
 		return
 	}
 
@@ -559,20 +488,8 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 
 	payload := env.Payload
 	if len(payload) == 0 {
-		// If IntentData is present (JSON-first), use it as the payload
-		if env.IntentData != nil && len(env.IntentData.Fields) > 0 {
-			var err error
-			jsonBytes, err := env.IntentData.MarshalJSON()
-			if err != nil {
-				rs.logger.Error("Failed to marshal IntentData for dispatch", "error", err)
-				return
-			}
-			payload = jsonBytes
-		} else {
-			// DataBlob is gone, if no IntentData and no Payload, we are stuck
-			rs.logger.Error("No payload or IntentData in UAPEnvelope", "message_id", env.Id)
-			return
-		}
+		rs.logger.Error("UAPEnvelope missing required binary Payload bytes - request rejected", "message_id", env.Id)
+		return
 	}
 
 	cmdMsg := PubSubCommandMessage{
@@ -589,11 +506,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 
 	// Execute through Warden (execution boundary)
 	if rs.warden != nil {
-		if err := rs.warden.ExecuteVerifiedTransaction(&governance.VerifiedTransaction{
-			Envelope:   env,
-			ActionType: env.ActionType,
-			Payload:    payload,
-		}, cmdMsg); err != nil {
+		if err := rs.warden.ExecuteVerifiedTransaction(verified, cmdMsg); err != nil {
 			rs.logger.Error("Warden execution failed", "error", err, "message_id", env.Id)
 			return
 		}
@@ -636,9 +549,21 @@ func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, 
 
 func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {
 	rs.logger.Info("Shutdown command received")
-	// Treat payload as plain string (UAP format)
-	reason := string(msg.Payload)
-	if reason == "" || reason == "{}" || reason == "invalid" {
+
+	req, err := unmarshalPayload(msg.EventType, msg.Payload)
+	if err != nil {
+		rs.logger.Error("Failed to unmarshal shutdown request", "error", err)
+		return
+	}
+
+	shutdownReq, ok := req.(*operatorv1.ShutdownRequested)
+	if !ok {
+		rs.logger.Error("Invalid payload type for shutdown request", "got", fmt.Sprintf("%T", req))
+		return
+	}
+
+	reason := shutdownReq.Reason
+	if reason == "" {
 		reason = "No reason provided"
 	}
 	rs.logger.Info("Shutting down operator (UAP)", "reason", reason)

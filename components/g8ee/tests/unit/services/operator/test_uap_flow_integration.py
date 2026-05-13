@@ -36,7 +36,7 @@ def pubsub_service():
     return svc
 
 async def test_uap_envelope_flow_integration(pubsub_service):
-    """Verify full flow from Protobuf UniversalEnvelope bytes to completed Future with converted enums."""
+    """Verify full flow from UAP JSON UniversalEnvelope bytes to completed Future with converted enums."""
     operator_id = "op-test-1"
     session_id = "sess-test-1"
     execution_id = "exec-test-1"

@@ -14,10 +14,13 @@
 package testutil
 
 import (
+	"crypto/ed25519"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -48,6 +51,20 @@ func NewTestConfig(t *testing.T) *config.Config {
 
 	operatorID := fmt.Sprintf("test-op-%s-%d", safeName, n)
 	operatorSessionID := fmt.Sprintf("test-sess-%s-%d", safeName, n)
+	workDir := t.TempDir()
+	pkiDir := filepath.Join(workDir, ".g8e", "pki")
+	secretsDir := filepath.Join(workDir, ".g8e", "secrets")
+	trustedSignersDir := filepath.Join(pkiDir, "trusted_signers")
+	if err := os.MkdirAll(trustedSignersDir, 0700); err != nil {
+		t.Fatalf("failed to create trusted signer directory: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate test trusted signer: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(trustedSignersDir, "test-key.pub"), []byte(hex.EncodeToString(pub)), 0600); err != nil {
+		t.Fatalf("failed to write test trusted signer: %v", err)
+	}
 
 	return &config.Config{
 		ProjectID:          "test-project",
@@ -60,7 +77,9 @@ func NewTestConfig(t *testing.T) *config.Config {
 		MaxConcurrentTasks: 25,
 		MaxMemoryMB:        2048,
 		HeartbeatInterval:  30 * time.Second,
-		WorkDir:            t.TempDir(),
+		WorkDir:            workDir,
+		PKIDir:             pkiDir,
+		SecretsDir:         secretsDir,
 	}
 }
 

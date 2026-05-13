@@ -16,6 +16,16 @@ type UAPEnvelope = commonv1.UniversalEnvelope
 
 // GenerateMessageID creates a deterministic hash of the critical payload.
 func GenerateMessageID(env *UAPEnvelope) (string, error) {
+	intentData := map[string]interface{}{}
+	if env.IntentData != nil {
+		intentData = env.IntentData.AsMap()
+	}
+
+	expiresAt := time.Time{}
+	if env.ExpiresAt != nil {
+		expiresAt = env.ExpiresAt.AsTime()
+	}
+
 	// Include all critical fields that bind the intent to the state and time
 	payload, err := json.Marshal(struct {
 		ActionType      string                 `json:"action_type"`
@@ -28,10 +38,10 @@ func GenerateMessageID(env *UAPEnvelope) (string, error) {
 	}{
 		ActionType:      env.ActionType,
 		TargetResource:  env.TargetResource,
-		IntentData:      env.IntentData.AsMap(),
+		IntentData:      intentData,
 		Payload:         env.Payload,
 		StateMerkleRoot: env.StateMerkleRoot,
-		ExpiresAt:       env.ExpiresAt.AsTime(),
+		ExpiresAt:       expiresAt,
 		Nonce:           env.Nonce,
 	})
 

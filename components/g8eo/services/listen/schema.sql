@@ -54,3 +54,19 @@ CREATE TABLE IF NOT EXISTS blobs (
 );
 CREATE INDEX IF NOT EXISTS idx_blobs_namespace ON blobs(namespace);
 CREATE INDEX IF NOT EXISTS idx_blobs_expires   ON blobs(expires_at);
+
+-- State Merkle Root: single row containing the current platform state root
+CREATE TABLE IF NOT EXISTS state_root (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    root TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- Nonces: used for transaction replay protection
+CREATE TABLE IF NOT EXISTS nonces (
+    nonce TEXT PRIMARY KEY,
+    expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_nonces_expires ON nonces(expires_at);
+
+

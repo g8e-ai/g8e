@@ -30,7 +30,7 @@ message L1Metadata {
 
 // L2 Governance: Consensus (Tribunal)
 message L2Metadata {
-  string tribunal_signature = 1; // HMAC-SHA256 signature
+  string tribunal_signature = 1; // ED25519 signature over transaction_hash|decision
   repeated string agent_ids = 2; // IDs of agents that voted
   string key_id = 3;             // ID of the key used for signature
 }

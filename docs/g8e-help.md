@@ -7,7 +7,7 @@ title: g8e CLI
 Last Updated: 2026-05-12
 Version: v0.2.4
 
-The `g8e` command is the unified entry point for the g8e Operator/protocol substrate. It manages the mandatory Operator runtime by default and exposes bundled Dashboard and Engine apps only as optional application-layer adapters.
+The `g8e` command is the unified entry point for the g8e Operator/protocol substrate. It manages the mandatory Operator runtime by default and exposes the Engine app only as an optional application-layer adapter.
 
 ## Usage
 
@@ -59,7 +59,7 @@ A user request moves through the **3-Layer Governance Bedrock**:
 2. **Triage**: The message is classified as `simple` (Dash) or `complex` (Sage).
 3. **L1: Technical Bedrock**: Initial scrubbing and validation against forbidden patterns (sudo, etc.).
 4. **L2: Consensus (Tribunal)**: Intent is translated into commands by the ensemble. The Warden checks for risk, and the Auditor verifies technical correctness.
-5. **L3: Authorization**: State-changing operations halt for human approval via the dashboard. Benign commands may use auto-approval if configured.
+5. **L3: Authorization**: State-changing operations halt for human approval. Benign commands may use auto-approval if configured.
 6. **Execution**: The Operator verifies protocol proofs locally, executes accepted work, and commits receipts to the host-authoritative audit ledger.
 
 ## Operational Modes
@@ -83,7 +83,7 @@ When no operator is connected:
 ./g8e platform status   # Check service health and PIDs
 ./g8e platform logs     # Stream aggregated logs
 ./g8e platform settings # View or update platform configuration
-./g8e apps start all    # Start optional bundled Dashboard and Engine adapters
+./g8e apps start all    # Start optional bundled Engine adapter
 ```
 
 ### Operator Deployment
@@ -124,9 +124,9 @@ When no operator is connected:
 - `settings`: Manage platform configuration (sections: general, llm, etc.)
 
 ### apps
-- `start [g8ee|all]`: Start optional bundled app adapters
-- `stop [g8ee|all]`: Stop optional bundled app adapters
-- `restart [g8ee|all]`: Restart optional bundled app adapters
+- `start [g8ee|all]`: Start optional bundled app adapter
+- `stop [g8ee|all]`: Stop optional bundled app adapter
+- `restart [g8ee|all]`: Restart optional bundled app adapter
 - `status`: Show optional app status alongside substrate status
 - `build [g8ee|all]`: Install optional app dependencies
 
@@ -184,7 +184,7 @@ When no operator is connected:
 
 #### evals workflow
 1. `./g8e evals deploy -d <token>`
-2. **Open the Dashboard and bind the eval operators to your session**
+2. **Bind the eval operators to your session**
 3. `./g8e evals run --gold-set <path>`
 
 ### Integration Tools

@@ -8,7 +8,7 @@ parent: Architecture
 Last Updated: 2026-05-12
 Version: v0.2.4
 
-The g8e platform uses a unified, hierarchical event system to drive state transitions and lifecycle signals. All cross-component traffic is governed by the **Universal Envelope**, a transport wrapper that carries governance metadata, state roots, and typed payloads.
+The g8e platform uses a unified, hierarchical event system to drive state transitions and lifecycle signals. All cross-component traffic is governed by the **Universal Envelope**, a UAP JSON transport wrapper that carries governance metadata, state roots, and typed payloads.
 
 ---
 
@@ -32,7 +32,7 @@ Events in g8e are the heartbeat of the system's reactivity. The architecture fol
 - **`g8ed` (Dashboard)**: The platform service. Emits lifecycle events (auth, session management) and proxies third-party events.
 
 ### 3. Delivery Lifecycle
-1. **Emission**: A producer serializes a **Universal Envelope** containing a typed Protobuf payload.
+1. **Emission**: A producer serializes a **Universal Envelope** (UAP JSON) containing a typed Protobuf payload.
 2. **Ingestion**: The substrate (`g8eo`) or relay (`g8ed`) receives the envelope via Pub/Sub or HTTP.
 3. **Routing**: The event is distributed based on the **Routing Tuple** defined in the envelope.
 4. **Delivery**: The event is pushed to the client via WSS/SSE or persisted to the audit log.
@@ -41,7 +41,7 @@ Events in g8e are the heartbeat of the system's reactivity. The architecture fol
 
 ## The Universal Envelope
 
-The `GovernanceEnvelope` (defined in `shared/proto/common.proto`) is the canonical wrapper for all platform transactions.
+The `UniversalEnvelope` (UAP JSON, defined in `shared/proto/common.proto`) is the canonical wrapper for all platform transactions.
 
 | Field | Description |
 |-------|-------------|
@@ -73,7 +73,7 @@ To ensure events reach the correct context, every event carries a routing tuple 
 `g8eo` enforces L1 safety using Protobuf reflection. It inspects the `forbidden_patterns` option on incoming message fields (e.g., `CommandRequested.command`) and rejects any payload containing prohibited strings like `sudo` or `rm -rf /`.
 
 ### 2. L2: Consensus (The Tribunal)
-The Tribunal calculates an HMAC-SHA256 signature over the `event_type` and `payload_bytes` using a shared auditor key. `g8eo` verifies this signature before executing any command, ensuring the instruction originated from a valid consensus group.
+The Tribunal attaches an ED25519 signature from a trusted signer over `transaction_hash|true`. `g8eo` verifies this signature before executing any command, ensuring the instruction originated from a valid consensus group.
 
 ### 3. L3: Authorization (Human Approval)
 Human-in-the-loop signatures (captured via Passkeys) are carried in the `L3Metadata` field. For benign diagnostic commands, an `auto_approved` flag may be set, but it never bypasses L1 or L2 gates.

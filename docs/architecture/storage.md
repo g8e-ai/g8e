@@ -5,8 +5,8 @@ parent: Architecture
 
 # Storage Architecture
 
-Last Updated: 2026-05-12
-Version: v0.2.4
+Last Updated: 2026-05-13
+Version: v0.2.5
 
 This document explains the unified storage architecture for the g8e platform. It focuses on the **why** and **what** — the architectural decisions, data flows, and invariants — rather than low-level implementation.
 
@@ -180,6 +180,8 @@ The Ledger is a Git repository located at `.g8e/data/ledger`.
 ---
 
 ## Canonical Collections
+
+The following collections are defined in `shared/constants/collections.json` and are used across the platform for Document Store organization:
 
 | Collection | Description |
 |---|---|

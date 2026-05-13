@@ -82,7 +82,7 @@ Operators only require outbound WSS connectivity to the platform. No ports are o
 
 ### 2. 3-Layer Validation Hierarchy
 - **L1 Technical Bedrock**: Hard gates (e.g., `sudo`, `su`) enforced by code validators via Protobuf reflection.
-- **L2 Consensus (Tribunal)**: 5-agent plurality verification. Signatures are verified using a shared `auditor_hmac_key`.
+- **L2 Consensus (Tribunal)**: 5-agent plurality verification. Signatures are verified with trusted ED25519 signer keys.
 - **L3 Authorization (Approval)**: Human-in-the-loop by default. Auto-approval is authorization metadata and never bypasses L1 or L2.
 
 ### 3. Audit & Transparency

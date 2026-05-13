@@ -208,14 +208,14 @@ func LoadListen(wssPort, httpPort, bootstrapPort int, dataDir, pkiDir, secretsDi
 		}
 		secretsDir = filepath.Join(cwd, ".g8e", "secrets")
 	}
-	if wssPort == 0 {
-		wssPort = 9001
+	if wssPort <= 0 {
+		wssPort = 0 // use dynamic port if <= 0
 	}
-	if httpPort == 0 {
-		httpPort = 9000
+	if httpPort <= 0 {
+		httpPort = 0 // use dynamic port if <= 0
 	}
-	if bootstrapPort == 0 {
-		bootstrapPort = 8080
+	if bootstrapPort <= 0 {
+		bootstrapPort = 0 // use dynamic port if <= 0
 	}
 	if passkeyRpID == "" {
 		passkeyRpID = "localhost"
@@ -223,7 +223,7 @@ func LoadListen(wssPort, httpPort, bootstrapPort int, dataDir, pkiDir, secretsDi
 	if passkeyRpName == "" {
 		passkeyRpName = "g8e"
 	}
-	publicPort := 8081
+	publicPort := 0 // use dynamic port
 
 	return &Config{
 		ComponentName: "g8eo-listen",

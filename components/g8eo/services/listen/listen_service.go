@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -223,6 +224,56 @@ func (ls *ListenService) IsReady() bool {
 	return ls.ready
 }
 
+// GetDB returns the underlying database service.
+func (ls *ListenService) GetDB() *ListenDBService {
+	return ls.db
+}
+
+// GetPKIAuthority returns the underlying PKI authority.
+func (ls *ListenService) GetPKIAuthority() *PKIAuthority {
+	return ls.pki
+}
+
+// GetHTTPPort returns the assigned port for the HTTP server.
+func (ls *ListenService) GetHTTPPort() int {
+	if ls.server == nil || ls.server.Addr == "" {
+		return 0
+	}
+	_, portStr, _ := net.SplitHostPort(ls.server.Addr)
+	p, _ := strconv.Atoi(portStr)
+	return p
+}
+
+// GetWSSPort returns the assigned port for the WSS server.
+func (ls *ListenService) GetWSSPort() int {
+	if ls.wssServer == nil || ls.wssServer.Addr == "" {
+		return 0
+	}
+	_, portStr, _ := net.SplitHostPort(ls.wssServer.Addr)
+	p, _ := strconv.Atoi(portStr)
+	return p
+}
+
+// GetBootstrapPort returns the assigned port for the bootstrap server.
+func (ls *ListenService) GetBootstrapPort() int {
+	if ls.bootstrapServer == nil || ls.bootstrapServer.Addr == "" {
+		return 0
+	}
+	_, portStr, _ := net.SplitHostPort(ls.bootstrapServer.Addr)
+	p, _ := strconv.Atoi(portStr)
+	return p
+}
+
+// GetPublicPort returns the assigned port for the public server.
+func (ls *ListenService) GetPublicPort() int {
+	if ls.publicServer == nil || ls.publicServer.Addr == "" {
+		return 0
+	}
+	_, portStr, _ := net.SplitHostPort(ls.publicServer.Addr)
+	p, _ := strconv.Atoi(portStr)
+	return p
+}
+
 // Start begins serving HTTP/WS requests. Blocks until the context is cancelled
 // or the server encounters a fatal error.
 func (ls *ListenService) Start(ctx context.Context) error {
@@ -233,9 +284,6 @@ func (ls *ListenService) Start(ctx context.Context) error {
 	}
 	ls.running = true
 	ls.mu.Unlock()
-
-	// Start KV TTL cleanup goroutine
-	go ls.db.RunTTLCleanup(ctx)
 
 	ls.logger.Info("operator Listen Mode ready",
 		"http_port", ls.cfg.Listen.HTTPPort,
@@ -257,6 +305,11 @@ func (ls *ListenService) Start(ctx context.Context) error {
 			ls.logger.Error("Failed to listen", "server", name, "addr", s.Addr, "error", err)
 			errChan <- err
 			return
+		}
+
+		// Update server Addr if it was dynamic
+		if s.Addr == ":0" {
+			s.Addr = ln.Addr().String()
 		}
 
 		ls.logger.Info("TCP listener bound", "server", name, "addr", s.Addr)

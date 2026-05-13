@@ -54,8 +54,7 @@ type G8eoService struct {
 	sentinel *sentinel.Sentinel
 
 	// P0 Transaction Gate infrastructure
-	replayStore       governance.ReplayStore
-	stateRootProvider governance.StateRootProvider
+	replayStore governance.ReplayStore
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -202,14 +201,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 			vs.replayStore = replayStore
 			vs.logger.Info("Replay store initialized for transaction verification")
 		}
-
-		stateRootProvider, err := storage.NewStateRootProvider(vs.localStore.GetDB().DB, vs.logger)
-		if err != nil {
-			vs.logger.Warn("Failed to initialize state root provider - transaction verification will not enforce state root", "error", err)
-		} else {
-			vs.stateRootProvider = stateRootProvider
-			vs.logger.Info("State root provider initialized for transaction verification")
-		}
 	}
 
 	// Initialize PubSub Layer
@@ -229,20 +220,19 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// PubSubCommandService Construction
 	psConfig := pubsub.CommandServiceConfig{
-		Config:            vs.config,
-		Logger:            vs.logger,
-		Execution:         vs.execution,
-		FileEdit:          vs.fileEdit,
-		PubSubClient:      vs.pubSubClient,
-		ResultsService:    vs.pubSubResults,
-		LocalStore:        vs.localStore,
-		RawVault:          vs.rawVault,
-		AuditVault:        vs.auditVault,
-		Ledger:            vs.ledger,
-		HistoryHandler:    vs.historyHandler,
-		Sentinel:          sentinel.NewSentinel(productionSentinelConfig(), vs.logger),
-		ReplayStore:       vs.replayStore,
-		StateRootProvider: vs.stateRootProvider,
+		Config:         vs.config,
+		Logger:         vs.logger,
+		Execution:      vs.execution,
+		FileEdit:       vs.fileEdit,
+		PubSubClient:   vs.pubSubClient,
+		ResultsService: vs.pubSubResults,
+		LocalStore:     vs.localStore,
+		RawVault:       vs.rawVault,
+		AuditVault:     vs.auditVault,
+		Ledger:         vs.ledger,
+		HistoryHandler: vs.historyHandler,
+		Sentinel:       sentinel.NewSentinel(productionSentinelConfig(), vs.logger),
+		ReplayStore:    vs.replayStore,
 	}
 
 	vs.pubSubCommands, err = pubsub.NewPubSubCommandService(psConfig)

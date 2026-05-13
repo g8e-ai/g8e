@@ -65,12 +65,11 @@ _menu() {
             3) ./g8e platform stop ;;
             4) ./g8e platform logs ;;
             5)
-                echo "1) g8eo (Go Operator)"; echo "2) g8ee (Python Engine)"; echo "3) g8ed (Node Dashboard)"
-                read -p "Select component [1-3]: " tcomp
+                echo "1) g8eo (Go Operator)"; echo "2) g8ee (Python Engine)"
+                read -p "Select component [1-2]: " tcomp
                 case $tcomp in
                     1) ./g8e test g8eo ;;
                     2) ./g8e test g8ee ;;
-                    3) ./g8e test g8ed ;;
                 esac ;;
             6)
                 echo "1) Up"; echo "2) Status"; echo "3) Down"

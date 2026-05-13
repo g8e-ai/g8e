@@ -4,7 +4,7 @@
 
 g8e is a governance-first agentic platform for trustless infrastructure management. Every actor — Engine, Operator, User — operates under a mutual adversarial assumption: verify every intent, sign every state change, and anchor every output to a host-authoritative ledger. 
 
-The architecture is a host-authoritative substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. Its foundation is a unified `GovernanceEnvelope` contract that binds typed payloads to canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3).
+The architecture is a host-authoritative substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. Its foundation is a unified `UniversalEnvelope` (UAP JSON) contract that binds typed payloads to canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3).
 
 Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state.
 
@@ -86,8 +86,8 @@ flowchart TD
 3. **The Tribunal** (Axiom, Concord, Variance, Pragma, Nemesis) generates five independent candidate commands. A winner is selected via plurality consensus (≥2 of 5). If no consensus is reached, an anonymized peer-review round (Round 2) runs before potentially failing back to Sage.
 4. **The Warden** performs pre-execution risk assessment. It orchestrates specialized sub-agents (`command_risk`, `file_risk`, `error`) to classify the command's blast radius and potential for harm.
 5. **The Auditor** performs the final consistency check and Merkle commitment. It verifies the Tribunal's choice against Sage's intent and judges the Nemesis.
-6. **Proof of Human Presence (PHP)**: The user reviews the command and risk assessment via the Dashboard and provides a hardware-bound signature (FIDO2/WebAuthn). This is **Layer 3** authorization; it never bypasses L1 or L2 gates.
-7. **The Operator** receives the serialized `GovernanceEnvelope`, verifies the L2 signature, enforces L1 forbidden-patterns, checks state freshness, and executes the command in an isolated process group. Results are captured in the local LFAA ledger.
+6. **Proof of Human Presence (PHP)**: The user reviews the command and risk assessment and provides a hardware-bound signature (FIDO2/WebAuthn). This is **Layer 3** authorization; it never bypasses L1 or L2 gates.
+7. **The Operator** receives the serialized `UniversalEnvelope` (UAP JSON), verifies the L2 signature, enforces L1 forbidden-patterns, checks state freshness, and executes the command in an isolated process group. Results are captured in the local LFAA ledger.
 8. **Codex** (async) extracts durable preferences and scrubbed summaries from history to build the system's long-term memory.
 
 The point of steps 1–5 is to minimize what reaches step 6. Your time is the only stake the system can't fake; everything upstream exists to spend it well.
@@ -100,8 +100,8 @@ The protocol is the foundation layer of g8e. UI flows, agent workflows, and stor
 
 ```text
 typed operator.proto payload
-  -> GovernanceEnvelope.payload
-  -> serialized GovernanceEnvelope bytes
+  -> UniversalEnvelope.payload (JSON)
+  -> UniversalEnvelope JSON bytes
   -> operator pub/sub data
 ```
 
@@ -142,7 +142,6 @@ flowchart LR
 
     subgraph Hub [Control & Persistence Plane / Self-Hosted Hub]
         direction TB
-        g8ed[g8ed<br>Optional Dashboard Adapter<br>Node.js]
         g8ee[g8ee<br>Optional Engine Adapter<br>Python]
 
         subgraph Operator_Listen [Operator Listen Mode]
@@ -155,15 +154,13 @@ flowchart LR
             Listen --- DS & KS & PS
         end
 
-        g8ed -- "Public Protocol" --> g8ee
-        g8ed -- "Public Protocol" --> Listen
         g8ee -- "Public Protocol" --> Listen
     end
 
     LLM((External LLM<br>Providers))
 
-    User -- "TLS 1.3" --> g8ed
-    g8eo -- "Outbound mTLS WebSocket" --> g8ed
+    User -- "TLS 1.3" --> Listen
+    g8eo -- "Outbound mTLS WebSocket" --> Listen
     g8ee -. "Scrubbed metadata only" .-> LLM
 ```
 
@@ -171,9 +168,8 @@ flowchart LR
 |---|---|---|
 | **Operator (g8eo)** | Go | The sovereign "Satellite Agent" and mandatory substrate. Runs on managed hosts, executes commands, and owns the LFAA ledger. Provides listen-mode persistence, policy enforcement, and pub/sub runtime. |
 | **AI Engine (g8ee)** | Python | Optional application-layer adapter. Orchestrates the Tribunal, Warden, and Auditor. Stateless abstraction for multi-provider LLM access. |
-| **Dashboard (g8ed)** | Node.js | Optional application-layer adapter. FIDO2/WebAuthn auth provider, mTLS broker, and ledger synchronization interface. |
 
-User to `g8ed` over TLS 1.3 with encrypted cookies. Operator to Gateway via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection is mutually authenticated; state-changing workflows pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
+User to `g8eo --listen` over TLS 1.3 with encrypted cookies. Operator to Gateway via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection is mutually authenticated; state-changing workflows pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
 
 ---
 
@@ -234,7 +230,7 @@ Threat model and full control catalogue: [security.md](docs/architecture/securit
 
 ## Quick Start
 
-Prerequisites: Go and curl available on the host. Node.js/npm and Python 3.12+ are only required for the optional Dashboard and Engine adapters.
+Prerequisites: Go and curl available on the host. Python 3.12+ is only required for the optional Engine adapter.
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
@@ -242,21 +238,20 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 ```
 
 1. **Trust the platform CA** on your workstation:
-   - macOS / Linux: `curl -fsSL http://localhost/trust | sudo sh`
-   - Windows: `irm http://localhost/trust | iex`
-2. **Register a passkey** at `https://localhost`.
-3. **Generate a device-link token** via the Dashboard.
+   - macOS / Linux: `curl -fsSL http://localhost:8080/trust | sudo sh`
+   - Windows: `irm http://localhost:8080/trust | iex`
+2. **Register a passkey** at `https://localhost:9000`.
+3. **Generate a device-link token** via the CLI: `./g8e login`.
 4. **Install the Operator** on any host you want to manage:
    ```bash
-   curl -fsSL http://<hub>/g8e | sh -s -- <device-link-token>
+   curl -fsSL http://<hub>:8080/g8e | sh -s -- <device-link-token>
    ```
 
 ### CLI Reference
 
 ```bash
 ./g8e platform start       # Start Operator substrate only
-./g8e platform start --with-apps  # Start Operator plus optional Dashboard and Engine
-./g8e apps start g8ed     # Start optional Dashboard adapter
+./g8e platform start --with-apps  # Start Operator plus optional Engine
 ./g8e apps start g8ee     # Start optional Engine adapter
 ./g8e platform status      # Show substrate health and optional app status
 ./g8e platform stop        # Stop Operator and optional apps
@@ -267,7 +262,6 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 ./g8e operator deploy      # Deploy Operator to a remote host via SSH
 ./g8e test                 # Run Operator substrate tests
 ./g8e test g8eo            # Run Operator substrate tests
-./g8e test g8ed            # Run optional Dashboard adapter tests
 ./g8e test g8ee            # Run optional Engine adapter tests
 ```
 
@@ -304,7 +298,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 |---|---|
 | [Position Paper](docs/architecture/position_paper.md) | The thesis: AI-Powered, Human-Driven Infrastructure |
 | [Architecture](docs/architecture/about.md) | Origins, governance philosophy, core principles |
-| [Protocol](docs/architecture/protocol.md) | Bedrock Protobuf `GovernanceEnvelope` contract, typed operator payloads, and protocol-level governance enforcement |
+| [Protocol](docs/architecture/protocol.md) | Bedrock UAP JSON `UniversalEnvelope` contract, typed operator payloads, and protocol-level governance enforcement |
 | [Governance](docs/architecture/governance.md) | L1/L2/L3 validation hierarchy, Tribunal mechanics, and protocol binding |
 | [Security](docs/architecture/security.md) | Authentication, Sentinel, LFAA, threat model |
 | [AI Control Plane](docs/architecture/ai_control_plane.md) | ReAct loop, Tribunal, prompts, tools, providers |

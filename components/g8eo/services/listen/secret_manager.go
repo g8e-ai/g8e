@@ -32,7 +32,6 @@ import (
 var requiredBootstrapSecrets = []string{
 	"internal_auth_token",
 	"session_encryption_key",
-	"auditor_hmac_key",
 }
 
 // SecretManager handles generation and validation of platform security secrets.
@@ -125,14 +124,12 @@ func (m *SecretManager) createPlatformSettings(now time.Time) error {
 	secrets := map[string]string{
 		"internal_auth_token":    m.generateSecureToken(32),
 		"session_encryption_key": m.generateSecureToken(32),
-		"auditor_hmac_key":       m.generateSecureToken(32),
 	}
 
 	platformSettings := models.SettingsDocument{}
 	platformSettings.Settings = map[string]interface{}{
 		"internal_auth_token":    secrets["internal_auth_token"],
 		"session_encryption_key": secrets["session_encryption_key"],
-		"auditor_hmac_key":       secrets["auditor_hmac_key"],
 	}
 	platformSettings.CreatedAt = now
 	platformSettings.UpdatedAt = now

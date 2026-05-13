@@ -62,8 +62,91 @@ func NewListenDBService(dataDir string, secretsDir string, logger *slog.Logger) 
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
+	// Initialize state root if missing
+	if err := svc.initStateRoot(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to initialize state root: %w", err)
+	}
+
+	// Start background maintenance
+	go svc.RunMaintenance(context.Background())
+
 	logger.Info("Listen database initialized", "path", dbPath)
 	return svc, nil
+}
+
+func (s *ListenDBService) initStateRoot() error {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM state_root").Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		_, err = s.db.Exec(
+			"INSERT INTO state_root (id, root, updated_at) VALUES (1, '', ?)",
+			sqliteutil.FormatTimestamp(time.Now().UTC()),
+		)
+		return err
+	}
+	return nil
+}
+
+// GetCurrentStateRoot returns the current state merkle root.
+func (s *ListenDBService) GetCurrentStateRoot() (string, error) {
+	var root string
+	err := s.db.QueryRow("SELECT root FROM state_root WHERE id = 1").Scan(&root)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return root, err
+}
+
+// CheckAndSetNonce returns true if the nonce was already used (replay detected).
+// If not used, it marks the nonce as used and returns false.
+func (s *ListenDBService) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
+	// 1. Check if exists
+	var existing string
+	err := s.db.QueryRow("SELECT nonce FROM nonces WHERE nonce = ?", nonce).Scan(&existing)
+	if err == nil {
+		return true, nil // Replay detected
+	}
+	if err != sql.ErrNoRows {
+		return false, err
+	}
+
+	// 2. Not used, insert
+	expStr := sqliteutil.FormatTimestamp(expiresAt)
+	_, err = s.db.Exec("INSERT INTO nonces (nonce, expires_at) VALUES (?, ?)", nonce, expStr)
+	if err != nil {
+		// Concurrent insert might fail with constraint violation - that's a replay
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return true, nil
+		}
+		return false, err
+	}
+
+	return false, nil
+}
+
+// RunMaintenance periodically removes expired entries.
+func (s *ListenDBService) RunMaintenance(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			now := sqliteutil.NowTimestamp()
+			// KV store
+			s.db.Exec("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+			// Blobs
+			s.db.Exec("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+			// Nonces
+			s.db.Exec("DELETE FROM nonces WHERE expires_at < ?", now)
+		}
+	}
 }
 
 func (s *ListenDBService) initSchema(secretsDir string) error {

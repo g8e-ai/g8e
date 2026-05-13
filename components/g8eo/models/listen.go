@@ -83,9 +83,10 @@ type PubSubPublishRequest struct {
 
 // HealthResponse is the typed response for GET /health.
 type HealthResponse struct {
-	Status  string `json:"status"`
-	Mode    string `json:"mode"`
-	Version string `json:"version"`
+	Status          string `json:"status"`
+	Mode            string `json:"mode"`
+	Version         string `json:"version"`
+	StateMerkleRoot string `json:"state_merkle_root,omitempty"`
 }
 
 // StatusResponse is the typed response for simple ok/error replies.

@@ -16,12 +16,15 @@ package governance
 import (
 	"crypto/ed25519"
 	"encoding/hex"
+	"errors"
 	"log/slog"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -31,14 +34,12 @@ type mockReplayStore struct {
 }
 
 func newMockReplayStore() *mockReplayStore {
-	return &mockReplayStore{
-		nonces: make(map[string]bool),
-	}
+	return &mockReplayStore{nonces: make(map[string]bool)}
 }
 
 func (m *mockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
 	if m.nonces[nonce] {
-		return true, nil // replay detected
+		return true, nil
 	}
 	m.nonces[nonce] = true
 	return false, nil
@@ -46,10 +47,6 @@ func (m *mockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (b
 
 type mockStateRootProvider struct {
 	root string
-}
-
-func newMockStateRootProvider(root string) *mockStateRootProvider {
-	return &mockStateRootProvider{root: root}
 }
 
 func (m *mockStateRootProvider) GetCurrentStateRoot() (string, error) {
@@ -64,600 +61,193 @@ func (m *mockL3Verifier) VerifyL3Proof(userID, messageID, signatureHex, pubKeyHe
 	return m.shouldPass, nil
 }
 
-func TestTransactionVerifier_InvalidProtobuf(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"EXECUTE_BASH"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Test with invalid protobuf bytes
-	_, err := verifier.VerifyTransaction([]byte("invalid protobuf data"))
-	if err != ErrInvalidProtobuf {
-		t.Errorf("Expected ErrInvalidProtobuf, got %v", err)
-	}
-}
-
-func TestTransactionVerifier_UnknownActionType(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"EXECUTE_BASH"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create a valid protobuf envelope with unknown action type
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                "test-id",
-		ActionType:        "UNKNOWN_ACTION",
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		Governance:        &commonv1.GovernanceMetadata{},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != ErrUnknownActionType {
-		t.Errorf("Expected ErrUnknownActionType, got %v", err)
-	}
-}
-
-func TestTransactionVerifier_TransactionExpired(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"EXECUTE_BASH"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create an envelope with expired timestamp
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                "test-id",
-		ActionType:        "EXECUTE_BASH",
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(-1 * time.Hour)), // expired
-		Nonce:             "test-nonce",
-		Governance:        &commonv1.GovernanceMetadata{},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != ErrTransactionExpired {
-		t.Errorf("Expected ErrTransactionExpired, got %v", err)
-	}
-}
-
-func TestTransactionValidator_TransactionReplay(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"EXECUTE_BASH", "FS_LIST"} // FS_LIST is not a mutation
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create a valid envelope
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                "test-id",
-		ActionType:        "FS_LIST",
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		StateMerkleRoot:   "test-root",
-		Governance:        &commonv1.GovernanceMetadata{},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	// First call should succeed
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != nil {
-		t.Fatalf("First verification failed: %v", err)
-	}
-
-	// Second call with same nonce should fail (replay)
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != ErrTransactionReplay {
-		t.Errorf("Expected ErrTransactionReplay, got %v", err)
-	}
-}
-
-func TestTransactionVerifier_StateRootMismatch(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("current-root")
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"EXECUTE_BASH", "FS_LIST"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create an envelope with mismatched state root
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                "test-id",
-		ActionType:        "FS_LIST",
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		StateMerkleRoot:   "wrong-root", // mismatched
-		Governance:        &commonv1.GovernanceMetadata{},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != ErrStateRootMismatch {
-		t.Errorf("Expected ErrStateRootMismatch, got %v", err)
-	}
-}
-
-func TestTransactionVerifier_StateRootMissing(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"EXECUTE_BASH", "FS_LIST"}
-
-	// Test with nil state root provider (should fail when state root is required)
-	verifier := NewTransactionVerifier(logger, replayStore, nil, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create an envelope with state root but no provider
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                "test-id",
-		ActionType:        "FS_LIST",
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		StateMerkleRoot:   "some-root",
-		Governance:        &commonv1.GovernanceMetadata{},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != ErrStateRootMissing {
-		t.Errorf("Expected ErrStateRootMissing, got %v", err)
-	}
-}
-
-func TestTransactionVerifier_L2SignatureMissing(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"EXECUTE_BASH", "FS_LIST"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create an envelope with L2 governance but missing signature
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                "test-id",
-		ActionType:        "FS_LIST",
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		StateMerkleRoot:   "test-root",
-		Governance: &commonv1.GovernanceMetadata{
-			L2: &commonv1.L2Metadata{
-				TribunalSignature: "", // missing
-				KeyId:             "test-key",
-			},
-		},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != ErrL2SignatureMissing {
-		t.Errorf("Expected ErrL2SignatureMissing, got %v", err)
-	}
-}
-
-func TestTransactionVerifier_L2KeyNotConfigured(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
-	trustedSigners := make(map[string]ed25519.PublicKey) // empty
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"EXECUTE_BASH", "FS_LIST"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create an envelope with L2 signature but key not in trusted signers
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                "test-id",
-		ActionType:        "FS_LIST",
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		StateMerkleRoot:   "test-root",
-		Governance: &commonv1.GovernanceMetadata{
-			L2: &commonv1.L2Metadata{
-				TribunalSignature: "test-sig",
-				KeyId:             "unknown-key", // not in trusted signers
-			},
-		},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != ErrL2KeyNotConfigured {
-		t.Errorf("Expected ErrL2KeyNotConfigured, got %v", err)
-	}
-}
-
-func TestTransactionVerifier_L3SignatureMissing(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"EXECUTE_BASH"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create an envelope for a mutation without L3 signature
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                "test-id",
-		ActionType:        "EXECUTE_BASH", // mutation
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		StateMerkleRoot:   "test-root",
-		Governance: &commonv1.GovernanceMetadata{
-			L3: &commonv1.L3Metadata{
-				HumanSignature: "", // missing
-				PublicKey:      "",
-			},
-		},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != ErrL3SignatureMissing {
-		t.Errorf("Expected ErrL3SignatureMissing, got %v", err)
-	}
-}
-
-func TestTransactionVerifier_L3VerifierNotConfigured(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	var l3Verifier L3Verifier = nil // not configured
-	knownActionTypes := []string{"EXECUTE_BASH"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create an envelope for a mutation with L3 signature but no verifier
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                "test-id",
-		ActionType:        "EXECUTE_BASH", // mutation
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		StateMerkleRoot:   "test-root",
-		Governance: &commonv1.GovernanceMetadata{
-			L3: &commonv1.L3Metadata{
-				HumanSignature: "test-sig",
-				PublicKey:      "test-pubkey",
-			},
-		},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != ErrL3VerifierNotConfigured {
-		t.Errorf("Expected ErrL3VerifierNotConfigured, got %v", err)
-	}
-}
-
-func TestTransactionVerifier_L3SignatureInvalid(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	l3Verifier := &mockL3Verifier{shouldPass: false} // will fail verification
-	knownActionTypes := []string{"EXECUTE_BASH"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create an envelope for a mutation with L3 signature that will fail verification
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                "test-id",
-		ActionType:        "EXECUTE_BASH", // mutation
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		StateMerkleRoot:   "test-root",
-		Governance: &commonv1.GovernanceMetadata{
-			L3: &commonv1.L3Metadata{
-				HumanSignature: "test-sig",
-				PublicKey:      "test-pubkey",
-			},
-		},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != ErrL3SignatureInvalid {
-		t.Errorf("Expected ErrL3SignatureInvalid, got %v", err)
-	}
-}
-
-func TestTransactionVerifier_ValidNonMutation(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"FS_LIST"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create a valid envelope for a non-mutation (no L3 required)
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                "test-id",
-		ActionType:        "FS_LIST", // not a mutation
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		StateMerkleRoot:   "test-root",
-		Governance:        &commonv1.GovernanceMetadata{},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	// Should succeed
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != nil {
-		t.Errorf("Expected verification to succeed for valid non-mutation, got %v", err)
-	}
-}
-
-func TestTransactionVerifier_ValidMutationWithL3(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"EXECUTE_BASH"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create a valid envelope for a mutation with L3 signature
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                "test-id",
-		ActionType:        "EXECUTE_BASH", // mutation
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		StateMerkleRoot:   "test-root",
-		Governance: &commonv1.GovernanceMetadata{
-			L3: &commonv1.L3Metadata{
-				HumanSignature: "test-sig",
-				PublicKey:      "test-pubkey",
-			},
-		},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	// Should succeed
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != nil {
-		t.Errorf("Expected verification to succeed for valid mutation with L3, got %v", err)
-	}
-}
-
-func TestTransactionVerifier_ValidL2Signature(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
-
-	// Create a valid ED25519 key pair
+func newStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Verifier L3Verifier) (*TransactionVerifier, ed25519.PrivateKey) {
+	t.Helper()
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		t.Fatalf("Failed to generate key pair: %v", err)
+		t.Fatalf("failed to generate signer: %v", err)
 	}
+	return NewTransactionVerifier(
+		slog.New(slog.NewTextHandler(os.Stdout, nil)),
+		replayStore,
+		stateRootProvider,
+		map[string]ed25519.PublicKey{"test-key": pubKey},
+		l3Verifier,
+		[]string{"EXECUTE_BASH", "FS_LIST"},
+	), privKey
+}
 
-	trustedSigners := map[string]ed25519.PublicKey{
-		"test-key": pubKey,
+func typedPayload(t *testing.T, actionType string) []byte {
+	t.Helper()
+	var msg proto.Message
+	switch actionType {
+	case "EXECUTE_BASH":
+		msg = &operatorv1.CommandRequested{Command: "uptime", ExecutionId: "exec-1", Justification: "test"}
+	case "FS_LIST":
+		msg = &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
+	default:
+		t.Fatalf("unsupported action type: %s", actionType)
 	}
+	payload, err := proto.Marshal(msg)
+	if err != nil {
+		t.Fatalf("failed to marshal payload: %v", err)
+	}
+	return payload
+}
 
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"FS_LIST"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create a valid envelope with L2 signature
-	messageID := "test-id"
-	payload := messageID + "|true"
-	signature := ed25519.Sign(privKey, []byte(payload))
-	sigHex := hex.EncodeToString(signature)
-
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                messageID,
-		ActionType:        "FS_LIST",
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
+func signedEnvelope(t *testing.T, actionType string, payload []byte, privKey ed25519.PrivateKey) *uap.UAPEnvelope {
+	t.Helper()
+	env := &uap.UAPEnvelope{
+		ProtocolVersion:   "1.0",
 		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		StateMerkleRoot:   "test-root",
-		Governance: &commonv1.GovernanceMetadata{
-			L2: &commonv1.L2Metadata{
-				TribunalSignature: sigHex,
-				KeyId:             "test-key",
-			},
+		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
+		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
+		OperatorId:        "operator-1",
+		OperatorSessionId: "session-1",
+		ActionType:        actionType,
+		TargetResource:    "localhost",
+		Payload:           payload,
+		StateMerkleRoot:   "root-1",
+		Nonce:             "nonce-" + actionType + "-" + hex.EncodeToString(payload[:4]),
+	}
+	hash, err := uap.GenerateMessageID(env)
+	if err != nil {
+		t.Fatalf("failed to generate transaction hash: %v", err)
+	}
+	env.Id = hash
+	env.TransactionHash = hash
+	env.Governance = &commonv1.GovernanceMetadata{
+		L2: &commonv1.L2Metadata{
+			KeyId:             "test-key",
+			TribunalSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
 		},
 	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
+	if actionType == "EXECUTE_BASH" {
+		env.Governance.L3 = &commonv1.L3Metadata{HumanSignature: "human-proof", PublicKey: "human-key"}
 	}
+	return env
+}
 
-	// Should succeed
-	_, err = verifier.VerifyTransaction(bytes)
+func TestTransactionVerifier_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
+	verifier, privKey := newStrictVerifier(t, newMockReplayStore(), &mockStateRootProvider{root: "root-1"}, &mockL3Verifier{shouldPass: true})
+	env := signedEnvelope(t, "FS_LIST", typedPayload(t, "FS_LIST"), privKey)
+
+	verified, err := verifier.VerifyEnvelope(env)
 	if err != nil {
-		t.Errorf("Expected verification to succeed with valid L2 signature, got %v", err)
+		t.Fatalf("expected verification to pass, got %v", err)
+	}
+	if verified.DecodedPayload == nil || verified.ActionType != "FS_LIST" {
+		t.Fatalf("verified transaction missing decoded payload or action: %#v", verified)
 	}
 }
 
-func TestTransactionVerifier_L2SignatureInvalid(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	replayStore := newMockReplayStore()
-	stateRootProvider := newMockStateRootProvider("test-root")
+func TestTransactionVerifier_AcceptsValidMutationUAPEnvelopeWithL3(t *testing.T) {
+	verifier, privKey := newStrictVerifier(t, newMockReplayStore(), &mockStateRootProvider{root: "root-1"}, &mockL3Verifier{shouldPass: true})
+	env := signedEnvelope(t, "EXECUTE_BASH", typedPayload(t, "EXECUTE_BASH"), privKey)
 
-	// Create a valid ED25519 key pair
-	pubKey, privKey, err := ed25519.GenerateKey(nil)
+	_, err := verifier.VerifyEnvelope(env)
 	if err != nil {
-		t.Fatalf("Failed to generate key pair: %v", err)
-	}
-
-	trustedSigners := map[string]ed25519.PublicKey{
-		"test-key": pubKey,
-	}
-
-	l3Verifier := &mockL3Verifier{shouldPass: true}
-	knownActionTypes := []string{"FS_LIST"}
-
-	verifier := NewTransactionVerifier(logger, replayStore, stateRootProvider, trustedSigners, l3Verifier, knownActionTypes)
-
-	// Create an envelope with invalid L2 signature (wrong payload)
-	messageID := "test-id"
-	wrongPayload := "wrong-payload|true"
-	signature := ed25519.Sign(privKey, []byte(wrongPayload))
-	sigHex := hex.EncodeToString(signature)
-
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                messageID,
-		ActionType:        "FS_LIST",
-		Payload:           []byte("test payload"),
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(1 * time.Hour)),
-		Nonce:             "test-nonce",
-		StateMerkleRoot:   "test-root",
-		Governance: &commonv1.GovernanceMetadata{
-			L2: &commonv1.L2Metadata{
-				TribunalSignature: sigHex,
-				KeyId:             "test-key",
-			},
-		},
-	}
-
-	bytes, err := proto.Marshal(envelope)
-	if err != nil {
-		t.Fatalf("Failed to marshal envelope: %v", err)
-	}
-
-	_, err = verifier.VerifyTransaction(bytes)
-	if err != ErrL2SignatureInvalid {
-		t.Errorf("Expected ErrL2SignatureInvalid, got %v", err)
+		t.Fatalf("expected verification to pass, got %v", err)
 	}
 }
 
-// testLogger is a minimal logger implementation for testing
-type testLogger struct{}
+func TestTransactionVerifier_FailClosedProofs(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*uap.UAPEnvelope)
+		want   error
+	}{
+		{name: "missing id", mutate: func(env *uap.UAPEnvelope) { env.Id = "" }, want: ErrTransactionIDMissing},
+		{name: "unknown action", mutate: func(env *uap.UAPEnvelope) { env.ActionType = "UNKNOWN" }, want: ErrUnknownActionType},
+		{name: "missing payload", mutate: func(env *uap.UAPEnvelope) { env.Payload = nil }, want: ErrPayloadMissing},
+		{name: "invalid typed payload", mutate: func(env *uap.UAPEnvelope) { env.Payload = []byte("not protobuf") }, want: ErrPayloadDecodeFailed},
+		{name: "missing transaction hash", mutate: func(env *uap.UAPEnvelope) { env.TransactionHash = "" }, want: ErrTransactionHashMissing},
+		{name: "hash mismatch", mutate: func(env *uap.UAPEnvelope) { env.TransactionHash = "wrong" }, want: ErrTransactionHashMismatch},
+		{name: "expired", mutate: func(env *uap.UAPEnvelope) {
+			env.ExpiresAt = timestamppb.New(time.Now().UTC().Add(-time.Minute))
+			rehash(t, env)
+		}, want: ErrTransactionExpired},
+		{name: "missing nonce", mutate: func(env *uap.UAPEnvelope) { env.Nonce = ""; rehash(t, env) }, want: ErrNonceMissing},
+		{name: "missing state root", mutate: func(env *uap.UAPEnvelope) { env.StateMerkleRoot = ""; rehash(t, env) }, want: ErrStateRootRequired},
+		{name: "missing l2", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2 = nil }, want: ErrL2SignatureMissing},
+		{name: "missing l2 key", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2.KeyId = "" }, want: ErrL2KeyNotConfigured},
+		{name: "invalid l2 signature", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2.TribunalSignature = "deadbeef" }, want: ErrL2SignatureInvalid},
+		{name: "missing l3", mutate: func(env *uap.UAPEnvelope) { env.Governance.L3 = nil }, want: ErrL3SignatureMissing},
+	}
 
-func newTestLogger() *testLogger {
-	return &testLogger{}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			verifier, privKey := newStrictVerifier(t, newMockReplayStore(), &mockStateRootProvider{root: "root-1"}, &mockL3Verifier{shouldPass: true})
+			env := signedEnvelope(t, "EXECUTE_BASH", typedPayload(t, "EXECUTE_BASH"), privKey)
+			tc.mutate(env)
+
+			_, err := verifier.VerifyEnvelope(env)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("expected %v, got %v", tc.want, err)
+			}
+		})
+	}
 }
 
-func (l *testLogger) Log(msg string, args ...interface{})   {}
-func (l *testLogger) Debug(msg string, args ...interface{}) {}
-func (l *testLogger) Info(msg string, args ...interface{})  {}
-func (l *testLogger) Warn(msg string, args ...interface{})  {}
-func (l *testLogger) Error(msg string, args ...interface{}) {}
+func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
+	t.Run("replayed nonce", func(t *testing.T) {
+		replayStore := newMockReplayStore()
+		verifier, privKey := newStrictVerifier(t, replayStore, &mockStateRootProvider{root: "root-1"}, &mockL3Verifier{shouldPass: true})
+		env := signedEnvelope(t, "FS_LIST", typedPayload(t, "FS_LIST"), privKey)
+		if _, err := verifier.VerifyEnvelope(env); err != nil {
+			t.Fatalf("first verification failed: %v", err)
+		}
+		_, err := verifier.VerifyEnvelope(env)
+		if !errors.Is(err, ErrTransactionReplay) {
+			t.Fatalf("expected replay rejection, got %v", err)
+		}
+	})
+
+	t.Run("state root mismatch", func(t *testing.T) {
+		verifier, privKey := newStrictVerifier(t, newMockReplayStore(), &mockStateRootProvider{root: "other-root"}, &mockL3Verifier{shouldPass: true})
+		env := signedEnvelope(t, "FS_LIST", typedPayload(t, "FS_LIST"), privKey)
+		_, err := verifier.VerifyEnvelope(env)
+		if !errors.Is(err, ErrStateRootMismatch) {
+			t.Fatalf("expected state root mismatch, got %v", err)
+		}
+	})
+}
+
+func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
+	t.Run("missing replay store", func(t *testing.T) {
+		verifier, privKey := newStrictVerifier(t, nil, &mockStateRootProvider{root: "root-1"}, &mockL3Verifier{shouldPass: true})
+		env := signedEnvelope(t, "FS_LIST", typedPayload(t, "FS_LIST"), privKey)
+		_, err := verifier.VerifyEnvelope(env)
+		if !errors.Is(err, ErrReplayStoreMissing) {
+			t.Fatalf("expected replay store rejection, got %v", err)
+		}
+	})
+
+	t.Run("missing state root provider", func(t *testing.T) {
+		verifier, privKey := newStrictVerifier(t, newMockReplayStore(), nil, &mockL3Verifier{shouldPass: true})
+		env := signedEnvelope(t, "FS_LIST", typedPayload(t, "FS_LIST"), privKey)
+		_, err := verifier.VerifyEnvelope(env)
+		if !errors.Is(err, ErrStateRootMissing) {
+			t.Fatalf("expected state root provider rejection, got %v", err)
+		}
+	})
+
+	t.Run("missing l3 verifier", func(t *testing.T) {
+		verifier, privKey := newStrictVerifier(t, newMockReplayStore(), &mockStateRootProvider{root: "root-1"}, nil)
+		env := signedEnvelope(t, "EXECUTE_BASH", typedPayload(t, "EXECUTE_BASH"), privKey)
+		_, err := verifier.VerifyEnvelope(env)
+		if !errors.Is(err, ErrL3VerifierNotConfigured) {
+			t.Fatalf("expected l3 verifier rejection, got %v", err)
+		}
+	})
+}
+
+func rehash(t *testing.T, env *uap.UAPEnvelope) {
+	t.Helper()
+	hash, err := uap.GenerateMessageID(env)
+	if err != nil {
+		t.Fatalf("failed to regenerate transaction hash: %v", err)
+	}
+	env.Id = hash
+	env.TransactionHash = hash
+}

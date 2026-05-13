@@ -76,11 +76,6 @@ func TestSecretManager_InitPlatformSettings_CreatesSecretsAndFiles(t *testing.T)
 	assert.NotEmpty(t, key)
 	assert.Equal(t, key, readSecretFromDB(t, db, "session_encryption_key"))
 
-	hmacBytes, err := os.ReadFile(filepath.Join(secretsDir, "auditor_hmac_key"))
-	require.NoError(t, err)
-	hmacKey := strings.TrimSpace(string(hmacBytes))
-	assert.NotEmpty(t, hmacKey)
-	assert.Equal(t, hmacKey, readSecretFromDB(t, db, "auditor_hmac_key"))
 }
 
 func TestSecretManager_InitPlatformSettings_FailsWhenFileWriteFails(t *testing.T) {
@@ -138,7 +133,7 @@ func TestSecretManager_InitPlatformSettings_WritesDigestManifest(t *testing.T) {
 	assert.Equal(t, 1, manifest.Version)
 	assert.NotEmpty(t, manifest.UpdatedAt)
 
-	for _, name := range []string{"internal_auth_token", "session_encryption_key", "auditor_hmac_key"} {
+	for _, name := range []string{"internal_auth_token", "session_encryption_key"} {
 		secret := readSecretFromDB(t, db, name)
 		require.NotEmpty(t, secret)
 		sum := sha256.Sum256([]byte(secret))
@@ -181,11 +176,11 @@ func TestSecretManager_InitPlatformSettings_RejectsPreexistingSecretWithoutPlatf
 	logger := testutil.NewTestLogger()
 
 	preSeeded := strings.Repeat("c", 64)
-	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "auditor_hmac_key"), []byte(preSeeded), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "internal_auth_token"), []byte(preSeeded), 0600))
 
 	err := NewSecretManager(db, secretsDir, logger).InitPlatformSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "found preexisting bootstrap secret auditor_hmac_key without platform_settings")
+	assert.Contains(t, err.Error(), "found preexisting bootstrap secret internal_auth_token without platform_settings")
 }
 
 func TestSecretManager_InitPlatformSettings_FailsWhenRequiredSecretFileMissing(t *testing.T) {
@@ -194,11 +189,11 @@ func TestSecretManager_InitPlatformSettings_FailsWhenRequiredSecretFileMissing(t
 	logger := testutil.NewTestLogger()
 
 	require.NoError(t, NewSecretManager(db, secretsDir, logger).InitPlatformSettings())
-	require.NoError(t, os.Remove(filepath.Join(secretsDir, "auditor_hmac_key")))
+	require.NoError(t, os.Remove(filepath.Join(secretsDir, "session_encryption_key")))
 
 	err := NewSecretManager(db, secretsDir, logger).InitPlatformSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "bootstrap secret auditor_hmac_key is required")
+	assert.Contains(t, err.Error(), "bootstrap secret session_encryption_key is required")
 }
 
 func TestSecretManager_InitPlatformSettings_FailsWhenDigestManifestMissing(t *testing.T) {
@@ -226,14 +221,14 @@ func TestSecretManager_InitPlatformSettings_FailsWhenDigestManifestEntryMissing(
 	require.NoError(t, err)
 	var manifest bootstrapDigestManifest
 	require.NoError(t, json.Unmarshal(data, &manifest))
-	delete(manifest.Secrets, "auditor_hmac_key")
+	delete(manifest.Secrets, "session_encryption_key")
 	mutated, err := json.Marshal(manifest)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(manifestPath, mutated, 0600))
 
 	err = NewSecretManager(db, secretsDir, logger).InitPlatformSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "bootstrap digest manifest missing required entry auditor_hmac_key")
+	assert.Contains(t, err.Error(), "bootstrap digest manifest missing required entry session_encryption_key")
 }
 
 func TestSecretManager_InitPlatformSettings_ReturnsErrorOnMalformedPlatformSettings(t *testing.T) {

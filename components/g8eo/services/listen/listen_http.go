@@ -140,6 +140,11 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc("/api/auth/login/verify", h.handleAuthLoginVerify)
 	mux.HandleFunc("/api/auth/logout", h.handleAuthLogout)
 
+	// PKI discovery also available on public port for BYO bootstrap
+	mux.HandleFunc("/.well-known/g8e/pki/root.pem", h.handlePKIRoot)
+	mux.HandleFunc("/.well-known/g8e/pki/hub-bundle.pem", h.handlePKIHubBundle)
+	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.handlePKIFingerprint)
+
 	// Browser-facing data routes (require session cookie)
 	authedMux := http.NewServeMux()
 	authedMux.HandleFunc("/api/user/me", h.handleUserMe)
@@ -211,10 +216,16 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	root, err := h.db.GetCurrentStateRoot()
+	if err != nil {
+		h.logger.Error("Health check failed to get state root", "error", err)
+	}
+
 	jsonResponse(w, http.StatusOK, models.HealthResponse{
-		Status:  constants.Status.ListenMode.StatusOK,
-		Mode:    constants.Status.ListenMode.Mode,
-		Version: h.cfg.Version,
+		Status:          constants.Status.ListenMode.StatusOK,
+		Mode:            constants.Status.ListenMode.Mode,
+		Version:         h.cfg.Version,
+		StateMerkleRoot: root,
 	})
 }
 
@@ -1296,13 +1307,16 @@ func (h *HTTPHandler) handlePubSubPublish(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	dataJSON, err := json.Marshal(req.Data)
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid data")
-		return
+	// If Data is a JSON string, it might be base64-encoded binary (e.g. UniversalEnvelope).
+	// Try to unmarshal it as []byte first (which handles base64 strings).
+	var binData []byte
+	var receivers int
+	if err := json.Unmarshal(req.Data, &binData); err == nil {
+		receivers = h.pubsub.Publish(req.Channel, binData)
+	} else {
+		// Not a string or not base64, treat as raw JSON fragment
+		receivers = h.pubsub.Publish(req.Channel, req.Data)
 	}
-
-	receivers := h.pubsub.Publish(req.Channel, dataJSON)
 	jsonResponse(w, http.StatusOK, models.PubSubPublishResponse{Receivers: receivers})
 }
 
