@@ -66,7 +66,52 @@ func (m *SecretManager) InitPlatformSettings() error {
 		return m.createPlatformSettings(now)
 	}
 
+	if err := m.cleanupStalePlatformSettings(); err != nil {
+		m.logger.Warn("[SecretManager] Failed to cleanup stale platform settings", "error", err)
+	}
+
 	return m.validatePlatformSettings()
+}
+
+func (m *SecretManager) cleanupStalePlatformSettings() error {
+	var dataJSON string
+	err := m.db.QueryRow(
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+	).Scan(&dataJSON)
+	if err != nil {
+		return err
+	}
+
+	var doc map[string]interface{}
+	if err := json.Unmarshal([]byte(dataJSON), &doc); err != nil {
+		return err
+	}
+
+	staleFields := []string{"passkey_rp_id", "passkey_origin", "setup_complete"}
+	changed := false
+	for _, field := range staleFields {
+		if _, ok := doc[field]; ok {
+			delete(doc, field)
+			changed = true
+		}
+	}
+
+	if !changed {
+		return nil
+	}
+
+	m.logger.Info("[SecretManager] Cleaning up stale fields from platform_settings document", "fields", staleFields)
+
+	newData, err := json.Marshal(doc)
+	if err != nil {
+		return err
+	}
+
+	_, err = m.db.Exec(
+		"UPDATE documents SET data = ?, updated_at = ? WHERE collection = 'settings' AND id = 'platform_settings'",
+		string(newData), sqliteutil.NowTimestamp(),
+	)
+	return err
 }
 
 func (m *SecretManager) createPlatformSettings(now time.Time) error {

@@ -32,7 +32,7 @@ def _configure_shared_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
             {
                 "infra": {
                     "db_path": ".g8e/data/g8e.db",
-                    "ca_cert_path": ".g8e/pki/ca.crt",
+                    "ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
                     "pki_dir": ".g8e/pki",
                     "docs_dir": "/docs",
                     "shared_dir": "/app/shared",
@@ -58,7 +58,7 @@ def test_load_paths_prefers_explicit_host_pki_dir(monkeypatch: pytest.MonkeyPatc
     paths = load_paths()
 
     assert paths["infra"]["pki_dir"] == str(pki_dir)
-    assert paths["infra"]["ca_cert_path"] == str(pki_dir / "ca.crt")
+    assert paths["infra"]["ca_cert_path"] == str(pki_dir / "trust" / "hub-bundle.pem")
 
 
 def test_load_paths_uses_host_runtime_dir_when_pki_dir_unset(monkeypatch: pytest.MonkeyPatch, tmp_path):
@@ -70,4 +70,4 @@ def test_load_paths_uses_host_runtime_dir_when_pki_dir_unset(monkeypatch: pytest
     paths = load_paths()
 
     assert paths["infra"]["pki_dir"] == str(runtime_dir / "pki")
-    assert paths["infra"]["ca_cert_path"] == str(runtime_dir / "pki" / "ca.crt")
+    assert paths["infra"]["ca_cert_path"] == str(runtime_dir / "pki" / "trust" / "hub-bundle.pem")

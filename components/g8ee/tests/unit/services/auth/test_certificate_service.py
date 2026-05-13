@@ -58,7 +58,9 @@ def ca_cert(ca_key):
 
 @pytest.fixture
 def setup_ca_files(temp_pki_dir, ca_cert):
-    cert_path = os.path.join(temp_pki_dir, "ca.crt")
+    trust_dir = os.path.join(temp_pki_dir, "trust")
+    os.makedirs(trust_dir, exist_ok=True)
+    cert_path = os.path.join(trust_dir, "hub-bundle.pem")
     
     with open(cert_path, "wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
@@ -99,11 +101,11 @@ async def test_initialize_success(setup_ca_files, mock_data_service):
 
 @pytest.mark.asyncio
 async def test_initialize_alternate_path(temp_pki_dir, ca_cert, mock_data_service):
-    # Test path: pki_dir/ca/ca.crt
-    ca_subdir = os.path.join(temp_pki_dir, "ca")
-    os.makedirs(ca_subdir)
+    # Test path: pki_dir/authorities/hub_ca.crt
+    auth_subdir = os.path.join(temp_pki_dir, "authorities")
+    os.makedirs(auth_subdir)
     
-    cert_path = os.path.join(ca_subdir, "ca.crt")
+    cert_path = os.path.join(auth_subdir, "hub_ca.crt")
     
     with open(cert_path, "wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))

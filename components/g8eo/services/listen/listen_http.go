@@ -93,6 +93,9 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 func (h *HTTPHandler) buildRouter() http.Handler {
 	mux := http.NewServeMux()
 
+	// Health check (available internally)
+	mux.HandleFunc("/health", h.handleHealth)
+
 	// Authenticated routes (require mTLS)
 	mux.HandleFunc("/api/settings", h.handleSettings)
 	mux.HandleFunc("/api/device-links", h.handleDeviceLinks)
