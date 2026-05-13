@@ -14,8 +14,7 @@
 """
 Operator Management Script for g8e Platform
 
-Manage operator documents via the g8ed internal HTTP API.
-Runs inside a trusted container and communicates with g8ed over the internal network.
+Manage operator documents via the Operator (g8eo) HTTP API.
 
 Usage:
     python manage-operator.py operators list --user-id USER_ID
@@ -25,7 +24,7 @@ Usage:
     python manage-operator.py operators init-slots --email user@example.com
     python manage-operator.py operators refresh-key --id OPERATOR_ID
     python manage-operator.py operators get-key --id OPERATOR_ID
-    python manage-operator.py operators reset --id OPERATOR_ID
+    python manage-operator.py operators terminate --id OPERATOR_ID
 """
 
 from __future__ import annotations
@@ -35,14 +34,13 @@ import sys
 from typing import Dict, Any, List
 
 from _lib import (
-    G8ED_BASE_URL,
+    OPERATOR_BASE_URL,
     print_banner,
     resolve_user_id,
-    g8ed_request,
+    operator_request,
 )
 
-INTERNAL_OPERATORS_BASE = f'{G8ED_BASE_URL}/api/internal/operators'
-INTERNAL_USERS_BASE = f'{G8ED_BASE_URL}/api/internal/users'
+OPERATORS_API = f'{OPERATOR_BASE_URL}/api/operators'
 
 
 def _obfuscate_sensitive(value: str | None) -> str:
@@ -53,7 +51,7 @@ def _obfuscate_sensitive(value: str | None) -> str:
 
 class OperatorManager:
     """
-    Manage operator documents via the g8ed internal HTTP API.
+    Manage operator documents via the Operator (g8eo) HTTP API.
     """
 
     def _format_operator_summary(self, op: Dict[str, Any]) -> str:
@@ -132,61 +130,44 @@ class OperatorManager:
     # =========================================================================
 
     def list_operators(self, user_id: str | None, email: str | None, all_statuses: bool = False) -> List[Dict]:
+        uid = None
         if user_id or email:
             uid = resolve_user_id(user_id, email)
             if not uid:
                 return []
-            endpoint = f'{INTERNAL_OPERATORS_BASE}/user/{uid}'
             header_text = f"Operators for user {uid}"
         else:
-            endpoint = INTERNAL_OPERATORS_BASE
             header_text = "All Operators"
 
-        params = {}
-        if all_statuses:
-            params['all'] = 'true'
+        # Query operators collection directly
+        query = {'user_id': uid} if uid else {}
+        operators = operator_request('POST', '/db/operators/_query', query)
+        if not isinstance(operators, list):
+            operators = []
 
-        if params:
-            import urllib.parse
-            query = urllib.parse.urlencode(params)
-            endpoint = f"{endpoint}?{query}"
+        # Filter by status if needed
+        if not all_statuses:
+            operators = [op for op in operators if op.get('status') != 'terminated']
 
-        result = g8ed_request('GET', endpoint)
-        if not result.get('success'):
-            raise RuntimeError(result.get('error', 'Failed to list operators'))
+        active_count = sum(1 for op in operators if op.get('status') == 'active')
 
-        operators = result.get('data', [])
-        total = result.get('total_count', len(operators))
-        active = result.get('active_count', 0)
-
-        # The internal user endpoint filters terminated by default unless all_statuses is true
-        # but the new listAllOperators also does this, so we don't necessarily need to filter here
-        # but for consistency with existing behavior of list_operators we will.
-        if not all_statuses and (user_id or email):
-            # This is already handled by g8ed for the user-specific endpoint
-            pass
-
-        print(f"\n{header_text} ({len(operators)} shown, {active} active)")
+        print(f"\n{header_text} ({len(operators)} shown, {active_count} active)")
         print("=" * 140)
         if not operators:
             print("  No operators found")
         else:
             for op in operators:
                 print(self._format_operator_summary(op))
-        print(f"\n  Total (non-terminated): {total}  Active: {active}")
+        print(f"\n  Total: {len(operators)}  Active: {active_count}")
         print()
         return operators
 
     def get_operator(self, operator_id: str) -> Dict | None:
-        result = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
-        if not result.get('success'):
-            if result.get('_status_code') == 404:
-                print(f"\nOperator not found: {operator_id}")
-            else:
-                raise RuntimeError(result.get('error', 'Failed to get operator'))
+        op = operator_request('GET', f'/db/operators/{operator_id}')
+        if not op:
+            print(f"\nOperator not found: {operator_id}")
             return None
 
-        op = result['data']
         print(self._format_operator_detail(op))
         return op
 
@@ -195,86 +176,86 @@ class OperatorManager:
         if not uid:
             return None
 
-        user_result = g8ed_request('GET', f'{INTERNAL_USERS_BASE}/{uid}')
-        org_id = uid
-        if user_result.get('success'):
-            org_id = user_result['data'].get('organization_id') or uid
+        # Check if user already has operator slots
+        existing = operator_request('POST', '/db/operators/_query', {'user_id': uid})
+        if isinstance(existing, list) and len(existing) > 0:
+            print(f"\nUser {uid} already has {len(existing)} operator slot(s)")
+            for op in existing:
+                print(f"    {op.get('id')} - slot {op.get('slot_number', 'N/A')}")
+            print()
+            return [op.get('id') for op in existing]
 
-        result = g8ed_request(
-            'POST',
-            f'{INTERNAL_OPERATORS_BASE}/user/{uid}/initialize-slots',
-            {'organization_id': org_id}
-        )
-        if not result.get('success'):
-            raise RuntimeError(result.get('error', 'Failed to initialize operator slots'))
+        # Create initial operator slot
+        import time
+        op_doc = {
+            'id': f'op_{uid}_slot_0',
+            'user_id': uid,
+            'organization_id': uid,
+            'status': 'available',
+            'slot_number': 0,
+            'is_slot': True,
+            'claimed': False,
+            'operator_type': 'slot',
+            'cloud_subtype': 'g8ep',
+            'created_at': int(time.time() * 1000),
+            'updated_at': int(time.time() * 1000),
+        }
 
-        operator_ids = result.get('operator_ids', [])
-        count = result.get('count', len(operator_ids))
+        result = operator_request('PUT', f'/db/operators/{op_doc["id"]}', op_doc)
+        if not result:
+            raise RuntimeError('Failed to create operator slot')
 
-        print(f"\nOperator slots initialized for user {uid}")
-        print(f"  Total slots: {count}")
-        for op_id in operator_ids:
-            print(f"    {op_id}")
+        print(f"\nOperator slot initialized for user {uid}")
+        print(f"  Slot 0: {op_doc['id']}")
         print()
-        return operator_ids
+        return [op_doc['id']]
 
     def refresh_key(self, operator_id: str, force: bool = False) -> Dict | None:
-        existing = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
-        if not existing.get('success'):
-            if existing.get('_status_code') == 404:
-                print(f"\nOperator not found: {operator_id}")
-            else:
-                raise RuntimeError(existing.get('error', 'Failed to get operator'))
+        op = operator_request('GET', f'/db/operators/{operator_id}')
+        if not op:
+            print(f"\nOperator not found: {operator_id}")
             return None
 
-        op = existing['data']
-        print(f"\nAbout to refresh API key for operator:")
+        print(f"\nAbout to rotate API key for operator:")
         print(f"  ID:       {operator_id}")
         print(f"  Name:     {op.get('name', 'N/A')}")
         print(f"  Slot:     {op.get('slot_number', 'N/A')}")
         print(f"  Status:   {op.get('status', 'N/A')}")
         print(f"  User ID:  {op.get('user_id', 'N/A')}")
         print()
-        print("  This terminates the old operator document and creates a new one.")
-        print("  The old API key will be invalidated immediately.")
+        print("  This will rotate the operator's API key.")
 
         if not force:
-            response = input("\nType 'refresh' to confirm: ")
-            if response.strip().lower() != 'refresh':
-                print("Refresh cancelled.")
+            response = input("\nType 'rotate' to confirm: ")
+            if response.strip().lower() != 'rotate':
+                print("Rotation cancelled.")
                 return None
 
         user_id = op.get('user_id')
         if not user_id:
-            raise RuntimeError("Operator has no user_id — cannot refresh")
+            raise RuntimeError("Operator has no user_id — cannot rotate key")
 
-        result = g8ed_request(
+        result = operator_request(
             'POST',
-            f'{INTERNAL_OPERATORS_BASE}/{operator_id}/refresh-key',
-            {'user_id': user_id}
+            f'{OPERATORS_API}/rotate-api-key',
+            {'operator_id': operator_id, 'user_id': user_id}
         )
 
-        if not result.get('success'):
-            raise RuntimeError(result.get('error', result.get('message', 'Failed to refresh API key')))
+        if not result or not result.get('success'):
+            raise RuntimeError(result.get('error', 'Failed to rotate API key') if result else 'Failed to rotate API key')
 
-        print(f"\nAPI key refreshed successfully.")
-        print(f"  Old Operator ID:  {result.get('old_operator_id', operator_id)}")
-        print(f"  New Operator ID:  {result.get('new_operator_id', 'N/A')}")
-        print(f"  Slot Number:      {result.get('slot_number', 'N/A')}")
-        print(f"  New API Key:      {_obfuscate_sensitive(result.get('new_api_key'))}")
+        print(f"\nAPI key rotated successfully.")
+        print(f"  Operator ID:      {operator_id}")
+        print(f"  New API Key:      {_obfuscate_sensitive(result.get('api_key'))}")
         print()
         return result
 
     def get_key(self, operator_id: str) -> str | None:
-        result = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
-        if not result.get('success'):
-            if result.get('_status_code') == 404:
-                print(f"\nOperator not found: {operator_id}")
-            else:
-                raise RuntimeError(result.get('error', 'Failed to get operator'))
+        op = operator_request('GET', f'/db/operators/{operator_id}')
+        if not op:
+            print(f"\nOperator not found: {operator_id}")
             return None
 
-        op = result['data']
         api_key = op.get('operator_api_key') or op.get('api_key')
 
         if not api_key:
@@ -290,42 +271,42 @@ class OperatorManager:
         print()
         return api_key
 
-    def reset(self, operator_id: str, force: bool = False) -> Dict | None:
-        existing = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
-        if not existing.get('success'):
-            if existing.get('_status_code') == 404:
-                print(f"\nOperator not found: {operator_id}")
-            else:
-                raise RuntimeError(existing.get('error', 'Failed to get operator'))
+    def terminate(self, operator_id: str, force: bool = False) -> Dict | None:
+        op = operator_request('GET', f'/db/operators/{operator_id}')
+        if not op:
+            print(f"\nOperator not found: {operator_id}")
             return None
 
-        op = existing['data']
-        print(f"\nAbout to reset operator to fresh AVAILABLE state:")
+        user_id = op.get('user_id')
+        print(f"\nAbout to terminate operator:")
         print(f"  ID:       {operator_id}")
         print(f"  Name:     {op.get('name', 'N/A')}")
         print(f"  Slot:     {op.get('slot_number', 'N/A')}")
         print(f"  Status:   {op.get('status', 'N/A')}")
-        print(f"  User ID:  {op.get('user_id', 'N/A')}")
+        print(f"  User ID:  {user_id or 'N/A'}")
         print()
-        print("  This deletes and recreates the operator document with default values.")
-        print("  The existing API key is preserved. All session state is cleared.")
+        print("  This will terminate the operator session and mark it as terminated.")
 
         if not force:
-            response = input("\nType 'reset' to confirm: ")
-            if response.strip().lower() != 'reset':
-                print("Reset cancelled.")
+            response = input("\nType 'terminate' to confirm: ")
+            if response.strip().lower() != 'terminate':
+                print("Termination cancelled.")
                 return None
 
-        result = g8ed_request(
-            'POST',
-            f'{INTERNAL_OPERATORS_BASE}/{operator_id}/reset-cache'
-        )
-        if not result.get('success'):
-            raise RuntimeError(result.get('error', 'Failed to reset operator'))
+        if not user_id:
+            raise RuntimeError("Operator has no user_id — cannot terminate")
 
-        print(f"\nOperator reset successfully.")
+        result = operator_request(
+            'POST',
+            f'{OPERATORS_API}/terminate',
+            {'operator_id': operator_id, 'user_id': user_id, 'reason': 'manual termination'}
+        )
+
+        if not result or not result.get('success'):
+            raise RuntimeError(result.get('error', 'Failed to terminate operator') if result else 'Failed to terminate operator')
+
+        print(f"\nOperator terminated successfully.")
         print(f"  Operator ID:  {operator_id}")
-        print(f"  New Status:   {result.get('status', 'N/A')}")
         print()
         return result
 
@@ -345,8 +326,8 @@ Examples:
   python manage-operator.py operators refresh-key --id OPERATOR_ID
   python manage-operator.py operators refresh-key --id OPERATOR_ID --force
   python manage-operator.py operators get-key --id OPERATOR_ID
-  python manage-operator.py operators reset --id OPERATOR_ID
-  python manage-operator.py operators reset --id OPERATOR_ID --force
+  python manage-operator.py operators terminate --id OPERATOR_ID
+  python manage-operator.py operators terminate --id OPERATOR_ID --force
         """
     )
 
@@ -376,8 +357,8 @@ Examples:
     sp.add_argument('--id', dest='operator_id', required=True, help='Operator ID')
 
     sp = subparsers.add_parser(
-        'reset',
-        help='Reset operator to fresh AVAILABLE state (preserves API key, clears session state)'
+        'terminate',
+        help='Terminate an operator session'
     )
     sp.add_argument('--id', dest='operator_id', required=True, help='Operator ID')
     sp.add_argument('--force', action='store_true', help='Skip confirmation prompt')
@@ -414,8 +395,8 @@ def run(argv: List[str]) -> int:
             manager.refresh_key(args.operator_id, force=args.force)
         elif args.command == 'get-key':
             manager.get_key(args.operator_id)
-        elif args.command == 'reset':
-            manager.reset(args.operator_id, force=args.force)
+        elif args.command == 'terminate':
+            manager.terminate(args.operator_id, force=args.force)
     except RuntimeError as e:
         print(f'[manage-operator operators] {e}', file=sys.stderr)
         return 1

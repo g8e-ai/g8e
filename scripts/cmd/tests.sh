@@ -28,9 +28,9 @@ if [[ "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" == "--help" ]]; then
     fi
     exit 0
 fi
-if [[ "$_TEST_COMPONENT" != "g8ee" && "$_TEST_COMPONENT" != "g8ed" && "$_TEST_COMPONENT" != "g8eo" ]]; then
+if [[ "$_TEST_COMPONENT" != "g8ee" && "$_TEST_COMPONENT" != "g8eo" ]]; then
     echo "[g8e] Unknown test component: '$_TEST_COMPONENT'" >&2
-    echo "  Valid: g8ee, g8ed, g8eo" >&2
+    echo "  Valid: g8ee, g8eo" >&2
     exit 1
 fi
 

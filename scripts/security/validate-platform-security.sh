@@ -73,7 +73,7 @@ check_port() {
 
 check_port 9000 || FAILED=1 # g8eo (Operator --listen)
 check_port 9001 || FAILED=1 # g8eo (WSS)
-check_port 443 || FAILED=1  # g8ed/g8ee
+check_port 443 || FAILED=1  # g8ee (Engine)
 
 if [ $FAILED -eq 0 ]; then
     echo -e "\n${GREEN}Platform Security Validation PASSED!${NC}"

@@ -14,7 +14,7 @@
 """
 Shared utilities for g8e data management scripts.
 
-Provides authentication, HTTP clients (operator direct + g8ed internal API),
+Provides authentication, HTTP clients for the Operator substrate,
 and terminal display helpers used across all resource scripts.
 """
 
@@ -40,7 +40,6 @@ _DEFAULT_PKI_DIR = str(PROJECT_ROOT / '.g8e' / 'pki')
 _DEFAULT_SECRETS_DIR = str(PROJECT_ROOT / '.g8e' / 'secrets')
 
 OPERATOR_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', 'https://localhost:9000')
-G8ED_BASE_URL = os.environ.get('G8ED_INTERNAL_URL', 'https://localhost')
 COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
 PRESERVE_COLLECTIONS = {'settings'}
 
@@ -66,9 +65,8 @@ def get_auth_token() -> str:
     """Return the operator session token from env (set by `g8e login`).
 
     The wrapper gates `g8e data` on a valid operator session before invoking
-    this script, so OPERATOR_SESSION_ID is expected to be present. It is
-    forwarded to g8ed for operator-scoped API calls; operator calls use the
-    internal auth token instead (see get_internal_auth_token).
+    this script, so OPERATOR_SESSION_ID is expected to be present.
+    Operator calls use the internal auth token (see get_internal_auth_token).
     """
     return os.environ.get('OPERATOR_SESSION_ID', '')
 
@@ -109,7 +107,7 @@ def get_auditor_hmac_key() -> str:
 
 
 # =============================================================================
-# g8ed HTTP client — direct DB/KV access (same as g8ee's DBClient)
+# Operator HTTP client — direct DB/KV access
 # =============================================================================
 
 def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
@@ -120,8 +118,7 @@ def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
     # The Operator listen-mode HTTP API requires X-Internal-Auth on all
     # non-health endpoints. The operator session from `g8e login` gates the
     # wrapper; the script reads the internal auth token written by the
-    # Operator at $G8E_SECRETS_DIR/internal_auth_token, the same way g8ed and
-    # g8ee do.
+    # Operator at $G8E_SECRETS_DIR/internal_auth_token.
     internal_token = get_internal_auth_token()
     if internal_token:
         headers['X-Internal-Auth'] = internal_token
@@ -184,57 +181,21 @@ def kv_delete_pattern(pattern: str) -> int:
 
 
 # =============================================================================
-# g8ed internal API client — for resource management (users, operators, etc.)
+# Operator API client — for resource management (users, operators, etc.)
 # =============================================================================
 
-def g8ed_request(method: str, url: str, body: Dict | None = None) -> Dict:
-    data = json.dumps(body).encode() if body is not None else None
-    headers = {
-        'X-Operator-Session-Id': get_auth_token() or '',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-    }
-    # g8ed internal endpoints accept either an operator session OR the
-    # platform internal auth token. We forward the on-disk internal token
-    # for bootstrap flows before any user is authenticated.
-    internal_token = get_internal_auth_token()
-    if internal_token:
-        headers['X-Internal-Auth'] = internal_token
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    ctx = _create_ssl_context()
-    try:
-        with urllib.request.urlopen(req, context=ctx) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        body_bytes = e.read()
-        try:
-            err = json.loads(body_bytes.decode())
-        except Exception:
-            err = {'error': body_bytes.decode()}
-        err['_status_code'] = e.code
-        return err
-    except urllib.error.URLError as e:
-        raise RuntimeError(
-            f"Could not reach g8ed at {G8ED_BASE_URL}. Is the platform running? "
-            f"(./g8e platform start)\n  {e.reason}"
-        )
-
-
 def resolve_user_id(user_id: str | None, email: str | None) -> str | None:
+    """Resolve user ID from email using the Operator's public API."""
     if user_id:
         return user_id
     if not email:
         return None
-    result = g8ed_request('GET', f'{G8ED_BASE_URL}/api/internal/users/email/{urllib.parse.quote(email, safe="")}')
-    # g8ed returns {user: {...}} on success and {error/...} on failure.
-    user = result.get('user') if isinstance(result, dict) else None
-    if not user:
-        if result.get('_status_code') == 404:
-            print(f"\nUser not found with email: {email}")
-        else:
-            raise RuntimeError(result.get('error', 'Failed to resolve user by email'))
+    # Query users collection by email
+    result = operator_request('POST', '/db/users/_query', {'email': email})
+    if not isinstance(result, list) or len(result) == 0:
+        print(f"\nUser not found with email: {email}")
         return None
-    return user['id']
+    return result[0].get('id')
 
 
 # =============================================================================

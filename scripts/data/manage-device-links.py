@@ -14,8 +14,7 @@
 """
 Device Link Management Script for g8e Platform
 
-Manage device link tokens via the g8ed internal HTTP API.
-Runs inside g8ep and communicates with g8ed over the internal network.
+Manage device link tokens via the Operator (g8eo) HTTP API.
 
 Usage:
     python manage-operator.py device-links list --user-id USER_ID
@@ -34,13 +33,13 @@ import sys
 from typing import Dict, Any, List
 
 from _lib import (
-    G8ED_BASE_URL,
+    OPERATOR_BASE_URL,
     print_banner,
     resolve_user_id,
-    g8ed_request,
+    operator_request,
 )
 
-INTERNAL_DEVICE_LINKS_BASE = f'{G8ED_BASE_URL}/api/internal/device-links'
+DEVICE_LINKS_API = f'{OPERATOR_BASE_URL}/api/device-links'
 
 TOKEN_RE_PREFIX = 'dlk_'
 
@@ -71,20 +70,19 @@ class DeviceLinkManager:
         uid = resolve_user_id(user_id, email)
         if not uid:
             raise RuntimeError('Provide --user-id or --email')
-        result = g8ed_request('GET', f'{INTERNAL_DEVICE_LINKS_BASE}/user/{uid}')
-        if not result.get('success'):
-            raise RuntimeError(result.get('error', 'Failed to list device links'))
-
-        links = result.get('links', [])
-        print(f"\nDevice Links for user {uid} ({len(links)} total)")
+        # Query device_links collection directly
+        result = operator_request('POST', '/db/device_links/_query', {'user_id': uid})
+        if not isinstance(result, list):
+            result = []
+        print(f"\nDevice Links for user {uid} ({len(result)} total)")
         print("=" * 110)
-        if not links:
+        if not result:
             print("  No device links found")
         else:
-            for link in links:
+            for link in result:
                 print(_format_link(link))
         print()
-        return links
+        return result
 
     def create_link(
         self,
@@ -107,9 +105,9 @@ class DeviceLinkManager:
         if expires_in_hours is not None:
             body['expires_in_hours'] = expires_in_hours
 
-        result = g8ed_request('POST', f'{INTERNAL_DEVICE_LINKS_BASE}/user/{uid}', body)
-        if not result.get('success'):
-            raise RuntimeError(result.get('error', 'Failed to create device link'))
+        result = operator_request('POST', DEVICE_LINKS_API, body)
+        if not result or not result.get('success'):
+            raise RuntimeError(result.get('error', 'Failed to create device link') if result else 'Failed to create device link')
 
         print("\nDevice link created:")
         print(f"  Token:           {result['token']}")
@@ -127,12 +125,12 @@ class DeviceLinkManager:
             print(f"Invalid token format: {token}")
             return False
 
-        result = g8ed_request('DELETE', f'{INTERNAL_DEVICE_LINKS_BASE}/{token}')
-        if not result.get('success'):
-            if result.get('_status_code') == 404:
+        result = operator_request('DELETE', f'{DEVICE_LINKS_API}/{token}')
+        if not result or not result.get('success'):
+            if isinstance(result, dict) and result.get('_status_code') == 404:
                 print(f"\nDevice link not found: {token}")
             else:
-                raise RuntimeError(result.get('error', 'Failed to revoke device link'))
+                raise RuntimeError(result.get('error', 'Failed to revoke device link') if result else 'Failed to revoke device link')
             return False
 
         print(f"\nDevice link revoked: {token}")
@@ -150,12 +148,14 @@ class DeviceLinkManager:
                 print("Deletion cancelled.")
                 return False
 
-        result = g8ed_request('DELETE', f'{INTERNAL_DEVICE_LINKS_BASE}/{token}?action=delete')
-        if not result.get('success'):
-            if result.get('_status_code') == 404:
+        # For permanent delete, we use a query parameter
+        import urllib.parse
+        result = operator_request('DELETE', f'{DEVICE_LINKS_API}/{urllib.parse.quote(token, safe="")}?action=delete')
+        if not result or not result.get('success'):
+            if isinstance(result, dict) and result.get('_status_code') == 404:
                 print(f"\nDevice link not found: {token}")
             else:
-                raise RuntimeError(result.get('error', 'Failed to delete device link'))
+                raise RuntimeError(result.get('error', 'Failed to delete device link') if result else 'Failed to delete device link')
             return False
 
         print(f"\nDevice link deleted: {token}")

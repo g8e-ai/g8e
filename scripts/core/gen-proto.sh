@@ -4,7 +4,6 @@
 # Generates:
 #   - Go code for g8eo
 #   - Python code for g8ee
-#   - JavaScript/TypeScript code for g8ed
 #
 # Usage: ./scripts/core/gen-proto.sh
 
@@ -18,9 +17,8 @@ PROTO_SRC_DIR="$PROJECT_ROOT/shared/proto"
 # Output directories
 GO_OUT_DIR="$PROJECT_ROOT/components/g8eo/shared/proto"
 PY_OUT_DIR="$PROJECT_ROOT/components/g8ee/app/proto"
-JS_OUT_DIR="$PROJECT_ROOT/components/g8ed/shared/proto"
 
-mkdir -p "$GO_OUT_DIR" "$PY_OUT_DIR" "$JS_OUT_DIR"
+mkdir -p "$GO_OUT_DIR" "$PY_OUT_DIR"
 
 echo "Generating Protobuf code..."
 
@@ -43,8 +41,5 @@ docker run --rm -u $(id -u):$(id -g) -v "$PROTO_SRC_DIR:/proto_src" -v "$PY_OUT_
 # Post-process Python files to fix imports for package structure
 touch "$PY_OUT_DIR/__init__.py"
 sed -i 's/^import \(.*_pb2\)/from . import \1/' "$PY_OUT_DIR"/*_pb2*.py
-
-# JS generation
-docker run --rm -u $(id -u):$(id -g) -v "$PROTO_SRC_DIR:/proto_src" -v "$JS_OUT_DIR:/js_out" namely/protoc-all -i /proto_src -d /proto_src -l node -o /js_out --grpc-web-out "import_style=commonjs,mode=grpcwebtext"
 
 echo "Protobuf generation complete."
