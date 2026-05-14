@@ -125,6 +125,7 @@ message FetchFileHistoryRequested {
   string execution_id = 1;
   string file_path = 2;
   int32 limit = 3;
+  string operator_session_id = 4;
 }
 
 message FetchFileDiffRequested {

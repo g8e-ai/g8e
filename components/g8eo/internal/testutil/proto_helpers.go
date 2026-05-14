@@ -22,9 +22,9 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
+	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 )
 
 // MustMarshalJSON marshals v to json.RawMessage, fatally failing the test on error.
@@ -196,12 +196,13 @@ func MustBuildFetchHistoryRequestedPayload(t *testing.T, execID string, sessionI
 }
 
 // MustBuildFetchFileHistoryRequestedPayload builds a FetchFileHistoryRequested payload bytes.
-func MustBuildFetchFileHistoryRequestedPayload(t *testing.T, execID string, filePath string, limit int32) []byte {
+func MustBuildFetchFileHistoryRequestedPayload(t *testing.T, execID string, filePath string, limit int32, operatorSessionID string) []byte {
 	t.Helper()
 	p := &operatorv1.FetchFileHistoryRequested{
-		ExecutionId: execID,
-		FilePath:    filePath,
-		Limit:       limit,
+		ExecutionId:       execID,
+		FilePath:          filePath,
+		Limit:             limit,
+		OperatorSessionId: operatorSessionID,
 	}
 	b, err := proto.Marshal(p)
 	if err != nil {

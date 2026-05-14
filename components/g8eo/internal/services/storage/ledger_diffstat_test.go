@@ -30,7 +30,7 @@ func TestLedgerService_GetDiffStat_EmptyHashesReturnsEmpty(t *testing.T) {
 	lms, avs, _ := setupTestLedger(t)
 	defer avs.Close()
 
-	result := lms.GetDiffStat("", "")
+	result := lms.GetDiffStat("", "", "session")
 	assert.Empty(t, result)
 }
 
@@ -58,7 +58,7 @@ func TestLedgerService_GetDiffStat_BetweenTwoCommits(t *testing.T) {
 	hashAfter := result2.LedgerHashAfter
 	require.NotEmpty(t, hashAfter)
 
-	stat := lms.GetDiffStat(hashBefore, hashAfter)
+	stat := lms.GetDiffStat(hashBefore, hashAfter, "sess-diffstat")
 	assert.NotEmpty(t, stat)
 }
 
@@ -76,7 +76,7 @@ func TestLedgerService_GetDiffStat_SameHashReturnsEmpty(t *testing.T) {
 	hash := result.LedgerHashAfter
 	require.NotEmpty(t, hash)
 
-	stat := lms.GetDiffStat(hash, hash)
+	stat := lms.GetDiffStat(hash, hash, "sess-same")
 	assert.Empty(t, stat)
 }
 
@@ -84,13 +84,13 @@ func TestLedgerService_GetDiffStat_InvalidHashesReturnsEmpty(t *testing.T) {
 	lms, avs, _ := setupTestLedger(t)
 	defer avs.Close()
 
-	stat := lms.GetDiffStat("deadbeef", "cafebabe")
+	stat := lms.GetDiffStat("deadbeef", "cafebabe", "session")
 	assert.Empty(t, stat)
 }
 
 func TestLedgerService_GetDiffStat_GitDisabledReturnsEmpty(t *testing.T) {
 	lms := NewLedgerService(nil, nil, nil)
 
-	stat := lms.GetDiffStat("abc123", "def456")
+	stat := lms.GetDiffStat("abc123", "def456", "session")
 	assert.Empty(t, stat)
 }

@@ -166,9 +166,10 @@ func (hh *HistoryHandler) HandleFetchFileHistory(requestJSON []byte) (*operatorv
 
 	hh.logger.Info("Handling FETCH_FILE_HISTORY request (via Protobuf)",
 		"file_path", request.FilePath,
-		"limit", limit)
+		"limit", limit,
+		"operator_session_id", request.OperatorSessionId)
 
-	history, err := hh.ledger.GetFileHistory(request.FilePath, limit)
+	history, err := hh.ledger.GetFileHistory(request.FilePath, limit, request.OperatorSessionId)
 	if err != nil {
 		return hh.fetchFileHistoryError(fmt.Errorf("failed to get file history: %w", err).Error()), nil
 	}
@@ -223,8 +224,8 @@ func (hh *HistoryHandler) HandleRestoreFile(requestJSON []byte) (*operatorv1.Res
 	}, nil
 }
 
-func (hh *HistoryHandler) GetFileAtCommit(filePath, commitHash string) (string, error) {
-	return hh.ledger.GetFileAtCommit(filePath, commitHash)
+func (hh *HistoryHandler) GetFileAtCommit(filePath, commitHash, operatorSessionID string) (string, error) {
+	return hh.ledger.GetFileAtCommit(filePath, commitHash, operatorSessionID)
 }
 
 func (hh *HistoryHandler) IsEnabled() bool {

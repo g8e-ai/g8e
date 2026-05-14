@@ -109,8 +109,8 @@ The Operator binary handles the seeding and initialization of platform secrets d
 ### Encrypted Audit Vault
 Every action is recorded in an encrypted SQLite database on the Operator host. Output is scrubbed by **Sentinel** for credentials and PII before being recorded or transmitted.
 
-### Git Ledger
-Every file mutation is mirrored into a hidden `.g8e/ledger` Git repository, providing a verifiable, diffable history of all AI-driven edits.
+### Ledger (Multi-Ledger Architecture)
+The Operator implements a **Multi-Ledger Architecture**: each operator session owns an isolated git repository at `.g8e/data/ledger/sessions/<operator_session_id>/`. Every file mutation is mirrored into the session-scoped ledger via a two-phase commit — a pre-mutation snapshot (`LedgerHashBefore`) followed by a post-mutation snapshot (`LedgerHashAfter`) — providing a verifiable, diffable history of every AI-driven edit. Session ledgers are initialized lazily on first use with a double-checked lock; concurrent sessions never share a working tree. Files are stored encrypted (`.enc`, AES-256-GCM) when the Encryption Vault is unlocked. The Ledger degrades gracefully when git is unavailable.
 
 ### Output Scrubbing (Sentinel)
 Sentinel performs dual-role analysis:
