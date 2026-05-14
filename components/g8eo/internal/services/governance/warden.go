@@ -13,10 +13,10 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/mappings"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
-	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	execution "github.com/g8e-ai/g8e/components/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/storage"
 	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
+	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 )
 
 type L3Verifier interface {
@@ -48,6 +48,14 @@ type Warden struct {
 	// Warden's own signing identity for ActionReceipts
 	SigningKey ed25519.PrivateKey
 	KeyID      string
+}
+
+// truncateHash safely truncates a hash for logging.
+func truncateHash(hash string) string {
+	if len(hash) >= 12 {
+		return hash[:12]
+	}
+	return hash
 }
 
 // Execute is the single execution boundary for all verified transactions.
@@ -153,11 +161,11 @@ func (w *Warden) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) {
 	}
 
 	event := &storage.Event{
-		OperatorSessionID: env.OperatorId,
+		OperatorSessionID: env.OperatorSessionId,
 		Timestamp:         time.Now(),
 		Type:              storage.EventType("action_receipt"),
 		ContentText:       fmt.Sprintf("ActionReceipt: %s (Status: %s, Summary: %s)", r.TransactionId, r.Status, r.ResultSummary),
-		CommandRaw:        fmt.Sprintf("tx_hash: %s, state_before: %s, state_after: %s", r.TransactionHash, r.StateRootBefore, r.StateRootAfter),
+		CommandRaw:        fmt.Sprintf("%s / %s (hash: %s, state: %s -> %s)", env.ActionType, env.TargetResource, truncateHash(r.TransactionHash), truncateHash(r.StateRootBefore), truncateHash(r.StateRootAfter)),
 	}
 
 	if _, err := w.AuditVault.RecordEvent(event); err != nil {

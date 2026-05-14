@@ -49,10 +49,8 @@ def _load_security_constraints() -> dict:
     try:
         with open(shared_models_path, "r") as f:
             constraints = json.load(f)
-        logger.info("Loaded security constraints from %s", shared_models_path)
         return constraints
-    except Exception as e:
-        logger.error("Failed to load security constraints from %s: %s", shared_models_path, e)
+    except Exception:
         return {}
 
 

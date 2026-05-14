@@ -32,11 +32,13 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/mappings"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/governance"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
+	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 )
 
 // ── flags ─────────────────────────────────────────────────────────────────────
@@ -52,20 +54,23 @@ var (
 type category int
 
 const (
-	catGoodActor category = iota // 70 % – FS_LIST, safe
-	catPromptInj                 // 20 % – EXECUTE_BASH, forbidden cmd
-	catMitM                      // 10 % – corrupted hash
+	catGoodActor    category = iota // 70 % – FS_LIST, safe
+	catPromptInj                    // 20 % – EXECUTE_BASH, forbidden cmd
+	catMitM                         // 10 % – corrupted hash
+	catFileMutation                 // 10 % – FILE_EDIT, safe
 )
 
 func pickCategory(r *rand.Rand) category {
 	n := r.Intn(100)
 	switch {
-	case n < 70:
+	case n < 60:
 		return catGoodActor
-	case n < 90:
+	case n < 80:
 		return catPromptInj
-	default:
+	case n < 90:
 		return catMitM
+	default:
+		return catFileMutation
 	}
 }
 
@@ -105,6 +110,21 @@ func buildPromptInjEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey
 	return signedEnvelope("EXECUTE_BASH", "localhost", stateRoot,
 		fmt.Sprintf("inject-%d-%d", id, time.Now().UnixNano()),
 		payload, false, privKey, keyID)
+}
+
+func buildFileMutationEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string) (*uap.UAPEnvelope, error) {
+	payload, err := proto.Marshal(&operatorv1.FileEditRequested{
+		FilePath:    fmt.Sprintf("/tmp/chaos-edit-%d.txt", id),
+		Content:     fmt.Sprintf("chaos was here at %d", time.Now().UnixNano()),
+		ExecutionId: fmt.Sprintf("exec-edit-%d", id),
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Mutations require L3 (human proof)
+	return signedEnvelope("FILE_EDIT", "localhost", stateRoot,
+		fmt.Sprintf("edit-%d-%d", id, time.Now().UnixNano()),
+		payload, true, privKey, keyID)
 }
 
 func buildMitMEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string) (*uap.UAPEnvelope, error) {
@@ -211,25 +231,79 @@ func (c *chaosL3Verifier) VerifyL3Proof(_, _, _, _ string) (bool, error) {
 
 // ── state root provider ───────────────────────────────────────────────────────
 
-type fixedStateRoot struct{ root string }
+type dynamicStateRoot struct {
+	mu   sync.Mutex
+	root string
+}
 
-func (f *fixedStateRoot) GetCurrentStateRoot() (string, error) { return f.root, nil }
+func (d *dynamicStateRoot) GetCurrentStateRoot() (string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.root, nil
+}
+
+func (d *dynamicStateRoot) UpdateRoot(newRoot string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.root = newRoot
+}
 
 // ── execution handler (no-op: chaos tester does not actually run commands) ────
 
-type noopExecutionHandler struct{}
+type chaosExecutionHandler struct {
+	ledger        *storage.LedgerService
+	stateRoot     *dynamicStateRoot
+	mutationCount atomic.Int64
+}
 
-func (n *noopExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, eventType string, _ interface{}) error {
+func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, eventType string, cmdMsg interface{}) error {
+	msg, ok := cmdMsg.(pubsub.PubSubCommandMessage)
+	if !ok {
+		return nil
+	}
+
+	// Simulate ledger activity for file mutations
+	if eventType == "g8e.v1.operator.file.edit.requested" && c.ledger != nil {
+		req := &operatorv1.FileEditRequested{}
+		if err := proto.Unmarshal(msg.Payload, req); err == nil {
+			slog.Info("Chaos simulating file mutation in ledger", "file", req.FilePath)
+			// Simulate the two-phase ledger commit
+			res, err := c.ledger.LedgerFileWrite(msg.OperatorSessionID, req.FilePath)
+			if err != nil {
+				slog.Error("LedgerFileWrite failed", "error", err)
+			}
+			if res != nil {
+				// Create the dummy file so git can see it
+				_ = os.MkdirAll(filepath.Dir(req.FilePath), 0755)
+				_ = os.WriteFile(req.FilePath, []byte(req.Content), 0644)
+				err = c.ledger.CompleteMirrorWrite(res, msg.OperatorSessionID)
+				if err != nil {
+					slog.Error("CompleteMirrorWrite failed", "error", err)
+				} else {
+					slog.Info("Chaos ledger mutation complete", "file", req.FilePath)
+					// Update state root after successful mutation to test state freshness
+					count := c.mutationCount.Add(1)
+					newRoot := fmt.Sprintf("chaos-state-root-v1-mutation-%d", count)
+					c.stateRoot.UpdateRoot(newRoot)
+					slog.Info("State root updated", "new_root", newRoot, "mutation_count", count)
+				}
+			}
+		} else {
+			slog.Error("Failed to unmarshal FileEditRequested", "error", err)
+		}
+	}
 	return nil
 }
 
-// ── result counters ───────────────────────────────────────────────────────────
+// Result counters
 
 type counters struct {
-	executed  atomic.Int64
-	l1Blocked atomic.Int64
-	hashFail  atomic.Int64
-	other     atomic.Int64
+	executed          atomic.Int64
+	executedGoodActor atomic.Int64
+	executedFileMut   atomic.Int64
+	l1Blocked         atomic.Int64
+	hashFail          atomic.Int64
+	other             atomic.Int64
 }
 
 // ── main ──────────────────────────────────────────────────────────────────────
@@ -293,17 +367,20 @@ func main() {
 	}
 	defer av.Close()
 
-	const stateRoot = "chaos-state-root-v1"
+	const initialStateRoot = "chaos-state-root-v1"
 
 	// ── governance stack ──────────────────────────────────────────────────────
 	replayStore := newMemReplayStore()
-	stateRootProvider := &fixedStateRoot{root: stateRoot}
+	stateRootProvider := &dynamicStateRoot{root: initialStateRoot}
 	l3Verifier := &chaosL3Verifier{}
 
 	knownActionTypes := []string{
 		"EXECUTE_BASH", "FILE_EDIT", "RESTORE_FILE", "SHUTDOWN",
 		"FS_LIST", "FS_READ", "FS_GREP", "PORT_CHECK", "FETCH_LOGS",
 	}
+
+	// Initialize Ledger
+	ledger := storage.NewLedgerService(av, nil, logger)
 
 	verifier := governance.NewTransactionVerifier(
 		logger,
@@ -320,28 +397,69 @@ func main() {
 		AuditVault:        av,
 		L3Verifier:        l3Verifier,
 		StateRootProvider: stateRootProvider,
-		ExecutionHandler:  &noopExecutionHandler{},
+		ExecutionHandler:  &chaosExecutionHandler{ledger: ledger, stateRoot: stateRootProvider},
 		SigningKey:        privKey,
 		KeyID:             keyID,
 	}
 
-	// ── fire payloads ─────────────────────────────────────────────────────────
+	// ── phase 1: generate and count payloads by category ───────────────────────
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	payloads := make([]category, *flagCount)
+	var generatedCounters struct {
+		goodActor    int
+		promptInj    int
+		mitM         int
+		fileMutation int
+	}
+
+	for i := 0; i < *flagCount; i++ {
+		cat := pickCategory(r)
+		payloads[i] = cat
+		switch cat {
+		case catGoodActor:
+			generatedCounters.goodActor++
+		case catPromptInj:
+			generatedCounters.promptInj++
+		case catMitM:
+			generatedCounters.mitM++
+		case catFileMutation:
+			generatedCounters.fileMutation++
+		}
+	}
+
+	// Print expected outcomes based on generated categories
+	fmt.Printf("\n=== Phase 1: Payload Generation Complete ===\n")
+	fmt.Printf("Total payloads generated : %d\n", *flagCount)
+	fmt.Printf("\n")
+	fmt.Printf("Expected Outcomes:\n")
+	fmt.Printf("  SAFE_EXECUTIONS (catGoodActor)    : %d → Expected: EXECUTED\n", generatedCounters.goodActor)
+	fmt.Printf("  FORBIDDEN_PATTERNS (catPromptInj) : %d → Expected: L1_BLOCKED\n", generatedCounters.promptInj)
+	fmt.Printf("  HASH_CORRUPTION (catMitM)         : %d → Expected: HASH_FAIL\n", generatedCounters.mitM)
+	fmt.Printf("  FILE_MUTATIONS (catFileMutation) : %d → Expected: EXECUTED (with L3)\n", generatedCounters.fileMutation)
+	fmt.Printf("\n")
+	fmt.Printf("Expected Totals:\n")
+	expectedExecuted := generatedCounters.goodActor + generatedCounters.fileMutation
+	expectedL1Blocked := generatedCounters.promptInj
+	expectedHashFail := generatedCounters.mitM
+	fmt.Printf("  EXECUTED       : %d (%.0f%%)\n", expectedExecuted, pct(int64(expectedExecuted), int64(*flagCount)))
+	fmt.Printf("  L1_BLOCKED     : %d (%.0f%%)\n", expectedL1Blocked, pct(int64(expectedL1Blocked), int64(*flagCount)))
+	fmt.Printf("  HASH_FAIL      : %d (%.0f%%)\n", expectedHashFail, pct(int64(expectedHashFail), int64(*flagCount)))
+	fmt.Printf("\n")
+	fmt.Printf("=== Phase 2: Running payloads through protocol ===\n")
+
+	// ── phase 2: fire payloads through the protocol ───────────────────────────
 	var cnt counters
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 20) // cap concurrency to avoid DB contention
 
-	logger.Info("Firing payloads", "count", *flagCount)
-
-	for i := 0; i < *flagCount; i++ {
+	for i, cat := range payloads {
 		wg.Add(1)
-		cat := pickCategory(r)
 		idx := i
 		sem <- struct{}{}
 		go func(id int, c category) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			fireOne(id, c, stateRoot, privKey, keyID, verifier, warden, logger, &cnt)
+			fireOne(id, c, initialStateRoot, privKey, keyID, verifier, warden, logger, &cnt)
 		}(idx, cat)
 	}
 
@@ -353,12 +471,29 @@ func main() {
 	other := cnt.other.Load()
 	total := executed + l1Blocked + hashFail + other
 
-	fmt.Printf("\n=== Chaos Run Complete ===\n")
-	fmt.Printf("Total payloads : %d\n", total)
-	fmt.Printf("EXECUTED       : %d (%.0f%%)\n", executed, pct(executed, total))
-	fmt.Printf("L1_BLOCKED     : %d (%.0f%%)\n", l1Blocked, pct(l1Blocked, total))
-	fmt.Printf("HASH_FAIL      : %d (%.0f%%)\n", hashFail, pct(hashFail, total))
-	fmt.Printf("OTHER_REJECTED : %d (%.0f%%)\n", other, pct(other, total))
+	fmt.Printf("\n=== Phase 3: Protocol Enforcement Summary ===\n")
+	fmt.Printf("Total payloads : %d\n\n", total)
+
+	fmt.Printf("%-23s | %5s | %-16s | %6s | %s\n", "Category", "Count", "Expected", "Actual", "Verified")
+	fmt.Printf("------------------------|-------|------------------|--------|----------\n")
+	printSummaryRow("SAFE_EXECUTIONS", generatedCounters.goodActor, "EXECUTED", int(cnt.executedGoodActor.Load()))
+	printSummaryRow("FILE_MUTATIONS", generatedCounters.fileMutation, "EXECUTED", int(cnt.executedFileMut.Load()))
+	printSummaryRow("FORBIDDEN_PATTERNS", generatedCounters.promptInj, "L1_BLOCKED", int(cnt.l1Blocked.Load()))
+	printSummaryRow("HASH_CORRUPTION", generatedCounters.mitM, "HASH_FAIL", int(cnt.hashFail.Load()))
+	if cnt.other.Load() > 0 {
+		printSummaryRow("OTHER_REJECTED", 0, "REJECTED", int(cnt.other.Load()))
+	}
+	fmt.Printf("------------------------|-------|------------------|--------|----------\n")
+
+	successRate := pct(executed+l1Blocked+hashFail, int64(*flagCount))
+	matchTotal := "✓"
+	if int(total) != *flagCount {
+		matchTotal = "✗"
+	}
+	fmt.Printf("%-23s | %5d | %-16s | %6d | %s (%.0f%% success)\n", "TOTAL", *flagCount, "", int(total), matchTotal, successRate)
+
+	fmt.Printf("\nNote: Results are probabilistic (~60/20/10/10 distribution) and will vary by run.\n")
+	fmt.Printf("Use './g8e data audit summary' to see aggregate results across all runs.\n")
 	fmt.Printf("\n")
 	fmt.Printf("Audit DB  : %s\n", filepath.Join(dataDir, "g8e.db"))
 	fmt.Printf("Ledger    : %s\n", filepath.Join(dataDir, "ledger"))
@@ -387,6 +522,8 @@ func fireOne(
 		env, err = buildPromptInjEnvelope(id, stateRoot, privKey, keyID)
 	case catMitM:
 		env, err = buildMitMEnvelope(id, stateRoot, privKey, keyID)
+	case catFileMutation:
+		env, err = buildFileMutationEnvelope(id, stateRoot, privKey, keyID)
 	}
 
 	if err != nil {
@@ -414,7 +551,15 @@ func fireOne(
 		return
 	}
 
-	_, execErr := warden.Execute(context.Background(), verified, nil)
+	cmdMsg := pubsub.PubSubCommandMessage{
+		ID:                env.Id,
+		EventType:         mappings.MapActionTypeToEventType(env.ActionType),
+		OperatorSessionID: env.OperatorSessionId,
+		Payload:           env.Payload,
+		Timestamp:         env.Timestamp.AsTime(),
+	}
+
+	_, execErr := warden.Execute(context.Background(), verified, cmdMsg)
 	if execErr != nil {
 		logger.Warn("warden execution error", "id", id, "error", execErr)
 		cnt.other.Add(1)
@@ -423,6 +568,12 @@ func fireOne(
 
 	logger.Info("envelope executed", "id", id, "category", categoryName(cat))
 	cnt.executed.Add(1)
+	switch cat {
+	case catGoodActor:
+		cnt.executedGoodActor.Add(1)
+	case catFileMutation:
+		cnt.executedFileMut.Add(1)
+	}
 }
 
 // recordRejection writes a rejection event directly to the audit vault so
@@ -494,6 +645,8 @@ func categoryName(c category) string {
 		return "PROMPT_INJECTION"
 	case catMitM:
 		return "MITM"
+	case catFileMutation:
+		return "FILE_MUTATION"
 	default:
 		return "UNKNOWN"
 	}
@@ -515,37 +668,35 @@ func findGit() (string, error) {
 	return "", fmt.Errorf("git not found")
 }
 
+func printSummaryRow(category string, count int, expectedOutcome string, actual int) {
+	match := "✓"
+	if count != actual {
+		match = "✗"
+	}
+	fmt.Printf("%-23s | %5d | %-16s | %6d | %s\n", category, count, expectedOutcome, actual, match)
+}
+
 func printDemoQueries(dbPath string) {
-	fmt.Printf("=== Demo Queries (run these in sqlite3) ===\n\n")
-	fmt.Printf("sqlite3 '%s'\n\n", dbPath)
+	fmt.Printf("=== Demo Queries (run these via ./g8e) ===\n\n")
 
-	fmt.Printf("-- 1. Intercept rate (The Insurance Policy)\n")
-	fmt.Printf("SELECT type AS status, COUNT(*) AS event_count\n")
-	fmt.Printf("FROM events\n")
-	fmt.Printf("GROUP BY type\n")
-	fmt.Printf("ORDER BY event_count DESC;\n\n")
+	fmt.Printf("# 1. View Governance Summary (intercept rate, attack patterns, action types)\n")
+	fmt.Printf("./g8e data audit --db-path '%s' summary\n\n", dbPath)
 
-	fmt.Printf("-- 2. Timeline of events (last 20)\n")
-	fmt.Printf("SELECT timestamp, type, content_text\n")
-	fmt.Printf("FROM events\n")
-	fmt.Printf("ORDER BY timestamp DESC\n")
-	fmt.Printf("LIMIT 20;\n\n")
+	fmt.Printf("# 2. View Recent Events (last 10)\n")
+	fmt.Printf("./g8e data audit --db-path '%s' events --session chaos-session-001 --limit 10\n\n", dbPath)
 
-	fmt.Printf("-- 3. Rejection breakdown by category\n")
-	fmt.Printf("SELECT type, COUNT(*) AS blocked\n")
-	fmt.Printf("FROM events\n")
-	fmt.Printf("WHERE type IN ('L1_BLOCKED','HASH_FAIL','L2_REJECTED','REJECTED')\n")
-	fmt.Printf("GROUP BY type;\n\n")
+	fmt.Printf("# 3. Inspect Git Ledger (audit trail)\n")
+	fmt.Printf("./g8e data audit --db-path '%s' ledger log\n\n", dbPath)
 
-	fmt.Printf("-- 4. Total execution throughput\n")
-	fmt.Printf("SELECT\n")
-	fmt.Printf("  SUM(CASE WHEN type = 'action_receipt' THEN 1 ELSE 0 END) AS warden_receipts,\n")
-	fmt.Printf("  SUM(CASE WHEN type LIKE '%%BLOCKED%%' OR type LIKE '%%FAIL%%' OR type LIKE '%%REJECTED%%' THEN 1 ELSE 0 END) AS intercepted,\n")
-	fmt.Printf("  COUNT(*) AS total\n")
-	fmt.Printf("FROM events;\n\n")
+	fmt.Printf("# 4. Search Ledger for specific patterns\n")
+	fmt.Printf("./g8e data audit --db-path '%s' ledger grep --pattern \"FS_LIST\"\n\n", dbPath)
 
-	fmt.Printf("=== Git Ledger (run in %s) ===\n\n", filepath.Dir(dbPath)+"/ledger")
-	fmt.Printf("git -C '%s/ledger' log --pretty=format:'%%h - %%an, %%ar : %%s' -n 10\n\n", filepath.Dir(dbPath))
-	fmt.Printf("# Show a specific commit:\n")
-	fmt.Printf("git -C '%s/ledger' show <commit-hash>\n\n", filepath.Dir(dbPath))
+	fmt.Printf("# 5. Verify Ledger Integrity\n")
+	fmt.Printf("./g8e data audit --db-path '%s' ledger verify\n\n", dbPath)
+
+	fmt.Printf("# 6. View Specific Ledger Commit\n")
+	fmt.Printf("./g8e data audit --db-path '%s' ledger show --commit <hash>\n\n", dbPath)
+
+	fmt.Printf("# Note: You can also use raw sqlite3 if needed:\n")
+	fmt.Printf("# sqlite3 '%s'\n\n", dbPath)
 }

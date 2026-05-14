@@ -108,7 +108,7 @@ while [[ $# -gt 0 ]]; do
             break
             ;;
         *)
-            if [[ "$1" =~ ^(g8ee|g8eo)$ ]]; then
+            if [[ "$1" =~ ^(g8ee|g8eo|chaos)$ ]]; then
                 COMPONENT="$1"
             else
                 EXTRA_ARGS+=("$1")
@@ -280,6 +280,15 @@ run_g8eo() {
     fi
 }
 
+run_chaos() {
+    log_header "Running g8eo Chaos Tester (host)"
+    cd "$PROJECT_ROOT/components/g8eo"
+    
+    # Ensure binary is built or run directly with go run
+    # 'go run' is simpler for a one-off tool
+    go run ./cmd/chaos_tester "${EXTRA_ARGS[@]}"
+}
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -300,5 +309,6 @@ else
     case "$COMPONENT" in
         g8ee) run_g8ee ;;
         g8eo) run_g8eo ;;
+        chaos) run_chaos ;;
     esac
 fi

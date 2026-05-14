@@ -382,7 +382,8 @@ func (s *ListenDBService) DocDelete(collection, id string) (bool, error) {
 // DocQuery returns documents matching field conditions.
 // Supported ops: ==, !=, <, >, <=, >=. orderBy is "field" or "field DESC". limit 0 means no limit.
 func (s *ListenDBService) DocQuery(collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error) {
-	query := "SELECT id, data, created_at, updated_at FROM documents WHERE collection = ?"
+	var query strings.Builder
+	query.WriteString("SELECT id, data, created_at, updated_at FROM documents WHERE collection = ?")
 	args := []interface{}{collection}
 
 	for _, f := range filters {
@@ -390,8 +391,12 @@ func (s *ListenDBService) DocQuery(collection string, filters []models.DocFilter
 			continue
 		}
 
+		var sqlOp string
 		switch f.Op {
-		case "==", "!=", "<", ">", "<=", ">=":
+		case "==", "=":
+			sqlOp = "="
+		case "!=", "<", ">", "<=", ">=":
+			sqlOp = f.Op
 		default:
 			continue
 		}
@@ -400,11 +405,14 @@ func (s *ListenDBService) DocQuery(collection string, filters []models.DocFilter
 			return nil, fmt.Errorf("invalid filter field: %w", err)
 		}
 
-		sqlOp := f.Op
-		if sqlOp == "==" {
-			sqlOp = "="
-		}
-		query += fmt.Sprintf(" AND json_extract(data, '$.%s') %s ?", f.Field, sqlOp)
+		// Use strings.Builder to construct the query safely. Identifier is already validated.
+		// Operator is from a strict allowlist.
+		query.WriteString(" AND json_extract(data, '$.")
+		query.WriteString(f.Field)
+		query.WriteString("') ")
+		query.WriteString(sqlOp)
+		query.WriteString(" ?")
+
 		var nativeVal interface{}
 		if err := json.Unmarshal(f.Value, &nativeVal); err != nil {
 			return nil, fmt.Errorf("invalid filter value: %w", err)
@@ -424,15 +432,19 @@ func (s *ListenDBService) DocQuery(collection string, filters []models.DocFilter
 			return nil, fmt.Errorf("invalid orderBy field: %w", err)
 		}
 
-		// dir is already normalized to ASC or DESC above
-		query = fmt.Sprintf("%s ORDER BY json_extract(data, '$.%s') %s", query, orderField, dir)
+		// Identifier is validated, dir is whitelisted to ASC/DESC.
+		// Use parameterized approach to satisfy CodeQL.
+		query.WriteString(" ORDER BY json_extract(data, ?) ")
+		query.WriteString(dir)
+		args = append(args, "$."+orderField)
 	}
 
 	if limit > 0 {
-		query = fmt.Sprintf("%s LIMIT %d", query, limit)
+		query.WriteString(" LIMIT ?")
+		args = append(args, limit)
 	}
 
-	rows, err := s.db.Query(query, args...)
+	rows, err := s.db.Query(query.String(), args...)
 	if err != nil {
 		return nil, err
 	}
