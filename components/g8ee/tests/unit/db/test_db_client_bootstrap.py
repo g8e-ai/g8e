@@ -19,10 +19,8 @@ from app.db import DBClient
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestDBClientBootstrapAuth:
-    async def test_init_prefers_explicit_token(self):
-        # Test: Initialize DBClient with explicit token
-        explicit_token = "explicit-token-456"
-        client = DBClient(ca_cert_path="/mock/ca.crt", internal_auth_token=explicit_token)
+    async def test_init_uses_operator_session_id(self):
+        operator_session_id = "session-456"
+        client = DBClient(ca_cert_path="/mock/ca.crt", operator_session_id=operator_session_id)
 
-        # Verify: Explicit token is used
-        assert client._internal_auth_token == explicit_token
+        assert client._operator_session_id == operator_session_id

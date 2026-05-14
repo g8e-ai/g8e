@@ -31,7 +31,7 @@ from app.db.kv_service import KVService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.settings_service import SettingsService
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.requires_operator]
 
 
 @pytest.fixture
@@ -40,15 +40,16 @@ async def real_kv_client():
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
 
-    # Skip test if no auth token is available (e.g., running without operator)
-    if not bootstrap_settings.auth.internal_auth_token:
-        pytest.skip("No internal auth token available - operator not accessible")
+    # Skip test if no session ID or API key is available
+    if not bootstrap_settings.auth.operator_session_id and not bootstrap_settings.auth.operator_api_key:
+        pytest.skip("No operator auth available - operator not accessible")
 
     client = KVCacheClient(
         http_url=bootstrap_settings.listen.http_url,
         component_name=ComponentName.G8EE,
         ca_cert_path=bootstrap_settings.ca_cert_path,
-        internal_auth_token=bootstrap_settings.auth.internal_auth_token,
+        operator_session_id=bootstrap_settings.auth.operator_session_id,
+        operator_api_key=bootstrap_settings.auth.operator_api_key,
     )
 
     await client.connect()
@@ -64,13 +65,14 @@ async def real_db_client():
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
 
-    # Skip test if no auth token is available
-    if not bootstrap_settings.auth.internal_auth_token:
-        pytest.skip("No internal auth token available - operator not accessible")
+    # Skip test if no session ID or API key is available
+    if not bootstrap_settings.auth.operator_session_id and not bootstrap_settings.auth.operator_api_key:
+        pytest.skip("No operator auth available - operator not accessible")
 
     client = DBClient(
         ca_cert_path=bootstrap_settings.ca_cert_path,
-        internal_auth_token=bootstrap_settings.auth.internal_auth_token,
+        operator_session_id=bootstrap_settings.auth.operator_session_id,
+        operator_api_key=bootstrap_settings.auth.operator_api_key,
     )
 
     await client.connect()
@@ -94,13 +96,12 @@ async def real_cache_aside(real_kv_client, real_db_client):
 @pytest.mark.asyncio
 async def test_kv_cache_client_real_auth(real_kv_client):
     """Test that KVCacheClient is configured with correct auth settings."""
-    # This test verifies the client is configured correctly with the auth token
+    # This test verifies the client is configured correctly with the auth
     # and correct port. It will catch the port mismatch issue (9001 vs 9000).
 
-    # Verify the client has the auth token set
-    assert real_kv_client._internal_auth_token is not None, "Internal auth token is None"
-    assert len(real_kv_client._internal_auth_token) == 64, \
-        f"Token length is {len(real_kv_client._internal_auth_token)}, expected 64"
+    # Verify the client has auth configured
+    assert real_kv_client._operator_session_id is not None or real_kv_client._operator_api_key is not None, \
+        "No operator auth (session or API key) configured"
 
     # Verify the port is correct (9000 for HTTPS, not 9001 for WSS)
     assert real_kv_client.http_url.endswith(":9000"), \
@@ -110,13 +111,9 @@ async def test_kv_cache_client_real_auth(real_kv_client):
 
 
 @pytest.mark.asyncio
-async def test_kv_cache_client_token_length(real_kv_client):
-    """Test that the internal auth token has the expected length (64 chars)."""
-    # The token should be 64 characters (32-byte hex)
-    token = real_kv_client._internal_auth_token
-    assert token is not None, "Internal auth token is None"
-    assert len(token) == 64, f"Token length is {len(token)}, expected 64"
-    assert all(c in "0123456789abcdef" for c in token), "Token should be hex-encoded"
+async def test_kv_cache_client_auth_present(real_kv_client):
+    """Test that the operator auth is present."""
+    assert real_kv_client._operator_session_id is not None or real_kv_client._operator_api_key is not None
 
 
 @pytest.mark.asyncio

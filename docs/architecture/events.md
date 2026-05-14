@@ -5,22 +5,26 @@ parent: Architecture
 
 # g8e Event Specification
 
-Last Updated: 2026-05-11
-Version: v0.2.3
+Last Updated: 2026-05-12
+Version: v0.2.4
 
-The g8e platform uses a unified, hierarchical event system to drive state transitions and lifecycle signals. All cross-component traffic is governed by the **Universal Envelope**, a Protobuf-first transport wrapper that carries governance metadata, state roots, and typed payloads.
+The g8e platform uses a unified, hierarchical event system to drive state transitions and lifecycle signals. All cross-component traffic is governed by the **Governance Envelope**, a UAP JSON transport wrapper that carries governance metadata, state roots, and typed payloads.
 
 ---
 
 ## Architecture & Transport
 
-Events in g8e are the heartbeat of the system's reactivity. The architecture follows a hub-and-spoke model with `g8ed` (Dashboard) at the center.
+Events in g8e are the heartbeat of the system's reactivity. The architecture follows a decentralized model where the **Operator Substrate** (`g8eo`) provides the primary pub/sub transport and persistence hub for all clients.
 
-### 1. The Central Hub: `g8ed`
-`g8ed` serves as the central event router and composition root. It manages three primary transport layers:
-- **Internal HTTP Push**: Receives events from `g8ee` (Engine) via standard POST requests (guarded by `X-Internal-Auth`).
-- **Operator Pub/Sub**: A WebSocket-based backbone for communication with `g8eo` (Operator). `g8ed` proxies these messages to the UI.
-- **Server-Sent Events (SSE)**: Pushes real-time updates to human-interactive clients in the browser.
+### 1. The Substrate Hub: `g8eo`
+`g8eo` in **Listen Mode** serves as the central event broker and coordination point.
+- **Operator Pub/Sub**: A WebSocket-based (WSS) backbone for real-time communication between all components.
+- **Audit Logging**: `g8eo` captures and persists events into the host-authoritative audit vault.
+
+### 2. Event Producers & Consumers
+- **Clients (bundled `g8ee`, `g8ed`, or BYO)**: Emit intent, chat streams, and governance proofs. Consume real-time updates and results.
+- **Managed Operators (`g8eo`)**: Emit command results, heartbeats, and filesystem updates.
+- **Dashboard (`g8ed`)**: Provides a reference UI and relay for Server-Sent Events (SSE) to browser-based clients.
 
 ### 2. Event Producers
 - **`g8ee` (Engine)**: The AI reasoning engine. Emits chat streams, tool requests, and Tribunal consensus results.
@@ -28,16 +32,16 @@ Events in g8e are the heartbeat of the system's reactivity. The architecture fol
 - **`g8ed` (Dashboard)**: The platform service. Emits lifecycle events (auth, session management) and proxies third-party events.
 
 ### 3. Delivery Lifecycle
-1. **Emission**: A producer serializes a **Universal Envelope** containing a typed Protobuf payload.
-2. **Ingestion**: `g8ed` receives the envelope via HTTP or Pub/Sub.
-3. **Routing**: `SSEService` determines the destination based on the **Routing Tuple**.
-4. **Delivery**: The event is pushed to the client via SSE or persisted to the audit log.
+1. **Emission**: A producer serializes a **Governance Envelope** (UAP JSON) containing a typed Protobuf payload.
+2. **Ingestion**: The substrate (`g8eo`) or relay (`g8ed`) receives the envelope via Pub/Sub or HTTP.
+3. **Routing**: The event is distributed based on the **Routing Tuple** defined in the envelope.
+4. **Delivery**: The event is pushed to the client via WSS/SSE or persisted to the audit log.
 
 ---
 
-## The Universal Envelope
+## The Governance Envelope
 
-The `UniversalEnvelope` (defined in `shared/proto/common.proto`) is the canonical wrapper for all platform transactions.
+The `GovernanceEnvelope` (UAP JSON, defined in `shared/proto/common.proto`) is the canonical wrapper for all platform transactions.
 
 | Field | Description |
 |-------|-------------|
@@ -69,7 +73,7 @@ To ensure events reach the correct context, every event carries a routing tuple 
 `g8eo` enforces L1 safety using Protobuf reflection. It inspects the `forbidden_patterns` option on incoming message fields (e.g., `CommandRequested.command`) and rejects any payload containing prohibited strings like `sudo` or `rm -rf /`.
 
 ### 2. L2: Consensus (The Tribunal)
-The Tribunal calculates an HMAC-SHA256 signature over the `event_type` and `payload_bytes` using a shared auditor key. `g8eo` verifies this signature before executing any command, ensuring the instruction originated from a valid consensus group.
+The Tribunal attaches an ED25519 signature from a trusted signer over `transaction_hash|true`. `g8eo` verifies this signature before executing any command, ensuring the instruction originated from a valid consensus group.
 
 ### 3. L3: Authorization (Human Approval)
 Human-in-the-loop signatures (captured via Passkeys) are carried in the `L3Metadata` field. For benign diagnostic commands, an `auto_approved` flag may be set, but it never bypasses L1 or L2 gates.

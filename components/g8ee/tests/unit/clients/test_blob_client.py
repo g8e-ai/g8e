@@ -30,11 +30,11 @@ def mock_listen_settings():
 def blob_client(mock_listen_settings):
     with patch("app.services.infra.settings_service.SettingsService") as mock_svc_cls:
         mock_svc = mock_svc_cls.return_value
-        mock_svc.get_local_settings.return_value.auth.internal_auth_token = "test-token"
+        mock_svc.get_local_settings.return_value.operator_session_id = "test-session"
 
         client = BlobClient(
             ca_cert_path="/path/to/ca.crt",
-            internal_auth_token="test-token",
+            operator_session_id="test-session",
             listen_settings=mock_listen_settings
         )
         return client

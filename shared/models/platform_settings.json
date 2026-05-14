@@ -13,10 +13,15 @@
     "_description": "Platform-wide configuration document. Stored flat under a 'settings' key.",
 
     "settings": {
-      "internal_auth_token": {
+      "operator_session_id": {
         "type": "string",
-        "required": true,
-        "description": "Cryptographically secure token for internal service-to-service authentication (g8ee <-> operator, g8ed <-> operator)."
+        "required": false,
+        "description": "Active session identifier for the operator component."
+      },
+      "operator_api_key": {
+        "type": "string",
+        "required": false,
+        "description": "Long-lived API key for the operator component (fallback for session_id)."
       },
       "session_encryption_key": {
         "type": "string",

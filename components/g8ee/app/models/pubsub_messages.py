@@ -63,9 +63,12 @@ class ExecutionResultsPayload(G8eBaseModel):
     stderr_hash: str | None = Field(default=None, description="SHA256 hash of raw stderr")
     stored_locally: bool = Field(default=False, description="True when full output is in operator local vault")
     return_code: int | None = Field(default=None, description="Process exit code")
-    error_message: str | None = Field(default=None, description="Human-readable error description")
+    error: str | None = Field(default=None, description="Human-readable error description")
+    error_message: str | None = Field(default=None, description="DEPRECATED: Use error")
     error_type: str | None = Field(default=None, description="Machine-readable error classification")
     completed_at: UTCDatetime | None = Field(default=None, description="When the command completed (UTC)")
+    start_time_unix_ms: int | None = Field(default=None)
+    end_time_unix_ms: int | None = Field(default=None)
 
     @field_validator("completed_at", mode="before")
     @classmethod
@@ -204,7 +207,7 @@ class FetchLogsResultPayload(G8eBaseModel):
     payload_type: Literal["fetch_logs_result"] = Field(default="fetch_logs_result", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier whose logs were fetched")
     command: str | None = Field(default=None, description="Original command string")
-    exit_code: int | None = Field(default=None)
+    return_code: int | None = Field(default=None)
     duration_ms: int | None = Field(default=None, description="Original execution duration in milliseconds")
     stdout: str | None = Field(default=None, description="Stored stdout content")
     stderr: str | None = Field(default=None, description="Stored stderr content")

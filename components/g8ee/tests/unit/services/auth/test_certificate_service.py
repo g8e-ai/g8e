@@ -25,7 +25,7 @@ from app.services.auth.certificate_service import CertificateService
 from app.services.auth.certificate_data_service import CertificateDataService
 
 @pytest.fixture
-def temp_ssl_dir():
+def temp_pki_dir():
     path = tempfile.mkdtemp()
     yield path
     shutil.rmtree(path)
@@ -57,13 +57,15 @@ def ca_cert(ca_key):
     return builder.sign(ca_key, hashes.SHA256())
 
 @pytest.fixture
-def setup_ca_files(temp_ssl_dir, ca_cert):
-    cert_path = os.path.join(temp_ssl_dir, "ca.crt")
+def setup_ca_files(temp_pki_dir, ca_cert):
+    trust_dir = os.path.join(temp_pki_dir, "trust")
+    os.makedirs(trust_dir, exist_ok=True)
+    cert_path = os.path.join(trust_dir, "hub-bundle.pem")
     
     with open(cert_path, "wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
     
-    return temp_ssl_dir
+    return temp_pki_dir
 
 @pytest.fixture
 def mock_data_service():
@@ -88,7 +90,7 @@ def mock_data_service():
 
 @pytest.mark.asyncio
 async def test_initialize_success(setup_ca_files, mock_data_service):
-    service = CertificateService(ssl_dir=setup_ca_files, data_service=mock_data_service)
+    service = CertificateService(pki_dir=setup_ca_files, data_service=mock_data_service)
     await service.initialize()
     
     assert service.initialized is True
@@ -98,17 +100,17 @@ async def test_initialize_success(setup_ca_files, mock_data_service):
     mock_data_service.get_all_revocations.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_initialize_alternate_path(temp_ssl_dir, ca_cert, mock_data_service):
-    # Test path: ssl_dir/ca/ca.crt
-    ca_subdir = os.path.join(temp_ssl_dir, "ca")
-    os.makedirs(ca_subdir)
+async def test_initialize_alternate_path(temp_pki_dir, ca_cert, mock_data_service):
+    # Test path: pki_dir/authorities/hub_ca.crt
+    auth_subdir = os.path.join(temp_pki_dir, "authorities")
+    os.makedirs(auth_subdir)
     
-    cert_path = os.path.join(ca_subdir, "ca.crt")
+    cert_path = os.path.join(auth_subdir, "hub_ca.crt")
     
     with open(cert_path, "wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
         
-    service = CertificateService(ssl_dir=temp_ssl_dir, data_service=mock_data_service)
+    service = CertificateService(pki_dir=temp_pki_dir, data_service=mock_data_service)
     await service.initialize()
     
     assert service.initialized is True
@@ -121,7 +123,7 @@ async def test_initialize_with_revocations(setup_ca_files, mock_data_service):
         {"serial": "DEF67890"}
     ]
     
-    service = CertificateService(ssl_dir=setup_ca_files, data_service=mock_data_service)
+    service = CertificateService(pki_dir=setup_ca_files, data_service=mock_data_service)
     await service.initialize()
     
     assert service.is_revoked("abc12345") is True
@@ -129,15 +131,15 @@ async def test_initialize_with_revocations(setup_ca_files, mock_data_service):
     assert service.is_revoked("123") is False
 
 @pytest.mark.asyncio
-async def test_initialize_fails_no_files(temp_ssl_dir, mock_data_service):
-    service = CertificateService(ssl_dir=temp_ssl_dir, data_service=mock_data_service)
+async def test_initialize_fails_no_files(temp_pki_dir, mock_data_service):
+    service = CertificateService(pki_dir=temp_pki_dir, data_service=mock_data_service)
     # This shouldn't raise, but should log and leave initialized=False
     await service.initialize()
     assert service.initialized is False
 
 @pytest.mark.asyncio
 async def test_generate_operator_certificate(setup_ca_files, mock_data_service):
-    service = CertificateService(ssl_dir=setup_ca_files, data_service=mock_data_service)
+    service = CertificateService(pki_dir=setup_ca_files, data_service=mock_data_service)
     await service.initialize()
     
     res = await service.generate_operator_certificate(
@@ -159,14 +161,14 @@ async def test_generate_operator_certificate(setup_ca_files, mock_data_service):
     mock_data_service.cache.db.client._request_json.assert_called_once()
     call_args = mock_data_service.cache.db.client._request_json.call_args
     assert call_args[0][0] == "POST"
-    assert call_args[0][1] == "/ssl/sign-certificate"
+    assert call_args[0][1] == "/.well-known/g8e/pki/sign-csr"
     payload = call_args[1]["json"]
     assert payload["common_name"] == "test-op"
     assert payload["organizational_unit"] == "test-user"
 
 @pytest.mark.asyncio
 async def test_generate_without_initialize_triggers_init(setup_ca_files, mock_data_service):
-    service = CertificateService(ssl_dir=setup_ca_files, data_service=mock_data_service)
+    service = CertificateService(pki_dir=setup_ca_files, data_service=mock_data_service)
     # Don't call initialize() explicitly
     
     res = await service.generate_operator_certificate(
@@ -178,15 +180,15 @@ async def test_generate_without_initialize_triggers_init(setup_ca_files, mock_da
     assert "cert" in res
 
 @pytest.mark.asyncio
-async def test_generate_even_if_no_ca_cert(temp_ssl_dir, mock_data_service):
+async def test_generate_even_if_no_ca_cert(temp_pki_dir, mock_data_service):
     # If ca.crt is missing, it logs an error but doesn't prevent signing via API
-    service = CertificateService(ssl_dir=temp_ssl_dir, data_service=mock_data_service)
+    service = CertificateService(pki_dir=temp_pki_dir, data_service=mock_data_service)
     res = await service.generate_operator_certificate("op", "user", "org")
     assert "cert" in res
 
 @pytest.mark.asyncio
 async def test_revoke_certificate(setup_ca_files, mock_data_service):
-    service = CertificateService(ssl_dir=setup_ca_files, data_service=mock_data_service)
+    service = CertificateService(pki_dir=setup_ca_files, data_service=mock_data_service)
     await service.initialize()
     
     serial = "ABC123DEF"
@@ -209,7 +211,7 @@ def test_get_crl(mock_data_service):
 
 @pytest.mark.asyncio
 async def test_cleanup(setup_ca_files, mock_data_service):
-    service = CertificateService(ssl_dir=setup_ca_files, data_service=mock_data_service)
+    service = CertificateService(pki_dir=setup_ca_files, data_service=mock_data_service)
     await service.initialize()
     service._revoked_serials.add("S1")
     
@@ -222,7 +224,7 @@ async def test_cleanup(setup_ca_files, mock_data_service):
 
 @pytest.mark.asyncio
 async def test_initialize_already_initialized(setup_ca_files, mock_data_service):
-    service = CertificateService(ssl_dir=setup_ca_files, data_service=mock_data_service)
+    service = CertificateService(pki_dir=setup_ca_files, data_service=mock_data_service)
     service.initialized = True
     await service.initialize()
     # Should return early and NOT call data_service again
@@ -230,7 +232,7 @@ async def test_initialize_already_initialized(setup_ca_files, mock_data_service)
 
 @pytest.mark.asyncio
 async def test_initialize_no_data_service(setup_ca_files):
-    service = CertificateService(ssl_dir=setup_ca_files, data_service=None)
+    service = CertificateService(pki_dir=setup_ca_files, data_service=None)
     await service.initialize()
     assert service.initialized is True
     assert service.ca_cert is not None
@@ -240,7 +242,7 @@ async def test_initialize_revocation_missing_serial(setup_ca_files, mock_data_se
     mock_data_service.get_all_revocations.return_value = [
         {"reason": "no serial"}
     ]
-    service = CertificateService(ssl_dir=setup_ca_files, data_service=mock_data_service)
+    service = CertificateService(pki_dir=setup_ca_files, data_service=mock_data_service)
     await service.initialize()
     assert service.initialized is True
     assert len(service._revoked_serials) == 0
@@ -249,7 +251,7 @@ async def test_initialize_revocation_missing_serial(setup_ca_files, mock_data_se
 async def test_initialize_data_service_exception(setup_ca_files, mock_data_service):
     mock_data_service.get_all_revocations.side_effect = Exception("DB Down")
     
-    service = CertificateService(ssl_dir=setup_ca_files, data_service=mock_data_service)
+    service = CertificateService(pki_dir=setup_ca_files, data_service=mock_data_service)
     # Should not raise, just log error
     await service.initialize()
     assert service.initialized is True
@@ -257,7 +259,7 @@ async def test_initialize_data_service_exception(setup_ca_files, mock_data_servi
 
 @pytest.mark.asyncio
 async def test_revoke_no_data_service(setup_ca_files):
-    service = CertificateService(ssl_dir=setup_ca_files, data_service=None)
+    service = CertificateService(pki_dir=setup_ca_files, data_service=None)
     await service.initialize()
     
     serial = "XYZ987"

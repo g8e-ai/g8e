@@ -17,13 +17,9 @@ VERSION := $(shell cat ../../VERSION 2>/dev/null | tr -d '[:space:]' || echo 'v0
 # PATHS AND NAMES
 # =============================================================================
 BINARY_NAME := g8e.operator
-CERTS_DIR := certs
-G8ED_SSL_CA_CERT := ../../.g8e/ssl/ca.crt
 BUILD_DIR := build
 BLOB_NAMESPACE := operator-binary
 OPERATOR_URL := https://localhost:9000
-CA_CERT := ../../.g8e/ssl/ca.crt
-AUTH_TOKEN := $(shell cat ../../.g8e/ssl/internal_auth_token 2>/dev/null | tr -d ' \n\r')
 
 # =============================================================================
 # ARCHITECTURES
@@ -56,9 +52,6 @@ help:
 	@echo "  lint          Run golangci-lint"
 	@echo "  check         Run fmt, vet, lint, test"
 	@echo ""
-	@echo "Certs:"
-	@echo "  clean-certs     Remove certificates"
-	@echo ""
 	@echo "Utility:"
 	@echo "  clean            Clean build artifacts"
 	@echo "  clean-go-cache   Clean Go build cache (reclaim disk space)"
@@ -72,13 +65,12 @@ help:
 .PHONY: build
 build:
 	@echo "Building Operator (linux/amd64)..."
-	@mkdir -p certs
-	@[ -f ../../.g8e/ssl/ca.crt ] && cp ../../.g8e/ssl/ca.crt certs/server_ca.crt || true
+	@mkdir -p build/linux-amd64
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 		-trimpath \
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
-		-o build/linux-amd64/g8e.operator .
+		-o build/linux-amd64/g8e.operator ./cmd/g8eo
 	@echo 'Built: build/linux-amd64/g8e.operator'
 	@SIZE=$$(ls -lh build/linux-amd64/g8e.operator | awk '{print $$5}') && \
 		echo "  Size: $$SIZE"
@@ -86,8 +78,6 @@ build:
 .PHONY: build-all
 build-all:
 	@echo "Building Operator (all architectures)..."
-	@mkdir -p certs
-	@[ -f ../../.g8e/ssl/ca.crt ] && cp ../../.g8e/ssl/ca.crt certs/server_ca.crt || true
 	@for arch in amd64 arm64 386; do \
 		echo "Building linux/$$arch..."; \
 		mkdir -p $(BUILD_DIR)/linux-$$arch && \
@@ -95,7 +85,7 @@ build-all:
 			-trimpath \
 			-buildvcs=false \
 			-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$$arch'" \
-			-o $(BUILD_DIR)/linux-$$arch/g8e.operator . || exit 1; \
+			-o $(BUILD_DIR)/linux-$$arch/g8e.operator ./cmd/g8eo || exit 1; \
 		SIZE=$$(ls -lh $(BUILD_DIR)/linux-$$arch/g8e.operator | awk '{print $$5}'); \
 		echo "  linux/$$arch: $$SIZE (uncompressed)"; \
 	done
@@ -116,7 +106,7 @@ build-all:
 # BUILD TARGETS — local Go
 # =============================================================================
 .PHONY: build-local
-build-local: check-certs _build-local-binary
+build-local: _build-local-binary
 
 .PHONY: _build-local-binary
 _build-local-binary:
@@ -126,12 +116,12 @@ _build-local-binary:
 		-trimpath \
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
-		-o build/linux-amd64/$(BINARY_NAME) .
+		-o build/linux-amd64/$(BINARY_NAME) ./cmd/g8eo
 	@echo "Built: build/linux-amd64/$(BINARY_NAME)"
 
 
 .PHONY: build-local-all
-build-local-all: check-certs
+build-local-all:
 	@echo "Building Operator for all Linux platforms..."
 	@for arch in $(ARCHS); do \
 		$(MAKE) _build-release ARCH=$$arch; \
@@ -148,15 +138,15 @@ build-local-all: check-certs
 	@echo "Build complete"
 
 .PHONY: build-linux-amd64
-build-linux-amd64: check-certs
+build-linux-amd64:
 	$(MAKE) _build-release ARCH=amd64
 
 .PHONY: build-linux-arm64
-build-linux-arm64: check-certs
+build-linux-arm64:
 	$(MAKE) _build-release ARCH=arm64
 
 .PHONY: build-linux-386
-build-linux-386: check-certs
+build-linux-386:
 	$(MAKE) _build-release ARCH=386
 
 .PHONY: _build-release
@@ -167,26 +157,7 @@ _build-release:
 		-trimpath \
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$(ARCH)'" \
-		-o build/linux-$(ARCH)/$(BINARY_NAME) .
-
-# =============================================================================
-# CERTIFICATE TARGETS
-# =============================================================================
-.PHONY: check-certs
-check-certs:
-	@if [ ! -f "$(G8ED_SSL_CA_CERT)" ]; then \
-		echo "WARNING: g8ed server CA not found at $(G8ED_SSL_CA_CERT)"; \
-		echo "  This is normal during first-time setup. The Operator will generate certs when started."; \
-	else \
-		mkdir -p $(CERTS_DIR); \
-		cp $(G8ED_SSL_CA_CERT) $(CERTS_DIR)/server_ca.crt; \
-		echo "Synced g8ed server CA to $(CERTS_DIR)/server_ca.crt"; \
-	fi
-
-.PHONY: clean-certs
-clean-certs:
-	@rm -f $(CERTS_DIR)/server_ca.crt
-	@echo "Removed $(CERTS_DIR)/server_ca.crt (source at $(G8ED_SSL_CA_CERT) is unchanged)"
+		-o build/linux-$(ARCH)/$(BINARY_NAME) ./cmd/g8eo
 
 # =============================================================================
 # CODE QUALITY
@@ -225,7 +196,7 @@ check: fmt vet lint test
 .PHONY: clean
 clean:
 	@rm -rf build/
-	@rm -f $(BINARY_NAME) coverage.out coverage.html
+	@rm -f $(BINARY_NAME) coverage.out coverage.html *.test
 
 .PHONY: clean-go-cache
 clean-go-cache:

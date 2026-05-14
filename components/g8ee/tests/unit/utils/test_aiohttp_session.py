@@ -177,7 +177,7 @@ class TestNewKvHttpSessionSsl:
                 headers={},
             )
             await s.close()
-            mock_resolve.assert_called_once_with(("/some/ca.pem",), use_tls=True)
+            mock_resolve.assert_called_once_with(("/some/ca.pem",), use_tls=True, certfile=None, keyfile=None)
 
     async def test_ssl_attempted_for_https_url(self):
         with patch("app.utils.aiohttp_session._resolve_ssl_context", return_value=None) as mock_resolve:
@@ -189,7 +189,7 @@ class TestNewKvHttpSessionSsl:
                 headers={},
             )
             await s.close()
-            mock_resolve.assert_called_once_with(("/some/ca.pem",), use_tls=True)
+            mock_resolve.assert_called_once_with(("/some/ca.pem",), use_tls=True, certfile=None, keyfile=None)
 
     async def test_no_ssl_without_ca_cert_path_for_https(self):
         with patch("app.utils.aiohttp_session._resolve_ssl_context", return_value=None) as mock_resolve:
@@ -201,7 +201,7 @@ class TestNewKvHttpSessionSsl:
                 headers={},
             )
             await s.close()
-            mock_resolve.assert_called_once_with(("/nonexistent/ca.pem",), use_tls=True)
+            mock_resolve.assert_called_once_with(("/nonexistent/ca.pem",), use_tls=True, certfile=None, keyfile=None)
 
 
 # =============================================================================
@@ -342,7 +342,7 @@ class TestNewComponentHttpSessionSsl:
                 None, timeout=aiohttp.ClientTimeout(total=10), ca_cert_path="/nonexistent/ca.pem", headers={}
             )
             try:
-                mock_resolve.assert_called_once_with(("/nonexistent/ca.pem",), use_tls=True)
+                mock_resolve.assert_called_once_with(("/nonexistent/ca.pem",), use_tls=True, certfile=None, keyfile=None)
             finally:
                 await s.close()
 
@@ -355,6 +355,6 @@ class TestNewComponentHttpSessionSsl:
                 headers={},
             )
             try:
-                mock_resolve.assert_called_once_with(("/some/ca.pem",), use_tls=True)
+                mock_resolve.assert_called_once_with(("/some/ca.pem",), use_tls=True, certfile=None, keyfile=None)
             finally:
                 await s.close()

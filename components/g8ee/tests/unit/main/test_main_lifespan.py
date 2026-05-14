@@ -69,7 +69,7 @@ def _configure_settings(mocks):
     """Wire up SettingsService + initialize_g8e_service to return a usable mock settings."""
     settings = MagicMock()
     settings.ca_cert_path = "/tmp/ca.crt"
-    settings.auth.internal_auth_token = "tok"
+    settings.operator_session_id = "session"
     settings.listen.default_ttl = 3600
     settings.port = 8443
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 # g8e Test Runner
 #
-# Runs tests for g8ee, g8ed, and g8eo components directly on the host.
-# Supports virtualenvs for Python, npm for Node, and native Go toolchain.
+# Runs substrate tests by default and optional app tests only when requested.
+# Supports native Go toolchain for the substrate plus virtualenvs/npm for app targets.
 
 set -e
 
@@ -56,9 +56,9 @@ EXTRA_ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --help|-h)
-            echo "Usage: run_tests.sh <COMPONENT> [OPTIONS] [-- EXTRA_ARGS]"
+            echo "Usage: run_tests.sh [COMPONENT] [OPTIONS] [-- EXTRA_ARGS]"
             echo ""
-            echo "Components: g8ee, g8ed, g8eo"
+            echo "Components: g8eo (default substrate), g8ee"
             echo ""
             echo "Options:"
             echo "  --coverage                Generate coverage reports"
@@ -69,12 +69,14 @@ while [[ $# -gt 0 ]]; do
             echo "  -j, --parallel <N|auto>   Run pytest in parallel via pytest-xdist (g8ee only)"
             echo ""
             echo "Examples (via ./g8e CLI):"
+            echo "  ./g8e test"
+            echo "  ./g8e test g8eo services/pubsub"
             echo "  ./g8e test g8ee tests/unit"
             echo "  ./g8e test g8ee --coverage"
             echo "  ./g8e test g8ee --pyright --ruff"
             echo "  ./g8e test g8ee --e2e"
             echo "  ./g8e test g8ee -j auto"
-            echo "  ./g8e test g8ed test/services"
+            echo "  ./g8e test g8eo services/listen"
             echo "  ./g8e test g8eo ./cmd/server"
             echo ""
             echo "LLM/Web Search configuration (g8ee only):"
@@ -106,7 +108,7 @@ while [[ $# -gt 0 ]]; do
             break
             ;;
         *)
-            if [[ "$1" =~ ^(g8ee|g8ed|g8eo)$ ]]; then
+            if [[ "$1" =~ ^(g8ee|g8eo|chaos)$ ]]; then
                 COMPONENT="$1"
             else
                 EXTRA_ARGS+=("$1")
@@ -117,57 +119,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$COMPONENT" ]]; then
-    log_err "No component specified. Usage: run_tests.sh <g8ee|g8ed|g8eo> [OPTIONS]"
-    exit 1
+    COMPONENT="g8eo"
 fi
-
-# =============================================================================
-# Container Environment Setup
-# =============================================================================
-
-_install_ca_cert() {
-    local ssl_dir="${G8E_SSL_DIR:-$PROJECT_ROOT/.g8e/ssl}"
-    local ca_cert="$ssl_dir/ca.crt"
-    [[ ! -f "$ca_cert" ]] && ca_cert="$ssl_dir/ca/ca.crt"
-    if [[ ! -f "$ca_cert" ]]; then
-        log_warn "Platform CA cert not found at $ca_cert"
-        return
-    fi
-    export G8E_SSL_CERT_FILE="$ca_cert"
-    export NODE_EXTRA_CA_CERTS="$ca_cert"
-    log_ok "Platform CA cert set (G8E_SSL_CERT_FILE=$ca_cert)"
-}
-
-_load_platform_secrets() {
-    local ssl_dir="${G8E_SSL_DIR:-$PROJECT_ROOT/.g8e/ssl}"
-    local auth_token_file="$ssl_dir/internal_auth_token"
-    local session_key_file="$ssl_dir/session_encryption_key"
-    if [[ -f "$auth_token_file" ]]; then
-        export G8E_INTERNAL_AUTH_TOKEN=$(cat "$auth_token_file" | tr -d ' \n\r')
-        log_ok "G8E_INTERNAL_AUTH_TOKEN loaded from $ssl_dir"
-    fi
-    if [[ -f "$session_key_file" ]]; then
-        export G8E_SESSION_ENCRYPTION_KEY=$(cat "$session_key_file" | tr -d ' \n\r')
-        log_ok "G8E_SESSION_ENCRYPTION_KEY loaded from $ssl_dir"
-    fi
-}
-
-_verify_operator() {
-    local ssl_dir="${G8E_SSL_DIR:-$PROJECT_ROOT/.g8e/ssl}"
-    local ca_cert="$ssl_dir/ca.crt"
-    [[ ! -f "$ca_cert" ]] && ca_cert="$ssl_dir/ca/ca.crt"
-    if [[ ! -f "$ca_cert" ]]; then
-        log_err "Platform CA cert not found at $ca_cert"
-        exit 1
-    fi
-    local operator_url="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"
-    local curl_args=("--cacert" "$ca_cert")
-    if ! curl -sf "${curl_args[@]}" "$operator_url/health" 2>/dev/null | grep -q '"status":"ok"'; then
-        log_err "Operator listen mode (operator) not accessible at $operator_url/health"
-        exit 1
-    fi
-    log_ok "Operator listen mode connected"
-}
 
 _prompt_llm_config() {
     # Check for G8E_ prefixed vars and populate standard ones if found
@@ -180,77 +133,11 @@ _prompt_llm_config() {
 
     # Skip if already provided via env/flags OR if not interactive
     [[ -n "${TEST_LLM_PROVIDER:-}" ]] && return
-    [[ ! -t 0 ]] && return
-
+    
     echo ""
-    echo -e "${CYAN}LLM Configuration for ai_integration tests${NC}"
-    echo -e "You can configure LLM credentials now, or skip to run tests without AI integration."
-    read -p "Configure LLM now? [y/N]: " configure_llm
-    if [[ ! "$configure_llm" =~ ^[Yy]$ ]]; then
-        return
-    fi
-
-    echo -e "\n${BLUE}Select a supported provider:${NC}"
-    echo "1) openai    (requires API key)"
-    echo "2) anthropic (requires API key)"
-    echo "3) gemini    (requires API key)"
-    echo "4) ollama    (requires endpoint)"
-    echo "5) llamacpp  (requires endpoint)"
-    
-    local provider=""
-    while [[ -z "$provider" ]]; do
-        read -p "Selection [1-5]: " p_choice
-        case "$p_choice" in
-            1) provider="openai" ;;
-            2) provider="anthropic" ;;
-            3) provider="gemini" ;;
-            4) provider="ollama" ;;
-            5) provider="llamacpp" ;;
-            *) echo -e "${RED}Invalid selection.${NC}" ;;
-        esac
-    done
-    export TEST_LLM_PROVIDER="$provider"
-
-    echo -e "\n${YELLOW}Note: Credentials are only stored in memory for the duration of this test run.${NC}"
-    
-    if [[ "$provider" == "openai" || "$provider" == "anthropic" || "$provider" == "gemini" ]]; then
-        read -s -p "Enter ${provider} API Key: " api_key
-        echo ""
-        export TEST_LLM_API_KEY="$api_key"
-    fi
-
-    case "$provider" in
-        openai)
-            read -p "Enter endpoint [https://api.openai.com/v1]: " endpoint
-            [[ -n "$endpoint" ]] && export TEST_LLM_ENDPOINT_URL="$endpoint"
-            ;;
-        anthropic)
-            read -p "Enter endpoint [https://api.anthropic.com]: " endpoint
-            [[ -n "$endpoint" ]] && export TEST_LLM_ENDPOINT_URL="$endpoint"
-            ;;
-        ollama)
-            read -p "Enter endpoint [http://localhost:11434]: " endpoint
-            export TEST_LLM_ENDPOINT_URL="${endpoint:-http://localhost:11434}"
-            ;;
-        llamacpp)
-            read -p "Enter endpoint [http://localhost:11444]: " endpoint
-            export TEST_LLM_ENDPOINT_URL="${endpoint:-http://localhost:11444}"
-            ;;
-    esac
-
-    local default_primary_model=""
-    case "$provider" in
-        openai)    default_primary_model="gpt-5.4" ;;
-        anthropic) default_primary_model="claude-opus-4-6" ;;
-        gemini)    default_primary_model="gemini-3-flash-preview" ;;
-        ollama)    default_primary_model="gemma4:e4b" ;;
-        llamacpp)  default_primary_model="gemma4:e2b" ;;
-    esac
-
-    read -p "Enter primary model (optional, press Enter for $default_primary_model): " model
-    [[ -n "$model" ]] && export TEST_LLM_PRIMARY_MODEL="$model"
-    
-    echo -e "${GREEN}LLM configuration set.${NC}\n"
+    log_warn "LLM credentials not set. AI integration tests will be skipped."
+    log_warn "To enable them, set G8E_TEST_LLM_PROVIDER and G8E_TEST_LLM_API_KEY."
+    echo ""
 }
 
 _show_llm_config() {
@@ -356,18 +243,6 @@ run_e2e() {
     "$venv_dir/bin/pytest" -rs -m e2e tests/e2e/ "${EXTRA_ARGS[@]}"
 }
 
-run_g8ed() {
-    log_header "Running g8ed tests (host)"
-    if [[ ! -d "$PROJECT_ROOT/components/g8ed/node_modules" ]]; then
-        log_err "g8ed node_modules not found. Run ./g8e platform start first."
-        exit 1
-    fi
-    cd "$PROJECT_ROOT/components/g8ed"
-    local cov_flag=""
-    [[ "$COVERAGE" == "true" ]] && cov_flag="--coverage"
-    npx vitest run --config ./vitest.config.js $cov_flag "${EXTRA_ARGS[@]}"
-}
-
 run_g8eo() {
     log_header "Running g8eo tests (host)"
     cd "$PROJECT_ROOT/components/g8eo"
@@ -405,14 +280,20 @@ run_g8eo() {
     fi
 }
 
+run_chaos() {
+    log_header "Running g8eo Chaos Tester (host)"
+    cd "$PROJECT_ROOT/components/g8eo"
+    
+    # Ensure binary is built or run directly with go run
+    # 'go run' is simpler for a one-off tool
+    go run ./cmd/chaos_tester "${EXTRA_ARGS[@]}"
+}
+
 # =============================================================================
 # Main
 # =============================================================================
 
 export NODE_ENV="test"
-_install_ca_cert
-_load_platform_secrets
-_verify_operator
 
 log_header "run_tests.sh ${COMPONENT} $*"
 
@@ -427,7 +308,7 @@ if [[ "$E2E" == "true" && "$COMPONENT" == "g8ee" ]]; then
 else
     case "$COMPONENT" in
         g8ee) run_g8ee ;;
-        g8ed) run_g8ed ;;
         g8eo) run_g8eo ;;
+        chaos) run_chaos ;;
     esac
 fi

@@ -203,20 +203,24 @@ class TestDeregisterOperatorSession:
 class TestDispatchResultsMessage:
     """Test _dispatch_results_message routing."""
 
-    async def test_routes_to_result_handler_protobuf(self, command_service):
-        """Test dispatches parsed protobuf message to _handle_pubsub_result_message."""
+    async def test_routes_to_result_handler_uap(self, command_service):
+        """Test dispatches parsed Protobuf GovernanceEnvelope to _handle_pubsub_result_message."""
         with patch.object(command_service._pubsub_service, "_handle_pubsub_result_message", new=AsyncMock()) as mock_handle:  # noqa: SLF001
-            # Build a valid protobuf envelope
-            envelope = common_pb2.UniversalEnvelope()
-            envelope.id = "test-id"
-            envelope.event_type = EventType.OPERATOR_COMMAND_COMPLETED
+            # Build a valid Protobuf GovernanceEnvelope JSON format
+            envelope_data = {
+                "id": "test-id",
+                "event_type": EventType.OPERATOR_COMMAND_RESULT,
+                "action_type": "EXECUTE_BASH_RESULT",
+                "operator_id": "op-1",
+                "operator_session_id": "sess-1",
+                "intent_data": {
+                    "payload_type": "execution_result",
+                    "execution_id": "exec-1",
+                    "status": "completed"
+                }
+            }
             
-            result = operator_pb2.CommandResult()
-            result.execution_id = "exec-1"
-            result.status = operator_pb2.EXECUTION_STATUS_COMPLETED
-            envelope.payload = result.SerializeToString()
-            
-            data = envelope.SerializeToString()
+            data = json.dumps(envelope_data).encode("utf-8")
             
             await command_service._pubsub_service._dispatch_results_message( PubSubChannel.results("op-1", "sess-1"), data)  # noqa: SLF001
             
@@ -224,17 +228,17 @@ class TestDispatchResultsMessage:
             call_args = mock_handle.call_args[0]
             assert call_args[0] == "op-1"
             assert call_args[1] == "sess-1"
-            assert call_args[2]["event_type"] == EventType.OPERATOR_COMMAND_COMPLETED
+            assert call_args[2]["event_type"] == EventType.OPERATOR_COMMAND_RESULT
             assert call_args[2]["payload"]["execution_id"] == "exec-1"
 
-    async def test_rejects_json_payload(self, command_service):
-        """Test rejects legacy JSON payload."""
+    async def test_rejects_invalid_protobuf_json(self, command_service):
+        """Test rejects invalid JSON payload."""
         command_service._pubsub_service._handle_pubsub_result_message = AsyncMock()  # noqa: SLF001
-        data = json.dumps({"event_type": EventType.OPERATOR_COMMAND_COMPLETED, "payload": {}})
+        data = b"not-even-json"
         
         await command_service._pubsub_service._dispatch_results_message(PubSubChannel.results("op-1", "sess-1"), data)  # noqa: SLF001
         
-        # Should NOT call handler because it's not a valid protobuf envelope
+        # Should NOT call handler because it's not a valid envelope
         command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()
 
     async def test_ignores_invalid_channel_format(self, command_service):
@@ -250,22 +254,30 @@ class TestDispatchResultsMessage:
             side_effect=Exception("boom")
         )
         
-        # Build a valid protobuf envelope to reach the handler
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.id = "test-id"
-        envelope.event_type = "test-event"
-        data = envelope.SerializeToString()
+        # Build a valid Protobuf GovernanceEnvelope to reach the handler
+        envelope_data = {
+            "id": "test-id",
+            "event_type": EventType.OPERATOR_COMMAND_RESULT,
+            "action_type": "EXECUTE_BASH_RESULT",
+            "operator_id": "op-1",
+            "operator_session_id": "sess-1",
+            "intent_data": {
+                "payload_type": "execution_result",
+                "execution_id": "exec-1"
+            }
+        }
+        data = json.dumps(envelope_data).encode("utf-8")
         
         with pytest.raises(Exception, match="boom"):
             await command_service._pubsub_service._dispatch_results_message(  # noqa: SLF001
                 PubSubChannel.results("op-1", "sess-1"), data
             )
 
-    async def test_swallows_non_protobuf_payload(self, command_service):
-        """Non-protobuf payloads are logged and dropped, never raised."""
+    async def test_swallows_invalid_envelope_payload(self, command_service):
+        """Invalid envelope payloads are logged and dropped, never raised."""
         command_service._pubsub_service._handle_pubsub_result_message = AsyncMock()  # noqa: SLF001
         await command_service._pubsub_service._dispatch_results_message(  # noqa: SLF001
-            PubSubChannel.results("op-1", "sess-1"), b"not-protobuf-at-all"
+            PubSubChannel.results("op-1", "sess-1"), b"invalid-envelope-data"
         )
         command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()
   # noqa: SLF001

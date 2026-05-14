@@ -19,7 +19,7 @@ with predictable test values.  Use it wherever tests need to simulate an
 inbound request that carries g8e context headers.
 """
 
-from app.constants import INTERNAL_AUTH_HEADER, G8eHeaders
+from app.constants import G8eHeaders
 
 TEST_G8E_HEADERS: dict[str, str] = {
     G8eHeaders.WEB_SESSION_ID.lower():       "session-test-abc123",
@@ -30,5 +30,4 @@ TEST_G8E_HEADERS: dict[str, str] = {
     G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed",
     G8eHeaders.EXECUTION_ID.lower():     "exec-test-001",
     G8eHeaders.BOUND_OPERATORS.lower():  "[]",
-    INTERNAL_AUTH_HEADER:                "test-internal-token",
 }

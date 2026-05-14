@@ -32,13 +32,17 @@ def _configure_shared_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
             {
                 "infra": {
                     "db_path": ".g8e/data/g8e.db",
-                    "ca_cert_path": ".g8e/ssl/ca.crt",
-                    "ssl_dir": ".g8e/ssl",
+                    "ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
+                    "app_cert_dir": ".g8e/pki/issued/apps",
+                    "pki_dir": ".g8e/pki",
                     "docs_dir": "/docs",
                     "shared_dir": "/app/shared",
                     "shared_constants_dir": "/app/shared/constants",
                     "shared_models_dir": "/app/shared/models",
                     "ssh_config_path": "/etc/g8e/ssh_config",
+                },
+                "g8ee": {
+                    "cert_name": "g8ee",
                 }
             }
         )
@@ -49,25 +53,29 @@ def _configure_shared_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
     return shared_dir
 
 
-def test_load_paths_prefers_explicit_host_ssl_dir(monkeypatch: pytest.MonkeyPatch, tmp_path):
+def test_load_paths_prefers_explicit_host_pki_dir(monkeypatch: pytest.MonkeyPatch, tmp_path):
     _configure_shared_paths(monkeypatch, tmp_path)
-    ssl_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e" / "ssl"
-    monkeypatch.setenv("G8E_SSL_DIR", str(ssl_dir))
+    pki_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e" / "pki"
+    monkeypatch.setenv("G8E_PKI_DIR", str(pki_dir))
     monkeypatch.delenv("G8E_RUNTIME_DIR", raising=False)
 
     paths = load_paths()
 
-    assert paths["infra"]["ssl_dir"] == str(ssl_dir)
-    assert paths["infra"]["ca_cert_path"] == str(ssl_dir / "ca.crt")
+    assert paths["infra"]["pki_dir"] == str(pki_dir)
+    assert paths["infra"]["ca_cert_path"] == str(pki_dir / "trust" / "hub-bundle.pem")
+    assert paths["infra"]["app_cert_dir"] == str(pki_dir / "issued" / "apps")
+    assert paths["g8ee"]["cert_name"] == "g8ee"
 
 
-def test_load_paths_uses_host_runtime_dir_when_ssl_dir_unset(monkeypatch: pytest.MonkeyPatch, tmp_path):
+def test_load_paths_uses_host_runtime_dir_when_pki_dir_unset(monkeypatch: pytest.MonkeyPatch, tmp_path):
     _configure_shared_paths(monkeypatch, tmp_path)
     runtime_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e"
-    monkeypatch.delenv("G8E_SSL_DIR", raising=False)
+    monkeypatch.delenv("G8E_PKI_DIR", raising=False)
     monkeypatch.setenv("G8E_RUNTIME_DIR", str(runtime_dir))
 
     paths = load_paths()
 
-    assert paths["infra"]["ssl_dir"] == str(runtime_dir / "ssl")
-    assert paths["infra"]["ca_cert_path"] == str(runtime_dir / "ssl" / "ca.crt")
+    assert paths["infra"]["pki_dir"] == str(runtime_dir / "pki")
+    assert paths["infra"]["ca_cert_path"] == str(runtime_dir / "pki" / "trust" / "hub-bundle.pem")
+    assert paths["infra"]["app_cert_dir"] == str(runtime_dir / "pki" / "issued" / "apps")
+    assert paths["g8ee"]["cert_name"] == "g8ee"

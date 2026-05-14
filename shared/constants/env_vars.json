@@ -16,7 +16,6 @@
     "G8E_LLM_COMMAND_GEN_PASSES": "llm.command_gen_passes"
   },
   "auth": {
-    "G8E_INTERNAL_AUTH_TOKEN": "auth.internal_auth_token",
     "G8E_SESSION_ENCRYPTION_KEY": "auth.session_encryption_key",
     "G8E_API_KEY": "auth.g8e_api_key"
   },
@@ -64,7 +63,8 @@
     "G8E_ENABLE_COMMAND_BLACKLISTING": "command_validation.enable_blacklisting"
   },
   "ssl": {
-    "G8E_SSL_DIR": "ssl.ssl_dir",
+    "G8E_PKI_DIR": "ssl.pki_dir",
+    "G8E_SECRETS_DIR": "ssl.secrets_dir",
     "G8E_PUBSUB_CA_CERT": "ssl.pubsub_ca_cert",
     "G8E_SSL_CERT_FILE": "ssl.ssl_cert_file"
   }

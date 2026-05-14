@@ -14,12 +14,8 @@
 """
 Platform Settings Script
 
-Read and write effective platform settings via the g8ed internal HTTP API.
-Runs inside g8ep and communicates with g8ed over the internal network.
-Secret values (API keys, tokens) are never returned by the internal endpoint.
-
-The --direct flag bypasses g8ed and writes straight to operator. Use this when
-g8ed is not running (e.g. initial LLM setup before first platform start).
+Read and write effective platform settings via the Operator (g8eo) HTTP API.
+Secret values (API keys, tokens) are never returned by the API.
 
 Usage:
     python manage-operator.py settings show
@@ -28,7 +24,6 @@ Usage:
     python manage-operator.py settings get llm_provider
     python manage-operator.py settings get llm_model
     python manage-operator.py settings set llm_provider=openai llm_model=gemma3:4b
-    python manage-operator.py settings set --direct llm_provider=openai llm_endpoint=https://api.openai.com/v1
     python manage-operator.py settings set llm_endpoint=https://10.0.0.1:11434/v1
     python manage-operator.py settings rotate-token
 """
@@ -44,32 +39,61 @@ from pathlib import Path
 from typing import Dict, Any, List
 
 from _lib import (
-    G8ED_BASE_URL,
     OPERATOR_BASE_URL,
     get_document,
     print_banner,
-    g8ed_request,
     operator_request,
 )
 
-INTERNAL_API_URL = f'{G8ED_BASE_URL}/api/internal/settings'
+SETTINGS_API = f'{OPERATOR_BASE_URL}/api/settings'
 OPERATOR_SETTINGS_COLLECTION = 'settings'
 PLATFORM_SETTINGS_ID = 'platform_settings'
 USER_SETTINGS_ID_PREFIX = 'user_settings_'
 
 
 def _api_get(user_id: str | None = None) -> Dict[str, Any]:
-    url = INTERNAL_API_URL
-    if user_id:
-        url += f'?user_id={user_id}'
-    return g8ed_request('GET', url)
+    # Query platform settings directly from operator
+    doc = get_document('platform_settings', 'platform_settings')
+    if not doc:
+        return {'success': True, 'data': {'settings': {}}}
+    
+    # Transform flat settings into structured format
+    settings = doc.get('settings', {})
+    structured: Dict[str, Any] = {}
+    for key, value in settings.items():
+        structured[key] = {
+            'value': value,
+            'section': _infer_section(key),
+            'label': key.replace('_', ' ').title()
+        }
+    return {'success': True, 'data': {'settings': structured}}
+
+
+def _infer_section(key: str) -> str:
+    """Infer settings section from key name."""
+    if key.startswith('llm_') or key in ['temperature', 'max_tokens', 'provider', 'model', 'assistant_model']:
+        return 'llm'
+    if key.startswith('vertex_') or key.startswith('google_'):
+        return 'search'
+    if key in ['session_encryption_key', 'passkey_rp_id', 'passkey_origin']:
+        return 'security'
+    return 'general'
 
 
 def _api_put(settings: Dict[str, str], user_id: str | None = None) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {'settings': settings}
+    """Write settings directly to operator platform_settings document."""
     if user_id:
-        payload['user_id'] = user_id
-    return g8ed_request('PUT', INTERNAL_API_URL, payload)
+        # User-specific settings not yet supported in g8eo
+        raise RuntimeError('User-specific settings not yet supported')
+    
+    doc = get_document('platform_settings', 'platform_settings') or {}
+    doc_settings = doc.get('settings', {})
+    doc_settings.update(settings)
+    doc['settings'] = doc_settings
+    doc['id'] = 'platform_settings'
+    
+    operator_request('PUT', '/db/platform_settings/platform_settings', doc)
+    return {'success': True, 'saved': list(settings.keys()), 'skipped': []}
 
 
 _SECTION_ORDER = ['general', 'llm', 'search', 'security', 'validation']
@@ -86,7 +110,6 @@ _KEY_ORDER = [
     'app_url',
     'passkey_rp_id',
     'passkey_origin',
-    'internal_auth_token',
     'session_encryption_key',
     'g8e_operator_endpoint',
 
@@ -170,7 +193,6 @@ def exec_show(args: argparse.Namespace) -> None:
         print(f"[settings] Error: {result.get('error', 'Unknown error')}", file=sys.stderr)
         sys.exit(1)
 
-    # The g8ed API returns settings inside a 'data' object
     data = result.get('data', {})
     settings = data.get('settings', {})
     if not settings:
@@ -205,8 +227,8 @@ def _operator_put_platform_settings(doc: Dict[str, Any]) -> None:
     operator_request('PUT', f'/db/{OPERATOR_SETTINGS_COLLECTION}/{PLATFORM_SETTINGS_ID}', doc)
 
 
-def exec_rotate_token(_args: argparse.Namespace) -> None:
-    new_token = secrets.token_hex(32)
+def exec_rotate_session_key(_args: argparse.Namespace) -> None:
+    new_key = secrets.token_hex(32)
     now = datetime.now(timezone.utc).isoformat()
 
     # 1. Update operator document
@@ -220,21 +242,12 @@ def exec_rotate_token(_args: argparse.Namespace) -> None:
         }
 
     doc.setdefault('settings', {})
-    doc['settings']['internal_auth_token'] = new_token
+    doc['settings']['session_encryption_key'] = new_key
     doc['updated_at'] = now
 
     _operator_put_platform_settings(doc)
 
-    # 2. Update token file in SSL directory
-    ssl_dir = Path(os.environ.get('G8E_SSL_DIR', '.g8e/ssl'))
-    token_path = ssl_dir / 'internal_auth_token'
-    if token_path.parent.exists():
-        try:
-            token_path.write_text(new_token)
-        except Exception as e:
-            print(f"[settings] Warning: Failed to write new token to {token_path}: {e}", file=sys.stderr)
-
-    print(new_token, end='')
+    print(new_key, end='')
 
 
 def _parse_assignments(assignments: list) -> Dict[str, str]:
@@ -277,10 +290,6 @@ def exec_set(args: argparse.Namespace) -> None:
         print("[settings] No settings provided.", file=sys.stderr)
         sys.exit(1)
 
-    if getattr(args, 'direct', False):
-        _direct_set(settings)
-        return
-
     result = _api_put(settings, user_id=args.user_id)
     if not result.get('success'):
         print(f"[settings] Error: {result.get('error', 'Unknown error')}", file=sys.stderr)
@@ -317,7 +326,7 @@ def exec_export(args: argparse.Namespace) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description='Read and write platform settings via the g8ed internal API.',
+        description='Read and write platform settings via the Operator API.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -350,12 +359,6 @@ def build_parser() -> argparse.ArgumentParser:
         help='One or more key=value pairs to persist (e.g. llm_model=gemma3:4b)',
     )
     sp.add_argument('--user-id', help='User ID for user-specific settings')
-    sp.add_argument(
-        '--direct',
-        action='store_true',
-        default=False,
-        help='Write directly to operator, bypassing the g8ed internal API (use when g8ed is not running)',
-    )
     sp.set_defaults(func=exec_set)
 
     sp = subparsers.add_parser('export', help='Export settings as clean JSON')
@@ -369,9 +372,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=exec_export)
 
     subparsers.add_parser(
-        'rotate-token',
-        help='Generate a new internal_auth_token and write it directly to operator',
-    ).set_defaults(func=exec_rotate_token)
+        'rotate-session-key',
+        help='Generate a new session_encryption_key and write it directly to operator',
+    ).set_defaults(func=exec_rotate_session_key)
 
     return parser
 
@@ -383,7 +386,7 @@ def run(argv: List[str]) -> int:
         parser.print_help()
         return 1
 
-    _machine_readable = args.command in ('get', 'rotate-token')
+    _machine_readable = args.command in ('get', 'rotate-session-key')
     if not _machine_readable:
         print_banner('manage-operator.py settings', ' '.join(argv))
 

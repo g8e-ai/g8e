@@ -26,7 +26,7 @@ services:
       - DEVICE_TOKEN=${DEVICE_TOKEN:-}
       - G8E_ENDPOINT=${G8E_ENDPOINT:-localhost}
     volumes:
-      - ../../../.g8e/ssl/ca/ca.crt:/operator/ca.crt:ro
+      - ../../../.g8e/pki/ca/ca.crt:/operator/ca.crt:ro
     labels:
       - "demo.service=operator-node"
 

@@ -14,7 +14,7 @@
 """
 Shared utilities for g8e data management scripts.
 
-Provides authentication, HTTP clients (operator direct + g8ed internal API),
+Provides authentication, HTTP clients for the Operator substrate,
 and terminal display helpers used across all resource scripts.
 """
 
@@ -36,30 +36,59 @@ _SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
 with open(_SHARED_CONSTANTS / 'collections.json') as _f:
     _COLLECTIONS_DATA = json.load(_f)
 
-_DEFAULT_SSL_DIR = str(PROJECT_ROOT / '.g8e' / 'ssl')
+_DEFAULT_PKI_DIR = str(PROJECT_ROOT / '.g8e' / 'pki')
+_DEFAULT_SECRETS_DIR = str(PROJECT_ROOT / '.g8e' / 'secrets')
+_DEFAULT_CREDENTIALS_DIR = str(Path.home() / '.g8e')
 
 OPERATOR_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', 'https://localhost:9000')
-G8ED_BASE_URL = os.environ.get('G8ED_INTERNAL_URL', 'https://localhost')
 COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
 PRESERVE_COLLECTIONS = {'settings'}
 
-SSL_DIR = Path(os.environ.get('G8E_SSL_DIR', _DEFAULT_SSL_DIR))
-CA_CERT_PATH = SSL_DIR / 'ca.crt'
-INTERNAL_AUTH_TOKEN_PATHS = (
-    SSL_DIR / 'internal_auth_token',
-    SSL_DIR / 'ssl' / 'internal_auth_token',
-)
+PKI_DIR = Path(os.environ.get('G8E_PKI_DIR', _DEFAULT_PKI_DIR))
+SECRETS_DIR = Path(os.environ.get('G8E_SECRETS_DIR', _DEFAULT_SECRETS_DIR))
+CREDENTIALS_DIR = Path(os.environ.get('G8E_CREDENTIALS_DIR', _DEFAULT_CREDENTIALS_DIR))
+TRUST_BUNDLE_PATH = PKI_DIR / 'trust' / 'hub-bundle.pem'
+
+
+def _get_cli_cert() -> tuple[str, str] | None:
+    """Return (cert_path, key_path) for the CLI mTLS client certificate.
+
+    Preference order:
+    1. G8E_CLI_CERT / G8E_CLI_KEY env vars (set by `g8e login`)
+    2. ~/.g8e/cli.crt + ~/.g8e/cli.key
+    3. Platform app cert (.g8e/pki/issued/apps/{cert_name}.crt) as fallback for
+       operator-local tooling that has not yet run `g8e login`.
+    """
+    cert = os.environ.get('G8E_CLI_CERT', str(CREDENTIALS_DIR / 'cli.crt'))
+    key = os.environ.get('G8E_CLI_KEY', str(CREDENTIALS_DIR / 'cli.key'))
+    if Path(cert).exists() and Path(key).exists():
+        return cert, key
+    try:
+        import json
+        paths_file = _PROJECT_ROOT / 'shared' / 'constants' / 'paths.json'
+        if paths_file.exists():
+            with open(paths_file) as f:
+                paths = json.load(f)
+                cert_name = paths.get('g8ee', {}).get('cert_name', 'g8ee')
+        else:
+            cert_name = 'g8ee'
+    except Exception:
+        cert_name = 'g8ee'
+    app_cert = str(PKI_DIR / 'issued' / 'apps' / f'{cert_name}.crt')
+    app_key = str(PKI_DIR / 'issued' / 'apps' / f'{cert_name}.key')
+    if Path(app_cert).exists() and Path(app_key).exists():
+        return app_cert, app_key
+    return None
 
 
 def _create_ssl_context() -> ssl.SSLContext | None:
     """Create SSL context that trusts the platform CA."""
     ctx = ssl.create_default_context()
-    if CA_CERT_PATH.exists():
-        ctx.load_verify_locations(str(CA_CERT_PATH))
-    else:
-        alt_path = SSL_DIR / 'ssl' / 'ca.crt'
-        if alt_path.exists():
-            ctx.load_verify_locations(str(alt_path))
+    if TRUST_BUNDLE_PATH.exists():
+        ctx.load_verify_locations(str(TRUST_BUNDLE_PATH))
+    cli_cert = _get_cli_cert()
+    if cli_cert:
+        ctx.load_cert_chain(cli_cert[0], cli_cert[1])
     return ctx
 
 
@@ -71,39 +100,18 @@ def get_auth_token() -> str:
     """Return the operator session token from env (set by `g8e login`).
 
     The wrapper gates `g8e data` on a valid operator session before invoking
-    this script, so OPERATOR_SESSION_ID is expected to be present. It is
-    forwarded to g8ed for operator-scoped API calls; operator calls use the
-    internal auth token instead (see get_internal_auth_token).
+    this script, so OPERATOR_SESSION_ID is expected to be present.
     """
     return os.environ.get('OPERATOR_SESSION_ID', '')
-
-
-def get_internal_auth_token() -> str:
-    """Return the platform internal auth token.
-
-    The Operator (listen mode) authenticates every internal request with
-    `X-Internal-Auth`. The token is written by the Operator on first start to
-    $G8E_SSL_DIR/internal_auth_token (default: $PROJECT_ROOT/.g8e/ssl/). Falls
-    back to the G8E_INTERNAL_AUTH_TOKEN env var for test-runner contexts.
-    """
-    for p in INTERNAL_AUTH_TOKEN_PATHS:
-        try:
-            if p.exists():
-                token = p.read_text().strip()
-                if token:
-                    return token
-        except OSError:
-            continue
-    return os.environ.get('G8E_INTERNAL_AUTH_TOKEN', '')
 
 
 def get_auditor_hmac_key() -> str:
     """Return the Tribunal auditor HMAC-SHA256 signing key.
 
     The key is written by the Operator on first start to
-    $G8E_SSL_DIR/auditor_hmac_key (default: $PROJECT_ROOT/.g8e/ssl/).
+    $G8E_SECRETS_DIR/auditor_hmac_key (default: $PROJECT_ROOT/.g8e/secrets/).
     """
-    p = SSL_DIR / 'auditor_hmac_key'
+    p = SECRETS_DIR / 'auditor_hmac_key'
     try:
         if p.exists():
             key = p.read_text().strip()
@@ -115,7 +123,7 @@ def get_auditor_hmac_key() -> str:
 
 
 # =============================================================================
-# g8ed HTTP client — direct DB/KV access (same as g8ee's DBClient)
+# Operator HTTP client — direct DB/KV access
 # =============================================================================
 
 def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
@@ -123,18 +131,9 @@ def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
     data = json.dumps(body).encode() if body is not None else None
     headers = {'Content-Type': 'application/json'} if data is not None else {}
 
-    # The Operator listen-mode HTTP API requires X-Internal-Auth on all
-    # non-health endpoints. The operator session from `g8e login` gates the
-    # wrapper; the script reads the internal auth token written by the
-    # Operator at $G8E_SSL_DIR/internal_auth_token, the same way g8ed and
-    # g8ee do.
-    internal_token = get_internal_auth_token()
-    if internal_token:
-        headers['X-Internal-Auth'] = internal_token
-
     session_token = get_auth_token()
     if session_token:
-        headers['X-Operator-Session-Id'] = session_token
+        headers['X-G8E-Operator-Session-ID'] = session_token
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     ctx = _create_ssl_context()
@@ -190,57 +189,23 @@ def kv_delete_pattern(pattern: str) -> int:
 
 
 # =============================================================================
-# g8ed internal API client — for resource management (users, operators, etc.)
+# Operator API client — for resource management (users, operators, etc.)
 # =============================================================================
 
-def g8ed_request(method: str, url: str, body: Dict | None = None) -> Dict:
-    data = json.dumps(body).encode() if body is not None else None
-    headers = {
-        'X-Operator-Session-Id': get_auth_token() or '',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-    }
-    # g8ed internal endpoints accept either an operator session OR the
-    # platform internal auth token. We forward the on-disk internal token
-    # for bootstrap flows before any user is authenticated.
-    internal_token = get_internal_auth_token()
-    if internal_token:
-        headers['X-Internal-Auth'] = internal_token
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    ctx = _create_ssl_context()
-    try:
-        with urllib.request.urlopen(req, context=ctx) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        body_bytes = e.read()
-        try:
-            err = json.loads(body_bytes.decode())
-        except Exception:
-            err = {'error': body_bytes.decode()}
-        err['_status_code'] = e.code
-        return err
-    except urllib.error.URLError as e:
-        raise RuntimeError(
-            f"Could not reach g8ed at {G8ED_BASE_URL}. Is the platform running? "
-            f"(./g8e platform start)\n  {e.reason}"
-        )
-
-
 def resolve_user_id(user_id: str | None, email: str | None) -> str | None:
+    """Resolve user ID from email using the Operator's public API."""
     if user_id:
         return user_id
     if not email:
         return None
-    result = g8ed_request('GET', f'{G8ED_BASE_URL}/api/internal/users/email/{urllib.parse.quote(email, safe="")}')
-    # g8ed returns {user: {...}} on success and {error/...} on failure.
-    user = result.get('user') if isinstance(result, dict) else None
-    if not user:
-        if result.get('_status_code') == 404:
-            print(f"\nUser not found with email: {email}")
-        else:
-            raise RuntimeError(result.get('error', 'Failed to resolve user by email'))
+    # Query users collection by email using DocFilter format
+    result = operator_request('POST', '/db/users/_query', {
+        'filters': [{'field': 'email', 'op': '==', 'value': json.dumps(email)}]
+    })
+    if not isinstance(result, list) or len(result) == 0:
+        print(f"\nUser not found with email: {email}")
         return None
-    return user['id']
+    return result[0].get('id')
 
 
 # =============================================================================

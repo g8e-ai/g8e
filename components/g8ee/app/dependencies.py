@@ -37,7 +37,6 @@ from app.models.http_context import G8eHttpContext
 from app.services.cache.cache_aside import CacheAsideService
 from app.security.auth import (
     is_infrastructure_health_check_ip,
-    validate_internal_origin,
     authenticate_proxy_or_internal,
 )
 from app.services.infra.health_service import HealthService
@@ -67,16 +66,43 @@ from .services.operator.session_auth_listener import SessionAuthListener
 from .services.auth.api_key_service import ApiKeyService
 from .services.auth.certificate_service import CertificateService
 from .services.infra.settings_service import SettingsService
-from app.security.auth import verify_internal_auth_token
 logger = logging.getLogger(__name__)
 
-
-def _verify_internal_auth_token(request: Request, settings: G8eePlatformSettings) -> bool:
-    return verify_internal_auth_token(request, settings)
-
-
-async def require_internal_origin(request: Request) -> bool:
-    return await validate_internal_origin(request)
+__all__ = [
+    "get_g8e_http_context",
+    "get_g8ee_api_key_service",
+    "get_g8ee_approval_service",
+    "get_g8ee_attachment_service",
+    "get_g8ee_blob_client",
+    "get_g8ee_blob_service",
+    "get_g8ee_cache_aside_service",
+    "get_g8ee_case_data_service",
+    "get_g8ee_certificate_service",
+    "get_g8ee_chat_pipeline",
+    "get_g8ee_chat_task_manager",
+    "get_g8ee_current_active_user",
+    "get_g8ee_event_service",
+    "get_g8ee_g8ed_http_client",
+    "get_g8ee_grounding_service",
+    "get_g8ee_investigation_data_service",
+    "get_g8ee_investigation_service",
+    "get_g8ee_kv_cache_client",
+    "get_g8ee_memory_generation_service",
+    "get_g8ee_memory_service",
+    "get_g8ee_operator_auth_service",
+    "get_g8ee_operator_cache",
+    "get_g8ee_operator_command_service",
+    "get_g8ee_operator_data_service",
+    "get_g8ee_operator_lifecycle_service",
+    "get_g8ee_operator_session_service",
+    "get_g8ee_platform_settings",
+    "get_g8ee_pubsub_client",
+    "get_g8ee_session_auth_listener",
+    "get_g8eeweb_search_provider",
+    "health_check_dependencies",
+    "is_infrastructure_health_check_ip",
+    "require_proxy_auth",
+]
 
 
 async def get_g8ee_all_services(request: Request) -> AllServices:
@@ -454,6 +480,5 @@ __all__ = [
     "get_g8eeweb_search_provider",
     "health_check_dependencies",
     "is_infrastructure_health_check_ip",
-    "require_internal_origin",
     "require_proxy_auth",
 ]

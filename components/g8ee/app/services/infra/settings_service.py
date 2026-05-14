@@ -89,7 +89,6 @@ class SettingsService:
             session_ttl=3600,
             absolute_session_timeout=86400,
             docs_dir="/docs",
-            supervisor_port=9001,
             app_url="http://localhost:8443",
             allowed_origins="*",
             passkey_rp_name="g8e",
@@ -98,18 +97,6 @@ class SettingsService:
         )
 
         # Load secrets from bootstrap service
-        internal_token = self._bootstrap.load_internal_auth_token()
-        if internal_token:
-            # Tamper-evidence: confirm the on-disk secret matches the SHA-256
-            # digest g8eo SecretManager recorded in bootstrap_digest.json at
-            # write time. Divergence (partial write, corruption, manual edit)
-            # must abort startup cleanly rather than let g8ee authenticate
-            # with a drifted secret and surface an opaque 401 later.
-            self._bootstrap.verify_against_manifest("internal_auth_token", internal_token)
-            settings.auth.internal_auth_token = internal_token
-        else:
-            self._logger.info("Internal auth token not available from bootstrap service")
-
         session_key = self._bootstrap.load_session_encryption_key()
         if session_key:
             self._bootstrap.verify_against_manifest("session_encryption_key", session_key)

@@ -259,8 +259,8 @@ class TestAuthenticatedUser:
             AuthenticatedUser(uid="u", user_id="u")
 
     def test_auth_method_is_enum(self):
-        user = self._make(auth_method=AuthMethod.INTERNAL)
-        assert user.auth_method == AuthMethod.INTERNAL
+        user = self._make(auth_method=AuthMethod.PROXY)
+        assert user.auth_method == AuthMethod.PROXY
 
 
     def test_all_auth_methods_accepted(self):

@@ -5,16 +5,16 @@ parent: Architecture
 
 # Storage Architecture
 
-Last Updated: 2026-05-11
-Version: v0.2.3
+Last Updated: 2026-05-13
+Version: v0.2.5
 
 This document explains the unified storage architecture for the g8e platform. It focuses on the **why** and **what** — the architectural decisions, data flows, and invariants — rather than low-level implementation.
 
 ## Core Principles
 
-- **Operator-Hub Persistence**: The Operator (`g8eo`) running in `--listen` mode is the authoritative system of record for the entire platform. Components like the Dashboard (`g8ed`) and Engine (`g8ee`) are completely stateless and rely on the Operator for persistence via the Coordination Store API.
-- **Local-First Audit Architecture (LFAA)**: Every file mutation and command execution on a managed host is recorded locally in the Operator's Audit Vault and Ledger. The platform receives only Sentinel-scrubbed metadata; raw data never leaves the host unless explicitly retrieved.
-- **Unified Coordination Store**: A single SQLite database on the platform hub provides Document, KV, SSE, and Blob storage services to stateless clients.
+- **Operator-Hub Persistence**: The Operator (`g8eo`) running in `--listen` mode is the authoritative system of record and the primary **Substrate**. It provides the Coordination Store API for all clients. Optional application-layer adapters like the Dashboard (`g8ed`) and Engine (`g8ee`) are completely stateless and rely on the Operator for persistence.
+- **Local-First Audit Architecture (LFAA)**: Every file mutation and command execution on a managed host is recorded locally in the Operator's Audit Vault and Ledger. The platform substrate receives only Sentinel-scrubbed metadata; raw data never leaves the host unless explicitly retrieved.
+- **Unified Coordination Store**: A single SQLite database on the platform hub (provided by `g8eo --listen`) provides Document, KV, SSE, and Blob storage services to stateless clients.
 - **Data Sovereignty**: Raw operational data (passwords, secrets, PII) is quarantined on the managed host. The platform only ever receives Sentinel-scrubbed summaries and metadata in the Scrubbed Vault.
 
 ## Storage Tiers
@@ -31,9 +31,9 @@ This document explains the unified storage architecture for the g8e platform. It
 ## Storage Architecture at a Glance
 
 ### Platform Hub (g8eo --listen)
-- **Component**: `g8eo` (the "Platform Hub")
+- **Component**: `g8eo` (the "Platform Hub" and "Substrate")
 - **Persistence**: Single SQLite database at `.g8e/data/g8e.db` (The "Coordination Store").
-- **Stateless Clients**: `g8ed` (Node.js) and `g8ee` (Python) read/write via HTTPS/WSS.
+- **Stateless Clients**: Bundled apps (`g8ed`, `g8ee`) and BYO clients read/write via public HTTPS/WSS APIs.
 - **Subsystems**:
     - **Document Store**: JSON document CRUD using a Collection/ID pattern with `json_extract` query support.
     - **KV Store**: High-speed ephemeral data with TTL support and read cache.
@@ -114,10 +114,10 @@ This document explains the unified storage architecture for the g8e platform. It
 
 | Component | Technology | Path/Volume | Role |
 |---|---|---|---|
-| **Platform Hub (DB)** | SQLite | `.g8e/data/g8e.db` | Central platform state (Coordination Store). |
-| **Platform Hub (SSL)** | TLS Certs | `.g8e/ssl` | CA, identity, and bootstrap secrets. **Root of Trust**. |
-| **Engine (g8ee)** | None | - | Stateless; uses `DBClient` and `KVCacheClient`. |
-| **Dashboard (g8ed)** | None | - | Stateless; uses `OperatorDocumentClient` and `KVCacheClient`. |
+| **Platform Hub (Substrate)** | SQLite | `.g8e/data/g8e.db` | Central platform state (Coordination Store). |
+| **Platform Hub (PKI)** | TLS Certs | `.g8e/pki` | CA hierarchy, intermediate CAs, trust bundles. **Root of Trust**. |
+| **Platform Hub (Secrets)** | Bootstrap Secrets | `.g8e/secrets` | Session encryption key with tamper-evidence manifest. |
+| **Optional Adapters** | None | - | Stateless clients; use `DBClient` and `KVCacheClient`. |
 | **Operator (Scrubbed)** | SQLite | `.g8e/local_state.db` | Sentinel-scrubbed AI context. |
 | **Operator (Raw)** | SQLite | `.g8e/raw_vault.db` | Customer-only unscrubbed forensic record. |
 | **Operator (Audit)** | SQLite (Enc) | `.g8e/data/g8e.db` | LFAA encrypted append-only event log. |
@@ -136,12 +136,18 @@ The Coordination Store is the platform's central coordination point. It is imple
 - **SSE Buffer**: A ring buffer for Server-Sent Events, ensuring clients can catch up after disconnects.
 - **PubSub Broker**: Real-time message distribution for coordination between the Engine and Dashboard.
 
-### The SSL Directory (Root of Trust)
-The `.g8e/ssl` directory is the platform's root of trust. It stores:
-1. **CA Certificates**: Root and intermediate certificates for mTLS.
-2. **Bootstrap Secrets**: `internal_auth_token`, `session_encryption_key`, and `auditor_hmac_key`.
+### The PKI and Secrets Directories (Root of Trust)
+The `.g8e/pki` and `.g8e/secrets` directories form the platform's root of trust.
 
-On startup, `g8eo` synchronizes these secrets into its database. If a conflict occurs, the SSL directory is the authoritative source.
+**PKI Directory (`.g8e/pki/`)** stores:
+1. **CA Hierarchy**: Root CA, intermediate CAs (hub, operator, bootstrap), and trust bundles.
+2. **Issued Certificates**: Server and workload certificates signed by intermediate CAs.
+
+**Secrets Directory (`.g8e/secrets/`)** stores:
+1. **Bootstrap Secrets**: `session_encryption_key`, `warden_signing_key`, and `warden_key_id`.
+2. **Tamper-Evidence Manifest**: `bootstrap_digest.json` with SHA-256 digests of each secret.
+
+On startup, `g8eo` SecretManager validates that secrets match the bootstrap digest manifest. If a conflict occurs, startup fails hard with actionable error messages.
 
 ### Cache-Aside Consistency
 `g8ee` and `g8ed` implement a cache-aside pattern for performance:
@@ -171,9 +177,13 @@ The Ledger is a Git repository located at `.g8e/data/ledger`.
 - **Scrubbed Vault** (`.g8e/local_state.db`): Stores the "AI-ready" view of the host, including execution logs and file diffs that have been processed by Sentinel.
 - **Raw Vault** (`.g8e/raw_vault.db`): Stores unscrubbed forensic records, accessible only to authorized customer auditors.
 
+Audit events are fail-closed against session identity. The audit vault never creates sessions from event payloads; session creation is owned by explicit Operator/auth lifecycle code. `RecordEvent` and `RecordEvents` reject missing, malformed, or unknown `operator_session_id` values before inserting audit rows.
+
 ---
 
 ## Canonical Collections
+
+The following collections are defined in `shared/constants/collections.json` and are used across the platform for Document Store organization:
 
 | Collection | Description |
 |---|---|
@@ -219,4 +229,4 @@ The Ledger is a Git repository located at `.g8e/data/ledger`.
 - [../components/g8ee.md](../components/g8ee.md) — g8ee component reference
 - [../components/g8ed.md](../components/g8ed.md) — g8ed component reference
 - [security.md](security.md) — Full security model: mTLS, Sentinel patterns, LFAA encryption, threat detection
-- [protocol.md](protocol.md) — Universal Envelope and communication protocol
+- [protocol.md](protocol.md) — Governance Envelope and communication protocol

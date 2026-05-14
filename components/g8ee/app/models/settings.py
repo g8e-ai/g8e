@@ -61,8 +61,9 @@ class UserSettingsDocument(G8eIdentifiableModel):
 
 class AuthSettings(G8eBaseModel):
     """Authentication and security token configuration."""
-    internal_auth_token: str | None = Field(None)
     session_encryption_key: str | None = Field(None)
+    operator_session_id: str | None = Field(None)
+    operator_api_key: str | None = Field(None)
     g8e_api_key: str | None = Field(None)
     auditor_hmac_key: str | None = Field(
         None,
@@ -377,6 +378,10 @@ class G8eePlatformSettings(G8eBaseModel):
     reputation: ReputationSettings = Field(default_factory=ReputationSettings)
     batch_execution: BatchExecutionSettings = Field(default_factory=BatchExecutionSettings)
 
+    # Private fields for overrides (GDD §18.2)
+    _client_cert_path: str | None = None
+    _client_key_path: str | None = None
+
     @property
     def ca_cert_path(self) -> str | None:
         """First valid CA path for internal services."""
@@ -384,6 +389,36 @@ class G8eePlatformSettings(G8eBaseModel):
         try:
             with open(ca_path):
                 return ca_path
+        except OSError:
+            return None
+
+    @property
+    def client_cert_path(self) -> str | None:
+        """Client certificate path for mTLS."""
+        if self._client_cert_path is not None:
+            return self._client_cert_path
+        from app.constants.paths import get_app_cert_paths
+        cert_path, _ = get_app_cert_paths()
+        if not cert_path:
+            return None
+        try:
+            with open(cert_path):
+                return cert_path
+        except OSError:
+            return None
+
+    @property
+    def client_key_path(self) -> str | None:
+        """Client private key path for mTLS."""
+        if self._client_key_path is not None:
+            return self._client_key_path
+        from app.constants.paths import get_app_cert_paths
+        _, key_path = get_app_cert_paths()
+        if not key_path:
+            return None
+        try:
+            with open(key_path):
+                return key_path
         except OSError:
             return None
 

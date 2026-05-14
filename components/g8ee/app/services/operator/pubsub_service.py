@@ -185,26 +185,12 @@ class OperatorPubSubService:
             logger.warning("[PUBSUB] Failed to parse results channel: %s", channel)
             return
 
-        # Enforce Protobuf-First Protocol
-        # We only accept bytes which are decoded as UniversalEnvelope protobufs.
-        if isinstance(data, bytes):
-            try:
-                raw = decode_g8eo_result_envelope(data)
-                logger.debug("[PUBSUB] Decoded protobuf UniversalEnvelope from g8eo")
-            except ValueError as e:
-                logger.warning("[PUBSUB] Failed to decode protobuf envelope: %s", e)
-                return
-        elif isinstance(data, str):
-            # Some pub/sub clients might return strings for bytes - try to decode if it looks like it could be protobuf
-            try:
-                data_bytes = data.encode('utf-8')
-                raw = decode_g8eo_result_envelope(data_bytes)
-                logger.debug("[PUBSUB] Decoded protobuf UniversalEnvelope from string data")
-            except (ValueError, UnicodeDecodeError) as e:
-                logger.warning("[PUBSUB] Received string data that is not a valid protobuf envelope: %s", e)
-                return
-        else:
-            logger.warning("[PUBSUB] Received unsupported data type: %s. Expected bytes (protobuf).", type(data))
+        # Enforce UAP JSON Protocol
+        try:
+            raw = decode_g8eo_result_envelope(data)
+            logger.debug("[PUBSUB] Decoded UAP JSON envelope from g8eo")
+        except (ValueError, TypeError) as e:
+            logger.warning("[PUBSUB] Failed to decode UAP envelope: %s", e)
             return
 
         await self._handle_pubsub_result_message(operator_id, operator_session_id, raw)

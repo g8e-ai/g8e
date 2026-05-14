@@ -40,7 +40,7 @@ x-web-node: &web-node
   labels:
     - "demo.service=web-node"
   volumes:
-    - ../../../.g8e/ssl/ca/ca.crt:/operator/ca.crt:ro
+    - ../../../.g8e/pki/ca/ca.crt:/operator/ca.crt:ro
 
 services:
   node-01:

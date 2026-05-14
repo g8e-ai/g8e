@@ -5,7 +5,7 @@ title: Docs Guidelines
 # g8e Documentation Guidelines
 
 Last Updated: 2026-05-11
-Version: v0.2.3
+Version: v0.2.4
 
 Internal authoring standards for g8e documentation. All contributors must follow these guidelines when creating or updating docs.
 
@@ -68,7 +68,6 @@ docs/
 | Pub/sub channel names and wire format | `docs/components/g8eo.md` | `g8ed.md`, `g8ee.md`, `testing.md` |
 | KV key namespace and patterns | `docs/components/g8eo.md` | `g8ed.md`, `g8ee.md` |
 | `G8eHttpContext` internal HTTP header full listing | `docs/components/g8ed.md` | `g8ee.md` cross-references; do not restate in other component docs |
-| `X-Internal-Auth` shared secret (generation and discovery) | `docs/architecture/security.md` | `developer.md`, `g8eo.md`, `g8ee.md`, `g8ed.md` |
 | Heartbeat end-to-end flow | `docs/components/g8ed.md` | `g8eo.md`, `g8ee.md` |
 | Shared constants and models (`shared/`) | `docs/developer.md` | `testing.md` |
 | Universal code quality rules | `docs/developer.md` | do not restate in component docs |
@@ -85,7 +84,7 @@ Every document must follow this structure:
 # Title
 
 Last Updated: 2026-05-11
-Version: v0.2.3
+Version: v0.2.4
 
 One or two sentence summary of what this document covers and who it is for.
 

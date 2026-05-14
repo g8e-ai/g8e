@@ -5,17 +5,19 @@ parent: Architecture
 
 # Thinking & Reasoning
 
-Last Updated: 2026-05-11
-Version: v0.2.3
+Last Updated: 2026-05-12
+Version: v0.2.4
 
 "Thinking" in g8e is a dual-layered architecture designed to guarantee that agentic actions are the result of deliberate, cross-validated reasoning rather than reflexive generation. 
 
-1.  **Structural Reasoning (L2 Consensus)**: A multi-agent ensemble (The Tribunal) that provides structural integrity through voting and auditing.
+1.  **Structural Reasoning (L2 Consensus)**: A verifiable proof that an action was generated through deliberate consensus (e.g., via the bundled **Tribunal** in the application layer).
 2.  **Provider Reasoning (LLM Thinking)**: The native reasoning capabilities of LLM providers (e.g., Gemini's `thinking_config`, Anthropic's `thinking_budget`) abstracted into a canonical vocabulary.
 
-## 1. Structural Reasoning: The Tribunal
+## 1. Structural Reasoning: Consensus
 
-The core "brain" of g8e is not a single model, but a **Tribunal** of five heterogeneous agents. This structural reasoning layer ensures that every shell command is debated before execution.
+g8e enforces structural reasoning at the **Substrate** level by requiring an L2 Consensus proof in the UAP JSON envelope for state-changing operations. 
+
+The bundled **Engine** (`g8ee`) adapter implements this via a **Tribunal** of five heterogeneous agents. This ensures that every shell command is debated before execution.
 
 - **Information Isolation**: Members generate candidates in parallel, sealed environments.
 - **Heterogeneous Lenses**: Personas like **Axiom** (composition), **Variance** (edge cases), and **Nemesis** (adversary) ensure the problem is viewed from multiple angles.
@@ -59,7 +61,7 @@ The `ThinkingLevel` enum (defined in `@/home/bob/g8e/components/g8ee/app/constan
 
 ## Thinking in the Data Stream
 
-The model's internal thinking process is treated as a first-class component of the Protobuf `UniversalEnvelope`.
+The model's internal thinking process is treated as a first-class component of the UAP JSON envelope.
 
 ### The Thinking State Machine
 `@/home/bob/g8e/components/g8ee/app/services/ai/agent_turn.py` implements a state machine to handle interleaved thought and output tokens. When a `thought` chunk is received, the Engine accumulates it and emits a `THINKING_START` signal. When non-thought tokens arrive, it flushes the thoughts and signals `THINKING_END`.
@@ -73,7 +75,7 @@ Reasoning intensity **never** compromises the **Local-First Audit Architecture (
 
 1.  **Scrubbing Protocol**: Sensitive PII and secrets are redacted by the Operator *before* the context reaches the Engine. Models only "think" over scrubbed data.
 2.  **Audit Vault**: The model's "thought process" is returned to the host, encrypted, and stored in the local Audit Vault.
-3.  **Governance Persistence**: Reasoning results (votes, rationales) are bound to the `UniversalEnvelope` in the `governance` block, providing a tamper-evident chain of reasoning for every action.
+3.  **Governance Persistence**: Reasoning results (votes, rationales) are bound to the UAP JSON envelope in the `governance` block, providing a tamper-evident chain of reasoning for every action.
 
 ## Testing Discipline
 
