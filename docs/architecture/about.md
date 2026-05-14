@@ -5,17 +5,18 @@ parent: Architecture
 
 # g8e: The Governed Transaction Layer
 
-g8e is a governed transaction runtime for agentic systems. It provides a data-sovereign, AI-agnostic governance substrate between humans, AI agents, and production infrastructure.
+g8e is a governed transaction runtime for agentic systems. It provides a data-sovereign, AI-agnostic governance substrate between humans, AI agents, and the systems they act on.
 
-The platform is split into two distinct tiers:
+The platform is split into three layers:
 
-1.  **Substrate (Mandatory)**: The **Operator (g8eo)** and the **g8e Protocol**. The Operator is a sovereign host agent that verifies, executes, and audits transactions. It is the authority for host state and policy.
-2.  **Application Layer (Optional)**: Reference adapters like the **Dashboard (g8ed)** and **Engine (g8ee)**. These are opt-in components that consume the public protocol surface on equal footing with Bring-Your-Own (BYO) frontends and agents.
+1.  **Protocol (Substrate)**: The **g8e Protocol** is the substrate. It is a domain-agnostic wire contract — a typed, signed, state-bound `GovernanceEnvelope` carrying L1/L2/L3 evidence — that any conforming implementation must verify and enforce.
+2.  **Operator (Role)**: Any host-side implementation that speaks the protocol: it receives signed transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a local ledger. **`g8eo`** is the reference Operator implementation in Go and the canonical example of what an Operator does. It is replaceable.
+3.  **Application Layer (Optional)**: Reference application components like the **Engine (g8ee)** and **Dashboard (g8ed)**. These are opt-in pieces of the AI-powered infrastructure-management reference application, consuming the public protocol surface on equal footing with Bring-Your-Own (BYO) frontends and agents.
 
-The core product invariant is that a typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof (L1/L2/L3) checks out.
+The core product invariant is that a typed, signed, state-bound transaction reaches a sovereign host implementation that distrusts upstream inputs and refuses to mutate reality unless every independent proof (L1/L2/L3) checks out.
 
-- **Substrate vs Application**: g8e separates the mandatory Operator substrate from optional application-layer adapters.
-- **UAP JSON-First Protocol**: All substrate commands and results are governed by the `GovernanceEnvelope` contract, ensuring transparency and flexibility for audit.
+- **Protocol vs Operator vs Application**: The protocol is the substrate; an Operator is a role; the bundled apps are one application of many possible applications.
+- **UAP JSON-First Protocol**: All client-facing commands and results are governed by the `GovernanceEnvelope` contract, ensuring transparency and flexibility for audit.
 
 ---
 
@@ -51,25 +52,25 @@ Hit me up: danny@g8e.ai
 
 ## The Architecture at a Glance
 
-The industry's current trajectory for agentic AI on infrastructure is structurally broken. Relying on a single Large Language Model creates a system vulnerable to auto-regressive collapse. Conversely, traditional "Human-in-the-Loop" setups rapidly degrade into alert fatigue, where human approval becomes a rubber-stamp. 
+The industry's current trajectory for agentic AI is structurally broken. Relying on a single Large Language Model creates a system vulnerable to auto-regressive collapse. Conversely, traditional "Human-in-the-Loop" setups rapidly degrade into alert fatigue, where human approval becomes a rubber-stamp.
 
-To solve this, g8e centers the product boundary on an Operator/protocol substrate, with optional Dashboard and Engine adapters around four core mechanisms:
+To solve this, g8e centers the product boundary on the **g8e Protocol** as the substrate. The reference Operator (`g8eo`) and the optional reference application (Engine/Dashboard) demonstrate the four core mechanisms the protocol mandates:
 
-### 1. The Reality Portal: Sovereign Execution (Substrate)
-SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator**: a statically compiled Go binary that runs on your managed host and provides the **mandatory substrate** for the platform.
+### 1. The Reality Portal: Sovereign Execution (Operator)
+SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. An **Operator** is any host-side implementation that speaks the protocol. The reference Operator (`g8eo`) is a statically compiled Go binary that runs on your managed host.
 
-The Operator treats all upstream inputs as inherently untrusted. Command traffic isn't binary Protobuf; it is UAP JSON `GovernanceEnvelope` bytes carrying structured intent data. Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level L1 checks, verifies L2 Consensus signatures, and routes the payload through a Sentinel layer enforcing strict allowlist/denylist controls and 46 MITRE ATT&CK detectors.
+A conforming Operator treats all upstream inputs as inherently untrusted. Command traffic on the wire is canonical JSON `GovernanceEnvelope` carrying structured intent data. Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level L1 checks, verifies L2 Consensus signatures, and routes the payload through a defensive analysis layer. The reference Operator implements this layer as Sentinel: strict allowlist/denylist controls and MITRE ATT&CK detectors.
 
 ### 2. The BFT Control Plane: Governance (Application Layer)
-Any state-changing intent can be evaluated by a consensus panel (e.g., the bundled 5-node **Engine** adapter). Operating under strict information isolation, they evaluate intent in a vacuum. Because they cannot socially engineer each other, they cannot sycophantically agree.
+Any state-changing intent can be evaluated by a consensus panel (e.g., the reference 5-node **Engine** adapter). Operating under strict information isolation, they evaluate intent in a vacuum. Because they cannot socially engineer each other, they cannot sycophantically agree.
 
 A calibrated adversarial agent (**Nemesis**) continuously attempts to trick the platform's risk-assessment Wardens with flawed-but-plausible commands. We replaced external audits with continuous, mathematically bounded adversarial pressure.
 
 ### 3. Execution is a Side-Effect of the Audit Log (LFAA)
-In g8e, auditability is the literal nervous system. Utilizing a Local-First Audit Architecture (LFAA), every intent, Tribunal verdict, risk assessment, and raw command output is anchored to an encrypted, Git-backed SQLite ledger on the host *before and during* execution. The cloud can disappear, and your history doesn't.
+Auditability is the literal nervous system. The protocol requires every accepted mutation and its output to be anchored to a host-local, append-only ledger before being acknowledged. The reference Operator implements this as a Local-First Audit Architecture (LFAA): every intent, Tribunal verdict, risk assessment, and raw command output is anchored to an encrypted, Git-backed SQLite ledger on the host *before and during* execution. The cloud can disappear, and your history doesn't.
 
 ### 4. Proof of Human Presence (Application-Layer Approval)
-The machine handles what is machine-checkable. The human handles what is strictly human-checkable: intent fidelity, contextual stakes, and the acceptance of consequences. A bundled Dashboard or BYO frontend can collect approval UX, but the protocol explicitly binds this Layer 3 authorization state (`GovernanceEnvelope.governance.l3`) into the payload envelope for Operator-side verification. No "internal" trust shortcuts exist for bundled components.
+The machine handles what is machine-checkable. The human handles what is strictly human-checkable: intent fidelity, contextual stakes, and the acceptance of consequences. A bundled Dashboard or BYO frontend can collect approval UX, but the protocol explicitly binds this Layer 3 authorization state (`GovernanceEnvelope.governance.l3`) into the envelope for Operator-side verification. No "internal" trust shortcuts exist for bundled components.
 
 ---
 

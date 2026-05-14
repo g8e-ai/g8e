@@ -7,7 +7,7 @@ title: g8e CLI
 Last Updated: 2026-05-12
 Version: v0.2.4
 
-The `g8e` command is the unified entry point for the g8e Operator/protocol substrate. It manages the mandatory Operator runtime by default and exposes the Engine app only as an optional application-layer adapter.
+The `g8e` command is the unified entry point for the g8e platform. The platform is built on the **g8e Protocol** as substrate; this CLI manages the reference Operator (`g8eo`) runtime by default and exposes the reference Engine app (`g8ee`) only as an optional application-layer adapter.
 
 ## Usage
 

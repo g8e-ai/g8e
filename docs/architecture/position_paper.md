@@ -7,11 +7,11 @@ Version: v0.2.4
 
 *Danny Barbour · [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*
 
-**Abstract:** We propose a distributed governance architecture for agentic infrastructure built on mutual adversarial assumption. We treat LLM-driven automation as a Byzantine Fault Tolerance (BFT) problem. The platform is composed of a mandatory **Operator Substrate** (`g8eo`) providing execution, audit, and protocol services, and an optional **Application Layer** consisting of bundled reference adapters—**Engine** (`g8ee`) and **Dashboard** (`g8ed`)—or any Bring-Your-Own (BYO) client. Governance evidence travels with execution intent in a UAP JSON `GovernanceEnvelope`, binding event names, operator payloads, state roots, and L1/L2/L3 metadata into a single transaction. The AI is structurally prevented from auto-regressive collapse, and the human operator is elevated from a rubber-stamp supervisor to a first-class co-validator whose explicit stake is time.
+**Abstract:** We propose a distributed governance architecture for agentic systems built on mutual adversarial assumption. We treat LLM-driven automation as a Byzantine Fault Tolerance (BFT) problem. The substrate is the **g8e Protocol**: a domain-agnostic wire contract in which governance evidence travels with execution intent inside a UAP JSON `GovernanceEnvelope`, binding event names, typed payloads, state roots, and L1/L2/L3 metadata into a single signed transaction. An **Operator** is any host-side implementation that verifies and executes those transactions; **`g8eo`** is the reference Operator implementation in Go. The optional **Application Layer** consists of bundled reference adapters—**Engine** (`g8ee`) and **Dashboard** (`g8ed`)—or any Bring-Your-Own (BYO) client. This paper focuses on one application of the protocol: AI-powered, human-driven infrastructure management. The AI is structurally prevented from auto-regressive collapse, and the human operator is elevated from a rubber-stamp supervisor to a first-class co-validator whose explicit stake is time.
 
 ## **1. The Fallacy of the Single Agent**
 
-The industry's current trajectory for agentic AI on infrastructure is structurally broken. Every catastrophic AI failure in production shares the same root cause: reliance on a single monolithic agent.
+The industry's current trajectory for agentic AI — on infrastructure and everywhere else the cost of a wrong action is real — is structurally broken. Every catastrophic AI failure in production shares the same root cause: reliance on a single monolithic agent.
 
 A single Large Language Model is a probabilistic text generator fundamentally vulnerable to auto-regressive collapse. Because it generates output sequentially based on its own preceding context, a single hallucination or bad assumption early in the reasoning chain becomes an unassailable axiom for the rest of the generation. The agent will confidently output thousands of tokens mathematically justifying its own mistake. Adding a "self-reflection" step to a single-agent loop typically results in the LLM aggressively defending its initial flawed logic.
 
@@ -21,19 +21,17 @@ Trusting a single agent to mutate state is gross negligence. Trusting a fatigued
 
 ## **2. The Reality Portal: Sovereign Execution**
 
-SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator Substrate**: a single, statically compiled Go binary (`g8eo`) that runs on the managed host.
+SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator**: any host-side implementation that speaks the g8e Protocol. The reference implementation is a single, statically compiled Go binary (`g8eo`) that runs on the managed host.
 
-In g8e, the Operator is the reality portal. It treats all upstream clients as inherently untrusted and actively expects adversarial inputs. Mutation commands use the canonical UAP JSON envelope carrying structured intent_data. Result payloads use typed Protobuf messages from `operator.proto` through a pub/sub transport.
+The Operator is the reality portal. It treats all upstream clients as inherently untrusted and actively expects adversarial inputs. Mutation commands use the canonical UAP JSON envelope carrying structured intent_data. Result payloads use typed Protobuf messages from `operator.proto` through a pub/sub transport.
 
-Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level **L1 Technical Bedrock** checks (forbidden patterns, allowlists), and verifies **L2 Consensus** signatures. It executes commands in an isolated process group with a closed stdin, protected by 46 discrete MITRE ATT&CK detectors.
-
-The system utilizes a **Slot-Based Model** where `g8ed` manages logical operator slots, but the `g8eo` binary remains the sovereign owner of the host's data and execution. By leveraging a Temporal Privilege Function, it attaches just-in-time IAM scopes based on the parsed intent and drops them post-execution, ensuring zero standing privileges.
+Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level **L1 Technical Bedrock** checks (forbidden patterns, allowlists), and verifies **L2 Consensus** signatures. The reference Operator executes commands in an isolated process group with a closed stdin, protected by 46 discrete MITRE ATT&CK detectors, and uses a Temporal Privilege Function to attach just-in-time IAM scopes based on the parsed intent and drop them post-execution, ensuring zero standing privileges. Any conforming Operator implementation must preserve the same protocol-level verification invariants.
 
 ## **3. Execution is a Side-Effect of the Audit Log**
 
 Most platforms treat auditability as a JSON log emitted after the fact. In g8e, auditability is the literal nervous system.
 
-We utilize a **Local-First Audit Architecture (LFAA)**. Every intent, Tribunal verdict, risk assessment, and raw command output is anchored to an encrypted, Git-backed SQLite ledger in the host's `.g8e/` directory *before and during* execution. The AI Engine and Dashboard are merely stateless relays. If the control plane burns down, your local host-owned ledger remains the mathematically verifiable truth of what happened.
+The protocol requires every accepted mutation and its output to be anchored to a host-local, append-only ledger before being acknowledged. The reference Operator implements this as the **Local-First Audit Architecture (LFAA)**: every intent, Tribunal verdict, risk assessment, and raw command output is anchored to an encrypted, Git-backed SQLite ledger in the host's `.g8e/` directory *before and during* execution. The reference AI Engine and Dashboard are merely stateless relays. If the control plane burns down, your local host-owned ledger remains the mathematically verifiable truth of what happened.
 
 ### **The Economics of Alignment**
 
@@ -79,10 +77,10 @@ Using a deterministic BenchmarkJudge, we measure exactly how often the Nemesis s
 
 ## **7. Closing**
 
-Infrastructure has properties consumer AI does not. Mistakes are persistent. Blast radius is real. Compliance regimes require auditability and sovereignty.
+Infrastructure has properties consumer AI does not. Mistakes are persistent. Blast radius is real. Compliance regimes require auditability and sovereignty. The same is true of any domain where an autonomous system can change physical, financial, or operational reality.
 
-The current generation of agent platforms cannot satisfy these constraints. Co-validation is the necessary correction. We use Byzantine Fault Tolerance to keep the AI honest, a Git-backed local ledger to power fleet memory, a sovereign Go binary to keep the state local, and a FIDO2 passkey to keep the human in authority.
+The current generation of agent platforms cannot satisfy these constraints. Co-validation is the necessary correction. We use Byzantine Fault Tolerance to keep the AI honest, a host-local append-only ledger to power fleet memory, a sovereign Operator implementation to keep the state local, and a FIDO2 passkey to keep the human in authority.
 
-If you are building infrastructure that AI agents will operate, build it on a zero-trust governance protocol whose enforcement metadata travels with the command. The ideas are free; the code is public.
+If you are building any system that AI agents will operate, build it on a zero-trust governance protocol whose enforcement metadata travels with the command. The g8e Protocol is one such substrate; `g8eo` is a working reference Operator; AI-powered infrastructure management is the first reference application. The ideas are free; the code is public.
 
 *g8e is open-source: [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*

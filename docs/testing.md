@@ -22,9 +22,9 @@ This document outlines the testing architecture, core principles, and how to wri
 
 The platform maintains distinct test harnesses with strictly separated lifecycle patterns.
 
-### 1. Substrate Tests (Operator/Protocol Path)
+### 1. Reference Operator Tests (Protocol Path)
 **Command:** `./g8e test` or `./g8e test g8eo`
-**Purpose:** Validates the Operator/protocol substrate without requiring Node, Python, or g8ee.
+**Purpose:** Validates the reference Operator (`g8eo`) and its protocol enforcement without requiring Node, Python, or g8ee.
 - **Pattern:** Uses Operator listen mode and unified command/result paths.
 - **Rationale:** Keeps the required platform boundary small and independently verifiable.
 
@@ -53,10 +53,10 @@ All tests are orchestrated via the `./g8e` CLI, which handles environment config
 ### Common Workflow
 
 ```bash
-# 1. Start the Operator/protocol substrate
+# 1. Start the reference Operator
 ./g8e platform start
 
-# 2. Run substrate tests
+# 2. Run reference Operator tests
 ./g8e test
 ./g8e test g8eo --coverage
 
@@ -77,7 +77,7 @@ Available flags: `-p` (provider), `-m` (primary model), `-a` (assistant model), 
 
 ## AI Benchmarks & Evaluations (Evals)
 
-The `evals` subsystem manages a dedicated fleet of simulated operator nodes to test non-deterministic AI behavior at scale.
+The `evals` subsystem manages a dedicated fleet of simulated operator nodes to test non-deterministic AI behavior at scale. For detailed architecture and usage, see [Evals](evals.md).
 
 ### Eval Workflow
 

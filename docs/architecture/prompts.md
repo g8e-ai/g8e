@@ -5,18 +5,20 @@ parent: Architecture
 
 # Prompt Architecture
 
-Last Updated: 2026-05-12
-Version: v0.2.4
+Last Updated: 2026-05-13
+Version: v0.3.0
 
 The g8e prompt system is a modular architecture implemented in the **optional Engine (`g8ee`) adapter**. It is designed for **prefix-cache reuse** and **strict structural enforcement**. It composes system prompts from shared fragments, canonical persona definitions, and dynamic turn-specific context.
 
-The system is optimized for high-reasoning models (llama.cpp, vLLM) by placing static content at the beginning of the prompt to maximize KV-cache hits across agent turns.
+As a **BYO (Bring Your Own) client** to the `g8eo` substrate, the Engine uses this system to translate user intent into the signed JSON transactions required by the protocol.
 
 ---
 
 ## The Assembly Pipeline
 
-The system prompt is built by `build_modular_system_prompt` in `@/home/bob/g8e/components/g8ee/app/llm/prompts.py:494`. Sections are concatenated in a fixed order based on their stability to optimize prefix caching.
+The system prompt is built by `build_modular_system_prompt` in `@/home/bob/g8e/components/g8ee/app/llm/prompts.py:494`. Sections are concatenated in a fixed order based on their stability to optimize prefix caching (e.g., llama.cpp, vLLM).
+
+### Section Order & Rationale
 
 | # | Section | Content Source | Stability | Rationale |
 |---|---------|----------------|-----------|-----------|
@@ -36,68 +38,67 @@ The system prompt is built by `build_modular_system_prompt` in `@/home/bob/g8e/c
 
 ---
 
-## Canonical Truths
+## Canonical Invariants
 
-### 1. Persona Registry
-All agent identities are defined as Pydantic models in `@/home/bob/g8e/components/g8ee/app/models/personas/` and registered in `PERSONA_REGISTRY`. This ensures type safety and structural consistency across the platform.
+### 1. XML Scaffolding
+All sections are wrapped in XML tags to enforce hard structural boundaries. This is guaranteed by `AgentPersona.format_xml_tag` in `@/home/bob/g8e/components/g8ee/app/utils/agent_persona_loader.py:62`. This prevents "prompt leakage" where one section's instructions bleed into another.
 
-### 2. Agents Shared Constants
-The shared JSON file `@/home/bob/g8e/shared/constants/agents.json:1` acts as the cross-component source of truth for metadata, icons, and model tiers.
+### 2. Prefix Cache Optimization
+By placing the most stable sections (Safety, Loyalty, Dissent) at the very beginning, the system maximizes KV-cache hits. This significantly reduces latency when switching between different agents (e.g., Triage to Sage) within the same conversation.
 
-### 3. XML Scaffolding Invariant
-All sections are wrapped in XML tags to enforce hard structural boundaries. This is guaranteed by `AgentPersona.format_xml_tag` in `@/home/bob/g8e/components/g8ee/app/utils/agent_persona_loader.py:62`.
-
----
-
-## Core Subsystems
-
-### The Triage Pipeline (Interrogator)
-Triage (`lite` tier) is the "first read of the room." It classifies requests by:
-- **Complexity**: Determines if the request is `simple` (handled by Dash) or `complex` (handled by Sage).
-- **Posture**: Gauges user intent (Normal, Escalated, Adversarial, Confused).
-- **Intent**: Classifies as `information` or `action`.
-
-### The Tribunal Ensemble (Consensus)
-The Tribunal converts Sage's intent into shell commands through a 5-member ensemble:
-- **Axiom**: Focuses on **Composition** (elegant pipelines).
-- **Concord**: Focuses on **Safety** (defensive discipline).
-- **Variance**: Focuses on **Edge Cases** (robust filenames/paths).
-- **Pragma**: Focuses on **Convention** (idiomatic system patterns).
-- **Nemesis**: The **Adversary** (proposes plausible-but-flawed candidates to stress-test the Auditor).
-
-The **Auditor** (`primary` tier) evaluates these candidates against the original intent to select or revise the final command.
-
-### Warden (Defensive Analysis)
-Warden coordinates risk classification before execution:
-- **Command Risk**: Labels commands as LOW, MEDIUM, or HIGH risk.
-- **File Risk**: Evaluates the cost and reversibility of file operations.
-- **Error Analyzer**: Determines if failures are `AUTO_FIXABLE` or require `ESCALATE`.
+### 3. Decoupled Reasoning
+The prompt system does not execute actions. It generates **intent**. This intent is then passed to the **Tribunal** for translation into a command, which is finally wrapped in a signed `UniversalEnvelope` and sent to the `g8eo` substrate for execution.
 
 ---
 
-## Governance & Safety
+## Dynamic Context Blocks
 
-### 1. Dissent Protocol
-Embedded in every prompt via `core/dissent.txt`, this protocol instructs agents to issue warnings or denials when requests conflict with safety or loyalty guardrails.
+### System Context (`<system_context>`)
+Injected via `_build_system_context_section`. It includes:
+- **Operator Type**: Standard vs. Cloud (least-privilege intent-based).
+- **Environment**: OS, Hostname, User (UID), Working Directory.
+- **Isolation**: Container runtime and Init system (e.g., warning if `systemd` is missing).
 
-### 2. Reputation Staking
-Warden and Tribunal members "stake reputation" on their outputs. High-quality, safe classifications earn reputation, while failures or over-blocking cost it.
+### Triage Context (`<triage_context>`)
+Injected via `build_triage_context_section`. It carries the Triage agent's classification:
+- **Request Posture**: `normal`, `escalated`, `adversarial`, or `confused`.
+- **Intent Summary**: The high-level objective of the turn.
 
-### 3. Co-Validation Terminology
-All prompts reinforce the **co-validated infrastructure** model, where AI agents and human operators work in tandem, with the AI proposing and the human (or L1/L2 gates) validating.
+### Investigation Context (`<investigation_context>`)
+Injected via `build_investigation_context_section`. It binds the prompt to the current case:
+- **Case Metadata**: Title, Description, Status, Priority, Severity.
+- **Bound Operators**: A list of all operators currently connected to the investigation.
+
+---
+
+## The Dissent Protocol
+
+Defined in `core/dissent.txt`, the Dissent Protocol is the "moral compass" of the agent. It instructs agents to:
+1.  **Verify Posture**: Read the `<triage_context>` to calibrate suspicion.
+2.  **Issue Warnings**: If a request is risky but valid, warn the user.
+3.  **Refuse Violations**: If a request violates L1/L2 safety or loyalty, refuse with a clear reason.
+4.  **Memory of Denials**: Past denials are carried in context to prevent "jailbreaking" through persistence.
+
+---
+
+## Tribunal Prompts
+
+The Tribunal uses a specialized set of prompts for its consensus-generation workflow:
+- **Generator (`tribunal/generator.txt`)**: Instructs the five personas (Axiom, Concord, Variance, Pragma, Nemesis) to translate intent into a specific command.
+- **Auditor (`tribunal/auditor.txt`)**: Evaluates the candidates against the original intent to select the most robust implementation.
 
 ---
 
 ## Operational Guide
 
 ### Adding a New Agent
-1. Create a new persona model in `@/home/bob/g8e/components/g8ee/app/models/personas/`.
-2. Register it in `PERSONA_REGISTRY` in `@/home/bob/g8e/components/g8ee/app/models/personas/__init__.py:35`.
-3. Update `@/home/bob/g8e/shared/constants/agents.json:54` with the metadata.
+1. Define a Pydantic model in `@/home/bob/g8e/components/g8ee/app/models/personas/`.
+2. Register it in `PERSONA_REGISTRY` in `@/home/bob/g8e/components/g8ee/app/models/personas/__init__.py`.
+3. The prompt system will automatically pick up the new persona.
 
-### Modifying Prompt Fragments
-1. Edit the relevant `.txt` file in `@/home/bob/g8e/components/g8ee/app/prompts_data/`.
-2. Register the file in `PromptFile` enum in `@/home/bob/g8e/components/g8ee/app/constants/prompts.py:46`.
+### Modifying Fragments
+1. Edit the `.txt` file in `@/home/bob/g8e/components/g8ee/app/prompts_data/`.
+2. If adding a new file, register it in the `PromptFile` enum in `@/home/bob/g8e/components/g8ee/app/constants/prompts.py`.
 
 ### Verification
 Run the prompt alignment suite:

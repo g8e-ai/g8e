@@ -9,7 +9,7 @@ permalink: /docs/
 Last Updated: 2026-05-12
 Version: v0.2.4
 
-g8e is a Zero-Trust Operator/protocol substrate for secure infrastructure operations. This index maps high-level concepts to the mandatory substrate (Operator plus shared protocol) and the optional bundled application-layer adapters (Dashboard and Engine).
+The **g8e Protocol** is the substrate: a domain-agnostic, zero-trust wire contract for human-verified action by autonomous systems. An **Operator** is any host-side implementation that speaks the protocol; **g8eo** is the reference Operator implementation in Go. **g8ee** (Engine) is a reference application component that demonstrates an AI-powered infrastructure-management use case on top of the protocol. This index maps high-level concepts to the protocol substrate, the reference Operator, and the optional reference application adapters.
 
 ## Platform Pillars
 
@@ -20,12 +20,12 @@ Foundational architecture documents defining the safety, reasoning, and environm
 | [architecture/security.md](architecture/security.md) | **Zero-Trust & Governance**: LFAA (Logs, Files, Audit, Activity) encryption, Sentinel traffic analysis, and human-in-the-loop controls. |
 | [architecture/governance.md](architecture/governance.md) | **3-Layer Governance**: The L1/L2/L3 validation hierarchy (Bedrock, Consensus, Authorization) and the Warden circuit breaker. |
 | [architecture/air_gap.md](architecture/air_gap.md) | **Air-Gap Operations**: Principles for fully disconnected environments, local inference, and zero-config bootstrap. |
-| [architecture/operator.md](architecture/operator.md) | **Secure Execution**: The g8eo Operator lifecycle, vault management, and real-time command tunneling. |
-| [architecture/storage.md](architecture/storage.md) | **Persistence**: Operator Listen Mode using the coordination store (SQLite), KV, and LFAA Audit Vault. |
+| [architecture/operator.md](architecture/operator.md) | **Reference Operator (g8eo)**: Lifecycle, vault management, and real-time command tunneling in the reference Go implementation of the Operator role. |
+| [architecture/storage.md](architecture/storage.md) | **Persistence**: Reference Operator Listen Mode using the coordination store (SQLite), KV, and LFAA Audit Vault. |
 
-## Optional Application Layer
+## Reference Application Layer
 
-Optional reference adapters that consume the public g8e protocol.
+Optional reference components that demonstrate AI-powered infrastructure management on top of the g8e Protocol. They consume the public protocol surface on equal footing with any BYO client.
 
 | Document | Description |
 |----------|-------------|
@@ -34,14 +34,14 @@ Optional reference adapters that consume the public g8e protocol.
 | [architecture/thinking.md](architecture/thinking.md) | **Thinking & Reasoning**: Dual-layer architecture for structural reasoning (Tribunal) and provider-native reasoning (thinking levels). |
 | [architecture/agent_personas.md](architecture/agent_personas.md) | **Personas**: Gallery of bundled agent personas and their specialized capabilities. |
 
-## Substrate and Application-Layer Reference
+## Implementation Reference
 
-Technical deep-dives into the required Operator substrate and optional bundled adapters.
+Technical deep-dives into the reference Operator and reference application components shipped in this repository.
 
 | Component | Role | Primary Implementation |
 |-----------|------|------------------------|
-| [**g8eo**](components/g8eo.md) | **Substrate Operator** | Go-based secure execution agent, protocol hub, listen-mode persistence, pub/sub runtime, policy enforcement, and audit. |
-| [**g8ee**](components/g8ee.md) | **Optional Engine Adapter** | Python (FastAPI) agentic adapter for LLM interactions, proposal generation, and proof production. |
+| [**g8eo**](components/g8eo.md) | **Reference Operator** | Go-based secure execution agent that implements the Operator role: protocol verification, hub/listen-mode persistence, pub/sub runtime, policy enforcement, and audit. Replaceable by any conforming Operator. |
+| [**g8ee**](components/g8ee.md) | **Reference AI Engine** | Python (FastAPI) reference application component for the AI-powered infrastructure-management use case: LLM orchestration, proposal generation, and L2 consensus proof production. |
 
 ## Guides & Standards
 

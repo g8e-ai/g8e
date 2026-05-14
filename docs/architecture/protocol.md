@@ -8,9 +8,9 @@ parent: Architecture
 Last Updated: 2026-05-12
 Version: v0.2.4
 
-The g8e Protocol is a **UAP JSON** communication layer designed for secure, auditable interaction between any g8e client and a host-local **Operator (g8eo)**.
+The g8e Protocol is the substrate of the platform: a **UAP JSON** wire contract for secure, auditable interaction between any g8e client and any host-side **Operator** implementation. An Operator is a role defined by this protocol — receive signed transactions, enforce L1/L2/L3 verification, execute through a defensive boundary, emit signed receipts anchored to a local ledger.
 
-While g8e includes bundled application-layer adapters—**Dashboard (g8ed)** and **Engine (g8ee)**—the protocol is designed for any Bring-Your-Own (BYO) frontend or agent system.
+The reference Operator implementation is **`g8eo`** (Go), and the bundled reference application includes **Engine (`g8ee`)** and **Dashboard (`g8ed`)**. The protocol is designed for any Bring-Your-Own (BYO) Operator, frontend, or agent system; the bundled components are illustrative, not privileged.
 
 # Core Invariants
 
@@ -66,7 +66,7 @@ The UAP envelope is the only canonical mutation transport. It is JSON on the wir
 
 ## 2. Verification Phase (Operator)
 
-Upon receiving an envelope, `g8eo` performs these checks in `@/home/bob/g8e/components/g8eo/services/pubsub/pubsub_commands.go`:
+Upon receiving an envelope, a conforming Operator must perform these checks before any action. In the reference Operator (`g8eo`), they live in `@/home/bob/g8e/components/g8eo/services/pubsub/pubsub_commands.go`:
 
 1. **Parsing**: Rejects any payload that is not a valid UAP JSON `GovernanceEnvelope`.
 2. **Expiry Check**: Rejects any transaction if `expires_at` is in the past.
@@ -75,12 +75,12 @@ Upon receiving an envelope, `g8eo` performs these checks in `@/home/bob/g8e/comp
 5. **L1 Check**: Uses Protobuf reflection to find fields marked with `forbidden_patterns`. If a regex matches (e.g., `sudo`), the command is rejected.
 6. **L2 Check**: Verifies the ED25519 signature against `.g8e/pki/trusted_signers/{key_id}.pub`.
 7. **L3 Check**: For mutation requests, verifies the human signature. Missing verifier configuration rejects.
-8. **Execution**: Warden receives the verified transaction and routes exactly one typed action to the appropriate Operator service handler.
+8. **Execution**: The Operator's execution boundary (the **Warden** in the reference implementation) receives the verified transaction and routes exactly one typed action to the appropriate handler.
 
 ## 3. Result Phase (Operator -> Client)
 
 1. **Execution**: The handler executes the requested action and captures results.
-2. **Envelope Building**: `g8eo` wraps the result payload (e.g., `CommandResult`) in a UAP JSON `GovernanceEnvelope`.
+2. **Envelope Building**: The Operator wraps the result payload (e.g., `CommandResult`) in a UAP JSON `GovernanceEnvelope`.
 3. **Publication**: The result envelope is published to the results channel for the subscribed client(s).
 
 ---
@@ -88,15 +88,15 @@ Upon receiving an envelope, `g8eo` performs these checks in `@/home/bob/g8e/comp
 # Governance Layers
 
 ### L1: Technical Bedrock (Hard Gates)
-Enforced by `TransactionVerifier` via Protobuf reflection before Warden execution.
+Enforced by the Operator's transaction verifier via Protobuf reflection before execution. In the reference Operator this is `TransactionVerifier`.
 - **Mechanism**: Custom field option `forbidden_patterns`.
 - **Scope**: Applied to fields like `CommandRequested.command`.
 - **Default Patterns**: `sudo`, `su`, `rm -rf /`.
 
 ### L2: Consensus (Consensus)
-Enforced by `TransactionVerifier` in `@/home/bob/g8e/components/g8eo/services/governance/transaction_verifier.go`.
-- **Signer**: Any trusted consensus agent or validator (e.g., `g8ee`).
-- **Verifier**: `g8eo` (Operator).
+Enforced by the Operator's transaction verifier. Reference implementation: `@/home/bob/g8e/components/g8eo/services/governance/transaction_verifier.go`.
+- **Signer**: Any trusted consensus agent or validator (e.g., `g8ee` in the reference application, or a BYO consensus implementation).
+- **Verifier**: The Operator (reference implementation: `g8eo`).
 - **Mechanism**: ED25519 asymmetric signatures. There is no HMAC fallback.
 - **Attribution**: Uses `key_id` in `GovernanceMetadata` for O(1) public key lookup.
 - **Material**: `transaction_hash|true`.
@@ -110,7 +110,7 @@ Human-in-the-loop authorization via Passkeys or BYO approval systems.
 
 # Data Conversions
 
-When `g8ee` decodes a result from `g8eo`, it parses the UAP JSON `GovernanceEnvelope` and then parses the typed payload:
+When the reference Engine (`g8ee`) decodes a result from the reference Operator (`g8eo`), it parses the UAP JSON `GovernanceEnvelope` and then parses the typed payload. A BYO client performs the same steps:
 
 Compatibility field shims are not part of the substrate protocol.
 
@@ -118,14 +118,16 @@ Compatibility field shims are not part of the substrate protocol.
 
 # Implementation Map
 
+The protocol is the authoritative contract. The files below are the reference implementations bundled in this repository.
+
 | Responsibility | Authoritative File |
 |----------------|--------------------|
-| **Schemas** | `@/home/bob/g8e/shared/proto/` |
-| **Event Registry** | `@/home/bob/g8e/shared/constants/events.json` |
-| **Request Builder (PY)** | `@/home/bob/g8e/components/g8ee/app/utils/envelope_builder.py` |
-| **Inbound Dispatch (GO)** | `@/home/bob/g8e/components/g8eo/services/pubsub/pubsub_commands.go` |
-| **L1/L2/L3 Verification (GO)** | `@/home/bob/g8e/components/g8eo/services/governance/transaction_verifier.go` |
-| **Result Publisher (GO)** | `@/home/bob/g8e/components/g8eo/services/pubsub/pubsub_results.go` |
+| **Schemas (substrate)** | `@/home/bob/g8e/shared/proto/` |
+| **Event Registry (substrate)** | `@/home/bob/g8e/shared/constants/events.json` |
+| **Reference Request Builder (PY, g8ee)** | `@/home/bob/g8e/components/g8ee/app/utils/envelope_builder.py` |
+| **Reference Inbound Dispatch (GO, g8eo)** | `@/home/bob/g8e/components/g8eo/services/pubsub/pubsub_commands.go` |
+| **Reference L1/L2/L3 Verification (GO, g8eo)** | `@/home/bob/g8e/components/g8eo/services/governance/transaction_verifier.go` |
+| **Reference Result Publisher (GO, g8eo)** | `@/home/bob/g8e/components/g8eo/services/pubsub/pubsub_results.go` |
 
 ---
 
