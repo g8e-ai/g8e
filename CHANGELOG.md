@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.4] - 2026-05-13
+
+### Added
+- **Operator-Owned PKI/TLS:** Transitioned from legacy SSL to a robust CSR-based mTLS infrastructure owned by `g8eo`.
+- **mTLS Enrollment:** New CSR and mTLS enrollment flow for operators and clients.
+- **BYO Client Support:** Consolidated state root and added end-to-end support for "Bring Your Own" clients.
+- **CLI Login:** Added first-class CLI login support via the operator.
+
+### Changed
+- **Substrate/App Layer Split:** Formalized `g8eo` as the mandatory substrate and moved `g8ed`/`g8ee` to optional application-layer adapters.
+- **g8ed Elimination:** Removed `g8ed` Dashboard as a mandatory component; migrated data management scripts to `g8eo` API.
+- **Governance Envelope Hardening:** Improved UAP and proto definitions for better transaction integrity.
+- **Reorganized g8eo:** Directory restructuring for better modularity and maintainability.
+- **Passkey & Setup Refactor:** Migrated passkey and setup logic to the operator substrate.
+
+### Fixed
+- **Settings Model Paths:** Fixed inconsistencies in settings model resolution.
+- **Split Brain Config:** Resolved configuration synchronization issues.
+- **Startup Health Check:** Fixed issues with platform startup health verification.
+- **PKIDir Bug:** Fixed bug in `PKIDir` path resolution.
+- **Security & Testing:** Addressed CodeQL findings and improved test security headers.
+
 ## [0.2.3] - 2026-05-11
 
 ### Added
@@ -28,7 +50,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Removed Docker:** Eliminated Docker containerization across the platform. Components now run directly on the host with the Operator binary in listen mode.
-- **g8es Component Removal:** Removed the g8es component abstraction. The platform now consists of exactly three components: Operator, Dashboard (g8ed), and Engine (g8ee).
 - **Platform Architecture:** Migrated to host-native execution model with platform runtime state in repo-local `.g8e` directory.
 - **Build System:** Comprehensive updates to `build.sh` for host-native bootstrapping, improved auth token handling, and better signal handling.
 - **Documentation:** Updated all documentation to reflect the removal of Docker and the new host-native architecture.
@@ -48,7 +69,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - **Dockerfiles:** Removed all Dockerfile configurations (Dockerfile, Dockerfile.test) from components.
 - **docker-compose.yml:** Removed Docker Compose configuration for platform components.
-- **g8es References:** Removed all references to the g8es component from code, tests, and documentation.
 
 ---
 
@@ -70,8 +90,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-05-07
 
 ### Added
-- **Protobuf-First Architecture:** Massively migrated the platform to a robust, typed Protobuf-first architecture for all component-to-component communication.
-- **Universal Envelope:** Introduced the `UniversalEnvelope` for all BFT transactions, binding event metadata, state roots, and hardware-bound fingerprints.
+- **Protobuf-Driven Architecture:** Massively migrated the platform to a robust, typed Protobuf-driven architecture for payloads, while maintaining a UAP JSON-first transport for mutation envelopes.
+- **Governance Envelope:** Introduced the JSON `GovernanceEnvelope` (UAP) for all BFT transactions, binding event metadata, state roots, and hardware-bound fingerprints.
 - **L1/L2/L3 Governance:** Integrated a 3-layer command validation hierarchy (L1 Technical Bedrock, L2 Consensus/Tribunal, L3 Authorization/Human) directly into the message envelope.
 - **Recursive Grep Tool:** Introduced `recursive_grep_search` for high-efficiency filesystem exploration across operator fleets.
 - **Interrogation Gate:** Implemented a new gate in the agent loop that detects `<interrogation>` blocks and suppresses pending tool calls to prioritize user input.

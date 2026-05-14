@@ -1,18 +1,27 @@
 {
   "infra": {
     "db_path": ".g8e/data/g8e.db",
-    "ca_cert_path": ".g8e/ssl/ca.crt",
-    "ssl_dir": ".g8e/ssl",
+    "pki_dir": ".g8e/pki",
+    "secrets_dir": ".g8e/secrets",
+    "ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
+    "app_cert_dir": ".g8e/pki/issued/apps",
     "docs_dir": "/docs",
     "shared_dir": "/app/shared",
     "shared_constants_dir": "/app/shared/constants",
     "shared_models_dir": "/app/shared/models",
     "ssh_config_path": "/etc/g8e/ssh_config"
   },
+  "ports": {
+    "operator_http": 9000,
+    "operator_wss": 9001,
+    "operator_bootstrap": 8080,
+    "operator_public": 8081
+  },
   "g8ee": {
     "app_dir": "/app/components/g8ee",
     "config_dir": "/app/components/g8ee/config",
     "tests_dir": "/app/components/g8ee/tests",
+    "cert_name": "g8ee",
     "evals": {
       "reports_dir": "/app/components/g8ee/reports/evals"
     }

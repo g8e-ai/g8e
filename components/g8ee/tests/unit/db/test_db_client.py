@@ -102,7 +102,7 @@ class InMemoryOperator:
 @pytest.fixture
 def db_client():
     store = InMemoryOperator()
-    client = DBClient(ca_cert_path="/mock/ca.crt", internal_auth_token="mock-token")
+    client = DBClient(ca_cert_path="/mock/ca.crt", operator_session_id="mock-session")
     client._request_json = store.handle_json
     client._request_list = store.handle_list
     client._request_void = store.handle_void
@@ -111,7 +111,7 @@ def db_client():
 
 @pytest.fixture
 def db_client_http_error():
-    client = DBClient(ca_cert_path="/mock/ca.crt", internal_auth_token="mock-token")
+    client = DBClient(ca_cert_path="/mock/ca.crt", operator_session_id="mock-session")
 
     async def raise_network_error(method, path, **kwargs):
         raise NetworkError("g8ed HTTP 500: internal error", component="g8ee")

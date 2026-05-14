@@ -1,13 +1,13 @@
 # **AI-Powered, Human-Driven Infrastructure**
 
-Last Updated: 2026-05-11
-Version: v0.2.3
+Last Updated: 2026-05-12
+Version: v0.2.4
 
 **A Byzantine Fault Tolerant Architecture for Agentic Automation**
 
 *Danny Barbour · [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*
 
-**Abstract:** We propose a distributed governance architecture for agentic infrastructure built on mutual adversarial assumption. We treat LLM-driven automation as a Byzantine Fault Tolerance (BFT) problem. The platform is composed of exactly three components: a stateless reasoning **Engine** (`g8ee`) running a consensus protocol over isolated AI personas, a stateless **Dashboard** (`g8ed`) serving as an auth relay, and a sovereign **Operator** (`g8eo`) that runs on managed hosts with a Git-backed local audit ledger. Governance evidence travels with execution intent in a typed Protobuf `UniversalEnvelope`, binding event names, operator payloads, state roots, and L1/L2/L3 metadata into a single transaction. The AI is structurally prevented from auto-regressive collapse, and the human operator is elevated from a rubber-stamp supervisor to a first-class co-validator whose explicit stake is time.
+**Abstract:** We propose a distributed governance architecture for agentic infrastructure built on mutual adversarial assumption. We treat LLM-driven automation as a Byzantine Fault Tolerance (BFT) problem. The platform is composed of a mandatory **Operator Substrate** (`g8eo`) providing execution, audit, and protocol services, and an optional **Application Layer** consisting of bundled reference adapters—**Engine** (`g8ee`) and **Dashboard** (`g8ed`)—or any Bring-Your-Own (BYO) client. Governance evidence travels with execution intent in a UAP JSON `GovernanceEnvelope`, binding event names, operator payloads, state roots, and L1/L2/L3 metadata into a single transaction. The AI is structurally prevented from auto-regressive collapse, and the human operator is elevated from a rubber-stamp supervisor to a first-class co-validator whose explicit stake is time.
 
 ## **1. The Fallacy of the Single Agent**
 
@@ -21,11 +21,11 @@ Trusting a single agent to mutate state is gross negligence. Trusting a fatigued
 
 ## **2. The Reality Portal: Sovereign Execution**
 
-SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator**: a single, statically compiled Go binary (`g8eo`) that runs on the managed host.
+SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator Substrate**: a single, statically compiled Go binary (`g8eo`) that runs on the managed host.
 
-In g8e, the Operator is the reality portal. It treats the upstream AI Engine as inherently untrusted and actively expects adversarial inputs. Command and result traffic is not ad hoc JSON; it is serialized `UniversalEnvelope` bytes carrying typed `operator.proto` payloads through a pub/sub transport.
+In g8e, the Operator is the reality portal. It treats all upstream clients as inherently untrusted and actively expects adversarial inputs. Mutation commands use the canonical UAP JSON envelope carrying structured intent_data. Result payloads use typed Protobuf messages from `operator.proto` through a pub/sub transport.
 
-Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level **L1 Technical Bedrock** checks (forbidden patterns, allowlists), and verifies **L2 Tribunal** HMAC signatures when configured. It executes commands in an isolated process group with a closed stdin, protected by 46 discrete MITRE ATT&CK detectors.
+Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level **L1 Technical Bedrock** checks (forbidden patterns, allowlists), and verifies **L2 Consensus** signatures. It executes commands in an isolated process group with a closed stdin, protected by 46 discrete MITRE ATT&CK detectors.
 
 The system utilizes a **Slot-Based Model** where `g8ed` manages logical operator slots, but the `g8eo` binary remains the sovereign owner of the host's data and execution. By leveraging a Temporal Privilege Function, it attaches just-in-time IAM scopes based on the parsed intent and drops them post-execution, ensuring zero standing privileges.
 
@@ -39,16 +39,16 @@ We utilize a **Local-First Audit Architecture (LFAA)**. Every intent, Tribunal v
 
 To a Staff SRE, fast AI is a threat model. If an agent generates a mutation in 800 milliseconds, it means it didn’t check the fleet history and it didn't verify implicit constraints.
 
-When you issue a command to g8e, it might take 40 seconds to process. **This is not latency; this is async alignment compute.** The system is trading cheap machine compute to protect your non-fungible human time. During those 40 seconds, the Auditor pulls cross-conversation memory across your fleet. If an agent proposes a directory deletion on Host B, the Auditor cross-references an incident from three weeks ago on Host A where a similar operation caused an outage.
+When you issue a command to g8e, it might take 40 seconds to process. **This is not latency; this is async alignment compute.** The system is trading cheap machine compute to protect your non-fungible human time. During those 40 seconds, the Consensus layer pulls cross-conversation memory across your fleet. If an agent proposes a directory deletion on Host B, the verifier cross-references history.
 
 You are not babysitting an autonomous bot. You are the final co-validator in a system that has already done the exhausting, cross-contextual research you would have otherwise had to do manually.
 
-## **4. The BFT Control Plane: The Tribunal**
+## **4. The BFT Control Plane: Governance**
 
 Any state-changing intent is forced through a 3-layer governance hierarchy:
 
 1.  **L1 Technical Bedrock**: Hard gates (forbidden patterns, allowlists) enforced by code.
-2.  **L2 Consensus (The Tribunal)**: A 5-node LLM consensus panel (Axiom, Concord, Variance, Pragma, Nemesis) evaluating intent in isolation.
+2.  **L2 Consensus**: A consensus panel (bundled in `g8ee` or provided by a BYO client) evaluating intent.
 3.  **L3 Authorization**: Human-in-the-loop co-validation powered by hardware-bound signatures.
 
 Operating under the **Information Isolation Principle**, the Tribunal agents are blind to one another. They cannot sycophantically agree, and they cannot be socially engineered. The **Warden**—armed with specialized risk-assessment sub-agents—will catch high-risk candidates and fail the transaction closed.
@@ -65,7 +65,7 @@ $$
 \text{Safe}(a) \iff \sigma_{\text{machine}}(a) \land \sigma_{\text{human}}(a)
 $$
 
-Neither signature is sufficient alone. We enforce explicit friction through **Proof of Human Presence (PHP)**. The **Governance Gateway** is the only path to the human, enforced by FIDO2 passkeys. At the protocol layer, `UniversalEnvelope.governance.l3` carries the human signature, or an `auto_approved` flag for benign diagnostic commands that have already passed L1 and L2.
+Neither signature is sufficient alone. We enforce explicit friction through **Proof of Human Presence (PHP)**. The **Governance Gateway** is the only path to the human, enforced by FIDO2 passkeys or verifiable approval proofs. At the protocol layer, `GovernanceEnvelope.governance.l3` carries the human signature, or an `auto_approved` flag for benign diagnostic commands that have already passed L1 and L2.
 
 To ensure seamless onboarding, the Dashboard serves a **Trust Portal** on Port 80, providing the platform CA and automated trust scripts to bootstrap the secure mTLS environment.
 

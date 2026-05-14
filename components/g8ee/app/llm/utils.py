@@ -108,7 +108,7 @@ def is_internal_endpoint(url: str | None) -> bool:
             return True
 
         # g8e platform services (Docker Compose service names)
-        if hostname_lower in ("g8ed", "g8eo", "operator"):
+        if hostname_lower in ("g8eo", "operator"):
             return True
 
         # Internal TLDs
@@ -131,7 +131,7 @@ def is_internal_endpoint(url: str | None) -> bool:
         if not url:
             return False
         lower_url = url.lower()
-        return any(x in lower_url for x in ("localhost", "127.0.0.1", ".internal", ".local", "g8ed", "g8eo", "operator"))
+        return any(x in lower_url for x in ("localhost", "127.0.0.1", ".internal", ".local", "g8eo", "operator"))
 
 
 def is_ollama_endpoint(url: str | None) -> bool:

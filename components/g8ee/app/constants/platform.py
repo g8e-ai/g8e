@@ -28,5 +28,4 @@ class AuthMethod(StrEnum):
     def __str__(self) -> str:
         return self.value
     PROXY    = "proxy"
-    INTERNAL = "internal"
     TEST     = "test"

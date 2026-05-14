@@ -49,7 +49,7 @@ if ($existing.Count -gt 0) {
 
 Write-Host ""
 Write-Host "[2/3] Fetching CA cert from ${Server}..."
-$certPem = ssh $Server "docker exec operator cat /ssl/ca.crt"
+$certPem = ssh $Server "curl -s https://localhost/.well-known/g8e/pki/root.pem --insecure"
 
 if (-not $certPem) {
     Write-Error "No certificate data received from ${Server}. Is the platform running?"

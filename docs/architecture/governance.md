@@ -1,11 +1,13 @@
 # Governance & Mechanism Design
 
-Last Updated: 2026-05-11
-Version: v0.2.3
+Last Updated: 2026-05-12
+Version: v0.2.4
 
 Agentic AI safety in g8e is framed as a **consensus problem**: given a population of LLM-instantiated personas with different lenses, a calibrated adversary among them, and a human user with finite attention, how do we converge on an executable command that is safe, audited, and minimally costly?
 
-The mechanism operates through a strictly ordered L1/L2/L3 validation hierarchy where each layer provides a unique type of safety guarantee. On operator pub/sub paths, this hierarchy is carried in the Protobuf `UniversalEnvelope` as governance metadata beside the typed `operator.proto` payload.
+The mechanism operates through a strictly ordered L1/L2/L3 validation hierarchy where each layer provides a unique type of safety guarantee. On operator pub/sub paths, this hierarchy is carried in the Protobuf `GovernanceEnvelope` as governance metadata beside the typed payload.
+
+g8e defines a mandatory **Substrate** (Operator + Protocol) that enforces these layers, and an optional **Application Layer** (bundled Engine or BYO) that produces the proofs required to pass them.
 
 ## The Players
 
@@ -44,15 +46,15 @@ L1 provides hardcoded, non-negotiable safety invariants that are enforced at the
 3.  **Fail-Closed Behavior**:
     If any L1 check fails, `g8eo` rejects the command before it reaches the shell, returning a `sentinel_blocked` or `validation_failed` error.
 
-### L2: Consensus (The Tribunal)
-The Tribunal converts Sage's intent into a command using an ensemble of five independent agents.
+### L2: Consensus (Consensus)
+The Consensus layer converts high-level intent into executable commands using an ensemble of independent agents (bundled in `g8ee` or provided by a BYO system).
 
-1.  **Information Isolation**: Members operate in parallel, sealed environments to prevent collusion.
-2.  **Plurality Vote**: Candidates are aggregated and ranked. A winning candidate must achieve consensus or be selected by the Auditor.
-3.  **Auditor Verification**: The Auditor reviews the winner against the intent. It can swap to a superior dissenter candidate or produce a revised command if technical flaws are found.
+1.  **Information Isolation**: Signers should operate in parallel, sealed environments to prevent collusion.
+2.  **Plurality Vote**: Candidates are aggregated and ranked. A winning candidate must achieve consensus.
+3.  **Auditor Verification**: The winner is reviewed against intent.
 4.  **L2 Signature**: 
-    `g8ee` signs the commitment using an HMAC-SHA256 over `(event_type || '\n' || payload_bytes)` using the auditor HMAC key. 
-    `g8eo` verifies this signature in `@/home/bob/g8e/components/g8eo/services/pubsub/l2_verifier.go:52` via `VerifyL2Governance`.
+    The client (e.g., `g8ee` or BYO agent) attaches an ED25519 signature from a trusted L2 signer over `transaction_hash|true`.
+    `g8eo` verifies this signature in `@/home/bob/g8e/components/g8eo/services/governance/transaction_verifier.go`. First boot is allowed before trusted signers exist, but the verifier rejects every missing-key or unknown-key transaction until signer material is provisioned.
 
 ### L3: Authorization (Human Gate)
 L3 involves human authorization, governed by the **Auditor-User Partition**.
@@ -68,10 +70,29 @@ The governance hierarchy is bound to the command protocol via `@/home/bob/g8e/sh
 
 | Governance layer | Protocol representation | Enforcement point |
 |---|---|---|
-| L1 Technical Bedrock | `governance.l1`, `forbidden_patterns` | `g8eo` reflection check & Sentinel Analysis |
-| L2 Consensus | `governance.l2.tribunal_signature` | `g8eo` HMAC verification |
-| L3 Authorization | `governance.l3.human_signature`, `governance.l3.auto_approved` | Dashboard UI & `g8ee` approval flow |
+| L1 Technical Bedrock | `governance.l1`, `forbidden_patterns`, `expires_at`, `nonce` | `g8eo` reflection, expiry, and replay check |
+| L2 Consensus | `governance.l2.tribunal_signature` | `g8eo` signature verification |
+| L3 Authorization | `governance.l3.human_signature`, `governance.l3.auto_approved` | `g8eo` L3 enforcement for mutations |
 | State Freshness | `state_merkle_root` | `g8eo` comparison to local ledger root |
+
+## Wire Format and Signing Invariant
+
+The canonical wire format for all client-facing surfaces (HTTPS APIs, WSS pub/sub command channels, receipts, audit exports) is **canonical JSON (protojson)** for `GovernanceEnvelope`. Binary protobuf bytes on the wire are rejected with a clear error.
+
+**Schema source of truth**: `.proto` files (typed, versioned, L1 field-option reflection).
+
+**Signing basis**: Deterministic `transaction_hash` computed from normalized envelope fields. Wire encoding is irrelevant because the verifier enforces `id == computed transaction_hash`.
+
+**Canonicalization rules** (implemented in `components/g8eo/pkg/uap/types.go`):
+- Field names in proto definition order
+- Strings as UTF-8
+- Numbers as decimal integers
+- Absent optional fields omitted
+- Nested messages recursed
+- Bytes as base64
+- Result hashed with SHA-256
+
+This invariant ensures that BYO clients (MCP, A2A, OpenAI, Anthropic, LangChain) can interact with g8eo using standard JSON-RPC/HTTP, while maintaining cryptographic integrity through the hash-based signing scheme.
 
 ## Reputation & Stakes
 
@@ -100,4 +121,4 @@ Agent performance is tracked via an EMA scalar `[0.0, 1.0]` in the `reputation_s
 
 1.  **Fail Closed**: Any inconclusive risk analysis defaults to `HIGH` risk.
 2.  **Auditor-User Partition**: The machine handles correctness; the human handles intent. Neither is sufficient alone.
-3.  **Universal Envelope Integrity**: Every command is wrapped in a `UniversalEnvelope` that carries immutable evidence of its journey through the L1/L2/L3 hierarchy.
+3.  **GovernanceEnvelope Integrity**: Every mutation command is wrapped in a `GovernanceEnvelope` that carries immutable evidence of its journey through the L1/L2/L3 hierarchy.

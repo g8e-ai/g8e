@@ -14,8 +14,7 @@
 """
 User Management Script for g8e Platform
 
-Manage platform users via the g8ed internal HTTP API.
-Runs inside g8ep and communicates with g8ed over the internal network.
+Manage platform users via the Operator (g8eo) HTTP API.
 
 Usage:
     python manage-operator.py users list
@@ -38,9 +37,9 @@ from typing import List, Dict, Any
 
 from _lib import (
     PROJECT_ROOT,
-    G8ED_BASE_URL,
+    OPERATOR_BASE_URL,
     print_banner,
-    g8ed_request,
+    operator_request,
 )
 
 _SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
@@ -49,16 +48,12 @@ with open(_SHARED_CONSTANTS / 'status.json') as _f:
     _STATUS = json.load(_f)
 VALID_ROLES: List[str] = list(_STATUS['user.role'].values())
 
-INTERNAL_API_BASE = f'{G8ED_BASE_URL}/api/internal/users'
-
-
-def _api_request(method: str, path: str, body: Dict | None = None) -> Dict:
-    return g8ed_request(method, f'{INTERNAL_API_BASE}{path}', body)
+USERS_API = f'{OPERATOR_BASE_URL}/api/users'
 
 
 class UserManager:
     """
-    Manage platform users via the g8ed internal HTTP API.
+    Manage platform users via the Operator (g8eo) HTTP API.
     """
 
     def _format_user_summary(self, user: Dict[str, Any]) -> str:
@@ -112,12 +107,12 @@ class UserManager:
     # =========================================================================
 
     def list_users(self, limit: int = 50) -> List[Dict[str, Any]]:
-        result = _api_request('GET', f'?limit={limit}')
-        if not result.get('success'):
-            raise RuntimeError(result.get('error', 'Failed to list users'))
-
-        users = result.get('data', [])
-        total = result.get('count', len(users))
+        # Query users collection directly from operator
+        users = operator_request('POST', '/db/users/_query', {})
+        if not isinstance(users, list):
+            users = []
+        total = len(users)
+        users = users[:limit]
 
         print(f"\nUsers ({len(users)} of {total} total)")
         print("=" * 130)
@@ -138,32 +133,34 @@ class UserManager:
             return None
 
         if user_id:
-            result = _api_request('GET', f'/{user_id}')
+            user = operator_request('GET', f'/db/users/{user_id}')
         else:
-            result = _api_request('GET', f'/email/{urllib.parse.quote(email, safe="")}')
+            # Query by email
+            users = operator_request('POST', '/db/users/_query', {'email': email})
+            if not isinstance(users, list) or len(users) == 0:
+                print(f"\nUser not found: {email}")
+                return None
+            user = users[0]
 
-        user = result.get('user') if isinstance(result, dict) else None
         if not user:
             identifier = user_id or email
-            if result.get('_status_code') == 404:
-                print(f"\nUser not found: {identifier}")
-            else:
-                raise RuntimeError(result.get('error', 'Failed to get user'))
+            print(f"\nUser not found: {identifier}")
             return None
 
         print(self._format_user_detail(user))
         return user
 
     def search_users(self, query: str, limit: int = 50) -> List[Dict[str, Any]]:
-        result = _api_request('GET', f'?limit={limit}')
-        if not result.get('success'):
-            raise RuntimeError(result.get('error', 'Failed to list users'))
+        # Query all users and filter locally
+        all_users = operator_request('POST', '/db/users/_query', {})
+        if not isinstance(all_users, list):
+            all_users = []
 
         q = query.lower()
         users = [
-            u for u in result.get('data', [])
+            u for u in all_users
             if q in (u.get('email') or '').lower() or q in (u.get('name') or '').lower()
-        ]
+        ][:limit]
 
         print(f"\nSearch results for '{query}' ({len(users)} found)")
         print("=" * 130)
@@ -183,35 +180,38 @@ class UserManager:
                     print(f"Invalid role: {role}. Valid roles: {VALID_ROLES}")
                     return None
 
-        body: Dict[str, Any] = {'email': email, 'name': name}
+        import time
+        user_id = f'user_{int(time.time() * 1000)}'
+        body: Dict[str, Any] = {
+            'id': user_id,
+            'email': email,
+            'name': name,
+            'created_at': int(time.time() * 1000),
+            'updated_at': int(time.time() * 1000),
+        }
         if roles:
             body['roles'] = roles
 
-        result = _api_request('POST', '', body)
-        user = result.get('user') if isinstance(result, dict) else None
-        if not user:
-            raise RuntimeError(result.get('error', 'Failed to create user'))
+        result = operator_request('PUT', f'/db/users/{user_id}', body)
+        if not result:
+            raise RuntimeError('Failed to create user')
 
         print("\nUser created successfully:")
-        print(f"  ID:       {user['id']}")
-        print(f"  Email:    {user.get('email')}")
-        print(f"  Name:     {user.get('name')}")
-        print(f"  Roles:    {user.get('roles')}")
+        print(f"  ID:       {user_id}")
+        print(f"  Email:    {email}")
+        print(f"  Name:     {name}")
+        print(f"  Roles:    {roles or ['user']}")
         print()
-        return user
+        return body
 
     def delete_user(self, user_id: str, force: bool = False) -> bool:
-        result = _api_request('GET', f'/{user_id}')
-        if not result.get('success'):
-            if result.get('_status_code') == 404:
-                print(f"\nUser not found: {user_id}")
-            else:
-                raise RuntimeError(result.get('error', 'Failed to get user'))
+        user = operator_request('GET', f'/db/users/{user_id}')
+        if not user:
+            print(f"\nUser not found: {user_id}")
             return False
 
-        user = result['data']
         print("\nAbout to delete user:")
-        print(f"  ID:    {user['id']}")
+        print(f"  ID:    {user.get('id')}")
         print(f"  Email: {user.get('email')}")
         print(f"  Name:  {user.get('name')}")
 
@@ -221,10 +221,7 @@ class UserManager:
                 print("Deletion cancelled.")
                 return False
 
-        del_result = _api_request('DELETE', f'/{user_id}')
-        if not del_result.get('success'):
-            raise RuntimeError(del_result.get('error', 'Failed to delete user'))
-
+        operator_request('DELETE', f'/db/users/{user_id}')
         print(f"\nUser {user_id} deleted.")
         return True
 
@@ -234,32 +231,46 @@ class UserManager:
             print(f"Invalid role: {role}. Valid roles: {VALID_ROLES}")
             return None
 
-        result = _api_request('PATCH', f'/{user_id}/roles', {'role': role, 'action': action})
-        if not result.get('success'):
-            if result.get('_status_code') == 404:
-                print(f"\nUser not found: {user_id}")
-            else:
-                raise RuntimeError(result.get('error', 'Failed to update roles'))
+        # Get current user
+        user = operator_request('GET', f'/db/users/{user_id}')
+        if not user:
+            print(f"\nUser not found: {user_id}")
             return None
 
-        user = result['data']
+        # Update roles
+        current_roles = user.get('roles', [])
+        if action == 'set':
+            new_roles = [role]
+        elif action == 'add':
+            new_roles = list(set(current_roles + [role]))
+        elif action == 'remove':
+            new_roles = [r for r in current_roles if r != role]
+        else:
+            new_roles = current_roles
+
+        user['roles'] = new_roles
+        user['updated_at'] = int(__import__('time').time() * 1000)
+        
+        operator_request('PUT', f'/db/users/{user_id}', user)
+        
         print(f"\nRoles updated for {user.get('email')}:")
-        print(f"  Roles: {user.get('roles')}")
+        print(f"  Roles: {new_roles}")
         print()
         return user
 
     def stats(self) -> Dict[str, Any]:
-        result = _api_request('GET', '/stats')
-        if not result.get('success'):
-            raise RuntimeError(result.get('error', 'Failed to get stats'))
-
-        data = result.get('data', {})
+        # Query all users and count
+        users = operator_request('POST', '/db/users/_query', {})
+        if not isinstance(users, list):
+            users = []
+        total = len(users)
+        
         print(f"\n{'=' * 60}")
         print("USER STATISTICS")
         print(f"{'=' * 60}")
-        print(f"\n  Total users: {data.get('total_users', 0)}")
+        print(f"\n  Total users: {total}")
         print(f"\n{'=' * 60}\n")
-        return data
+        return {'total_users': total}
 
 
 def build_parser() -> argparse.ArgumentParser:

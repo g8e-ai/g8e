@@ -19,7 +19,6 @@ from fastapi import Request
 from app.constants import (
     HTTP_FORWARDED_FOR_HEADER,
     HTTP_USER_AGENT_HEADER,
-    INTERNAL_AUTH_HEADER,
     PROXY_ORGANIZATION_ID_HEADER,
     PROXY_USER_EMAIL_HEADER,
     PROXY_USER_ID_HEADER,
@@ -43,7 +42,6 @@ from app.dependencies import (
     get_g8ee_platform_settings,
     get_g8ee_pubsub_client,
     health_check_dependencies,
-    require_internal_origin,
     require_proxy_auth,
 )
 from app.errors import (
@@ -387,81 +385,10 @@ def _make_internal_request(client_ip, path, headers=None, settings_token=None):
     request.app = MagicMock()
     if settings_token is not None:
         settings = MagicMock()
-        settings.auth.internal_auth_token = settings_token
         request.app.state.settings = settings
     else:
         del request.app.state.settings
     return request
-
-
-class TestRequireInternalOrigin:
-    async def test_valid_internal_auth_token_grants_access(self):
-        token = "super-secret-token"
-        request = _make_internal_request(
-            client_ip="192.168.1.1",
-            path="/api/internal/test",
-            headers={INTERNAL_AUTH_HEADER: token, HTTP_FORWARDED_FOR_HEADER: None, HTTP_USER_AGENT_HEADER: "test"},
-            settings_token=token,
-        )
-        result = await require_internal_origin(request)
-        assert result is True
-
-    async def test_gke_health_check_ip_grants_access(self):
-        request = _make_internal_request(
-            client_ip="35.191.5.10",
-            path="/health",
-            headers={HTTP_FORWARDED_FOR_HEADER: None, HTTP_USER_AGENT_HEADER: "GoogleHC/1.0"},
-        )
-        result = await require_internal_origin(request)
-        assert result is True
-
-    async def test_localhost_health_path_grants_access(self):
-        request = _make_internal_request(
-            client_ip="127.0.0.1",
-            path="/health/live",
-            headers={HTTP_FORWARDED_FOR_HEADER: None, HTTP_USER_AGENT_HEADER: "curl"},
-        )
-        result = await require_internal_origin(request)
-        assert result is True
-
-    async def test_localhost_non_health_path_raises_authorization_error(self):
-        request = _make_internal_request(
-            client_ip="127.0.0.1",
-            path="/api/internal/sensitive",
-            headers={HTTP_FORWARDED_FOR_HEADER: None, HTTP_USER_AGENT_HEADER: "curl"},
-        )
-        with pytest.raises(AuthorizationError) as exc_info:
-            await require_internal_origin(request)
-        assert exc_info.value.get_http_status() == 403
-
-    async def test_unknown_ip_no_token_raises_authorization_error(self):
-        request = _make_internal_request(
-            client_ip="203.0.113.50",
-            path="/api/internal/test",
-            headers={HTTP_FORWARDED_FOR_HEADER: None, HTTP_USER_AGENT_HEADER: "attacker"},
-        )
-        with pytest.raises(AuthorizationError) as exc_info:
-            await require_internal_origin(request)
-        assert exc_info.value.get_http_status() == 403
-
-    async def test_wrong_token_raises_authorization_error(self):
-        request = _make_internal_request(
-            client_ip="203.0.113.50",
-            path="/api/internal/test",
-            headers={INTERNAL_AUTH_HEADER: "wrong-token", HTTP_FORWARDED_FOR_HEADER: None, HTTP_USER_AGENT_HEADER: "test"},
-            settings_token="correct-token",
-        )
-        with pytest.raises(AuthorizationError):
-            await require_internal_origin(request)
-
-    async def test_ipv6_mapped_ipv4_health_check_ip_grants_access(self):
-        request = _make_internal_request(
-            client_ip="::ffff:10.0.0.5",
-            path="/health",
-            headers={HTTP_FORWARDED_FOR_HEADER: None, HTTP_USER_AGENT_HEADER: "healthcheck"},
-        )
-        result = await require_internal_origin(request)
-        assert result is True
 
 
 class TestRequireProxyAuth:
@@ -478,21 +405,16 @@ class TestRequireProxyAuth:
         assert result.organization_id == "org-xyz"
         assert result.auth_method == AuthMethod.PROXY
 
-    async def test_internal_token_with_g8e_headers_return_authenticated_user(self, mock_request):
-        token = "internal-secret"
+    async def test_g8e_headers_without_proxy_identity_raise_authentication_error(self, mock_request):
         settings = MagicMock()
-        settings.auth.internal_auth_token = token
         mock_request.headers = {
             **TEST_G8E_HEADERS,
-            INTERNAL_AUTH_HEADER: token,
             G8eHeaders.USER_ID.lower(): "internal-user",
             G8eHeaders.WEB_SESSION_ID.lower(): "sess-abc",
             G8eHeaders.ORGANIZATION_ID.lower(): "org-internal",
         }
-        result = await require_proxy_auth(mock_request, settings)
-        assert result.uid == "internal-user"
-        assert result.web_session_id == "sess-abc"
-        assert result.auth_method == AuthMethod.INTERNAL
+        with pytest.raises(AuthenticationError, match="Authentication required"):
+            await require_proxy_auth(mock_request, settings)
 
     async def test_no_auth_raises_authentication_error(self, mock_request, mock_settings):
         mock_request.headers = {}

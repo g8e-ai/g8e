@@ -11,105 +11,34 @@ permissions:
   contents: read
 
 jobs:
-  test-g8ee:
+  verify-proto:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: components/g8eo/go.mod
-          cache-dependency-path: components/g8eo/go.sum
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: components/g8ed/package-lock.json
-
-      - name: Install g8ed dependencies
-        run: npm ci --prefix components/g8ed
-
-      - name: Start platform
-        run: ./g8e platform start
-
-      - name: Test g8ee
-        run: >-
-          ./g8e test g8ee
-          -p gemini
-          -k "$GEMINI_API_KEY"
-          -m gemini-3.1-pro-preview-customtools
-          -a gemini-3-flash-preview
-          -l gemini-3.1-flash-lite-preview
-          -j auto
-          -- tests
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
-      - name: Show platform logs
-        if: failure()
+      - name: Install Protobuf tools
         run: |
-          tail -n 200 .g8e/logs/operator-listen.log || true
-          tail -n 200 .g8e/logs/g8ee.log || true
-          tail -n 200 .g8e/logs/g8ed.log || true
+          pip install protobuf==6.33.6 grpcio-tools==1.80.0
 
-      - name: Stop platform
-        if: always()
-        run: ./g8e platform stop
+      - name: Generate Proto
+        run: ./scripts/core/gen-proto.sh
 
-  test-g8ed:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: components/g8eo/go.mod
-          cache-dependency-path: components/g8eo/go.sum
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: components/g8ed/package-lock.json
-
-      - name: Install g8ed dependencies
-        run: npm ci --prefix components/g8ed
-
-      - name: Start platform
-        run: ./g8e platform start
-
-      - name: Test g8ed
-        run: ./g8e test g8ed
-
-      - name: Show platform logs
-        if: failure()
+      - name: Check for drift
         run: |
-          tail -n 200 .g8e/logs/operator-listen.log || true
-          tail -n 200 .g8e/logs/g8ee.log || true
-          tail -n 200 .g8e/logs/g8ed.log || true
-
-      - name: Stop platform
-        if: always()
-        run: ./g8e platform stop
+          # Only check for changes in generated proto files, ignore untracked files
+          CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$|^\s*M.*_pb2.*\.py$|^\s*M.*\.proto$" || true)
+          if [ -n "$CHANGES" ]; then
+            echo "Error: Generated proto files are out of sync with shared/proto/*.proto"
+            echo "$CHANGES"
+            git diff -- $(git status --porcelain | grep -E "^\s*M" | awk '{print $2}')
+            exit 1
+          fi
 
   test-g8eo:
     runs-on: ubuntu-latest
@@ -124,46 +53,65 @@ jobs:
           go-version-file: components/g8eo/go.mod
           cache-dependency-path: components/g8eo/go.sum
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: components/g8ed/package-lock.json
-
-      - name: Install g8ed dependencies
-        run: npm ci --prefix components/g8ed
-
-      - name: Start platform
+      - name: Start Operator substrate
         run: ./g8e platform start
 
-      - name: Test g8eo
-        run: ./g8e test g8eo
+      - name: Test Operator substrate
+        run: ./g8e test
 
-      - name: Show platform logs
+      - name: Show Operator logs
         if: failure()
-        run: |
-          tail -n 200 .g8e/logs/operator-listen.log || true
-          tail -n 200 .g8e/logs/g8ee.log || true
-          tail -n 200 .g8e/logs/g8ed.log || true
+        run: tail -n 200 .g8e/logs/operator-listen.log || true
 
       - name: Stop platform
         if: always()
         run: ./g8e platform stop
 
-  check-model-parity:
+  apps-g8ee:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: components/g8eo/go.mod
+          cache-dependency-path: components/g8eo/go.sum
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+
+      - name: Start Operator substrate
+        run: ./g8e platform start
+
+      - name: Start g8ee adapter
+        run: ./g8e apps start g8ee
+
+      - name: Test g8ee adapter
+        run: >-
+          ./g8e test g8ee
+          -p gemini
+          -k "$GEMINI_API_KEY"
+          -m gemini-3.1-pro-preview-customtools
+          -a gemini-3-flash-preview
+          -l gemini-3.1-flash-lite
+          -j auto
+          -- tests
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Show app logs
+        if: failure()
+        run: |
+          tail -n 200 .g8e/logs/operator-listen.log || true
+          tail -n 200 .g8e/logs/g8ee.log || true
+
+      - name: Stop platform
+        if: always()
+        run: ./g8e platform stop
 

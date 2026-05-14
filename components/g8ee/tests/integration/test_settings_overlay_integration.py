@@ -74,8 +74,7 @@ class TestG8eeSettingsOverlayIntegration:
                     "default_ttl": 3600
                 },
                 "auth": {
-                    "internal_auth_token": "test-token",
-                    "session_encryption_key": None,
+                    "session_encryption_key": "test-key",
                     "g8e_api_key": None
                 },
                 "component_urls": {
@@ -157,7 +156,6 @@ class TestG8eeSettingsOverlayIntegration:
                     "default_ttl": 3600
                 },
                 "auth": {
-                    "internal_auth_token": None,
                     "session_encryption_key": None,
                     "g8e_api_key": None
                 },
@@ -253,7 +251,6 @@ class TestG8eeSettingsOverlayIntegration:
                 "log_level": "INFO",
                 "enable_logging": True,
                 "auth": {
-                    "internal_auth_token": None,
                     "session_encryption_key": None,
                     "auditor_hmac_key": hmac_key,
                     "g8e_api_key": None,
@@ -267,7 +264,6 @@ class TestG8eeSettingsOverlayIntegration:
         # Stub bootstrap so it reports no on-disk secrets; this isolates the
         # platform-DB-overlay path described in the docstring.
         bootstrap = MagicMock()
-        bootstrap.load_internal_auth_token.return_value = None
         bootstrap.load_session_encryption_key.return_value = None
         bootstrap.load_auditor_hmac_key.return_value = None
         bootstrap.load_ca_cert_path.return_value = None
@@ -316,7 +312,6 @@ class TestG8eeSettingsOverlayIntegration:
                     "default_ttl": 3600
                 },
                 "auth": {
-                    "internal_auth_token": None,
                     "session_encryption_key": None,
                     "g8e_api_key": None
                 },
@@ -405,7 +400,6 @@ class TestG8eeSettingsOverlayIntegration:
         # Stub bootstrap so no on-disk secrets exist; the platform DB doc is
         # the only source of auth values, exercising the overlay path.
         bootstrap = MagicMock()
-        bootstrap.load_internal_auth_token.return_value = None
         bootstrap.load_session_encryption_key.return_value = None
         bootstrap.load_auditor_hmac_key.return_value = None
         bootstrap.load_ca_cert_path.return_value = None
@@ -427,7 +421,7 @@ class TestG8eeSettingsOverlayIntegration:
         """When the bootstrap volume already provided an auth secret, the
         platform DB value must NOT clobber it. This guards the precedence
         contract that the model-driven auth merge has to preserve."""
-        bootstrap_token = "bootstrap-token-value"
+        bootstrap_key = "bootstrap-key-value"
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
@@ -436,8 +430,7 @@ class TestG8eeSettingsOverlayIntegration:
                 "log_level": "INFO",
                 "enable_logging": True,
                 "auth": {
-                    "internal_auth_token": "platform-token-should-be-ignored",
-                    "session_encryption_key": None,
+                    "session_encryption_key": "platform-key-should-be-ignored",
                 },
             },
             "created_at": "2026-01-01T00:00:00Z",
@@ -446,8 +439,7 @@ class TestG8eeSettingsOverlayIntegration:
         cache_service.get_document_with_cache.return_value = platform_data
 
         bootstrap = MagicMock()
-        bootstrap.load_internal_auth_token.return_value = bootstrap_token
-        bootstrap.load_session_encryption_key.return_value = None
+        bootstrap.load_session_encryption_key.return_value = bootstrap_key
         bootstrap.load_auditor_hmac_key.return_value = None
         bootstrap.load_ca_cert_path.return_value = None
         settings_service = SettingsService(
@@ -457,7 +449,7 @@ class TestG8eeSettingsOverlayIntegration:
 
         settings = await settings_service.get_platform_settings()
 
-        assert settings.auth.internal_auth_token == bootstrap_token
+        assert settings.auth.session_encryption_key == bootstrap_key
 
     async def test_overlay_propagates_auto_approve_from_platform(self, cache_service):
         """Platform-level auto_approve settings must flow through overlay_platform_data.
@@ -475,7 +467,6 @@ class TestG8eeSettingsOverlayIntegration:
                 "log_level": "INFO",
                 "enable_logging": True,
                 "auth": {
-                    "internal_auth_token": None,
                     "session_encryption_key": None,
                     "g8e_api_key": None,
                 },
@@ -497,7 +488,6 @@ class TestG8eeSettingsOverlayIntegration:
         cache_service.get_document_with_cache.return_value = platform_data
 
         bootstrap = MagicMock()
-        bootstrap.load_internal_auth_token.return_value = None
         bootstrap.load_session_encryption_key.return_value = None
         bootstrap.load_auditor_hmac_key.return_value = None
         bootstrap.load_ca_cert_path.return_value = None
@@ -535,7 +525,6 @@ class TestG8eeSettingsOverlayIntegration:
                 "log_level": "INFO",
                 "enable_logging": True,
                 "auth": {
-                    "internal_auth_token": None,
                     "session_encryption_key": None,
                     "g8e_api_key": None,
                 },
@@ -590,7 +579,6 @@ class TestG8eeSettingsOverlayIntegration:
                 "log_level": "INFO",
                 "enable_logging": True,
                 "auth": {
-                    "internal_auth_token": None,
                     "session_encryption_key": None,
                     "g8e_api_key": None,
                 },

@@ -1,0 +1,9 @@
+[DB-CLIENT] Connection failed: Cannot connect to host localhost:9000 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1000)')]
+[KV-CACHE-CLIENT] Connection failed: G8E-1600: HTTP request failed: Cannot connect to host localhost:9000 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1000)')] Caused by: Cannot connect to host localhost:9000 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1000)')]
+Failed to load platform settings from operator: G8E-1301: get_document failed for settings/platform_settings: Cannot connect to host localhost:9000 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1000)')] Caused by: Cannot connect to host localhost:9000 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1000)')]
+============================= test session starts ==============================
+collected 2 items
+
+tests/unit/services/operator/test_protobuf_flow_integration.py ..        [100%]
+
+============================== 2 passed in 0.07s ===============================

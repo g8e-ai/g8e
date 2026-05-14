@@ -24,6 +24,8 @@ E2E fixtures are in tests/e2e/conftest.py.
 
 import logging
 import os
+import socket
+import time
 
 import pytest
 import pytest_asyncio
@@ -211,25 +213,40 @@ def _web_search_settings_from_env() -> SearchSettings | None:
     )
 
 
-async def _load_settings_from_operator(timeout: float = 5.0) -> G8eePlatformSettings:
+def _is_operator_online(host: str = "localhost", port: int = 9000, timeout: float = 1.0) -> bool:
+    """Check if the operator is online by attempting a socket connection to its port."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except (ConnectionRefusedError, socket.timeout, OSError):
+        return False
+
+
+async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = True) -> G8eePlatformSettings:
     """Load platform settings via SettingsService with a timeout."""
     import asyncio
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
+
+    if not is_online:
+        logger.info("Skipping platform settings load: operator is offline")
+        return bootstrap_settings
 
     try:
         # Wrap the entire setup and fetch in a timeout
         async with asyncio.timeout(timeout):
             db_client = DBClient(
                 ca_cert_path=bootstrap_settings.ca_cert_path,
-                internal_auth_token=bootstrap_settings.auth.internal_auth_token
+                client_cert_path=bootstrap_settings.client_cert_path,
+                client_key_path=bootstrap_settings.client_key_path,
             )
             await db_client.connect()
 
             kv_client = KVCacheClient(
                 component_name=ComponentName.G8EE,
                 ca_cert_path=bootstrap_settings.ca_cert_path,
-                internal_auth_token=bootstrap_settings.auth.internal_auth_token
+                client_cert_path=bootstrap_settings.client_cert_path,
+                client_key_path=bootstrap_settings.client_key_path,
             )
             await kv_client.connect()
 
@@ -260,9 +277,22 @@ def pytest_configure(config):
 
     logger.info("Pytest configure started.")
 
+    # Check if operator is online once at the start
+    is_online = _is_operator_online()
+    config.stash[pytest.StashKey[bool]()] = is_online
+    
+    # We use a global variable because some fixtures are session-scoped and don't have easy access to config
+    global _OPERATOR_ONLINE
+    _OPERATOR_ONLINE = is_online
+
+    if is_online:
+        logger.info("Operator is ONLINE on port 9000")
+    else:
+        logger.warning("Operator is OFFLINE on port 9000. Integration tests requiring a live operator will be skipped.")
+
     # Only load settings if they haven't been set yet
     try:
-        settings = asyncio.run(_load_settings_from_operator())
+        settings = asyncio.run(_load_settings_from_operator(is_online=is_online))
     except Exception as e:
         logger.warning(f"Failed to load settings from operator: {e}")
         from app.services.infra.settings_service import SettingsService
@@ -288,6 +318,8 @@ def pytest_collection_modifyitems(config, items):
     llm = get_llm_settings()
     search_settings = get_search_settings()
 
+    # Check operator status from configure step
+    is_operator_online = _OPERATOR_ONLINE
 
     # Check for LLM credentials from TEST_LLM_* env vars
     has_test_llm_creds = _has_llm_credentials(llm)
@@ -313,22 +345,17 @@ def pytest_collection_modifyitems(config, items):
         and bool(search_settings.api_key)
     ) if search_settings else False
 
-    logger.info(f"Collection: settings={settings is not None}, has_test_creds={has_test_llm_creds}, has_creds={has_llm_credentials}, has_vertex={has_vertex_search}, has_web_search={has_web_search}")
-    if llm:
-        logger.info(f"LLM Config: provider={llm.primary_provider}, key_set={bool(llm.gemini_api_key)}")
-
-    skip_no_llm = pytest.mark.skip(reason=f"ai_integration tests require LLM flags. has_creds={has_llm_credentials}")
-    skip_no_vertex = pytest.mark.skip(reason="requires_api tests require Vertex AI Search credentials (VERTEX_SEARCH_ENABLED, VERTEX_SEARCH_PROJECT_ID, VERTEX_SEARCH_ENGINE_ID, VERTEX_SEARCH_API_KEY)")
-    skip_no_web_search = pytest.mark.skip(reason=f"requires_web_search tests require web search configuration (search.enabled, project_id, engine_id, api_key). has_web_search={has_web_search}")
-
-
     for item in items:
-        if item.get_closest_marker("ai_integration") and not has_llm_credentials:
-            item.add_marker(skip_no_llm)
-        if item.get_closest_marker("requires_api") and not has_vertex_search:
-            item.add_marker(skip_no_vertex)
-        if item.get_closest_marker("requires_web_search") and not has_web_search:
-            item.add_marker(skip_no_web_search)
+        if item.get_closest_marker("requires_operator") and not is_operator_online:
+            item.add_marker(pytest.mark.skip(reason="operator offline"))
+        elif item.get_closest_marker("operator_wire") and not is_operator_online:
+            item.add_marker(pytest.mark.skip(reason="operator offline"))
+        elif item.get_closest_marker("ai_integration") and not has_llm_credentials:
+            item.add_marker(pytest.mark.skip(reason="no llm creds"))
+        elif item.get_closest_marker("requires_api") and not has_vertex_search:
+            item.add_marker(pytest.mark.skip(reason="no vertex search"))
+        elif item.get_closest_marker("requires_web_search") and not has_web_search:
+            item.add_marker(pytest.mark.skip(reason="no web search"))
 
         # Dynamically add markers based on scenario data for accuracy tests
         if "test_agent_accuracy" in item.name or "test_gemini_accuracy" in item.name:
@@ -690,6 +717,9 @@ def provider_config():
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def cache_aside_service(test_settings):
+    if not _OPERATOR_ONLINE:
+        pytest.skip("Operator is offline - skipping integration fixture")
+
     from app.db import DBClient
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
@@ -699,14 +729,16 @@ async def cache_aside_service(test_settings):
 
     raw_kv = KVCacheClient(
         ca_cert_path=settings.ca_cert_path,
-        internal_auth_token=settings.auth.internal_auth_token,
+        client_cert_path=settings.client_cert_path,
+        client_key_path=settings.client_key_path,
         component_name=ComponentName.G8EE,
     )
     await raw_kv.connect()
 
     raw_db = DBClient(
         ca_cert_path=settings.ca_cert_path,
-        internal_auth_token=settings.auth.internal_auth_token
+        client_cert_path=settings.client_cert_path,
+        client_key_path=settings.client_key_path,
     )
     await raw_db.connect()
 
@@ -738,13 +770,15 @@ async def db_client(cache_aside_service):
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def pubsub_service(test_settings):
+    if not _OPERATOR_ONLINE:
+        pytest.skip("Operator is offline - skipping integration fixture")
+
     from app.clients.pubsub_client import PubSubClient
 
     settings = test_settings
 
     client = PubSubClient(
         pubsub_url=settings.listen.pubsub_url,
-        internal_auth_token=settings.auth.internal_auth_token,
         component_name=ComponentName.G8EE,
     )
     await client.connect()

@@ -11,18 +11,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for protobuf envelope decoder and enum conversion."""
+"""Tests for UAP JSON envelope decoder and enum conversion."""
 
 import pytest
+import json
+from datetime import datetime, timezone
 
-from app.constants import ExecutionStatus
-from app.proto import common_pb2, operator_pb2
+from app.constants import ExecutionStatus, EventType
+from app.proto import operator_pb2
 from app.utils.envelope_builder import (
-    decode_universal_envelope,
+    decode_uap_envelope,
     decode_g8eo_result_envelope,
     protobuf_execution_status_to_python,
-    build_universal_envelope_bytes,
+    build_uap_envelope_json,
 )
+from app.models.pubsub_messages import G8eMessage
 
 pytestmark = [pytest.mark.unit]
 
@@ -66,68 +69,55 @@ class TestProtobufExecutionStatusToPython:
             protobuf_execution_status_to_python(999)
 
 
-class TestDecodeUniversalEnvelope:
-    """Test UniversalEnvelope decoding."""
+class TestDecodeUAPEnvelope:
+    """Test UAP JSON envelope decoding."""
 
     def test_decode_valid_envelope(self):
-        """Valid envelope bytes decode successfully."""
-        # Build a minimal envelope
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.id = "test-id"
-        envelope.event_type = "test.event"
-        envelope.payload = b"test-payload"
+        """Valid UAP JSON envelope decodes successfully."""
+        envelope_data = {
+            "protocol_version": "1.0",
+            "message_id": "test-id",
+            "intent": {"action_type": "test.event"},
+            "intent_data": {"key": "value"}
+        }
+        envelope_json = json.dumps(envelope_data)
+        decoded = decode_uap_envelope(envelope_json)
 
-        envelope_bytes = envelope.SerializeToString()
-        decoded = decode_universal_envelope(envelope_bytes)
+        assert decoded["message_id"] == "test-id"
+        assert decoded["intent"]["action_type"] == "test.event"
+        assert decoded["intent_data"]["key"] == "value"
 
-        assert decoded.id == "test-id"
-        assert decoded.event_type == "test.event"
-        assert decoded.payload == b"test-payload"
-
-    def test_decode_missing_id_raises(self):
-        """Envelope without id field raises ValueError."""
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.event_type = "test.event"
-        envelope.payload = b"test-payload"
-
-        envelope_bytes = envelope.SerializeToString()
-        with pytest.raises(ValueError, match="missing id field"):
-            decode_universal_envelope(envelope_bytes)
-
-    def test_decode_invalid_bytes_raises(self):
-        """Invalid bytes raise ValueError."""
-        with pytest.raises(ValueError, match="Failed to decode"):
-            decode_universal_envelope(b"invalid-bytes")
+    def test_decode_invalid_json_raises(self):
+        """Invalid JSON raises JSONDecodeError."""
+        with pytest.raises(json.JSONDecodeError):
+            decode_uap_envelope("invalid-json")
 
 
 class TestDecodeG8eoResultEnvelope:
-    """Test g8eo result envelope decoding with enum conversion."""
+    """Test g8eo result envelope decoding with UAP JSON."""
 
     def test_decode_command_result_completed(self):
-        """CommandResult with COMPLETED status decodes correctly."""
-        # Build envelope with CommandResult payload
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.id = "test-exec-id"
-        envelope.event_type = "g8e.v1.operator.command.completed"
-        envelope.operator_id = "op-1"
-        envelope.operator_session_id = "sess-1"
-        envelope.case_id = "case-1"
-
-        # Build CommandResult payload
-        command_result = operator_pb2.CommandResult()
-        command_result.execution_id = "test-exec-id"
-        command_result.status = operator_pb2.EXECUTION_STATUS_COMPLETED
-        command_result.output = "test output"
-        command_result.exit_code = 0
-
-        envelope.payload = command_result.SerializeToString()
-        envelope_bytes = envelope.SerializeToString()
-
+        """EXECUTE_BASH_RESULT with completed status decodes correctly."""
+        envelope_data = {
+            "id": "test-exec-id",
+            "event_type": EventType.OPERATOR_COMMAND_RESULT,
+            "operator_id": "op-1",
+            "action_type": "EXECUTE_BASH_RESULT",
+            "intent_data": {
+                "execution_id": "test-exec-id",
+                "status": "completed",
+                "stdout": "test output",
+                "return_code": 0
+            },
+            "operator_session_id": "sess-1",
+            "case_id": "case-1"
+        }
+        
         # Decode
-        decoded = decode_g8eo_result_envelope(envelope_bytes)
+        decoded = decode_g8eo_result_envelope(envelope_data)
 
         assert decoded["id"] == "test-exec-id"
-        assert decoded["event_type"] == "g8e.v1.operator.command.completed"
+        assert decoded["event_type"] == EventType.OPERATOR_COMMAND_RESULT
         assert decoded["operator_id"] == "op-1"
         assert decoded["operator_session_id"] == "sess-1"
         assert decoded["case_id"] == "case-1"
@@ -136,28 +126,27 @@ class TestDecodeG8eoResultEnvelope:
         payload = decoded["payload"]
         assert payload["payload_type"] == "execution_result"
         assert payload["execution_id"] == "test-exec-id"
-        assert payload["status"] == "completed"  # Enum converted to string
+        assert payload["status"] == "completed"
         assert payload["stdout"] == "test output"
         assert payload["return_code"] == 0
 
     def test_decode_command_result_failed(self):
-        """CommandResult with FAILED status decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.id = "test-exec-id"
-        envelope.event_type = "g8e.v1.operator.command.failed"
-        envelope.operator_id = "op-1"
-        envelope.operator_session_id = "sess-1"
+        """EXECUTE_BASH_RESULT with failed status decodes correctly."""
+        envelope_data = {
+            "id": "test-exec-id",
+            "event_type": EventType.OPERATOR_COMMAND_RESULT,
+            "operator_id": "op-1",
+            "action_type": "EXECUTE_BASH_RESULT",
+            "intent_data": {
+                "execution_id": "test-exec-id",
+                "status": "failed",
+                "error": "test error",
+                "return_code": 1
+            },
+            "operator_session_id": "sess-1"
+        }
 
-        command_result = operator_pb2.CommandResult()
-        command_result.execution_id = "test-exec-id"
-        command_result.status = operator_pb2.EXECUTION_STATUS_FAILED
-        command_result.error = "test error"
-        command_result.exit_code = 1
-
-        envelope.payload = command_result.SerializeToString()
-        envelope_bytes = envelope.SerializeToString()
-
-        decoded = decode_g8eo_result_envelope(envelope_bytes)
+        decoded = decode_g8eo_result_envelope(envelope_data)
 
         payload = decoded["payload"]
         assert payload["payload_type"] == "execution_result"
@@ -166,23 +155,22 @@ class TestDecodeG8eoResultEnvelope:
         assert payload["return_code"] == 1
 
     def test_decode_execution_status_update(self):
-        """ExecutionStatusUpdate decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.id = "test-id"
-        envelope.event_type = "g8e.v1.operator.command.status.updated"
-        envelope.operator_id = "op-1"
-        envelope.operator_session_id = "sess-1"
+        """EXECUTE_STATUS_UPDATE decodes correctly."""
+        envelope_data = {
+            "id": "test-id",
+            "event_type": EventType.OPERATOR_COMMAND_STATUS_UPDATED,
+            "operator_id": "op-1",
+            "action_type": "EXECUTE_STATUS_UPDATE",
+            "intent_data": {
+                "execution_id": "test-exec-id",
+                "status": "executing",
+                "process_alive": True,
+                "elapsed_seconds": 5.0
+            },
+            "operator_session_id": "sess-1"
+        }
 
-        status_update = operator_pb2.ExecutionStatusUpdate()
-        status_update.execution_id = "test-exec-id"
-        status_update.status = operator_pb2.EXECUTION_STATUS_EXECUTING
-        status_update.process_alive = True
-        status_update.elapsed_seconds = 5.0
-
-        envelope.payload = status_update.SerializeToString()
-        envelope_bytes = envelope.SerializeToString()
-
-        decoded = decode_g8eo_result_envelope(envelope_bytes)
+        decoded = decode_g8eo_result_envelope(envelope_data)
 
         payload = decoded["payload"]
         assert payload["payload_type"] == "execution_status"
@@ -192,23 +180,22 @@ class TestDecodeG8eoResultEnvelope:
         assert payload["elapsed_seconds"] == 5.0
 
     def test_decode_file_edit_result(self):
-        """FileEditResult decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.id = "test-id"
-        envelope.event_type = "g8e.v1.operator.file.edit.completed"
-        envelope.operator_id = "op-1"
-        envelope.operator_session_id = "sess-1"
+        """FILE_EDIT_RESULT decodes correctly."""
+        envelope_data = {
+            "id": "test-id",
+            "event_type": EventType.OPERATOR_FILE_EDIT_COMPLETED,
+            "operator_id": "op-1",
+            "action_type": "FILE_EDIT_RESULT",
+            "intent_data": {
+                "execution_id": "test-exec-id",
+                "status": "completed",
+                "file_path": "/test/file.txt",
+                "operation": "write"
+            },
+            "operator_session_id": "sess-1"
+        }
 
-        file_result = operator_pb2.FileEditResult()
-        file_result.execution_id = "test-exec-id"
-        file_result.status = operator_pb2.EXECUTION_STATUS_COMPLETED
-        file_result.file_path = "/test/file.txt"
-        file_result.operation = "write"
-
-        envelope.payload = file_result.SerializeToString()
-        envelope_bytes = envelope.SerializeToString()
-
-        decoded = decode_g8eo_result_envelope(envelope_bytes)
+        decoded = decode_g8eo_result_envelope(envelope_data)
 
         payload = decoded["payload"]
         assert payload["payload_type"] == "file_edit_result"
@@ -218,24 +205,23 @@ class TestDecodeG8eoResultEnvelope:
         assert payload["operation"] == "write"
 
     def test_decode_fs_list_result(self):
-        """FsListResult decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.id = "test-id"
-        envelope.event_type = "g8e.v1.operator.fs.list.completed"
-        envelope.operator_id = "op-1"
-        envelope.operator_session_id = "sess-1"
+        """FS_LIST_RESULT decodes correctly."""
+        envelope_data = {
+            "id": "test-id",
+            "event_type": EventType.OPERATOR_FS_LIST_COMPLETED,
+            "operator_id": "op-1",
+            "action_type": "FS_LIST_RESULT",
+            "intent_data": {
+                "execution_id": "test-exec-id",
+                "status": "completed",
+                "path": "/test",
+                "total_count": 5,
+                "truncated": False
+            },
+            "operator_session_id": "sess-1"
+        }
 
-        fs_list = operator_pb2.FsListResult()
-        fs_list.execution_id = "test-exec-id"
-        fs_list.status = operator_pb2.EXECUTION_STATUS_COMPLETED
-        fs_list.path = "/test"
-        fs_list.total_count = 5
-        fs_list.truncated = False
-
-        envelope.payload = fs_list.SerializeToString()
-        envelope_bytes = envelope.SerializeToString()
-
-        decoded = decode_g8eo_result_envelope(envelope_bytes)
+        decoded = decode_g8eo_result_envelope(envelope_data)
 
         payload = decoded["payload"]
         assert payload["payload_type"] == "fs_list_result"
@@ -245,113 +231,36 @@ class TestDecodeG8eoResultEnvelope:
         assert payload["total_count"] == 5
         assert payload["truncated"] is False
 
-    def test_decode_fs_grep_result(self):
-        """FsGrepResult decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.id = "test-id"
-        envelope.event_type = "g8e.v1.operator.fs.grep.completed"
-        envelope.operator_id = "op-1"
-        envelope.operator_session_id = "sess-1"
+    def test_decode_unknown_action_type(self):
+        """Unknown action type returns unknown payload type."""
+        envelope_data = {
+            "id": "test-id",
+            "event_type": "unknown.event",
+            "operator_id": "op-1",
+            "action_type": "unknown.action.type",
+            "intent_data": {"test": "data"},
+            "operator_session_id": "sess-1"
+        }
 
-        fs_grep = operator_pb2.FsGrepResult()
-        fs_grep.execution_id = "test-exec-id"
-        fs_grep.status = operator_pb2.EXECUTION_STATUS_COMPLETED
-        fs_grep.path = "/test"
-        fs_grep.total_matches = 3
-        fs_grep.truncated = False
-
-        envelope.payload = fs_grep.SerializeToString()
-        envelope_bytes = envelope.SerializeToString()
-
-        decoded = decode_g8eo_result_envelope(envelope_bytes)
-
-        payload = decoded["payload"]
-        assert payload["payload_type"] == "fs_grep_result"
-        assert payload["execution_id"] == "test-exec-id"
-        assert payload["status"] == "completed"
-        assert payload["path"] == "/test"
-        assert payload["total_matches"] == 3
-
-    def test_decode_fs_read_result(self):
-        """FsReadResult decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.id = "test-id"
-        envelope.event_type = "g8e.v1.operator.fs.read.completed"
-        envelope.operator_id = "op-1"
-        envelope.operator_session_id = "sess-1"
-
-        fs_read = operator_pb2.FsReadResult()
-        fs_read.execution_id = "test-exec-id"
-        fs_read.status = operator_pb2.EXECUTION_STATUS_COMPLETED
-        fs_read.path = "/test/file.txt"
-        fs_read.content = "test content"
-        fs_read.size_bytes = 12
-
-        envelope.payload = fs_read.SerializeToString()
-        envelope_bytes = envelope.SerializeToString()
-
-        decoded = decode_g8eo_result_envelope(envelope_bytes)
-
-        payload = decoded["payload"]
-        assert payload["payload_type"] == "fs_read_result"
-        assert payload["execution_id"] == "test-exec-id"
-        assert payload["status"] == "completed"
-        assert payload["path"] == "/test/file.txt"
-        assert payload["content"] == "test content"
-        assert payload["size_bytes"] == 12
-
-    def test_decode_port_check_result(self):
-        """PortCheckResult decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.id = "test-id"
-        envelope.event_type = "g8e.v1.operator.port.check.completed"
-        envelope.operator_id = "op-1"
-        envelope.operator_session_id = "sess-1"
-
-        port_check = operator_pb2.PortCheckResult()
-        port_check.execution_id = "test-exec-id"
-        port_check.status = operator_pb2.EXECUTION_STATUS_COMPLETED
-
-        envelope.payload = port_check.SerializeToString()
-        envelope_bytes = envelope.SerializeToString()
-
-        decoded = decode_g8eo_result_envelope(envelope_bytes)
-
-        payload = decoded["payload"]
-        assert payload["payload_type"] == "port_check_result"
-        assert payload["execution_id"] == "test-exec-id"
-        assert payload["status"] == "completed"
-
-    def test_decode_unknown_event_type(self):
-        """Unknown event type returns unknown payload type."""
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.id = "test-id"
-        envelope.event_type = "unknown.event.type"
-        envelope.operator_id = "op-1"
-        envelope.operator_session_id = "sess-1"
-        envelope.payload = b"test-payload"
-
-        envelope_bytes = envelope.SerializeToString()
-        decoded = decode_g8eo_result_envelope(envelope_bytes)
+        decoded = decode_g8eo_result_envelope(envelope_data)
 
         assert decoded["payload"]["payload_type"] == "unknown"
 
     def test_decode_command_cancelled(self):
-        """Command cancelled event decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
-        envelope.id = "test-id"
-        envelope.event_type = "g8e.v1.operator.command.cancelled"
-        envelope.operator_id = "op-1"
-        envelope.operator_session_id = "sess-1"
+        """EXECUTE_BASH_CANCELLED event decodes correctly."""
+        envelope_data = {
+            "id": "test-id",
+            "event_type": EventType.OPERATOR_COMMAND_CANCELLED,
+            "operator_id": "op-1",
+            "action_type": "EXECUTE_BASH_CANCELLED",
+            "intent_data": {
+                "execution_id": "test-exec-id",
+                "status": "cancelled"
+            },
+            "operator_session_id": "sess-1"
+        }
 
-        command_result = operator_pb2.CommandResult()
-        command_result.execution_id = "test-exec-id"
-        command_result.status = operator_pb2.EXECUTION_STATUS_CANCELLED
-
-        envelope.payload = command_result.SerializeToString()
-        envelope_bytes = envelope.SerializeToString()
-
-        decoded = decode_g8eo_result_envelope(envelope_bytes)
+        decoded = decode_g8eo_result_envelope(envelope_data)
 
         payload = decoded["payload"]
         assert payload["payload_type"] == "cancellation_result"

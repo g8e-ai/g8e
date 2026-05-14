@@ -5,12 +5,12 @@ parent: Architecture
 
 # g8e Pub/Sub Architecture
 
-Last Updated: 2026-05-11
-Version: v0.2.3
+Last Updated: 2026-05-12
+Version: v0.2.4
 
-The g8e platform utilizes a high-performance, WebSocket-based Pub/Sub system for all real-time inter-component communication. This decoupled architecture allows the central engine (`g8ee`) to orchestrate distributed agents (`g8eo` Operators) across heterogeneous environments without direct network visibility.
+The g8e platform utilizes a high-performance, WebSocket-based Pub/Sub system for all real-time inter-component communication. This decoupled architecture allows a central engine (bundled `g8ee` or BYO agent) to orchestrate distributed agents (`g8eo` Operators) across heterogeneous environments without direct network visibility.
 
-As of v0.2.0, the "g8es" component abstraction has been removed. The host listener is now the **Operator binary running in `--listen` mode**, which acts as the WebSocket broker for the platform.
+The host listener is the **Operator binary running in `--listen` mode**, which acts as the WebSocket broker for the platform.
 
 ---
 
@@ -20,21 +20,20 @@ The lifecycle of an Operator session is entirely governed by its pub/sub interac
 
 ### 1. Bootstrap & Authentication
 When an Operator starts, it identifies itself via a **Bootstrap Handshake**:
-- **Request**: Operator publishes a `UniversalEnvelope` to an ephemeral `auth.publish:session:{hash}` channel.
-- **Validation**: `g8ee` (via `SessionAuthListener`) validates the request and responds with a bootstrap configuration (API keys, resource limits, certs) on `auth.response:session:{hash}`.
+- **Request**: Operator publishes a UAP JSON envelope to an ephemeral `auth.publish:session:{hash}` channel.
+- **Validation**: The authentication authority (bundled `g8ee` or a substrate-native service) validates the request and responds with a bootstrap configuration (API keys, resource limits, certs) on `auth.response:session:{hash}`.
 - **Finalization**: Once authenticated, the Operator transitions to its dedicated per-session channels.
 
 ### 2. Activity Monitoring (Heartbeats)
 Operators maintain their `AVAILABLE` status by publishing periodic signals to their `heartbeat` channel. 
-- **Efficiency**: `g8ee` uses a single **Pattern Subscription** (`heartbeat:*`) to observe all active Operators simultaneously, avoiding the race conditions and overhead of per-session registration.
+- **Efficiency**: Clients use a single **Pattern Subscription** (`heartbeat:*`) to observe all active Operators simultaneously.
 - **Resource Tracking**: Heartbeats contain real-time CPU, Memory, and Disk metrics used for task scheduling and fleet monitoring.
 
 ### 3. Command Orchestration
 The primary function of the platform is the delivery and execution of commands:
-- **Dispatch**: `g8ee` publishes serialized `UniversalEnvelope` bytes to the Operator's `cmd` channel.
-- **Tracking**: `g8ee` registers an `asyncio.Future` correlated by `execution_id`.
-- **Execution**: The Operator executes the typed payload and publishes serialized `UniversalEnvelope` result bytes back to the `results` channel.
-- **Completion**: `g8ee` matches the `execution_id`, completes the future, and returns the result to the caller.
+- **Dispatch**: A client publishes UAP JSON envelope bytes to the Operator's `cmd` channel.
+- **Execution**: The Operator executes the typed payload and publishes UAP JSON result bytes back to the `results` channel.
+- **Completion**: The client matches the `execution_id` and processes the result.
 
 ---
 
@@ -45,9 +44,9 @@ Canonical format: `{prefix}:{operator_id}:{operator_session_id}`
 
 | Prefix | Source | Destination | Purpose |
 | :--- | :--- | :--- | :--- |
-| `cmd` | `g8ee` | `g8eo` | Command delivery and system control requests. |
-| `results` | `g8eo` | `g8ee` | Return of stdout, stderr, exit codes, and file artifacts. |
-| `heartbeat` | `g8eo` | `g8ee` | Signal of life and resource utilization. |
+| `cmd` | Client | `g8eo` | Command delivery and system control requests. |
+| `results` | `g8eo` | Client | Return of stdout, stderr, exit codes, and file artifacts. |
+| `heartbeat` | `g8eo` | Client | Signal of life and resource utilization. |
 
 ### Platform Broadcast Channels
 Broadcasting system-wide state changes to all listeners (primarily for the UI).
@@ -61,9 +60,9 @@ Broadcasting system-wide state changes to all listeners (primarily for the UI).
 
 ---
 
-## Universal Envelope & Protocol
+## Governance Envelope & Protocol
 
-All inter-component communication is governed by the **Universal Envelope** protocol defined in `@/shared/proto/common.proto`.
+All inter-component communication is governed by the **Governance Envelope** protocol defined in `@/shared/proto/common.proto`.
 
 ### Why the Envelope?
 The envelope provides a cryptographic and technical contract that separates routing from logic:
@@ -76,14 +75,14 @@ The envelope provides a cryptographic and technical contract that separates rout
 
 ## Governance & Safety
 
-Pub/Sub is the only way `g8ee` communicates with `g8eo`. This provides a critical security boundary:
+Pub/Sub is the primary channel for governed client-to-operator communication. This provides a critical security boundary:
 
 ### 1. No Inbound TCP
 Operators only require outbound WSS connectivity to the platform. No ports are opened on the target host, significantly reducing the attack surface.
 
 ### 2. 3-Layer Validation Hierarchy
 - **L1 Technical Bedrock**: Hard gates (e.g., `sudo`, `su`) enforced by code validators via Protobuf reflection.
-- **L2 Consensus (Tribunal)**: 5-agent plurality verification. Signatures are verified using a shared `auditor_hmac_key`.
+- **L2 Consensus (Tribunal)**: 5-agent plurality verification. Signatures are verified with trusted ED25519 signer keys.
 - **L3 Authorization (Approval)**: Human-in-the-loop by default. Auto-approval is authorization metadata and never bypasses L1 or L2.
 
 ### 3. Audit & Transparency

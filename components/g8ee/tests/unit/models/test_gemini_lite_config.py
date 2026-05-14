@@ -16,10 +16,10 @@ from app.models.model_configs import get_model_config
 
 
 def test_gemini_3_1_flash_lite_config():
-    """Verify that gemini-3.1-flash-lite-preview is correctly registered and configured."""
+    """Verify that gemini-3.1-flash-lite is correctly registered and configured."""
     config = get_model_config(GEMINI_3_1_FLASH_LITE)
 
-    assert config.name == "gemini-3.1-flash-lite-preview"
+    assert config.name == "gemini-3.1-flash-lite"
     assert config.supports_tools is True
     assert config.context_window_input == 1_000_000
     assert config.context_window_output == 64_000

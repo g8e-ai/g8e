@@ -24,14 +24,14 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0cpubsub.proto\x12\rg8e.pubsub.v1\">\n\rPubSubMessage\x12\x0e\n\x06\x61\x63tion\x18\x01 \x01(\t\x12\x0f\n\x07\x63hannel\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x03 \x01(\x0c\"K\n\x0bPubSubEvent\x12\x0c\n\x04type\x18\x01 \x01(\t\x12\x0f\n\x07\x63hannel\x18\x02 \x01(\t\x12\x0f\n\x07pattern\x18\x03 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x04 \x01(\x0c\x42=Z;github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0cpubsub.proto\x12\rg8e.pubsub.v1\">\n\rPubSubMessage\x12\x0e\n\x06\x61\x63tion\x18\x01 \x01(\t\x12\x0f\n\x07\x63hannel\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x03 \x01(\x0c\"K\n\x0bPubSubEvent\x12\x0c\n\x04type\x18\x01 \x01(\t\x12\x0f\n\x07\x63hannel\x18\x02 \x01(\t\x12\x0f\n\x07pattern\x18\x03 \x01(\t\x12\x0c\n\x04\x64\x61ta\x18\x04 \x01(\x0c\x42\x46ZDgithub.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/pubsubv1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'pubsub_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z;github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1'
+  _globals['DESCRIPTOR']._serialized_options = b'ZDgithub.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/pubsubv1'
   _globals['_PUBSUBMESSAGE']._serialized_start=31
   _globals['_PUBSUBMESSAGE']._serialized_end=93
   _globals['_PUBSUBEVENT']._serialized_start=95

@@ -23,14 +23,14 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$PROJECT_ROOT/.g8e}"
 LOG_DIR="$G8E_RUNTIME_DIR/logs"
 
-CORE_SERVICES="operator g8ee g8ed"
-ALL_SERVICES="operator g8ee g8ed"
+CORE_SERVICES="operator g8ee"
+ALL_SERVICES="operator g8ee"
 
 usage() {
     echo "Usage: ./g8e platform logs [options] [service...]"
     echo ""
     echo "Search and display platform logs across all components in time order."
-    echo "Default: last 200 lines from core services (operator, g8ee, g8ed), no follow."
+    echo "Default: last 200 lines from core services (operator, g8ee), no follow."
     echo ""
     echo "Filter options:"
     echo "  -g, --grep <pattern>    Include lines matching pattern (grep -Ei, case-insensitive)"
@@ -44,7 +44,7 @@ usage() {
     echo "  --all                   Include all services (default: core only)"
     echo ""
     echo "Services (optional, space-separated, overrides defaults):"
-    echo "  operator  g8ee  g8ed"
+    echo "  operator  g8ee"
     echo ""
     echo "Examples:"
     echo "  ./g8e platform logs                          # last 200 lines, all core services"
@@ -54,7 +54,7 @@ usage() {
     echo "  ./g8e platform logs --since 5m               # last 5 minutes"
     echo "  ./g8e platform logs --since 1h --level error # errors in last hour"
     echo "  ./g8e platform logs --invert 'cache (HIT|MISS)|healthcheck'"
-    echo "  ./g8e platform logs g8ee g8ed --tail 50"
+    echo "  ./g8e platform logs g8ee --tail 50"
     echo "  ./g8e platform logs operator                # operator listen mode logs"
     exit 0
 }
@@ -77,7 +77,7 @@ while [[ $# -gt 0 ]]; do
         -g|--grep) GREP_PATTERN="$2"; shift 2 ;;
         -v|--invert) INVERT_PATTERN="$2"; shift 2 ;;
         -s|--since) SINCE="$2"; shift 2 ;;
-        -l, --level)
+        -l|--level)
             case "${2,,}" in
                 error) LEVEL_PATTERN="error" ;;
                 warn)  LEVEL_PATTERN="warn" ;;
@@ -86,7 +86,7 @@ while [[ $# -gt 0 ]]; do
                 *) echo "[g8e] unknown level: '$2' (valid: error, warn, info, debug)" >&2; exit 1 ;;
             esac
             shift 2 ;;
-        operator|g8ee|g8ed) SERVICES+=("$1"); shift ;;
+        operator|g8ee) SERVICES+=("$1"); shift ;;
         *) echo "[g8e] unknown logs option: '$1'" >&2; exit 1 ;;
     esac
 done
@@ -104,7 +104,6 @@ _service_log_file() {
     case "$1" in
         operator) echo "$LOG_DIR/operator-listen.log" ;;
         g8ee)     echo "$LOG_DIR/g8ee.log" ;;
-        g8ed)     echo "$LOG_DIR/g8ed.log" ;;
         *)        echo "" ;;
     esac
 }

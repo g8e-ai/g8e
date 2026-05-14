@@ -19,7 +19,6 @@ from fastapi import Request
 from app.constants import (
     HTTP_FORWARDED_FOR_HEADER,
     HTTP_USER_AGENT_HEADER,
-    INTERNAL_AUTH_HEADER,
     PROXY_ORGANIZATION_ID_HEADER,
     PROXY_USER_EMAIL_HEADER,
     PROXY_USER_ID_HEADER,
@@ -33,15 +32,6 @@ from app.models.settings import G8eePlatformSettings
 from app.models.state import G8eeAppState
 
 logger = logging.getLogger(__name__)
-
-
-def verify_internal_auth_token(request: Request, settings: G8eePlatformSettings) -> bool:
-    """Verify the internal authentication token from headers."""
-    provided = request.headers.get(INTERNAL_AUTH_HEADER)
-    expected = settings.auth.internal_auth_token
-    if provided and expected:
-        return hmac.compare_digest(provided, expected)
-    return False
 
 
 def is_infrastructure_health_check_ip(ip: str) -> bool:
@@ -70,67 +60,8 @@ def is_infrastructure_health_check_ip(ip: str) -> bool:
     return False
 
 
-async def validate_internal_origin(request: Request, settings: G8eePlatformSettings | None = None) -> bool:
-    """Validate that the request originates from an internal source or health checker."""
-    client_ip = request.client.host if request.client else None
-    forwarded_for = request.headers.get(HTTP_FORWARDED_FOR_HEADER)
-    user_agent = request.headers.get(HTTP_USER_AGENT_HEADER)
-
-    normalized_ip = client_ip.replace("::ffff:", "") if client_ip and client_ip.startswith("::ffff:") else client_ip
-
-    if not settings and hasattr(request.app.state, "settings"):
-        state = cast(G8eeAppState, request.app.state)
-        settings = state.settings
-
-    if settings and verify_internal_auth_token(request, settings):
-        logger.info(
-            "[AUTH] Internal endpoint access granted via auth token",
-            extra={
-                "endpoint": request.url.path,
-                "ip": client_ip
-            }
-        )
-        return True
-
-    if is_infrastructure_health_check_ip(normalized_ip):
-        logger.info(
-            "[AUTH] Health check from GKE load balancer",
-            extra={
-                "endpoint": request.url.path,
-                "ip": normalized_ip
-            }
-        )
-        return True
-
-    if normalized_ip == "127.0.0.1" and request.url.path.startswith("/health"):
-        logger.info(
-            "[AUTH] Health check from localhost (container internal)",
-            extra={"endpoint": request.url.path}
-        )
-        return True
-
-    logger.warning(
-        "[AUTH] INTERNAL ENDPOINT ACCESS DENIED - missing or invalid auth token",
-        extra={
-            "endpoint": request.url.path,
-            "method": request.method,
-            "ip": client_ip,
-            "normalized_ip": normalized_ip if normalized_ip != client_ip else None,
-            "forwarded_for": forwarded_for,
-            "has_auth_token": bool(request.headers.get(INTERNAL_AUTH_HEADER)),
-            "has_expected_token": bool(settings and settings.auth.internal_auth_token),
-            "user_agent": user_agent
-        }
-    )
-
-    raise AuthorizationError(
-        "Forbidden - Internal endpoint requires authentication",
-        component=ComponentName.G8EE,
-    )
-
-
 async def authenticate_proxy_or_internal(request: Request, settings: G8eePlatformSettings) -> AuthenticatedUser:
-    """Authenticate the user via proxy headers or internal auth token."""
+    """Authenticate the user via proxy headers."""
     proxy_user_id = request.headers.get(PROXY_USER_ID_HEADER)
     proxy_user_email = request.headers.get(PROXY_USER_EMAIL_HEADER)
     proxy_org_id = request.headers.get(PROXY_ORGANIZATION_ID_HEADER)
@@ -151,26 +82,5 @@ async def authenticate_proxy_or_internal(request: Request, settings: G8eePlatfor
             organization_id=proxy_org_id,
             auth_method=AuthMethod.PROXY,
         )
-
-    if verify_internal_auth_token(request, settings):
-        g8e_user_id = request.headers.get(G8eHeaders.USER_ID.lower())
-        g8e_session_id = request.headers.get(G8eHeaders.WEB_SESSION_ID.lower())
-        g8e_org_id = request.headers.get(G8eHeaders.ORGANIZATION_ID.lower())
-
-        if g8e_user_id:
-            logger.info(
-                "[g8ee] Authenticated via internal auth token",
-                extra={
-                    "user_id": g8e_user_id,
-                    "web_session_id": g8e_session_id[:12] + "..." if g8e_session_id else None
-                }
-            )
-            return AuthenticatedUser(
-                uid=g8e_user_id,
-                user_id=g8e_user_id,
-                organization_id=g8e_org_id,
-                web_session_id=g8e_session_id,
-                auth_method=AuthMethod.INTERNAL,
-            )
 
     raise AuthenticationError("Authentication required", component=ComponentName.G8EE)

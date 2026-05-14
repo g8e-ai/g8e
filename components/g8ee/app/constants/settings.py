@@ -353,7 +353,7 @@ ANTHROPIC_CLAUDE_HAIKU_4_5      = "claude-haiku-4-5"
 
 GEMINI_3_1_PRO                  = "gemini-3.1-pro-preview"
 GEMINI_3_1_PRO_CUSTOM_TOOLS     = "gemini-3.1-pro-preview-customtools"
-GEMINI_3_1_FLASH_LITE           = "gemini-3.1-flash-lite-preview"
+GEMINI_3_1_FLASH_LITE           = "gemini-3.1-flash-lite"
 GEMINI_3_FLASH                  = "gemini-3-flash-preview"
 
 OLLAMA_QWEN3_5_122B             = "qwen3.5:122b"
@@ -492,7 +492,7 @@ MAX_OUTPUT_LENGTH               = 100_000
 
 # Certificates
 CLIENT_CERT_VALIDITY_DAYS = 365
-DEFAULT_SSL_DIR = os.environ.get("G8E_SSL_DIR", "/operator")
+DEFAULT_PKI_DIR = os.environ.get("G8E_PKI_DIR", "/operator/pki")
 CERT_SUBJECT_ORG          = "g8e Operator"
 CERT_SUBJECT_COUNTRY      = "US"
 CRL_ISSUER                = "g8e Platform CA"

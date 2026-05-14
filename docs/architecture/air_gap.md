@@ -5,10 +5,10 @@ parent: Architecture
 
 # Air-Gap Architecture
 
-Last Updated: 2026-05-11
-Version: v0.2.3
+Last Updated: 2026-05-12
+Version: v0.2.4
 
-g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through a self-contained three-component architecture, vendored dependencies, and local LLM inference.
+g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through a self-contained **Substrate** (Operator + Protocol), vendored dependencies, and optional local LLM inference.
 
 ---
 
@@ -17,8 +17,8 @@ g8e is designed for high-security environments where internet connectivity is st
 The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In this mode, the platform operates as a completely sealed unit:
 
 - **No Telemetry:** Zero outbound usage, health, or error data is sent to Lateralus Labs.
-- **Local Assets:** All frontend assets (fonts, icons, JS libraries) are served locally from the `g8ed` (Dashboard) component.
-- **Local Persistence:** All platform state, including chat history, settings, and secrets, is stored in a unified SQLite database managed by the `g8eo` (Operator) component in Listen Mode.
+- **Local Assets:** All frontend assets (fonts, icons, JS libraries) are served locally by the application layer.
+- **Local Persistence:** All platform state, including chat history, settings, and secrets, is stored in a unified SQLite database managed by the **Operator Substrate** (`g8eo`) in Listen Mode.
 
 ---
 
@@ -27,18 +27,18 @@ The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In th
 In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the `g8eo` (Operator) binary in **Listen Mode** (`--listen`). In this mode, the Operator acts as the platform's central persistence and messaging backbone rather than an outbound execution agent.
 
 ### Architecture & Ports
-The Operator backbone exposes two primary interfaces for internal component communication (Dashboard and Engine). While the binary defaults to port 443, the standard platform deployment maps these to:
+The Operator Substrate exposes interfaces for public protocol communication from optional adapters (Dashboard and Engine) and BYO clients. While the binary defaults to port 443, the standard platform deployment maps these to:
 
 | Port | Protocol | Purpose |
 |---|---|---|
-| **9000** | **HTTPS** | **Document Store & Vault:** Unified SQLite-backed API for `g8ee` and `g8ed`. |
+| **9000** | **HTTPS** | **Substrate API:** Document Store, Vault, and Protocol endpoints. |
 | **9001** | **WSS** | **Pub/Sub Broker:** Real-time messaging backbone for all platform events. |
 
 ### Core Responsibilities
 - **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file in `.g8e/data`.
 - **Internal PKI:** Acts as the platform's Certificate Authority (CA), auto-generating ECDSA P-384 TLS certificates for all inter-component traffic.
 - **Secret Management:** Provides an encrypted Vault for storing platform secrets (API keys, internal tokens) without external dependencies.
-- **Messaging:** Serves as the central Pub/Sub broker, ensuring state synchronization between the Dashboard and Engine.
+- **Messaging:** Serves as the central Pub/Sub broker for all compliant clients.
 
 ---
 

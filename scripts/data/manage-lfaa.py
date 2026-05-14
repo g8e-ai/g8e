@@ -207,7 +207,7 @@ class LFAAManager:
 
     def _fmt_session_summary(self, s: sqlite3.Row) -> str:
         event_count = self.conn.execute(
-            'SELECT COUNT(*) FROM events WHERE web_session_id = ?', (s['id'],)
+            'SELECT COUNT(*) FROM events WHERE operator_session_id = ?', (s['id'],)
         ).fetchone()[0]
         return (
             f"  {s['id'][:20]:<22}  "
@@ -265,7 +265,7 @@ class LFAAManager:
             return None
 
         counts = self.conn.execute(
-            'SELECT type, COUNT(*) as cnt FROM events WHERE web_session_id = ? GROUP BY type',
+            'SELECT type, COUNT(*) as cnt FROM events WHERE operator_session_id = ? GROUP BY type',
             (web_session_id,)
         ).fetchall()
 
@@ -295,16 +295,16 @@ class LFAAManager:
             params_filter.append(event_type)
 
         rows = self.conn.execute(
-            f'SELECT id, web_session_id, timestamp, type, content_text, command_raw, '
+            f'SELECT id, operator_session_id, timestamp, type, content_text, command_raw, '
             f'command_exit_code, command_stdout, command_stderr, execution_duration_ms, '
             f'stored_locally, stdout_truncated, stderr_truncated, encrypted '
-            f'FROM events WHERE web_session_id = ? {type_clause} '
+            f'FROM events WHERE operator_session_id = ? {type_clause} '
             f'ORDER BY timestamp DESC LIMIT ? OFFSET ?',
             params_filter + [limit, offset]
         ).fetchall()
 
         total = self.conn.execute(
-            f'SELECT COUNT(*) FROM events WHERE web_session_id = ? {type_clause}',
+            f'SELECT COUNT(*) FROM events WHERE operator_session_id = ? {type_clause}',
             params_filter
         ).fetchone()[0]
 
@@ -323,7 +323,7 @@ class LFAAManager:
 
     def get_event(self, event_id: int) -> Dict | None:
         row = self.conn.execute(
-            'SELECT id, web_session_id, timestamp, type, content_text, command_raw, '
+            'SELECT id, operator_session_id, timestamp, type, content_text, command_raw, '
             'command_exit_code, command_stdout, command_stderr, execution_duration_ms, '
             'stored_locally, stdout_truncated, stderr_truncated, encrypted '
             'FROM events WHERE id = ?', (event_id,)
@@ -335,7 +335,7 @@ class LFAAManager:
         print(f'\n{"=" * 80}')
         print(f'EVENT #{row["id"]}  [{row["type"]}]')
         print(f'{"=" * 80}')
-        print(f'  WebSession:    {row["web_session_id"]}')
+        print(f'  OperatorSession: {row["operator_session_id"]}')
         print(f'  Timestamp:  {row["timestamp"]}')
         print(f'  Encrypted:  {bool(row["encrypted"])}')
 
@@ -383,7 +383,7 @@ class LFAAManager:
         where_clauses = []
         params: List[Any] = []
         if web_session_id:
-            where_clauses.append('e.web_session_id = ?')
+            where_clauses.append('e.operator_session_id = ?')
             params.append(web_session_id)
         if filepath:
             where_clauses.append('fml.filepath LIKE ?')
@@ -393,7 +393,7 @@ class LFAAManager:
         rows = self.conn.execute(
             f'SELECT fml.id, fml.event_id, fml.filepath, fml.operation, '
             f'fml.ledger_hash_before, fml.ledger_hash_after, fml.diff_stat, '
-            f'e.timestamp, e.web_session_id '
+            f'e.timestamp, e.operator_session_id '
             f'FROM file_mutation_log fml '
             f'JOIN events e ON fml.event_id = e.id '
             f'{where_sql} ORDER BY e.timestamp DESC LIMIT ?',
@@ -439,8 +439,8 @@ class LFAAManager:
         oldest = self.conn.execute('SELECT MIN(timestamp) FROM events').fetchone()[0]
         newest = self.conn.execute('SELECT MAX(timestamp) FROM events').fetchone()[0]
         top_sessions = self.conn.execute(
-            'SELECT web_session_id, COUNT(*) as cnt FROM events '
-            'GROUP BY web_session_id ORDER BY cnt DESC LIMIT 5'
+            'SELECT operator_session_id, COUNT(*) as cnt FROM events '
+            'GROUP BY operator_session_id ORDER BY cnt DESC LIMIT 5'
         ).fetchall()
 
         db_size_bytes = os.path.getsize(self._local_db_path) if self._local_db_path else 0
@@ -467,7 +467,7 @@ class LFAAManager:
         if top_sessions:
             print('\n  Top Sessions by Event Count:')
             for row in top_sessions:
-                print(f'    {row["web_session_id"][:36]}  {row["cnt"]} events')
+                print(f'    {row["operator_session_id"][:36]}  {row["cnt"]} events')
         print(f'\n{"=" * 60}\n')
 
         return {
@@ -477,6 +477,161 @@ class LFAAManager:
             'encrypted_events': encrypted_count,
             'db_size_bytes': db_size_bytes,
         }
+
+    def summary(self) -> None:
+        """Print comprehensive governance summary reports."""
+        print(f'\n{"=" * 80}')
+        print('GOVERNANCE SUMMARY: Intercept Rate (The Insurance Policy)')
+        print('  Distribution of audit events showing how often the platform is')
+        print('  insuring you by blocking potentially harmful or tampered activity.')
+        print('  (Note: Percentages represent aggregate history from this database)')
+        print(f'{"=" * 80}')
+
+        # Hardcoded expected distribution for Chaos Tester comparison
+        # GOOD_ACTOR (70%), PROMPT_INJECTION (20%), MITM (10%)
+        # Note: mapping to audit event types
+        expected_dist = {
+            'action_receipt': 70.0,
+            'L1_BLOCKED': 20.0,
+            'HASH_FAIL': 10.0,
+        }
+
+        rows = self.conn.execute("""
+            SELECT
+              type AS status,
+              COUNT(*) AS count,
+              ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM events), 1) AS percent
+            FROM events
+            GROUP BY type
+            ORDER BY count DESC
+        """).fetchall()
+
+        print(f"  {'STATUS':<20} {'ACTUAL':>8} {'%':>8}   {'EXPECTED':>8} {'DIFF':>8}")
+        print(f"  {'-' * 18:<20} {'-' * 8:>8} {'-' * 8:>8}   {'-' * 8:>8} {'-' * 8:>8}")
+
+        for r in rows:
+            status = r['status']
+            actual_count = r['count']
+            actual_percent = r['percent']
+            expected_percent = expected_dist.get(status, 0.0)
+            diff = actual_percent - expected_percent
+            diff_str = f"{diff:+.1f}%" if expected_percent > 0 else "N/A"
+
+            print(f"  {status:<20} {actual_count:>8} {actual_percent:>7}%   {expected_percent:>7}% {diff_str:>8}")
+
+        print(f'\n{"=" * 80}')
+        print('GOVERNANCE SUMMARY: Attack Pattern Analysis (L1 Blocks)')
+        print('  Top command patterns blocked by L1 Bedrock (forbidden patterns).')
+        print(f'{"=" * 80}')
+        rows = self.conn.execute("""
+            SELECT
+              command_raw AS command_pattern,
+              COUNT(*) AS attempts
+            FROM events
+            WHERE type = 'L1_BLOCKED'
+            GROUP BY command_raw
+            ORDER BY attempts DESC
+            LIMIT 10
+        """).fetchall()
+        if not rows:
+            print('  No L1 blocks found')
+        else:
+            for r in rows:
+                print(f"  {r['attempts']:>4}x  {r['command_pattern']}")
+
+        print(f'\n{"=" * 80}')
+        print('GOVERNANCE SUMMARY: Action Type Distribution')
+        print('  Matrix of action types vs outcomes (EXECUTED vs BLOCKED).')
+        print('  Used to identify which capabilities are targeted for abuse.')
+        print(f'{"=" * 80}')
+        rows = self.conn.execute("""
+            SELECT
+              substr(command_raw, 1, instr(command_raw, ' /') - 1) AS action_type,
+              type AS outcome,
+              COUNT(*) AS count
+            FROM events
+            WHERE command_raw LIKE '% /%'
+            GROUP BY action_type, outcome
+            ORDER BY action_type, count DESC
+        """).fetchall()
+        if not rows:
+            print('  No actions found')
+        else:
+            for r in rows:
+                action = r['action_type'] or 'UNKNOWN'
+                print(f"  {action:<20} {r['outcome']:<15} {r['count']:>5}")
+
+        print(f'\n{"=" * 80}')
+        print('GOVERNANCE SUMMARY: Integrity Verification')
+        print('  Frequency of simulated MitM tampering (HASH_FAIL events).')
+        print(f'{"=" * 80}')
+        row = self.conn.execute("""
+            SELECT
+              COUNT(*) AS tampered_attempts,
+              ROUND(COUNT(*) * 100.0 / MAX(1, (SELECT COUNT(*) FROM events)), 1) AS percent
+            FROM events
+            WHERE type = 'HASH_FAIL'
+        """).fetchone()
+        print(f"  Tampered Envelopes: {row['tampered_attempts']} ({row['percent']}%)")
+
+        print(f'\n{"=" * 80}')
+        print('GOVERNANCE SUMMARY: Session Activity')
+        print('  Audit event distribution grouped by operator session.')
+        print(f'{"=" * 80}')
+        rows = self.conn.execute("""
+            SELECT operator_session_id, type, COUNT(*) AS count
+            FROM events
+            GROUP BY operator_session_id, type
+            ORDER BY count DESC
+        """).fetchall()
+        for r in rows:
+            print(f"  {r['operator_session_id']:<30} {r['type']:<20} {r['count']:>8}")
+
+        print(f'\n{"=" * 80}')
+        print('GOVERNANCE SUMMARY: Temporal Throughput (Events/sec)')
+        print('  Real-time performance metric showing events processed per second.')
+        print(f'{"=" * 80}')
+        rows = self.conn.execute("""
+            SELECT
+              strftime('%Y-%m-%d %H:%M:%S', timestamp) AS second,
+              type,
+              COUNT(*) AS events_per_sec
+            FROM events
+            GROUP BY second, type
+            ORDER BY second DESC, events_per_sec DESC
+            LIMIT 15
+        """).fetchall()
+        for r in rows:
+            print(f"  {r['second']}  {r['type']:<20} {r['events_per_sec']:>4} events/sec")
+        print(f'{"=" * 80}\n')
+
+    def ledger(self, action: str, limit: int = 10, pattern: str | None = None, commit: str | None = None) -> None:
+        """Git Ledger operations."""
+        ledger_dir = os.path.join(os.path.dirname(self._local_db_path), 'ledger')
+        if not os.path.exists(ledger_dir):
+            print(f"Ledger directory not found: {ledger_dir}")
+            return
+
+        if action == 'log':
+            cmd = ['git', '-C', ledger_dir, 'log', '--pretty=format:%h - %ad : %s', '--date=iso', f'-n{limit}']
+            subprocess.run(cmd)
+            print()
+        elif action == 'show':
+            if not commit:
+                print("Error: --commit required for 'show' action")
+                return
+            cmd = ['git', '-C', ledger_dir, 'show', commit]
+            subprocess.run(cmd)
+        elif action == 'grep':
+            if not pattern:
+                print("Error: --pattern required for 'grep' action")
+                return
+            cmd = ['git', '-C', ledger_dir, 'log', f'--grep={pattern}', '--oneline']
+            subprocess.run(cmd)
+            print()
+        elif action == 'verify':
+            cmd = ['git', '-C', ledger_dir, 'fsck']
+            subprocess.run(cmd)
 
     def export_session(self, web_session_id: str, output_path: str | None,
                        fmt: str = 'json') -> None:
@@ -489,10 +644,10 @@ class LFAAManager:
             return
 
         rows = self.conn.execute(
-            'SELECT id, web_session_id, timestamp, type, content_text, command_raw, '
+            'SELECT id, operator_session_id, timestamp, type, content_text, command_raw, '
             'command_exit_code, command_stdout, command_stderr, execution_duration_ms, '
             'stored_locally, stdout_truncated, stderr_truncated, encrypted '
-            'FROM events WHERE web_session_id = ? ORDER BY timestamp ASC',
+            'FROM events WHERE operator_session_id = ? ORDER BY timestamp ASC',
             (web_session_id,)
         ).fetchall()
 
@@ -500,7 +655,7 @@ class LFAAManager:
         for row in rows:
             event: Dict[str, Any] = {
                 'id': row['id'],
-                'web_session_id': row['web_session_id'],
+                'operator_session_id': row['operator_session_id'],
                 'timestamp': row['timestamp'],
                 'type': row['type'],
                 'content_text': self._decode(row['content_text']) or None,
@@ -610,6 +765,16 @@ Examples:
     # stats
     subparsers.add_parser('stats', help='Show audit vault statistics')
 
+    # summary
+    subparsers.add_parser('summary', help='Show comprehensive governance summary reports')
+
+    # ledger
+    sp = subparsers.add_parser('ledger', help='Git Ledger operations')
+    sp.add_argument('action', choices=['log', 'show', 'grep', 'verify'], help='Ledger action')
+    sp.add_argument('--limit', type=int, default=10, help='Limit for log output')
+    sp.add_argument('--pattern', help='Search pattern for grep')
+    sp.add_argument('--commit', help='Commit hash for show')
+
     # export
     sp = subparsers.add_parser('export', help='Export all events for a session to JSON/JSONL')
     sp.add_argument('--session', dest='web_session_id', required=True, help='WebSession ID')
@@ -660,6 +825,10 @@ def run(argv: List[str]) -> int:
             )
         elif args.command == 'stats':
             manager.stats()
+        elif args.command == 'summary':
+            manager.summary()
+        elif args.command == 'ledger':
+            manager.ledger(args.action, limit=args.limit, pattern=args.pattern, commit=args.commit)
         elif args.command == 'export':
             manager.export_session(
                 web_session_id=args.web_session_id,

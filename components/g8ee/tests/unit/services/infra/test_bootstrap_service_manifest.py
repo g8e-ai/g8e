@@ -56,57 +56,52 @@ def volume(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def bootstrap(volume: Path) -> BootstrapService:
-    return BootstrapService(volume_path=str(volume))
+    return BootstrapService(secrets_dir=str(volume), pki_dir=str(volume))
 
 
 def test_verify_passes_when_digest_matches(volume: Path, bootstrap: BootstrapService) -> None:
-    token = "matching-token"
-    _write_manifest(volume, {"internal_auth_token": token})
+    token = "matching-session-key"
+    _write_manifest(volume, {"session_encryption_key": token})
 
-    # Should not raise.
-    bootstrap.verify_against_manifest("internal_auth_token", token)
+    bootstrap.verify_against_manifest("session_encryption_key", token)
 
 
 def test_verify_raises_when_digest_mismatches(volume: Path, bootstrap: BootstrapService) -> None:
-    _write_manifest(volume, {"internal_auth_token": "db-authoritative"})
+    _write_manifest(volume, {"session_encryption_key": "db-authoritative"})
 
     with pytest.raises(BootstrapSecretTamperError, match="failed tamper-evidence check"):
-        bootstrap.verify_against_manifest("internal_auth_token", "tampered-volume-value")
+        bootstrap.verify_against_manifest("session_encryption_key", "tampered-volume-value")
 
 
 def test_verify_noop_for_empty_value(volume: Path, bootstrap: BootstrapService) -> None:
-    _write_manifest(volume, {"internal_auth_token": "anything"})
+    _write_manifest(volume, {"session_encryption_key": "anything"})
 
-    # Empty/None value: nothing to compare; the caller already decided not
-    # to authenticate with it. Must not raise.
-    bootstrap.verify_against_manifest("internal_auth_token", "")
-    bootstrap.verify_against_manifest("internal_auth_token", None)
+    bootstrap.verify_against_manifest("session_encryption_key", "")
+    bootstrap.verify_against_manifest("session_encryption_key", None)
 
 
 def test_verify_skips_when_manifest_missing(volume: Path, bootstrap: BootstrapService) -> None:
-    # Transitional window: old g8eo that never wrote a manifest. Log+skip,
-    # do not hard-fail, otherwise upgrade order becomes a deploy footgun.
-    bootstrap.verify_against_manifest("internal_auth_token", "any-value")
+    bootstrap.verify_against_manifest("session_encryption_key", "any-value")
 
 
 def test_verify_skips_when_manifest_has_no_entry(volume: Path, bootstrap: BootstrapService) -> None:
-    _write_manifest(volume, {"session_encryption_key": "k"})
+    _write_manifest(volume, {"auditor_hmac_key": "k"})
 
-    bootstrap.verify_against_manifest("internal_auth_token", "any-value")
+    bootstrap.verify_against_manifest("session_encryption_key", "any-value")
 
 
 def test_verify_raises_on_malformed_manifest(volume: Path, bootstrap: BootstrapService) -> None:
     (volume / BOOTSTRAP_DIGEST_MANIFEST_FILE).write_text("{not valid json")
 
     with pytest.raises(BootstrapSecretTamperError, match="unreadable or malformed"):
-        bootstrap.verify_against_manifest("internal_auth_token", "any-value")
+        bootstrap.verify_against_manifest("session_encryption_key", "any-value")
 
 
 def test_verify_session_key_independently(volume: Path, bootstrap: BootstrapService) -> None:
     key = "a" * 64
     _write_manifest(
         volume,
-        {"internal_auth_token": "tok", "session_encryption_key": key},
+        {"session_encryption_key": key},
     )
 
     bootstrap.verify_against_manifest("session_encryption_key", key)
@@ -124,7 +119,6 @@ def test_verify_auditor_hmac_key_independently(volume: Path, bootstrap: Bootstra
     _write_manifest(
         volume,
         {
-            "internal_auth_token": "tok",
             "session_encryption_key": "s" * 64,
             "auditor_hmac_key": key,
         },

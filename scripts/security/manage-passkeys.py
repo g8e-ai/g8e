@@ -14,8 +14,7 @@
 """
 Passkey Management Script for g8e Platform
 
-Manage FIDO2/WebAuthn passkey credentials via the g8ed internal HTTP API.
-Runs inside g8ep and communicates with g8ed over the internal network.
+Manage FIDO2/WebAuthn passkey credentials via the Operator (g8eo) HTTP API.
 
 Usage:
     ./g8e security passkeys list --id USER_ID
@@ -39,16 +38,10 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.absolute()
 sys.path.insert(0, str(PROJECT_ROOT / 'scripts' / 'data'))
 
 from _lib import (
-    G8ED_BASE_URL,
+    OPERATOR_BASE_URL,
     resolve_user_id,
-    g8ed_request,
+    operator_request,
 )
-
-INTERNAL_USER_BASE = f'{G8ED_BASE_URL}/api/internal/users'
-
-
-def _api_request(method: str, path: str, body: Dict | None = None) -> Dict:
-    return g8ed_request(method, f'{INTERNAL_USER_BASE}{path}', body)
 
 
 class PasskeyManager:
@@ -74,11 +67,12 @@ class PasskeyManager:
         if not uid:
             return None
 
-        result = _api_request('GET', f'/{uid}/passkeys')
-        if not result.get('success'):
-            raise RuntimeError(result.get('error', 'Failed to list passkeys'))
+        # Get user document directly
+        user = operator_request('GET', f'/db/users/{uid}')
+        if not user:
+            raise RuntimeError(f'User not found: {uid}')
 
-        credentials = result.get('credentials', [])
+        credentials = user.get('passkey_credentials', [])
         identifier = email or uid
 
         print(f"\nPasskey credentials for {identifier} ({len(credentials)} registered)")
@@ -93,7 +87,7 @@ class PasskeyManager:
             print()
             print("  Full credential IDs:")
             for i, cred in enumerate(credentials):
-                print(f"  [{i + 1}] {cred.get('id')}")
+                print(f"  [{i + 1}] {cred.get('id', 'N/A')}")
         print()
         return credentials
 
@@ -114,19 +108,25 @@ class PasskeyManager:
                 print("Revocation cancelled.")
                 return False
 
-        del_result = _api_request('DELETE', f'/{uid}/passkeys/{urllib.parse.quote(credential_id, safe="")}')
-        if not del_result.get('success'):
-            if del_result.get('_status_code') == 404:
-                error = del_result.get('error', '')
-                if 'credential' in error.lower():
-                    print(f"\nCredential not found: {credential_id}")
-                    print("  Use 'list' to see registered credential IDs.")
-                else:
-                    print(f"\nUser not found: {uid}")
-                return False
-            raise RuntimeError(del_result.get('error', 'Failed to revoke credential'))
+        # Get user and remove credential
+        user = operator_request('GET', f'/db/users/{uid}')
+        if not user:
+            print(f"\nUser not found: {uid}")
+            return False
 
-        remaining = del_result.get('remaining', 0)
+        credentials = user.get('passkey_credentials', [])
+        new_credentials = [c for c in credentials if c.get('id') != credential_id]
+        
+        if len(new_credentials) == len(credentials):
+            print(f"\nCredential not found: {credential_id}")
+            print("  Use 'list' to see registered credential IDs.")
+            return False
+
+        user['passkey_credentials'] = new_credentials
+        user['updated_at'] = int(__import__('time').time() * 1000)
+        operator_request('PUT', f'/db/users/{uid}', user)
+
+        remaining = len(new_credentials)
         print(f"\nCredential revoked. User has {remaining} passkey(s) remaining.")
         if remaining == 0:
             print("  User must re-register a passkey at the setup page.")
@@ -150,19 +150,23 @@ class PasskeyManager:
                 print("Reset cancelled.")
                 return False
 
-        del_result = _api_request('DELETE', f'/{uid}/passkeys')
-        if not del_result.get('success'):
-            if del_result.get('_status_code') == 404:
-                print(f"\nUser not found: {uid}")
-                return False
-            raise RuntimeError(del_result.get('error', 'Failed to reset passkeys'))
+        # Get user and clear credentials
+        user = operator_request('GET', f'/db/users/{uid}')
+        if not user:
+            print(f"\nUser not found: {uid}")
+            return False
 
-        revoked = del_result.get('revoked', 0)
+        revoked = len(user.get('passkey_credentials', []))
         if revoked == 0:
             print(f"\nNo passkeys registered for {identifier}. Nothing to reset.")
-        else:
-            print(f"\nPasskey reset complete for {identifier} ({revoked} credential(s) removed).")
-            print("  User will be prompted to register a new passkey on next login.")
+            return True
+
+        user['passkey_credentials'] = []
+        user['updated_at'] = int(__import__('time').time() * 1000)
+        operator_request('PUT', f'/db/users/{uid}', user)
+
+        print(f"\nPasskey reset complete for {identifier} ({revoked} credential(s) removed).")
+        print("  User will be prompted to register a new passkey on next login.")
         print()
         return True
 
@@ -182,19 +186,23 @@ class PasskeyManager:
                 print("Revocation cancelled.")
                 return False
 
-        del_result = _api_request('DELETE', f'/{uid}/passkeys')
-        if not del_result.get('success'):
-            if del_result.get('_status_code') == 404:
-                print(f"\nUser not found: {uid}")
-                return False
-            raise RuntimeError(del_result.get('error', 'Failed to revoke passkeys'))
+        # Get user and clear credentials
+        user = operator_request('GET', f'/db/users/{uid}')
+        if not user:
+            print(f"\nUser not found: {uid}")
+            return False
 
-        revoked = del_result.get('revoked', 0)
+        revoked = len(user.get('passkey_credentials', []))
         if revoked == 0:
             print(f"\nNo passkeys registered for {identifier}. Nothing to revoke.")
-        else:
-            print(f"\nAll {revoked} passkey credential(s) revoked for {identifier}.")
-            print("  User must re-register a passkey at the setup page.")
+            return True
+
+        user['passkey_credentials'] = []
+        user['updated_at'] = int(__import__('time').time() * 1000)
+        operator_request('PUT', f'/db/users/{uid}', user)
+
+        print(f"\nAll {revoked} passkey credential(s) revoked for {identifier}.")
+        print("  User must re-register a passkey at the setup page.")
         print()
         return True
 

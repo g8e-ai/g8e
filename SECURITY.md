@@ -29,8 +29,8 @@ The following are in scope for security reports:
 - **Engine (g8ee)** -- Reasoning plane, the Tribunal consensus ensemble, and L2 signature generation.
 - **Operator (g8eo)** -- Execution plane, L1 technical bedrock enforcement, and output scrubbing.
 - **Governance layers** -- L1 (Hard Gates), L2 (Consensus), and L3 (Human-in-the-loop).
-- **Universal Envelope** -- Cryptographic binding of identity, context, and governance metadata.
-- **Inter-service communication** -- mTLS (TLS 1.3) and `X-Internal-Auth` token enforcement.
+- **Governance Envelope** -- Cryptographic binding of identity, context, and governance metadata.
+- **Inter-service communication** -- mTLS (TLS 1.3) only. `X-Internal-Auth` and internal-origin trust have been removed in favor of strict workload identity.
 - **Local-First Audit Architecture (LFAA)** -- Encrypted SQLite audit vaults and the Git ledger.
 
 The following are out of scope:
@@ -70,6 +70,6 @@ State-changing operations require a **Proof of Human Presence (PHP)**.
 - **mTLS Everywhere**: All component communication is secured via TLS 1.3 with mutual authentication and a private internal CA.
 - **Output Scrubbing (Sentinel)**: `g8eo` scrubs terminal output for credentials, PII, and secrets before it leaves the host.
 - **Data Sovereignty**: Audit logs are stored in encrypted SQLite vaults on the Operator host. A hidden Git ledger provides a diffable history of all AI-driven file mutations.
-- **Secret Containment**: Authoritative secrets (HMAC keys, SSL certs) are stored in a repo-local host-owned directory (`./.g8e/ssl`) and are never bind-mounted into untrusted containers.
+- **Secret Containment**: Authoritative secrets are stored under repo-local host-owned PKI and secrets directories (`./.g8e/pki` and `./.g8e/secrets`) and are never bind-mounted into untrusted containers.
 
 For full details, see [docs/architecture/security.md](docs/architecture/security.md).

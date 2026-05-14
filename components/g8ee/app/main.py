@@ -101,26 +101,39 @@ async def _connect_clients(settings):
     HTTP client is created by ServiceFactory (InternalHttpClient).
     """
     ca = settings.ca_cert_path
-    token = settings.auth.internal_auth_token
+    cert = settings.client_cert_path
+    key = settings.client_key_path
     auditor_hmac_key = settings.auth.auditor_hmac_key
 
-    db_client = DBClient(ca_cert_path=ca, internal_auth_token=token)
+    db_client = DBClient(
+        ca_cert_path=ca,
+        client_cert_path=cert,
+        client_key_path=key
+    )
     await db_client.connect()
 
     kv_cache_client = KVCacheClient(
-        component_name=ComponentName.G8EE, ca_cert_path=ca, internal_auth_token=token,
+        component_name=ComponentName.G8EE,
+        ca_cert_path=ca,
+        client_cert_path=cert,
+        client_key_path=key,
     )
     await kv_cache_client.connect()
 
     pubsub_client = PubSubClient(
         component_name=ComponentName.G8EE,
         ca_cert_path=ca,
-        internal_auth_token=token,
+        client_cert_path=cert,
+        client_key_path=key,
         auditor_hmac_key=auditor_hmac_key,
     )
     await pubsub_client.connect()
 
-    blob_client = BlobClient(ca_cert_path=ca, internal_auth_token=token)
+    blob_client = BlobClient(
+        ca_cert_path=ca,
+        client_cert_path=cert,
+        client_key_path=key
+    )
     await blob_client.connect()
 
     return db_client, kv_cache_client, pubsub_client, blob_client

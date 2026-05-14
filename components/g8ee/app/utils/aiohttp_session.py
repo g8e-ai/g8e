@@ -40,14 +40,28 @@ import aiohttp
 from app.utils.json_utils import _json_dumps
 
 
-def _resolve_ssl_context(ca_cert_paths: tuple[str | None, ...], use_tls: bool = False) -> ssl.SSLContext | bool:
+def _resolve_ssl_context(
+    ca_cert_paths: tuple[str | None, ...],
+    use_tls: bool = False,
+    certfile: str | None = None,
+    keyfile: str | None = None,
+) -> ssl.SSLContext | bool:
     """Return an SSL context for the first existing cert path, or True if TLS requested without cert."""
     for path in ca_cert_paths:
         if path:
             try:
                 with open(path):
                     pass
-                return ssl.create_default_context(cafile=path)
+                ctx = ssl.create_default_context(cafile=path)
+                if certfile and keyfile:
+                    try:
+                        with open(certfile), open(keyfile):
+                            ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
+                    except (OSError, ssl.SSLError) as e:
+                        # Log but continue with just CA if client cert loading fails
+                        import logging
+                        logging.getLogger(__name__).warning("Failed to load client cert chain: %s", e)
+                return ctx
             except OSError:
                 continue
     return True if use_tls else False
@@ -64,6 +78,8 @@ def new_kv_http_session(
     timeout: aiohttp.ClientTimeout,
     ca_cert_path: str,
     headers: dict[str, str],
+    client_cert_path: str | None = None,
+    client_key_path: str | None = None,
 ) -> aiohttp.ClientSession:
     """Session for KV/REST HTTP requests to the Operator listen port.
 
@@ -75,7 +91,12 @@ def new_kv_http_session(
         return existing
 
     use_tls = _url_uses_tls(base_url)
-    ssl_ctx = _resolve_ssl_context((ca_cert_path,), use_tls=use_tls)
+    ssl_ctx = _resolve_ssl_context(
+        (ca_cert_path,),
+        use_tls=use_tls,
+        certfile=client_cert_path,
+        keyfile=client_key_path,
+    )
     connector = aiohttp.TCPConnector(ssl=ssl_ctx)
 
     default_headers = {"Content-Type": "application/json"}
@@ -110,6 +131,8 @@ def new_pubsub_ws_session(
 def resolve_pubsub_ssl_context(
     ca_cert_path: str | None = None,
     use_tls: bool = False,
+    certfile: str | None = None,
+    keyfile: str | None = None,
     **kwargs,
 ) -> ssl.SSLContext | bool:
     """Resolve the SSL context for WebSocket pub/sub connections.
@@ -122,7 +145,12 @@ def resolve_pubsub_ssl_context(
         or kwargs.get("pubsub_ca_cert")
         or kwargs.get("ssl_cert_file")
     )
-    return _resolve_ssl_context((actual_path,), use_tls=use_tls)
+    return _resolve_ssl_context(
+        (actual_path,),
+        use_tls=use_tls,
+        certfile=certfile,
+        keyfile=keyfile
+    )
 
 
 def new_component_http_session(
@@ -131,6 +159,8 @@ def new_component_http_session(
     timeout: aiohttp.ClientTimeout,
     ca_cert_path: str,
     headers: dict[str, str],
+    client_cert_path: str | None = None,
+    client_key_path: str | None = None,
 ) -> aiohttp.ClientSession:
     """Session for inter-component HTTP (HTTPClient , CacheAsideService).
 
@@ -141,7 +171,12 @@ def new_component_http_session(
     if existing is not None and not existing.closed:
         return existing
 
-    ssl_ctx = _resolve_ssl_context((ca_cert_path,), use_tls=True)
+    ssl_ctx = _resolve_ssl_context(
+        (ca_cert_path,),
+        use_tls=True,
+        certfile=client_cert_path,
+        keyfile=client_key_path,
+    )
     connector = aiohttp.TCPConnector(ssl=ssl_ctx)
 
     return aiohttp.ClientSession(

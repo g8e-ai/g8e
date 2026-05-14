@@ -34,7 +34,8 @@ from app.utils.aiohttp_session import new_kv_http_session
 from app.constants import (
     ComponentName,
     ErrorCode,
-    INTERNAL_AUTH_HEADER,
+    OPERATOR_SESSION_ID_HEADER,
+    OPERATOR_API_KEY_HEADER,
     HTTP_CONTENT_TYPE_HEADER,
 )
 from app.errors import NetworkError
@@ -58,8 +59,11 @@ class KVCacheClient:
         component_name: ComponentName = ComponentName.G8EE,
         timeout: float = 10.0,
         ca_cert_path: str | None = None,
-        internal_auth_token: str | None = None,
+        operator_session_id: str | None = None,
+        operator_api_key: str | None = None,
         listen_settings: ListenSettings | None = None,
+        client_cert_path: str | None = None,
+        client_key_path: str | None = None,
     ):
         if listen_settings is None:
             service = SettingsService()
@@ -69,21 +73,29 @@ class KVCacheClient:
         self.component_name = component_name
         self._timeout = timeout
         self._ca_cert_path = ca_cert_path
-        self._internal_auth_token = internal_auth_token
+        self._client_cert_path = client_cert_path
+        self._client_key_path = client_key_path
+        self._operator_session_id = operator_session_id
+        self._operator_api_key = operator_api_key
         self._session: aiohttp.ClientSession | None = None
         self._healthy = False
 
     async def _get_http_session(self) -> aiohttp.ClientSession:
         """HTTP session for KV/REST requests."""
         headers = {HTTP_CONTENT_TYPE_HEADER: "application/json"}
-        if self._internal_auth_token:
-            headers[INTERNAL_AUTH_HEADER] = self._internal_auth_token
+        # Priority: operator_session_id > operator_api_key
+        if self._operator_session_id:
+            headers[OPERATOR_SESSION_ID_HEADER] = self._operator_session_id
+        elif self._operator_api_key:
+            headers[OPERATOR_API_KEY_HEADER] = self._operator_api_key
 
         self._session = new_kv_http_session(
             self._session,
             base_url=self.http_url,
             timeout=aiohttp.ClientTimeout(total=self._timeout),
             ca_cert_path=self._ca_cert_path,
+            client_cert_path=self._client_cert_path,
+            client_key_path=self._client_key_path,
             headers=headers,
         )
         return self._session

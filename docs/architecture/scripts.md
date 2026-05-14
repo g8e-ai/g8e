@@ -6,7 +6,7 @@ parent: Architecture
 # g8e Scripts
 
 Last Updated: 2026-05-11
-Version: v0.2.3
+Version: v0.2.4
 
 The scripts layer provides the operational interface for the g8e platform. It has been migrated from container orchestration to host-native lifecycle management for Operator, Dashboard (g8ed), and Engine (g8ee).
 
@@ -18,12 +18,12 @@ g8e uses a host-native target model. Operator listen mode owns local persistence
 
 The root `./g8e` script is a Bash-based dispatcher. It is the only script an operator should invoke directly on the host.
 
-- **Host Runtime State:** Generated platform runtime state is rooted at `./.g8e`, including `data`, `ssl`, `pids`, and `logs`. Managed services receive the SSL path via `G8E_SSL_DIR`.
+- **Host Runtime State:** Generated platform runtime state is rooted at `./.g8e`, including `data`, `pki`, `secrets`, `pids`, and `logs`. Tooling receives trust material through `G8E_TRUST_BUNDLE` and bootstrap secrets through `G8E_SECRETS_DIR`.
 - **Session Management:** Commands targeting the internal API (`data`, `security`, `mcp`, `operator`) are gated by a local credential store (`~/.g8e/credentials`) which is populated via `./g8e login`.
 
 ### Execution Flow
 1. **Host-Side:** Commands like `platform start` or `operator build` run directly on the host, managing Operator listen mode and component lifecycle.
-2. **Tooling-Side:** Commands like `data users list` or `security validate` run with the platform environment populated, including internal URLs and the host SSL path, often delegating to Python or Node.js helpers.
+2. **Tooling-Side:** Commands like `data users list` or `security validate` run with the platform environment populated, including internal URLs, the host trust bundle, and the host secrets directory, often delegating to Python or Node.js helpers.
 
 ---
 
@@ -35,8 +35,8 @@ Orchestrates platform lifecycle via `scripts/core/build.sh`.
 - **`start` / `stop` / `restart`:** Host-native service lifecycle. `start` waits for service health checks.
 - **`rebuild`:** Restarts managed services (g8ee, g8ed). Unlike legacy container models, this does not build images but restarts host processes.
 - **`setup`:** Initial platform configuration and service initialization.
-- **`reset`:** Destructive. Wipes Dashboard/Engine data and Operator listen-mode data, while preserving TLS material in `./.g8e/ssl`.
-- **`wipe`:** Clears application data via the Operator listen-mode API. Preserves platform settings, SSL certs, and authentication state.
+- **`reset`:** Destructive. Wipes Dashboard/Engine data, Operator listen-mode data, and bootstrap secrets while preserving PKI material in `./.g8e/pki`.
+- **`wipe`:** Clears application data via the Operator listen-mode API. Preserves platform settings, PKI material, secrets, and authentication state.
 - **`logs`:** Aggregates logs from all managed services into a single stream via `scripts/core/logs.sh`.
 - **`settings`:** Direct access to platform-wide settings stored by Operator listen mode.
 
@@ -46,7 +46,7 @@ Unified interface for interacting with platform state, dispatched via `scripts/d
 - **Dispatcher Pattern:** `manage-operator.py` routes requests to specialized modules:
     - **`store`**: Document store & KV queries (`manage-store.py`).
     - **`users`**: Platform user management (`manage-users.py`).
-    - **`operators`**: Operator document management (`manage-operators.py`).
+    - **`operators`**: Operator document management (`manage-operators.py`). Note: Operator API keys are write-only operational secrets; they are never displayed or retrieved by this script.
     - **`device-links`**: Device link token management (`manage-device-links.py`).
     - **`settings`**: Platform settings read/write (`manage-settings.py`).
     - **`audit`**: LFAA audit vault queries (`manage-lfaa.py`).
@@ -57,10 +57,9 @@ Unified interface for interacting with platform state, dispatched via `scripts/d
 Manages the platform's root of trust and security invariants.
 
 - **`validate`:** Checks TLS integrity, permissions, and environment consistency.
-- **`certs`:** Manages the internal ECDSA P-384 CA via `scripts/security/manage-ssl.sh`.
+- **`pki`:** Operator-owned PKI management and trust bundle operations.
 - **`mtls-test`:** Connectivity test for mTLS between components.
 - **`passkeys`:** Manages FIDO2/WebAuthn credentials via `manage-passkeys.py`.
-- **`rotate-internal-token`:** Rotates the `X-Internal-Auth` token used for service-to-service communication.
 
 ### Testing (`./g8e test`)
 Runs component-specific test suites using native toolchains via `scripts/testing/run_tests.sh`.
@@ -93,13 +92,13 @@ scripts/
 │   ├── logs.sh     #   Log aggregation
 │   └── setup.sh    #   Setup delegation
 ├── data/           # Data operations (Python)
-│   ├── manage-operator.py    # Main dispatcher (formerly manage-g8es.py)
+│   ├── manage-operator.py    # Main dispatcher
 │   ├── manage-store.py       # Document/KV queries
 │   ├── manage-users.py       # User management
 │   ├── manage-lfaa.py        # Audit vault queries
 │   └── manage-reputation.py  # Reputation management
 ├── security/       # TLS and Security (Bash/Python)
-│   ├── manage-ssl.sh         # Cert lifecycle
+│   ├── manage-pki.sh         # Operator PKI validation and lifecycle helpers
 │   ├── manage-passkeys.py    # FIDO2/WebAuthn
 │   └── validate-platform-security.sh
 ├── testing/        # Test runners
@@ -113,9 +112,6 @@ scripts/
 ---
 
 ## Technical Invariants
-
-### 1. Internal Authentication
-Internal scripts authenticate to Operator listen mode and Dashboard using a shared `X-Internal-Auth` token. This token is stored under `./.g8e/ssl/internal_auth_token` and is rotated via `./g8e security rotate-internal-token`.
 
 ### 2. Path Resolution
 All scripts must resolve `PROJECT_ROOT` relative to their own location to ensure they work regardless of the user's current working directory.

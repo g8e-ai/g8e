@@ -16,7 +16,6 @@ import logging
 from app.clients.http_client import CircuitBreakerConfig, RetryConfig, HTTPClient
 from app.models.settings import G8eePlatformSettings
 from app.constants import (
-    INTERNAL_AUTH_HEADER,
     UNKNOWN_ERROR_MESSAGE,
     G8ED_CLIENT_FAILURE_THRESHOLD,
     G8ED_CLIENT_MAX_RETRIES,
@@ -60,7 +59,7 @@ class InternalHttpClient:
                 failure_threshold=G8ED_CLIENT_FAILURE_THRESHOLD,
                 recovery_time=G8ED_CLIENT_RECOVERY_TIME,
             ),
-            auth_token=settings.auth.internal_auth_token or "",
+            auth_token="",
             api_key=settings.auth.g8e_api_key or "",
             headers={G8eHeaders.SOURCE_COMPONENT: ComponentName.G8EE},
             ca_cert_path=settings.ca_cert_path or "",
@@ -81,14 +80,7 @@ class InternalHttpClient:
         return self._http
 
     def _auth_headers(self) -> dict[str, str]:
-        token = self.settings.auth.internal_auth_token
-        if not token:
-            raise ConfigurationError(
-                "INTERNAL_AUTH_TOKEN is not configured — g8ee cannot authenticate with g8ed",
-                component=ComponentName.G8EE,
-            )
         return {
-            INTERNAL_AUTH_HEADER: token,
             G8eHeaders.SOURCE_COMPONENT: ComponentName.G8EE,
         }
 

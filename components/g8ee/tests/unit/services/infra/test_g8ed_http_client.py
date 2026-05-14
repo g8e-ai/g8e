@@ -16,7 +16,6 @@ from datetime import UTC, datetime
 import pytest
 
 from app.constants import (
-    INTERNAL_AUTH_HEADER,
     ComponentName,
     EventType,
     G8eHeaders,
@@ -121,7 +120,7 @@ class TestG8edHttpClientSettings:
 
     async def test_configure_updates_settings(self, mock_settings):
         """configure() replaces settings after construction."""
-        initial = mock_settings.model_copy(update={"auth": AuthSettings(internal_auth_token="initial-token")})
+        initial = mock_settings.model_copy()
         client = InternalHttpClient(settings=initial)
         client.configure(mock_settings)
         assert client.settings is mock_settings
@@ -135,33 +134,11 @@ class TestG8edHttpClientAuthHeaders:
 
     async def test_auth_headers_uses_g8eheaders_constant(self, mock_settings):
         """_auth_headers uses G8eHeaders.SOURCE_COMPONENT, not a hardcoded string."""
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         headers = client._auth_headers()
         assert G8eHeaders.SOURCE_COMPONENT in headers
         assert headers[G8eHeaders.SOURCE_COMPONENT] == ComponentName.G8EE
 
-    async def test_auth_headers_includes_internal_auth_token(self, mock_settings):
-        """_auth_headers includes the internal auth_token."""
-        mock_settings.auth.internal_auth_token = "test-token"
-        client = InternalHttpClient(settings=mock_settings)
-        headers = client._auth_headers()
-        expected_token = "test-token"
-        assert headers[INTERNAL_AUTH_HEADER] == expected_token
-
-    async def test_auth_headers_raises_configuration_error_when_token_is_none(self, mock_settings):
-        """_auth_headers raises ConfigurationError when internal_auth_token is None."""
-        mock_settings.auth.internal_auth_token = None
-        client = InternalHttpClient(settings=mock_settings)
-        with pytest.raises(ConfigurationError):
-            client._auth_headers()
-
-    async def test_auth_headers_raises_configuration_error_when_token_is_empty(self, mock_settings):
-        """_auth_headers raises ConfigurationError when internal_auth_token is empty string."""
-        mock_settings.auth.internal_auth_token = ""
-        client = InternalHttpClient(settings=mock_settings)
-        with pytest.raises(ConfigurationError):
-            client._auth_headers()
 
 
 # =============================================================================
@@ -183,7 +160,6 @@ class TestG8edHttpClientPushSSEEvent:
 
     async def test_push_sse_event_success(self, mock_settings):
         """Returns typed SSEPushResponse with success=True and delivered count."""
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(200, {"success": True, "delivered": 3})
@@ -195,7 +171,6 @@ class TestG8edHttpClientPushSSEEvent:
 
     async def test_push_sse_event_zero_delivered_is_success(self, mock_settings):
         """BackgroundEvent fan-out to zero sessions is a legitimate success — not an error."""
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(200, {"success": True, "delivered": 0})
@@ -206,7 +181,6 @@ class TestG8edHttpClientPushSSEEvent:
 
     async def test_push_sse_event_http_error_raises_with_status(self, mock_settings):
         """Non-2xx responses raise NetworkError with the originating status code preserved."""
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(503, {"error": "unavailable"})
@@ -223,7 +197,6 @@ class TestG8edHttpClientPushSSEEvent:
         status code — indistinguishable from a zero-delivery fan-out. The fix
         raises NetworkError with the HTTP status preserved in details.
         """
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(500, {"error": "crash"})
@@ -234,7 +207,6 @@ class TestG8edHttpClientPushSSEEvent:
 
     async def test_push_sse_event_exception(self, mock_settings):
         """Raises NetworkError on network exception."""
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(side_effect=OSError("Connection refused"))
         with pytest.raises(NetworkError):
@@ -242,7 +214,6 @@ class TestG8edHttpClientPushSSEEvent:
 
     async def test_push_sse_event_sends_wire_payload(self, mock_settings):
         """Payload sent to g8ed matches SessionEvent.flatten_for_wire() shape."""
-        mock_settings.auth.internal_auth_token = "test-token"
         mock_http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(200, {"success": True})
         )
@@ -261,8 +232,6 @@ class TestG8edHttpClientPushSSEEvent:
 
     async def test_push_sse_event_sends_auth_headers(self, mock_settings):
         """push_sse_event sends internal auth headers to operator."""
-        test_token = "dynamic-test-token-789"
-        mock_settings.auth.internal_auth_token = test_token
         client = InternalHttpClient(settings=mock_settings)
         mock_http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(200, {"success": True})
@@ -272,7 +241,6 @@ class TestG8edHttpClientPushSSEEvent:
         event = self._make_test_event(EventType.LLM_CHAT_ITERATION_STARTED)
         await client.push_sse_event(event)
 
-        assert mock_http._captured_headers[INTERNAL_AUTH_HEADER] == test_token
         assert mock_http._captured_headers[G8eHeaders.SOURCE_COMPONENT] == ComponentName.G8EE
 
 
@@ -285,7 +253,6 @@ class TestG8edHttpClientGrantIntent:
     async def test_success_returns_typed_result(self, mock_settings):
         """Returns IntentOperationResult with success=True and granted_intents."""
         from app.models.http_context import G8eHttpContext
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(200, {
@@ -308,7 +275,6 @@ class TestG8edHttpClientGrantIntent:
     async def test_server_error_returns_failure(self, mock_settings):
         """Returns failure result on 500."""
         from app.models.http_context import G8eHttpContext
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(500, {"success": False, "error": "server error"})
@@ -326,7 +292,6 @@ class TestG8edHttpClientGrantIntent:
     async def test_network_exception_raises_network_error(self, mock_settings):
         """Raises NetworkError on network exception."""
         from app.models.http_context import G8eHttpContext
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(side_effect=Exception("Network error"))
         context = G8eHttpContext(
@@ -343,7 +308,6 @@ class TestG8edHttpClientGrantIntent:
     async def test_sends_correct_url_and_payload(self, mock_settings):
         """Sends POST to the correct URL with intent payload."""
         from app.models.http_context import G8eHttpContext
-        mock_settings.auth.internal_auth_token = "test-token"
         mock_http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(200, {"success": True, "granted_intents": []})
         )
@@ -366,8 +330,6 @@ class TestG8edHttpClientGrantIntent:
     async def test_sends_correct_auth_headers(self, mock_settings):
         """grant_intent sends internal auth headers to operator."""
         from app.models.http_context import G8eHttpContext
-        test_token = "grant-token-123"
-        mock_settings.auth.internal_auth_token = test_token
         mock_http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(200, {"success": True, "granted": True})
         )
@@ -383,7 +345,6 @@ class TestG8edHttpClientGrantIntent:
         )
         await client.grant_intent("op-1", "intent-1", context)
 
-        assert mock_http._captured_headers[INTERNAL_AUTH_HEADER] == test_token
         assert mock_http._captured_headers[G8eHeaders.SOURCE_COMPONENT] == ComponentName.G8EE
 
 
@@ -396,7 +357,6 @@ class TestG8edHttpClientRevokeIntent:
     async def test_success_returns_typed_result(self, mock_settings):
         """Returns IntentOperationResult with success=True and remaining granted_intents."""
         from app.models.http_context import G8eHttpContext
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(200, {
@@ -419,7 +379,6 @@ class TestG8edHttpClientRevokeIntent:
     async def test_failure_response_returns_error(self, mock_settings):
         """Returns IntentOperationResult with success=False and error."""
         from app.models.http_context import G8eHttpContext
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(400, {
@@ -442,7 +401,6 @@ class TestG8edHttpClientRevokeIntent:
     async def test_server_error_returns_failure(self, mock_settings):
         """Returns failure result on 500."""
         from app.models.http_context import G8eHttpContext
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(500, {"success": False, "error": "server error"})
@@ -460,7 +418,6 @@ class TestG8edHttpClientRevokeIntent:
     async def test_network_exception_raises_network_error(self, mock_settings):
         """Raises NetworkError on network exception."""
         from app.models.http_context import G8eHttpContext
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(side_effect=OSError("Connection refused"))
         context = G8eHttpContext(
@@ -477,7 +434,6 @@ class TestG8edHttpClientRevokeIntent:
     async def test_timeout_exception_raises_network_error(self, mock_settings):
         """Raises NetworkError on timeout exception."""
         from app.models.http_context import G8eHttpContext
-        mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(side_effect=Exception("Timeout"))
         context = G8eHttpContext(
@@ -494,7 +450,6 @@ class TestG8edHttpClientRevokeIntent:
     async def test_sends_correct_url_and_payload(self, mock_settings):
         """Sends POST to the correct URL with intent payload."""
         from app.models.http_context import G8eHttpContext
-        mock_settings.auth.internal_auth_token = "test-token"
         mock_http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(200, {"success": True})
         )
@@ -517,8 +472,6 @@ class TestG8edHttpClientRevokeIntent:
     async def test_sends_correct_auth_headers(self, mock_settings):
         """Sends correct auth headers using G8eHeaders constant."""
         from app.models.http_context import G8eHttpContext
-        test_token = "revoke-token-456"
-        mock_settings.auth.internal_auth_token = test_token
         mock_http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(200, {"success": True})
         )
@@ -534,7 +487,6 @@ class TestG8edHttpClientRevokeIntent:
         )
         await client.revoke_intent("op-123", "ec2_discovery", context)
 
-        assert mock_http._captured_headers[INTERNAL_AUTH_HEADER] == test_token
         assert mock_http._captured_headers[G8eHeaders.SOURCE_COMPONENT] == ComponentName.G8EE
 
 
@@ -548,7 +500,6 @@ class TestG8edHttpClientTypedModels:
     async def test_grant_intent_sends_typed_request_payload(self, mock_settings):
         """grant_intent sends IntentRequestPayload via flatten_for_wire."""
         from app.models.http_context import G8eHttpContext
-        mock_settings.auth.internal_auth_token = "test-token"
         mock_http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(200, {"success": True, "granted_intents": ["ec2_discovery"]})
         )
@@ -570,7 +521,6 @@ class TestG8edHttpClientTypedModels:
     async def test_revoke_intent_sends_typed_request_payload(self, mock_settings):
         """revoke_intent sends IntentRequestPayload via flatten_for_wire."""
         from app.models.http_context import G8eHttpContext
-        mock_settings.auth.internal_auth_token = "test-token"
         mock_http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(200, {"success": True, "granted_intents": []})
         )

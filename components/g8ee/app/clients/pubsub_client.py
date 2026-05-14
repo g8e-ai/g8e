@@ -57,8 +57,9 @@ class PubSubClient:
         component_name: ComponentName = ComponentName.G8EE,
         timeout: float = 10.0,
         ca_cert_path: str | None = None,
-        internal_auth_token: str | None = None,
         auditor_hmac_key: str | None = None,
+        client_cert_path: str | None = None,
+        client_key_path: str | None = None,
     ):
         _settings = ListenSettings()
         # Use direct internal WSS URL by default for service-to-service
@@ -69,7 +70,8 @@ class PubSubClient:
         self.client_id = f"{component_name.value}-{uuid.uuid4().hex[:8]}"
         self._timeout = timeout
         self._ca_cert_path = ca_cert_path
-        self._internal_auth_token = internal_auth_token
+        self._client_cert_path = client_cert_path
+        self._client_key_path = client_key_path
         self._auditor_hmac_key = auditor_hmac_key
 
         self._ws_session: aiohttp.ClientSession | None = None
@@ -114,19 +116,16 @@ class PubSubClient:
             if not ws_url.startswith("wss://"):
                 ws_url = "wss://" + ws_url.split("://")[-1]
 
-        if self._internal_auth_token:
-            ws_url += f"?token={self._internal_auth_token}"
-
         ssl_ctx = resolve_pubsub_ssl_context(
             self._ca_cert_path,
-            use_tls=True
+            use_tls=True,
+            certfile=self._client_cert_path,
+            keyfile=self._client_key_path,
         )
 
         ws_session = await self._get_http_ws_session()
 
         headers = {}
-        if self._internal_auth_token:
-            headers["X-Internal-Auth"] = self._internal_auth_token
 
         self._ws = await ws_session.ws_connect(ws_url, ssl=ssl_ctx, headers=headers)
         logger.info("[PUBSUB-CLIENT] Pub/sub WebSocket connected")
@@ -533,16 +532,16 @@ class PubSubClient:
             }
         )
 
-        # Use Protobuf UniversalEnvelope for all commands (v0.2.0 Protocol-First)
+        # Use UAP JSON for all commands (v0.3.0 UAP-First)
         try:
             payload_bytes = build_universal_envelope_bytes(
                 command_data,
                 auditor_hmac_key=self._auditor_hmac_key or "",
             )
-            logger.debug("[PUBSUB-CLIENT] Publishing Protobuf UniversalEnvelope")
+            logger.debug("[PUBSUB-CLIENT] Publishing UAP JSON Envelope")
         except Exception as e:
-            logger.error("[PUBSUB-CLIENT] Failed to build UniversalEnvelope: %s", e)
-            # In v0.2.0 we do NOT fall back to JSON. If the envelope fails, the command fails.
+            logger.error("[PUBSUB-CLIENT] Failed to build UAPEnvelope: %s", e)
+            # If the envelope fails, the command fails.
             return 0
 
         result = await self.publish(channel, payload_bytes)
@@ -700,16 +699,16 @@ class PubSubClient:
                 payload=HeartbeatRequestPayload(),
             )
 
-            # Use Protobuf UniversalEnvelope for all pings (v0.2.0 Protocol-First)
+            # Use UAP JSON for all pings (v0.3.0 UAP-First)
             try:
                 payload_bytes = build_universal_envelope_bytes(
                     ping,
                     auditor_hmac_key=self._auditor_hmac_key or "",
                 )
-                logger.debug("[PUBSUB-CLIENT] Publishing Protobuf UniversalEnvelope for ping")
+                logger.debug("[PUBSUB-CLIENT] Publishing UAP JSON Envelope for ping")
             except Exception as e:
-                logger.error("[PUBSUB-CLIENT] Failed to build UniversalEnvelope for ping: %s", e)
-                # In v0.2.0 we do NOT fall back to JSON. If the envelope fails, the ping fails.
+                logger.error("[PUBSUB-CLIENT] Failed to build UAPEnvelope for ping: %s", e)
+                # If the envelope fails, the ping fails.
                 return False
 
             receivers = await self.publish(channel, payload_bytes)

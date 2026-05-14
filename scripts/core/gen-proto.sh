@@ -4,7 +4,6 @@
 # Generates:
 #   - Go code for g8eo
 #   - Python code for g8ee
-#   - JavaScript/TypeScript code for g8ed
 #
 # Usage: ./scripts/core/gen-proto.sh
 
@@ -16,47 +15,61 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROTO_SRC_DIR="$PROJECT_ROOT/shared/proto"
 
 # Output directories
-GO_OUT_DIR="$PROJECT_ROOT/components/g8eo/shared/proto"
+GO_OUT_DIR="$PROJECT_ROOT/components/g8eo/internal/shared/proto"
 PY_OUT_DIR="$PROJECT_ROOT/components/g8ee/app/proto"
-JS_OUT_DIR="$PROJECT_ROOT/components/g8ed/shared/proto"
 
-mkdir -p "$GO_OUT_DIR" "$PY_OUT_DIR" "$JS_OUT_DIR"
+mkdir -p "$GO_OUT_DIR" "$PY_OUT_DIR"
 
 echo "Generating Protobuf code..."
 
-# We use the g8eo-test-runner container as it has the Go/Python/JS environments
-# installed.
-# We will use docker compose run to execute the protoc commands.
-
-# Go generation
-docker compose run --rm -u root -v "$PROTO_SRC_DIR:/proto_src" -v "$GO_OUT_DIR:/go_out" g8eo-test-runner sh -c "\
-  protoc -I=/proto_src -I=/usr/include \
-  --go_out=/go_out --go_opt=module=github.com/g8e-ai/g8e/components/g8eo/shared/proto \
-  --go-grpc_out=/go_out --go-grpc_opt=module=github.com/g8e-ai/g8e/components/g8eo/shared/proto \
-  /proto_src/*.proto"
-
 # Python generation
-docker compose run --rm -u root -v "$PROTO_SRC_DIR:/proto_src" -v "$PY_OUT_DIR:/py_out" g8eo-test-runner sh -c "\
-  python3 -m grpc_tools.protoc -I=/proto_src -I=/usr/include \
-  --python_out=/py_out \
-  --grpc_python_out=/py_out \
-  /proto_src/*.proto"
+echo "Generating Python code..."
+
+# Try to find a suitable python with grpc_tools.protoc
+if [ -f "$PROJECT_ROOT/components/g8ee/.venv/bin/python3" ]; then
+    PYTHON_CMD="$PROJECT_ROOT/components/g8ee/.venv/bin/python3"
+else
+    PYTHON_CMD="python3"
+fi
+
+if "$PYTHON_CMD" -m grpc_tools.protoc --version >/dev/null 2>&1; then
+    echo "Using $PYTHON_CMD -m grpc_tools.protoc..."
+    # Generate each proto to ensure correct package structure
+    for proto in common operator pubsub; do
+        "$PYTHON_CMD" -m grpc_tools.protoc -I "$PROTO_SRC_DIR" --python_out="$PY_OUT_DIR" "$PROTO_SRC_DIR/$proto.proto"
+    done
+else
+    echo "grpc_tools.protoc not found in venv or path, falling back to Docker..."
+    docker run --rm -u $(id -u):$(id -g) -v "$PROTO_SRC_DIR:/proto_src" -v "$PY_OUT_DIR:/py_out" namely/protoc-all:latest -i /proto_src -d /proto_src -l python -o /py_out
+fi
 
 # Post-process Python files to fix imports for package structure
-docker compose run --rm -u root -v "$PY_OUT_DIR:/py_out" g8eo-test-runner sh -c "\
-  touch /py_out/__init__.py && \
-  sed -i 's/^import \(.*_pb2\)/from . import \1/' /py_out/*_pb2*.py"
+touch "$PY_OUT_DIR/__init__.py"
+sed -i 's/^import \(.*_pb2\)/from . import \1/' "$PY_OUT_DIR"/*_pb2*.py
 
-# JS generation
-docker compose run --rm -u root -v "$PROTO_SRC_DIR:/proto_src" -v "$JS_OUT_DIR:/js_out" g8eo-test-runner sh -c "\
-  grpc_tools_node_protoc -I=/proto_src -I=/usr/include \
-  --js_out=import_style=commonjs,binary:/js_out \
-  --grpc-web_out=import_style=commonjs,mode=grpcwebtext:/js_out \
-  /proto_src/*.proto"
+# Verify the generated code is parseable by the current python
+if "$PYTHON_CMD" -c "import grpc_tools" 2>/dev/null; then
+    echo "Verifying generated Python modules..."
+    for f in "$PY_OUT_DIR"/*_pb2.py; do
+        module_name=$(basename "$f" .py)
+        echo "Checking $module_name..."
+        # We need to test from the components/g8ee directory so 'app.proto' is a valid package
+        (cd "$PROJECT_ROOT/components/g8ee" && "$PYTHON_CMD" -c "from app.proto import $module_name") || { echo "Failed to import $module_name!"; exit 1; }
+    done
+fi
 
-# Fix ownership (since we ran as root in the container)
-docker compose run --rm -u root -v "$GO_OUT_DIR:/go_out" -v "$PY_OUT_DIR:/py_out" -v "$JS_OUT_DIR:/js_out" g8eo-test-runner sh -c "\
-  chown -R $(id -u):$(id -g) /go_out /py_out /js_out"
+# Go generation
+# We generate each package explicitly to ensure correct output paths and package names
+echo "Generating Go code..."
+for proto in common operator pubsub; do
+    echo "Generating $proto.proto..."
+    docker run --rm -u $(id -u):$(id -g) -v "$PROJECT_ROOT:/workspace" -w /workspace namely/protoc-all:latest \
+        -i shared/proto \
+        -f shared/proto/$proto.proto \
+        -l go \
+        -o components/g8eo/internal \
+        --go-module-prefix github.com/g8e-ai/g8e/components/g8eo/internal \
+        --go-opt=module=github.com/g8e-ai/g8e/components/g8eo/internal
+done
 
-echo "Protobuf generation complete (placeholder)."
-echo "NOTE: Ensure protoc and plugins are installed in the build environment."
+echo "Protobuf generation complete."

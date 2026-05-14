@@ -6,7 +6,7 @@ parent: Components
 # g8ee
 
 Last Updated: 2026-05-11
-Version: v0.2.3
+Version: v0.2.4
 
 g8ee is the AI engine for the g8e platform. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, featuring human-in-the-loop safety controls, data sovereignty, and a multi-provider LLM abstraction layer.
 
@@ -153,7 +153,7 @@ g8ee maintains 5 core data clients, each with exactly one handler service:
 |--------|-----------------|----------------|
 | `DBClient` | `DBService` | Authoritative document persistence (SQLite `documents` via operator) |
 | `KVCacheClient` | `KVService` | High-frequency state and session data (SQLite `kv_store` via operator) |
-| `PubSubClient` | `PubSubService` | Event-driven messaging and operator command dispatch |
+| `PubSubClient` | `PubSubService` | Event-driven messaging and UAP command dispatch |
 | `BlobClient` | `BlobService` | Binary data storage and retrieval (SQLite `blobs` via operator) |
 | `InternalHttpClient` | `HTTPService` | External API communication (via `ServiceFactory`) |
 
@@ -207,7 +207,7 @@ Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `A
 **Ollama Provider:** The `OllamaProvider` is a dedicated provider for Ollama endpoints, using the official `ollama` Python SDK's AsyncClient:
 - **Endpoint Handling:** Strips `/v1` suffix if present to match Ollama's native API format
 - **Thinking Support:** Enables `think=true` parameter for primary model calls to support Ollama's thinking feature; extracts `thinking` field from responses and streams it as `thought=True` chunks
-- **SSL Verification:** Uses the Ollama SDK's default SSL verification behavior
+- **TLS Verification:** Uses the Ollama SDK's default TLS verification behavior
 - **Tool Calling:** Converts tool declarations to Ollama's function calling format; falls back to non-streaming when tools are present to avoid hanging
 
 ### AI Streaming Loop
@@ -405,7 +405,7 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 | `gemini-3.1-pro-preview` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
 | `gemini-3.1-pro-preview-customtools` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
 | `gemini-3-flash-preview` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
-| `gemini-3.1-flash-lite-preview` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-flash-lite` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 1,000,000 | 64,000 |
 
 #### OpenAI Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
@@ -542,7 +542,7 @@ g8ee also owns heartbeat status decay: `HeartbeatStaleMonitorService` (`app/serv
 
 ### Defensive Safety
 
-Before dispatching any state-changing operation, g8ee runs the L1/L2/L3 governance path: L1 technical bedrock checks, L2 Tribunal consensus and Auditor commitment, and L3 authorization state from the Governance Gateway. Command risk classification (LOW / MEDIUM / HIGH, fails closed to HIGH), file operation safety, and error analysis with auto-fix all feed that path. Dispatch to g8eo is a g8e protocol operation: a typed `operator.proto` payload is wrapped in a serialized Protobuf `UniversalEnvelope` with governance metadata and published through operator pub/sub. See [architecture/protocol.md](../architecture/protocol.md) and [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo) for full details.
+Before dispatching any state-changing operation, g8ee runs the L1/L2/L3 governance path: L1 technical bedrock checks, L2 Tribunal consensus and Auditor commitment, and L3 authorization state from the Governance Gateway. Command risk classification (LOW / MEDIUM / HIGH, fails closed to HIGH), file operation safety, and error analysis with auto-fix all feed that path. Dispatch to g8eo is a g8e protocol operation: a typed `operator.proto` payload is wrapped in a UAP JSON `GovernanceEnvelope` with governance metadata and published through operator pub/sub. See [architecture/protocol.md](../architecture/protocol.md) and [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo) for full details.
 
 ### MCP Adapter
 
@@ -577,7 +577,7 @@ g8ee implements an **MCP Client Adapter** that translates outbound tool calls in
 
 ### Command Validation Policies (L1/L2/L3 Governance)
 
-g8e enforces the L1/L2/L3 validation hierarchy described in the README and protocol docs. This hierarchy ensures that every command is technically sound, aligned with intent, and approved by the appropriate authority. On operator command paths, the hierarchy is carried in `UniversalEnvelope.governance` beside the typed `operator.proto` payload.
+g8e enforces the L1/L2/L3 validation hierarchy described in the README and protocol docs. This hierarchy ensures that every command is technically sound, aligned with intent, and approved by the appropriate authority. On operator command paths, the hierarchy is carried in `GovernanceEnvelope.governance` beside the typed `operator.proto` payload.
 
 #### L1: Technical Bedrock (Hard Gates)
 The technical bedrock is the foundation of g8e safety. It is enforced by validators before dispatch and by g8eo at the protocol boundary through Protobuf reflection over `forbidden_patterns` field options. L1 is **always** active, regardless of agent consensus or auto-approval settings.
@@ -824,8 +824,8 @@ g8ee uses three distinct clients for data operations.
 
 | Client | Transport | Purpose |
 |--------|-----------|---------|
-| `DBClient` | HTTP | Document store — cases, investigations, operators, memories. All requests authenticated via `X-Internal-Auth` header. |
-| `KVClient` | HTTP + WebSocket | KV store operations and pub/sub (command dispatch, results, heartbeats). All requests authenticated via `X-Internal-Auth` header. |
+| `DBClient` | HTTP | Document store — cases, investigations, operators, memories. All requests authenticated via mTLS with operator session. |
+| `KVClient` | HTTP + WebSocket | KV store operations and pub/sub (command dispatch, results, heartbeats). All requests authenticated via mTLS with operator session. |
 | `InternalHttpClient ` | HTTP | g8ee → g8ed internal API — SSE push, operator queries, heartbeat forwarding, intent management |
 
 ### KV Key Structure
@@ -856,7 +856,7 @@ This is enforced by `KVClient.subscribe()` (`app/clients/db_client.py`):
 
 ### Internal HTTP Communication (g8ed → g8ee)
 
-g8ee communicates with other components via direct HTTP using `X-Internal-Auth` for authentication and standard `G8eHttpContext` headers.
+g8ee communicates with other components via direct HTTP using mTLS with operator session authentication and standard `G8eHttpContext` headers.
 
 #### Key Internal Endpoints
 
@@ -869,7 +869,7 @@ g8ee communicates with other components via direct HTTP using `X-Internal-Auth` 
 | `/api/internal/operators/register-operator-session` | POST | Subscribes g8ee to heartbeat/result channels for a new session |
 
 #### Authentication Discovery
-g8ee discovers the authoritative `internal_auth_token` by reading `/operator/ssl/internal_auth_token` at startup (or via `INTERNAL_AUTH_TOKEN` env var). This is the absolute source of truth for service-to-service authentication.
+g8ee uses mTLS with URI SAN workload identity to communicate with the Operator. Identity is established via the client certificates issued during the bootstrap process.
 
 #### Context Propagation
 The canonical header list and ownership rules are in [components/g8ed.md — Internal HTTP Communication](g8ed.md#internal-http-communication-g8ed--g8ee).
@@ -1123,7 +1123,6 @@ The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_se
 
 | Key | Default | Purpose |
 |-----|---------|---------|
-| `internal_auth_token` | — | Component-to-component auth (`X-Internal-Auth` header); required before g8ee accepts requests |
 | `g8e_api_key` | — | Optional API key for external client authentication |
 
 **Command Validation Settings** (per-user, in `G8eeUserSettings.command_validation`):

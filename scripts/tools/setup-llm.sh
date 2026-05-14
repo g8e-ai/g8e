@@ -218,7 +218,7 @@ case "$COMMAND" in
         _header "Restarting LLM Services"
         # Since we are on the host, we can call docker compose if available, 
         # but the standard way in this repo is via build.sh
-        bash "$REPO_ROOT/scripts/core/build.sh" restart g8ed g8ee
+        bash "$REPO_ROOT/scripts/core/build.sh" restart g8ee
         exit 0
         ;;
 esac
@@ -528,13 +528,7 @@ _write_to_db() {
     fi
 
     if docker exec g8ep python3 /app/scripts/data/manage-operator.py settings set "${DB_ARGS[@]}" 2>/dev/null; then
-        _ok "LLM settings written to DB (via g8ed)"
-        return 0
-    fi
-
-    _info "g8ed unavailable — writing directly to operator"
-    if docker exec g8ep python3 /app/scripts/data/manage-operator.py settings set --direct "${DB_ARGS[@]}" 2>/dev/null; then
-        _ok "LLM settings written to DB (direct)"
+        _ok "LLM settings written to DB"
         return 0
     fi
 

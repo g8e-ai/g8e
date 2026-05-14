@@ -51,7 +51,6 @@ from typing import Any
 import pytest
 
 from app.constants import (
-    INTERNAL_AUTH_HEADER,
     NEW_CASE_ID,
     ComponentName,
     G8eHeaders,
@@ -379,7 +378,6 @@ def _base_headers(
         G8eHeaders.SOURCE_COMPONENT: source_component,
         G8eHeaders.BOUND_OPERATORS: bound_operators,
         G8eHeaders.NEW_CASE: new_case,
-        INTERNAL_AUTH_HEADER: "test-auth-token",
     }
 
     # Add any additional headers

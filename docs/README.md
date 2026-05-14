@@ -6,10 +6,10 @@ permalink: /docs/
 
 # g8e Documentation Index
 
-Last Updated: 2026-05-11
-Version: v0.2.3
+Last Updated: 2026-05-12
+Version: v0.2.4
 
-g8e is a Zero-Trust AI platform for secure infrastructure operations. This index maps high-level concepts to their technical implementations across the three-component architecture (Operator, Dashboard, Engine).
+g8e is a Zero-Trust Operator/protocol substrate for secure infrastructure operations. This index maps high-level concepts to the mandatory substrate (Operator plus shared protocol) and the optional bundled application-layer adapters (Dashboard and Engine).
 
 ## Platform Pillars
 
@@ -19,22 +19,29 @@ Foundational architecture documents defining the safety, reasoning, and environm
 |----------|-------------|
 | [architecture/security.md](architecture/security.md) | **Zero-Trust & Governance**: LFAA (Logs, Files, Audit, Activity) encryption, Sentinel traffic analysis, and human-in-the-loop controls. |
 | [architecture/governance.md](architecture/governance.md) | **3-Layer Governance**: The L1/L2/L3 validation hierarchy (Bedrock, Consensus, Authorization) and the Warden circuit breaker. |
-| [architecture/ai_agents.md](architecture/ai_agents.md) | **Agentic AI**: Multi-provider LLM abstraction (g8ee), the 5-member Tribunal ensemble, and tool-loop execution. |
-| [architecture/thinking.md](architecture/thinking.md) | **Thinking & Reasoning**: Dual-layer architecture for structural reasoning (Tribunal) and provider-native reasoning (thinking levels). |
 | [architecture/air_gap.md](architecture/air_gap.md) | **Air-Gap Operations**: Principles for fully disconnected environments, local inference, and zero-config bootstrap. |
 | [architecture/operator.md](architecture/operator.md) | **Secure Execution**: The g8eo Operator lifecycle, vault management, and real-time command tunneling. |
 | [architecture/storage.md](architecture/storage.md) | **Persistence**: Operator Listen Mode using the coordination store (SQLite), KV, and LFAA Audit Vault. |
-| [architecture/dashboard.md](architecture/dashboard.md) | **Dashboard & Relay**: The g8ed hub-and-spoke model, stateless relaying, and session binding. |
 
-## Component Reference
+## Optional Application Layer
 
-Technical deep-dives into the three services that comprise the g8e stack.
+Optional reference adapters that consume the public g8e protocol.
+
+| Document | Description |
+|----------|-------------|
+| [architecture/ai_agents.md](architecture/ai_agents.md) | **Agentic AI**: Optional application-layer LLM adapter behavior, the 5-member Tribunal ensemble, and tool-loop proposal generation. |
+| [architecture/prompts.md](architecture/prompts.md) | **Prompt Engineering**: Schema and logic for agent persona assembly. |
+| [architecture/thinking.md](architecture/thinking.md) | **Thinking & Reasoning**: Dual-layer architecture for structural reasoning (Tribunal) and provider-native reasoning (thinking levels). |
+| [architecture/agent_personas.md](architecture/agent_personas.md) | **Personas**: Gallery of bundled agent personas and their specialized capabilities. |
+
+## Substrate and Application-Layer Reference
+
+Technical deep-dives into the required Operator substrate and optional bundled adapters.
 
 | Component | Role | Primary Implementation |
 |-----------|------|------------------------|
-| [**g8eo**](components/g8eo.md) | **Operator** | Go-based secure execution agent and listen-mode persistence/pubsub runtime. |
-| [**g8ee**](components/g8ee.md) | **Engine** | Python (FastAPI) agentic orchestrator for LLM interactions and tool dispatch. |
-| [**g8ed**](components/g8ed.md) | **Dashboard** | Node.js (Express) management plane, SSE fan-out, and session binding. |
+| [**g8eo**](components/g8eo.md) | **Substrate Operator** | Go-based secure execution agent, protocol hub, listen-mode persistence, pub/sub runtime, policy enforcement, and audit. |
+| [**g8ee**](components/g8ee.md) | **Optional Engine Adapter** | Python (FastAPI) agentic adapter for LLM interactions, proposal generation, and proof production. |
 
 ## Guides & Standards
 
@@ -50,7 +57,6 @@ Technical deep-dives into the three services that comprise the g8e stack.
 
 | Document | Description |
 |----------|-------------|
-| [architecture/protocol.md](architecture/protocol.md) | **g8e Protocol**: Protobuf `UniversalEnvelope`, typed operator payloads, and governance metadata. |
+| [architecture/protocol.md](architecture/protocol.md) | **g8e Protocol**: UAP JSON mutation envelope, typed operator payloads, and governance metadata. |
 | [reference/events.md](reference/events.md) | **Wire Protocol**: Registry of all internal pub/sub and SSE events. |
-| [architecture/prompts.md](architecture/prompts.md) | **Prompt Engineering**: Schema and logic for agent persona assembly. |
 | [architecture/scripts.md](architecture/scripts.md) | **Management CLI**: Architecture of the core platform orchestration scripts. |
