@@ -207,7 +207,7 @@ class LFAAManager:
 
     def _fmt_session_summary(self, s: sqlite3.Row) -> str:
         event_count = self.conn.execute(
-            'SELECT COUNT(*) FROM events WHERE web_session_id = ?', (s['id'],)
+            'SELECT COUNT(*) FROM events WHERE operator_session_id = ?', (s['id'],)
         ).fetchone()[0]
         return (
             f"  {s['id'][:20]:<22}  "
@@ -265,7 +265,7 @@ class LFAAManager:
             return None
 
         counts = self.conn.execute(
-            'SELECT type, COUNT(*) as cnt FROM events WHERE web_session_id = ? GROUP BY type',
+            'SELECT type, COUNT(*) as cnt FROM events WHERE operator_session_id = ? GROUP BY type',
             (web_session_id,)
         ).fetchall()
 
@@ -295,16 +295,16 @@ class LFAAManager:
             params_filter.append(event_type)
 
         rows = self.conn.execute(
-            f'SELECT id, web_session_id, timestamp, type, content_text, command_raw, '
+            f'SELECT id, operator_session_id, timestamp, type, content_text, command_raw, '
             f'command_exit_code, command_stdout, command_stderr, execution_duration_ms, '
             f'stored_locally, stdout_truncated, stderr_truncated, encrypted '
-            f'FROM events WHERE web_session_id = ? {type_clause} '
+            f'FROM events WHERE operator_session_id = ? {type_clause} '
             f'ORDER BY timestamp DESC LIMIT ? OFFSET ?',
             params_filter + [limit, offset]
         ).fetchall()
 
         total = self.conn.execute(
-            f'SELECT COUNT(*) FROM events WHERE web_session_id = ? {type_clause}',
+            f'SELECT COUNT(*) FROM events WHERE operator_session_id = ? {type_clause}',
             params_filter
         ).fetchone()[0]
 
@@ -323,7 +323,7 @@ class LFAAManager:
 
     def get_event(self, event_id: int) -> Dict | None:
         row = self.conn.execute(
-            'SELECT id, web_session_id, timestamp, type, content_text, command_raw, '
+            'SELECT id, operator_session_id, timestamp, type, content_text, command_raw, '
             'command_exit_code, command_stdout, command_stderr, execution_duration_ms, '
             'stored_locally, stdout_truncated, stderr_truncated, encrypted '
             'FROM events WHERE id = ?', (event_id,)
@@ -335,7 +335,7 @@ class LFAAManager:
         print(f'\n{"=" * 80}')
         print(f'EVENT #{row["id"]}  [{row["type"]}]')
         print(f'{"=" * 80}')
-        print(f'  WebSession:    {row["web_session_id"]}')
+        print(f'  OperatorSession: {row["operator_session_id"]}')
         print(f'  Timestamp:  {row["timestamp"]}')
         print(f'  Encrypted:  {bool(row["encrypted"])}')
 
@@ -383,7 +383,7 @@ class LFAAManager:
         where_clauses = []
         params: List[Any] = []
         if web_session_id:
-            where_clauses.append('e.web_session_id = ?')
+            where_clauses.append('e.operator_session_id = ?')
             params.append(web_session_id)
         if filepath:
             where_clauses.append('fml.filepath LIKE ?')
@@ -393,7 +393,7 @@ class LFAAManager:
         rows = self.conn.execute(
             f'SELECT fml.id, fml.event_id, fml.filepath, fml.operation, '
             f'fml.ledger_hash_before, fml.ledger_hash_after, fml.diff_stat, '
-            f'e.timestamp, e.web_session_id '
+            f'e.timestamp, e.operator_session_id '
             f'FROM file_mutation_log fml '
             f'JOIN events e ON fml.event_id = e.id '
             f'{where_sql} ORDER BY e.timestamp DESC LIMIT ?',
@@ -439,8 +439,8 @@ class LFAAManager:
         oldest = self.conn.execute('SELECT MIN(timestamp) FROM events').fetchone()[0]
         newest = self.conn.execute('SELECT MAX(timestamp) FROM events').fetchone()[0]
         top_sessions = self.conn.execute(
-            'SELECT web_session_id, COUNT(*) as cnt FROM events '
-            'GROUP BY web_session_id ORDER BY cnt DESC LIMIT 5'
+            'SELECT operator_session_id, COUNT(*) as cnt FROM events '
+            'GROUP BY operator_session_id ORDER BY cnt DESC LIMIT 5'
         ).fetchall()
 
         db_size_bytes = os.path.getsize(self._local_db_path) if self._local_db_path else 0
@@ -467,7 +467,7 @@ class LFAAManager:
         if top_sessions:
             print('\n  Top Sessions by Event Count:')
             for row in top_sessions:
-                print(f'    {row["web_session_id"][:36]}  {row["cnt"]} events')
+                print(f'    {row["operator_session_id"][:36]}  {row["cnt"]} events')
         print(f'\n{"=" * 60}\n')
 
         return {
@@ -644,10 +644,10 @@ class LFAAManager:
             return
 
         rows = self.conn.execute(
-            'SELECT id, web_session_id, timestamp, type, content_text, command_raw, '
+            'SELECT id, operator_session_id, timestamp, type, content_text, command_raw, '
             'command_exit_code, command_stdout, command_stderr, execution_duration_ms, '
             'stored_locally, stdout_truncated, stderr_truncated, encrypted '
-            'FROM events WHERE web_session_id = ? ORDER BY timestamp ASC',
+            'FROM events WHERE operator_session_id = ? ORDER BY timestamp ASC',
             (web_session_id,)
         ).fetchall()
 
@@ -655,7 +655,7 @@ class LFAAManager:
         for row in rows:
             event: Dict[str, Any] = {
                 'id': row['id'],
-                'web_session_id': row['web_session_id'],
+                'operator_session_id': row['operator_session_id'],
                 'timestamp': row['timestamp'],
                 'type': row['type'],
                 'content_text': self._decode(row['content_text']) or None,
