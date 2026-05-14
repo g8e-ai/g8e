@@ -219,7 +219,7 @@ func (vw *VaultWriter) StoreFileDiffFromLedger(filePath, operation, eventID, ope
 		return
 	}
 
-	history, err := ledger.GetFileHistory(filePath, 2)
+	history, err := ledger.GetFileHistory(filePath, 2, operatorSessionID)
 	if err != nil || len(history) < 2 {
 		vw.logger.Info("No file history available for diff computation",
 			"file_path", filePath,
@@ -230,7 +230,7 @@ func (vw *VaultWriter) StoreFileDiffFromLedger(filePath, operation, eventID, ope
 	hashBefore := history[1].CommitHash
 	hashAfter := history[0].CommitHash
 
-	diffContent := ledger.GetDiffContent(hashBefore, hashAfter)
+	diffContent := ledger.GetDiffContent(hashBefore, hashAfter, operatorSessionID)
 	if diffContent == "" {
 		vw.logger.Info("No diff content available", "file_path", filePath)
 		return
@@ -243,7 +243,7 @@ func (vw *VaultWriter) StoreFileDiffFromLedger(filePath, operation, eventID, ope
 		operation:         operation,
 		ledgerHashBefore:  hashBefore,
 		ledgerHashAfter:   hashAfter,
-		diffStat:          ledger.GetDiffStat(hashBefore, hashAfter),
+		diffStat:          ledger.GetDiffStat(hashBefore, hashAfter, operatorSessionID),
 		diffContent:       diffContent,
 		caseID:            caseID,
 		operatorSessionID: operatorSessionID,

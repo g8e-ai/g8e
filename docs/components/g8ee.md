@@ -790,7 +790,7 @@ LFAA extends sovereign mode to make the **Operator the system of record** for al
 
 Key LFAA components on the Operator:
 - **Audit Vault** — Local SQLite database (`{workdir}/.g8e/data/g8e.db`) storing all events: user messages, command executions, file mutations, and AI responses. Sensitive fields encrypted at rest.
-- **Ledger** — Local Git repository (`{workdir}/.g8e/data/ledger`) providing cryptographic version history for every file the AI has modified.
+- **Ledger** — Multi-Ledger Architecture: per-session isolated git repositories at `{workdir}/.g8e/data/ledger/sessions/<operator_session_id>/` providing cryptographic version history for every file the AI has modified. Each session owns an isolated git repo initialized lazily on first mutation.
 
 For complete schema DDL, exact table/column definitions, vault encryption details (AES-256-GCM envelope encryption, KEK derivation, DEK wrapping), and data flow specifics, see [architecture/storage.md — g8eo Operator Storage](../architecture/storage.md#g8eo--operator-storage).
 

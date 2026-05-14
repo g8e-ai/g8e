@@ -319,7 +319,13 @@ A security principle where entities receive only the minimum permissions necessa
 
 ## Ledger
 
-A git-backed version control system (`./.g8e/data/ledger`) that maintains cryptographic integrity and restoration capability for all files modified by the Operator. Every file mutation creates a git commit with hash references, enabling time-travel and rollback functionality.
+The file-mutation audit layer of the LFAA. The Operator implements a **Multi-Ledger Architecture**: each operator session receives its own isolated git repository initialized on first use at `.g8e/data/ledger/sessions/<operator_session_id>/`. A global ledger at `.g8e/data/ledger/` acts as the bootstrap root, but all runtime file-mutation history is written into the session-scoped sub-repository.
+
+Every file mutation follows a two-phase commit: the Ledger snapshots the file's state before the mutation (`LedgerHashBefore`), the Operator executes, then the Ledger snapshots the result (`LedgerHashAfter`). Each phase produces a git commit with a timestamped message referencing the operator session ID. The resulting git hash pair provides a cryptographically verifiable diff, enabling time-travel, rollback, and cross-session forensic comparison.
+
+Session ledgers are created lazily and protected by a double-checked lock so concurrent sessions never interfere. The Ledger is disabled gracefully when git is unavailable (`--no-git`); the Audit Vault continues operating.
+
+See also: **Audit Vault**, **Local-First Audit Architecture (LFAA)**, **Time-Travel**.
 
 ---
 

@@ -132,10 +132,13 @@ type AuditVaultService struct {
 	logger          *slog.Logger
 	ledgerPath      string
 	filesPath       string
+	sessionsRoot    string // Root for session-specific ledgers
 	gitPath         string
 	encryptionVault *vault.Vault
 	pruner          *sqliteutil.Pruner
 	closeOnce       sync.Once
+
+	mu sync.RWMutex // Protects session ledger initialization
 }
 
 // NewAuditVaultService creates a new audit vault service
@@ -154,6 +157,7 @@ func NewAuditVaultService(config *AuditVaultConfig, logger *slog.Logger) (*Audit
 		logger:          logger,
 		ledgerPath:      filepath.Join(config.DataDir, config.LedgerDir),
 		filesPath:       filepath.Join(config.DataDir, config.LedgerDir, "files"),
+		sessionsRoot:    filepath.Join(config.DataDir, config.LedgerDir, "sessions"),
 		encryptionVault: config.EncryptionVault,
 		gitPath:         config.GitPath,
 	}
@@ -210,6 +214,7 @@ func (avs *AuditVaultService) createDirectoryStructure() error {
 		avs.config.DataDir,
 		avs.ledgerPath,
 		avs.filesPath,
+		avs.sessionsRoot,
 	}
 
 	for _, dir := range dirs {
@@ -238,40 +243,95 @@ func (avs *AuditVaultService) verifyWritePermissions() error {
 	return nil
 }
 
-// initLedgerGit initializes git repository in the ledger directory
+// GetSessionLedgerPath returns the ledger path for a specific session, initializing it if needed.
+func (avs *AuditVaultService) GetSessionLedgerPath(sessionID string) (string, error) {
+	if sessionID == "" {
+		return avs.ledgerPath, nil
+	}
+
+	sessionPath := filepath.Join(avs.sessionsRoot, sessionID)
+
+	avs.mu.RLock()
+	_, err := os.Stat(filepath.Join(sessionPath, ".git"))
+	avs.mu.RUnlock()
+
+	if err == nil {
+		return sessionPath, nil
+	}
+
+	// Initialize new session ledger
+	avs.mu.Lock()
+	defer avs.mu.Unlock()
+
+	// Double check
+	if _, err := os.Stat(filepath.Join(sessionPath, ".git")); err == nil {
+		return sessionPath, nil
+	}
+
+	if err := os.MkdirAll(sessionPath, 0755); err != nil {
+		return "", fmt.Errorf("failed to create session ledger directory: %w", err)
+	}
+
+	if err := avs.initGitRepo(sessionPath); err != nil {
+		return "", fmt.Errorf("failed to initialize session git repo: %w", err)
+	}
+
+	avs.logger.Info("Initialized new session ledger", "session_id", sessionID, "path", sessionPath)
+	return sessionPath, nil
+}
+
+// initLedgerGit initializes git repository in the global ledger directory
 func (avs *AuditVaultService) initLedgerGit() error {
-	gitDir := filepath.Join(avs.ledgerPath, ".git")
+	return avs.initGitRepo(avs.ledgerPath)
+}
+
+// initGitRepo initializes a git repository in the specified directory
+func (avs *AuditVaultService) initGitRepo(path string) error {
+	gitDir := filepath.Join(path, ".git")
 
 	if _, err := os.Stat(gitDir); err == nil {
-		avs.logger.Info("Ledger git repository already initialized", "path", avs.ledgerPath)
 		return nil
 	}
 
-	if err := avs.gitExec("init"); err != nil {
+	if err := avs.gitExecInDir(path, "init"); err != nil {
 		return fmt.Errorf("git init failed: %w", err)
 	}
 
-	if err := avs.gitExec("config", "user.name", "g8e Operator"); err != nil {
+	if err := avs.gitExecInDir(path, "config", "user.name", "g8e Operator"); err != nil {
 		return fmt.Errorf("git config user.name failed: %w", err)
 	}
-	if err := avs.gitExec("config", "user.email", "operator@"+constants.DefaultEndpoint); err != nil {
+	if err := avs.gitExecInDir(path, "config", "user.email", "operator@"+constants.DefaultEndpoint); err != nil {
 		return fmt.Errorf("git config user.email failed: %w", err)
 	}
 
-	gitignore := filepath.Join(avs.ledgerPath, ".gitignore")
+	gitignore := filepath.Join(path, ".gitignore")
 	if err := os.WriteFile(gitignore, []byte("# g8e Ledger\n"), 0644); err != nil {
 		return fmt.Errorf("failed to create .gitignore: %w", err)
 	}
 
-	if err := avs.gitExec("add", "-A"); err != nil {
+	if err := avs.gitExecInDir(path, "add", "-A"); err != nil {
 		return fmt.Errorf("failed to git add: %w", err)
 	}
 
-	if err := avs.gitExec("commit", "-m", "Initial ledger commit", "--allow-empty"); err != nil {
+	if err := avs.gitExecInDir(path, "commit", "-m", "Initial ledger commit", "--allow-empty"); err != nil {
 		return fmt.Errorf("failed to create initial commit: %w", err)
 	}
 
-	avs.logger.Info("Ledger git repository initialized", "path", avs.ledgerPath)
+	return nil
+}
+
+// gitExecInDir runs a git command in the specified directory
+func (avs *AuditVaultService) gitExecInDir(dir string, args ...string) error {
+	if avs.gitPath == "" {
+		return fmt.Errorf("git not available")
+	}
+	cmd := exec.Command(avs.gitPath, args...)
+	cmd.Dir = dir
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git %s in %s: %v (stderr: %s)", args[0], dir, err, strings.TrimSpace(stderr.String()))
+	}
 	return nil
 }
 

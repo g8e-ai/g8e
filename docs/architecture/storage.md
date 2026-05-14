@@ -24,7 +24,7 @@ This document explains the unified storage architecture for the g8e platform. It
     *   **Audit Vault**: Cryptographically signed, append-only record of all session activity (encrypted at rest).
     *   **Scrubbed Vault**: Sentinel-processed output for AI context and platform-side reporting.
     *   **Raw Vault**: Unscrubbed command output for deep forensic analysis (customer-access only).
-3.  **The Ledger (Managed Hosts)**: Git-backed version control of all file mutations providing cryptographic history and instant rollback.
+3.  **The Ledger (Managed Hosts)**: Multi-Ledger Architecture — a fleet of per-session isolated git repositories providing cryptographic history and instant rollback. Each operator session owns its own git repo under `.g8e/data/ledger/sessions/<operator_session_id>/`.
 
 ---
 
@@ -47,7 +47,7 @@ This document explains the unified storage architecture for the g8e platform. It
 - **Scrubbed Vault** (`.g8e/local_state.db`): Sentinel-processed command output (`execution_log`) and file diffs (`file_diff_log`) for AI context.
 - **Raw Vault** (`.g8e/raw_vault.db`): Unscrubbed command output (`raw_execution_log`) and file diffs (`raw_file_diff_log`) for forensic investigations. Accessible only to humans.
 - **Audit Vault** (`.g8e/data/g8e.db`): Encrypted append-only event log (`events`), session history (`sessions`), and file mutation metadata (`file_mutation_log`).
-- **Ledger** (`.g8e/data/ledger`): Git repository tracking every file mutation with cryptographic integrity. Files are mirrored here from the host OS.
+- **Ledger** (`.g8e/data/ledger/`): Multi-Ledger Architecture. A global bootstrap root plus per-session isolated git repositories at `sessions/<operator_session_id>/`. Each session ledger is initialized lazily on first file mutation for that session. Files are mirrored into the session ledger with a two-phase commit (pre/post snapshots).
 
 ---
 
@@ -103,9 +103,9 @@ This document explains the unified storage architecture for the g8e platform. It
 │  └──────────────────┘  └──────────────────┘  └──────────────────┘  │
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                      Ledger                                   │   │
-│  │               data/ledger (Git)                               │   │
-│  │   Cryptographic version control for every file mutation      │   │
+│  │                  Ledger (Multi-Ledger)                        │   │
+│  │         data/ledger/sessions/<session_id>/ (Git)              │   │
+│  │   Per-session isolated git repos; two-phase commits          │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -123,7 +123,7 @@ This document explains the unified storage architecture for the g8e platform. It
 | **Operator (Audit Vault)** | SQLite (Enc) | `.g8e/data/g8e.db` | LFAA encrypted append-only event log (`events`, `sessions`, `file_mutation_log`). |
 | **Operator (Scrubbed Vault)** | SQLite | `.g8e/local_state.db` | Sentinel-scrubbed AI context (`execution_log`, `file_diff_log`). |
 | **Operator (Raw Vault)** | SQLite | `.g8e/raw_vault.db` | Customer-only unscrubbed forensic record (`raw_execution_log`, `raw_file_diff_log`). |
-| **Operator (Ledger)** | Git | `.g8e/data/ledger` | Cryptographic file history and rollback. |
+| **Operator (Ledger)** | Git | `.g8e/data/ledger/sessions/<session_id>/` | Multi-Ledger: per-session isolated git repos for cryptographic file history, diff, and rollback. |
 
 ---
 
@@ -169,11 +169,15 @@ Sentinel protects data privacy in two phases:
 1. **Defense (Pre-Execution)**: Analyzes commands and file edits *before* they occur, blocking threat patterns.
 2. **Scrubbing (Post-Execution)**: Removes sensitive data (API keys, PII) from output before it is stored in the Scrubbed Vault or sent to the platform.
 
-### The Ledger (Git)
-The Ledger is a Git repository located at `.g8e/data/ledger`.
-- **Atomic Commits**: Every file modification is committed with pre/post hashes.
-- **Tamper Evidence**: Uses Git's Merkle tree to guarantee history integrity.
-- **Rollback**: Enables restoration of any file to any previous state in history.
+### The Ledger (Multi-Ledger Architecture)
+The Ledger uses a **Multi-Ledger Architecture**: each operator session owns an isolated git repository under `.g8e/data/ledger/sessions/<operator_session_id>/`. A global root at `.g8e/data/ledger/` is initialized at bootstrap but all runtime mutations are written into session-scoped repos.
+
+- **Session Isolation**: Each session ledger is initialized lazily with a double-checked lock on first file mutation. Concurrent sessions never share a git working tree, preventing cross-session interference.
+- **Two-Phase Commit**: Every mutation captures `LedgerHashBefore` (pre-mutation git commit) and `LedgerHashAfter` (post-mutation git commit), with the commit message embedding the operator session ID and a UTC timestamp.
+- **Tamper Evidence**: Git's Merkle tree guarantees history integrity. The git commit hash is the state root for that mutation boundary.
+- **Rollback**: Any file can be restored to any prior state within its session ledger (`RestoreFileFromCommit`).
+- **Encrypted Mirror**: When the Encryption Vault is unlocked, mirrored files are stored as `.enc` (AES-256-GCM) and decrypted transparently on retrieval.
+- **Graceful Degradation**: When git is unavailable (`--no-git`), the Ledger is disabled. The Audit Vault continues operating.
 
 ### Vault Strategy
 - **Audit Vault** (`.g8e/data/g8e.db`): Encrypted using AES-256-GCM (if configured). Stores the definitive session history and event log.

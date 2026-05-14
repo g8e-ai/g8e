@@ -14,10 +14,12 @@
 package storage
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -88,7 +90,7 @@ func TestLedgerService_MirrorFileWrite_NewFile(t *testing.T) {
 	assert.NotEmpty(t, result.LedgerPath)
 
 	// The mirror path should be within the ledger
-	assert.True(t, strings.Contains(result.LedgerPath, "ledger/files"))
+	assert.Contains(t, result.LedgerPath, "files")
 
 	// Now create the actual file
 	err = os.WriteFile(testFilePath, []byte("Hello, World!"), 0644)
@@ -270,15 +272,17 @@ func TestLedgerService_GetLedgerPath(t *testing.T) {
 	lms, avs, _ := setupTestLedger(t)
 	defer avs.Close()
 
-	// Test absolute path
-	ledgerPath := lms.getLedgerPath("/etc/nginx/nginx.conf")
-	assert.Contains(t, ledgerPath, "ledger/files")
+	ledgerDir := avs.GetLedgerPath()
+
+	// The mirror path should be within the ledger
+	ledgerPath := lms.getLedgerPath(ledgerDir, "/etc/nginx/nginx.conf")
+	assert.Contains(t, ledgerPath, "files")
 	assert.Contains(t, ledgerPath, "etc/nginx/nginx.conf")
 	assert.False(t, strings.Contains(ledgerPath, "//"))
 
 	// Test relative path (should be converted to absolute)
-	ledgerPath = lms.getLedgerPath("relative/path/file.txt")
-	assert.Contains(t, ledgerPath, "ledger/files")
+	ledgerPath = lms.getLedgerPath(ledgerDir, "relative/path/file.txt")
+	assert.Contains(t, ledgerPath, "files")
 }
 
 func TestLedgerService_CopyToLedger(t *testing.T) {
@@ -315,8 +319,10 @@ func TestLedgerService_SnapshotLedger(t *testing.T) {
 	lms, avs, tempDir := setupTestLedger(t)
 	defer avs.Close()
 
+	ledgerDir := avs.GetLedgerPath()
+
 	// Take a snapshot
-	hash1, err := lms.snapshotLedger("Test snapshot 1")
+	hash1, err := lms.snapshotLedger(ledgerDir, "Test snapshot 1")
 	require.NoError(t, err)
 	assert.NotEmpty(t, hash1)
 	assert.Len(t, hash1, 40) // Git SHA-1 hash length
@@ -327,7 +333,7 @@ func TestLedgerService_SnapshotLedger(t *testing.T) {
 	err = os.WriteFile(testFile, []byte("snapshot test"), 0644)
 	require.NoError(t, err)
 
-	hash2, err := lms.snapshotLedger("Test snapshot 2")
+	hash2, err := lms.snapshotLedger(ledgerDir, "Test snapshot 2")
 	require.NoError(t, err)
 	assert.NotEmpty(t, hash2)
 	assert.NotEqual(t, hash1, hash2)
@@ -337,8 +343,10 @@ func TestLedgerService_CalculateDiffStat(t *testing.T) {
 	lms, avs, tempDir := setupTestLedger(t)
 	defer avs.Close()
 
+	ledgerDir := avs.GetLedgerPath()
+
 	// Take initial snapshot
-	hash1, err := lms.snapshotLedger("Initial state")
+	hash1, err := lms.snapshotLedger(ledgerDir, "Initial state")
 	require.NoError(t, err)
 
 	// Create a file
@@ -348,11 +356,11 @@ func TestLedgerService_CalculateDiffStat(t *testing.T) {
 	require.NoError(t, err)
 
 	// Take another snapshot
-	hash2, err := lms.snapshotLedger("After adding file")
+	hash2, err := lms.snapshotLedger(ledgerDir, "After adding file")
 	require.NoError(t, err)
 
 	// Calculate diff stat
-	diffStat := lms.calculateDiffStat(hash1, hash2)
+	diffStat := lms.calculateDiffStat(ledgerDir, hash1, hash2)
 	assert.NotEmpty(t, diffStat)
 }
 
@@ -360,10 +368,12 @@ func TestLedgerService_CalculateDiffStat_EmptyHashes(t *testing.T) {
 	lms, avs, _ := setupTestLedger(t)
 	defer avs.Close()
 
-	diffStat := lms.calculateDiffStat("", "")
+	ledgerDir := avs.GetLedgerPath()
+
+	diffStat := lms.calculateDiffStat(ledgerDir, "", "")
 	assert.Empty(t, diffStat)
 
-	diffStat = lms.calculateDiffStat("abc123", "")
+	diffStat = lms.calculateDiffStat(ledgerDir, "abc123", "")
 	assert.Empty(t, diffStat)
 }
 
@@ -416,7 +426,7 @@ func TestLedgerService_GetFileHistory(t *testing.T) {
 	lms.CompleteMirrorWrite(result3, operatorSessionID)
 
 	// Get file history
-	history, err := lms.GetFileHistory(testFilePath, 10)
+	history, err := lms.GetFileHistory(testFilePath, 10, operatorSessionID)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(history), 2) // At least 2 commits for this file
 
@@ -436,7 +446,7 @@ func TestLedgerService_GetFileHistory_NilReceiver(t *testing.T) {
 	var lms *LedgerService
 
 	assert.NotPanics(t, func() {
-		history, err := lms.GetFileHistory("/some/file", 10)
+		history, err := lms.GetFileHistory("/some/file", 10, "session")
 		assert.Error(t, err)
 		assert.Nil(t, history)
 		assert.Contains(t, err.Error(), "disabled")
@@ -446,7 +456,7 @@ func TestLedgerService_GetFileHistory_NilReceiver(t *testing.T) {
 func TestLedgerService_GetFileHistory_DisabledVault(t *testing.T) {
 	lms := NewLedgerService(nil, nil, testutil.NewTestLogger())
 
-	history, err := lms.GetFileHistory("/some/file", 10)
+	history, err := lms.GetFileHistory("/some/file", 10, "session")
 	assert.Error(t, err)
 	assert.Nil(t, history)
 	assert.Contains(t, err.Error(), "disabled")
@@ -463,7 +473,7 @@ func TestLedgerService_GetFileHistory_DefaultLimit(t *testing.T) {
 	lms.CompleteMirrorCreate(result, "operator_session")
 
 	// Get history with zero limit (should default to 50)
-	history, err := lms.GetFileHistory(testFilePath, 0)
+	history, err := lms.GetFileHistory(testFilePath, 0, "operator_session")
 	require.NoError(t, err)
 	assert.NotNil(t, history)
 }
@@ -487,7 +497,7 @@ func TestLedgerService_GetFileAtCommit(t *testing.T) {
 	lms.CompleteMirrorWrite(result2, operatorSessionID)
 
 	// Get content at initial commit
-	content, err := lms.GetFileAtCommit(testFilePath, initialHash)
+	content, err := lms.GetFileAtCommit(testFilePath, initialHash, operatorSessionID)
 	require.NoError(t, err)
 	assert.Equal(t, "Initial content", content)
 
@@ -499,7 +509,7 @@ func TestLedgerService_GetFileAtCommit(t *testing.T) {
 func TestLedgerService_GetFileAtCommit_DisabledVault(t *testing.T) {
 	lms := NewLedgerService(nil, nil, testutil.NewTestLogger())
 
-	content, err := lms.GetFileAtCommit("/some/file", "abc123")
+	content, err := lms.GetFileAtCommit("/some/file", "abc123", "session")
 	assert.Error(t, err)
 	assert.Empty(t, content)
 	assert.Contains(t, err.Error(), "disabled")
@@ -588,7 +598,7 @@ func TestLedgerService_CompleteWorkflow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify history
-	history, err := lms.GetFileHistory(testFilePath, 10)
+	history, err := lms.GetFileHistory(testFilePath, 10, operatorSessionID)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(history), 2)
 
@@ -607,31 +617,46 @@ func TestLedgerService_CompleteWorkflow(t *testing.T) {
 	assert.Equal(t, "Step 2: Modified", string(content))
 }
 
-func TestLedgerService_ConcurrentMirrorOperations(t *testing.T) {
+func TestLedgerService_MultiSessionConcurrency(t *testing.T) {
 	lms, avs, tempDir := setupTestLedger(t)
 	defer avs.Close()
 
-	// Test that mutex properly serializes operations
-	done := make(chan bool, 3)
+	// Test that multiple sessions can operate in parallel without blocking each other's git commits
+	sessionCount := 5
+	done := make(chan bool, sessionCount)
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < sessionCount; i++ {
 		go func(idx int) {
-			filePath := filepath.Join(tempDir, "concurrent_test.txt")
-			operatorSessionID := "concurrent-session"
+			sessionID := fmt.Sprintf("parallel-session-%d", idx)
+			filePath := filepath.Join(tempDir, fmt.Sprintf("parallel_test_%d.txt", idx))
 
-			result, _ := lms.LedgerFileWrite(operatorSessionID, filePath)
-			os.WriteFile(filePath, []byte("content"), 0644)
-			lms.CompleteMirrorWrite(result, operatorSessionID)
+			// Record session in DB first (required by AuditVaultService.RecordEvents check)
+			err := avs.CreateSession(sessionID, "Parallel Session", "parallel@test.local")
+			require.NoError(t, err)
+
+			// Start multi-phase operation
+			result, err := lms.MirrorFileCreate(sessionID, filePath)
+			require.NoError(t, err)
+
+			os.WriteFile(filePath, []byte(fmt.Sprintf("content from session %d", idx)), 0644)
+			err = lms.CompleteMirrorCreate(result, sessionID)
+			require.NoError(t, err)
+
+			// Verify session-specific ledger directory exists
+			sessionLedgerDir := filepath.Join(tempDir, "ledger", "sessions", sessionID)
+			assert.DirExists(t, filepath.Join(sessionLedgerDir, ".git"))
+
 			done <- true
 		}(i)
 	}
 
-	// Wait for all goroutines
-	for i := 0; i < 3; i++ {
-		<-done
+	for i := 0; i < sessionCount; i++ {
+		select {
+		case <-done:
+		case <-time.After(time.Second * 10):
+			t.Errorf("Timeout waiting for parallel session %d", i)
+		}
 	}
-
-	// No panics or race conditions = pass
 }
 
 func TestLedgerService_LargeFile(t *testing.T) {

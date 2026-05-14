@@ -274,24 +274,23 @@ func TestHistoryHandler_FetchFileHistory(t *testing.T) {
 
 	// Create a file and track it through multiple versions
 	testFilePath := tempDir + "/test_file_history.txt"
-	operatorSessionID := "test-file-history-session"
 
 	// Create the file
 	err := os.WriteFile(testFilePath, []byte("Version 1"), 0644)
 	require.NoError(t, err)
 
-	// Mirror the file creation
+	// Mirror the file creation (use empty session ID for global ledger)
 	lms := hh.ledger
-	result, _ := lms.MirrorFileCreate(operatorSessionID, testFilePath)
-	lms.CompleteMirrorCreate(result, operatorSessionID)
+	result, _ := lms.MirrorFileCreate("", testFilePath)
+	lms.CompleteMirrorCreate(result, "")
 
 	// Modify the file
 	os.WriteFile(testFilePath, []byte("Version 2"), 0644)
-	result2, _ := lms.LedgerFileWrite(operatorSessionID, testFilePath)
-	lms.CompleteMirrorWrite(result2, operatorSessionID)
+	result2, _ := lms.LedgerFileWrite("", testFilePath)
+	lms.CompleteMirrorWrite(result2, "")
 
-	// Fetch file history
-	requestJSON := testutil.MustBuildFetchFileHistoryRequestedPayload(t, "exec-123", testFilePath, 10)
+	// Fetch file history (empty session ID uses global ledger)
+	requestJSON := testutil.MustBuildFetchFileHistoryRequestedPayload(t, "exec-123", testFilePath, 10, "")
 
 	response, err := hh.HandleFetchFileHistory(requestJSON)
 	require.NoError(t, err)
@@ -305,7 +304,7 @@ func TestHistoryHandler_FetchFileHistoryMissingFilePath(t *testing.T) {
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
-	requestJSON := testutil.MustBuildFetchFileHistoryRequestedPayload(t, "exec-123", "", 10)
+	requestJSON := testutil.MustBuildFetchFileHistoryRequestedPayload(t, "exec-123", "", 10, "")
 
 	response, err := hh.HandleFetchFileHistory(requestJSON)
 	require.NoError(t, err)
@@ -326,8 +325,8 @@ func TestHistoryHandler_FetchFileHistoryDefaultLimit(t *testing.T) {
 	result, _ := lms.MirrorFileCreate("operator_session", testFilePath)
 	lms.CompleteMirrorCreate(result, "operator_session")
 
-	// Request with limit=0
-	requestJSON := testutil.MustBuildFetchFileHistoryRequestedPayload(t, "exec-123", testFilePath, 0)
+	// Request with limit=0 (use same session ID as mirroring)
+	requestJSON := testutil.MustBuildFetchFileHistoryRequestedPayload(t, "exec-123", testFilePath, 0, "operator_session")
 
 	response, err := hh.HandleFetchFileHistory(requestJSON)
 	require.NoError(t, err)
@@ -472,7 +471,7 @@ func TestHistoryHandler_GetFileAtCommit(t *testing.T) {
 	lms.CompleteMirrorWrite(result2, operatorSessionID)
 
 	// Get content at initial commit
-	content, err := hh.GetFileAtCommit(testFilePath, initialHash)
+	content, err := hh.GetFileAtCommit(testFilePath, initialHash, operatorSessionID)
 	require.NoError(t, err)
 	assert.Equal(t, "Initial", content)
 }

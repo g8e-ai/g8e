@@ -4,7 +4,7 @@
 
 The **g8e Protocol** is the substrate: a wire contract that binds typed payloads, canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3) into a single signed `GovernanceEnvelope` (UAP JSON) transaction. It is not specific to any one domain. Anything that can express an intended action as a typed payload — infrastructure mutations, data writes, financial transfers, physical-world actuation, agent-to-agent calls — can be governed by it.
 
-An **Operator** is any host-side implementation that speaks the g8e Protocol: it receives signed transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a local ledger. The Operator is a role, not a specific binary.
+An **Operator** is any host-side implementation that speaks the g8e Protocol: it receives signed transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a local multi-ledger. The Operator is a role, not a specific binary.
 
 This repository ships:
 
@@ -20,7 +20,7 @@ Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal o
 
 These principles are properties of the protocol. The reference Operator and reference application illustrate them; any conforming implementation must preserve them.
 
-- **Host Sovereignty.** The host that performs the action is the system of record. Every accepted mutation and its output are anchored to a local, append-only ledger on that host. Raw data never has to leave the host for governance to function. The reference Operator implements this via a git-backed ledger (LFAA) and native SQLite vaults — queryable with standard SQL, mapped to MITRE ATT&CK for SIEM/SOC integration.
+- **Host Sovereignty.** The host that performs the action is the system of record. Every accepted mutation and its output are anchored to a local, append-only audit layer on that host. Raw data never has to leave the host for governance to function. The reference Operator implements this via a **Multi-Ledger Architecture** (LFAA) — each operator session owns an isolated, git-backed ledger — plus native SQLite vaults queryable with standard SQL and mapped to MITRE ATT&CK for SIEM/SOC integration.
 - **Decoupled Reasoning.** Intent generation is separated from execution. Whatever produces an intent (an LLM ensemble, a human, another agent, a deterministic policy engine) is stateless from the Operator's perspective — only signed transactions cross the boundary. The reference application uses a swappable, stateless reasoning engine across Anthropic, Gemini, OpenAI, and local providers (Ollama, llama.cpp).
 - **Operator Integrity.** The Operator is a verifiable-execution boundary, not a translator. Malformed, unsigned, or stale transactions are rejected, never coerced. The reference Operator adds Sentinel pre-execution analysis, hardware fingerprint binding, and outbound-only mTLS on top of the protocol's required L1/L2/L3 checks.
 - **Consensus-Driven Safety.** L2 requires an independent consensus proof; the protocol does not care how that consensus is produced. The reference application produces it with a Tribunal of five specialized LLM personas under tiered information isolation, an adversarial co-validator (Nemesis), and reputation staking with automated slashing.
@@ -74,7 +74,7 @@ flowchart TD
 2. **L2 (Consensus)**: The transaction must carry a valid cryptographic signature from a trusted consensus panel (The Tribunal).
 3. **L3 (Authorization)**: State-changing mutations require a hardware-bound signature (FIDO2/WebAuthn) or match an explicit auto-approval policy for benign diagnostics.
 4. **State Freshness**: The `state_merkle_root` binds the command to the host state at generation time; the Operator rejects stale or replayed transactions.
-5. **Warden Execution**: The Operator's on-host execution boundary performs the action in an isolated environment and captures results into a local audit ledger. The reference implementation calls this the Warden and writes to the LFAA git-backed ledger.
+5. **Warden Execution**: The Operator's on-host execution boundary performs the action and captures results into the session-scoped audit ledger. The reference implementation calls this the Warden and writes to the session's LFAA git-backed ledger (Multi-Ledger Architecture: one isolated git repo per operator session under `.g8e/data/ledger/sessions/<session_id>/`).
 6. **Signed Receipt**: Every execution (success or failure) emits a signed `ActionReceipt` providing an immutable proof of the mutation.
 
 ---
@@ -112,7 +112,7 @@ flowchart LR
             Scrubbed[(Scrubbed Vault)]
             Raw[(Raw Vault)]
             Audit[(Audit Vault)]
-            Ledger[(Git Ledger)]
+            Ledger[(Multi-Ledger<br>per-session git repos)]
         end
 
         g8eo --- Scrubbed & Raw & Audit & Ledger
@@ -189,7 +189,7 @@ g8e uses a 3-layer command validation hierarchy to ensure safety and minimize cl
 - **PKI Authority**: Owns the platform's Certificate Authority (CA). Handles CSR signing, certificate revocation (CRL/OCSP), and mTLS trust brokerage.
 - **Identity & Access**: Manages hardware-bound device links, user registration, and WebAuthn/FIDO2 passkey brokerage for Layer 3 authorization.
 - **Local-First Storage**: Provides a high-performance Document Store (SQLite), KV Store, and Blob storage for all platform components.
-- **LFAA (Local-First Audit Architecture)**: Every mutation is anchored to a local, git-backed ledger on the host, providing an immutable chain of custody.
+- **LFAA (Local-First Audit Architecture)**: Every mutation is anchored to a session-scoped, git-backed ledger on the host (Multi-Ledger: one isolated git repo per operator session), providing an immutable chain of custody.
 - **Real-time Messaging**: A built-in PubSub broker and WebSocket gateway orchestrate traffic between satellites, hubs, and clients.
 - **Sentinel Defense**: MITRE ATT&CK detectors and scrubbing patterns perform on-host pre-execution analysis of every command.
 
@@ -207,7 +207,7 @@ g8e uses a 3-layer command validation hierarchy to ensure safety and minimize cl
 - **Sentinel** — On-host defensive analysis: MITRE-mapped detectors, scrubbing patterns, and command allowlist/denylist enforcement.
 - **Warden** — Defensive execution: The on-host execution boundary inside the Operator that executes transactions, enforces state-root freshness, and emits signed ActionReceipts.
 - **Sovereignty** — Raw command output never leaves the host. Only Sentinel-scrubbed metadata reaches model providers. Engine outage does not erase host-local history.
-- **LFAA** — Local-First Audit Architecture. All state changes are committed to a local git ledger and SQLite vaults on the managed host.
+- **LFAA** — Local-First Audit Architecture. All state changes are committed to a session-scoped git ledger (Multi-Ledger: one isolated git repo per operator session) and SQLite vaults on the managed host.
 - **Compliance** — NSA Zero Trust (exceeds requirements in 6 of 7 pillars), HIPAA-ready, FedRAMP-aligned controls.
 
 Threat model and full control catalogue: [security.md](docs/architecture/security.md).

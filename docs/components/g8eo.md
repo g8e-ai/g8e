@@ -52,7 +52,7 @@ Satellite initialization is fail-closed: nothing executes until trust and identi
    - **Identity binding**: Pins the hardware fingerprint and Operator ID to the issued certificate.
 
 2. **Phase 2 — Service initialization (post-auth)**
-   - **Vaults**: Opens the Scrubbed, Raw, and Audit vaults and initializes the git-backed Ledger under `.g8e/`.
+   - **Vaults**: Opens the Scrubbed, Raw, and Audit vaults and initializes the global Ledger root under `.g8e/data/ledger/`. Session-scoped git repositories under `sessions/<operator_session_id>/` are created lazily on first file mutation.
    - **Pub/sub**: Establishes the persistent mTLS WebSocket to the Hub's `/ws/pubsub` endpoint.
    - **Sentinel**: Activates pre-execution threat detection and post-execution output scrubbing (MITRE ATT&CK-mapped detectors).
    - **Warden**: Activates the on-host execution boundary; only the Warden is permitted to mutate the host.
@@ -80,7 +80,7 @@ g8eo maintains four independent local stores in the `.g8e/` directory:
 | **Scrubbed Vault** | Sentinel-scrubbed command output and file diffs. | AI Engine (g8ee) |
 | **Raw Vault** | Unscrubbed full output for forensics. | Local User Only |
 | **Audit Vault** | Append-only event timeline (SQLite). | Platform / Audit |
-| **Ledger** | Git-backed cryptographic version history for all modified files. | Platform / Audit |
+| **Ledger** | Multi-Ledger: per-session isolated git repos at `.g8e/data/ledger/sessions/<session_id>/` for cryptographic file history, diff, and rollback. | Platform / Audit |
 
 ### Hub API Surface
 In `--listen` mode, g8eo exposes a single public protocol surface — there is no private back channel. Every caller (Satellite, BYO client, optional reference app) authenticates with the same mTLS contract and SPIFFE URI identity.

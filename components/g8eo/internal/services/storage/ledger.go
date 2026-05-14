@@ -90,6 +90,11 @@ func (lms *LedgerService) LedgerFileWrite(operatorSessionID, filePath string) (*
 		return nil, nil
 	}
 
+	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session ledger path: %w", err)
+	}
+
 	lms.mu.Lock()
 	defer lms.mu.Unlock()
 
@@ -98,7 +103,7 @@ func (lms *LedgerService) LedgerFileWrite(operatorSessionID, filePath string) (*
 		Operation: FileMutationWrite,
 	}
 
-	ledgerPath := lms.getLedgerPath(filePath)
+	ledgerPath := lms.getLedgerPath(ledgerDir, filePath)
 	result.LedgerPath = ledgerPath
 
 	if _, err := os.Stat(filePath); err == nil {
@@ -107,7 +112,7 @@ func (lms *LedgerService) LedgerFileWrite(operatorSessionID, filePath string) (*
 		}
 	}
 
-	hashBefore, err := lms.snapshotLedger(fmt.Sprintf("Pre-mutation backup: %s", filePath))
+	hashBefore, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Pre-mutation backup: %s", filePath))
 	if err != nil {
 		lms.logger.Warn("Failed to snapshot pre-mutation state", "error", err)
 	}
@@ -123,6 +128,11 @@ func (lms *LedgerService) CompleteMirrorWrite(result *LedgerResult, operatorSess
 		return nil
 	}
 
+	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get session ledger path: %w", err)
+	}
+
 	lms.mu.Lock()
 	defer lms.mu.Unlock()
 
@@ -131,14 +141,14 @@ func (lms *LedgerService) CompleteMirrorWrite(result *LedgerResult, operatorSess
 		return fmt.Errorf("failed to copy post-mutation file to ledger: %w", err)
 	}
 
-	hashAfter, err := lms.snapshotLedger(fmt.Sprintf("Post-mutation: %s via OperatorSession %s", result.FilePath, operatorSessionID))
+	hashAfter, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Post-mutation: %s via OperatorSession %s", result.FilePath, operatorSessionID))
 	if err != nil {
 		lms.logger.Warn("Failed to snapshot post-mutation state", "error", err)
 	}
 	result.LedgerHashAfter = hashAfter
 
-	result.DiffStat = lms.calculateDiffStat(result.LedgerHashBefore, result.LedgerHashAfter)
-	result.DiffContent = lms.calculateDiffContent(result.LedgerHashBefore, result.LedgerHashAfter)
+	result.DiffStat = lms.calculateDiffStat(ledgerDir, result.LedgerHashBefore, result.LedgerHashAfter)
+	result.DiffContent = lms.calculateDiffContent(ledgerDir, result.LedgerHashBefore, result.LedgerHashAfter)
 
 	lms.logger.Info("File mutation mirrored",
 		"file", result.FilePath,
@@ -156,6 +166,11 @@ func (lms *LedgerService) MirrorFileDelete(operatorSessionID, filePath string) (
 		return nil, nil
 	}
 
+	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session ledger path: %w", err)
+	}
+
 	lms.mu.Lock()
 	defer lms.mu.Unlock()
 
@@ -164,7 +179,7 @@ func (lms *LedgerService) MirrorFileDelete(operatorSessionID, filePath string) (
 		Operation: FileMutationDelete,
 	}
 
-	ledgerPath := lms.getLedgerPath(filePath)
+	ledgerPath := lms.getLedgerPath(ledgerDir, filePath)
 	result.LedgerPath = ledgerPath
 
 	if _, err := os.Stat(filePath); err == nil {
@@ -173,7 +188,7 @@ func (lms *LedgerService) MirrorFileDelete(operatorSessionID, filePath string) (
 		}
 	}
 
-	hashBefore, err := lms.snapshotLedger(fmt.Sprintf("Pre-deletion backup: %s", filePath))
+	hashBefore, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Pre-deletion backup: %s", filePath))
 	if err != nil {
 		lms.logger.Warn("Failed to snapshot pre-deletion state", "error", err)
 	}
@@ -189,6 +204,11 @@ func (lms *LedgerService) CompleteMirrorDelete(result *LedgerResult, operatorSes
 		return nil
 	}
 
+	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get session ledger path: %w", err)
+	}
+
 	lms.mu.Lock()
 	defer lms.mu.Unlock()
 
@@ -196,14 +216,14 @@ func (lms *LedgerService) CompleteMirrorDelete(result *LedgerResult, operatorSes
 		lms.logger.Warn("Failed to remove mirror file", "path", result.LedgerPath, "error", err)
 	}
 
-	hashAfter, err := lms.snapshotLedger(fmt.Sprintf("Post-deletion: %s via OperatorSession %s", result.FilePath, operatorSessionID))
+	hashAfter, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Post-deletion: %s via OperatorSession %s", result.FilePath, operatorSessionID))
 	if err != nil {
 		lms.logger.Warn("Failed to snapshot post-deletion state", "error", err)
 	}
 	result.LedgerHashAfter = hashAfter
 
 	result.DiffStat = "file deleted"
-	result.DiffContent = lms.calculateDiffContent(result.LedgerHashBefore, result.LedgerHashAfter)
+	result.DiffContent = lms.calculateDiffContent(ledgerDir, result.LedgerHashBefore, result.LedgerHashAfter)
 
 	lms.logger.Info("File deletion mirrored",
 		"file", result.FilePath,
@@ -220,6 +240,11 @@ func (lms *LedgerService) MirrorFileCreate(operatorSessionID, filePath string) (
 		return nil, nil
 	}
 
+	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session ledger path: %w", err)
+	}
+
 	lms.mu.Lock()
 	defer lms.mu.Unlock()
 
@@ -228,10 +253,10 @@ func (lms *LedgerService) MirrorFileCreate(operatorSessionID, filePath string) (
 		Operation: FileMutationCreate,
 	}
 
-	ledgerPath := lms.getLedgerPath(filePath)
+	ledgerPath := lms.getLedgerPath(ledgerDir, filePath)
 	result.LedgerPath = ledgerPath
 
-	hashBefore, err := lms.snapshotLedger(fmt.Sprintf("Pre-creation state for: %s", filePath))
+	hashBefore, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Pre-creation state for: %s", filePath))
 	if err != nil {
 		lms.logger.Warn("Failed to snapshot pre-creation state", "error", err)
 	}
@@ -247,6 +272,11 @@ func (lms *LedgerService) CompleteMirrorCreate(result *LedgerResult, operatorSes
 		return nil
 	}
 
+	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get session ledger path: %w", err)
+	}
+
 	lms.mu.Lock()
 	defer lms.mu.Unlock()
 
@@ -255,7 +285,7 @@ func (lms *LedgerService) CompleteMirrorCreate(result *LedgerResult, operatorSes
 		return fmt.Errorf("failed to copy created file to ledger: %w", err)
 	}
 
-	hashAfter, err := lms.snapshotLedger(fmt.Sprintf("Post-creation: %s via OperatorSession %s", result.FilePath, operatorSessionID))
+	hashAfter, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Post-creation: %s via OperatorSession %s", result.FilePath, operatorSessionID))
 	if err != nil {
 		lms.logger.Warn("Failed to snapshot post-creation state", "error", err)
 	}
@@ -266,7 +296,7 @@ func (lms *LedgerService) CompleteMirrorCreate(result *LedgerResult, operatorSes
 		result.DiffStat = fmt.Sprintf("+%d lines, %d bytes (new file)", lineCount, info.Size())
 	}
 
-	result.DiffContent = lms.calculateDiffContent(result.LedgerHashBefore, result.LedgerHashAfter)
+	result.DiffContent = lms.calculateDiffContent(ledgerDir, result.LedgerHashBefore, result.LedgerHashAfter)
 
 	lms.logger.Info("File creation mirrored",
 		"file", result.FilePath,
@@ -278,14 +308,15 @@ func (lms *LedgerService) CompleteMirrorCreate(result *LedgerResult, operatorSes
 }
 
 // getLedgerPath returns the path where a file should be mirrored in the ledger.
-func (lms *LedgerService) getLedgerPath(filePath string) string {
+func (lms *LedgerService) getLedgerPath(ledgerDir, filePath string) string {
 	absPath, err := filepath.Abs(filePath)
 	if err != nil {
 		absPath = filePath
 	}
 
 	cleanPath := strings.TrimPrefix(absPath, "/")
-	return filepath.Join(lms.auditVault.filesPath, cleanPath)
+	// Files are stored in 'files/' subdirectory within the ledger repository
+	return filepath.Join(ledgerDir, "files", cleanPath)
 }
 
 // copyToLedger copies a file from the host to the ledger, encrypting it if the vault is unlocked.
@@ -346,35 +377,35 @@ func (lms *LedgerService) copyToLedger(srcPath, dstPath string) error {
 	return nil
 }
 
-// gitExec runs a git command in the ledger directory.
-func (lms *LedgerService) gitExec(args ...string) error {
+// gitExec runs a git command in the specified directory.
+func (lms *LedgerService) gitExec(dir string, args ...string) error {
 	gitPath := lms.auditVault.GetGitPath()
 	if gitPath == "" {
 		return fmt.Errorf("git not available")
 	}
 	cmd := exec.Command(gitPath, args...)
-	cmd.Dir = lms.auditVault.GetLedgerGitDir()
+	cmd.Dir = dir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git %s: %v (stderr: %s)", args[0], err, strings.TrimSpace(stderr.String()))
+		return fmt.Errorf("git %s in %s: %v (stderr: %s)", args[0], dir, err, strings.TrimSpace(stderr.String()))
 	}
 	return nil
 }
 
-// gitOutput runs a git command in the ledger directory and returns stdout.
-func (lms *LedgerService) gitOutput(args ...string) (string, error) {
+// gitOutput runs a git command in the specified directory and returns stdout.
+func (lms *LedgerService) gitOutput(dir string, args ...string) (string, error) {
 	gitPath := lms.auditVault.GetGitPath()
 	if gitPath == "" {
 		return "", fmt.Errorf("git not available")
 	}
 	cmd := exec.Command(gitPath, args...)
-	cmd.Dir = lms.auditVault.GetLedgerGitDir()
+	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git %s: %v (stderr: %s)", args[0], err, strings.TrimSpace(stderr.String()))
+		return "", fmt.Errorf("git %s in %s: %v (stderr: %s)", args[0], dir, err, strings.TrimSpace(stderr.String()))
 	}
 	return strings.TrimSpace(stdout.String()), nil
 }
@@ -403,17 +434,17 @@ func (lms *LedgerService) GetStateMerkleRoot() (string, error) {
 }
 
 // snapshotLedger creates a git commit and returns the commit hash.
-func (lms *LedgerService) snapshotLedger(message string) (string, error) {
-	if err := lms.gitExec("add", "-A"); err != nil {
+func (lms *LedgerService) snapshotLedger(ledgerDir, message string) (string, error) {
+	if err := lms.gitExec(ledgerDir, "add", "-A"); err != nil {
 		return "", fmt.Errorf("git add failed: %w", err)
 	}
 
 	commitMsg := fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), message)
-	if err := lms.gitExec("commit", "-m", commitMsg, "--allow-empty"); err != nil {
+	if err := lms.gitExec(ledgerDir, "commit", "-m", commitMsg, "--allow-empty"); err != nil {
 		return "", fmt.Errorf("git commit failed: %w", err)
 	}
 
-	hash, err := lms.gitOutput("rev-parse", "HEAD")
+	hash, err := lms.gitOutput(ledgerDir, "rev-parse", "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("failed to get HEAD: %w", err)
 	}
@@ -422,12 +453,12 @@ func (lms *LedgerService) snapshotLedger(message string) (string, error) {
 }
 
 // calculateDiffStat calculates the diff statistics between two commits.
-func (lms *LedgerService) calculateDiffStat(hashBefore, hashAfter string) string {
+func (lms *LedgerService) calculateDiffStat(ledgerDir, hashBefore, hashAfter string) string {
 	if hashBefore == "" || hashAfter == "" {
 		return ""
 	}
 
-	output, err := lms.gitOutput("diff", "--stat", hashBefore, hashAfter)
+	output, err := lms.gitOutput(ledgerDir, "diff", "--stat", hashBefore, hashAfter)
 	if err != nil || output == "" {
 		return ""
 	}
@@ -440,12 +471,12 @@ func (lms *LedgerService) calculateDiffStat(hashBefore, hashAfter string) string
 }
 
 // calculateDiffContent computes the full diff content between two commits.
-func (lms *LedgerService) calculateDiffContent(hashBefore, hashAfter string) string {
+func (lms *LedgerService) calculateDiffContent(ledgerDir, hashBefore, hashAfter string) string {
 	if hashBefore == "" || hashAfter == "" {
 		return ""
 	}
 
-	output, err := lms.gitOutput("diff", hashBefore, hashAfter)
+	output, err := lms.gitOutput(ledgerDir, "diff", hashBefore, hashAfter)
 	if err != nil {
 		lms.logger.Warn("Failed to calculate diff content", "error", err)
 		return ""
@@ -455,13 +486,29 @@ func (lms *LedgerService) calculateDiffContent(hashBefore, hashAfter string) str
 }
 
 // GetDiffContent returns the full diff content between two commits.
-func (lms *LedgerService) GetDiffContent(hashBefore, hashAfter string) string {
-	return lms.calculateDiffContent(hashBefore, hashAfter)
+func (lms *LedgerService) GetDiffContent(hashBefore, hashAfter string, operatorSessionID string) string {
+	if !lms.gitReady() {
+		return ""
+	}
+	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
+	if err != nil {
+		lms.logger.Warn("Failed to get session ledger path for diff content", "error", err)
+		return ""
+	}
+	return lms.calculateDiffContent(ledgerDir, hashBefore, hashAfter)
 }
 
 // GetDiffStat returns the diff statistics between two commits.
-func (lms *LedgerService) GetDiffStat(hashBefore, hashAfter string) string {
-	return lms.calculateDiffStat(hashBefore, hashAfter)
+func (lms *LedgerService) GetDiffStat(hashBefore, hashAfter string, operatorSessionID string) string {
+	if !lms.gitReady() {
+		return ""
+	}
+	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
+	if err != nil {
+		lms.logger.Warn("Failed to get session ledger path for diff stat", "error", err)
+		return ""
+	}
+	return lms.calculateDiffStat(ledgerDir, hashBefore, hashAfter)
 }
 
 // countLines counts the number of lines in a file.
@@ -474,8 +521,11 @@ func (lms *LedgerService) countLines(filePath string) int {
 }
 
 // GetFileHistory retrieves the git history for a specific file.
-func (lms *LedgerService) GetFileHistory(filePath string, limit int) ([]FileHistoryEntry, error) {
+func (lms *LedgerService) GetFileHistory(filePath string, limit int, operatorSessionID string) ([]FileHistoryEntry, error) {
 	if !lms.gitReady() {
+		return nil, fmt.Errorf("ledger is disabled")
+	}
+	if lms.auditVault == nil {
 		return nil, fmt.Errorf("ledger is disabled")
 	}
 
@@ -483,13 +533,18 @@ func (lms *LedgerService) GetFileHistory(filePath string, limit int) ([]FileHist
 		limit = 50
 	}
 
-	ledgerPath := lms.getLedgerPath(filePath)
-	relPath, err := filepath.Rel(lms.auditVault.GetLedgerPath(), ledgerPath)
+	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session ledger path: %w", err)
+	}
+
+	ledgerPath := lms.getLedgerPath(ledgerDir, filePath)
+	relPath, err := filepath.Rel(ledgerDir, ledgerPath)
 	if err != nil {
 		relPath = ledgerPath
 	}
 
-	output, err := lms.gitOutput("log",
+	output, err := lms.gitOutput(ledgerDir, "log",
 		fmt.Sprintf("-n%d", limit),
 		"--format=%H\t%aI\t%s",
 		"--", relPath)
@@ -536,19 +591,24 @@ type FileHistoryEntry struct {
 }
 
 // GetFileAtCommit retrieves the content of a file at a specific commit, decrypting if the vault is unlocked.
-func (lms *LedgerService) GetFileAtCommit(filePath, commitHash string) (string, error) {
+func (lms *LedgerService) GetFileAtCommit(filePath, commitHash, operatorSessionID string) (string, error) {
 	if !lms.gitReady() {
 		return "", fmt.Errorf("ledger is disabled")
 	}
 
-	ledgerPath := lms.getLedgerPath(filePath)
-	relPath, err := filepath.Rel(lms.auditVault.GetLedgerPath(), ledgerPath)
+	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get session ledger path: %w", err)
+	}
+
+	ledgerPath := lms.getLedgerPath(ledgerDir, filePath)
+	relPath, err := filepath.Rel(ledgerDir, ledgerPath)
 	if err != nil {
 		relPath = ledgerPath
 	}
 
 	encryptedRelPath := relPath + ".enc"
-	content, err := lms.gitShowFile(commitHash, encryptedRelPath)
+	content, err := lms.gitShowFile(ledgerDir, commitHash, encryptedRelPath)
 	if err == nil {
 		if !lms.IsEncryptionEnabled() {
 			return "", fmt.Errorf("encrypted file found but vault is locked")
@@ -561,7 +621,7 @@ func (lms *LedgerService) GetFileAtCommit(filePath, commitHash string) (string, 
 		return string(decrypted), nil
 	}
 
-	content, err = lms.gitShowFile(commitHash, relPath)
+	content, err = lms.gitShowFile(ledgerDir, commitHash, relPath)
 	if err != nil {
 		return "", fmt.Errorf("file not found in commit: %w", err)
 	}
@@ -570,14 +630,14 @@ func (lms *LedgerService) GetFileAtCommit(filePath, commitHash string) (string, 
 }
 
 // gitShowFile retrieves a file's content at a specific commit.
-func (lms *LedgerService) gitShowFile(commitHash, relPath string) (string, error) {
+func (lms *LedgerService) gitShowFile(ledgerDir, commitHash, relPath string) (string, error) {
 	gitPath := lms.auditVault.GetGitPath()
 	if gitPath == "" {
 		return "", fmt.Errorf("git not available")
 	}
 	ref := fmt.Sprintf("%s:%s", commitHash, relPath)
 	cmd := exec.Command(gitPath, "show", ref)
-	cmd.Dir = lms.auditVault.GetLedgerGitDir()
+	cmd.Dir = ledgerDir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -593,22 +653,27 @@ func (lms *LedgerService) RestoreFileFromCommit(filePath, commitHash, operatorSe
 		return fmt.Errorf("ledger is disabled")
 	}
 
+	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get session ledger path: %w", err)
+	}
+
 	lms.mu.Lock()
 	defer lms.mu.Unlock()
 
-	content, err := lms.GetFileAtCommit(filePath, commitHash)
+	content, err := lms.GetFileAtCommit(filePath, commitHash, operatorSessionID)
 	if err != nil {
 		return fmt.Errorf("failed to get file at commit: %w", err)
 	}
 
-	ledgerPath := lms.getLedgerPath(filePath)
+	ledgerPath := lms.getLedgerPath(ledgerDir, filePath)
 	if _, err := os.Stat(filePath); err == nil {
 		if err := lms.copyToLedger(filePath, ledgerPath); err != nil {
 			lms.logger.Warn("Failed to backup current state before restoration", "error", err)
 		}
 	}
 
-	_, _ = lms.snapshotLedger(fmt.Sprintf("Pre-restoration state: %s", filePath))
+	_, _ = lms.snapshotLedger(ledgerDir, fmt.Sprintf("Pre-restoration state: %s", filePath))
 
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write restored file: %w", err)
@@ -618,7 +683,7 @@ func (lms *LedgerService) RestoreFileFromCommit(filePath, commitHash, operatorSe
 		lms.logger.Warn("Failed to mirror restored file", "error", err)
 	}
 
-	_, _ = lms.snapshotLedger(fmt.Sprintf("Restored: %s to commit %s via OperatorSession %s", filePath, truncateHash(commitHash), operatorSessionID))
+	_, _ = lms.snapshotLedger(ledgerDir, fmt.Sprintf("Restored: %s to commit %s via OperatorSession %s", filePath, truncateHash(commitHash), operatorSessionID))
 
 	lms.logger.Info("File restored from commit",
 		"file", filePath,
