@@ -158,7 +158,7 @@ func signedEnvelope(
 	env := &uap.UAPEnvelope{
 		ProtocolVersion:   "1.0",
 		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(5 * time.Minute)),
+		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(30 * time.Minute)), // Increased to 30m for chaos runs
 		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
 		OperatorId:        "chaos-operator",
 		OperatorSessionId: "chaos-session-001",
@@ -367,6 +367,17 @@ func main() {
 		os.Exit(1)
 	}
 	defer av.Close()
+	session, err := av.GetSession("chaos-session-001")
+	if err != nil {
+		logger.Error("failed to inspect chaos audit session", "error", err)
+		os.Exit(1)
+	}
+	if session == nil {
+		if err := av.CreateSession("chaos-session-001", "Chaos Tester", "chaos@test.local"); err != nil {
+			logger.Error("failed to create chaos audit session", "error", err)
+			os.Exit(1)
+		}
+	}
 
 	const initialStateRoot = "chaos-state-root-v1"
 
@@ -451,42 +462,13 @@ func main() {
 	// ── phase 2: fire payloads through the protocol ───────────────────────────
 	var cnt counters
 	var wg sync.WaitGroup
-	// Pre-build all envelopes to parallelize crypto work before hot path
-	logger.Info("Pre-building envelopes...", "count", *flagCount)
-	envelopes := make([]*uap.UAPEnvelope, *flagCount)
-	var buildWg sync.WaitGroup
-	buildSem := make(chan struct{}, runtime.NumCPU()*2)
-	var buildErrs atomic.Int64
 
-	for i, cat := range payloads {
-		buildWg.Add(1)
-		idx := i
-		catCopy := cat
-		buildSem <- struct{}{}
-		go func(id int, c category) {
-			defer buildWg.Done()
-			defer func() { <-buildSem }()
-			env, err := buildEnvelope(id, c, initialStateRoot, privKey, keyID)
-			if err != nil {
-				logger.Error("envelope build failed", "id", id, "error", err)
-				buildErrs.Add(1)
-				return
-			}
-			envelopes[id] = env
-		}(idx, catCopy)
-	}
-	buildWg.Wait()
-
-	if buildErrs.Load() > 0 {
-		logger.Error("Failed to build some envelopes", "errors", buildErrs.Load())
-	}
-
-	// Batch rejection writer to reduce SQLite contention
-	rejectionBatch := &batchRejectionWriter{
+	// Batch rejection and success writers to reduce SQLite contention
+	rejectionBatch := &batchEventWriter{
 		warden:    warden,
 		logger:    logger,
-		flushSize: 50,
-		events:    make([]*storage.Event, 0, 50),
+		flushSize: 100,
+		events:    make([]*storage.Event, 0, 100),
 	}
 	defer rejectionBatch.flush() // ensure final batch is written
 
@@ -496,20 +478,27 @@ func main() {
 	logger.Info("Starting execution phase", "workers", workerCount)
 
 	for i, cat := range payloads {
-		if envelopes[i] == nil {
-			continue // skip failed builds
-		}
 		wg.Add(1)
 		idx := i
 		catCopy := cat
 		sem <- struct{}{}
-		go func(id int, c category, env *uap.UAPEnvelope) {
+		go func(id int, c category) {
 			defer wg.Done()
 			defer func() { <-sem }()
+
 			// Fetch current state root at execution time (may have been updated by prior mutations)
 			currentRoot, _ := stateRootProvider.GetCurrentStateRoot()
-			fireOnePrebuilt(id, c, env, currentRoot, verifier, warden, logger, &cnt, rejectionBatch)
-		}(idx, catCopy, envelopes[idx])
+
+			// Build envelope JUST-IN-TIME to avoid expiration during pre-build
+			env, err := buildEnvelope(id, c, currentRoot, privKey, keyID)
+			if err != nil {
+				logger.Error("envelope build failed", "id", id, "error", err)
+				cnt.other.Add(1)
+				return
+			}
+
+			fireOne(id, c, env, currentRoot, verifier, warden, logger, &cnt, rejectionBatch)
+		}(idx, catCopy)
 	}
 
 	wg.Wait()
@@ -565,7 +554,7 @@ func buildEnvelope(id int, cat category, stateRoot string, privKey ed25519.Priva
 	}
 }
 
-func fireOnePrebuilt(
+func fireOne(
 	id int,
 	cat category,
 	env *uap.UAPEnvelope,
@@ -574,16 +563,16 @@ func fireOnePrebuilt(
 	warden *governance.Warden,
 	logger *slog.Logger,
 	cnt *counters,
-	rejectionBatch *batchRejectionWriter,
+	batchWriter *batchEventWriter,
 ) {
-	verified, verErr := verifier.VerifyEnvelope(env)
+	_, verErr := verifier.VerifyEnvelope(env)
 	if verErr != nil {
 		reason := classifyRejection(verErr)
 		logger.Info("envelope rejected",
 			"id", id,
 			"category", categoryName(cat),
 			"reason", verErr.Error())
-		rejectionBatch.record(id, cat, env, verErr)
+		batchWriter.recordRejection(id, cat, env, verErr)
 		switch reason {
 		case "L1_BLOCKED":
 			cnt.l1Blocked.Add(1)
@@ -603,10 +592,17 @@ func fireOnePrebuilt(
 		Timestamp:         env.Timestamp.AsTime(),
 	}
 
-	_, execErr := warden.Execute(context.Background(), verified, cmdMsg)
-	if execErr != nil {
-		logger.Warn("warden execution error", "id", id, "error", execErr)
+	// In chaos tester, we want to bypass the Warden's synchronous SQLite write for successes too
+	// so we use a custom execution flow that still hits the handler but batches the audit log.
+
+	// Execute through the handler
+	eventType := mappings.MapActionTypeToEventType(env.ActionType)
+	err := warden.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, cmdMsg)
+
+	if err != nil {
+		logger.Warn("execution error", "id", id, "error", err)
 		cnt.other.Add(1)
+		batchWriter.recordExecution(id, cat, env, err)
 		return
 	}
 
@@ -618,10 +614,12 @@ func fireOnePrebuilt(
 	case catFileMutation:
 		cnt.executedFileMut.Add(1)
 	}
+
+	batchWriter.recordExecution(id, cat, env, nil)
 }
 
-// batchRejectionWriter batches rejection events to reduce SQLite lock contention
-type batchRejectionWriter struct {
+// batchEventWriter batches events to reduce SQLite lock contention
+type batchEventWriter struct {
 	mu        sync.Mutex
 	warden    *governance.Warden
 	logger    *slog.Logger
@@ -629,7 +627,7 @@ type batchRejectionWriter struct {
 	flushSize int
 }
 
-func (b *batchRejectionWriter) record(id int, cat category, env *uap.UAPEnvelope, verErr error) {
+func (b *batchEventWriter) recordRejection(id int, cat category, env *uap.UAPEnvelope, verErr error) {
 	if b.warden.AuditVault == nil {
 		return
 	}
@@ -643,8 +641,33 @@ func (b *batchRejectionWriter) record(id int, cat category, env *uap.UAPEnvelope
 		CommandRaw:        env.ActionType + " / " + env.TargetResource,
 	}
 
+	b.queueEvent(event)
+}
+
+func (b *batchEventWriter) recordExecution(id int, cat category, env *uap.UAPEnvelope, execErr error) {
+	if b.warden.AuditVault == nil {
+		return
+	}
+
+	status := "COMPLETED"
+	if execErr != nil {
+		status = fmt.Sprintf("FAILED: %v", execErr)
+	}
+
+	event := &storage.Event{
+		OperatorSessionID: "chaos-session-001",
+		Timestamp:         time.Now(),
+		Type:              "action_receipt",
+		ContentText:       fmt.Sprintf("[chaos-id:%d] %s: %s", id, categoryName(cat), status),
+		CommandRaw:        fmt.Sprintf("%s / %s (hash: %s)", env.ActionType, env.TargetResource, env.TransactionHash[:12]),
+	}
+
+	b.queueEvent(event)
+}
+
+func (b *batchEventWriter) queueEvent(ev *storage.Event) {
 	b.mu.Lock()
-	b.events = append(b.events, event)
+	b.events = append(b.events, ev)
 	shouldFlush := len(b.events) >= b.flushSize
 	b.mu.Unlock()
 
@@ -653,7 +676,7 @@ func (b *batchRejectionWriter) record(id int, cat category, env *uap.UAPEnvelope
 	}
 }
 
-func (b *batchRejectionWriter) flush() {
+func (b *batchEventWriter) flush() {
 	b.mu.Lock()
 	events := b.events
 	b.events = make([]*storage.Event, 0, b.flushSize)
@@ -663,9 +686,10 @@ func (b *batchRejectionWriter) flush() {
 		return
 	}
 
-	for _, ev := range events {
-		if _, err := b.warden.AuditVault.RecordEvent(ev); err != nil {
-			b.logger.Warn("failed to record rejection event", "error", err)
+	// Use a single transaction for the whole batch
+	if b.warden.AuditVault != nil {
+		if err := b.warden.AuditVault.RecordEvents(events); err != nil {
+			b.logger.Warn("failed to record batch of events", "error", err)
 		}
 	}
 }

@@ -172,7 +172,7 @@ func TestAuditVaultService_Event(t *testing.T) {
 	assert.Equal(t, "file1.txt\nfile2.txt", retrievedEvent.CommandStdout)
 }
 
-func TestAuditVaultService_RecordEvent_AutoCreatesSession(t *testing.T) {
+func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -191,8 +191,6 @@ func TestAuditVaultService_RecordEvent_AutoCreatesSession(t *testing.T) {
 	require.NoError(t, err)
 	defer avs.Close()
 
-	// Do NOT call CreateSession — simulates direct terminal / anchored terminal commands
-	// where no session is explicitly created before events are recorded.
 	operatorSessionID := "session_1771888262981_ffafe0f4-9c9e-439c-8a97-89e5a9f04c1e"
 	exitCode := 0
 	event := &Event{
@@ -208,20 +206,131 @@ func TestAuditVaultService_RecordEvent_AutoCreatesSession(t *testing.T) {
 	}
 
 	eventID, err := avs.RecordEvent(event)
-	require.NoError(t, err, "RecordEvent must not fail when session was not pre-created")
-	assert.Greater(t, eventID, int64(0))
+	require.ErrorIs(t, err, ErrAuditSessionUnknown)
+	assert.Equal(t, int64(0), eventID)
 
-	// OperatorSession should have been auto-created
 	session, err := avs.GetSession(operatorSessionID)
 	require.NoError(t, err)
-	require.NotNil(t, session, "session should be auto-created by RecordEvent")
-	assert.Equal(t, operatorSessionID, session.ID)
+	assert.Nil(t, session)
+}
 
-	// Event should be retrievable
+func TestAuditVaultService_RecordEvent_RejectsMissingSession(t *testing.T) {
+	tempDir := t.TempDir()
+
+	config := &AuditVaultConfig{
+		DataDir:                   tempDir,
+		DBPath:                    "test.db",
+		LedgerDir:                 "ledger",
+		MaxDBSizeMB:               100,
+		RetentionDays:             7,
+		PruneIntervalMinutes:      60,
+		Enabled:                   true,
+		OutputTruncationThreshold: 102400,
+		HeadTailSize:              51200,
+	}
+
+	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	require.NoError(t, err)
+	defer avs.Close()
+
+	eventID, err := avs.RecordEvent(&Event{
+		Timestamp:   time.Now().UTC(),
+		Type:        EventTypeCmdExec,
+		ContentText: "missing session",
+		CommandRaw:  "uptime",
+	})
+	require.ErrorIs(t, err, ErrAuditSessionMissing)
+	assert.Equal(t, int64(0), eventID)
+}
+
+func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
+	tempDir := t.TempDir()
+
+	config := &AuditVaultConfig{
+		DataDir:                   tempDir,
+		DBPath:                    "test.db",
+		LedgerDir:                 "ledger",
+		MaxDBSizeMB:               100,
+		RetentionDays:             7,
+		PruneIntervalMinutes:      60,
+		Enabled:                   true,
+		OutputTruncationThreshold: 102400,
+		HeadTailSize:              51200,
+	}
+
+	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	require.NoError(t, err)
+	defer avs.Close()
+
+	operatorSessionID := "batch-valid-session"
+	err = avs.CreateSession(operatorSessionID, "Batch Session", "user@example.com")
+	require.NoError(t, err)
+
+	err = avs.RecordEvents([]*Event{
+		{
+			OperatorSessionID: operatorSessionID,
+			Timestamp:         time.Now().UTC(),
+			Type:              EventTypeCmdExec,
+			ContentText:       "valid event",
+			CommandRaw:        "uptime",
+		},
+		{
+			OperatorSessionID: "unknown-batch-session",
+			Timestamp:         time.Now().UTC(),
+			Type:              EventTypeCmdExec,
+			ContentText:       "invalid event",
+			CommandRaw:        "id",
+		},
+	})
+	require.ErrorIs(t, err, ErrAuditSessionUnknown)
+
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
 	require.NoError(t, err)
-	require.Len(t, events, 1)
-	assert.Equal(t, "uptime", events[0].CommandRaw)
+	assert.Len(t, events, 0)
+}
+
+func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.T) {
+	tempDir := t.TempDir()
+
+	config := &AuditVaultConfig{
+		DataDir:                   tempDir,
+		DBPath:                    "test.db",
+		LedgerDir:                 "ledger",
+		MaxDBSizeMB:               100,
+		RetentionDays:             7,
+		PruneIntervalMinutes:      60,
+		Enabled:                   true,
+		OutputTruncationThreshold: 102400,
+		HeadTailSize:              51200,
+	}
+
+	avs, err := NewAuditVaultService(config, testutil.NewTestLogger())
+	require.NoError(t, err)
+	defer avs.Close()
+
+	operatorSessionID := "batch-existing-session"
+	err = avs.CreateSession(operatorSessionID, "Batch Session", "user@example.com")
+	require.NoError(t, err)
+
+	err = avs.RecordEvents([]*Event{
+		{
+			OperatorSessionID: operatorSessionID,
+			Timestamp:         time.Now().UTC(),
+			Type:              EventTypeUserMsg,
+			ContentText:       "hello",
+		},
+		{
+			OperatorSessionID: operatorSessionID,
+			Timestamp:         time.Now().UTC(),
+			Type:              EventTypeAIMsg,
+			ContentText:       "world",
+		},
+	})
+	require.NoError(t, err)
+
+	events, err := avs.GetEvents(operatorSessionID, 10, 0)
+	require.NoError(t, err)
+	assert.Len(t, events, 2)
 }
 
 func TestAuditVaultService_OutputTruncation(t *testing.T) {

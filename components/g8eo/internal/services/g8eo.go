@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/internal/config"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/auth"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/governance"
@@ -180,6 +181,18 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.auditVault, err = storage.NewAuditVaultService(auditVaultConfig, vs.logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize audit vault: %w", err)
+	}
+	if vs.config.OperatorSessionId == "" {
+		return fmt.Errorf("operator session ID required before audit vault can accept events")
+	}
+	session, err := vs.auditVault.GetSession(vs.config.OperatorSessionId)
+	if err != nil {
+		return fmt.Errorf("failed to verify audit session: %w", err)
+	}
+	if session == nil {
+		if err := vs.auditVault.CreateSession(vs.config.OperatorSessionId, "Operator Session", vs.config.OperatorID); err != nil {
+			return fmt.Errorf("failed to create audit session: %w", err)
+		}
 	}
 
 	if vs.auditVault != nil && vs.auditVault.IsEnabled() && vs.auditVault.IsGitAvailable() {
@@ -341,9 +354,12 @@ func (a *auditVaultTransactionStore) DocSet(collection, id string, data json.Raw
 	if a.vault == nil {
 		return nil
 	}
-	// Use the vault's database connection through a simple event recording
+	var receipt models.ActionReceiptRecord
+	if err := json.Unmarshal(data, &receipt); err != nil {
+		return fmt.Errorf("failed to decode action receipt record: %w", err)
+	}
 	event := &storage.Event{
-		OperatorSessionID: id,
+		OperatorSessionID: receipt.OperatorSessionID,
 		Timestamp:         time.Now(),
 		Type:              storage.EventType("transaction_audit"),
 		ContentText:       string(data),

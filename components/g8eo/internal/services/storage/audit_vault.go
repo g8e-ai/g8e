@@ -16,6 +16,7 @@ package storage
 import (
 	"bytes"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -71,6 +72,12 @@ const (
 	EventTypeAIMsg        EventType = "AI_MSG"
 	EventTypeCmdExec      EventType = "CMD_EXEC"
 	EventTypeFileMutation EventType = "FILE_MUTATION"
+)
+
+var (
+	ErrAuditEventNil       = errors.New("AUDIT_EVENT_INVALID: event required")
+	ErrAuditSessionMissing = errors.New("AUDIT_SESSION_MISSING: operator_session_id required")
+	ErrAuditSessionUnknown = errors.New("AUDIT_SESSION_UNKNOWN: operator_session_id must reference a pre-created session")
 )
 
 // FileMutationOperation represents the type of file operation
@@ -345,6 +352,9 @@ func (avs *AuditVaultService) CreateSession(id, title, userIdentity string) erro
 	if avs == nil || avs.db == nil {
 		return nil
 	}
+	if id == "" || strings.TrimSpace(id) != id {
+		return ErrAuditSessionMissing
+	}
 
 	query := `INSERT INTO sessions (id, title, user_identity) VALUES (?, ?, ?)`
 	_, err := avs.db.Exec(query, id, title, userIdentity)
@@ -388,11 +398,128 @@ func (avs *AuditVaultService) GetSession(id string) (*OperatorSession, error) {
 	return &session, nil
 }
 
+func (avs *AuditVaultService) requireExistingSessionTx(tx *sql.Tx, event *Event) error {
+	if event == nil {
+		return ErrAuditEventNil
+	}
+	if event.OperatorSessionID == "" || strings.TrimSpace(event.OperatorSessionID) != event.OperatorSessionID {
+		return ErrAuditSessionMissing
+	}
+
+	var exists int
+	err := tx.QueryRow(`SELECT 1 FROM sessions WHERE id = ?`, event.OperatorSessionID).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("%w: %s", ErrAuditSessionUnknown, event.OperatorSessionID)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to verify audit session: %w", err)
+	}
+	return nil
+}
+
+// RecordEvents records multiple events in a single database transaction.
+func (avs *AuditVaultService) RecordEvents(events []*Event) error {
+	if avs == nil || avs.db == nil || len(events) == 0 {
+		return nil
+	}
+
+	tx, err := avs.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start batch transaction: %w", err)
+	}
+
+	query := `
+	INSERT INTO events (
+		operator_session_id, timestamp, type, content_text,
+		command_raw, command_exit_code, command_stdout, command_stderr,
+		execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated, encrypted
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to prepare batch statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, event := range events {
+		if err := avs.requireExistingSessionTx(tx, event); err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		stdout, stdoutTruncated := avs.truncateOutput(event.CommandStdout)
+		stderr, stderrTruncated := avs.truncateOutput(event.CommandStderr)
+
+		encrypted := avs.IsEncryptionEnabled()
+		encryptedFlag := 0
+		if encrypted {
+			encryptedFlag = 1
+		}
+
+		contentTextBytes, err := avs.encryptContent(event.ContentText)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to encrypt content_text: %w", err)
+		}
+
+		stdoutBytes, err := avs.encryptContent(stdout)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to encrypt stdout: %w", err)
+		}
+
+		stderrBytes, err := avs.encryptContent(stderr)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to encrypt stderr: %w", err)
+		}
+
+		_, err = stmt.Exec(
+			event.OperatorSessionID,
+			sqliteutil.FormatTimestamp(event.Timestamp),
+			string(event.Type),
+			contentTextBytes,
+			event.CommandRaw,
+			event.CommandExitCode,
+			stdoutBytes,
+			stderrBytes,
+			event.ExecutionDurationMs,
+			true, // stored_locally
+			stdoutTruncated,
+			stderrTruncated,
+			encryptedFlag,
+		)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to execute batch statement: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit batch transaction: %w", err)
+	}
+
+	avs.logger.Info("Batch of events recorded", "count", len(events))
+	return nil
+}
+
 // RecordEvent records an event in the audit log
 // Content fields are encrypted if an encryption vault is configured and unlocked
 func (avs *AuditVaultService) RecordEvent(event *Event) (int64, error) {
 	if avs == nil || avs.db == nil {
 		return 0, nil
+	}
+
+	tx, err := avs.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("failed to start transaction: %w", err)
+	}
+
+	if err := avs.requireExistingSessionTx(tx, event); err != nil {
+		tx.Rollback()
+		return 0, err
 	}
 
 	stdout, stdoutTruncated := avs.truncateOutput(event.CommandStdout)
@@ -402,34 +529,20 @@ func (avs *AuditVaultService) RecordEvent(event *Event) (int64, error) {
 
 	contentTextBytes, err := avs.encryptContent(event.ContentText)
 	if err != nil {
+		tx.Rollback()
 		return 0, fmt.Errorf("failed to encrypt content_text: %w", err)
 	}
 
 	stdoutBytes, err := avs.encryptContent(stdout)
 	if err != nil {
+		tx.Rollback()
 		return 0, fmt.Errorf("failed to encrypt stdout: %w", err)
 	}
 
 	stderrBytes, err := avs.encryptContent(stderr)
 	if err != nil {
+		tx.Rollback()
 		return 0, fmt.Errorf("failed to encrypt stderr: %w", err)
-	}
-
-	// Use transaction for atomicity
-	tx, err := avs.db.Begin()
-	if err != nil {
-		return 0, fmt.Errorf("failed to start transaction: %w", err)
-	}
-
-	// Upsert session to satisfy FK constraint: sessions may not be pre-created for direct terminal commands.
-	if event.OperatorSessionID != "" {
-		if _, err := tx.Exec(
-			`INSERT OR IGNORE INTO sessions (id) VALUES (?)`,
-			event.OperatorSessionID,
-		); err != nil {
-			tx.Rollback()
-			return 0, fmt.Errorf("failed to ensure session exists: %w", err)
-		}
 	}
 
 	query := `

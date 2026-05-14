@@ -177,6 +177,8 @@ The Ledger is a Git repository located at `.g8e/data/ledger`.
 - **Scrubbed Vault** (`.g8e/local_state.db`): Stores the "AI-ready" view of the host, including execution logs and file diffs that have been processed by Sentinel.
 - **Raw Vault** (`.g8e/raw_vault.db`): Stores unscrubbed forensic records, accessible only to authorized customer auditors.
 
+Audit events are fail-closed against session identity. The audit vault never creates sessions from event payloads; session creation is owned by explicit Operator/auth lifecycle code. `RecordEvent` and `RecordEvents` reject missing, malformed, or unknown `operator_session_id` values before inserting audit rows.
+
 ---
 
 ## Canonical Collections
