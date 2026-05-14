@@ -3,10 +3,10 @@ title: Storage
 parent: Architecture
 ---
 
-# Storage Architecture
+## Storage Architecture
 
 Last Updated: 2026-05-13
-Version: v0.2.5
+Version: v0.3.0
 
 This document explains the unified storage architecture for the g8e platform. It focuses on the **why** and **what** — the architectural decisions, data flows, and invariants — rather than low-level implementation.
 
@@ -39,13 +39,15 @@ This document explains the unified storage architecture for the g8e platform. It
     - **KV Store**: High-speed ephemeral data with TTL support and read cache.
     - **Blob Store**: Binary storage for investigation attachments and large objects.
     - **SSE Event Buffer**: Ring buffer for Server-Sent Events reconnection replay.
+    - **State Root**: Platform-wide Merkle state root for transaction verification.
+    - **Nonces**: Replay protection for governance transactions.
 
 ### Managed Hosts (g8eo)
 - **Component**: `g8eo` (the "Operator")
-- **Scrubbed Vault** (`.g8e/local_state.db`): Sentinel-processed output for AI context.
-- **Raw Vault** (`.g8e/raw_vault.db`): Unscrubbed command output for forensic investigations.
-- **Audit Vault** (`.g8e/data/g8e.db`): Encrypted append-only event log and session history.
-- **Ledger** (`.g8e/data/ledger`): Git repository tracking every file mutation with cryptographic integrity.
+- **Scrubbed Vault** (`.g8e/local_state.db`): Sentinel-processed command output (`execution_log`) and file diffs (`file_diff_log`) for AI context.
+- **Raw Vault** (`.g8e/raw_vault.db`): Unscrubbed command output (`raw_execution_log`) and file diffs (`raw_file_diff_log`) for forensic investigations. Accessible only to humans.
+- **Audit Vault** (`.g8e/data/g8e.db`): Encrypted append-only event log (`events`), session history (`sessions`), and file mutation metadata (`file_mutation_log`).
+- **Ledger** (`.g8e/data/ledger`): Git repository tracking every file mutation with cryptographic integrity. Files are mirrored here from the host OS.
 
 ---
 
@@ -118,9 +120,9 @@ This document explains the unified storage architecture for the g8e platform. It
 | **Platform Hub (PKI)** | TLS Certs | `.g8e/pki` | CA hierarchy, intermediate CAs, trust bundles. **Root of Trust**. |
 | **Platform Hub (Secrets)** | Bootstrap Secrets | `.g8e/secrets` | Session encryption key with tamper-evidence manifest. |
 | **Optional Adapters** | None | - | Stateless clients; use `DBClient` and `KVCacheClient`. |
-| **Operator (Scrubbed)** | SQLite | `.g8e/local_state.db` | Sentinel-scrubbed AI context. |
-| **Operator (Raw)** | SQLite | `.g8e/raw_vault.db` | Customer-only unscrubbed forensic record. |
-| **Operator (Audit)** | SQLite (Enc) | `.g8e/data/g8e.db` | LFAA encrypted append-only event log. |
+| **Operator (Audit Vault)** | SQLite (Enc) | `.g8e/data/g8e.db` | LFAA encrypted append-only event log (`events`, `sessions`, `file_mutation_log`). |
+| **Operator (Scrubbed Vault)** | SQLite | `.g8e/local_state.db` | Sentinel-scrubbed AI context (`execution_log`, `file_diff_log`). |
+| **Operator (Raw Vault)** | SQLite | `.g8e/raw_vault.db` | Customer-only unscrubbed forensic record (`raw_execution_log`, `raw_file_diff_log`). |
 | **Operator (Ledger)** | Git | `.g8e/data/ledger` | Cryptographic file history and rollback. |
 
 ---
@@ -133,8 +135,9 @@ The Coordination Store is the platform's central coordination point. It is imple
 - **Document Store**: Unified storage for JSON documents. Clients use a collection/ID pattern. All documents include `created_at` and `updated_at` timestamps managed by the store.
 - **KV Store**: High-speed ephemeral data and read cache. Supports TTL, `GLOB` pattern matching, and cursor-based scanning (`KVScan`).
 - **Blob Store**: Binary storage for investigation attachments, large objects, and certificate material.
-- **SSE Buffer**: A ring buffer for Server-Sent Events, ensuring clients can catch up after disconnects.
-- **PubSub Broker**: Real-time message distribution for coordination between the Engine and Dashboard.
+- **SSE Buffer**: A per-session ring buffer for Server-Sent Events, ensuring clients can catch up after disconnects.
+- **State Root Provider**: Calculates and maintains the platform-wide Merkle state root, binding all Hub data into a single verifiable hash.
+- **Nonce Manager**: Prevents transaction replay by tracking used nonces with sliding-window expiration.
 
 ### The PKI and Secrets Directories (Root of Trust)
 The `.g8e/pki` and `.g8e/secrets` directories form the platform's root of trust.
@@ -149,11 +152,11 @@ The `.g8e/pki` and `.g8e/secrets` directories form the platform's root of trust.
 
 On startup, `g8eo` SecretManager validates that secrets match the bootstrap digest manifest. If a conflict occurs, startup fails hard with actionable error messages.
 
-### Cache-Aside Consistency
-`g8ee` and `g8ed` implement a cache-aside pattern for performance:
-1. **Read**: Check KV cache first. On miss, fetch from Document Store and populate KV.
-2. **Write**: Write to Document Store first (authoritative), then delete/invalidate the KV cache key.
-3. **TTL**: KV entries have collection-specific TTLs to ensure eventually consistency.
+### State Merkle Root Invariant
+The platform state is anchored by a Merkle state root calculated across all documents, KV entries, and blobs.
+1. **Deterministic Calculation**: The root is computed by hashing a canonical JSON representation of all active records in the Hub database.
+2. **Transaction Binding**: Every governance transaction carries the `state_merkle_root` at the time of generation.
+3. **Execution Verification**: The Operator satellite verifies that the transaction's state root matches the sovereign host state or the Hub state (depending on the command scope) before execution. Stale transactions are rejected.
 
 ---
 

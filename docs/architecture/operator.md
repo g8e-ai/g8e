@@ -8,30 +8,33 @@ parent: Architecture
 Last Updated: 2026-05-13
 Version: v0.3.0
 
-The Operator is the platform's mandatory **substrate**, data plane, execution engine, and persistence layer. It is a statically compiled Go binary that provides the core foundation for all g8e operations, functioning as both the protocol hub (Listen Mode) and the execution agent (Standard Mode).
+The **Operator** is a role defined by the g8e Protocol: a host-side implementation that receives signed transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a local ledger. It is the data plane, execution engine, and persistence layer for the platform.
+
+This document describes **`g8eo`**, the reference Operator implementation: a statically compiled Go binary that functions as both the protocol hub (Listen Mode) and the execution agent (Standard Mode). Any conforming implementation can replace it; the protocol invariants below are mandatory, the specific binary is not.
 
 ## Core Principles
 
-- **Single Binary, Multi-Mode**: The same binary runs as the Hub (Listen Mode), Target (Standard Mode), and Fleet Utility (Stream Mode).
+- **Single Binary, Multi-Mode**: The reference binary runs as the Hub (Listen Mode), Target (Standard Mode), and Fleet Utility (Stream Mode).
 - **mTLS-Everywhere**: All communication is outbound-only from the target and strictly gated by Operator-owned mutual TLS. No inbound ports are required on managed hosts.
 - **Local-First Audit (LFAA)**: The host is the single source of truth for command history and file mutations, stored in a tamper-evident ledger.
 - **UAP JSON-First (GovernanceEnvelope)**: Every mutation action is governed by a UAP JSON `GovernanceEnvelope`. This is the *only* canonical mutation envelope, ensuring transparency and flexibility for audit.
 - **3-Layer Governance**: Hard gates at the bedrock (L1), consensus in the middle (L2), and human authorization at the top (L3).
-- **Substrate vs Application**: g8e separates the mandatory Operator substrate from optional application-layer adapters (like the Engine).
+- **Protocol vs Implementation**: The protocol is the substrate. The reference Operator is one implementation of the protocol's Operator role; the reference Engine is one example of an application built on top of it.
 
 ## Architecture Overview
 
-The g8e platform is built on the mandatory **Operator/protocol substrate**. 
+The g8e platform is built on the g8e Protocol as substrate. A conforming Operator implementation is what makes that protocol live on a host.
 
-- **Substrate (Mandatory)**: `g8eo` in **Listen Mode** is the platform's backbone. It is the protocol hub, persistence layer (SQLite), pub/sub broker, root CA, and audit authority. It is sufficient on its own to receive, verify, and execute protocol-governed transactions.
-- **Application Layer (Optional)**: Optional adapters like the Engine (`g8ee`) consume the public Operator protocol surface. They have no privileged substrate responsibilities and no private access channels.
+- **Protocol (Substrate)**: The wire contract, schemas, and L1/L2/L3 verification rules. Mandatory and immutable for any client or implementation.
+- **Reference Operator (`g8eo`)**: In **Listen Mode** it acts as the platform's backbone for the reference deployment — protocol hub, persistence layer (SQLite), pub/sub broker, root CA, and audit authority. In **Standard Mode** it acts as the execution agent on a managed host. It is sufficient on its own to receive, verify, and execute protocol-governed transactions, and it is replaceable by any conforming Operator.
+- **Reference Application Layer (Optional)**: Reference components like the Engine (`g8ee`) consume the public Operator protocol surface. They have no privileged substrate responsibilities and no private access channels.
 
 ```mermaid
 flowchart TD
     subgraph Hub ["Operator/Protocol Substrate"]
         direction TB
-        subgraph Persistence ["Required Runtime"]
-            listen["Operator (Listen Mode)"]
+        subgraph Persistence ["Reference Runtime (g8eo)"]
+            listen["Reference Operator (Listen Mode)"]
             db[("SQLite / KV")]
             ps[["Pub/Sub Broker"]]
             ca["Root CA / PKI"]
@@ -42,18 +45,18 @@ flowchart TD
         end
     end
 
-    subgraph Apps ["Optional Application Layer"]
+    subgraph Apps ["Reference Application Layer"]
         g8ee["g8ee Engine Adapter"]
     end
 
     g8ee -. "mTLS Protobuf" .-> listen
 
     subgraph EP_A ["Managed Host A"]
-        OPA["Operator (Standard)"] --- LFAA_A["LFAA Ledger & Vault"]
+        OPA["Reference Operator (Standard)"] --- LFAA_A["LFAA Ledger & Vault"]
     end
 
     subgraph EP_B ["Managed Host B"]
-        OPB["Operator (Standard)"] --- LFAA_B["LFAA Ledger & Vault"]
+        OPB["Reference Operator (Standard)"] --- LFAA_B["LFAA Ledger & Vault"]
     end
 
     OPA -- "mTLS WSS (Protobuf)" --> listen
@@ -62,10 +65,12 @@ flowchart TD
 
 ## Operating Modes
 
-### 1. Listen Mode (Hub)
-Transforms the operator into the platform's backbone. Started with the `--listen` flag.
+The reference Operator (`g8eo`) supports the following modes. A BYO Operator may shape its lifecycle differently as long as it preserves the protocol's verification and audit invariants.
 
-- **Substrate Role**: Mandatory hub for all platform operations.
+### 1. Listen Mode (Hub)
+Transforms the reference Operator into the platform's backbone. Started with the `--listen` flag.
+
+- **Role**: Reference hub for the bundled deployment.
 - **Persistence**: Document-store and TTL-aware KV store backed by SQLite.
 - **Messaging**: High-performance WebSocket Pub/Sub broker using UAP JSON `GovernanceEnvelope` messages.
 - **Identity (PKI)**: Acts as the platform's root Certificate Authority, issuing mTLS certificates via CSR-based enrollment.
@@ -86,7 +91,7 @@ Listen Mode exposes four distinct ports for different protocol surfaces:
 - **Public Ports (Bootstrap, Public)**: Plain TLS endpoints for enrollment and browser-based flows. These are the sovereign entry points for new operators and BYO clients.
 
 ### 2. Standard Mode (Target)
-The default mode for execution on target hosts. The operator initiates an outbound connection and waits for protocol-governed UAP JSON envelopes.
+The default mode for execution on target hosts. The reference Operator initiates an outbound connection and waits for protocol-governed UAP JSON envelopes.
 
 **Lifecycle:**
 1. **Discovery**: Resolves environment and local CA certificates from `.g8e/pki` or the Hub's PKI endpoint.
@@ -104,7 +109,7 @@ Connects to an OpenClaw Gateway as a standalone capability provider, allowing g8
 
 ## Governance & Safety
 
-The Operator enforces a 3-layer validation hierarchy for every command. The **Warden** service acts as the final execution boundary.
+A conforming Operator enforces a 3-layer validation hierarchy for every command. In the reference Operator, the **Warden** service acts as the final execution boundary.
 
 | Layer | Name | Mechanism | Role |
 |---|---|---|---|

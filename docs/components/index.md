@@ -10,5 +10,5 @@ Version: v0.2.4
 
 Technical reference for each platform component.
 
-- [**g8ee**](g8ee.md) — AI Engine (optional application layer)
-- [**g8eo**](g8eo.md) — Operator Binary (substrate)
+- [**g8eo**](g8eo.md) — Reference Operator implementation (Go); replaceable by any conforming Operator.
+- [**g8ee**](g8ee.md) — Reference AI Engine for the bundled infrastructure-management application layer.

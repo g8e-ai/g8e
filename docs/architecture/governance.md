@@ -7,7 +7,7 @@ Agentic AI safety in g8e is framed as a **consensus problem**: given a populatio
 
 The mechanism operates through a strictly ordered L1/L2/L3 validation hierarchy where each layer provides a unique type of safety guarantee. On operator pub/sub paths, this hierarchy is carried in the Protobuf `GovernanceEnvelope` as governance metadata beside the typed payload.
 
-g8e defines a mandatory **Substrate** (Operator + Protocol) that enforces these layers, and an optional **Application Layer** (bundled Engine or BYO) that produces the proofs required to pass them.
+The **g8e Protocol** is the substrate that defines these layers. Any conforming **Operator** implementation (the reference being `g8eo`) enforces them on the host. An optional **Application Layer** (the bundled Engine or any BYO consensus producer) supplies the proofs required to pass them.
 
 ## The Players
 

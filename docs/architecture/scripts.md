@@ -5,81 +5,84 @@ parent: Architecture
 
 # g8e Scripts
 
-Last Updated: 2026-05-11
-Version: v0.2.4
+Last Updated: 2026-05-13
+Version: v0.2.5
 
-The scripts layer provides the operational interface for the g8e platform. It has been migrated from container orchestration to host-native lifecycle management for Operator, Dashboard (g8ed), and Engine (g8ee).
+The scripts layer provides the primary operational interface for the g8e platform. It enforces a **host-native** execution model, managing the lifecycle of the mandatory Operator substrate and optional application-layer adapters.
 
 ## Architecture Overview
 
-g8e uses a host-native target model. Operator listen mode owns local persistence and pub/sub state under `./.g8e`, while Dashboard and Engine run as managed platform services on the host.
+g8e avoids container orchestration complexity by running directly on the host. The architecture is split into two distinct tiers:
+
+1. **Substrate (Mandatory):** The `g8eo` Operator binary running in `--listen` mode. It owns persistence, PKI, messaging (PubSub), and governance enforcement.
+2. **Application Layer (Optional):** Reference adapters like `g8ee` (AI Engine) that consume the protocol. These run as managed host processes.
 
 ### The `./g8e` CLI Entry Point
 
-The root `./g8e` script is a Bash-based dispatcher. It is the only script an operator should invoke directly on the host.
+The root `./g8e` script is a Bash-based dispatcher. It is the single entry point for all platform operations.
 
-- **Host Runtime State:** Generated platform runtime state is rooted at `./.g8e`, including `data`, `pki`, `secrets`, `pids`, and `logs`. Tooling receives trust material through `G8E_TRUST_BUNDLE` and bootstrap secrets through `G8E_SECRETS_DIR`.
-- **Session Management:** Commands targeting the internal API (`data`, `security`, `mcp`, `operator`) are gated by a local credential store (`~/.g8e/credentials`) which is populated via `./g8e login`.
-
-### Execution Flow
-1. **Host-Side:** Commands like `platform start` or `operator build` run directly on the host, managing Operator listen mode and component lifecycle.
-2. **Tooling-Side:** Commands like `data users list` or `security validate` run with the platform environment populated, including internal URLs, the host trust bundle, and the host secrets directory, often delegating to Python or Node.js helpers.
+- **Global Flags:**
+    - `--api-key` / `-k`: Explicit API key for authentication.
+    - `--device-token`: Device-link token for initial registration.
+    - `--dev`: Enable development mode (e.g., skip production readiness gates).
+- **Host Runtime State:** All runtime data is rooted at `./.g8e`, including:
+    - `data/`: SQLite databases and KV stores.
+    - `pki/`: Platform Certificate Authority and trust bundles.
+    - `secrets/`: Bootstrap secrets and identity materials.
+    - `logs/`: Aggregated service logs.
+- **Credential Management:** Authenticated commands target the Operator's internal API, using credentials stored in `~/.g8e/credentials`.
 
 ---
 
 ## Core Command Categories
 
 ### Platform Management (`./g8e platform`)
-Orchestrates platform lifecycle via `scripts/core/build.sh`.
+Orchestrates the mandatory substrate lifecycle via `scripts/core/build.sh`.
 
-- **`start` / `stop` / `restart`:** Host-native service lifecycle. `start` waits for service health checks.
-- **`rebuild`:** Restarts managed services (g8ee, g8ed). Unlike legacy container models, this does not build images but restarts host processes.
-- **`setup`:** Initial platform configuration and service initialization.
-- **`reset`:** Destructive. Wipes Dashboard/Engine data, Operator listen-mode data, and bootstrap secrets while preserving PKI material in `./.g8e/pki`.
-- **`wipe`:** Clears application data via the Operator listen-mode API. Preserves platform settings, PKI material, secrets, and authentication state.
-- **`logs`:** Aggregates logs from all managed services into a single stream via `scripts/core/logs.sh`.
-- **`settings`:** Direct access to platform-wide settings stored by Operator listen mode.
+- **`start` / `stop` / `restart`:** Manages the Operator `--listen` process and its dependencies.
+- **`status`:** Health check for the substrate and any active apps.
+- **`reset`:** Destructive. Wipes application data and bootstrap secrets while preserving PKI roots.
+- **`wipe`:** Clears application-layer data via the Operator API.
+- **`clean`:** Complete removal of all g8e processes and data.
+- **`logs`:** Streams aggregated logs from `./.g8e/logs/`.
+- **`settings`:** Read-only access to platform-wide configuration.
 
-### Data Management (`./g8e data`)
-Unified interface for interacting with platform state, dispatched via `scripts/data/manage-operator.py`.
+### Application Layer (`./g8e apps`)
+Manages optional, opt-in adapters that extend the platform's capabilities.
 
-- **Dispatcher Pattern:** `manage-operator.py` routes requests to specialized modules:
-    - **`store`**: Document store & KV queries (`manage-store.py`).
-    - **`users`**: Platform user management (`manage-users.py`).
-    - **`operators`**: Operator document management (`manage-operators.py`). Note: Operator API keys are write-only operational secrets; they are never displayed or retrieved by this script.
-    - **`device-links`**: Device link token management (`manage-device-links.py`).
-    - **`settings`**: Platform settings read/write (`manage-settings.py`).
-    - **`audit`**: LFAA audit vault queries (`manage-lfaa.py`).
-    - **`mcp`**: MCP client integration configuration (`manage-mcp.py`).
-    - **`reputation`**: Reputation state & commitment management (`manage-reputation.py`).
-
-### Security & Identity (`./g8e security`)
-Manages the platform's root of trust and security invariants.
-
-- **`validate`:** Checks TLS integrity, permissions, and environment consistency.
-- **`pki`:** Operator-owned PKI management and trust bundle operations.
-- **`mtls-test`:** Connectivity test for mTLS between components.
-- **`passkeys`:** Manages FIDO2/WebAuthn credentials via `manage-passkeys.py`.
-
-### Testing (`./g8e test`)
-Runs component-specific test suites using native toolchains via `scripts/testing/run_tests.sh`.
-
-- **Isolation:** Tests for `g8ee` (Python), `g8ed` (Node.js), and `g8eo` (Go) run on the host using native virtualenvs, npm, and Go toolchains.
+- **`start` / `stop` / `restart` [g8ee|all]:** Component-specific lifecycle.
+- **`build`:** Installs native dependencies (e.g., Python virtualenvs for `g8ee`).
+- **Note:** Apps are "BYO clients" — they have no substrate responsibilities and no private coupling.
 
 ### Operator Operations (`./g8e operator`)
-Lifecycle management for the `g8eo` operator binary and remote deployments.
+Lifecycle management for `g8eo` binaries and remote fleet deployment.
 
-- **`build` / `build-all`:** Compiles the operator for current or all architectures (amd64, arm64, 386).
-- **`deploy`**: Fetches the binary from Operator listen mode and copies it to a remote host via SSH.
-- **`stream`**: Starts an interactive streaming session with remote operators.
-- **`reauth`**: Forces a re-authentication of a running operator process.
+- **`init`:** Compiles the operator for the local architecture.
+- **`build` / `build-all`:** Cross-compiles for amd64, arm64, and 386.
+- **`deploy <user@host>`:** Fetches the signed binary from the local hub and copies it to a remote host via SSH.
+- **`stream`:** Interactive session for managing remote operators via the Hub's PubSub broker.
+- **`reauth`:** Triggers a re-authentication of a running operator process.
 
-### Interactive Setup Tools
-Located in `scripts/tools/`, these provide guided configuration:
+### Infrastructure & Data (`./g8e data` / `./g8e security`)
+Unified interface for interacting with the substrate, dispatched via `scripts/cmd/infra.sh`.
 
-- **`./g8e llm setup`**: Configures LLM providers (Gemini, Anthropic, OpenAI, etc.).
-- **`./g8e search setup`**: Configures Vertex AI Search for web grounding.
-- **`./g8e ssh setup`**: Configures SSH multiplexing for operator streaming.
+- **`data`**: Specialized Python helpers for substrate state:
+    - `users`: User and session management.
+    - `operators`: Operator registration and slot management.
+    - `store`: Document store and KV queries.
+    - `device-links`: Device-link token lifecycle.
+    - `audit`: LFAA git-ledger and audit vault queries.
+- **`security`**: TLS and identity invariants:
+    - `validate`: Checks PKI integrity and environment consistency.
+    - `mtls-test`: Connectivity test for mTLS trust.
+    - `passkeys`: WebAuthn/FIDO2 hardware-bound identity management.
+
+### Testing (`./g8e test`)
+Runs component tests using native toolchains via `scripts/testing/run_tests.sh`.
+
+- **`g8eo`**: Go unit and integration tests.
+- **`g8ee`**: Python tests (pytest), including optional E2E and linting (Ruff/Pyright).
+- **`chaos`**: Resiliency testing via `chaos_tester`.
 
 ---
 
@@ -87,36 +90,41 @@ Located in `scripts/tools/`, these provide guided configuration:
 
 ```text
 scripts/
-├── core/           # Platform lifecycle (Bash)
-│   ├── build.sh    #   Platform lifecycle orchestration
-│   ├── logs.sh     #   Log aggregation
-│   └── setup.sh    #   Setup delegation
-├── data/           # Data operations (Python)
-│   ├── manage-operator.py    # Main dispatcher
-│   ├── manage-store.py       # Document/KV queries
-│   ├── manage-users.py       # User management
-│   ├── manage-lfaa.py        # Audit vault queries
-│   └── manage-reputation.py  # Reputation management
-├── security/       # TLS and Security (Bash/Python)
-│   ├── manage-pki.sh         # Operator PKI validation and lifecycle helpers
-│   ├── manage-passkeys.py    # FIDO2/WebAuthn
+├── cmd/           # Primary command implementations (Bash)
+│   ├── platform.sh # Substrate lifecycle
+│   ├── apps.sh     # App-layer lifecycle
+│   ├── infra.sh    # Data/Security dispatcher
+│   ├── operator.sh # Operator binary/deployment
+│   └── tests.sh    # Test execution bridge
+├── core/          # Internal orchestrators
+│   ├── build.sh    # Main process manager
+│   ├── manage-env.sh # Variable resolution
+│   └── path_utils.sh # PROJECT_ROOT resolution
+├── data/          # Substrate interaction (Python)
+│   ├── manage-users.py
+│   ├── manage-operators.py
+│   └── manage-lfaa.py
+├── security/      # Security logic
 │   └── validate-platform-security.sh
-├── testing/        # Test runners
-│   └── run_tests.sh          # Main test execution bridge
-└── tools/          # Setup wizards
-    ├── setup-llm.sh          # LLM provider config
-    ├── setup-search.sh       # Vertex Search config
-    └── setup-ssh.sh          # SSH multiplexing config
+├── testing/       # Test runners
+│   └── run_tests.sh
+└── tools/         # Setup wizards (LLM, SSH, Search)
 ```
 
 ---
 
 ## Technical Invariants
 
-### 2. Path Resolution
-All scripts must resolve `PROJECT_ROOT` relative to their own location to ensure they work regardless of the user's current working directory.
+### 1. Path Resolution
+All scripts must resolve `G8E_PROJECT_ROOT` relative to their own location.
 - **Bash:** `$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)`
 - **Python:** `Path(__file__).parent.parent.parent.absolute()`
 
-### 3. Service Readiness
-The platform does not consider itself "up" until Operator listen mode and component readiness checks pass. `build.sh` waits for these checks before completing `up` or `start` commands.
+### 2. Service Readiness
+The platform is not "ready" until the Operator listen-mode health check (`/healthz`) passes. `build.sh` blocks until this state is reached.
+
+### 3. Canonical Wire Format
+All client-facing interaction (HTTP, PubSub, receipts) must use **canonical JSON (protojson)**. Binary Protobuf is reserved for internal storage and audit vaults to ensure the platform remains accessible to generic BYO clients (MCP, A2A, LLMs).
+
+### 4. Fail-Closed Execution
+Scripts must never mask failures or proceed with missing trust material. If a trust bundle or secret is missing, the script must exit with a clear error instructing the user to restart the platform substrate.

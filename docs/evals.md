@@ -1,3 +1,7 @@
+---
+title: Evals
+---
+
 # g8e Evals - Real-Operator Evaluation Framework
 
 The g8e Evals framework provides a host-driven, high-fidelity testing environment for validating the platform's behavior with real `g8e.operator` binaries running in isolated Linux containers.

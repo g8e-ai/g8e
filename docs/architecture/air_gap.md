@@ -18,7 +18,7 @@ The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In th
 
 - **No Telemetry:** Zero outbound usage, health, or error data is sent to Lateralus Labs.
 - **Local Assets:** All frontend assets (fonts, icons, JS libraries) are served locally by the application layer.
-- **Local Persistence:** All platform state, including chat history, settings, and secrets, is stored in a unified SQLite database managed by the **Operator Substrate** (`g8eo`) in Listen Mode.
+- **Local Persistence:** All platform state, including chat history, settings, and secrets, is stored in a unified SQLite database managed by the reference Operator (`g8eo`) in Listen Mode.
 
 ---
 
@@ -27,7 +27,7 @@ The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In th
 In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the `g8eo` (Operator) binary in **Listen Mode** (`--listen`). In this mode, the Operator acts as the platform's central persistence and messaging backbone rather than an outbound execution agent.
 
 ### Architecture & Ports
-The Operator Substrate exposes interfaces for public protocol communication from optional adapters (Dashboard and Engine) and BYO clients. While the binary defaults to port 443, the standard platform deployment maps these to:
+The reference Operator in Listen Mode exposes interfaces for public protocol communication from optional reference adapters (Dashboard and Engine) and BYO clients. While the binary defaults to port 443, the standard platform deployment maps these to:
 
 | Port | Protocol | Purpose |
 |---|---|---|

@@ -1,25 +1,35 @@
 # g8e
 
-**AI-powered, human-driven infrastructure.**
+**A governance-first protocol for trustless, human-verified action by autonomous systems.**
 
-g8e is a governance-first substrate for trustless infrastructure management. It provides a mandatory, host-authoritative protocol layer that ensures every mutation — whether from a human or an AI agent — is verified, signed, and anchored to a local ledger.
+The **g8e Protocol** is the substrate: a wire contract that binds typed payloads, canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3) into a single signed `GovernanceEnvelope` (UAP JSON) transaction. It is not specific to any one domain. Anything that can express an intended action as a typed payload — infrastructure mutations, data writes, financial transfers, physical-world actuation, agent-to-agent calls — can be governed by it.
 
-The core of the platform is the **Operator (g8eo)** and the **g8e Protocol**: a unified `GovernanceEnvelope` (UAP JSON) contract that binds typed payloads to canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3). 
+An **Operator** is any host-side implementation that speaks the g8e Protocol: it receives signed transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a local ledger. The Operator is a role, not a specific binary.
+
+This repository ships:
+
+- The **g8e Protocol** (`shared/proto`, `docs/architecture/protocol.md`) — the canonical wire contract.
+- **g8eo** — a reference Operator implementation in Go. Sovereign, single-binary, runs as a satellite on managed hosts or as a hub in `--listen` mode.
+- A **reference application** for AI-powered, human-driven infrastructure management built on top of the protocol, including the optional **g8ee** AI engine and Tribunal consensus model.
+
+If you want to build something else on the protocol — a different Operator, a different application, a different class of governed action — the contract is the same.
 
 Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state.
 
 ### Core Principles
 
-- **Host Sovereignty.** The managed host is the system of record. Every mutation and command output is anchored to a local, git-backed ledger (LFAA) in native SQLite vaults — queryable with standard SQL, mapped to MITRE ATT&CK for SIEM/SOC integration. Raw data never leaves your infrastructure.
-- **LLM Sovereignty.** A stateless reasoning engine decouples intent from execution. Context is ephemeral per request; providers never retain session state. Swap between Anthropic, Gemini, OpenAI, or local providers (Ollama, llama.cpp) without losing continuity.
-- **Operator Integrity.** The Operator is a protocol for verifiable execution. Sentinel pre-execution analysis (46 threat detectors), hardware fingerprint binding, outbound-only mTLS, and unified command envelopes ensure that legacy or malformed command bytes are rejected rather than translated.
-- **Consensus-Driven Safety.** The Tribunal generates candidates under tiered information isolation — agents cannot see each other's reasoning or plans. An adversarial co-validator (Nemesis) stress-tests the panel. All core personas stake reputation on every turn; incompetence triggers automated slashing.
+These principles are properties of the protocol. The reference Operator and reference application illustrate them; any conforming implementation must preserve them.
+
+- **Host Sovereignty.** The host that performs the action is the system of record. Every accepted mutation and its output are anchored to a local, append-only ledger on that host. Raw data never has to leave the host for governance to function. The reference Operator implements this via a git-backed ledger (LFAA) and native SQLite vaults — queryable with standard SQL, mapped to MITRE ATT&CK for SIEM/SOC integration.
+- **Decoupled Reasoning.** Intent generation is separated from execution. Whatever produces an intent (an LLM ensemble, a human, another agent, a deterministic policy engine) is stateless from the Operator's perspective — only signed transactions cross the boundary. The reference application uses a swappable, stateless reasoning engine across Anthropic, Gemini, OpenAI, and local providers (Ollama, llama.cpp).
+- **Operator Integrity.** The Operator is a verifiable-execution boundary, not a translator. Malformed, unsigned, or stale transactions are rejected, never coerced. The reference Operator adds Sentinel pre-execution analysis, hardware fingerprint binding, and outbound-only mTLS on top of the protocol's required L1/L2/L3 checks.
+- **Consensus-Driven Safety.** L2 requires an independent consensus proof; the protocol does not care how that consensus is produced. The reference application produces it with a Tribunal of five specialized LLM personas under tiered information isolation, an adversarial co-validator (Nemesis), and reputation staking with automated slashing.
 
 ## Why
 
-g8e lets any AI assistant investigate infrastructure, but only governed, signed, auditable actions can change it.
+The g8e Protocol lets any agent — AI or human — investigate freely, but only governed, signed, auditable actions can change state.
 
-Two architectures dominate agentic AI in 2026, and both fail at infrastructure scale.
+Two architectures dominate agentic AI in 2026, and both fail wherever the cost of a wrong action is real.
 
 **Autonomous agents** act without verifying contextual intent. They do exactly what they understood the request to mean while missing what the user actually meant. Every catastrophic agent failure has the same shape.
 
@@ -33,13 +43,13 @@ Full treatment: [position paper](docs/architecture/position_paper.md).
 
 ## Protocol Transaction Flow
 
-The g8e substrate enforces safety at the point of execution. Every mutation reaches the Operator as a signed `GovernanceEnvelope` transaction.
+The g8e Protocol enforces safety at the point of execution. Every mutation reaches an Operator as a signed `GovernanceEnvelope` transaction. The diagram below shows the verification pipeline a conforming Operator must implement; the reference implementation is `g8eo`.
 
 ```mermaid
 flowchart TD
     TX[Signed GovernanceEnvelope<br>JSON Transaction] --> L1
     
-    subgraph Substrate [Substrate Verification - g8eo]
+    subgraph Substrate [Operator Verification - protocol-mandated]
         L1{L1: Technical Bedrock<br>Forbidden Patterns?}
         L1 -- "Violated" --> Reject
         
@@ -64,14 +74,14 @@ flowchart TD
 2. **L2 (Consensus)**: The transaction must carry a valid cryptographic signature from a trusted consensus panel (The Tribunal).
 3. **L3 (Authorization)**: State-changing mutations require a hardware-bound signature (FIDO2/WebAuthn) or match an explicit auto-approval policy for benign diagnostics.
 4. **State Freshness**: The `state_merkle_root` binds the command to the host state at generation time; the Operator rejects stale or replayed transactions.
-5. **Warden Execution**: The Warden (on-host execution boundary) executes the command in an isolated environment and captures results into the local LFAA ledger.
+5. **Warden Execution**: The Operator's on-host execution boundary performs the action in an isolated environment and captures results into a local audit ledger. The reference implementation calls this the Warden and writes to the LFAA git-backed ledger.
 6. **Signed Receipt**: Every execution (success or failure) emits a signed `ActionReceipt` providing an immutable proof of the mutation.
 
 ---
 
 ## Protocol Foundation
 
-The protocol is the foundation layer of g8e. While AI agents and UI flows can evolve, every interaction is governed by a single wire contract:
+The protocol is g8e. Operators, agents, and applications are interchangeable; the wire contract is not. Every interaction is governed by a single contract:
 
 - **Canonical JSON (protojson)**: All client-facing surfaces (HTTP, PubSub, receipts) use JSON for maximum ecosystem compatibility (MCP, A2A, LLMs).
 - **GovernanceEnvelope (UAP)**: A unified container binding identity, intent, state, and governance proofs.
@@ -82,7 +92,9 @@ Full contract: [protocol.md](docs/architecture/protocol.md).
 
 ---
 
-## Architecture
+## Reference Architecture
+
+This is one valid topology built on the protocol: the reference Operator (`g8eo`) running both as a sovereign satellite on a managed host and as a central hub, with the reference AI application (`g8ee`) attached as a BYO client.
 
 ```mermaid
 flowchart LR
@@ -90,7 +102,7 @@ flowchart LR
 
     subgraph Exec_Plane [Execution Plane / Managed Host]
         direction TB
-        g8eo[g8eo<br>Operator<br>Go Binary]
+        g8eo[g8eo<br>Reference Operator<br>Go Binary]
 
         HostOS[Target System / Shell]
         g8eo -- "Warden<br>Execution Boundary" --> HostOS
@@ -106,9 +118,9 @@ flowchart LR
         g8eo --- Scrubbed & Raw & Audit & Ledger
     end
 
-    subgraph Substrate_Hub [Substrate Hub / g8eo --listen]
+    subgraph Hub [Hub / g8eo --listen]
         direction TB
-        Listen[(g8eo Substrate)]
+        Listen[(Reference Operator<br>in Hub mode)]
         DS[(Document Store)]
         KS[(KV Store & TTL)]
         PS((PubSub))
@@ -116,7 +128,7 @@ flowchart LR
         Listen --- DS & KS & PS
     end
 
-    subgraph Optional_Apps [Optional Application Layer]
+    subgraph Optional_Apps [Reference Application Layer]
         g8ee[g8ee<br>AI Engine]
     end
 
@@ -124,25 +136,25 @@ flowchart LR
 
     User -- "TLS 1.3 / mTLS" --> Listen
     g8eo -- "Outbound mTLS WebSocket" --> Listen
-    Optional_Apps -- "Public Protocol" --> Listen
+    Optional_Apps -- "g8e Protocol" --> Listen
     g8ee -. "Scrubbed metadata only" .-> LLM
 ```
 
 | Component | Stack | Role |
 |---|---|---|
-| **Operator (g8eo)** | Go | **The Substrate.** Provides the mandatory persistence, PKI, messaging (PubSub), and governance backbone. Runs as a sovereign satellite on managed hosts or as a central Hub in listen mode. |
-| **AI Engine (g8ee)** | Python | **Optional.** A reference agentic reasoning engine that orchestrates the Tribunal and Auditor workflows. |
+| **g8eo** | Go | **Reference Operator implementation.** Provides persistence, PKI, messaging (PubSub), and governance enforcement for the reference deployment. Runs as a sovereign satellite on managed hosts or as a central hub in `--listen` mode. Any conforming Operator can replace it. |
+| **g8ee** | Python | **Reference application component.** An optional agentic reasoning engine that orchestrates the Tribunal and Auditor workflows for the AI-powered infrastructure management use case. |
 
-Every interaction with the substrate is mutually authenticated via TLS 1.3 and mTLS. State-changing workflows must pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
+Every interaction with an Operator is mutually authenticated via TLS 1.3 and mTLS. State-changing workflows must pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
 
 ---
 
-## Reference Application Stack
+## Reference Application: AI-Powered Infrastructure Management
 
-While the g8e substrate is self-contained and protocol-agnostic, the repository includes an optional reference application that demonstrates the protocol\'s capabilities:
+The protocol is domain-agnostic. The reference application bundled in this repository demonstrates one concrete use case: AI agents proposing infrastructure mutations that humans verify and a sovereign Operator executes.
 
 ### g8ee (AI Engine)
-A Python-based agentic reasoning engine. It provides the reference implementation for the **Tribunal** consensus model and multi-provider LLM orchestration.
+A Python-based agentic reasoning engine. It is the reference L2 producer: it generates candidate commands, runs the **Tribunal** consensus model, and orchestrates multi-provider LLM calls. A different application could replace it entirely as long as the transactions it emits conform to the protocol.
 
 The Tribunal uses five specialized LLM personas to generate candidate commands in parallel, blind to each other:
 
@@ -167,11 +179,11 @@ g8e uses a 3-layer command validation hierarchy to ensure safety and minimize cl
 3. **L3 (Authorization)**: Human-in-the-loop by default. Benign diagnostic commands may be auto-approved, but only if they have already passed L1 and L2.
 
 
-## The Operator (g8eo)
+## The Reference Operator (g8eo)
 
-The **Operator** is the sovereign engine of the g8e platform. It is a single Go binary that can run in two modes: **Listen (Hub)** or **Satellite**.
+`g8eo` is the reference Operator implementation: a single Go binary that can run in two modes — **Hub (`--listen`)** or **Satellite**. It is the canonical example of what an Operator does, not a privileged component of the protocol. Replace it with any implementation that preserves the same verification and audit invariants.
 
-### Core Substrate Capabilities
+### Capabilities
 
 - **Protocol Enforcement**: Verifies every inbound transaction against the L1/L2/L3 governance hierarchy before execution.
 - **PKI Authority**: Owns the platform's Certificate Authority (CA). Handles CSR signing, certificate revocation (CRL/OCSP), and mTLS trust brokerage.
@@ -179,12 +191,12 @@ The **Operator** is the sovereign engine of the g8e platform. It is a single Go 
 - **Local-First Storage**: Provides a high-performance Document Store (SQLite), KV Store, and Blob storage for all platform components.
 - **LFAA (Local-First Audit Architecture)**: Every mutation is anchored to a local, git-backed ledger on the host, providing an immutable chain of custody.
 - **Real-time Messaging**: A built-in PubSub broker and WebSocket gateway orchestrate traffic between satellites, hubs, and clients.
-- **Sentinel Defense**: 46 MITRE ATT&CK detectors and 27 scrubbing patterns perform on-host pre-execution analysis of every command.
+- **Sentinel Defense**: MITRE ATT&CK detectors and scrubbing patterns perform on-host pre-execution analysis of every command.
 
 ### Deployment Modes
 
-- **Hub Mode (`--listen`)**: Acts as the central persistence and messaging backbone for the fleet. No inbound ports are required on satellite hosts.
-- **Satellite Mode**: Runs on managed infrastructure. It establishes an outbound-only mTLS connection to the Hub, receives signed transactions, and executes them in an isolated environment.
+- **Hub Mode (`--listen`)**: Acts as the central persistence and messaging backbone for a fleet. No inbound ports are required on satellite hosts.
+- **Satellite Mode**: Runs on a managed host. It establishes an outbound-only mTLS connection to a Hub, receives signed transactions, verifies them against the protocol, and executes them in an isolated environment.
 
 ---
 
@@ -192,7 +204,7 @@ The **Operator** is the sovereign engine of the g8e platform. It is a single Go 
 
 - **Auth** — Proof of Human Presence (PHP) via FIDO2 / WebAuthn passkeys. Hardware-bound approval is the default Layer 3 state for mutations; auto-approval is restricted to benign commands that already passed L1 and L2. Passwords are unsupported by design.
 - **Transport** — TLS 1.3 for the Control Plane; outbound-only mTLS for Operators. Platform-generated ECDSA P-384 CA.
-- **Sentinel** — On-host defensive analysis: 46 MITRE-mapped detectors, 27 scrubbing patterns, and command allowlist/denylist enforcement.
+- **Sentinel** — On-host defensive analysis: MITRE-mapped detectors, scrubbing patterns, and command allowlist/denylist enforcement.
 - **Warden** — Defensive execution: The on-host execution boundary inside the Operator that executes transactions, enforces state-root freshness, and emits signed ActionReceipts.
 - **Sovereignty** — Raw command output never leaves the host. Only Sentinel-scrubbed metadata reaches model providers. Engine outage does not erase host-local history.
 - **LFAA** — Local-First Audit Architecture. All state changes are committed to a local git ledger and SQLite vaults on the managed host.

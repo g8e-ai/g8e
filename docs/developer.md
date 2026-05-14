@@ -7,7 +7,7 @@ title: Developer
 Last Updated: 2026-05-13
 Version: v0.2.5
 
-This document defines the deterministic execution constraints for all code generated for the g8e platform. The platform is an open-source, self-hosted AI governance layer designed for offline operation. The mandatory substrate is the Operator (g8eo) plus the shared Protobuf protocol; the Engine (g8ee) is an optional application-layer adapter.
+This document defines the deterministic execution constraints for all code generated for the g8e platform. The platform is an open-source, self-hosted AI governance layer designed for offline operation. The substrate is the **g8e Protocol** (shared Protobuf schemas plus the UAP JSON wire contract). `g8eo` is the reference Operator implementation in Go; `g8ee` is a reference application-layer adapter in Python. Both reference components are replaceable by any conforming Operator or BYO client.
 
 I. Core Architectural Invariants
 1. Human Agency is Absolute: The human is always the one making state-changing decisions. Every state-changing operation must surface its own approval prompt, ensuring a permanent governance trail. Automatic Function Calling is permanently disabled.
@@ -25,15 +25,15 @@ II. Development Lifecycle
 The platform runs host-natively. Do not use Docker for primary component development or testing.
 
 1. Setup:
-   - Go 1.22+ (for the Operator/protocol substrate)
+   - Go 1.22+ (for the reference Operator `g8eo`)
    - Python 3.12+ (only when developing the optional g8ee adapter)
 
 2. Commands:
    - `./g8e`: Launches the Interactive Platform Manager (Menu).
-   - `./g8e platform start`: Boots the Operator/protocol substrate only.
+   - `./g8e platform start`: Boots the reference Operator (`g8eo`) only.
    - `./g8e platform start --with-apps`: Boots the Operator plus optional bundled app adapters.
    - `./g8e apps start [g8ee|all]`: Starts optional application-layer adapters explicitly.
-   - `./g8e platform status`: Checks substrate health first and optional app status separately.
+   - `./g8e platform status`: Checks reference Operator health first and optional app status separately.
    - `./g8e login`: Authenticates the local CLI to the running platform.
    - `./g8e test <component>`: Runs host-native tests (default: g8eo).
 
@@ -46,7 +46,7 @@ The platform runs host-natively. Do not use Docker for primary component develop
 
 4. Four-Port Contract (Listen Mode):
    - **WSS (9001)**: Pub/Sub broker for operator connections (mTLS required)
-   - **HTTP (9000)**: mTLS API for substrate operations (mTLS required)
+   - **HTTP (9000)**: mTLS API for Operator protocol operations (mTLS required)
    - **Bootstrap (8080)**: Device-link enrollment and CSR-based registration (plain TLS)
    - **Public (8081)**: Browser-based auth and BYO bootstrap (plain TLS)
 
@@ -72,7 +72,7 @@ V. Component Rules
 1. g8eo / operator (Go)
    - LFAA Payload Stamping: All LFAA results must include an `execution_id`.
    - Concurrency: Goroutines must have explicit cancellation contexts and clear channel ownership.
-   - Substrate Boundary: Any capability needed by bundled apps or BYO clients must be exposed through the public Operator protocol.
+   - Protocol Boundary: Any capability needed by bundled apps or BYO clients must be exposed through the public Operator protocol; no private substrate-to-app channels.
    - Execution Boundary: Warden is the sole circuit breaker before dispatch. Every accepted mutation must emit a signed `ActionReceipt`.
 
 2. g8ee (Python/FastAPI, optional application-layer adapter)
