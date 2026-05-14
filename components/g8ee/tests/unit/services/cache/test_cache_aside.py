@@ -149,7 +149,7 @@ class TestCacheAsideService:
     async def test_update_document_invalidates_query_cache_for_collection(self, service, mock_kv_cache_client):
         """Regression: a single-doc write must also invalidate the shared
         `g8e:cache:query:<collection>:*` cache so downstream readers (e.g.
-        g8ed's HeartbeatMonitorService) never serve a stale snapshot."""
+        client's HeartbeatMonitorService) never serve a stale snapshot."""
         query_params = {"filters": []}
         query_str = json.dumps(query_params, sort_keys=True)
         filter_hash = hashlib.md5(query_str.encode()).hexdigest()

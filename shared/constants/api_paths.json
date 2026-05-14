@@ -1,5 +1,5 @@
 {
-  "_comment": "AUTHORITIVE internal API paths shared across g8ee and g8ed. All internal cluster communication must use these paths prefixed with /api/internal.",
+  "_comment": "AUTHORITIVE internal API paths shared across g8ee and . All internal cluster communication must use these paths prefixed with /api/internal.",
   "internal_prefix": "/api/internal",
   "g8ee": {
     "chat": "/chat",
@@ -33,7 +33,7 @@
     "health": "/health",
     "settings_user": "/settings/user"
   },
-  "g8ed": {
+  "": {
     "sse_push": "/sse/push",
     "grant_intent": "/operators/{operator_id}/grant-intent",
     "revoke_intent": "/operators/{operator_id}/revoke-intent",

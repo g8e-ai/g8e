@@ -421,10 +421,6 @@ UNKNOWN_ERROR_MESSAGE           = "Unknown error"
 
 EVENT_PUBLISH_SUCCESS           = "http-success"
 
-G8ED_CLIENT_TIMEOUT             = 10.0
-G8ED_CLIENT_MAX_RETRIES         = 2
-G8ED_CLIENT_FAILURE_THRESHOLD   = 5
-G8ED_CLIENT_RECOVERY_TIME       = 30.0
 
 WEB_SEARCH_CLIENT_TIMEOUT       = 30.0
 WEB_SEARCH_CLIENT_MAX_RETRIES   = 3
@@ -530,7 +526,7 @@ INVESTIGATION_LOOKUP_MAX_RETRIES     = 3
 INVESTIGATION_LOOKUP_RETRY_DELAYS_MS = [100, 200, 300]
 
 DB_TIMESTAMP = "__SERVER_TIMESTAMP__"
-NEW_CASE_ID  = "new-case-via-g8ed"
+NEW_CASE_ID  = "new-case-via-client"
 
 FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = tuple(
     _SECURITY_CONSTRAINTS.get("forbidden_command_patterns", {}).get("patterns", [
@@ -600,8 +596,8 @@ G8EE_APP_LICENSE_NAME                = "Proprietary"
 G8EE_APP_LICENSE_URL                 = "https://github.com/g8e-ai/g8e/blob/main/LICENSE"
 
 CORS_ALLOWED_ORIGIN_G8EE             = "https://localhost:8443"
-CORS_ALLOWED_ORIGIN_G8ED_HTTP       = "http://localhost:80"
-CORS_ALLOWED_ORIGIN_G8ED_HTTPS      = "https://localhost:443"
+CORS_ALLOWED_ORIGIN_CLIENT_HTTP       = "http://localhost:80"
+CORS_ALLOWED_ORIGIN_CLIENT_HTTPS      = "https://localhost:443"
 CORS_ALLOWED_ORIGIN_LOCALHOST       = "https://localhost"
 CORS_ALLOWED_ORIGIN_G8E             = "https://localhost"
 

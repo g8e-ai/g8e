@@ -14,14 +14,14 @@
 """
 Attachment Service for g8ee
 
-Retrieves file attachment data from operator Blob Store that was stored by g8ed,
+Retrieves file attachment data from operator Blob Store that was stored by client,
 and processes the retrieved base64 data for LLM provider consumption.
 
 Attachments are stored per-investigation in Blob Store namespaces.
 Namespace format: att:{investigation_id}
 Blob ID format: att:{investigation_id}/{attachment_id}
 
-This service is read-only from g8ee's perspective - g8ed handles writes.
+This service is read-only from g8ee's perspective - client handles writes.
 """
 
 import base64
@@ -45,7 +45,7 @@ class AttachmentService:
     """
     Retrieves attachment data from operator Blob Store and processes it for AI consumption.
 
-    g8ed stores full AttachmentData JSON (including base64 data) in Blob Store.
+    client stores full AttachmentData JSON (including base64 data) in Blob Store.
     g8ee retrieves and classifies it here for LLM provider consumption.
     """
 
@@ -126,10 +126,10 @@ class AttachmentService:
         attachment_metadata: list[AttachmentMetadata]
     ) -> list[AttachmentData]:
         """
-        Retrieve full attachment data for a list of attachment metadata from g8ed.
+        Retrieve full attachment data for a list of attachment metadata from client.
 
         Args:
-            attachment_metadata: List of AttachmentMetadata from g8ed
+            attachment_metadata: List of AttachmentMetadata from client
 
         Returns:
             List of AttachmentData with base64_data included

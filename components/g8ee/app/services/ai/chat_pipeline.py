@@ -56,7 +56,7 @@ from app.models.agent_activity import AgentActivityMetadata
 from app.llm.prompts import build_modular_system_prompt
 from app.llm.utils import resolve_model, ModelOverrideResolver
 
-from app.services.infra.g8ed_event_service import EventService
+from app.services.infra.event_service import EventService
 from .agent import g8eEngine
 from app.services.investigation.investigation_service import extract_all_operators_context, InvestigationService
 from app.services.investigation.memory_data_service import MemoryDataService
@@ -66,7 +66,6 @@ from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
 from app.services.data.agent_activity_data_service import AgentActivityDataService
 from app.models.agents.triage import TriageRequest
-from app.models.g8ed_client import ChatErrorPayload, TriageClarificationQuestionsPayload
 from app.utils.interrogation import extract_interrogation_questions
 
 logger = logging.getLogger(__name__)
@@ -80,7 +79,7 @@ class ChatPipelineService:
 
     def __init__(
         self,
-        g8ed_event_service: EventService,
+        event_service: EventService,
         investigation_service: InvestigationService,
         request_builder: AIRequestBuilder,
         g8e_agent: g8eEngine,
@@ -88,7 +87,7 @@ class ChatPipelineService:
         memory_generation_service: MemoryGenerationService,
         agent_activity_data_service: AgentActivityDataService,
     ) -> None:
-        self.g8ed_event_service = g8ed_event_service
+        self.event_service = event_service
         self.investigation_service = investigation_service
         self.request_builder = request_builder
         self.g8e_agent = g8e_agent
@@ -371,7 +370,7 @@ class ChatPipelineService:
             return
 
         logger.info("[SSE-CHAT] Detected %d clarifying questions, publishing event", len(questions))
-        await self.g8ed_event_service.publish_investigation_event(
+        await self.event_service.publish_investigation_event(
             investigation_id=g8e_context.investigation_id or "",
             event_type=EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS,
             payload=TriageClarificationQuestionsPayload(
@@ -540,7 +539,7 @@ class ChatPipelineService:
         user_settings: G8eeUserSettings,
         _track_task: bool = True,
     ) -> None:
-        """Non-streaming chat path — AI response delivered via SSE through g8ed.
+        """Non-streaming chat path — AI response delivered via SSE through client.
 
         Optionally registers the current asyncio task with ChatTaskManager so it
         can be cancelled via the stop endpoint.
@@ -595,7 +594,7 @@ class ChatPipelineService:
                 investigation_id, e, exc_info=True
             )
             try:
-                await self.g8ed_event_service.publish_investigation_event(
+                await self.event_service.publish_investigation_event(
                     investigation_id=investigation_id,
                     event_type=EventType.LLM_CHAT_ITERATION_FAILED,
                     payload=ChatErrorPayload(error=str(e)),
@@ -698,7 +697,7 @@ class ChatPipelineService:
             await self.g8e_agent.run_with_sse(
                 inputs=inputs,
                 state=state,
-                g8ed_event_service=self.g8ed_event_service,
+                event_service=self.event_service,
                 llm_provider=llm_provider,
                 on_iteration_text=_persist_iteration_text,
             )

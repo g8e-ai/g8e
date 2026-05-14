@@ -70,7 +70,7 @@ type LoadOptions struct {
 type ListenConfig struct {
 	Enabled       bool
 	WSSPort       int    // WSS/TLS port for operator pub/sub connections (default: 443)
-	HTTPPort      int    // TLS/HTTPS port for internal g8ee/g8ed traffic (default: 443)
+	HTTPPort      int    // TLS/HTTPS port for internal g8ee/client traffic (default: 443)
 	BootstrapPort int    // Plain-TLS port for bootstrap routes (/.well-known/, /api/auth/device-link/register) (default: 8080)
 	PublicPort    int    // Plain-TLS port for browser-based auth and setup (default: 8081)
 	DataDir       string // Root directory for SQLite database (default: .g8e/data in working directory)
@@ -129,7 +129,7 @@ type Config struct {
 	CloudMode     bool   // True if running as cloud Operator (--cloud flag)
 	CloudProvider string // Cloud provider: 'aws', 'gcp', 'azure' (empty unless --cloud is set)
 
-	// Endpoint is the g8ed host or IP used for all HTTP and WebSocket connections.
+	// Endpoint is the client host or IP used for all HTTP and WebSocket connections.
 	Endpoint string
 
 	// TLSServerName overrides the hostname used for TLS certificate verification.

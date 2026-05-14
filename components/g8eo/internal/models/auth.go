@@ -22,7 +22,7 @@ import (
 )
 
 // DeviceLinkData represents a device link for operator enrollment.
-// Authority: components/g8ed/models/auth_models.js::DeviceLinkData
+// Authority: components/client/models/auth_models.js::DeviceLinkData
 type DeviceLinkData struct {
 	Token          string            `json:"token"`
 	UserID         string            `json:"user_id"`

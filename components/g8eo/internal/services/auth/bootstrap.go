@@ -89,7 +89,7 @@ func NewBootstrapService(cfg *config.Config, logger *slog.Logger) (*BootstrapSer
 
 // AuthServicesResponse represents the response from Auth Services Operator authentication.
 // Error is json.RawMessage so the decoder tolerates both legacy bare-string
-// errors and the standard g8ed error envelope object {code, message, ...}.
+// errors and the standard client error envelope object {code, message, ...}.
 type AuthServicesResponse struct {
 	Success           bool             `json:"success"`
 	OperatorSessionId string           `json:"operator_session_id"`
@@ -102,7 +102,7 @@ type AuthServicesResponse struct {
 	OperatorCertKey   string           `json:"operator_cert_key"`
 }
 
-// RequestBootstrapConfig authenticates with g8ed and receives bootstrap configuration.
+// RequestBootstrapConfig authenticates with client and receives bootstrap configuration.
 // Supports API key auth: POST /api/auth/operator with Bearer token
 func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*BootstrapConfig, error) {
 	bs.logger.Info("Authenticating with endpoint...", "endpoint", bs.config.Endpoint)
@@ -202,7 +202,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		}
 
 		// Handle non-200 status codes. The server may reply with either a bare
-		// string error or the standard g8ed error envelope object — decode into
+		// string error or the standard client error envelope object — decode into
 		// json.RawMessage and normalize via httpclient.ExtractErrorMessage so we
 		// never produce a confusing "cannot unmarshal object into string" failure.
 		if resp.StatusCode != http.StatusOK {

@@ -42,7 +42,7 @@ from app.services.ai.generator import generate_command
 from app.services.data.reputation_data_service import ReputationDataService
 from tests.fakes.agent_helpers import (
     make_agent_run_args,
-    make_g8ed_event_service,
+    make_client_event_service,
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
@@ -61,7 +61,7 @@ class TestCommandGeneratorWithCommitment:
             web_session_id="commitment-test-sess-001",
             user_id="commitment-test-user-001",
         )
-        event_svc = make_g8ed_event_service()
+        event_svc = make_client_event_service()
 
         # Use real ReputationDataService with fake cache/db
         reputation_svc = ReputationDataService(fake_cache_aside_service)
@@ -135,7 +135,7 @@ class TestCommandGeneratorWithCommitment:
                 request="list files",
                 guidelines="",
                 operator_context=None,
-                g8ed_event_service=event_svc,
+                client_event_service=event_svc,
                 web_session_id=inputs.web_session_id,
                 user_id=inputs.user_id,
                 case_id=inputs.case_id,
@@ -164,7 +164,7 @@ class TestCommandGeneratorWithCommitment:
             case_id="commitment-fail-case-001",
             investigation_id="commitment-fail-inv-001",
         )
-        event_svc = make_g8ed_event_service()
+        event_svc = make_client_event_service()
         reputation_svc = ReputationDataService(fake_cache_aside_service)
 
         with patch("app.services.ai.generator._run_generation_stage", new_callable=AsyncMock) as mock_gen, \
@@ -192,7 +192,7 @@ class TestCommandGeneratorWithCommitment:
                 request="delete all",
                 guidelines="",
                 operator_context=None,
-                g8ed_event_service=event_svc,
+                client_event_service=event_svc,
                 web_session_id=inputs.web_session_id,
                 user_id=inputs.user_id,
                 case_id=inputs.case_id,
@@ -213,7 +213,7 @@ class TestCommandGeneratorWithCommitment:
     async def test_commitment_failure_is_fatal_to_command_generation(self, fake_cache_aside_service):
         """A failure in the commitment step should crash the generator (prevents ghost verdicts)."""
         inputs, _ = make_agent_run_args()
-        event_svc = make_g8ed_event_service()
+        event_svc = make_client_event_service()
         reputation_svc = ReputationDataService(fake_cache_aside_service)
 
         # Force commitment failure by mocking create_commitment to raise
@@ -262,7 +262,7 @@ class TestCommandGeneratorWithCommitment:
                     request="list",
                     guidelines="",
                     operator_context=None,
-                    g8ed_event_service=event_svc,
+                    client_event_service=event_svc,
                     web_session_id=inputs.web_session_id,
                     user_id=inputs.user_id,
                     case_id=inputs.case_id,

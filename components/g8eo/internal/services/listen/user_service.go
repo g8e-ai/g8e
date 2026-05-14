@@ -27,7 +27,7 @@ import (
 )
 
 // UserService handles user management in the Operator substrate.
-// This replaces g8ed's UserService as the authoritative user source.
+// This replaces client's UserService as the authoritative user source.
 type UserService struct {
 	db     *ListenDBService
 	logger *slog.Logger

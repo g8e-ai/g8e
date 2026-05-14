@@ -79,7 +79,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
     ) -> list[OperatorDocument]:
         """Query Operator documents.
 
-        ``bypass_cache=True`` mirrors g8ed's ``queryOperatorsFresh`` and is used
+        ``bypass_cache=True`` mirrors client's ``queryOperatorsFresh`` and is used
         by reconcilers (e.g. HeartbeatStaleMonitorService) where stale query
         cache results would produce false STALE/OFFLINE transitions.
         """

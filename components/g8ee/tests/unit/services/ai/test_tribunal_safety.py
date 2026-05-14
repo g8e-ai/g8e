@@ -204,7 +204,7 @@ class TestGenerateCommandSafety:
                     request="run as root",
                     guidelines="",
                     operator_context=_make_mock_operator_context(),
-                    g8ed_event_service=AsyncMock(),
+                    client_event_service=AsyncMock(),
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",

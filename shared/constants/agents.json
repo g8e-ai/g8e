@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical AI persona definitions and metadata shared across g8ee (Python) and g8ed (JS). Each agent.metadata entry carries: id, display_name, icon, description, role, model_tier, tools, identity, purpose, autonomy. Tribunal members additionally carry output_contract.",
+  "_comment": "Canonical AI persona definitions and metadata shared across g8ee (Python) and . Each agent.metadata entry carries: id, display_name, icon, description, role, model_tier, tools, identity, purpose, autonomy. Tribunal members additionally carry output_contract.",
   "triage.complexity": {
     "simple": "simple",
     "complex": "complex"

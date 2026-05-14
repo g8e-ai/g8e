@@ -71,7 +71,7 @@ class HeartbeatStaleMonitorService:
     """Periodically scans operator documents and reconciles their `status` field
     against how recently g8eo has been phoning home (`latest_heartbeat_snapshot.timestamp`).
 
-    Ported from g8ed's HeartbeatMonitorService to consolidate operator ownership in g8ee.
+    Ported from client's HeartbeatMonitorService to consolidate operator ownership in g8ee.
     """
 
     def __init__(

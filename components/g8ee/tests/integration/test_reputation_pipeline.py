@@ -42,7 +42,7 @@ from app.models.tool_results import CommandExecutionResult, FileEditResult
 from app.services.ai.agent_tool_loop import orchestrate_tool_execution
 from tests.fakes.agent_helpers import (
     make_agent_run_args,
-    make_g8ed_event_service,
+    make_client_event_service,
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
@@ -70,7 +70,7 @@ class TestReputationPipelineIntegration:
     async def test_successful_tribunal_command_triggers_resolution(self, mock_tool_executor):
         """A successful Tribunal command should trigger reputation resolution."""
         inputs, _ = make_agent_run_args()
-        event_svc = make_g8ed_event_service()
+        event_svc = make_client_event_service()
 
         # Setup context
         g8e_context = G8eHttpContext(
@@ -136,7 +136,7 @@ class TestReputationPipelineIntegration:
                 tool_executor=mock_tool_executor,
                 investigation=investigation,
                 g8e_context=g8e_context,
-                g8ed_event_service=event_svc,
+                client_event_service=event_svc,
                 request_settings=inputs.request_settings
             )
 
@@ -161,7 +161,7 @@ class TestReputationPipelineIntegration:
     async def test_failed_tribunal_command_triggers_tier2_slash(self, mock_tool_executor):
         """A failed Tribunal command (Tier 2) should trigger resolution with slashing."""
         inputs, _ = make_agent_run_args()
-        event_svc = make_g8ed_event_service()
+        event_svc = make_client_event_service()
 
         g8e_context = G8eHttpContext(
             case_id="slash-case",
@@ -217,7 +217,7 @@ class TestReputationPipelineIntegration:
                 tool_executor=mock_tool_executor,
                 investigation=investigation,
                 g8e_context=g8e_context,
-                g8ed_event_service=event_svc,
+                client_event_service=event_svc,
                 request_settings=inputs.request_settings
             )
 
@@ -231,7 +231,7 @@ class TestReputationPipelineIntegration:
     async def test_non_tribunal_tool_skips_resolution(self, mock_tool_executor):
         """Non-Tribunal tools (e.g. file_read) should never trigger reputation resolution."""
         inputs, _ = make_agent_run_args()
-        event_svc = make_g8ed_event_service()
+        event_svc = make_client_event_service()
 
         # file_read is an operator tool but not RUN_COMMANDS (Tribunal)
         tool_call = ToolCall(id="call_abc", name=OperatorToolName.FILE_READ, args={"file_path": "/tmp/test"})
@@ -256,7 +256,7 @@ class TestReputationPipelineIntegration:
                 investigation_id="inv",
                 source_component=ComponentName.G8EE
             ),
-            g8ed_event_service=event_svc,
+            client_event_service=event_svc,
             request_settings=inputs.request_settings
         )
 

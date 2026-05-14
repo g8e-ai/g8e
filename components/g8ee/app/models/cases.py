@@ -58,7 +58,7 @@ class CaseCreateRequest(G8eBaseModel):
     SECURITY MODEL (Adversarial Client Design):
     - Client input is treated as potentially adversarial
     - Only essential user-controlled fields are accepted from client
-    - All identity/security fields are injected server-side by g8ed from authenticated session
+    - All identity/security fields are injected server-side by client from authenticated session
     - All generated fields (id, title) are created server-side by g8e
     
     CLIENT-PROVIDED (user input):
@@ -66,7 +66,7 @@ class CaseCreateRequest(G8eBaseModel):
     - attachments: Optional - user-uploaded files  
     - sentinel_mode: Optional - user preference for data scrubbing
     
-    SERVER-INJECTED BY g8ed (from authenticated session - never trust client):
+    SERVER-INJECTED BY client (from authenticated session - never trust client):
     - user_id: From session.user_id
     - user_email: From session.user_data.email
     - web_session_id: From validated session cookie
@@ -88,10 +88,10 @@ class CaseCreateRequest(G8eBaseModel):
         default=True,
         description="Sentinel mode - when True, data is scrubbed before storage and AI sees redacted data."
     )
-    user_id: str = Field(..., min_length=1, description="User ID - MUST be injected by g8ed from authenticated session")
-    user_email: str | None = Field(default=None, description="User email - injected by g8ed from session")
-    web_session_id: str | None = Field(default=None, description="Session ID - injected by g8ed from validated session cookie (None for device token flows)")
-    organization_id: str | None = Field(default=None, description="Organization ID - injected by g8ed from session")
+    user_id: str = Field(..., min_length=1, description="User ID - MUST be injected by client from authenticated session")
+    user_email: str | None = Field(default=None, description="User email - injected by client from session")
+    web_session_id: str | None = Field(default=None, description="Session ID - injected by client from validated session cookie (None for device token flows)")
+    organization_id: str | None = Field(default=None, description="Organization ID - injected by client from session")
     priority: Priority = Field(default=Priority.MEDIUM, description="Server default - not client controllable")
     severity: Severity = Field(default=Severity.MEDIUM, description="Server default - not client controllable")
     source: str = Field(default="g8e.ai", description="Server default - not client controllable")
@@ -135,7 +135,7 @@ class CaseCreatedPayload(G8eBaseModel):
 
 
 class CaseEventPayload(G8eBaseModel):
-    """Typed payload for case SSE events pushed to g8ed."""
+    """Typed payload for case SSE events pushed to client."""
     updated_at: UTCDatetime = Field(..., description="When the case was last updated")
     title: str | None = Field(default=None, description="Updated title")
     description: str | None = Field(default=None, description="Updated description")

@@ -91,9 +91,9 @@ class TestG8eHttpContextHappyPath:
         assert ctx.investigation_id == "inv-round-trip-001"
 
     async def test_source_component_parsed_to_enum(self):
-        request = _make_request(_base_headers(source_component="g8ed"))
+        request = _make_request(_base_headers(source_component="client"))
         ctx = await get_g8e_http_context(request)
-        assert ctx.source_component == ComponentName.G8ED
+        assert ctx.source_component == ComponentName.CLIENT
 
     async def test_result_is_g8e_http_context(self):
         request = _make_request(_base_headers())
@@ -193,7 +193,7 @@ class TestNewCaseSentinel:
         headers = {
             G8eHeaders.WEB_SESSION_ID:       "sess-nc-001",
             G8eHeaders.USER_ID:          "user-nc-001",
-            G8eHeaders.SOURCE_COMPONENT: "g8ed",
+            G8eHeaders.SOURCE_COMPONENT: "client",
             G8eHeaders.NEW_CASE:         "true",
             G8eHeaders.BOUND_OPERATORS:  "[]",
         }
@@ -204,7 +204,7 @@ class TestNewCaseSentinel:
         headers = {
             G8eHeaders.WEB_SESSION_ID:       "sess-nc-002",
             G8eHeaders.USER_ID:          "user-nc-002",
-            G8eHeaders.SOURCE_COMPONENT: "g8ed",
+            G8eHeaders.SOURCE_COMPONENT: "client",
             G8eHeaders.NEW_CASE:         "true",
             G8eHeaders.BOUND_OPERATORS:  "[]",
         }
@@ -215,7 +215,7 @@ class TestNewCaseSentinel:
         headers = {
             G8eHeaders.WEB_SESSION_ID:       "sess-nc-003",
             G8eHeaders.USER_ID:          "user-nc-003",
-            G8eHeaders.SOURCE_COMPONENT: "g8ed",
+            G8eHeaders.SOURCE_COMPONENT: "client",
             G8eHeaders.NEW_CASE:         "true",
             G8eHeaders.BOUND_OPERATORS:  "[]",
         }
@@ -232,7 +232,7 @@ class TestNewCaseSentinel:
         headers = {
             G8eHeaders.WEB_SESSION_ID:       "sess-nc-004",
             G8eHeaders.USER_ID:          "user-nc-004",
-            G8eHeaders.SOURCE_COMPONENT: "g8ed",
+            G8eHeaders.SOURCE_COMPONENT: "client",
             G8eHeaders.NEW_CASE:         "true",
             G8eHeaders.CASE_ID:          "case-provided",
             G8eHeaders.INVESTIGATION_ID: "inv-provided",
@@ -304,10 +304,10 @@ class TestSourceComponentValidation:
         ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.source_component == ComponentName.G8EE
 
-    async def test_g8ed_component_accepted(self):
-        headers = _base_headers(source_component="g8ed")
+    async def test_client_component_accepted(self):
+        headers = _base_headers(source_component="client")
         ctx = await get_g8e_http_context(_make_request(headers))
-        assert ctx.source_component == ComponentName.G8ED
+        assert ctx.source_component == ComponentName.CLIENT
 
 
 # ---------------------------------------------------------------------------

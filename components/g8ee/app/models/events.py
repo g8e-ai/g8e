@@ -12,20 +12,20 @@
 # limitations under the License.
 
 """
-Typed g8ed publish events.
+Typed client publish events.
 
-All events published to g8ed are represented as one of two typed envelopes:
+All events published to client are represented as one of two typed envelopes:
 
 - SessionEvent: routes to a specific connected browser session. web_session_id,
   case_id, and investigation_id are all required — the caller must have all
   three or the event cannot be constructed.
 
-- BackgroundEvent: system-initiated, no browser session. g8ed fans the event
+- BackgroundEvent: system-initiated, no browser session. client fans the event
   out to every active SSE session owned by user_id. investigation_id and
   case_id are optional correlation hints carried inside the payload.
 
 The EventService.publish() method accepts the union type and dispatches
-accordingly. publish_event_to_g8ed() no longer exists.
+accordingly. publish_event_to_client() no longer exists.
 """
 
 from typing import Any
@@ -41,7 +41,7 @@ class SessionEvent(G8eBaseModel):
     (approval requests, command broadcasts, AI stream events, etc.).
     """
 
-    event_type: EventType = Field(description="g8ed event type")
+    event_type: EventType = Field(description="client event type")
     payload: G8eBaseModel = Field(description="Typed event-specific payload")
     web_session_id: str = Field(description="Browser session to deliver to")
     user_id: str = Field(description="User ID associated with the session")
@@ -53,12 +53,12 @@ class SessionEvent(G8eBaseModel):
 class BackgroundEvent(G8eBaseModel):
     """System-initiated event with no connected browser session.
 
-    g8ed fans the event out to every active SSE session owned by user_id.
+    client fans the event out to every active SSE session owned by user_id.
     investigation_id and case_id are optional correlation hints carried inside
     the payload — they do not drive routing.
     """
 
-    event_type: EventType = Field(description="g8ed event type")
+    event_type: EventType = Field(description="client event type")
     payload: G8eBaseModel = Field(description="Typed event-specific payload")
     user_id: str = Field(description="User ID to fan out to")
     investigation_id: str | None = Field(default=None, description="Investigation correlation ID")

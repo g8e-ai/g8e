@@ -34,18 +34,18 @@ class _InternalApiPathsMeta(type):
             key = name[5:].lower()
             if key in cls._G8EE_PATHS:
                 return cls.PREFIX + cls._G8EE_PATHS[key]
-        elif name.startswith("G8ED_"):
+        elif name.startswith("CLIENT_"):
             key = name[5:].lower()
-            if key in cls._G8ED_PATHS:
-                return cls.PREFIX + cls._G8ED_PATHS[key]
+            if key in cls._CLIENT_PATHS:
+                return cls.PREFIX + cls._CLIENT_PATHS[key]
         raise AttributeError(f"'{cls.__name__}' object has no attribute '{name}'")
 
 class InternalApiPaths(metaclass=_InternalApiPathsMeta):
-    """Internal API paths shared across g8ee and g8ed."""
+    """Internal API paths shared across g8ee and client."""
     PREFIX: str = API_PATHS["internal_prefix"]
 
     _G8EE_PATHS: dict = API_PATHS["g8ee"]
-    _G8ED_PATHS: dict = API_PATHS["g8ed"]
+    _CLIENT_PATHS: dict = API_PATHS["client"]
 
 
 def validate_api_paths_sync() -> None:
@@ -59,12 +59,12 @@ def validate_api_paths_sync() -> None:
         except AttributeError:
             errors.append(f"g8ee key '{key}' not accessible as '{attr_name}'")
 
-    for key in API_PATHS["g8ed"]:
-        attr_name = f"G8ED_{key.upper()}"
+    for key in API_PATHS["client"]:
+        attr_name = f"CLIENT_{key.upper()}"
         try:
             getattr(InternalApiPaths, attr_name)
         except AttributeError:
-            errors.append(f"g8ed key '{key}' not accessible as '{attr_name}'")
+            errors.append(f"client key '{key}' not accessible as '{attr_name}'")
 
     if errors:
         raise RuntimeError(

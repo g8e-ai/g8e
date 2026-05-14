@@ -31,7 +31,7 @@ class SessionAuthListener:
     """
     SessionAuthListener for g8ee.
     Listens for session auth requests on PubSub and responds with bootstrap config.
-    Moved from g8ed.
+    Moved from client.
     """
 
     def __init__(
@@ -54,10 +54,10 @@ class SessionAuthListener:
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
 
         # We need the actual prefixes from constants
-        # In g8ee, PubSubChannel has different attributes than g8ed JS.
+        # In g8ee, PubSubChannel has different attributes than client JS.
         # I'll check app/constants/channels.py in g8ee.
 
-        # Based on g8ed JS:
+        # Based on client JS:
         # authChannel     = `${PubSubChannel.AUTH_PUBLISH_SESSION_PREFIX}${sessionHash}`;
         # responseChannel = `${PubSubChannel.AUTH_RESPONSE_SESSION_PREFIX}${sessionHash}`;
 
@@ -83,7 +83,7 @@ class SessionAuthListener:
                 operator = await self.operator_data_service.get_operator(operator_id)
                 api_key = operator.api_key if operator else None
 
-                # Aligned with SessionAuthResponse in g8ed
+                # Aligned with SessionAuthResponse in client
                 response = {
                     "success": True,
                     "operator_session_id": operator_session_id,

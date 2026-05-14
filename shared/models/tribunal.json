@@ -1,8 +1,8 @@
 {
-  "_comment": "Canonical Tribunal model. The Tribunal is a five-member heterogeneous AI panel used by g8ee for command generation refinement. Each member has a distinct reasoning profile. g8ee is the sole authority \u2014 g8ed and g8eo consume Tribunal events via SSE but do not interact with members directly.",
+  "_comment": "Canonical Tribunal model. The Tribunal is a five-member heterogeneous AI panel used by g8ee for command generation refinement. Each member has a distinct reasoning profile. g8ee is the sole authority \u2014 client and g8eo consume Tribunal events via SSE but do not interact with members directly.",
   "_authority": "g8ee (command_generator.py)",
   "_consumers": [
-    "g8ed (JS \u2014 renders Tribunal widget in anchored terminal output)"
+    "client (JS \u2014 renders Tribunal widget in anchored terminal output)"
   ],
   "tribunal": {
     "_description": "The Tribunal \u2014 a five-member AI panel that refines command syntax through multi-perspective voting and verification. Fires only for run_commands_with_operator workflows.",

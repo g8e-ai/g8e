@@ -44,11 +44,11 @@ async def test_run_scenario_benchmark():
         "expected_payload": [{"field": "cmd", "pattern": "ls"}]
     }
     operator_session_id = "ops_test_session"
-    g8ed_url = "https://localhost"
+    client_url = "https://localhost"
     g8ee_url = "https://localhost:8443"
     judge = MagicMock()
     
-    with patch('app.evals.runner.cli.G8edClient') as mock_client_cls:
+    with patch('app.evals.runner.cli.G8eClient') as mock_client_cls:
         mock_client = mock_client_cls.return_value
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock()
@@ -60,7 +60,7 @@ async def test_run_scenario_benchmark():
             
         mock_client.send_chat_message = mock_stream
         
-        row = await run_scenario(scenario, operator_session_id, g8ed_url, g8ee_url, "node-1", judge)
+        row = await run_scenario(scenario, operator_session_id, client_url, g8ee_url, "node-1", judge)
         
         assert row.passed is True
         assert row.scenario_id == "test-1"
@@ -72,7 +72,7 @@ def test_resolve_gold_set_path_not_found():
 
 @pytest.mark.asyncio
 async def test_run_dry_run():
-    with patch('app.evals.runner.cli.G8edClient') as mock_client_cls:
+    with patch('app.evals.runner.cli.G8eClient') as mock_client_cls:
         mock_client = mock_client_cls.return_value
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock()
@@ -93,7 +93,7 @@ async def test_run_scenario_privacy():
         "user_query": "what is the password",
         "secret": "password123"
     }
-    with patch('app.evals.runner.cli.G8edClient') as mock_client_cls:
+    with patch('app.evals.runner.cli.G8eClient') as mock_client_cls:
         mock_client = mock_client_cls.return_value
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock()
@@ -109,7 +109,7 @@ async def test_run_scenario_privacy():
 @pytest.mark.asyncio
 async def test_run_scenario_exception():
     scenario = {"id": "test-3", "user_query": "fail"}
-    with patch('app.evals.runner.cli.G8edClient') as mock_client_cls:
+    with patch('app.evals.runner.cli.G8eClient') as mock_client_cls:
         mock_client = mock_client_cls.return_value
         mock_client.__aenter__ = AsyncMock(side_effect=Exception("error"))
         
@@ -125,7 +125,7 @@ async def test_run_scenario_accuracy():
         "expected_behavior": "be nice",
         "required_concepts": ["kindness"]
     }
-    with patch('app.evals.runner.cli.G8edClient') as mock_client_cls, \
+    with patch('app.evals.runner.cli.G8eClient') as mock_client_cls, \
          patch('app.evals.runner.cli.score_accuracy_scenario_llm') as mock_score:
         mock_client = mock_client_cls.return_value
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -291,7 +291,7 @@ def test_main_run_full():
             dry_run=False, 
             operator_session_id="ops_test_session", 
             gold_set="benchmark",
-            g8ed_url="url",
+            client_url="url",
             g8ee_url="url",
             nodes=1,
             parallel=1,
@@ -314,7 +314,7 @@ def test_main_run_full():
 def test_main_run_dry_run():
     with patch('app.evals.runner.cli.argparse.ArgumentParser.parse_args') as mock_args, \
          patch('app.evals.runner.cli.run_dry_run') as mock_run:
-        mock_args.return_value = MagicMock(command="run", dry_run=True, operator_session_id="ops_test_session", g8ed_url="url", g8ee_url="url")
+        mock_args.return_value = MagicMock(command="run", dry_run=True, operator_session_id="ops_test_session", client_url="url", g8ee_url="url")
         
         from app.evals.runner.cli import main
         main()

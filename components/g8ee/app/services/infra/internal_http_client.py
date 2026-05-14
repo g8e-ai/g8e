@@ -17,10 +17,10 @@ from app.clients.http_client import CircuitBreakerConfig, RetryConfig, HTTPClien
 from app.models.settings import G8eePlatformSettings
 from app.constants import (
     UNKNOWN_ERROR_MESSAGE,
-    G8ED_CLIENT_FAILURE_THRESHOLD,
-    G8ED_CLIENT_MAX_RETRIES,
-    G8ED_CLIENT_RECOVERY_TIME,
-    G8ED_CLIENT_TIMEOUT,
+    CLIENT_CLIENT_FAILURE_THRESHOLD,
+    CLIENT_CLIENT_MAX_RETRIES,
+    CLIENT_CLIENT_RECOVERY_TIME,
+    CLIENT_CLIENT_TIMEOUT,
     ComponentName,
     G8eHeaders,
     InternalApiPaths,
@@ -28,7 +28,6 @@ from app.constants import (
 from app.errors import ConfigurationError, NetworkError
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
 from app.models.http_context import G8eHttpContext
-from app.models.g8ed_client import (
     GrantIntentResponse,
     IntentOperationResult,
     IntentRequestPayload,
@@ -41,23 +40,23 @@ from app.models.g8ed_client import (
 logger = logging.getLogger(__name__)
 
 
-def get_g8ed_url(settings: G8eePlatformSettings) -> str:
-    return settings.component_urls.g8ed_url
+def get_client_url(settings: G8eePlatformSettings) -> str:
+    return settings.component_urls.client_url
 
 
 class InternalHttpClient:
 
     def __init__(self, settings: G8eePlatformSettings):
-        self.g8ed_url = get_g8ed_url(settings)
+        self.client_url = get_client_url(settings)
         self._settings = settings
         self._http: HTTPClient = HTTPClient(
             component_id=ComponentName.G8EE,
-            base_url=self.g8ed_url,
-            timeout=G8ED_CLIENT_TIMEOUT,
-            retry_config=RetryConfig(max_retries=G8ED_CLIENT_MAX_RETRIES),
+            base_url=self.client_url,
+            timeout=CLIENT_CLIENT_TIMEOUT,
+            retry_config=RetryConfig(max_retries=CLIENT_CLIENT_MAX_RETRIES),
             circuit_breaker_config=CircuitBreakerConfig(
-                failure_threshold=G8ED_CLIENT_FAILURE_THRESHOLD,
-                recovery_time=G8ED_CLIENT_RECOVERY_TIME,
+                failure_threshold=CLIENT_CLIENT_FAILURE_THRESHOLD,
+                recovery_time=CLIENT_CLIENT_RECOVERY_TIME,
             ),
             auth_token="",
             api_key=settings.auth.g8e_api_key or "",
@@ -65,7 +64,7 @@ class InternalHttpClient:
             ca_cert_path=settings.ca_cert_path or "",
         )
 
-        logger.info("InternalHttpClient initialized with URL: %s", self.g8ed_url)
+        logger.info("InternalHttpClient initialized with URL: %s", self.client_url)
 
     def configure(self, settings: G8eePlatformSettings) -> None:
         self._settings = settings
@@ -91,7 +90,7 @@ class InternalHttpClient:
         self,
         event: SessionEvent | BackgroundEvent,
     ) -> SSEPushResponse:
-        """POST an event to g8ed for SSE delivery.
+        """POST an event to client for SSE delivery.
 
         Returns the typed SSEPushResponse so callers can distinguish "accepted,
         delivered to N sessions" from "accepted, fan-out had zero listeners"
@@ -110,7 +109,7 @@ class InternalHttpClient:
         event_type: str = wire.get("event", {}).get("type") or "None"
 
         logger.info(
-            "[HTTP-G8ED] Pushing SSE event",
+            "[HTTP-CLIENT] Pushing SSE event",
             extra={
                 "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
                 "event_type": event_type,
@@ -119,20 +118,20 @@ class InternalHttpClient:
 
         try:
             response = await self._http.post(
-                InternalApiPaths.G8ED_SSE_PUSH,
+                InternalApiPaths.CLIENT_SSE_PUSH,
                 json_data=wire_model,
                 headers=self._auth_headers(),
             )
         except Exception as e:
             raise NetworkError(
-                f"[HTTP-G8ED] HTTP request failed: {e}",
+                f"[HTTP-CLIENT] HTTP request failed: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
             ) from e
 
         if not response.is_success:
             logger.error(
-                "[HTTP-G8ED] Failed to deliver SSE event",
+                "[HTTP-CLIENT] Failed to deliver SSE event",
                 extra={
                     "status": response.status_code,
                     "error": response.text,
@@ -140,7 +139,7 @@ class InternalHttpClient:
                 }
             )
             raise NetworkError(
-                f"[HTTP-G8ED] SSE push returned HTTP {response.status_code}",
+                f"[HTTP-CLIENT] SSE push returned HTTP {response.status_code}",
                 component=ComponentName.G8EE,
                 details={
                     "status_code": response.status_code,
@@ -151,7 +150,7 @@ class InternalHttpClient:
 
         result = SSEPushResponse.model_validate(response.json())
         logger.info(
-            "[HTTP-G8ED] SSE event delivered",
+            "[HTTP-CLIENT] SSE event delivered",
             extra={
                 "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
                 "event_type": event_type,
@@ -169,14 +168,14 @@ class InternalHttpClient:
     ) -> IntentOperationResult:
         try:
             logger.info(
-                "[HTTP-G8ED] Granting intent to operator",
+                "[HTTP-CLIENT] Granting intent to operator",
                 extra={"operator_id": operator_id, "intent": intent}
             )
 
             request_payload = IntentRequestPayload(intent=intent)
 
             response = await self._http.post(
-                InternalApiPaths.G8ED_GRANT_INTENT.format(operator_id=operator_id),
+                InternalApiPaths.CLIENT_GRANT_INTENT.format(operator_id=operator_id),
                 json_data=request_payload,
                 headers=self._auth_headers(),
                 context=context,
@@ -184,7 +183,7 @@ class InternalHttpClient:
             result = GrantIntentResponse.model_validate(response.json())
             if response.is_success and result.success:
                 logger.info(
-                    "[HTTP-G8ED] Intent granted successfully",
+                    "[HTTP-CLIENT] Intent granted successfully",
                     extra={
                         "operator_id": operator_id,
                         "intent": intent,
@@ -196,7 +195,7 @@ class InternalHttpClient:
                     granted_intents=result.granted_intents,
                 )
             logger.warning(
-                "[HTTP-G8ED] Failed to grant intent",
+                "[HTTP-CLIENT] Failed to grant intent",
                 extra={
                     "operator_id": operator_id,
                     "intent": intent,
@@ -211,7 +210,7 @@ class InternalHttpClient:
 
         except Exception as e:
             raise NetworkError(
-                f"[HTTP-G8ED] Failed to grant intent: {e}",
+                f"[HTTP-CLIENT] Failed to grant intent: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
             ) from e
@@ -226,7 +225,7 @@ class InternalHttpClient:
             request_payload = IntentRequestPayload(intent=intent)
 
             response = await self._http.post(
-                InternalApiPaths.G8ED_REVOKE_INTENT.format(operator_id=operator_id),
+                InternalApiPaths.CLIENT_REVOKE_INTENT.format(operator_id=operator_id),
                 json_data=request_payload,
                 headers=self._auth_headers(),
                 context=context,
@@ -244,7 +243,7 @@ class InternalHttpClient:
 
         except Exception as e:
             raise NetworkError(
-                f"[HTTP-G8ED] Failed to revoke intent: {e}",
+                f"[HTTP-CLIENT] Failed to revoke intent: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
             ) from e
@@ -257,13 +256,13 @@ class InternalHttpClient:
         organization_id: str | None = None,
         context: G8eHttpContext | None = None,
     ) -> OperatorLinkResponse:
-        """Generate a single-operator handshake link (dlk_ token) via g8ed.
+        """Generate a single-operator handshake link (dlk_ token) via client.
         
         This is a prerequisite for the 'stream_operator' tool (Phase 4).
         """
         try:
             logger.info(
-                "[HTTP-G8ED] Generating operator device link",
+                "[HTTP-CLIENT] Generating operator device link",
                 extra={"user_id": user_id, "operator_id": operator_id}
             )
 
@@ -275,7 +274,7 @@ class InternalHttpClient:
             )
 
             response = await self._http.post(
-                InternalApiPaths.G8ED_CREATE_OPERATOR_LINK,
+                InternalApiPaths.CLIENT_CREATE_OPERATOR_LINK,
                 json_data=request_payload,
                 headers=self._auth_headers(),
                 context=context,
@@ -284,13 +283,13 @@ class InternalHttpClient:
             result = OperatorLinkResponse.model_validate(response.json())
             if response.is_success and result.success:
                 logger.info(
-                    "[HTTP-G8ED] Operator device link generated successfully",
+                    "[HTTP-CLIENT] Operator device link generated successfully",
                     extra={"user_id": user_id, "operator_id": operator_id}
                 )
                 return result
 
             logger.warning(
-                "[HTTP-G8ED] Failed to generate operator device link",
+                "[HTTP-CLIENT] Failed to generate operator device link",
                 extra={
                     "user_id": user_id,
                     "operator_id": operator_id,
@@ -302,7 +301,7 @@ class InternalHttpClient:
 
         except Exception as e:
             raise NetworkError(
-                f"[HTTP-G8ED] Failed to generate operator device link: {e}",
+                f"[HTTP-CLIENT] Failed to generate operator device link: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
             ) from e

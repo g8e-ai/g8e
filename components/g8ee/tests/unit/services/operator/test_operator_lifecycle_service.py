@@ -29,12 +29,12 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 class TestOperatorLifecycleService:
     @pytest.fixture
-    def mock_g8ed_http_client(self):
+    def mock_client_http_client(self):
         return AsyncMock(spec=HTTPClient)
 
     @pytest.fixture
-    def operator_data_service(self, mock_cache_aside_service, mock_g8ed_http_client):
-        return OperatorDataService(mock_cache_aside_service, mock_g8ed_http_client)
+    def operator_data_service(self, mock_cache_aside_service, mock_client_http_client):
+        return OperatorDataService(mock_cache_aside_service, mock_client_http_client)
 
     @pytest.fixture
     def lifecycle_service(self, operator_data_service):
@@ -140,7 +140,7 @@ class TestOperatorLifecycleService:
 
         result = await lifecycle_service.terminate_operator(
             operator_id=operator_id,
-            actor=ComponentName.G8ED,
+            actor=ComponentName.CLIENT,
             summary="Manual termination"
         )
 
@@ -165,7 +165,7 @@ class TestOperatorLifecycleService:
         # Verify history append via update_document in add_history_entry
         history_entry = update_data["history_trail"].values[0]
         assert history_entry["event_type"] == "terminated"
-        assert history_entry["actor"] == "g8ed"
+        assert history_entry["actor"] == "client"
 
     async def test_terminate_operator_not_found_raises_validation_error(self, lifecycle_service, mock_cache):
         mock_cache.get_document_with_cache.return_value = None

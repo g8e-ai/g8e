@@ -38,7 +38,7 @@ const (
 )
 
 // PasskeyService handles L3 proof brokerage for passkey/WebAuthn operations.
-// This moves the L3 authorization from g8ed into g8eo as the sovereign authority.
+// This moves the L3 authorization from client into g8eo as the sovereign authority.
 //
 // NOTE: This is a simplified ED25519-based implementation. Full WebAuthn/FIDO2
 // support will be added in a future iteration using the go-webauthn library.

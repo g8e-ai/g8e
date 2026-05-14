@@ -13,7 +13,7 @@
 
 """
 SSE delivery — translates StreamChunkFromModel events produced by the agent
-streaming loop into g8ed EventService pub/sub calls for browser delivery.
+streaming loop into client EventService pub/sub calls for browser delivery.
 """
 
 import asyncio
@@ -37,7 +37,6 @@ from app.models.agent import (
 )
 from app.models.base import G8eBaseModel
 from app.utils.timestamp import now
-from app.models.g8ed_client import (
     AiProcessingStoppedPayload,
     AIToolLifecyclePayload,
     ChatCitationsReadyPayload,
@@ -50,7 +49,7 @@ from app.models.g8ed_client import (
     ChatTurnCompletePayload,
 )
 from app.errors import ValidationError
-from app.services.infra.g8ed_event_service import EventService
+from app.services.infra.client_event_service import EventService
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +58,7 @@ async def deliver_via_sse(
     stream: AsyncGenerator[StreamChunkFromModel],
     inputs: AgentInputs,
     state: AgentStreamState,
-    g8ed_event_service: EventService,
+    client_event_service: EventService,
     on_iteration_text: Callable[[str], Awaitable[None]] | None = None,
 ) -> None:
     """
@@ -114,7 +113,7 @@ async def deliver_via_sse(
         """
         if not has_sse:
             return
-        await g8ed_event_service.publish_investigation_event(
+        await client_event_service.publish_investigation_event(
             investigation_id=investigation_id,
             event_type=event_type,
             payload=payload,

@@ -744,7 +744,7 @@ func handleVerifyVault(vault *vault.Vault, apiKey string, logger *slog.Logger) {
 // runOpenClawMode starts the Operator as an OpenClaw Node Host.
 // The Operator connects to the OpenClaw Gateway via WebSocket, advertises
 // system.run and system.which, and executes shell commands on demand.
-// No g8e infrastructure (g8ee, g8ed) is required.
+// No g8e infrastructure (g8ee, client) is required.
 func runOpenClawMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {

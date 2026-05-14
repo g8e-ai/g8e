@@ -75,7 +75,7 @@ class ExecutionStatus(StrEnum):
 class ComponentName(StrEnum):
     G8EE = "g8ee"
     G8EO = "g8eo"
-    G8ED = "g8ed"
+    CLIENT = "client"
 
 class ComponentStatus(StrEnum):
     ACTIVE = "active"

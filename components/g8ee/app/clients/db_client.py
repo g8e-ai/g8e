@@ -115,7 +115,7 @@ class DBClient:
             if resp.status == 404:
                 return None
             if resp.status >= 400:
-                raise NetworkError(f"g8ed HTTP {resp.status}: {text}", component="g8ee")
+                raise NetworkError(f"client HTTP {resp.status}: {text}", component="g8ee")
             return json.loads(text)
 
     async def _request_list(self, method: str, path: str, **kwargs: Any) -> list[dict[str, object]]:
@@ -127,7 +127,7 @@ class DBClient:
             if resp.status == 404:
                 return []
             if resp.status >= 400:
-                raise NetworkError(f"g8ed HTTP {resp.status}: {text}", component="g8ee")
+                raise NetworkError(f"client HTTP {resp.status}: {text}", component="g8ee")
             return json.loads(text)
 
     async def _request_void(self, method: str, path: str, **kwargs: Any) -> None:
@@ -137,7 +137,7 @@ class DBClient:
         async with session.request(method, url, **kwargs) as resp:
             if resp.status >= 400:
                 text = await resp.text()
-                raise NetworkError(f"g8ed HTTP {resp.status}: {text}", component="g8ee")
+                raise NetworkError(f"client HTTP {resp.status}: {text}", component="g8ee")
 
     async def close(self) -> None:
         try:

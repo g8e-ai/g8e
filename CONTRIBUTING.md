@@ -47,14 +47,14 @@ g8e consists of exactly three components running host-native:
 
 | Component | Language | Role |
 |-----------|----------|------|
-| **g8ed** | Node.js | Dashboard & API Gateway. Handles Express routes, session management, and SSE relay. |
+| **client** | Node.js | Dashboard & API Gateway. Handles Express routes, session management, and SSE relay. |
 | **g8ee** | Python | Reasoning Engine. FastAPI app orchestrating AI agents and enforcing governance layers. |
 | **Operator** | Go | Persistence & Pub/Sub. When running in `listen` mode (port 9000/9001), it handles the event bus and SQLite storage. |
 
 Runtime state lives under `./.g8e`, including data, SSL material, PID files, and logs. Go, Node.js/npm, Python, and curl must be available on the host.
 
 ```bash
-./g8e platform start        # Start all platform components (Operator listen, g8ed, g8ee)
+./g8e platform start        # Start all platform components (Operator listen, client, g8ee)
 ./g8e platform status       # Show component health, versions, and PIDs
 ./g8e platform restart      # Restart all platform components
 ./g8e platform stop         # Stop all platform components
@@ -72,7 +72,7 @@ Tests execute with the host-native component toolchains.
 
 ```bash
 ./g8e test g8ee      # Engine tests (Python/pytest)
-./g8e test g8ed      # Dashboard tests (Node/Vitest)
+./g8e test client      # Dashboard tests (Node/Vitest)
 ./g8e test g8eo      # Operator tests (Go)
 ```
 
@@ -81,7 +81,7 @@ All tests must pass before submitting a Pull Request.
 ## Code Style
 
 - **Python (`g8ee`):** Follow existing patterns. Type hints are mandatory. Use Pydantic models for data structures.
-- **Node.js (`g8ed`):** Follow existing Express patterns. Use JSDoc for complex logic.
+- **Node.js (`client`):** Follow existing Express patterns. Use JSDoc for complex logic.
 - **Go (`g8eo` / Operator):** Run `gofmt`. Avoid global state. Follow existing package boundaries.
 - **Protobuf (`shared/proto`):** Use Protobuf for all cross-component messages. Run `./scripts/core/gen-proto.sh` after updating `.proto` files.
 - **Shell scripts:** Use `set -euo pipefail`. Must be `shellcheck` clean.
@@ -105,7 +105,7 @@ Ensure that tool_call_id is correctly propagated when parsing the LLM response.
 Fixes #123.
 ```
 
-Valid prefixes: `g8ee:`, `g8ed:`, `g8eo:`, `operator:`, `docs:`, `ci:`, `scripts:`.
+Valid prefixes: `g8ee:`, `client:`, `g8eo:`, `operator:`, `docs:`, `ci:`, `scripts:`.
 
 ### PR Guidelines
 

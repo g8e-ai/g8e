@@ -68,7 +68,7 @@ from app.services.protocols import (
     LFAAServiceProtocol,
     PortServiceProtocol,
     PubSubServiceProtocol,
-    G8edClientProtocol,
+    G8eClientProtocol,
 )
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.investigation.investigation_service import extract_single_operator_context
@@ -131,7 +131,7 @@ class OperatorCommandService:
         self._cache_aside_service = cache_aside_service
         self._operator_data_service = operator_data_service
         self._investigation_service = investigation_service
-        self.g8ed_event_service = execution_service.g8ed_event_service
+        self.event_service = execution_service.event_service
         self._settings = settings
 
         self._whitelist_validator = whitelist_validator if whitelist_validator is not None else get_whitelist_validator()
@@ -176,10 +176,10 @@ class OperatorCommandService:
         cache_aside_service: CacheAsideService,
         operator_data_service: OperatorDataService,
         investigation_service: InvestigationServiceProtocol,
-        g8ed_event_service: EventServiceProtocol,
+        event_service: EventServiceProtocol,
         settings: G8eePlatformSettings,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
-        internal_http_client: G8edClientProtocol,
+        internal_http_client: G8eClientProtocol,
         approval_service: ApprovalServiceProtocol,
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
@@ -195,7 +195,7 @@ class OperatorCommandService:
         execution_service = OperatorExecutionService(
             pubsub_service=pubsub_service,
             approval_service=approval_service,
-            g8ed_event_service=g8ed_event_service,
+            event_service=event_service,
             settings=settings,
             ai_response_analyzer=ai_response_analyzer,
             operator_data_service=operator_data_service,
@@ -216,7 +216,7 @@ class OperatorCommandService:
         file_service = OperatorFileService(
             pubsub_service=pubsub_service,
             approval_service=approval_service,
-            g8ed_event_service=g8ed_event_service,
+            event_service=event_service,
             execution_service=execution_service,
             ai_response_analyzer=ai_response_analyzer,
             investigation_service=investigation_service,
@@ -225,9 +225,9 @@ class OperatorCommandService:
         intent_service = OperatorIntentService(
             approval_service=approval_service,
             execution_service=execution_service,
-            g8ed_event_service=g8ed_event_service,
+            event_service=event_service,
             investigation_service=investigation_service,
-            g8ed_client=internal_http_client,
+            client_client=internal_http_client,
         )
 
         return cls(
@@ -372,7 +372,7 @@ class OperatorCommandService:
         # 3. Notify preparing (one event for the approval card).
         # Skip for auto-approved commands since they bypass the approval UI.
         if not is_auto_approved:
-            await self.g8ed_event_service.publish_command_event(
+            await self.event_service.publish_command_event(
                 EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
                 self._CommandExecutingBroadcastEvent(
                     command=command,
@@ -430,7 +430,7 @@ class OperatorCommandService:
         async def _publish_failed(exec_id: str, op_id: str, op_session_id: str, hostname: str, error_msg: str) -> None:
             """Emit OPERATOR_COMMAND_FAILED so the UI always reflects every operator in the batch."""
             try:
-                await self.g8ed_event_service.publish_command_event(
+                await self.event_service.publish_command_event(
                     EventType.OPERATOR_COMMAND_FAILED,
                     self._CommandResultBroadcastEvent(
                         execution_id=exec_id,
@@ -491,7 +491,7 @@ class OperatorCommandService:
                     ),
                 )
 
-                await self.g8ed_event_service.publish_command_event(
+                await self.event_service.publish_command_event(
                     EventType.OPERATOR_COMMAND_STARTED,
                     self._CommandExecutingBroadcastEvent(
                         command=command,
@@ -526,7 +526,7 @@ class OperatorCommandService:
                     if internal_result.status == ExecutionStatus.COMPLETED
                     else EventType.OPERATOR_COMMAND_FAILED
                 )
-                await self.g8ed_event_service.publish_command_event(
+                await self.event_service.publish_command_event(
                     completion_event_type,
                     self._CommandResultBroadcastEvent(
                         execution_id=exec_id,

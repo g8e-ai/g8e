@@ -15,8 +15,8 @@ async def test_filesystem_service_grep_import_fix():
     # and don't raise NameError when the methods are called/referenced.
     pubsub_service = MagicMock()
     execution_service = MagicMock()
-    execution_service.g8ed_event_service.publish_command_event = MagicMock(return_value=asyncio.Future())
-    execution_service.g8ed_event_service.publish_command_event.return_value.set_result(None)
+    execution_service.client_event_service.publish_command_event = MagicMock(return_value=asyncio.Future())
+    execution_service.client_event_service.publish_command_event.return_value.set_result(None)
     
     investigation_service = MagicMock()
     
@@ -66,7 +66,7 @@ async def test_filesystem_service_grep_import_fix():
         web_session_id="web-1",
         user_id="user-1",
         organization_id="org-1",
-        source_component=ComponentName.G8ED
+        source_component=ComponentName.CLIENT
     )
     
     # This should not raise NameError for FsGrepToolResult

@@ -234,7 +234,7 @@ class TestTribunalInvokerRun:
                     sage_request=mock_sage_request,
                     investigation=mock_investigation,
                     g8e_context=mock_g8e_context,
-                    g8ed_event_service=mock_event_service,
+                    client_event_service=mock_event_service,
                     request_settings=mock_request_settings,
                     tool_executor=mock_tool_executor,
                 )
@@ -282,7 +282,7 @@ class TestTribunalInvokerRun:
                 sage_request=mock_sage_request,
                 investigation=mock_investigation,
                 g8e_context=mock_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=mock_request_settings,
                 tool_executor=mock_tool_executor,
             )
@@ -335,7 +335,7 @@ class TestTribunalInvokerRun:
                 sage_request=mock_sage_request,
                 investigation=mock_investigation,
                 g8e_context=mock_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=mock_request_settings,
                 tool_executor=mock_tool_executor,
             )
@@ -385,7 +385,7 @@ class TestTribunalInvokerRun:
                 sage_request=mock_sage_request,
                 investigation=mock_investigation,
                 g8e_context=mock_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=mock_request_settings,
                 tool_executor=mock_tool_executor,
             )

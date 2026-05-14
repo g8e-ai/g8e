@@ -29,7 +29,7 @@ def sample_g8e_context(unique_web_session_id, unique_user_id, unique_case_id, un
         user_id=unique_user_id,
         case_id=unique_case_id,
         investigation_id=unique_investigation_id,
-        source_component=ComponentName.G8ED
+        source_component=ComponentName.CLIENT
     )
 
 @pytest.fixture
@@ -102,7 +102,7 @@ async def test_stream_executor_internal_flow(
     executor = tool_service.stream_executor
 
     # Mock internal dependencies
-    from app.models.g8ed_client import OperatorLinkResponse
+    from app.models.client_client import OperatorLinkResponse
     executor._internal_http_client.generate_operator_link = AsyncMock(return_value=OperatorLinkResponse(
         success=True,
         token="dlk_test_token"

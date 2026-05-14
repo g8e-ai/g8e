@@ -78,12 +78,12 @@ class OperatorApprovalService:
 
     def __init__(
         self,
-        g8ed_event_service: EventServiceProtocol,
+        event_service: EventServiceProtocol,
         operator_data_service: OperatorDataServiceProtocol,
         investigation_data_service: InvestigationDataServiceProtocol,
         on_approval_requested: Callable[[str, PendingApproval], None] | None = None,
     ) -> None:
-        self.g8ed_event_service = g8ed_event_service
+        self.event_service = event_service
         self._operator_data_service = operator_data_service
         self._investigation_data_service = investigation_data_service
         self._on_approval_requested = on_approval_requested
@@ -334,7 +334,7 @@ class OperatorApprovalService:
             )
 
             try:
-                await self.g8ed_event_service.publish(
+                await self.event_service.publish(
                     SessionEvent(
                         event_type=EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED,
                         payload=approval_event,
@@ -345,9 +345,9 @@ class OperatorApprovalService:
                         task_id=request.task_id,
                     )
                 )
-                logger.info("[AGENT_CONTINUE_APPROVAL] Published to g8ed")
+                logger.info("[AGENT_CONTINUE_APPROVAL] Published to client")
             except Exception as publish_error:
-                error_msg = f"Failed to publish agent continuation approval request to g8ed: {publish_error}"
+                error_msg = f"Failed to publish agent continuation approval request to client: {publish_error}"
                 logger.error("[AGENT_CONTINUE_APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
                 return ApprovalResult(
                     approved=False,
@@ -505,7 +505,7 @@ class OperatorApprovalService:
             )
 
             try:
-                await self.g8ed_event_service.publish(
+                await self.event_service.publish(
                     SessionEvent(
                         event_type=EventType.OPERATOR_STREAM_APPROVAL_REQUESTED,
                         payload=approval_event,
@@ -515,9 +515,9 @@ class OperatorApprovalService:
                         investigation_id=g8e_context.investigation_id,
                     )
                 )
-                logger.info("[STREAM_APPROVAL] Published to g8ed")
+                logger.info("[STREAM_APPROVAL] Published to client")
             except Exception as publish_error:
-                error_msg = f"Failed to publish stream approval request to g8ed: {publish_error}"
+                error_msg = f"Failed to publish stream approval request to client: {publish_error}"
                 logger.error("[STREAM_APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
                 return ApprovalResult(
                     approved=False,
@@ -664,7 +664,7 @@ class OperatorApprovalService:
                     logger.info("[APPROVAL]   - %s (%s)", ts.hostname, ts.operator_type)
 
             try:
-                await self.g8ed_event_service.publish(
+                await self.event_service.publish(
                     SessionEvent(
                         event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
                         payload=approval_event,
@@ -675,9 +675,9 @@ class OperatorApprovalService:
                         task_id=task_id,
                     )
                 )
-                logger.info("[APPROVAL] Published to g8ed")
+                logger.info("[APPROVAL] Published to client")
             except Exception as publish_error:
-                error_msg = f"Failed to publish approval request to g8ed: {publish_error}"
+                error_msg = f"Failed to publish approval request to client: {publish_error}"
                 logger.error("[APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
                 return ApprovalResult(
                     approved=False,
@@ -838,7 +838,7 @@ class OperatorApprovalService:
             )
 
             try:
-                await self.g8ed_event_service.publish(
+                await self.event_service.publish(
                     SessionEvent(
                         event_type=EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED,
                         payload=approval_event,
@@ -848,9 +848,9 @@ class OperatorApprovalService:
                         investigation_id=g8e_context.investigation_id,
                     )
                 )
-                logger.info("[FILE_EDIT_APPROVAL] Published to g8ed")
+                logger.info("[FILE_EDIT_APPROVAL] Published to client")
             except Exception as publish_error:
-                error_msg = f"Failed to publish file edit approval request to g8ed: {publish_error}"
+                error_msg = f"Failed to publish file edit approval request to client: {publish_error}"
                 logger.error("[FILE_EDIT_APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
                 return ApprovalResult(
                     approved=False,
@@ -1019,7 +1019,7 @@ class OperatorApprovalService:
             )
 
             try:
-                await self.g8ed_event_service.publish(
+                await self.event_service.publish(
                     SessionEvent(
                         event_type=EventType.OPERATOR_INTENT_APPROVAL_REQUESTED,
                         payload=approval_event,
@@ -1029,9 +1029,9 @@ class OperatorApprovalService:
                         investigation_id=g8e_context.investigation_id,
                     )
                 )
-                logger.info("[INTENT_APPROVAL] Published to g8ed")
+                logger.info("[INTENT_APPROVAL] Published to client")
             except Exception as publish_error:
-                error_msg = f"Failed to publish intent approval request to g8ed: {publish_error}"
+                error_msg = f"Failed to publish intent approval request to client: {publish_error}"
                 logger.error("[INTENT_APPROVAL] %s", error_msg, exc_info=True)
                 return ApprovalResult(
                     approved=False,

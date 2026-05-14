@@ -247,7 +247,7 @@ class TestOperatorAuthService:
         mock_lifecycle_service.claim_operator_slot.assert_called_once()
 
         # Verify KV operations for atomic slot counter
-        # incr called once: for slot counter only (device link usage tracking is handled by g8ed)
+        # incr called once: for slot counter only (device link usage tracking is handled by client)
         assert mock_cache.kv.incr.call_count == 1
 
     async def test_register_device_link_operator_concurrent_slot_assignment(self, auth_service, mock_operator_data_service, mock_session_service, mock_lifecycle_service, mock_certificate_service, mock_cache, mock_api_key_service):
@@ -293,7 +293,7 @@ class TestOperatorAuthService:
         mock_operator_data_service.create_operator.assert_called_once()
 
         # Verify atomic increment was called once (slot counter only)
-        # Device link usage tracking is handled by g8ed
+        # Device link usage tracking is handled by client
         assert mock_cache.kv.incr.call_count == 1
 
     async def test_register_device_link_operator_no_api_key_on_slot(self, auth_service, mock_operator_data_service):

@@ -65,10 +65,10 @@ docs/
 
 | Fact | Authoritative location | Others cross-reference |
 |------|----------------------|----------------------|
-| Pub/sub channel names and wire format | `docs/components/g8eo.md` | `g8ed.md`, `g8ee.md`, `testing.md` |
-| KV key namespace and patterns | `docs/components/g8eo.md` | `g8ed.md`, `g8ee.md` |
-| `G8eHttpContext` internal HTTP header full listing | `docs/components/g8ed.md` | `g8ee.md` cross-references; do not restate in other component docs |
-| Heartbeat end-to-end flow | `docs/components/g8ed.md` | `g8eo.md`, `g8ee.md` |
+| Pub/sub channel names and wire format | `docs/components/g8eo.md` | `.md`, `g8ee.md`, `testing.md` |
+| KV key namespace and patterns | `docs/components/g8eo.md` | `.md`, `g8ee.md` |
+| `G8eHttpContext` internal HTTP header full listing | `docs/components/.md` | `g8ee.md` cross-references; do not restate in other component docs |
+| Heartbeat end-to-end flow | `docs/components/.md` | `g8eo.md`, `g8ee.md` |
 | Shared constants and models (`shared/`) | `docs/developer.md` | `testing.md` |
 | Universal code quality rules | `docs/developer.md` | do not restate in component docs |
 | g8ee component internals (workflow modes, tools, LLM config, Sentinel, LFAA) | `docs/components/g8ee.md` | `docs/architecture/ai_agents.md` |
@@ -118,11 +118,11 @@ All documentation updates must follow the `updatedocs` process:
 ## Writing Style
 
 - Write in the present tense — "g8eo sends a heartbeat every 30 seconds", not "g8eo will send".
-- Use active voice — "g8ed validates the session", not "the session is validated by g8ed".
+- Use active voice — " validates the session", not "the session is validated by ".
 - Be direct and specific — avoid vague terms like "handles", "manages", "deals with".
 - No filler phrases — "Note that", "Please be aware", "It is important to".
 - No emojis anywhere in documentation.
-- Refer to components by their canonical names: g8eo, g8ee, g8ed, operator.
+- Refer to components by their canonical names: g8eo, g8ee, operator.
 
 ---
 

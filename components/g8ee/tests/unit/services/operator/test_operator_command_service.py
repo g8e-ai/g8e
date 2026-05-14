@@ -78,7 +78,7 @@ class TestOperatorCommandServiceInit:
                 cache_aside_service=None,
                 operator_data_service=None,
                 # investigation_service is missing
-                g8ed_event_service=None,
+                client_event_service=None,
                 settings=None,
                 ai_response_analyzer=None,
                 internal_http_client=None,
@@ -139,11 +139,11 @@ class TestBroadcastCommandEvent:
 
     pytestmark: ClassVar = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
-    async def test_publishes_event_to_g8ed(self):
-        """OperatorExecutionService publishes events via g8ed_event_service.publish_command_event."""
+    async def test_publishes_event_to_client(self):
+        """OperatorExecutionService publishes events via client_event_service.publish_command_event."""
         service = _make_service()
         execution_svc = service._execution_service  # noqa: SLF001
-        execution_svc.g8ed_event_service.publish_command_event = AsyncMock()
+        execution_svc.client_event_service.publish_command_event = AsyncMock()
 
         class _TestEvent(G8eBaseModel):
             operator_session_id: str
@@ -155,25 +155,25 @@ class TestBroadcastCommandEvent:
             case_id="case-xyz",
             investigation_id="inv-111",
         )
-        await execution_svc.g8ed_event_service.publish_command_event(
+        await execution_svc.client_event_service.publish_command_event(
             EventType.OPERATOR_COMMAND_REQUESTED,
             data,
             g8e_context=g8e_context,
             task_id="task-123",
         )
 
-        execution_svc.g8ed_event_service.publish_command_event.assert_awaited_once()
-        call_args = execution_svc.g8ed_event_service.publish_command_event.call_args
+        execution_svc.client_event_service.publish_command_event.assert_awaited_once()
+        call_args = execution_svc.client_event_service.publish_command_event.call_args
         assert call_args.args[0] == EventType.OPERATOR_COMMAND_REQUESTED
         assert call_args.kwargs["g8e_context"].web_session_id == "web-abc"
         assert call_args.kwargs["g8e_context"].case_id == "case-xyz"
 
-    async def test_swallows_g8ed_publish_exception(self):
-        """g8ed publish exceptions from execute_command_internal paths must not propagate."""
+    async def test_swallows_client_publish_exception(self):
+        """client publish exceptions from execute_command_internal paths must not propagate."""
         service = _make_service()
         execution_svc = service._execution_service  # noqa: SLF001
-        execution_svc.g8ed_event_service.publish_command_event = AsyncMock(
-            side_effect=Exception("g8ed unreachable")
+        execution_svc.client_event_service.publish_command_event = AsyncMock(
+            side_effect=Exception("client unreachable")
         )
         class _EmptyEvent(G8eBaseModel):
             pass
@@ -185,7 +185,7 @@ class TestBroadcastCommandEvent:
             investigation_id="inv-111",
         )
         with contextlib.suppress(Exception):
-            await execution_svc.g8ed_event_service.publish_command_event(
+            await execution_svc.client_event_service.publish_command_event(
                 EventType.OPERATOR_COMMAND_REQUESTED,
                 _EmptyEvent(),
                 g8e_context=g8e_context,
@@ -303,7 +303,7 @@ class TestExecuteCommandTargetSystems:
         event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            g8ed_event_service=event_service,
+            client_event_service=event_service,
             ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
@@ -334,7 +334,7 @@ class TestExecuteCommandTargetSystems:
         event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            g8ed_event_service=event_service,
+            client_event_service=event_service,
             ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
@@ -370,7 +370,7 @@ class TestExecuteCommandTargetSystems:
         event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            g8ed_event_service=event_service,
+            client_event_service=event_service,
             ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
@@ -418,7 +418,7 @@ class TestExecuteCommandTargetSystems:
         event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            g8ed_event_service=event_service,
+            client_event_service=event_service,
             ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
@@ -455,7 +455,7 @@ class TestExecuteCommandTargetSystems:
         event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            g8ed_event_service=event_service,
+            client_event_service=event_service,
             ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
@@ -488,7 +488,7 @@ class TestExecuteCommandTargetSystems:
         event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            g8ed_event_service=event_service,
+            client_event_service=event_service,
             ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
@@ -519,7 +519,7 @@ class TestExecuteCommandTargetSystems:
         event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            g8ed_event_service=event_service,
+            client_event_service=event_service,
             ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
@@ -550,7 +550,7 @@ class TestExecuteCommandTargetSystems:
         event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            g8ed_event_service=event_service,
+            client_event_service=event_service,
             ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
@@ -582,7 +582,7 @@ class TestExecuteCommandTargetSystems:
         event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            g8ed_event_service=event_service,
+            client_event_service=event_service,
             ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
@@ -618,7 +618,7 @@ class TestExecuteCommandTargetSystems:
         event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            g8ed_event_service=event_service,
+            client_event_service=event_service,
             ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(
@@ -651,7 +651,7 @@ class TestExecuteCommandTargetSystems:
         event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()
         execution_service = FakeExecutionService(
-            g8ed_event_service=event_service,
+            client_event_service=event_service,
             ai_response_analyzer=ai_analyzer
         )
         service = build_command_service(

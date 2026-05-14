@@ -206,7 +206,7 @@ def build_g8e_http_context(
     investigation_id: str | None = None,
     organization_id: str | None = None,
     bound_operators: list[BoundOperator] | None = None,
-    source_component: ComponentName = ComponentName.G8ED,
+    source_component: ComponentName = ComponentName.CLIENT,
     new_case: bool = False,
     is_operator_auth_relay: bool = False,
 ) -> G8eHttpContext:
@@ -214,7 +214,7 @@ def build_g8e_http_context(
     
     Args:
         is_operator_auth_relay: Set to True for device token flows (evals) where web_session_id/user_id are None.
-                                 Must be paired with source_component=ComponentName.G8ED.
+                                 Must be paired with source_component=ComponentName.CLIENT.
     """
     resolved_inv_id = investigation_id
     if resolved_inv_id is None:
@@ -353,7 +353,7 @@ def build_case_model(
     web_session_id: str = "session-test-123",
     status: CaseStatus = CaseStatus.NEW,
     description: str = "Test description",
-    source: ComponentName = ComponentName.G8ED,
+    source: ComponentName = ComponentName.CLIENT,
     priority: Priority = Priority.MEDIUM,
     severity: Severity = Severity.LOW,
 ) -> CaseModel:

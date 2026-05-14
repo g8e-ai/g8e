@@ -184,14 +184,14 @@ case "$TOP" in
                     echo "[g8e] eval fleet is not running" >&2; exit 1
                 fi
                 if [[ -z "$operator_session_id" ]]; then
-                    echo "[g8e] Error: --operator-session-id is required (auto-discovery removed with g8ed)" >&2
+                    echo "[g8e] Error: --operator-session-id is required (auto-discovery removed with BYO client)" >&2
                     exit 1
                 fi
                 if [[ "$operator_session_id" == dlk_* ]]; then
                     echo "[g8e] Error: evals run requires a bound operator session id, not a device link token" >&2; exit 1
                 fi
                 if [[ ${#eval_llm_args[@]} -gt 0 ]]; then
-                    echo "[g8e] Warning: LLM settings via evals run is temporarily disabled (g8ed removed)." >&2
+                    echo "[g8e] Warning: LLM settings via evals run is temporarily disabled (BYO client removed)." >&2
                     echo "[g8e] Set LLM settings via the Operator API or g8ee adapter directly." >&2
                 fi
                 _banner "evals run"

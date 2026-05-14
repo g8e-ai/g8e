@@ -10,7 +10,7 @@ The g8e Evals framework provides a host-driven, high-fidelity testing environmen
 
 Unlike standard unit tests, the evals framework exercises the entire stack:
 - **LLM Reasoning**: Verifies the AI's ability to plan and execute tasks.
-- **Protocol Fidelity**: Ensures correct communication between `g8ed` and the operator.
+- **Protocol Fidelity**: Ensures correct communication between `` and the operator.
 - **Security & Privacy**: Validates that sensitive data is scrubbed and approvals are enforced.
 - **Execution Accuracy**: Confirms that commands are executed correctly on a real filesystem.
 
@@ -28,7 +28,7 @@ This directory contains the infrastructure definition for the evaluation fleet:
 The Python package responsible for orchestrating the evaluation:
 - **`cli.py`**: Main entrypoint for `./g8e evals run`.
 - **`fleet.py`**: Manages the lifecycle (up/down/restart) of Docker containers.
-- **`client.py`**: Asynchronous client for `g8ed` (Chat, Investigations, SSE stream, Approvals).
+- **`client.py`**: Asynchronous client for `` (Chat, Investigations, SSE stream, Approvals).
 - **`scorer.py`**: Implements deterministic regex matching, LLM-as-a-Judge, and privacy validation.
 - **`metrics.py`**: Data models for evaluation results and reporting.
 

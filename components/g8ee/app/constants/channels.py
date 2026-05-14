@@ -92,7 +92,7 @@ class OperatorChannel:
     """Typed constructor/parser for per-operator-session pub/sub channels.
 
     All callers MUST go through this class; never format channel names by hand.
-    The operator_session_id is used verbatim — g8ed generates it as
+    The operator_session_id is used verbatim — client generates it as
     `operator_session_<ts>_<uuid>` and that full string is the session id.
     """
 

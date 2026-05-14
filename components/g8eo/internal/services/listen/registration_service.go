@@ -54,7 +54,7 @@ const (
 )
 
 // RegistrationService handles substrate-native device enrollment.
-// Ported from g8ed/DeviceLinkService and g8ee/OperatorAuthService.
+// Ported from client/DeviceLinkService and g8ee/OperatorAuthService.
 type RegistrationService struct {
 	db     *ListenDBService
 	pki    *PKIAuthority

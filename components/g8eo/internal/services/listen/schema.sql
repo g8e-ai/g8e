@@ -5,8 +5,8 @@
 -- source of truth for the operator schema — do not duplicate it elsewhere.
 --
 -- All domain data (users, sessions, operators, cases, etc.) is stored as JSON
--- documents in the documents table. g8ed and g8ee interact with this store
--- exclusively via the g8ed HTTP API — neither component holds a local SQLite
+-- documents in the documents table. client and g8ee interact with this store
+-- exclusively via the client HTTP API — neither component holds a local SQLite
 -- database.
 
 -- Document store: unified collection/id based storage

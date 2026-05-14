@@ -103,8 +103,8 @@ def mock_web_search_provider():
 
 
 @pytest.fixture
-def mock_g8ed_event_service():
-    """Mock g8ed event service for deterministic testing."""
+def mock_client_event_service():
+    """Mock client event service for deterministic testing."""
     service = AsyncMock()
     service.publish_event = AsyncMock()
     return service

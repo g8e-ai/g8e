@@ -112,7 +112,7 @@ from app.services.investigation.investigation_service import InvestigationServic
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.services.ai.title_generator import generate_case_title
-from app.services.infra.g8ed_event_service import EventService
+from app.services.infra.client_event_service import EventService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.auth.api_key_service import ApiKeyService
 from app.services.auth.certificate_service import CertificateService
@@ -504,7 +504,7 @@ async def stop_ai_processing(
     """
     Stop active AI processing for an investigation - internal cluster use only.
 
-    Called by g8ed when user clicks the stop button in the UI.
+    Called by client when user clicks the stop button in the UI.
     Gracefully cancels the asyncio task processing the AI response.
     """
     investigation_id = request.investigation_id
@@ -526,7 +526,7 @@ async def stop_ai_processing(
         web_session_id=web_session_id,
         user_id=g8e_context.user_id,
         case_id=g8e_context.case_id,
-        g8ed_event_service=chat_pipeline.g8ed_event_service,
+        client_event_service=chat_pipeline.client_event_service,
     )
 
     if cancelled:
@@ -557,15 +557,15 @@ async def operator_approval_respond(
     approval_service: OperatorApprovalService = Depends(get_g8ee_approval_service),
 ):
     """
-    Handle Operator command approval response from g8ed.
-    Called directly by g8ed via HTTP when user approves/denies a command.
+    Handle Operator command approval response from client.
+    Called directly by client via HTTP when user approves/denies a command.
     """
     bound_op = g8e_context.bound_operators[0] if g8e_context.bound_operators else None
     request.operator_session_id = bound_op.operator_session_id or "" if bound_op else ""
     request.operator_id = bound_op.operator_id if bound_op else ""
 
     logger.info(
-        "[INTERNAL-HTTP] Received approval response from g8ed",
+        "[INTERNAL-HTTP] Received approval response from client",
         extra={
             "approval_id": request.approval_id,
             "approved": request.approved,
@@ -788,8 +788,8 @@ async def terminate_operator(
     history entry under a single per-operator lock so concurrent writes cannot
     interleave a partial termination.
 
-    Called by g8ed during API key refresh and manual termination.
-    SECURITY: Internal only - g8ed component.
+    Called by client during API key refresh and manual termination.
+    SECURITY: Internal only - client component.
     """
     operator = await operator_lifecycle_service.operator_data_service.get_operator(request.operator_id)
     if not operator:
@@ -797,8 +797,8 @@ async def terminate_operator(
 
     await operator_lifecycle_service.terminate_operator(
         operator_id=request.operator_id,
-        actor=ComponentName.G8ED,
-        summary="Operator terminated via g8ed relay",
+        actor=ComponentName.CLIENT,
+        summary="Operator terminated via client relay",
     )
 
     logger.info(
@@ -841,10 +841,10 @@ async def create_operator_slot(
     """
     Create an operator slot.
 
-    Called by g8ed during user initialization and device link creation.
+    Called by client during user initialization and device link creation.
     g8ee handles the actual write to the operator document to enforce the
-    architectural boundary: after auth, g8ed has no business writing to operators.
-    SECURITY: Internal only - g8ed component.
+    architectural boundary: after auth, client has no business writing to operators.
+    SECURITY: Internal only - client component.
     """
 
     try:
@@ -932,11 +932,11 @@ async def update_operator_api_key(
     """
     Update an operator's API key.
 
-    Called by g8ed during initialization to issue API keys for existing slots
+    Called by client during initialization to issue API keys for existing slots
     that were created without keys during setup.
     g8ee handles the actual write to the operator document to enforce the
-    architectural boundary: after auth, g8ed has no business writing to operators.
-    SECURITY: Internal only - g8ed component.
+    architectural boundary: after auth, client has no business writing to operators.
+    SECURITY: Internal only - client component.
     """
 
     try:
@@ -997,7 +997,7 @@ async def generate_api_key(
     """Generate a new API key.
     
     Authority: g8ee.
-    SECURITY: Internal only - g8ed component.
+    SECURITY: Internal only - client component.
     """
     try:
         api_key = api_key_service.generate_raw_key(prefix=request.prefix)
@@ -1021,7 +1021,7 @@ async def revoke_operator_certificate(
     """Revoke an operator certificate.
     
     Authority: g8ee.
-    SECURITY: Internal only - g8ed component.
+    SECURITY: Internal only - client component.
     """
     try:
         success = await certificate_service.revoke_certificate(
@@ -1044,10 +1044,10 @@ async def claim_operator_slot(
     """
     Claim an operator slot for device registration.
 
-    Called by g8ed during device registration.
+    Called by client during device registration.
     g8ee handles the actual write to the operator document to enforce the
-    architectural boundary: after auth, g8ed has no business writing to operators.
-    SECURITY: Internal only - g8ed component.
+    architectural boundary: after auth, client has no business writing to operators.
+    SECURITY: Internal only - client component.
     """
 
     try:
@@ -1095,10 +1095,10 @@ async def bind_operators(
     """
     Bind operators to a web session.
 
-    Called by g8ed during operator bind operations.
+    Called by client during operator bind operations.
     g8ee handles the actual write to the operator document to enforce the
-    architectural boundary: after auth, g8ed has no business writing to operators.
-    SECURITY: Internal only - g8ed component.
+    architectural boundary: after auth, client has no business writing to operators.
+    SECURITY: Internal only - client component.
     """
 
     bound = []
@@ -1193,10 +1193,10 @@ async def unbind_operators(
     """
     Unbind operators from a web session.
 
-    Called by g8ed during operator unbind operations.
+    Called by client during operator unbind operations.
     g8ee handles the actual write to the operator document to enforce the
-    architectural boundary: after auth, g8ed has no business writing to operators.
-    SECURITY: Internal only - g8ed component.
+    architectural boundary: after auth, client has no business writing to operators.
+    SECURITY: Internal only - client component.
     """
 
     unbound = []
@@ -1289,7 +1289,7 @@ async def authenticate_operator(
 ):
     """
     Authenticate an operator via API key (Bearer).
-    Called by g8ed (as proxy) or directly via internal API.
+    Called by client (as proxy) or directly via internal API.
     """
     request_context = {
         "ip": http_request.client.host if http_request else None,
@@ -1321,7 +1321,7 @@ async def register_device_link_operator(
     operator_auth_service: OperatorAuthService = Depends(get_g8ee_operator_auth_service),
     http_request: Request = None,
 ) -> OperatorDeviceLinkRegisterResponse:
-    """Bootstrap an operator after device-link consumption (g8ed-internal)."""
+    """Bootstrap an operator after device-link consumption (client-internal)."""
     result = await operator_auth_service.register_device_link_operator(
         operator_id=request.operator_id,
         user_id=request.user_id,
@@ -1398,9 +1398,9 @@ async def register_operator_session(
     """
     Subscribe g8ee to the heartbeat pub/sub channel for an operator session.
 
-    Called by g8ed immediately after operator authentication succeeds so g8ee
+    Called by client immediately after operator authentication succeeds so g8ee
     is listening before the first heartbeat arrives.
-    SECURITY: Internal only - g8ed component.
+    SECURITY: Internal only - client component.
     """
     await heartbeat_service.register_operator_session(
         operator_id=request.operator_id,
@@ -1431,8 +1431,8 @@ async def deregister_operator_session(
     """
     Unsubscribe g8ee from the heartbeat pub/sub channel for an operator session.
 
-    Called by g8ed when an operator goes offline, is stopped, or is terminated.
-    SECURITY: Internal only - g8ed component.
+    Called by client when an operator goes offline, is stopped, or is terminated.
+    SECURITY: Internal only - client component.
     """
     await heartbeat_service.deregister_operator_session(
         operator_id=request.operator_id,
@@ -1610,7 +1610,7 @@ async def sync_user_settings(
     cache_aside: CacheAsideService = Depends(get_g8ee_cache_aside_service),
 ):
     """
-    Sync user settings from g8ed - internal cluster use only.
+    Sync user settings from client - internal cluster use only.
     
     Invalidates the local cache for the user's settings so subsequent
     requests will fetch the fresh settings from operator.

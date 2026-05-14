@@ -43,8 +43,8 @@ from .constants import (
     CORS_ALLOWED_ORIGIN_G8E,
     CORS_ALLOWED_ORIGIN_LOCALHOST,
     CORS_ALLOWED_ORIGIN_G8EE,
-    CORS_ALLOWED_ORIGIN_G8ED_HTTP,
-    CORS_ALLOWED_ORIGIN_G8ED_HTTPS,
+    CORS_ALLOWED_ORIGIN_CLIENT_HTTP,
+    CORS_ALLOWED_ORIGIN_CLIENT_HTTPS,
     HTTP_ACCEPT_HEADER,
     HTTP_ACCEPT_LANGUAGE_HEADER,
     HTTP_ACCESS_CONTROL_ALLOW_CREDENTIALS,
@@ -231,7 +231,7 @@ async def lifespan(app: FastAPI):
         await _close_client(getattr(state, "kv_cache_client", None), "KV cache client")
         await _close_client(getattr(state, "blob_client", None), "Blob client")
         await _close_client(
-            getattr(state, "internal_http_client", None), "g8ed HTTP client",
+            getattr(state, "internal_http_client", None), "client HTTP client",
         )
 
         services = getattr(state, "services", None)
@@ -273,8 +273,8 @@ def _build_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=[
             CORS_ALLOWED_ORIGIN_G8EE,
-            CORS_ALLOWED_ORIGIN_G8ED_HTTP,
-            CORS_ALLOWED_ORIGIN_G8ED_HTTPS,
+            CORS_ALLOWED_ORIGIN_CLIENT_HTTP,
+            CORS_ALLOWED_ORIGIN_CLIENT_HTTPS,
             CORS_ALLOWED_ORIGIN_LOCALHOST,
             CORS_ALLOWED_ORIGIN_G8E,
         ],

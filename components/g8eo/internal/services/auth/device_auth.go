@@ -69,7 +69,7 @@ type deviceRegisterResponse struct {
 
 // extractErrorMessage is retained as a thin alias for test readability; the
 // real implementation lives in httpclient.ExtractErrorMessage so every g8eo
-// client that deals with g8ed responses can share it.
+// client that deals with client responses can share it.
 func extractErrorMessage(raw json.RawMessage) string {
 	return httpclient.ExtractErrorMessage(raw)
 }

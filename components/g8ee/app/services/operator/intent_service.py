@@ -23,7 +23,7 @@ from app.services.protocols import (
     EventServiceProtocol,
     ExecutionServiceProtocol,
     InvestigationServiceProtocol,
-    G8edClientProtocol,
+    G8eClientProtocol,
 )
 from app.constants.status import (
     AITaskId,
@@ -66,15 +66,15 @@ class OperatorIntentService:
         self,
         approval_service: ApprovalServiceProtocol,
         execution_service: ExecutionServiceProtocol,
-        g8ed_event_service: EventServiceProtocol,
+        event_service: EventServiceProtocol,
         investigation_service: InvestigationServiceProtocol,
-        g8ed_client: G8edClientProtocol,
+        client_client: G8eClientProtocol,
     ) -> None:
         self._approval_service = approval_service
         self._execution_service = execution_service
-        self._g8ed_event_service = g8ed_event_service
+        self._event_service = event_service
         self._investigation_service = investigation_service
-        self._g8ed_client = g8ed_client
+        self._client_client = client_client
         self._iam_builder = IamCommandBuilder()
 
     @property
@@ -86,16 +86,16 @@ class OperatorIntentService:
         return self._execution_service
 
     @property
-    def g8ed_event_service(self) -> EventServiceProtocol:
-        return self._g8ed_event_service
+    def event_service(self) -> EventServiceProtocol:
+        return self._event_service
 
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:
         return self._investigation_service
 
     @property
-    def g8ed_client(self) -> G8edClientProtocol:
-        return self._g8ed_client
+    def client_client(self) -> G8eClientProtocol:
+        return self._client_client
 
     def _resolve_intent_dependencies(self, requested_intents: list[str]) -> list[str]:
         all_intents = set(requested_intents)
@@ -176,7 +176,7 @@ class OperatorIntentService:
         )
 
         # Notify start
-        await self.g8ed_event_service.publish_command_event(
+        await self.event_service.publish_command_event(
             EventType.OPERATOR_INTENT_APPROVAL_REQUESTED,
             CommandExecutingBroadcastEvent(
                 command=f"intent_grant {', '.join(requested_intents)}",
@@ -190,7 +190,7 @@ class OperatorIntentService:
 
         if not approval_result.approved:
             # Notify failure
-            await self.g8ed_event_service.publish_command_event(
+            await self.event_service.publish_command_event(
                 EventType.OPERATOR_INTENT_DENIED,
                 CommandResultBroadcastEvent(
                     execution_id=execution_id,
@@ -219,7 +219,7 @@ class OperatorIntentService:
         final_op_id = approval_result.operator_id or operator_id
 
         # Notify completion
-        await self.g8ed_event_service.publish_command_event(
+        await self.event_service.publish_command_event(
             EventType.OPERATOR_INTENT_GRANTED,
             CommandResultBroadcastEvent(
                 execution_id=execution_id,
@@ -326,7 +326,7 @@ class OperatorIntentService:
         execution_id = generate_intent_execution_id()
 
         # Notify start
-        await self.g8ed_event_service.publish_command_event(
+        await self.event_service.publish_command_event(
             EventType.OPERATOR_COMMAND_STARTED,
             CommandExecutingBroadcastEvent(
                 command=f"intent_revoke {', '.join(requested_intents)}",
@@ -359,11 +359,9 @@ class OperatorIntentService:
             )
             res, _envelope = await self.execution_service.execute(msg, g8e_context)
             iam_results.append(IamIntentResult(intent=intent, result=res))
-            if res and res.status == ExecutionStatus.COMPLETED and self.g8ed_client:
-                await self.g8ed_client.revoke_intent(op_doc.id, intent, g8e_context)
 
         # Notify completion
-        await self.g8ed_event_service.publish_command_event(
+        await self.event_service.publish_command_event(
             EventType.OPERATOR_INTENT_REVOKED,
             CommandResultBroadcastEvent(
                 execution_id=execution_id,

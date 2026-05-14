@@ -4,7 +4,7 @@ from app.services.protocols import (
     DocumentServiceProtocol,
     EventServiceProtocol,
     ExecutionServiceProtocol,
-    G8edClientProtocol,
+    G8eClientProtocol,
     HTTPServiceProtocol,
     InvestigationServiceProtocol,
     LFAAServiceProtocol,
@@ -18,7 +18,7 @@ from tests.fakes.fake_approval_service import FakeApprovalService
 from tests.fakes.fake_db_service import FakeDBService
 from tests.fakes.fake_event_service import FakeEventService
 from tests.fakes.fake_execution_service import FakeExecutionService
-from tests.fakes.fake_g8ed_client import FakeG8edClient
+from tests.fakes.fake_operator_clients import FakeKVClient, FakePubSubClient, FakeDBClient, FakeG8eClient
 from tests.fakes.fake_http_service import FakeHTTPService
 from tests.fakes.fake_investigation_service import FakeInvestigationService
 from tests.fakes.fake_lfaa_service import FakeLFAAService
@@ -39,7 +39,7 @@ def test_fakes_implement_protocols():
         (FakeHTTPService(), HTTPServiceProtocol),
         (FakeLFAAService(), LFAAServiceProtocol),
         (FakePubSubService(), PubSubServiceProtocol),
-        (FakeG8edClient(), G8edClientProtocol),
+        (FakeG8eClient(), G8eClientProtocol),
         (FakeApprovalService(), ApprovalServiceProtocol),
         (FakeInvestigationService(), InvestigationServiceProtocol),
         (FakeMemoryDataService(), MemoryDataServiceProtocol),

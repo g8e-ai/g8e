@@ -22,7 +22,7 @@ from app.llm.factory import get_llm_provider
 from app.models.settings import LLMSettings
 from app.services.ai.eval_judge import EvalJudge
 
-from .client import G8edClient
+from .client import G8eClient
 from .metrics import EvalRow, FullReport
 from .reporter import compute_summaries, persist_report, render_text_table
 from .scorer import (
@@ -74,16 +74,16 @@ def resolve_gold_set_path(gold_set_arg: str | None) -> Path | None:
     return None
 
 
-async def run_dry_run(operator_session_id: str, g8ed_url: str | None = None, g8ee_url: str | None = None) -> None:
-    # Resolve g8ed_url from environment or default
-    if g8ed_url is None:
-        g8ed_url = os.environ.get("G8ED_URL", os.environ.get("G8ED_INTERNAL_URL", "https://localhost"))
+async def run_dry_run(operator_session_id: str, client_url: str | None = None, g8ee_url: str | None = None) -> None:
+    # Resolve client_url from environment or default
+    if client_url is None:
+        client_url = os.environ.get("CLIENT_URL", os.environ.get("CLIENT_INTERNAL_URL", "https://localhost"))
     # Resolve g8ee_url from environment or default
     if g8ee_url is None:
         g8ee_url = os.environ.get("G8EE_URL", os.environ.get("G8EE_INTERNAL_URL", "https://localhost:8443"))
     print("[evals] Running canned chat: 'uname -a'")
 
-    async with G8edClient(g8ed_url, g8ee_url) as client:
+    async with G8eClient(client_url, g8ee_url) as client:
         investigation = await client.create_investigation(
             operator_session_id=operator_session_id
         )
@@ -105,7 +105,7 @@ async def run_dry_run(operator_session_id: str, g8ed_url: str | None = None, g8e
 async def run_scenario(
     scenario: dict[str, Any],
     operator_session_id: str,
-    g8ed_url: str,
+    client_url: str,
     g8ee_url: str,
     node_id: str,
     judge: EvalJudge,
@@ -115,7 +115,7 @@ async def run_scenario(
     Args:
         scenario: Gold set scenario dict
         operator_session_id: Bound operator session id from web-session binding
-        g8ed_url: g8ed public API base URL
+        client_url: client public API base URL
         g8ee_url: g8ee internal API base URL
         node_id: Container name to use
         judge: EvalJudge instance for accuracy scoring
@@ -129,7 +129,7 @@ async def run_scenario(
     dimension = scenario.get("dimension", "accuracy")
 
     try:
-        async with G8edClient(g8ed_url, g8ee_url) as client:
+        async with G8eClient(client_url, g8ee_url) as client:
             investigation = await client.create_investigation(
                 operator_session_id=operator_session_id
             )
@@ -146,7 +146,7 @@ async def run_scenario(
                 if event.get("type") == "text_chunk":
                     response_text += event.get("data", "")
                 elif event.get("type") == "tool_call":
-                    # Tool calls from g8ed might have slightly different shape than SDK
+                    # Tool calls from client might have slightly different shape than SDK
                     # Extract data from the event
                     tool_data = event.get("data", {})
                     tool_calls.append(tool_data)
@@ -231,7 +231,7 @@ async def run_scenario(
 async def run_full_eval(
     operator_session_id: str | None,
     gold_set_path: str,
-    g8ed_url: str | None = None,
+    client_url: str | None = None,
     g8ee_url: str | None = None,
     nodes: int = 3,
     parallel: int = 1,
@@ -248,7 +248,7 @@ async def run_full_eval(
     Args:
         operator_session_id: Bound operator session id from web-session binding
         gold_set_path: Path to gold set JSON file
-        g8ed_url: g8ed public API base URL (defaults to G8ED_URL env var or https://localhost)
+        client_url: client public API base URL (defaults to CLIENT_URL env var or https://localhost)
         g8ee_url: g8ee internal API base URL (defaults to G8EE_URL env var or https://localhost:8443)
         nodes: Number of eval nodes to use
         parallel: Number of scenarios to run in parallel
@@ -259,9 +259,9 @@ async def run_full_eval(
         llm_endpoint: LLM provider endpoint URL
         llm_api_key: LLM provider API key
     """
-    # Resolve g8ed_url from environment or default
-    if g8ed_url is None:
-        g8ed_url = os.environ.get("G8ED_URL", os.environ.get("G8ED_INTERNAL_URL", "https://localhost"))
+    # Resolve client_url from environment or default
+    if client_url is None:
+        client_url = os.environ.get("CLIENT_URL", os.environ.get("CLIENT_INTERNAL_URL", "https://localhost"))
     # Resolve g8ee_url from environment or default
     if g8ee_url is None:
         g8ee_url = os.environ.get("G8EE_URL", os.environ.get("G8EE_INTERNAL_URL", "https://localhost:8443"))
@@ -325,7 +325,7 @@ async def run_full_eval(
         node_id = f"evals-eval-node-{(i % nodes) + 1}"
         print(f"[evals] [{i+1}/{len(operator_bound_scenarios)}] Running {scenario['id']} on {node_id}")
 
-        row = await run_scenario(scenario, operator_session_id, g8ed_url, g8ee_url, node_id, judge)
+        row = await run_scenario(scenario, operator_session_id, client_url, g8ee_url, node_id, judge)
         rows.append(row)
 
         if row.passed:
@@ -362,9 +362,9 @@ def main() -> None:
         help="Bound operator session id from web-session binding",
     )
     run_parser.add_argument(
-        "--g8ed-url",
+        "--client-url",
         default=None,
-        help="g8ed public API base URL (default: G8ED_URL env var or https://localhost)",
+        help="client public API base URL (default: CLIENT_URL env var or https://localhost)",
     )
     run_parser.add_argument(
         "--g8ee-url",
@@ -439,7 +439,7 @@ def main() -> None:
             if not args.operator_session_id:
                 print("[evals] Error: --operator-session-id is required for --dry-run")
                 sys.exit(1)
-            asyncio.run(run_dry_run(args.operator_session_id, args.g8ed_url, args.g8ee_url))
+            asyncio.run(run_dry_run(args.operator_session_id, args.client_url, args.g8ee_url))
         else:
             gold_set_path = resolve_gold_set_path(args.gold_set)
             if not gold_set_path:
@@ -451,7 +451,7 @@ def main() -> None:
             asyncio.run(run_full_eval(
                 args.operator_session_id,
                 str(gold_set_path),
-                args.g8ed_url,
+                args.client_url,
                 args.g8ee_url,
                 args.nodes,
                 args.parallel,

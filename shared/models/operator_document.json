@@ -1,14 +1,14 @@
 {
-  "_comment": "Canonical OperatorDocument shape. g8ed is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via g8ed HTTP API and operator KV cache. g8eo is the source of runtime data (heartbeats) that g8ed merges into this document. A field mismatch between g8ed and g8ee breaks operator binding, context building, and AI execution.",
+  "_comment": "Canonical OperatorDocument shape. client is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via client HTTP API and operator KV cache. g8eo is the source of runtime data (heartbeats) that client merges into this document. A field mismatch between client and g8ee breaks operator binding, context building, and AI execution.",
 
   "_comment.field_naming": "FIELD NAMING CONVENTION: The canonical OperatorDocument uses 'id' as the primary key field name (core_identity.id). Wire format models and projections (e.g., operator_status_info, bound_operator_context, operator_slot, heartbeat) use 'operator_id' for clarity in cross-component contexts where the entity type may not be immediately obvious from context. When mapping between OperatorDocument and wire formats: OperatorDocument.core_identity.id ↔ wire_format.operator_id. This naming pattern is intentional and consistent across all operator-related wire formats.",
 
-  "_authority": "g8ed (SQLite)",
+  "_authority": "client (SQLite)",
   "_consumers": ["g8ee (Python OperatorDocument)", "g8eo (identity fields at auth time)"],
   "_cache_aside": "operator KV — keyed by g8e:doc:operators:{id}. Cache-aside pattern. SQLite is source of truth.",
 
   "operator_document": {
-    "_description": "Full operator record as stored in g8ed SQLite and returned by GET /api/internal/operators/:id/status and GET /api/operators/status.",
+    "_description": "Full operator record as stored in client SQLite and returned by GET /api/internal/operators/:id/status and GET /api/operators/status.",
 
     "core_identity": {
       "id": {
@@ -53,12 +53,12 @@
       "api_key": {
         "type": "string",
         "required": false,
-        "description": "Platform API key used by this operator for g8ed authentication (hashed form for validation)"
+        "description": "Platform API key used by this operator for client authentication (hashed form for validation)"
       },
       "operator_api_key": {
         "type": "string",
         "required": false,
-        "description": "Per-operator API key provisioned in the slot. Used by g8eo to authenticate to g8ed."
+        "description": "Per-operator API key provisioned in the slot. Used by g8eo to authenticate to client."
       },
       "operator_api_key_created_at": {
         "type": "string",
@@ -73,7 +73,7 @@
     },
 
     "certificate": {
-      "_description": "Per-operator mTLS certificate provisioned by g8ed.",
+      "_description": "Per-operator mTLS certificate provisioned by client.",
       "operator_cert": {
         "type": "string",
         "required": false,
@@ -123,7 +123,7 @@
         "type": "string",
         "format": "iso8601",
         "required": false,
-        "description": "When the operator process first authenticated with g8ed"
+        "description": "When the operator process first authenticated with client"
       },
       "terminated_at": {
         "type": "string",
@@ -145,7 +145,7 @@
     },
 
     "slot_metadata": {
-      "_description": "Operator slot provisioning fields. Slots are pre-created by g8ed for each user.",
+      "_description": "Operator slot provisioning fields. Slots are pre-created by client for each user.",
       "slot_number": {
         "type": "integer",
         "required": false,
@@ -310,7 +310,7 @@
       "session_token": {
         "type": "string",
         "required": false,
-        "description": "Active session token for session-based auth validation. Set by g8ed at bootstrap time."
+        "description": "Active session token for session-based auth validation. Set by client at bootstrap time."
       },
       "session_expires_at": {
         "type": "string",

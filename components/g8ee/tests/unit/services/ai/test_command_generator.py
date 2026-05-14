@@ -405,7 +405,7 @@ class TestGenerateCommandOutcomes:
                 request="list files",
                 guidelines="",
                 operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/tmp", username="root", uid=0),
-                g8ed_event_service=AsyncMock(),
+                client_event_service=AsyncMock(),
                 web_session_id="ws-1",
                 user_id="user-1",
                 case_id="case-1",
@@ -445,7 +445,7 @@ class TestGenerateCommandSystemError:
                     request="list files",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=mock_event_service,
+                    client_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -483,7 +483,7 @@ class TestGenerateCommandSystemError:
                     request="list files",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=mock_event_service,
+                    client_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -528,7 +528,7 @@ class TestGenerateCommandSystemError:
                 request="list files",
                 guidelines="",
                 operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 web_session_id="ws-1",
                 user_id="user-1",
                 case_id="case-1",
@@ -583,7 +583,7 @@ class TestMixedErrorFallback:
                     request="list files",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=mock_event_service,
+                    client_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -630,7 +630,7 @@ class TestTribunalProviderUnavailableError:
                     request="list files",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=mock_event_service,
+                    client_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -666,7 +666,7 @@ class TestTribunalModelNotConfiguredError:
                     request="list files",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=mock_event_service,
+                    client_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -1093,7 +1093,7 @@ class TestGenerateCommandHappyPath:
                 request="list files with details",
                 guidelines="",
                 operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/tmp", username="root", uid=0),
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 web_session_id="ws-happy-1",
                 user_id="user-happy-1",
                 case_id="case-happy-1",
@@ -1139,7 +1139,7 @@ class TestGenerateCommandHappyPath:
                 request="find all log files under /var/log",
                 guidelines="",
                 operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 web_session_id="ws-happy-2",
                 user_id="user-happy-2",
                 case_id="case-happy-2",
@@ -1184,7 +1184,7 @@ class TestGenerateCommandHappyPath:
                 request="find all TODO comments recursively with line numbers",
                 guidelines="",
                 operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user/project", username="user", uid=1000),
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 web_session_id="ws-happy-3",
                 user_id="user-happy-3",
                 case_id="case-happy-3",
@@ -1238,7 +1238,7 @@ class TestGenerateCommandHappyPath:
                 request="show disk usage in human-readable format",
                 guidelines="",
                 operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 web_session_id="ws-happy-4",
                 user_id="user-happy-4",
                 case_id="case-happy-4",
@@ -1270,7 +1270,7 @@ class TestGenerateCommandHappyPath:
                 request="show current user name",
                 guidelines="",
                 operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 web_session_id="ws-happy-5",
                 user_id="user-happy-5",
                 case_id="case-happy-5",
@@ -1302,7 +1302,7 @@ class TestGenerateCommandHappyPath:
                 request="show system uptime",
                 guidelines="",
                 operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 web_session_id="ws-happy-6",
                 user_id="user-happy-6",
                 case_id="case-happy-6",
@@ -1347,7 +1347,7 @@ class TestGenerateCommandHappyPath:
                 request="list files in /tmp with details",
                 guidelines="",
                 operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 web_session_id="ws-happy-7",
                 user_id="user-happy-7",
                 case_id="case-happy-7",
@@ -1387,7 +1387,7 @@ class TestGenerateCommandHappyPath:
                 request="show the system hostname from /etc/hostname",
                 guidelines="",
                 operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 web_session_id="ws-happy-8",
                 user_id="user-happy-8",
                 case_id="case-happy-8",
@@ -1426,7 +1426,7 @@ class TestGenerateCommandHappyPath:
                 request="ls",
                 guidelines="",
                 operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 web_session_id="ws-happy-9",
                 user_id="user-happy-9",
                 case_id="case-happy-9",
@@ -1536,7 +1536,7 @@ class TestGenerateCommandAuditorFailure:
                     request="list files with details",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=mock_event_service,
+                    client_event_service=mock_event_service,
                     web_session_id="ws-vf-1",
                     user_id="user-vf-1",
                     case_id="case-vf-1",
@@ -1585,7 +1585,7 @@ class TestGenerateCommandAuditorFailure:
                     request="list files with details",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=mock_event_service,
+                    client_event_service=mock_event_service,
                     web_session_id="ws-vf-2",
                     user_id="user-vf-2",
                     case_id="case-vf-2",
@@ -1630,7 +1630,7 @@ class TestGenerateCommandAuditorFailure:
                     request="list files with details",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=mock_event_service,
+                    client_event_service=mock_event_service,
                     web_session_id="ws-vf-3",
                     user_id="user-vf-3",
                     case_id="case-vf-3",
@@ -1678,7 +1678,7 @@ class TestGenerateCommandAuditorFailure:
                     request="show system hostname",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=mock_event_service,
+                    client_event_service=mock_event_service,
                     web_session_id="ws-vf-4",
                     user_id="user-vf-4",
                     case_id="case-vf-4",
@@ -1712,7 +1712,7 @@ class TestGenerateCommandAuditorFailure:
                     request="show current user",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=mock_event_service,
+                    client_event_service=mock_event_service,
                     web_session_id="ws-vf-5",
                     user_id="user-vf-5",
                     case_id="case-vf-5",
@@ -1919,7 +1919,7 @@ class TestTribunalEmitter:
     async def test_terminal_event_publish_failure_raises(self):
         """Terminal event publish failures are re-raised to ensure caller is aware of the failure."""
         from app.models.http_context import G8eHttpContext
-        from app.services.infra.g8ed_event_service import EventService
+        from app.services.infra.client_event_service import EventService
 
         mock_event_service = MagicMock(spec=EventService)
         mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))
@@ -1945,7 +1945,7 @@ class TestTribunalEmitter:
         """Progress event publish failures are logged but not re-raised."""
         from app.models.agents.tribunal import TribunalPassCompletedPayload
         from app.models.http_context import G8eHttpContext
-        from app.services.infra.g8ed_event_service import EventService
+        from app.services.infra.client_event_service import EventService
 
         mock_event_service = MagicMock(spec=EventService)
         mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))
@@ -2007,7 +2007,7 @@ class TestTribunalEmitter:
                 request="test round 2",
                 guidelines="",
                 operator_context=_make_mock_operator_context(),
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 web_session_id="ws-1",
                 user_id="user-1",
                 case_id="case-1",
@@ -2036,7 +2036,7 @@ class TestTribunalEmitter:
             TribunalSessionSystemErrorPayload,
         )
         from app.models.http_context import G8eHttpContext
-        from app.services.infra.g8ed_event_service import EventService
+        from app.services.infra.client_event_service import EventService
 
         mock_event_service = MagicMock(spec=EventService)
         mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))

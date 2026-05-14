@@ -14,7 +14,7 @@
 """Operator Stream Executor
 
 Orchestrates the Phase 4 'stream' operation:
-1. Mints a dlk_ token via g8ed (internal API)
+1. Mints a dlk_ token via client (internal API)
 2. Requests human approval via OperatorApprovalService
 3. Executes 'docker exec g8eo ... stream' command
 """
@@ -60,8 +60,8 @@ class OperatorStreamExecutor:
 
         # 1. Mint dlk_ token
         try:
-            # Authority: g8ed owns device link token lifecycle.
-            # Using high-level client method which uses canonical InternalApiPaths.G8ED_CREATE_OPERATOR_LINK.
+            # Authority: client owns device link token lifecycle.
+            # Using high-level client method which uses canonical InternalApiPaths.CLIENT_CREATE_OPERATOR_LINK.
             link_response = await self._internal_http_client.generate_operator_link(
                 user_id=g8e_context.user_id,
                 operator_id="", # Multi-host stream isn't bound to one operator yet
@@ -73,7 +73,7 @@ class OperatorStreamExecutor:
             if not device_token:
                 raise ExternalServiceError(
                     "Failed to mint device link token: no token in response",
-                    service_name="g8ed",
+                    service_name="client",
                     component=ComponentName.G8EE
                 )
         except Exception as e:
@@ -95,7 +95,7 @@ class OperatorStreamExecutor:
             operator_id="",         # Not bound to a specific operator
             hosts=args.hosts,
             arch=args.arch,
-            endpoint=self._settings.component_urls.g8ed_url,
+            endpoint=self._settings.component_urls.client_url,
             device_token=device_token,
             concurrency=args.concurrency,
             timeout=args.timeout_seconds,

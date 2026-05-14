@@ -11,7 +11,7 @@ The platform is split into three layers:
 
 1.  **Protocol (Substrate)**: The **g8e Protocol** is the substrate. It is a domain-agnostic wire contract — a typed, signed, state-bound `GovernanceEnvelope` carrying L1/L2/L3 evidence — that any conforming implementation must verify and enforce.
 2.  **Operator (Role)**: Any host-side implementation that speaks the protocol: it receives signed transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a local ledger. **`g8eo`** is the reference Operator implementation in Go and the canonical example of what an Operator does. It is replaceable.
-3.  **Application Layer (Optional)**: Reference application components like the **Engine (g8ee)** and **Dashboard (g8ed)**. These are opt-in pieces of the AI-powered infrastructure-management reference application, consuming the public protocol surface on equal footing with Bring-Your-Own (BYO) frontends and agents.
+3.  **Application Layer (Optional)**: Reference application components like the **Engine (g8ee)** and **Dashboard ()**. These are opt-in pieces of the AI-powered infrastructure-management reference application, consuming the public protocol surface on equal footing with Bring-Your-Own (BYO) frontends and agents.
 
 The core product invariant is that a typed, signed, state-bound transaction reaches a sovereign host implementation that distrusts upstream inputs and refuses to mutate reality unless every independent proof (L1/L2/L3) checks out.
 

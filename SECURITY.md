@@ -25,7 +25,7 @@ We will acknowledge receipt within 48 hours and provide an initial assessment wi
 
 The following are in scope for security reports:
 
-- **Dashboard (g8ed)** -- Web gateway, session management, and Passkey (PHP) orchestration.
+- **Dashboard (client)** -- Web gateway, session management, and Passkey (PHP) orchestration.
 - **Engine (g8ee)** -- Reasoning plane, the Tribunal consensus ensemble, and L2 signature generation.
 - **Operator (g8eo)** -- Execution plane, L1 technical bedrock enforcement, and output scrubbing.
 - **Governance layers** -- L1 (Hard Gates), L2 (Consensus), and L3 (Human-in-the-loop).

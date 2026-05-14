@@ -53,7 +53,7 @@ from .services.ai.chat_task_manager import BackgroundTaskManager
 from .services.data.attachment_store_service import AttachmentService
 from .db.blob_service import BlobService
 from .services.protocols import SettingsServiceProtocol
-from .services.infra.g8ed_event_service import EventService
+from .services.infra.client_event_service import EventService
 from .services.infra.internal_http_client import InternalHttpClient
 from .services.operator.approval_service import OperatorApprovalService
 from .services.operator.command_service import OperatorCommandService
@@ -82,7 +82,7 @@ __all__ = [
     "get_g8ee_chat_task_manager",
     "get_g8ee_current_active_user",
     "get_g8ee_event_service",
-    "get_g8ee_g8ed_http_client",
+    "get_g8ee_client_http_client",
     "get_g8ee_grounding_service",
     "get_g8ee_investigation_data_service",
     "get_g8ee_investigation_service",
@@ -386,22 +386,22 @@ async def get_g8ee_attachment_service(request: Request) -> AttachmentService:
     return service
 
 
-async def get_g8ee_g8ed_http_client(request: Request) -> InternalHttpClient:
+async def get_g8ee_client_http_client(request: Request) -> InternalHttpClient:
     state = cast(G8eeAppState, request.app.state)
     client = state.internal_http_client
     if not client:
-        logger.error("g8ed HTTP client not found in app state - g8ee initialization may have failed")
-        raise ServiceUnavailableError("g8ed HTTP client not available")
+        logger.error("client HTTP client not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("client HTTP client not available")
 
     return client
 
 
 async def get_g8ee_event_service(request: Request) -> EventService:
     state = cast(G8eeAppState, request.app.state)
-    service = state.services.g8ed_event_service
+    service = state.services.client_event_service
     if not service:
-        logger.error("g8ed event service not found in app state - g8ee initialization may have failed")
-        raise ServiceUnavailableError("g8ed event service not available")
+        logger.error("client event service not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("client event service not available")
 
     return cast(EventService, service)
 
@@ -461,7 +461,7 @@ __all__ = [
     "get_g8ee_chat_task_manager",
     "get_g8ee_current_active_user",
     "get_g8ee_event_service",
-    "get_g8ee_g8ed_http_client",
+    "get_g8ee_client_http_client",
     "get_g8ee_grounding_service",
     "get_g8ee_investigation_data_service",
     "get_g8ee_investigation_service",

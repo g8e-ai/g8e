@@ -30,7 +30,7 @@ const (
 	Component_COMPONENT_UNSPECIFIED Component = 0
 	Component_COMPONENT_G8EE        Component = 1
 	Component_COMPONENT_G8EO        Component = 2
-	Component_COMPONENT_G8ED        Component = 3
+	Component_COMPONENT_CLIENT        Component = 3
 )
 
 // Enum value maps for Component.
@@ -39,13 +39,13 @@ var (
 		0: "COMPONENT_UNSPECIFIED",
 		1: "COMPONENT_G8EE",
 		2: "COMPONENT_G8EO",
-		3: "COMPONENT_G8ED",
+		3: "COMPONENT_CLIENT",
 	}
 	Component_value = map[string]int32{
 		"COMPONENT_UNSPECIFIED": 0,
 		"COMPONENT_G8EE":        1,
 		"COMPONENT_G8EO":        2,
-		"COMPONENT_G8ED":        3,
+		"COMPONENT_CLIENT":        3,
 	}
 )
 

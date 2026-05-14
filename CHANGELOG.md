@@ -16,8 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI Login:** Added first-class CLI login support via the operator.
 
 ### Changed
-- **Substrate/App Layer Split:** Formalized `g8eo` as the mandatory substrate and moved `g8ed`/`g8ee` to optional application-layer adapters.
-- **g8ed Elimination:** Removed `g8ed` Dashboard as a mandatory component; migrated data management scripts to `g8eo` API.
+- **Substrate/App Layer Split:** Formalized `g8eo` as the mandatory substrate and moved `client`/`g8ee` to optional application-layer adapters.
+- **client Elimination:** Removed `client` Dashboard as a mandatory component; migrated data management scripts to `g8eo` API.
 - **Governance Envelope Hardening:** Improved UAP and proto definitions for better transaction integrity.
 - **Reorganized g8eo:** Directory restructuring for better modularity and maintainability.
 - **Passkey & Setup Refactor:** Migrated passkey and setup logic to the operator substrate.
@@ -60,11 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Port Conflicts:** Resolved port conflict issues during platform startup.
 - **Platform Commands:** Fixed g8e platform commands for proper host-native execution.
 - **Build.sh:** Fixed auth token handling and kill signal processing in build scripts.
-- **Test Suite:** Fixed test failures across g8ee, g8ed, and g8eo after Docker removal.
+- **Test Suite:** Fixed test failures across g8ee, client, and g8eo after Docker removal.
 - **Chat:** Fixed chat functionality issues in the dashboard.
 - **Demo Profiles:** Fixed nginx demo and cleaned up SAN configurations in demo profiles.
 - **Certificate Service:** Fixed test certificate service for host-native testing.
-- **Dependency:** Bumped fast-uri from 3.1.0 to 3.1.2 in g8ed for security.
+- **Dependency:** Bumped fast-uri from 3.1.0 to 3.1.2 in client for security.
 
 ### Removed
 - **Dockerfiles:** Removed all Dockerfile configurations (Dockerfile, Dockerfile.test) from components.
@@ -80,12 +80,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Heartbeat Service:** Refactored heartbeat processing to align with updated Protobuf schemas and improved error handling.
 - **Envelope Builder:** Updated `EnvelopeBuilder` to ensure correct field mapping for heartbeat events.
-- **Metrics Routing:** Refined console metrics routing and service interaction in `g8ed`.
+- **Metrics Routing:** Refined console metrics routing and service interaction in `client`.
 
 ### Fixed
 - **Heartbeat Proto Serialization:** Resolved serialization issues in the heartbeat service ensuring stable cross-component status updates.
 - **Test Suite Cleanup:** Removed deprecated `pubsub_results` tests and modernized console metrics unit tests.
-- **Cache Reliability:** Improved cache-aside service reliability in `g8ed`.
+- **Cache Reliability:** Improved cache-aside service reliability in `client`.
 
 ## [0.2.0] - 2026-05-07
 
@@ -115,7 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test Coverage & Stability:** Massive increase in unit and integration test coverage for `g8ee`, `g8eo`, and `operator`, with full migration to typed payload assertions.
 
 ### Removed
-- **Legacy Audit UI:** Removed the outdated Audit page and associated backend services from `g8ed` in favor of streamlined platform logging.
+- **Legacy Audit UI:** Removed the outdated Audit page and associated backend services from `client` in favor of streamlined platform logging.
 - **"Available" Status:** Deprecated the "available" operator status as it was redundant for state management.
 
 ## [0.1.9] - 2026-05-05
@@ -171,7 +171,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Warden Personas & Context:** Refined Warden's context and personas for better risk evaluation.
 - **Tool Call Event Delivery:** Improved reliability and performance of tool call event delivery.
 - **Onboarding UX:** Enhancements to the onboarding flow for a smoother user experience.
-- **Node Package Updates:** Updated dependencies in `g8ed` for security and performance.
+- **Node Package Updates:** Updated dependencies in `client` for security and performance.
 
 ### Fixed
 - **Hamburger Menu & Screenshots:** Resolved issues with the dashboard hamburger menu and screenshot capture functionality.
@@ -205,7 +205,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Authentication Loops:** Resolved edge cases in operator authentication and fixed internal routing issues during high-concurrency streams.
 - **Async Tooling:** Fixed `asyncio` race conditions in the `ToolService` and improved background task tracking.
-- **Test Suite Stability:** Fixed unit and integration test failures in `g8ed`, `g8ee`, and the evals suite.
+- **Test Suite Stability:** Fixed unit and integration test failures in `client`, `g8ee`, and the evals suite.
 - **API Key Security:** Improved masking and display security for API keys within the CLI environment.
 - **Iconography:** Fixed missing or incorrect icons in the Dashboard, including the Auditor and Operator status indicators.
 
@@ -217,7 +217,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.3] - 2026-04-24
 
 ### Added
-- **Global Platform Refactor:** Massive synchronization of constants and models across `g8ed`, `g8ee`, and `shared` layers to ensure wire-contract stability.
+- **Global Platform Refactor:** Massive synchronization of constants and models across `client`, `g8ee`, and `shared` layers to ensure wire-contract stability.
 - **Iteration-Scoped AI Message Persistence:** Per-tool-iteration AI commentary now lands in `conversation_history` as `MessageSender.AI_PRIMARY` rows tagged with `EventType.EVENT_SOURCE_AI_PRIMARY`, preserving the agent's running narrative across restores. The SSE delivery layer fires an `on_iteration_text` callback at each `TOOL_RESULT` boundary, which `ChatPipelineService` binds to a persistence helper. Final post-stream persistence still runs and skips whitespace-only text.
 - **`InvestigationService.persist_ai_message(...)`:** New domain-layer helper that centralizes the strip-guard and `AIResponseMetadata` construction previously duplicated between the per-iteration and final AI persist paths. Accepts optional `grounding_metadata` and `token_usage` for the final-row case.
 - **`BackgroundTaskManager.track_detached(...)`:** Synchronous tracking helper for fire-and-forget tasks dispatched from inside coroutines that cannot `await`. Auto-removes completed tasks via done-callback; surfaces uncaught exceptions at `WARNING` with `exc_info=True`.
@@ -226,7 +226,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tribunal Voting Breakdown:** Enhanced tribunal consensus events now include detailed voting breakdowns and dissent records.
 
 ### Changed
-- **Frontend Modernization:** Overhauled `g8ed` components including `operator-panel`, `anchored-terminal`, and SSE handlers for better UX and reliability.
+- **Frontend Modernization:** Overhauled `client` components including `operator-panel`, `anchored-terminal`, and SSE handlers for better UX and reliability.
 - **Memory Generation Off The Response Path:** `update_memory_from_conversation` is no longer awaited inline in `_persist_ai_response`. It is dispatched as a tracked background task via `BackgroundTaskManager.track_detached`, so memory generation can no longer block SSE completion or silently swallow errors. Failures are logged at `WARNING` level with `exc_info=True` (previously `INFO`, which hid real errors).
 - **SSE Event Publishing:** `deliver_via_sse` now publishes through a single `_publish(event_type, payload)` closure that captures the fixed `(investigation_id, web_session_id, case_id, user_id)` routing tuple. Eliminates 14 call sites where a new event could accidentally drop a routing field.
 - **Validation Messages in `deliver_via_sse`:** Split the single multi-field guard into three precise checks with correct `field=` identifiers for `investigation_id`, `web_session_id`, and `case_id`.
@@ -279,7 +279,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Batch Concurrency Safety:** `command_validation.max_batch_concurrency` is now bounded (1–64) at the model layer, preventing misconfigurations that could fan out to an unbounded number of operators.
 - **Operator Selection Errors:** Multi-operator validation errors now clearly describe both single-host (`target_operator`) and batch (`target_operators`) targeting options.
-- **Documentation:** `g8ed` docs updated to describe parallel batch fan-out with bounded concurrency and shared `batch_id` correlation.
+- **Documentation:** `client` docs updated to describe parallel batch fan-out with bounded concurrency and shared `batch_id` correlation.
 - **Agent Autonomy Language:** Updated autonomy-related language to use more empowering terminology across prompts and documentation.
 - **Prompt Engineering:** Cleaned up anti-patterns from prompts, synchronized verbiage, and refactored thinking support to handle multiple definitions.
 - **Capability Handling:** Improved capability handling and thinking levels for agents.
@@ -300,7 +300,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **g8ee (AI Engine):** ReAct-based Python orchestration layer with support for Anthropic, OpenAI, and local Ollama models.
 - **g8eo (Operator):** ~4MB dependency-free static Go binary for remote host execution. Features zero-inbound ports and outbound-only mTLS.
 - **operator (Data Store):** SQLite-backed persistence layer, KV store, and pub/sub broker running within the Operator framework.
-- **g8ed (Dashboard):** Node.js central management console featuring FIDO2 WebAuthn (passkey) authentication and real-time mTLS gateway proxying.
+- **client (Dashboard):** Node.js central management console featuring FIDO2 WebAuthn (passkey) authentication and real-time mTLS gateway proxying.
 - **Security:** "Tribunal Refinement Pipeline" utilizing stochastic swarm voting to validate AI-proposed terminal commands before human review.
 - **Security:** Local execution vaulting to ensure raw stdout/stderr logs are securely encrypted and retained strictly on the target host.
 - **DevOps:** Comprehensive `g8e` CLI wrapper for host-native platform lifecycle, testing, operator deployment, and CA certificate management.

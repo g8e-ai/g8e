@@ -208,7 +208,7 @@ class TestExecutionIdGeneration:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -225,7 +225,7 @@ class TestExecutionIdGeneration:
                     tool_executor=mock_tool_executor,
                     investigation=sample_investigation,
                     g8e_context=sample_g8e_context,
-                    g8ed_event_service=mock_event_service,
+                    client_event_service=mock_event_service,
                     request_settings=request_settings,
                 )
                 ids.append(result.call_info.execution_id)
@@ -241,7 +241,7 @@ class TestExecutionIdGeneration:
             tool_executor=mock_tool_executor,
             investigation=sample_investigation,
             g8e_context=sample_g8e_context,
-            g8ed_event_service=mock_event_service,
+            client_event_service=mock_event_service,
             request_settings=request_settings,
         )
 
@@ -263,7 +263,7 @@ class TestExecutionIdGeneration:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -288,7 +288,7 @@ class TestOperatorToolDetection:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -302,7 +302,7 @@ class TestOperatorToolDetection:
             tool_executor=mock_tool_executor,
             investigation=sample_investigation,
             g8e_context=sample_g8e_context,
-            g8ed_event_service=mock_event_service,
+            client_event_service=mock_event_service,
             request_settings=request_settings,
         )
 
@@ -318,7 +318,7 @@ class TestOperatorToolDetection:
             tool_executor=mock_tool_executor,
             investigation=sample_investigation,
             g8e_context=sample_g8e_context,
-            g8ed_event_service=mock_event_service,
+            client_event_service=mock_event_service,
             request_settings=request_settings,
         )
 
@@ -333,7 +333,7 @@ class TestOperatorToolDetection:
             tool_executor=mock_tool_executor,
             investigation=sample_investigation,
             g8e_context=sample_g8e_context,
-            g8ed_event_service=mock_event_service,
+            client_event_service=mock_event_service,
             request_settings=request_settings,
         )
 
@@ -371,7 +371,7 @@ class TestToolArgsInjection:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -399,7 +399,7 @@ class TestToolArgsInjection:
             tool_executor=mock_tool_executor,
             investigation=sample_investigation,
             g8e_context=sample_g8e_context,
-            g8ed_event_service=mock_event_service,
+            client_event_service=mock_event_service,
             request_settings=request_settings,
         )
 
@@ -430,7 +430,7 @@ class TestToolArgsInjection:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -456,7 +456,7 @@ class TestToolCallResultStructure:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -471,7 +471,7 @@ class TestToolCallResultStructure:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -487,7 +487,7 @@ class TestToolCallResultStructure:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -504,7 +504,7 @@ class TestToolCallResultStructure:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -520,7 +520,7 @@ class TestToolCallResultStructure:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -536,7 +536,7 @@ class TestToolCallResultStructure:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -552,7 +552,7 @@ class TestToolCallResultStructure:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -584,7 +584,7 @@ class TestToolCallResultStructure:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -623,7 +623,7 @@ class TestTribunalResultSurfaced:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -640,7 +640,7 @@ class TestTribunalResultSurfaced:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -659,7 +659,7 @@ class TestTribunalResultSurfaced:
             tool_executor=mock_tool_executor,
             investigation=sample_investigation,
             g8e_context=sample_g8e_context,
-            g8ed_event_service=mock_event_service,
+            client_event_service=mock_event_service,
             request_settings=request_settings,
         )
 
@@ -674,7 +674,7 @@ class TestTribunalResultSurfaced:
             tool_executor=mock_tool_executor,
             investigation=sample_investigation,
             g8e_context=sample_g8e_context,
-            g8ed_event_service=mock_event_service,
+            client_event_service=mock_event_service,
             request_settings=request_settings,
         )
 
@@ -693,7 +693,7 @@ class TestTribunalResultSurfaced:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -709,7 +709,7 @@ class TestTribunalResultSurfaced:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -731,7 +731,7 @@ class TestToolNameExtraction:
             tool_executor=mock_tool_executor,
             investigation=sample_investigation,
             g8e_context=sample_g8e_context,
-            g8ed_event_service=mock_event_service,
+            client_event_service=mock_event_service,
             request_settings=request_settings,
         )
 
@@ -751,7 +751,7 @@ class TestToolNameExtraction:
             tool_executor=mock_tool_executor,
             investigation=sample_investigation,
             g8e_context=sample_g8e_context,
-            g8ed_event_service=mock_event_service,
+            client_event_service=mock_event_service,
             request_settings=request_settings,
         )
 
@@ -777,7 +777,7 @@ class TestTribunalRefinement:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -799,7 +799,7 @@ class TestTribunalRefinement:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -824,7 +824,7 @@ class TestTribunalRefinement:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -858,7 +858,7 @@ class TestTribunalRefinement:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -900,7 +900,7 @@ class TestTribunalRefinement:
                     investigation_id=unique_investigation_id,
                     web_session_id=unique_web_session_id,
                 ),
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -928,7 +928,7 @@ class TestTribunalRefinement:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -955,7 +955,7 @@ class TestTribunalSystemErrorHaltsExecution:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -980,7 +980,7 @@ class TestTribunalSystemErrorHaltsExecution:
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -1062,7 +1062,7 @@ class TestTargetOperatorResolution:
                 tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
                 g8e_context=self.multi_op_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -1087,7 +1087,7 @@ class TestTargetOperatorResolution:
                 tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
                 g8e_context=self.multi_op_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -1112,7 +1112,7 @@ class TestTargetOperatorResolution:
                 tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
                 g8e_context=self.multi_op_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -1137,7 +1137,7 @@ class TestTargetOperatorResolution:
                 tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
                 g8e_context=self.multi_op_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -1162,7 +1162,7 @@ class TestTargetOperatorResolution:
                 tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
                 g8e_context=self.multi_op_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 
@@ -1187,7 +1187,7 @@ class TestTargetOperatorResolution:
                 tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
                 g8e_context=self.multi_op_g8e_context,
-                g8ed_event_service=mock_event_service,
+                client_event_service=mock_event_service,
                 request_settings=request_settings,
             )
 

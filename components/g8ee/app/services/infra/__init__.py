@@ -14,5 +14,5 @@
 """
 Infrastructure Services
 
-g8ed HTTP client, g8ed event service, and health check manager.
+client HTTP client, client event service, and health check manager.
 """

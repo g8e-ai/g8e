@@ -280,7 +280,7 @@ class TestGetG8eHttpContext:
             G8eHeaders.CASE_ID.lower(): "case-111",
             G8eHeaders.INVESTIGATION_ID.lower(): "inv-222",
             G8eHeaders.BOUND_OPERATORS.lower(): '[{"operator_id": "op-333", "operator_session_id": "sess-333", "status": "bound"}]',
-            G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed",
+            G8eHeaders.SOURCE_COMPONENT.lower(): "client",
         }
         context = await get_g8e_http_context(mock_request)
         assert context.web_session_id == "session-123"
@@ -290,16 +290,16 @@ class TestGetG8eHttpContext:
         assert context.investigation_id == "inv-222"
         assert len(context.bound_operators) == 1
         assert context.bound_operators[0].operator_id == "op-333"
-        assert context.source_component == ComponentName.G8ED
+        assert context.source_component == ComponentName.CLIENT
 
     async def test_missing_session_id_raises_authentication_error(self, mock_request):
-        mock_request.headers = {G8eHeaders.USER_ID.lower(): "user-456", G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed"}
+        mock_request.headers = {G8eHeaders.USER_ID.lower(): "user-456", G8eHeaders.SOURCE_COMPONENT.lower(): "client"}
         with pytest.raises(AuthenticationError) as exc_info:
             await get_g8e_http_context(mock_request)
         assert exc_info.value.get_http_status() == 401
 
     async def test_missing_user_id_raises_authentication_error(self, mock_request):
-        mock_request.headers = {G8eHeaders.WEB_SESSION_ID.lower(): "session-123", G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed"}
+        mock_request.headers = {G8eHeaders.WEB_SESSION_ID.lower(): "session-123", G8eHeaders.SOURCE_COMPONENT.lower(): "client"}
         with pytest.raises(AuthenticationError) as exc_info:
             await get_g8e_http_context(mock_request)
         assert exc_info.value.get_http_status() == 401
@@ -327,7 +327,7 @@ class TestGetG8eHttpContext:
         mock_request.headers = {
             G8eHeaders.WEB_SESSION_ID.lower(): "session-abc",
             G8eHeaders.USER_ID.lower(): "user-xyz",
-            G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed",
+            G8eHeaders.SOURCE_COMPONENT.lower(): "client",
             G8eHeaders.CASE_ID.lower(): "case-min-001",
             G8eHeaders.INVESTIGATION_ID.lower(): "inv-min-001",
         }
@@ -353,7 +353,7 @@ class TestGetG8eHttpContext:
         mock_request.headers = {
             G8eHeaders.WEB_SESSION_ID.lower(): "session-abc",
             G8eHeaders.USER_ID.lower(): "user-xyz",
-            G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed",
+            G8eHeaders.SOURCE_COMPONENT.lower(): "client",
             G8eHeaders.CASE_ID.lower(): "case-req-001",
             G8eHeaders.INVESTIGATION_ID.lower(): "inv-req-001",
         }
@@ -365,7 +365,7 @@ class TestGetG8eHttpContext:
         mock_request.headers = {
             G8eHeaders.WEB_SESSION_ID.lower(): "session-abc",
             G8eHeaders.USER_ID.lower(): "user-xyz",
-            G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed",
+            G8eHeaders.SOURCE_COMPONENT.lower(): "client",
             G8eHeaders.CASE_ID.lower(): "case-rid-001",
             G8eHeaders.INVESTIGATION_ID.lower(): "inv-rid-001",
             G8eHeaders.EXECUTION_ID.lower(): "exec_explicit_id",

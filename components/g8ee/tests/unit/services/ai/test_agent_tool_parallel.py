@@ -31,7 +31,7 @@ async def test_execute_turn_tool_calls_parallel():
     tool_executor = MagicMock()
     investigation = MagicMock(spec=EnrichedInvestigationContext)
     g8e_context = MagicMock(spec=G8eHttpContext)
-    g8ed_event_service = AsyncMock()
+    client_event_service = AsyncMock()
     
     request_settings = MagicMock(spec=G8eeUserSettings)
     request_settings.llm = LLMSettings(llm_parallel_tool_calls=True)
@@ -63,7 +63,7 @@ async def test_execute_turn_tool_calls_parallel():
             g8e_context=g8e_context,
             result_out=result_out,
             request_settings=request_settings,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
         ):
             chunks.append(chunk)
 
@@ -91,7 +91,7 @@ async def test_execute_turn_tool_calls_sequential():
     tool_executor = MagicMock()
     investigation = MagicMock(spec=EnrichedInvestigationContext)
     g8e_context = MagicMock(spec=G8eHttpContext)
-    g8ed_event_service = AsyncMock()
+    client_event_service = AsyncMock()
     
     request_settings = MagicMock(spec=G8eeUserSettings)
     request_settings.llm = LLMSettings(llm_parallel_tool_calls=False)
@@ -124,7 +124,7 @@ async def test_execute_turn_tool_calls_sequential():
             g8e_context=g8e_context,
             result_out=result_out,
             request_settings=request_settings,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
         ):
             pass
     finally:

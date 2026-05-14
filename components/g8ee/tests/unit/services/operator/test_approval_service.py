@@ -49,30 +49,30 @@ class TestOperatorApprovalServiceInit:
 
     def test_constructor_with_dependencies(self):
         """Constructor accepts all required protocol dependencies."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
 
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
 
-        assert service.g8ed_event_service is g8ed_event_service
+        assert service.client_event_service is client_event_service
         assert service.operator_data_service is operator_data_service
         assert service.investigation_data_service is investigation_data_service
         assert service.get_pending_approvals() == {}
 
     def test_constructor_with_callback(self):
         """Constructor accepts optional on_approval_requested callback."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         callback = MagicMock()
 
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
             on_approval_requested=callback,
@@ -82,11 +82,11 @@ class TestOperatorApprovalServiceInit:
 
     def test_set_on_approval_requested(self):
         """set_on_approval_requested updates the callback."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -102,11 +102,11 @@ class TestHandleApprovalResponse:
 
     async def test_handle_approval_response_success(self):
         """Successfully processes an approval response."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -142,11 +142,11 @@ class TestHandleApprovalResponse:
 
     async def test_handle_approval_response_unknown_approval_id(self):
         """Logs warning for unknown approval_id and returns early."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -163,11 +163,11 @@ class TestHandleApprovalResponse:
 
     async def test_handle_approval_response_missing_approval_id(self):
         """Raises ValidationError when approval_id is empty string."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -189,11 +189,11 @@ class TestMarkPendingApprovalsAsFeedback:
 
     def test_mark_pending_approvals_as_feedback_filters_by_investigation(self):
         """Marks approvals as feedback only for matching investigation."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -235,11 +235,11 @@ class TestMarkPendingApprovalsAsFeedback:
 
     def test_mark_pending_approvals_as_feedback_filters_by_user_id(self):
         """Marks approvals as feedback only for matching user."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -281,11 +281,11 @@ class TestMarkPendingApprovalsAsFeedback:
 
     def test_mark_pending_approvals_as_feedback_skips_responded(self):
         """Skips approvals that already have a response."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -314,11 +314,11 @@ class TestMarkPendingApprovalsAsFeedback:
 
     def test_mark_pending_approvals_as_feedback_no_matching(self):
         """Returns zero when no matching approvals found."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -339,12 +339,12 @@ class TestRequestCommandApproval:
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_command_approval_granted(self, mock_pending_approval_class, mock_generate_approval_id):
         """Successfully requests and receives command approval granted."""
-        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
+        client_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         callback = MagicMock()
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
             on_approval_requested=callback,
@@ -389,17 +389,17 @@ class TestRequestCommandApproval:
 
         assert result.approved is True
         assert result.approval_id == approval_id
-        assert g8ed_event_service.publish.called
+        assert client_event_service.publish.called
         assert callback.called
 
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_command_approval_rejected(self, mock_pending_approval_class):
         """Successfully requests and receives command approval rejected."""
-        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
+        client_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -445,11 +445,11 @@ class TestRequestCommandApproval:
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_command_approval_with_risk_analysis(self, mock_pending_approval_class):
         """Command approval with risk analysis logs risk level."""
-        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
+        client_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -500,11 +500,11 @@ class TestRequestFileEditApproval:
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_file_edit_approval_granted(self, mock_pending_approval_class, mock_generate_approval_id):
         """Successfully requests and receives file edit approval granted."""
-        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
+        client_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -555,11 +555,11 @@ class TestRequestIntentApproval:
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_intent_approval_granted(self, mock_pending_approval_class, mock_generate_intent_approval_id):
         """Successfully requests and receives intent approval granted."""
-        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
+        client_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -604,11 +604,11 @@ class TestRequestIntentApproval:
 
     async def test_request_intent_approval_invalid_intent(self):
         """Returns error result for invalid intent name."""
-        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
+        client_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -646,12 +646,12 @@ class TestRequestAgentContinueApproval:
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_agent_continue_approval_granted(self, mock_pending_approval_class, mock_generate_approval_id):
         """Publishes AGENT_CONTINUE_APPROVAL_REQUESTED and returns approved=True."""
-        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
+        client_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         callback = MagicMock()
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
             on_approval_requested=callback,
@@ -690,10 +690,10 @@ class TestRequestAgentContinueApproval:
 
         assert result.approved is True
         assert result.approval_id == approval_id
-        assert g8ed_event_service.publish.called
+        assert client_event_service.publish.called
         assert callback.called
 
-        published_event = g8ed_event_service.publish.call_args.args[0]
+        published_event = client_event_service.publish.call_args.args[0]
         assert published_event.event_type == EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED
         assert isinstance(published_event.payload, AgentContinueApprovalEvent)
         assert published_event.payload.turn_limit == 25
@@ -709,11 +709,11 @@ class TestRequestAgentContinueApproval:
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_agent_continue_approval_rejected(self, mock_pending_approval_class):
         """Returns approved=False and audits AI_AGENT_CONTINUE_APPROVAL_REJECTED when denied."""
-        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
+        client_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -751,12 +751,12 @@ class TestRequestAgentContinueApproval:
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_agent_continue_approval_publish_failure(self, mock_pending_approval_class):
         """Returns error result and does not await when publish raises."""
-        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
-        g8ed_event_service.publish.side_effect = RuntimeError("broker down")
+        client_event_service = AsyncMock(spec=EventServiceProtocol)
+        client_event_service.publish.side_effect = RuntimeError("broker down")
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -785,11 +785,11 @@ class TestRequestAgentContinueApproval:
 
     async def test_request_agent_continue_approval_feedback(self):
         """When pending is resolved with feedback=True, returns feedback ApprovalResult."""
-        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
+        client_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -836,12 +836,12 @@ class TestRegisterPending:
 
     def test_register_pending_with_callback(self):
         """Registers pending approval and calls callback if set."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         callback = MagicMock()
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
             on_approval_requested=callback,
@@ -866,11 +866,11 @@ class TestRegisterPending:
 
     def test_register_pending_without_callback(self):
         """Registers pending approval without calling callback when not set."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -893,12 +893,12 @@ class TestRegisterPending:
 
     def test_register_pending_callback_exception_logged(self):
         """Logs error when callback raises exception."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         callback = MagicMock(side_effect=RuntimeError("Callback failed"))
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
             on_approval_requested=callback,
@@ -926,11 +926,11 @@ class TestAudit:
 
     async def test_audit_with_operator_id(self):
         """Records audit to both operator activity_log and conversation_history."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -962,11 +962,11 @@ class TestAudit:
 
     async def test_audit_without_operator_id(self):
         """Records audit only to conversation_history when operator_id is None."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -998,11 +998,11 @@ class TestAudit:
 
     async def test_audit_populates_event_type_in_metadata(self):
         """Contract test: add_approval_record sets metadata.event_type to the event_type parameter."""
-        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        client_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )

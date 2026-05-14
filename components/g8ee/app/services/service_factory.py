@@ -41,7 +41,7 @@ from app.services.data.reputation_data_service import ReputationDataService
 from app.services.data.stake_resolution_data_service import StakeResolutionDataService
 from app.services.infra.http_service import HTTPService
 from app.services.infra.internal_http_client import InternalHttpClient
-from app.services.infra.g8ed_event_service import EventService
+from app.services.infra.event_service import EventService
 from app.services.infra.settings_service import SettingsService
 from app.services.auth.api_key_service import ApiKeyService
 from app.services.auth.certificate_service import CertificateService
@@ -89,7 +89,7 @@ if TYPE_CHECKING:
 class CoreServices:
     http_service: HTTPService | HTTPServiceProtocol
     internal_http_client: InternalHttpClient
-    g8ed_event_service: EventService | EventServiceProtocol
+    event_service: EventService | EventServiceProtocol
     settings_service: SettingsService
 
 
@@ -147,7 +147,7 @@ class AllServices:
     memory_service: MemoryDataService | MemoryDataServiceProtocol
     http_service: HTTPService | HTTPServiceProtocol
     internal_http_client: InternalHttpClient
-    g8ed_event_service: EventService | EventServiceProtocol
+    event_service: EventService | EventServiceProtocol
     settings_service: SettingsService
     investigation_data_service: InvestigationDataService | InvestigationDataServiceProtocol
     operator_data_service: OperatorDataService | OperatorDataServiceProtocol
@@ -184,10 +184,10 @@ class ServiceFactory:
 
         internal_http_client = InternalHttpClient(settings)
 
-        # Register g8ed HTTP client with the HTTP service
-        http_service.set_http_client(internal_http_client.client, "g8ed")
+        # Register client HTTP client with the HTTP service
+        http_service.set_http_client(internal_http_client.client, "client")
 
-        g8ed_event_service: EventService = EventService(
+        event_service: EventService = EventService(
             internal_http_client=internal_http_client
         )
 
@@ -196,7 +196,7 @@ class ServiceFactory:
         return CoreServices(
             http_service=http_service,
             internal_http_client=internal_http_client,
-            g8ed_event_service=g8ed_event_service,
+            event_service=event_service,
             settings_service=settings_service,
         )
 
@@ -223,7 +223,7 @@ class ServiceFactory:
         case_data_service = CaseDataService(
             settings=settings,
             cache=cache_aside_service,
-            event_service=cast(EventService, core_services.g8ed_event_service),
+            event_service=cast(EventService, core_services.event_service),
         )
 
         agent_activity_data_service = AgentActivityDataService(
@@ -315,12 +315,12 @@ class ServiceFactory:
 
         heartbeat_service = HeartbeatSnapshotService(
             operator_data_service=data_services.operator_data_service,
-            event_service=core_services.g8ed_event_service,
+            event_service=core_services.event_service,
         )
 
         heartbeat_stale_monitor = HeartbeatStaleMonitorService(
             operator_data_service=data_services.operator_data_service,
-            event_service=core_services.g8ed_event_service,
+            event_service=core_services.event_service,
         )
 
         return OperatorServices(
@@ -383,7 +383,7 @@ class ServiceFactory:
             )
 
         approval_service = OperatorApprovalService(
-            g8ed_event_service=core_services.g8ed_event_service,
+            event_service=core_services.event_service,
             operator_data_service=data_services.operator_data_service,
             investigation_data_service=data_services.investigation_data_service,
         )
@@ -407,7 +407,7 @@ class ServiceFactory:
             cache_aside_service=cache_aside_service,
             operator_data_service=data_services.operator_data_service,  # type: ignore[arg-type]
             investigation_service=domain_services.investigation_service,  # type: ignore[arg-type]
-            g8ed_event_service=core_services.g8ed_event_service,  # type: ignore[arg-type]
+            event_service=core_services.event_service,  # type: ignore[arg-type]
             settings=settings,
             ai_response_analyzer=response_analyzer,  # type: ignore[arg-type]
             internal_http_client=core_services.internal_http_client,
@@ -446,7 +446,7 @@ class ServiceFactory:
         )
 
         chat_pipeline = ChatPipelineService(
-            g8ed_event_service=core_services.g8ed_event_service,  # type: ignore[arg-type]
+            event_service=core_services.event_service,  # type: ignore[arg-type]
             investigation_service=domain_services.investigation_service,  # type: ignore[arg-type]
             request_builder=request_builder,
             g8e_agent=g8e_agent,
@@ -475,7 +475,7 @@ class ServiceFactory:
             memory_service=data_services.memory_data_service,
             http_service=core_services.http_service,
             internal_http_client=core_services.internal_http_client,
-            g8ed_event_service=core_services.g8ed_event_service,
+            event_service=core_services.event_service,
             settings_service=core_services.settings_service,
             investigation_data_service=data_services.investigation_data_service,
             operator_data_service=data_services.operator_data_service,

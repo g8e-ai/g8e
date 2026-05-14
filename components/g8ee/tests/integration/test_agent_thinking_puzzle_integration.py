@@ -57,7 +57,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     # This will provide better error information than skipping
 
     # Get real services from all_services fixture
-    event_service = all_services.g8ed_event_service
+    event_service = all_services.client_event_service
     operator_command_service = all_services.operator_command_service
     tool_service = all_services.tool_service
     agent = all_services.g8e_agent
@@ -134,7 +134,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     await agent.run_with_sse(
         inputs=agent_inputs,
         state=AgentStreamState(),
-        g8ed_event_service=event_service,
+        client_event_service=event_service,
         llm_provider=llm_provider,
     )
 

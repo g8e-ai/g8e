@@ -37,7 +37,7 @@ from app.models.agent import StreamChunkData, StreamChunkFromModel
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import (
     make_agent_run_args,
-    make_g8ed_event_service,
+    make_client_event_service,
 )
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
@@ -84,7 +84,7 @@ async def test_callback_invoked_once_per_tool_iteration_with_accumulated_text():
         web_session_id="web-iter-1",
         user_id="user-iter-1",
     )
-    event_svc = make_g8ed_event_service()
+    event_svc = make_client_event_service()
     persisted: list[str] = []
 
     async def _on_iteration_text(text: str) -> None:
@@ -101,7 +101,7 @@ async def test_callback_invoked_once_per_tool_iteration_with_accumulated_text():
         ),
         inputs=inputs,
         state=state,
-        g8ed_event_service=event_svc,
+        client_event_service=event_svc,
         on_iteration_text=_on_iteration_text,
     )
 
@@ -121,7 +121,7 @@ async def test_callback_invoked_once_per_iteration_across_multiple_tool_loops():
         web_session_id="web-iter-2",
         user_id="user-iter-2",
     )
-    event_svc = make_g8ed_event_service()
+    event_svc = make_client_event_service()
     persisted: list[str] = []
 
     async def _on_iteration_text(text: str) -> None:
@@ -140,7 +140,7 @@ async def test_callback_invoked_once_per_iteration_across_multiple_tool_loops():
         ),
         inputs=inputs,
         state=state,
-        g8ed_event_service=event_svc,
+        client_event_service=event_svc,
         on_iteration_text=_on_iteration_text,
     )
 
@@ -156,7 +156,7 @@ async def test_callback_skipped_when_iteration_text_is_whitespace_only():
         web_session_id="web-iter-3",
         user_id="user-iter-3",
     )
-    event_svc = make_g8ed_event_service()
+    event_svc = make_client_event_service()
     persisted: list[str] = []
 
     async def _on_iteration_text(text: str) -> None:
@@ -173,7 +173,7 @@ async def test_callback_skipped_when_iteration_text_is_whitespace_only():
         ),
         inputs=inputs,
         state=state,
-        g8ed_event_service=event_svc,
+        client_event_service=event_svc,
         on_iteration_text=_on_iteration_text,
     )
 
@@ -189,7 +189,7 @@ async def test_callback_not_invoked_when_no_tool_results():
         web_session_id="web-iter-4",
         user_id="user-iter-4",
     )
-    event_svc = make_g8ed_event_service()
+    event_svc = make_client_event_service()
     persisted: list[str] = []
 
     async def _on_iteration_text(text: str) -> None:
@@ -202,7 +202,7 @@ async def test_callback_not_invoked_when_no_tool_results():
         ),
         inputs=inputs,
         state=state,
-        g8ed_event_service=event_svc,
+        client_event_service=event_svc,
         on_iteration_text=_on_iteration_text,
     )
 
@@ -218,7 +218,7 @@ async def test_callback_failure_does_not_abort_stream():
         web_session_id="web-iter-5",
         user_id="user-iter-5",
     )
-    event_svc = make_g8ed_event_service()
+    event_svc = make_client_event_service()
     invocations: list[str] = []
 
     async def _on_iteration_text(text: str) -> None:
@@ -235,7 +235,7 @@ async def test_callback_failure_does_not_abort_stream():
         ),
         inputs=inputs,
         state=state,
-        g8ed_event_service=event_svc,
+        client_event_service=event_svc,
         on_iteration_text=_on_iteration_text,
     )
 
@@ -254,7 +254,7 @@ async def test_omitting_callback_preserves_legacy_behavior():
         web_session_id="web-iter-6",
         user_id="user-iter-6",
     )
-    event_svc = make_g8ed_event_service()
+    event_svc = make_client_event_service()
 
     await deliver_via_sse(
         stream=_stream(
@@ -266,7 +266,7 @@ async def test_omitting_callback_preserves_legacy_behavior():
         ),
         inputs=inputs,
         state=state,
-        g8ed_event_service=event_svc,
+        client_event_service=event_svc,
     )
 
     # Without the callback the intermediate text is lost (legacy behavior),
@@ -288,7 +288,7 @@ async def test_no_session_flow_populates_response_text_without_sse():
         web_session_id=None,  # Device token flow
         user_id="user-device-1",
     )
-    event_svc = make_g8ed_event_service()
+    event_svc = make_client_event_service()
 
     await deliver_via_sse(
         stream=_stream(
@@ -301,7 +301,7 @@ async def test_no_session_flow_populates_response_text_without_sse():
         ),
         inputs=inputs,
         state=state,
-        g8ed_event_service=event_svc,
+        client_event_service=event_svc,
     )
 
     # Stream must be processed to populate response_text even without SSE delivery

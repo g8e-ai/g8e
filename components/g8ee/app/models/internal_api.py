@@ -23,7 +23,7 @@ class ChatMessageRequest(G8eBaseModel):
     """Request model for chat messages -- user-provided content only.
 
     Identity and business context (case_id, investigation_id, web_session_id,
-    user_id) come exclusively from G8eHttpContext headers set by g8ed.
+    user_id) come exclusively from G8eHttpContext headers set by client.
     The request body carries only user-controlled content.
 
     Whether to create a new case+investigation is derived from g8e_context.case_id
@@ -105,7 +105,7 @@ class OperatorApprovalResponse(G8eBaseModel):
 class OperatorSlotCreationRequest(G8eBaseModel):
     """Request model for operator slot creation.
 
-    Called by g8ed during user initialization and device link creation.
+    Called by client during user initialization and device link creation.
     g8ee handles the actual write to the operator document.
     """
     user_id: str = Field(..., description="User ID")
@@ -127,7 +127,7 @@ class OperatorSlotCreationResponse(G8eBaseModel):
 class OperatorSlotClaimRequest(G8eBaseModel):
     """Request model for operator slot claiming.
 
-    Called by g8ed during device registration.
+    Called by client during device registration.
     g8ee handles the actual write to the operator document.
     """
     operator_id: str = Field(..., description="Operator ID")
@@ -145,7 +145,7 @@ class OperatorSlotClaimResponse(G8eBaseModel):
 class OperatorUpdateApiKeyRequest(G8eBaseModel):
     """Request model for updating an operator's API key.
 
-    Called by g8ed to issue API keys for existing slots that were created without keys.
+    Called by client to issue API keys for existing slots that were created without keys.
     g8ee handles the actual write to the operator document.
     """
     operator_id: str = Field(..., description="Operator ID")
@@ -161,7 +161,7 @@ class OperatorUpdateApiKeyResponse(G8eBaseModel):
 class OperatorBindRequest(G8eBaseModel):
     """Request model for operator binding.
 
-    Called by g8ed during operator bind operations.
+    Called by client during operator bind operations.
     g8ee handles the actual write to the operator document.
     """
     operator_ids: list[str] = Field(..., description="Operator IDs to bind")
@@ -182,7 +182,7 @@ class OperatorBindResponse(G8eBaseModel):
 class OperatorUnbindRequest(G8eBaseModel):
     """Request model for operator unbinding.
 
-    Called by g8ed during operator unbind operations.
+    Called by client during operator unbind operations.
     g8ee handles the actual write to the operator document.
     """
     operator_ids: list[str] = Field(..., description="Operator IDs to unbind")
@@ -203,9 +203,9 @@ class OperatorUnbindResponse(G8eBaseModel):
 
 
 class InternalOperatorAuthCall(G8eBaseModel):
-    """Request model for operator authentication via API key (Bearer) relayed through g8ed.
+    """Request model for operator authentication via API key (Bearer) relayed through client.
 
-    Internal g8ee-g8ed API contract for operator authentication.
+    Internal g8ee-client API contract for operator authentication.
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -230,8 +230,8 @@ class OperatorAuthenticateResponse(G8eBaseModel):
 class OperatorDeviceLinkRegisterRequest(G8eBaseModel):
     """Request model for device-link operator registration.
 
-    Called by g8ed after device-link token consumption.
-    Trust model: caller is g8ed via internal mTLS. No authorization header.
+    Called by client after device-link token consumption.
+    Trust model: caller is client via internal mTLS. No authorization header.
     """
     operator_id: str | None = Field(default=None, description="Operator ID (optional if creating on-demand)")
     user_id: str = Field(..., description="User ID")
@@ -307,7 +307,7 @@ class StopOperatorRequest(G8eBaseModel):
 class OperatorSessionRegistrationRequest(G8eBaseModel):
     """Request model for registering or deregistering an operator session heartbeat subscription.
 
-    Called by g8ed when an operator authenticates (register) or goes offline/stops (deregister).
+    Called by client when an operator authenticates (register) or goes offline/stops (deregister).
     Triggers g8ee to subscribe or unsubscribe from the heartbeat pub/sub channel for this session.
     """
     operator_id: str = Field(..., description="Operator ID")
@@ -343,7 +343,7 @@ class ApiKeyGenerationResponse(G8eBaseModel):
 class OperatorListenSessionAuthRequest(G8eBaseModel):
     """Request model for starting a session auth listener.
     
-    Called by g8ed during device registration bootstrap.
+    Called by client during device registration bootstrap.
     """
     operator_session_id: str = Field(..., description="Operator session ID")
     operator_id: str = Field(..., description="Operator ID")

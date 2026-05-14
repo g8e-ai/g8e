@@ -45,7 +45,7 @@ from app.models.cases import CaseModel, HistoryEntry
 from app.models.events import SessionEvent
 from app.models.db_queries import CaseHistoryQuery
 from app.services.cache.cache_aside import CacheAsideService
-from app.services.infra.g8ed_event_service import EventService
+from app.services.infra.event_service import EventService
 from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)

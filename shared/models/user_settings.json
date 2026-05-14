@@ -1,7 +1,7 @@
 {
-  "_comment": "Canonical UserSettings document shape. g8ed is the authority — it creates and updates this document in the settings collection. g8ee reads it at request time via UserSettingsDocument.model_validate(). Settings are grouped into nested sub-objects (llm, search, eval_judge) that map directly to g8ee Pydantic models.",
+  "_comment": "Canonical UserSettings document shape. client is the authority — it creates and updates this document in the settings collection. g8ee reads it at request time via UserSettingsDocument.model_validate(). Settings are grouped into nested sub-objects (llm, search, eval_judge) that map directly to g8ee Pydantic models.",
 
-  "_authority": "g8ed",
+  "_authority": "client",
   "_consumers": ["g8ee (Python — reads at request time to build per-user G8eeUserSettings)"],
   "_collection": "settings",
   "_document_id": "user_settings_{user_id}",

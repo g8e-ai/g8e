@@ -80,11 +80,11 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 	})
 
 	t.Run("server omits success field (contract regression)", func(t *testing.T) {
-		// Regression: before the fix, g8ed's DeviceRegistrationResponse model
+		// Regression: before the fix, client's DeviceRegistrationResponse model
 		// did not include `success`, so every operator reported
 		// "registration failed with status 200" despite the server having
 		// created a valid session. The operator must require `success: true`
-		// in the envelope, matching every other g8ed response.
+		// in the envelope, matching every other client response.
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"operator_session_id": "sess-x", "operator_id": "op-x"}`)
@@ -114,8 +114,8 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 		assert.Contains(t, err.Error(), "device registration failed: invalid token")
 	})
 
-	t.Run("server returns g8ed error-object envelope", func(t *testing.T) {
-		// Regression: g8ed returns `{error: {code, message, ...}}`, not a bare
+	t.Run("server returns client error-object envelope", func(t *testing.T) {
+		// Regression: client returns `{error: {code, message, ...}}`, not a bare
 		// string. Before the fix, json.Unmarshal into Error(string) failed with
 		// `cannot unmarshal object into Go struct field ... of type string`,
 		// masking the real server error (e.g. "G8E-1800 already registered").

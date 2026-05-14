@@ -59,7 +59,7 @@ def g8e_context():
         case_id="case-123",
         investigation_id="inv-123",
         organization_id="org-123",
-        source_component=ComponentName.G8ED
+        source_component=ComponentName.CLIENT
     )
 
 @pytest.mark.asyncio
@@ -159,7 +159,7 @@ async def test_stop_ai_processing(g8e_context):
         web_session_id="session-123",
         user_id=g8e_context.user_id,
         case_id=g8e_context.case_id,
-        g8ed_event_service=mock_pipeline.g8ed_event_service,
+        client_event_service=mock_pipeline.client_event_service,
     )
 
 @pytest.mark.asyncio

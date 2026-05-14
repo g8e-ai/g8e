@@ -11,7 +11,7 @@ from tests.fakes.fake_event_service import FakeEventService
 async def test_interrogation_questions_published():
     # Setup
     svc = ChatPipelineService.__new__(ChatPipelineService)
-    svc.g8ed_event_service = FakeEventService()
+    svc.client_event_service = FakeEventService()
     svc.investigation_service = MagicMock()
     svc.investigation_service.persist_ai_message = AsyncMock(return_value=True)
     
@@ -56,7 +56,7 @@ async def test_interrogation_questions_published():
     )
     
     # Verify
-    events = svc.g8ed_event_service.published
+    events = svc.client_event_service.published
     interrogation_events = [e for e in events if e.event_type == EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS]
     
     assert len(interrogation_events) == 1
@@ -69,7 +69,7 @@ async def test_interrogation_questions_published():
 async def test_interrogation_questions_not_published_when_missing():
     # Setup
     svc = ChatPipelineService.__new__(ChatPipelineService)
-    svc.g8ed_event_service = FakeEventService()
+    svc.client_event_service = FakeEventService()
     svc.investigation_service = MagicMock()
     svc.investigation_service.persist_ai_message = AsyncMock(return_value=True)
     
@@ -93,6 +93,6 @@ async def test_interrogation_questions_not_published_when_missing():
     )
     
     # Verify
-    events = svc.g8ed_event_service.published
+    events = svc.client_event_service.published
     interrogation_events = [e for e in events if e.event_type == EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS]
     assert len(interrogation_events) == 0

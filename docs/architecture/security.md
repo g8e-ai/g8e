@@ -10,7 +10,7 @@ Version: v0.2.5
 
 The **g8e Protocol** is a Zero-Trust substrate for human-verified action by autonomous systems. Security is not an "add-on" but the core constraint: the protocol assumes the AI control plane is potentially adversarial or error-prone and enforces safety on the host through a 3-layer governance hierarchy and a unified envelope architecture.
 
-The platform is split into the protocol substrate, an **Operator** role (with `g8eo` as the reference Go implementation), and optional reference application components (`g8ed`/Dashboard, `g8ee`/Engine). The Operator owns all security, trust, and execution responsibilities on the host; the application layer holds no privileged trust.
+The platform is split into the protocol substrate, an **Operator** role (with `g8eo` as the reference Go implementation), and optional reference application components (``/Dashboard, `g8ee`/Engine). The Operator owns all security, trust, and execution responsibilities on the host; the application layer holds no privileged trust.
 
 ## Bedrock Principles
 
@@ -95,13 +95,13 @@ The Operator binary handles the seeding and initialization of platform secrets d
    - When running with `--listen`, the Operator generates core platform secrets if they are missing from `.g8e/pki` or the database.
    - **Secrets Generated**: `session_encryption_key`, `auditor_hmac_key`.
    - **Storage**: Secrets are saved to the SQLite `documents` table and written to the `--secrets-dir` (default: `.g8e/secrets`).
-   - **Bootstrapping Apps**: A `bootstrap_digest.json` manifest is written. Application-layer adapters (g8ed, g8ee) can read this manifest to discover endpoints and trust roots, but they never gain access to the raw underlying secrets.
+   - **Bootstrapping Apps**: A `bootstrap_digest.json` manifest is written. Application-layer adapters (g8ee) can read this manifest to discover endpoints and trust roots, but they never gain access to the raw underlying secrets.
 
 3. **Out-of-Band Keys**:
    - API keys can be provided directly via the `-k` flag, the `G8E_OPERATOR_API_KEY` environment variable, or an interactive prompt.
 
 -   **Encrypted at Rest**: Sensitive data (audit logs, secrets) is encrypted using **AES-256-GCM**.
--   **No Secret Mounts**: Application-layer adapters (g8ed, g8ee) do not have access to substrate secrets.
+-   **No Secret Mounts**: Application-layer adapters (g8ee) do not have access to substrate secrets.
 -   **Tamper Evidence**: Startup checks verify SHA-256 digests of all secret material.
 
 ## Sovereignty & Audit

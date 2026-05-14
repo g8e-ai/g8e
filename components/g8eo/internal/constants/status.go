@@ -93,7 +93,7 @@ type versionStabilityValues struct {
 type componentNameValues struct {
 	G8EE string
 	G8EO string
-	G8ED string
+	CLIENT string
 }
 
 // platformValues mirrors shared/constants/status.json platform.
@@ -183,7 +183,7 @@ var Status = statusValues{
 	ComponentName: componentNameValues{
 		G8EE: "g8ee",
 		G8EO: "g8eo",
-		G8ED: "g8ed",
+		CLIENT: "client",
 	},
 	Platform: platformValues{
 		Linux:   "linux",

@@ -1,10 +1,10 @@
 {
-  "_comment": "Canonical PlatformSettings document shape. operator (g8eo) is the initial authority for security secrets, while g8ed is the authority for user-managed configuration via the dashboard. Document ID is 'platform_settings' in the 'components' collection.",
+  "_comment": "Canonical PlatformSettings document shape. operator (g8eo) is the initial authority for security secrets, while client is the authority for user-managed configuration via the dashboard. Document ID is 'platform_settings' in the 'components' collection.",
 
-  "_authority": "operator (Secrets) / g8ed (Config)",
+  "_authority": "operator (Secrets) / client (Config)",
   "_consumers": [
     "g8ee (Python — reads at startup and on cache miss to build base Settings)",
-    "g8ed (JS — reads to serve internal settings API and UI dashboard)"
+    "client (JS — reads to serve internal settings API and UI dashboard)"
   ],
   "_collection": "settings",
   "_document_id": "platform_settings",

@@ -114,7 +114,7 @@ def db_client_http_error():
     client = DBClient(ca_cert_path="/mock/ca.crt", operator_session_id="mock-session")
 
     async def raise_network_error(method, path, **kwargs):
-        raise NetworkError("g8ed HTTP 500: internal error", component="g8ee")
+        raise NetworkError("client HTTP 500: internal error", component="g8ee")
 
     client._request_json = raise_network_error
     client._request_list = raise_network_error
@@ -477,7 +477,7 @@ class TestBatchWrite:
             nonlocal call_count
             call_count += 1
             if call_count == 2:
-                raise NetworkError("g8ed HTTP 500: mid-batch failure", component="g8ee")
+                raise NetworkError("client HTTP 500: mid-batch failure", component="g8ee")
 
         db_client._request_void = fail_on_second
         with pytest.raises(NetworkError):

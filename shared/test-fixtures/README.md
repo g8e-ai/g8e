@@ -62,7 +62,7 @@ Per-tool REQUESTED/STARTED/COMPLETED/FAILED events are emitted by individual too
 - `sse-events-schema.json` - JSON schema for event validation
 - `ledger-hash-fixtures.json` - Cross-language fixtures for the ledger hash chain.
   Consumed by both `components/g8ee/tests/unit/utils/test_ledger_hash_fixtures.py` and
-  `components/g8ed/test/unit/utils/ledger-verify-fixtures.spec.js` to enforce
+  `components/client/test/unit/utils/ledger-verify-fixtures.spec.js` to enforce
   byte-exact agreement between the Python and JS hashers.
 
 ## Testing Guidelines

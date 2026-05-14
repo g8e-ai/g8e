@@ -15,7 +15,7 @@ If you are building a BYO client, you do not need g8ee — anything that produce
 ## Position in the Platform
 
 - **Mandatory substrate**: `g8eo` Operator (Hub mode via `--listen`, Satellite mode on managed hosts). Owns L1/L2/L3 verification, PKI/mTLS, audit, and Warden execution.
-- **Optional reference application layer**: `g8ee` (this component, AI engine / L2 producer) and `g8ed` (dashboard adapter / browser BYO client). Both consume the Operator protocol surface and have no privileged substrate role.
+- **Optional reference application layer**: `g8ee` (this component, AI engine / L2 producer) and `` (dashboard adapter / browser BYO client). Both consume the Operator protocol surface and have no privileged substrate role.
 - **Default start (`./g8e platform start`)**: Operator only. g8ee is started explicitly via `./g8e platform start --with-apps` or `./g8e apps start g8ee`.
 - **Wire format**: canonical JSON (protojson) `GovernanceEnvelope` on all client-facing surfaces (HTTP, pub/sub, receipts). Signing is computed over a deterministic transaction hash; wire encoding is independent of the security invariant.
 
@@ -66,7 +66,7 @@ Every gated operation is verified through multiple layers:
 
 ### 5. Streaming & Delivery
 Responses are delivered via **Server-Sent Events (SSE)**:
-- **Real-time**: `deliver_via_sse` publishes chunks (text, thinking, tool calls) to `g8ed` as they arrive.
+- **Real-time**: `deliver_via_sse` publishes chunks (text, thinking, tool calls) to `` as they arrive.
 - **Per-Iteration Persistence**: Intermediate AI commentary is persisted to the database *during* the loop, ensuring history is preserved if the connection drops.
 
 ### 6. Post-Flight & Telemetry
@@ -94,17 +94,17 @@ flowchart LR
     subgraph App ["Optional Reference Application Layer"]
         direction TB
         g8ee["g8ee<br/>AI Engine / L2 Producer"]
-        g8ed["g8ed<br/>Dashboard Adapter"]
+        ["<br/>Dashboard Adapter"]
     end
 
     Client -- "TLS 1.3 / mTLS" --> Operator
-    Client -. "HTTPS / SSE" .-> g8ed
-    g8ed <--> Operator
+    Client -. "HTTPS / SSE" .-> 
+     <--> Operator
     g8ee <--> Operator
-    g8ed <-. "internal HTTP<br/>(SSE relay, optional)" .-> g8ee
+     <-. "internal HTTP<br/>(SSE relay, optional)" .-> g8ee
 ```
 
-g8ee depends only on the Operator's public protocol surface (DB / KV / PubSub / Blob over mTLS, plus canonical-JSON `GovernanceEnvelope` on pub/sub). Its historical internal-HTTP coupling to `g8ed` (SSE push, intent forwarding) is part of the optional dashboard adapter path and is not required for BYO clients.
+g8ee depends only on the Operator's public protocol surface (DB / KV / PubSub / Blob over mTLS, plus canonical-JSON `GovernanceEnvelope` on pub/sub). Its historical internal-HTTP coupling to `` (SSE push, intent forwarding) is part of the optional dashboard adapter path and is not required for BYO clients.
 
 ### Data Access Hierarchy
 1. **Clients**: Handle raw transport/protocol (e.g., `DBClient`, `PubSubClient`, `BlobClient`).
@@ -243,7 +243,7 @@ Retry behaviour in `stream_response`: if the provider raises a retryable error a
 
 **Tool-loop turn limit:** `_stream_with_tool_loop` caps ReAct iterations at `AGENT_MAX_TOOL_TURNS` (default 25). When the cap is reached, the agent does **not** silently abort — instead it calls `OperatorApprovalService.request_command_approval` through the same approval pipeline that gates operator-bound tools, with a justification explaining the turn limit. On approve, the turn counter resets and the loop continues (so the operator can be asked again at the next 25-turn boundary); on deny, feedback, or timeout, the loop terminates cleanly with `finish_reason=stopped_by_operator`. If no approval service is wired (e.g., isolated test construction), the legacy behaviour of aborting at the cap is preserved.
 
-`_process_provider_turn` owns all thinking state transitions for one LLM call. Thinking chunks are emitted as `StreamChunkFromModelType.THINKING` (or `THINKING_UPDATE`/`THINKING_END`) and delivered to g8ed for UI rendering if the model supports it. Text chunks are yielded as `StreamChunkFromModelType.TEXT` immediately.
+`_process_provider_turn` owns all thinking state transitions for one LLM call. Thinking chunks are emitted as `StreamChunkFromModelType.THINKING` (or `THINKING_UPDATE`/`THINKING_END`) and delivered to  for UI rendering if the model supports it. Text chunks are yielded as `StreamChunkFromModelType.TEXT` immediately.
 
 ### SSE Delivery Pipeline
 
@@ -256,13 +256,13 @@ LLM SDK  →  GeminiProvider  →  stream_response  →  deliver_via_sse
                                              EventService.publish (SessionEvent)
                                                        │  HTTP POST
                                                        ▼
-                                                    g8ed /api/internal/sse/push
+                                                     /api/internal/sse/push
                                                        │  SSE fan-out
                                                        ▼
                                                     Browser
 ```
 
-Each `TEXT` chunk produces exactly one HTTP POST to g8ed (`LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` event) when `web_session_id` is present. g8ed relays it to the browser immediately via its SSE connection. `LLM_CHAT_ITERATION_TEXT_COMPLETED` is published once after the loop exits, carrying finish reason, citation metadata, and aggregate token usage.
+Each `TEXT` chunk produces exactly one HTTP POST to  (`LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` event) when `web_session_id` is present.  relays it to the browser immediately via its SSE connection. `LLM_CHAT_ITERATION_TEXT_COMPLETED` is published once after the loop exits, carrying finish reason, citation metadata, and aggregate token usage.
 
 **Operator-Bound Evals:** When `web_session_id` is None (e.g., if a CLI tool was allowed to run against a bound session without a browser attachment), SSE publishing is skipped entirely. Stream processing still occurs unconditionally to populate `AgentStreamState.response_text`, enabling agent execution without a browser session. The `has_sse` flag controls SSE publishing while stream state mutation runs in all cases. Note that evals now require operators to be bound to a human web session for execution authorization.
 
@@ -463,7 +463,7 @@ The UI exposes two separate model dropdowns: **Primary** (complex tasks) and **A
 
 ### LLM Config Discovery
 
-On SSE connect, g8ed pushes a `llm.config` event containing provider-specific `primary_models` and `assistant_models` arrays plus the current defaults. The browser populates both model dropdowns from this event — no separate HTTP call is required.
+On SSE connect pushes a `llm.config` event containing provider-specific `primary_models` and `assistant_models` arrays plus the current defaults. The browser populates both model dropdowns from this event — no separate HTTP call is required.
 
 ### Triage & Routing
 
@@ -548,7 +548,7 @@ All service contracts are defined as `Protocol` types in `app/services/protocols
 
 ### Heartbeat Flow
 
-g8ee is the persistence authority for heartbeats. It subscribes to `heartbeat:{operator_id}:{session}` channels, validates and persists each heartbeat (rolling buffer of last 10, latest snapshot, system info), then notifies g8ed for SSE fan-out to the browser. See [components/g8ed.md — Heartbeat Architecture](g8ed.md#heartbeat-architecture) for the full end-to-end flow including g8ed's role.
+g8ee is the persistence authority for heartbeats. It subscribes to `heartbeat:{operator_id}:{session}` channels, validates and persists each heartbeat (rolling buffer of last 10, latest snapshot, system info), then notifies  for SSE fan-out to the browser. See [components/.md — Heartbeat Architecture](.md#heartbeat-architecture) for the full end-to-end flow including 's role.
 
 g8ee also owns heartbeat status decay: `HeartbeatStaleMonitorService` (`app/services/operator/heartbeat_stale_monitor.py`) runs on a timer and transitions operator status to `stale` or `offline` when heartbeats stop arriving (60s threshold). This consolidates operator status ownership in g8ee, eliminating dual-writer race conditions on the `operators` collection.
 
@@ -668,15 +668,15 @@ Cloud Operators for AWS implement a **Zero Standing Privileges** model. The Oper
 sequenceDiagram
     participant User
     participant AI as g8ee / AI
-    participant g8ed
+    participant 
     participant AWS as IAM / AWS
 
     User->>AI: Request AWS operation
     AI->>AI: Check granted_intents in context
-    AI->>g8ed: grant_intent_permission (intent, justification)
-    G8ed->>User: Approval prompt in terminal UI
-    User->>g8ed: Approve / Deny
-    G8ed->>AI: Approval response
+    AI->>: grant_intent_permission (intent, justification)
+    Client->>User: Approval prompt in terminal UI
+    User->>: Approve / Deny
+    Client->>AI: Approval response
     AI->>AWS: Auto-attach intent policy via Escalation Role
     AI->>User: Proceed with original operation
 ```
@@ -814,7 +814,7 @@ g8ee processes multi-modal file attachments for LLM consumption.
 
 ### Flow
 
-1. **g8ed** stores full `AttachmentData` JSON (including base64 data, filename, content type) in operator Blob Store and forwards a `store_key` reference to G8EE.
+1. **** stores full `AttachmentData` JSON (including base64 data, filename, content type) in operator Blob Store and forwards a `store_key` reference to G8EE.
 2. **g8ee** retrieves the full attachment from Blob Store on demand, classifies the attachment type (PDF, image, text), and formats it as a `Part` object for the LLM provider.
 3. **Blob Store** stores the complete attachment payload — both binary data and metadata in a single JSON object.
 
@@ -838,7 +838,7 @@ g8ee uses three distinct clients for data operations.
 |--------|-----------|---------|
 | `DBClient` | HTTP | Document store — cases, investigations, operators, memories. All requests authenticated via mTLS with operator session. |
 | `KVClient` | HTTP + WebSocket | KV store operations and pub/sub (command dispatch, results, heartbeats). All requests authenticated via mTLS with operator session. |
-| `InternalHttpClient ` | HTTP | g8ee → g8ed internal API — SSE push, operator queries, heartbeat forwarding, intent management |
+| `InternalHttpClient ` | HTTP | g8ee →  internal API — SSE push, operator queries, heartbeat forwarding, intent management |
 
 ### KV Key Structure
 
@@ -866,7 +866,7 @@ This is enforced by `KVClient.subscribe()` (`app/clients/db_client.py`):
 
 **Rule:** Never publish to a channel before `subscribe()` has returned. `subscribe()` returning is the proof that the broker has registered the subscription. Any test that calls `publish` after `subscribe` is race-free by construction — no `asyncio.sleep` is needed or permitted.
 
-### Internal HTTP Communication (g8ed → g8ee)
+### Internal HTTP Communication ( → g8ee)
 
 g8ee communicates with other components via direct HTTP using mTLS with operator session authentication and standard `G8eHttpContext` headers.
 
@@ -876,7 +876,7 @@ g8ee communicates with other components via direct HTTP using mTLS with operator
 |----------|--------|---------|
 | `/api/internal/chat` | POST | Primary non-streaming chat entry point; handles case/investigation creation and background AI processing |
 | `/api/internal/chat/stop` | POST | Stops active AI processing for an investigation |
-| `/api/internal/operator/approval/respond` | POST | Processes command approval/denial from g8ed |
+| `/api/internal/operator/approval/respond` | POST | Processes command approval/denial from  |
 | `/api/internal/operator/direct-command` | POST | Executes commands from the terminal UI (g8e Direct) |
 | `/api/internal/operators/register-operator-session` | POST | Subscribes g8ee to heartbeat/result channels for a new session |
 
@@ -884,7 +884,7 @@ g8ee communicates with other components via direct HTTP using mTLS with operator
 g8ee uses mTLS with URI SAN workload identity to communicate with the Operator. Identity is established via the client certificates issued during the bootstrap process.
 
 #### Context Propagation
-The canonical header list and ownership rules are in [components/g8ed.md — Internal HTTP Communication](g8ed.md#internal-http-communication-g8ed--g8ee).
+The canonical header list and ownership rules are in [components/.md — Internal HTTP Communication](.md#internal-http-communication---g8ee).
 
 Key fields consumed by G8EE:
 
@@ -902,9 +902,9 @@ Key fields consumed by G8EE:
 
 #### New Case Protocol (`X-G8E-New-Case`)
 
-When a user sends their first message in a new conversation, no `case_id` or `investigation_id` exists yet. g8ed signals this by setting `X-G8E-New-Case: true` and sending `UNKNOWN_ID` sentinels for both `X-G8E-Case-ID` and `X-G8E-Investigation-ID`. g8ee reads `g8e_context.new_case` and branches into inline case and investigation creation.
+When a user sends their first message in a new conversation, no `case_id` or `investigation_id` exists yet.  signals this by setting `X-G8E-New-Case: true` and sending `UNKNOWN_ID` sentinels for both `X-G8E-Case-ID` and `X-G8E-Investigation-ID`. g8ee reads `g8e_context.new_case` and branches into inline case and investigation creation.
 
-**g8ed side** (`services/clients/internal_http_client.js` → `buildG8eContextHeaders`):
+** side** (`services/clients/internal_http_client.js` → `buildG8eContextHeaders`):
 - Detects a new case when `context.case_id` is an empty string (the value set by `chat_routes.js` when no `case_id` was present in the request body)
 - Sets `X-G8E-New-Case: true`, `X-G8E-Case-ID: unknown`, `X-G8E-Investigation-ID: unknown`
 - Existing-case path: sets `X-G8E-Case-ID` and `X-G8E-Investigation-ID` to the real IDs; `X-G8E-New-Case` is omitted
@@ -915,7 +915,7 @@ When a user sends their first message in a new conversation, no `case_id` or `in
 - When `new_case=False` (default), both IDs must be non-empty real values
 
 **g8ee router** (`app/routers/internal_router.py` → `internal_chat`):
-- Branches on `g8e_context.new_case` — creates `CaseModel` + `InvestigationModel` inline, stamps the new IDs onto a `model_copy` of `g8e_context`, pushes `CASE_CREATED` SSE to g8ed, enqueues background AI title generation, then proceeds to `run_chat` with the updated context
+- Branches on `g8e_context.new_case` — creates `CaseModel` + `InvestigationModel` inline, stamps the new IDs onto a `model_copy` of `g8e_context`, pushes `CASE_CREATED` SSE to enqueues background AI title generation, then proceeds to `run_chat` with the updated context
 - Returns `ChatStartedResponse` with the new `case_id` and `investigation_id`
 
 **Security:** The frontend cannot forge this signal. `chat_routes.js` makes the new-case determination server-side based on whether an authenticated request body contained a valid `case_id` string — client-supplied non-string values (`0`, `false`, etc.) are explicitly rejected by the type guard and treated as new-case.
@@ -948,22 +948,22 @@ To prevent header bloat, this header carries only minimal identity and status (`
 
 **LFAA audit guard:** `web_session_id` is a required, non-empty string in all LFAA audit event payloads. The pipeline dispatches LFAA events only when `web_session_id` is present (`if op_id and op_session and web_session_id`). No coercion to `""` is permitted.
 
-### g8ed Internal API Methods
+###  Internal API Methods
 
-`InternalHttpClient ` exposes typed methods for all g8ee → g8ed communication:
+`InternalHttpClient ` exposes typed methods for all g8ee →  communication:
 
 | Method | Purpose |
 |--------|---------|
-| `push_sse_event` | Push a typed event to a browser session via g8ed's SSE relay |
+| `push_sse_event` | Push a typed event to a browser session via 's SSE relay |
 | `get_operator_by_user_id` | Fetch the active operator for a user |
 | `get_operator_status` | Fetch an operator document by ID |
 | `update_operator_heartbeat` | Forward heartbeat telemetry for SSE broadcast |
-| `update_operator_context` | Notify g8ed of context changes (case, investigation, task) |
+| `update_operator_context` | Notify  of context changes (case, investigation, task) |
 | `grant_intent` / `revoke_intent` | Manage AWS intent permissions on a Cloud Operator |
 | `bind_operators` | Bind operator(s) to a web session |
-| `fetch_documentation` | Fetch auto-generated markdown docs from g8ed |
+| `fetch_documentation` | Fetch auto-generated markdown docs from  |
 
-For services that push many event types (operator status, heartbeat, AI progress), use `EventService` (`services/infra/g8ed_event_service.py`), which wraps `push_sse_event` with typed construction.
+For services that push many event types (operator status, heartbeat, AI progress), use `EventService` (`services/infra/_event_service.py`), which wraps `push_sse_event` with typed construction.
 
 ---
 
@@ -1062,7 +1062,7 @@ When using a Gemini provider with the `google_search` SDK tool enabled in `Gener
 
 #### Config Source
 
-g8ee loads its runtime configuration from the `platform_settings` and `user_settings` documents in operator. All settings documents use a **nested structure** matching g8ee's Pydantic models. g8ed's `updateUserSettings()` structures flat UI input into nested before writing. g8ee reads the nested document directly via `UserSettingsDocument.model_validate()`.
+g8ee loads its runtime configuration from the `platform_settings` and `user_settings` documents in operator. All settings documents use a **nested structure** matching g8ee's Pydantic models. 's `updateUserSettings()` structures flat UI input into nested before writing. g8ee reads the nested document directly via `UserSettingsDocument.model_validate()`.
 
 #### platform_settings & user_settings Schema
 
@@ -1167,7 +1167,7 @@ When `enable_auto_approve` is true and a command's base verb is in the auto-appr
 
 ## AI Evaluation Reporting
 
-AI agent evaluation runs through the **host-driven evals framework** at `components/g8ee/evals/`. Per the architectural mandate in [`docs/testing.md`](../testing.md#evals--public-device-token-path), evals exercise the product surface as real users experience it: device-link tokens, public g8ed HTTPS endpoints, real operator containers via docker compose. They are NOT pytest-driven and do NOT call internal services directly.
+AI agent evaluation runs through the **host-driven evals framework** at `components/g8ee/evals/`. Per the architectural mandate in [`docs/testing.md`](../testing.md#evals--public-device-token-path), evals exercise the product surface as real users experience it: device-link tokens, public  HTTPS endpoints, real operator containers via docker compose. They are NOT pytest-driven and do NOT call internal services directly.
 
 ### Dimensions
 

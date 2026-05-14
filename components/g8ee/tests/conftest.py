@@ -581,9 +581,9 @@ def mock_settings():
 
 
 @pytest.fixture
-def mock_g8ed_http_client():
-    from tests.fakes.fake_g8ed_client import FakeG8edClient
-    return FakeG8edClient()
+def mock_client_http_client():
+    from tests.fakes.fake_operator_clients import FakeG8eClient
+    return FakeG8eClient()
 
 
 @pytest.fixture

@@ -90,7 +90,7 @@ def is_internal_endpoint(url: str | None) -> bool:
     - Localhost/loopback
     - RFC 1918 private IP ranges
     - Known internal hostnames (.internal, .local)
-    - g8e platform services (g8ed, g8eo, operator)
+    - g8e platform services (client, g8eo, operator)
     """
     if not url:
         return False

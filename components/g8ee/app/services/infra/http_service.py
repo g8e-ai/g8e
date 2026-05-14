@@ -62,7 +62,7 @@ class HTTPService:
         
         Args:
             client: The HTTP client instance
-            service_name: Unique name for the service (e.g., "g8ed", "external_api")
+            service_name: Unique name for the service (e.g., "client", "external_api")
         """
         if not client:
             raise ValidationError(f"HTTP client is required for service '{service_name}'", component="g8ee")

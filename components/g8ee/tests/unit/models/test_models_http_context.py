@@ -368,7 +368,7 @@ class TestG8eHttpContext:
             user_id="user-uuid-456",
             case_id="case-test-001",
             investigation_id="inv-test-001",
-            source_component=ComponentName.G8ED,
+            source_component=ComponentName.CLIENT,
         )
         defaults.update(overrides)
         return G8eHttpContext(**defaults)
@@ -377,28 +377,28 @@ class TestG8eHttpContext:
         ctx = self._make()
         assert ctx.web_session_id == "session_abc_123"
         assert ctx.user_id == "user-uuid-456"
-        assert ctx.source_component == ComponentName.G8ED
+        assert ctx.source_component == ComponentName.CLIENT
 
     def test_web_session_id_required(self):
         with pytest.raises(ValidationError):
             G8eHttpContext(user_id="u", case_id="c", investigation_id="i", source_component=ComponentName.G8EE)
 
-    def test_user_id_optional_for_g8ed_operator_auth(self):
-        # user_id can be None when source_component is G8ED for operator auth relay on exempt path
+    def test_user_id_optional_for_client_operator_auth(self):
+        # user_id can be None when source_component is CLIENT for operator auth relay on exempt path
         ctx = G8eHttpContext(
             web_session_id=None,
             user_id=None,
             case_id="c",
             investigation_id="i",
-            source_component=ComponentName.G8ED,
+            source_component=ComponentName.CLIENT,
             is_operator_auth_relay=True
         )
         assert ctx.user_id is None
         assert ctx.web_session_id is None
 
-    def test_web_session_id_required_when_source_not_g8ed(self):
-        # web_session_id is required when source_component is not G8ED
-        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is G8ED and path is exempted"):
+    def test_web_session_id_required_when_source_not_client(self):
+        # web_session_id is required when source_component is not CLIENT
+        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is CLIENT and path is exempted"):
             G8eHttpContext(
                 web_session_id=None,
                 user_id="u",
@@ -407,9 +407,9 @@ class TestG8eHttpContext:
                 source_component=ComponentName.G8EE
             )
 
-    def test_user_id_required_when_source_not_g8ed(self):
-        # user_id is required when source_component is not G8ED
-        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is G8ED and path is exempted"):
+    def test_user_id_required_when_source_not_client(self):
+        # user_id is required when source_component is not CLIENT
+        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is CLIENT and path is exempted"):
             G8eHttpContext(
                 web_session_id="s",
                 user_id=None,
@@ -418,9 +418,9 @@ class TestG8eHttpContext:
                 source_component=ComponentName.G8EE
             )
 
-    def test_both_web_session_and_user_id_required_when_source_not_g8ed(self):
-        # Both web_session_id and user_id are required when source_component is not G8ED
-        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is G8ED and path is exempted"):
+    def test_both_web_session_and_user_id_required_when_source_not_client(self):
+        # Both web_session_id and user_id are required when source_component is not CLIENT
+        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is CLIENT and path is exempted"):
             G8eHttpContext(
                 web_session_id=None,
                 user_id=None,
@@ -437,19 +437,19 @@ class TestG8eHttpContext:
             user_id="u",
             case_id="c",
             investigation_id="i",
-            source_component=ComponentName.G8ED
+            source_component=ComponentName.CLIENT
         )
         assert ctx.web_session_id == "s"
         assert ctx.user_id == "u"
-        assert ctx.source_component == ComponentName.G8ED
+        assert ctx.source_component == ComponentName.CLIENT
 
     def test_case_id_required(self):
         with pytest.raises(ValidationError):
-            G8eHttpContext(web_session_id="s", user_id="u", investigation_id="i", source_component=ComponentName.G8ED)
+            G8eHttpContext(web_session_id="s", user_id="u", investigation_id="i", source_component=ComponentName.CLIENT)
 
     def test_investigation_id_required(self):
         with pytest.raises(ValidationError):
-            G8eHttpContext(web_session_id="s", user_id="u", case_id="c", source_component=ComponentName.G8ED)
+            G8eHttpContext(web_session_id="s", user_id="u", case_id="c", source_component=ComponentName.CLIENT)
 
     def test_source_component_required(self):
         with pytest.raises(ValidationError):
@@ -466,8 +466,8 @@ class TestG8eHttpContext:
             assert ctx.source_component == component
 
     def test_source_component_accepts_string_value_via_coercion(self):
-        ctx = self._make(source_component=ComponentName.G8ED)
-        assert ctx.source_component == ComponentName.G8ED
+        ctx = self._make(source_component=ComponentName.CLIENT)
+        assert ctx.source_component == ComponentName.CLIENT
 
     def test_optional_fields_default_to_none(self):
         ctx = self._make()
@@ -564,9 +564,9 @@ class TestG8eHttpContext:
         assert ctx.timestamp == _TS
 
     def test_model_dump_serializes_source_component_as_string(self):
-        ctx = self._make(source_component=ComponentName.G8ED)
+        ctx = self._make(source_component=ComponentName.CLIENT)
         dumped = ctx.model_dump()
-        assert dumped["source_component"] == "g8ed"
+        assert dumped["source_component"] == "client"
 
     def test_model_dump_excludes_none_by_default(self):
         ctx = self._make()

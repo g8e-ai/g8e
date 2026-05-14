@@ -22,18 +22,18 @@ The reference Operator in **Listen Mode** serves as the central event broker and
 - **Audit Logging**: `g8eo` captures and persists events into the host-authoritative audit vault.
 
 ### 2. Event Producers & Consumers
-- **Clients (bundled `g8ee`, `g8ed`, or BYO)**: Emit intent, chat streams, and governance proofs. Consume real-time updates and results.
+- **Clients (bundled `g8ee`, or BYO)**: Emit intent, chat streams, and governance proofs. Consume real-time updates and results.
 - **Managed Operators (`g8eo`)**: Emit command results, heartbeats, and filesystem updates.
-- **Dashboard (`g8ed`)**: Provides a reference UI and relay for Server-Sent Events (SSE) to browser-based clients.
+- **Dashboard (``)**: Provides a reference UI and relay for Server-Sent Events (SSE) to browser-based clients.
 
 ### 2. Event Producers
 - **`g8ee` (Engine)**: The AI reasoning engine. Emits chat streams, tool requests, and Tribunal consensus results.
 - **`g8eo` (Operator)**: The remote execution agent. Emits command results, heartbeats, and filesystem updates.
-- **`g8ed` (Dashboard)**: The platform service. Emits lifecycle events (auth, session management) and proxies third-party events.
+- **`` (Dashboard)**: The platform service. Emits lifecycle events (auth, session management) and proxies third-party events.
 
 ### 3. Delivery Lifecycle
 1. **Emission**: A producer serializes a **Governance Envelope** (UAP JSON) containing a typed Protobuf payload.
-2. **Ingestion**: The substrate (`g8eo`) or relay (`g8ed`) receives the envelope via Pub/Sub or HTTP.
+2. **Ingestion**: The substrate (`g8eo`) or relay (``) receives the envelope via Pub/Sub or HTTP.
 3. **Routing**: The event is distributed based on the **Routing Tuple** defined in the envelope.
 4. **Delivery**: The event is pushed to the client via WSS/SSE or persisted to the audit log.
 

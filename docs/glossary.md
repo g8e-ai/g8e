@@ -25,7 +25,7 @@ A set of rules that determines which users or systems can access specific resour
 
 ## Anchored Operator Terminal
 
-The pinned terminal at the bottom of the chat interface in g8ed for direct SSH-like command execution without AI involvement. Features command history (up/down arrows), collapsible view, real-time output via SSE, and displays AI-initiated events (approvals, execution results). Provides direct user input bypassing the AI while showing events routed from the AI execution flow.
+The pinned terminal at the bottom of the chat interface in  for direct SSH-like command execution without AI involvement. Features command history (up/down arrows), collapsible view, real-time output via SSE, and displays AI-initiated events (approvals, execution results). Provides direct user input bypassing the AI while showing events routed from the AI execution flow.
 
 ---
 
@@ -113,7 +113,7 @@ The set of standards and regulations that g8e adheres to, including NSA ZIG alig
 
 ## Coordination Store (SQLite)
 
-The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. The Operator binary running in `--listen` mode is the single source of truth — a single SQLite database in WAL mode shared by all components via the Operator's document store, KV, and pub/sub APIs. g8ee and g8ed are stateless with respect to persistence and access all data through the g8ed HTTP API.
+The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. The Operator binary running in `--listen` mode is the single source of truth — a single SQLite database in WAL mode shared by all components via the Operator's document store, KV, and pub/sub APIs. g8ee and  are stateless with respect to persistence and access all data through the  HTTP API.
 
 ---
 
@@ -139,7 +139,7 @@ A security strategy that implements multiple layers of protection to ensure the 
 
 A pre-authorized deployment method for installing Operators on one or many systems from a single token. Users generate a Device Link from the Operator Panel with configurable `max_uses` (1–10,000, default 1) and expiry (1 minute to 7 days, default 1 hour). The token (`dlk_` prefix) is distributed via Ansible, SSH, or configuration management as `g8e.operator --device-token dlk_xxx`. Each system auto-registers: the platform claims an existing AVAILABLE Operator slot for that user, or creates one on demand if none exist. No browser approval required — the link itself is the authorization. Operator slots are the accounting unit — each registered device consumes one slot.
 
-**Authority Split:** g8ed is authoritative for device link documents (usage tracking, exhaustion checking, claims management); g8ee is authoritative for operator documents (slot management, lifecycle operations).
+**Authority Split:**  is authoritative for device link documents (usage tracking, exhaustion checking, claims management); g8ee is authoritative for operator documents (slot management, lifecycle operations).
 
 ---
 
@@ -173,7 +173,7 @@ The platform name. g8e is an open-source, air-gapped capable AI governance platf
 
 ---
 
-## g8ed (g8e Dashboard)
+## 
 
 The Node.js/Express web frontend component. Handles user authentication (passkey/FIDO2/WebAuthn), session management, the chat interface, Operator Panel, and SSE streaming to browsers. Routes messages between users and g8ee.
 
@@ -412,7 +412,7 @@ The remote LLM inference component. g8e supports any remote Ollama server that p
 
 ## Operator
 
-The language-agnostic, platform-agnostic execution binary that runs on target systems and receives commands from the g8e control plane. The current ~4MB Go binary (`g8eo`) is the reference implementation for Linux and macOS. When running in `--listen` mode, the Operator serves as the platform's **Coordination Store**, providing the document store, KV, and pub/sub broker for g8ed and g8ee.
+The language-agnostic, platform-agnostic execution binary that runs on target systems and receives commands from the g8e control plane. The current ~4MB Go binary (`g8eo`) is the reference implementation for Linux and macOS. When running in `--listen` mode, the Operator serves as the platform's **Coordination Store**, providing the document store, KV, and pub/sub broker for  and g8ee.
 
 Operator command/result traffic follows the g8e protocol: UAP JSON `GovernanceEnvelope` bytes carry typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport.
 
@@ -546,7 +546,7 @@ A host-local bootstrap interface served by the Operator on Port 80 during initia
 
 ## Unified Approval
 
-The batch execution approval dialog in g8ed that allows a single user approval to cover commands across multiple Operators.
+The batch execution approval dialog in  that allows a single user approval to cover commands across multiple Operators.
 
 ---
 

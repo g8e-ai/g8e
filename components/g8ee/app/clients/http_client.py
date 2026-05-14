@@ -786,7 +786,7 @@ def get_service_client(
     """Get an HTTP client configured for inter-service communication.
 
     Args:
-        target_service: The service being called (e.g., ComponentName.G8ED)
+        target_service: The service being called (e.g., ComponentName.CLIENT)
         source_service: The component making the request (e.g., ComponentName.G8EE)
         base_url: Optional explicit service URL
         timeout: Request timeout in seconds

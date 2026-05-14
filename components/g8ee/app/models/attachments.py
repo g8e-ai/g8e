@@ -21,10 +21,10 @@ from .base import G8eBaseModel
 
 class AttachmentMetadata(G8eBaseModel):
     """
-    Attachment reference passed from g8ed to G8EE.
+    Attachment reference passed from client to G8EE.
 
     Contains the operator KV store key and file metadata needed to retrieve
-    the full attachment data. g8ed stores the binary content; g8ee retrieves
+    the full attachment data. client stores the binary content; g8ee retrieves
     it via this key before processing.
     """
     store_key: str | None = Field(default=None, description="Primary operator KV key (attachment:{inv_id}:{att_id})")

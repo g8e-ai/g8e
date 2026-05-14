@@ -81,14 +81,14 @@ class OperatorFileService:
         self,
         pubsub_service: PubSubServiceProtocol,
         approval_service: ApprovalServiceProtocol,
-        g8ed_event_service: EventServiceProtocol,
+        event_service: EventServiceProtocol,
         execution_service: ExecutionServiceProtocol,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
         self._pubsub_service = pubsub_service
         self._approval_service = approval_service
-        self._g8ed_event_service = g8ed_event_service
+        self._event_service = event_service
         self._execution_service = execution_service
         self._ai_response_analyzer = ai_response_analyzer
         self._investigation_service = investigation_service
@@ -102,8 +102,8 @@ class OperatorFileService:
         return self._approval_service
 
     @property
-    def g8ed_event_service(self) -> EventServiceProtocol:
-        return self._g8ed_event_service
+    def event_service(self) -> EventServiceProtocol:
+        return self._event_service
 
     @property
     def execution_service(self) -> ExecutionServiceProtocol:
@@ -191,7 +191,7 @@ class OperatorFileService:
                     )
                     if risk_analysis and not risk_analysis.safe_to_proceed:
                         # Broadcast Warden block to UI
-                        await self.g8ed_event_service.publish_command_event(
+                        await self.event_service.publish_command_event(
                             EventType.OPERATOR_FILE_EDIT_FAILED,
                             CommandFailedBroadcastEvent(
                                 command=f"file_edit {op_name} {file_path}",
@@ -232,7 +232,7 @@ class OperatorFileService:
 
                 if not approval_result.approved:
                     # Broadcast failure
-                    await self.g8ed_event_service.publish_command_event(
+                    await self.event_service.publish_command_event(
                         EventType.OPERATOR_FILE_EDIT_FAILED,
                         CommandFailedBroadcastEvent(
                             command=f"file_edit {op_name} {file_path}",
@@ -268,7 +268,7 @@ class OperatorFileService:
             )
 
             # Notify start
-            await self.g8ed_event_service.publish_command_event(
+            await self.event_service.publish_command_event(
                 EventType.OPERATOR_FILE_EDIT_STARTED,
                 CommandExecutingBroadcastEvent(
                     command=f"file_edit {op_name} {file_path}",
@@ -299,7 +299,7 @@ class OperatorFileService:
                 else EventType.OPERATOR_FILE_EDIT_FAILED
             )
 
-            await self.g8ed_event_service.publish_command_event(
+            await self.event_service.publish_command_event(
                 completion_event_type,
                 FileEditBroadcastEvent(
                     command=f"file_edit {op_name} {file_path}",
@@ -375,7 +375,7 @@ class OperatorFileService:
             )
 
             # Notify start
-            await self.g8ed_event_service.publish_command_event(
+            await self.event_service.publish_command_event(
                 EventType.OPERATOR_FILE_HISTORY_FETCH_STARTED,
                 CommandExecutingBroadcastEvent(
                     command=f"file_history {file_path}",
@@ -399,7 +399,7 @@ class OperatorFileService:
                 else EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED
             )
 
-            await self.g8ed_event_service.publish_command_event(
+            await self.event_service.publish_command_event(
                 completion_event_type,
                 CommandResultBroadcastEvent(
                     execution_id=exec_id,
@@ -487,7 +487,7 @@ class OperatorFileService:
             )
 
             # Notify start
-            await self.g8ed_event_service.publish_command_event(
+            await self.event_service.publish_command_event(
                 EventType.OPERATOR_FILE_DIFF_FETCH_STARTED,
                 CommandExecutingBroadcastEvent(
                     command=f"file_diff {file_path}",
@@ -511,7 +511,7 @@ class OperatorFileService:
                 else EventType.OPERATOR_FILE_DIFF_FETCH_FAILED
             )
 
-            await self.g8ed_event_service.publish_command_event(
+            await self.event_service.publish_command_event(
                 completion_event_type,
                 CommandResultBroadcastEvent(
                     execution_id=exec_id,

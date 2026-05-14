@@ -17,7 +17,7 @@ These tests consume the shared fixture file at
 ``shared/test-fixtures/ledger-hash-fixtures.json`` and assert that the Python
 implementation reproduces the recorded canonical-JSON encodings, entry hashes,
 genesis hashes, and chain results. The same fixture file is consumed by the
-g8ed JS verifier test (``ledger-verify-fixtures.spec.js``) so any drift between
+client JS verifier test (``ledger-verify-fixtures.spec.js``) so any drift between
 the two implementations is caught immediately.
 """
 

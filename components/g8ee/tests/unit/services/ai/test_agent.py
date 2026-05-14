@@ -56,7 +56,7 @@ from tests.fakes.agent_helpers import (
     make_agent_inputs,
     make_agent_stream_state,
     make_g8e_agent,
-    make_g8ed_event_service,
+    make_client_event_service,
     make_gen_config,
     make_provider_chunk,
 )
@@ -152,14 +152,14 @@ class TestStreamResponseRetryLoop:
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
         gen_config = make_gen_config()
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         context.model_to_use = "test-model"
         context.generation_config = gen_config
         chunks = []
         async for chunk in agent.stream_response(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -187,14 +187,14 @@ class TestStreamResponseRetryLoop:
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
         gen_config = make_gen_config()
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         context.model_to_use = "test-model"
         context.generation_config = gen_config
         chunks = []
         async for chunk in agent.stream_response(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -225,7 +225,7 @@ class TestStreamResponseRetryLoop:
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
         gen_config = make_gen_config()
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         with patch("asyncio.sleep") as mock_sleep:
             async def capture_sleep(duration):
@@ -238,7 +238,7 @@ class TestStreamResponseRetryLoop:
             chunks = []
             async for chunk in agent.stream_response(
                 inputs=context,
-                g8ed_event_service=g8ed_event_service,
+                client_event_service=client_event_service,
                 llm_provider=provider,
             ):
                 chunks.append(chunk)
@@ -262,14 +262,14 @@ class TestStreamResponseRetryLoop:
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
         gen_config = make_gen_config()
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         context.model_to_use = "test-model"
         context.generation_config = gen_config
         chunks = []
         async for chunk in agent.stream_response(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -308,14 +308,14 @@ class TestStreamResponseErrorHandling:
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
         gen_config = make_gen_config()
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         context.model_to_use = "test-model"
         context.generation_config = gen_config
         chunks = []
         async for chunk in agent.stream_response(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -339,14 +339,14 @@ class TestStreamResponseErrorHandling:
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
         gen_config = make_gen_config()
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         context.model_to_use = "test-model"
         context.generation_config = gen_config
         chunks = []
         async for chunk in agent.stream_response(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -369,13 +369,13 @@ class TestRunWithSSEValidation:
         context = make_agent_inputs()
         context.g8e_context = None
 
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         with pytest.raises(ValidationError) as exc_info:
             await agent.run_with_sse(
                 inputs=context,
                 state=make_agent_stream_state(),
-                g8ed_event_service=g8ed_event_service,
+                client_event_service=client_event_service,
                 llm_provider=provider,
             )
 
@@ -405,12 +405,12 @@ class TestStreamWithToolLoop:
         context = make_agent_inputs()
         context.generation_config = make_gen_config()
         context.model_to_use = "test-model"
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -447,12 +447,12 @@ class TestStreamWithToolLoop:
         context = make_agent_inputs()
         context.generation_config = make_gen_config()
         context.model_to_use = "test-model"
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -475,12 +475,12 @@ class TestStreamWithToolLoop:
         context = make_agent_inputs()
         context.generation_config = make_gen_config()
         context.model_to_use = "test-model"
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -523,7 +523,7 @@ class TestMaxTurnLimitApproval:
         agent = make_g8e_agent(approval_service=approval_service)
         context = make_agent_inputs()
         gen_config = make_gen_config()
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         with patch("app.services.ai.agent.AGENT_MAX_TOOL_TURNS", 2), \
              patch("app.services.ai.agent.execute_turn_tool_calls") as mock_exec:
@@ -536,7 +536,7 @@ class TestMaxTurnLimitApproval:
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
                 inputs=context,
-                g8ed_event_service=g8ed_event_service,
+                client_event_service=client_event_service,
                 llm_provider=provider,
             ):
                 chunks.append(chunk)
@@ -562,7 +562,7 @@ class TestMaxTurnLimitApproval:
         agent = make_g8e_agent(approval_service=approval_service)
         context = make_agent_inputs()
         gen_config = make_gen_config()
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         with patch("app.services.ai.agent.AGENT_MAX_TOOL_TURNS", 2), \
              patch("app.services.ai.agent.execute_turn_tool_calls") as mock_exec:
@@ -589,7 +589,7 @@ class TestMaxTurnLimitApproval:
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
                 inputs=context,
-                g8ed_event_service=g8ed_event_service,
+                client_event_service=client_event_service,
                 llm_provider=provider,
             ):
                 chunks.append(chunk)
@@ -605,7 +605,7 @@ class TestMaxTurnLimitApproval:
         agent = make_g8e_agent(approval_service=None)
         context = make_agent_inputs()
         gen_config = make_gen_config()
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         with patch("app.services.ai.agent.AGENT_MAX_TOOL_TURNS", 2), \
              patch("app.services.ai.agent.execute_turn_tool_calls") as mock_exec:
@@ -618,7 +618,7 @@ class TestMaxTurnLimitApproval:
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
                 inputs=context,
-                g8ed_event_service=g8ed_event_service,
+                client_event_service=client_event_service,
                 llm_provider=provider,
             ):
                 chunks.append(chunk)
@@ -657,12 +657,12 @@ class TestTokenAccumulation:
         context = make_agent_inputs()
         context.generation_config = make_gen_config()
         context.model_to_use = "test-model"
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -690,12 +690,12 @@ class TestTokenAccumulation:
         context = make_agent_inputs()
         context.generation_config = make_gen_config()
         context.model_to_use = "test-model"
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -739,7 +739,7 @@ class TestGroundingMetadata:
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
         gen_config = make_gen_config()
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         async def mock_execute(**kwargs):
             grounding = GroundingMetadata(grounding_used=True, sources=[])
@@ -764,7 +764,7 @@ class TestGroundingMetadata:
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
                 inputs=context,
-                g8ed_event_service=g8ed_event_service,
+                client_event_service=client_event_service,
                 llm_provider=provider,
             ):
                 chunks.append(chunk)
@@ -787,12 +787,12 @@ class TestGroundingMetadata:
         context = make_agent_inputs()
         context.generation_config = make_gen_config()
         context.model_to_use = "test-model"
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -836,7 +836,7 @@ class TestInterrogationGate:
         context = make_agent_inputs()
         context.generation_config = make_gen_config()
         context.model_to_use = "test-model"
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         # Mock execute_turn_tool_calls to prevent actual tool execution
         with patch("app.services.ai.agent.execute_turn_tool_calls") as mock_exec:
@@ -849,7 +849,7 @@ class TestInterrogationGate:
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
                 inputs=context,
-                g8ed_event_service=g8ed_event_service,
+                client_event_service=client_event_service,
                 llm_provider=provider,
             ):
                 chunks.append(chunk)
@@ -908,7 +908,7 @@ class TestInterrogationGate:
         context = make_agent_inputs()
         context.generation_config = make_gen_config()
         context.model_to_use = "test-model"
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         with patch("app.services.ai.agent.execute_turn_tool_calls") as mock_exec:
             async def _fake_exec(*, result_out, **kwargs):
@@ -920,7 +920,7 @@ class TestInterrogationGate:
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
                 inputs=context,
-                g8ed_event_service=g8ed_event_service,
+                client_event_service=client_event_service,
                 llm_provider=provider,
             ):
                 chunks.append(chunk)
@@ -957,12 +957,12 @@ class TestCompleteEmission:
         context = make_agent_inputs()
         context.generation_config = make_gen_config()
         context.model_to_use = "test-model"
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -987,12 +987,12 @@ class TestCompleteEmission:
         context = make_agent_inputs()
         context.generation_config = make_gen_config()
         context.model_to_use = "test-model"
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
             inputs=context,
-            g8ed_event_service=g8ed_event_service,
+            client_event_service=client_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)

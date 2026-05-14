@@ -66,7 +66,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         self,
         pubsub_service: PubSubServiceProtocol,
         approval_service: ApprovalServiceProtocol,
-        g8ed_event_service: EventServiceProtocol,
+        event_service: EventServiceProtocol,
         settings: G8eePlatformSettings,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         operator_data_service: OperatorDataServiceProtocol,
@@ -74,7 +74,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
     ) -> None:
         self._pubsub_service = pubsub_service
         self._approval_service = approval_service
-        self._g8ed_event_service = g8ed_event_service
+        self._event_service = event_service
         self._settings = settings
         self._operator_data_service = operator_data_service
         self._ai_response_analyzer = ai_response_analyzer
@@ -94,8 +94,8 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         return self._approval_service
 
     @property
-    def g8ed_event_service(self) -> EventServiceProtocol:
-        return self._g8ed_event_service
+    def event_service(self) -> EventServiceProtocol:
+        return self._event_service
 
     @property
     def operator_data_service(self) -> OperatorDataServiceProtocol:
@@ -130,7 +130,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         feedback_reason: str,
     ) -> CommandExecutionResult:
         try:
-            await self.g8ed_event_service.publish_command_event(
+            await self.event_service.publish_command_event(
                 EventType.OPERATOR_COMMAND_FAILED,
                 CommandFailedBroadcastEvent(
                     command=command,
@@ -150,7 +150,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 task_id=AITaskId.COMMAND,
             )
         except Exception as e:
-            logger.warning("Failed to broadcast command event %s to g8ed: %s", EventType.OPERATOR_COMMAND_FAILED, e)
+            logger.warning("Failed to broadcast command event %s to client: %s", EventType.OPERATOR_COMMAND_FAILED, e)
         return CommandExecutionResult(
             success=False,
             error=error_msg,
@@ -428,7 +428,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             self.pubsub_service.release_future(execution_id)
             return DirectCommandResult(execution_id=execution_id, status=ExecutionStatus.FAILED, error="No Operator listening")
 
-        # Launch background task to wait for result and broadcast it to g8ed
+        # Launch background task to wait for result and broadcast it to client
         # This allows the API to return immediately to the frontend terminal
         _t = asyncio.create_task(
             self._wait_and_broadcast_direct_command_result(
@@ -456,7 +456,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         operator_session_id: str,
         hostname: str | None = None,
     ) -> None:
-        """Wait for a direct command result and broadcast it via g8ed_event_service."""
+        """Wait for a direct command result and broadcast it via event_service."""
         timeout_seconds = 300  # Default terminal timeout
         try:
             envelope = await asyncio.wait_for(future, timeout=timeout_seconds)
@@ -474,7 +474,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 else EventType.OPERATOR_COMMAND_FAILED
             )
 
-            await self.g8ed_event_service.publish_command_event(
+            await self.event_service.publish_command_event(
                 completion_event_type,
                 CommandResultBroadcastEvent(
                     execution_id=execution_id,

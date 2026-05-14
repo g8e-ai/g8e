@@ -396,7 +396,7 @@ class TestG8eHTTPClientPrepareRequest:
         ctx = G8eHttpContext(
             web_session_id="sess-abc",
             user_id="user-123",
-            source_component=ComponentName.G8ED,
+            source_component=ComponentName.CLIENT,
             case_id="case-456",
             investigation_id="inv-789",
         )
@@ -405,7 +405,7 @@ class TestG8eHTTPClientPrepareRequest:
         )
         assert headers[G8eHeaders.WEB_SESSION_ID] == "sess-abc"
         assert headers[G8eHeaders.USER_ID] == "user-123"
-        assert headers[G8eHeaders.SOURCE_COMPONENT] == "g8ed"
+        assert headers[G8eHeaders.SOURCE_COMPONENT] == "client"
         assert headers[G8eHeaders.CASE_ID] == "case-456"
         assert headers[G8eHeaders.INVESTIGATION_ID] == "inv-789"
 
@@ -509,7 +509,7 @@ class TestGetServiceClient:
     def test_raises_validation_error_when_base_url_absent(self):
         with pytest.raises(ValidationError):
             get_service_client(
-                target_service=ComponentName.G8ED,
+                target_service=ComponentName.CLIENT,
                 source_service=ComponentName.G8EE,
                 base_url="",
                 timeout=DEFAULT_TIMEOUT,
@@ -519,7 +519,7 @@ class TestGetServiceClient:
     def test_plain_value_error_never_raised_for_missing_base_url(self):
         with pytest.raises(Exception) as exc_info:
             get_service_client(
-                target_service=ComponentName.G8ED,
+                target_service=ComponentName.CLIENT,
                 source_service=ComponentName.G8EE,
                 base_url="",
                 timeout=DEFAULT_TIMEOUT,

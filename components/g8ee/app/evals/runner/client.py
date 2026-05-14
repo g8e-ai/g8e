@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Licensed under the Apache License, Version 2.0
 
-"""g8ed HTTP/SSE client for eval runner."""
+"""client HTTP/SSE client for eval runner."""
 
 from __future__ import annotations
 
@@ -22,11 +22,11 @@ _SHARED_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
 with open(_SHARED_DIR / "constants" / "public_api_paths.json") as f:
     PUBLIC_API_PATHS = json.load(f)
 
-class G8edClient:
-    """Async client for g8ed chat API and SSE streams."""
+class G8eClient:
+    """Async client for client chat API and SSE streams."""
 
-    def __init__(self, g8ed_url: str, g8ee_url: str, operator_session_id: str | None = None, ca_cert_path: str | None = None):
-        self.g8ed_url = g8ed_url
+    def __init__(self, client_url: str, g8ee_url: str, operator_session_id: str | None = None, ca_cert_path: str | None = None):
+        self.client_url = client_url
         self.g8ee_url = g8ee_url
         self.operator_session_id = operator_session_id
         self.ca_cert_path = ca_cert_path
@@ -43,7 +43,7 @@ class G8edClient:
             await self._session.close()
 
     async def create_investigation(self, operator_session_id: str) -> dict:
-        """Create a new investigation via g8ed API.
+        """Create a new investigation via client API.
 
         Args:
             operator_session_id: Session ID for the operator
@@ -73,7 +73,7 @@ class G8edClient:
             message: User message
             operator_session_id: Optional session ID for the operator
         """
-        url = f"{self.g8ed_url}{PUBLIC_API_PATHS['chat_send']}"
+        url = f"{self.client_url}{PUBLIC_API_PATHS['chat_send']}"
         headers = {
             "X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         }
@@ -93,7 +93,7 @@ class G8edClient:
             resp.raise_for_status()
 
         # Connect to SSE for the response
-        sse_url = f"{self.g8ed_url}{PUBLIC_API_PATHS['sse_events']}"
+        sse_url = f"{self.client_url}{PUBLIC_API_PATHS['sse_events']}"
         async with self._session.get(sse_url, headers=headers) as resp:
             resp.raise_for_status()
 
@@ -118,7 +118,7 @@ class G8edClient:
         Returns:
             Approval response data
         """
-        url = f"{self.g8ed_url}{PUBLIC_API_PATHS['operator_approval_respond']}"
+        url = f"{self.client_url}{PUBLIC_API_PATHS['operator_approval_respond']}"
         headers = {
             "X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         }

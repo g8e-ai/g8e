@@ -42,7 +42,7 @@ def _build_execution_service() -> tuple[OperatorExecutionService, OperatorPubSub
     # We use __new__ to avoid full __init__ complexity
     svc = OperatorExecutionService.__new__(OperatorExecutionService)
     svc._pubsub_service = pubsub_service
-    svc._g8ed_event_service = event_service
+    svc._client_event_service = event_service
     svc._approval_service = None
     svc._settings = None
     svc._operator_data_service = None
@@ -104,7 +104,7 @@ class TestDirectCommandBroadcasting:
         for _ in range(5):
             await asyncio.sleep(0)
 
-        # 4. Verify the event was published to g8ed
+        # 4. Verify the event was published to client
         event_service.publish_command_event.assert_called_once()
         args, kwargs = event_service.publish_command_event.call_args
 

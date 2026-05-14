@@ -20,7 +20,7 @@ from app.services.ai.agent import g8eEngine
 from tests.fakes.agent_helpers import (
     make_agent_inputs,
     make_g8e_agent,
-    make_g8ed_event_service,
+    make_client_event_service,
     make_gen_config,
     make_provider_chunk,
 )
@@ -51,14 +51,14 @@ class TestAgentCancellation:
         inputs = make_agent_inputs()
         inputs.model_to_use = "test-model"
         inputs.generation_config = make_gen_config()
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         # Run the stream in a task so we can cancel it
         async def run_stream():
             chunks = []
             async for chunk in agent.stream_response(
                 inputs=inputs,
-                g8ed_event_service=g8ed_event_service,
+                client_event_service=client_event_service,
                 llm_provider=provider
             ):
                 chunks.append(chunk)
@@ -107,13 +107,13 @@ class TestAgentCancellation:
         inputs.generation_config = make_gen_config()
         # Force sequential execution for this test
         inputs.request_settings.llm.llm_parallel_tool_calls = False
-        g8ed_event_service = make_g8ed_event_service()
+        client_event_service = make_client_event_service()
 
         async def run_stream():
             chunks = []
             async for chunk in agent.stream_response(
                 inputs=inputs,
-                g8ed_event_service=g8ed_event_service,
+                client_event_service=client_event_service,
                 llm_provider=provider
             ):
                 chunks.append(chunk)

@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical status values shared across g8ee (Python), g8eo (Go), and g8ed (JS).",
+  "_comment": "Canonical status values shared across g8ee (Python), g8eo (Go), and .",
 
   "user.role": {
     "user": "user",
@@ -91,7 +91,7 @@
   "component.name": {
     "g8ee": "g8ee",
     "g8eo": "g8eo",
-    "g8ed": "g8ed"
+    "": ""
   },
 
   "component.status": {
@@ -433,7 +433,7 @@
   },
 
   "history.actor": {
-    "g8ed": "g8ed",
+    "": "",
     "user": "user",
     "g8eo": "g8eo",
     "system": "system"
@@ -541,7 +541,7 @@
     "stream.operator": "stream_operator_to_ssh_fleet"
   },
 
-  "_comment.llm.models": "Canonical LLM model identifiers shared across g8ee, g8eo, and g8ed.",
+  "_comment.llm.models": "Canonical LLM model identifiers shared across g8ee, g8eo, and .",
   "llm.models": {
     "gemini": {
       "3.1.pro": "gemini-3.1-pro-preview",

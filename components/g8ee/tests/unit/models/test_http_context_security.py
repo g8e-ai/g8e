@@ -32,12 +32,12 @@ def create_mock_request(path: str, headers: dict):
     return request
 
 @pytest.mark.asyncio
-async def test_g8ed_rejected_on_non_exempt_path_without_web_session_id():
-    """G8ED requests to non-exempt paths without web_session_id are rejected."""
+async def test_client_rejected_on_non_exempt_path_without_web_session_id():
+    """CLIENT requests to non-exempt paths without web_session_id are rejected."""
     non_exempt_path = "/api/internal/cases"
     
     headers = {
-        G8eHeaders.SOURCE_COMPONENT: ComponentName.G8ED,
+        G8eHeaders.SOURCE_COMPONENT: ComponentName.CLIENT,
         G8eHeaders.CASE_ID: "some-case",
         G8eHeaders.INVESTIGATION_ID: "some-inv",
         G8eHeaders.SYSTEM_FINGERPRINT: "fp-test-123",
@@ -51,12 +51,12 @@ async def test_g8ed_rejected_on_non_exempt_path_without_web_session_id():
     assert "websession-id" in str(excinfo.value).lower()
 
 @pytest.mark.asyncio
-async def test_g8ed_rejected_on_non_exempt_path_without_user_id():
-    """G8ED requests to non-exempt paths without user_id are rejected."""
+async def test_client_rejected_on_non_exempt_path_without_user_id():
+    """CLIENT requests to non-exempt paths without user_id are rejected."""
     non_exempt_path = "/api/internal/cases"
     
     headers = {
-        G8eHeaders.SOURCE_COMPONENT: ComponentName.G8ED,
+        G8eHeaders.SOURCE_COMPONENT: ComponentName.CLIENT,
         G8eHeaders.WEB_SESSION_ID: "sess-123",
         G8eHeaders.CASE_ID: "some-case",
         G8eHeaders.INVESTIGATION_ID: "some-inv",
@@ -71,12 +71,12 @@ async def test_g8ed_rejected_on_non_exempt_path_without_user_id():
     assert "user-id" in str(excinfo.value).lower()
 
 @pytest.mark.asyncio
-async def test_g8ed_allowed_on_exempt_path():
-    """Verify that G8ED can still bypass on legitimate exempt paths."""
+async def test_client_allowed_on_exempt_path():
+    """Verify that CLIENT can still bypass on legitimate exempt paths."""
     exempt_path = "/api/internal/operators/authenticate"
     
     headers = {
-        G8eHeaders.SOURCE_COMPONENT: ComponentName.G8ED,
+        G8eHeaders.SOURCE_COMPONENT: ComponentName.CLIENT,
         G8eHeaders.CASE_ID: "some-case",
         G8eHeaders.INVESTIGATION_ID: "some-inv",
         G8eHeaders.SYSTEM_FINGERPRINT: "fp-test-456",
@@ -85,6 +85,6 @@ async def test_g8ed_allowed_on_exempt_path():
     request = create_mock_request(exempt_path, headers)
     
     context = await G8eHttpContext.from_request(request)
-    assert context.source_component == ComponentName.G8ED
+    assert context.source_component == ComponentName.CLIENT
     assert context.web_session_id is None
     assert context.user_id is None

@@ -136,7 +136,7 @@ async def test_execute_file_edit_read_broadcasts_content():
         operator_documents=[mock_operator]
     )
     
-    file_service.g8ed_event_service.publish_command_event = AsyncMock()
+    file_service.client_event_service.publish_command_event = AsyncMock()
     
     await file_service.execute_file_edit(args, g8e_context, investigation)
     
@@ -144,7 +144,7 @@ async def test_execute_file_edit_read_broadcasts_content():
     # Check that publish_command_event was called with FileEditBroadcastEvent containing the content
     # Find the completion event call
     completion_call = None
-    for call in file_service.g8ed_event_service.publish_command_event.call_args_list:
+    for call in file_service.client_event_service.publish_command_event.call_args_list:
         if call[0][0] == EventType.OPERATOR_FILE_EDIT_COMPLETED:
             completion_call = call
             break

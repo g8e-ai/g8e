@@ -421,7 +421,7 @@ func TestAuthServicesResponse_JSONParsing(t *testing.T) {
 		assert.Equal(t, "invalid api key", httpclient.ExtractErrorMessage(resp.Error))
 	})
 
-	t.Run("error response (g8ed error envelope object)", func(t *testing.T) {
+	t.Run("error response (client error envelope object)", func(t *testing.T) {
 		// Regression: the server actually returns the object envelope.
 		jsonData := `{"success": false, "error": {"code": "G8E-1800", "message": "already registered", "category": "auth"}}`
 

@@ -93,7 +93,6 @@ from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.models.tool_results import ToolResult
-from app.models.g8ed_client import IntentOperationResult, SSEPushResponse
 from app.constants.prompts import AgentMode
 from app.llm import llm_types as types
 
@@ -511,7 +510,7 @@ class InvestigationServiceProtocol(Protocol):
 
 
 @runtime_checkable
-class G8edClientProtocol(Protocol):
+class G8eClientProtocol(Protocol):
     async def push_sse_event(self, event: SessionEvent | BackgroundEvent) -> SSEPushResponse:
         raise NotImplementedError
     async def grant_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult:
@@ -610,7 +609,7 @@ class ApprovalServiceProtocol(Protocol):
 @runtime_checkable
 class ExecutionServiceProtocol(Protocol):
     @property
-    def g8ed_event_service(self) -> EventServiceProtocol:
+    def client_event_service(self) -> EventServiceProtocol:
         raise NotImplementedError
     @property
     def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
@@ -678,7 +677,7 @@ class FileServiceProtocol(Protocol):
     def approval_service(self) -> ApprovalServiceProtocol:
         raise NotImplementedError
     @property
-    def g8ed_event_service(self) -> EventServiceProtocol:
+    def client_event_service(self) -> EventServiceProtocol:
         raise NotImplementedError
     @property
     def execution_service(self) -> ExecutionServiceProtocol:
@@ -721,13 +720,12 @@ class IntentServiceProtocol(Protocol):
     def execution_service(self) -> ExecutionServiceProtocol:
         raise NotImplementedError
     @property
-    def g8ed_event_service(self) -> EventServiceProtocol:
+    def client_event_service(self) -> EventServiceProtocol:
         raise NotImplementedError
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:
         raise NotImplementedError
     @property
-    def g8ed_client(self) -> G8edClientProtocol:
         raise NotImplementedError
     async def execute_intent_permission_request(
         self,

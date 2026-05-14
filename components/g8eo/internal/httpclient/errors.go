@@ -19,9 +19,9 @@ import (
 )
 
 // ExtractErrorMessage returns a human-readable error string from a raw JSON
-// `error` field produced by g8ed, accepting either:
+// `error` field produced by client, accepting either:
 //   - a plain JSON string: "some error"
-//   - the standard g8ed error envelope object: {"code": "...", "message": "...", ...}
+//   - the standard client error envelope object: {"code": "...", "message": "...", ...}
 //
 // g8eo HTTP response structs should model `error` as json.RawMessage rather
 // than `string`, and call this helper when surfacing the error to the user.

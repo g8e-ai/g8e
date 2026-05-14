@@ -19,7 +19,7 @@ enum Component {
   COMPONENT_UNSPECIFIED = 0;
   COMPONENT_G8EE = 1;
   COMPONENT_G8EO = 2;
-  COMPONENT_G8ED = 3;
+  COMPONENT_CLIENT = 3;
 }
 
 // L1 Governance: Technical Bedrock (Hard Gates)

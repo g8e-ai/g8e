@@ -55,7 +55,7 @@
   },
   "component_urls": {
     "G8EE_URL": "component_urls.g8ee_url",
-    "G8E_G8ED_URL": "component_urls.g8ed_url",
+    "G8E_CLIENT_URL": "component_urls.client_url",
     "G8E_OPERATOR_ENDPOINT": "component_urls.operator_endpoint"
   },
   "command_validation": {

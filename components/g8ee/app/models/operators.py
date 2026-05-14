@@ -112,17 +112,17 @@ class OperatorHistoryEntry(G8eBaseModel):
 
 
 class OperatorDocument(G8eIdentifiableModel):
-    """g8ee read-side projection of the g8ed OperatorDocument.
+    """g8ee read-side projection of the client OperatorDocument.
 
     Maps to operator_status_info in shared/models/operator_document.json.
     Populated from operator KV cache keyed by KVKey.doc(Collections.OPERATORS, id) or
     GET /api/internal/operators/:id/status.
-    g8ed is the authority — g8ee only reads this document.
+    client is the authority — g8ee only reads this document.
     """
 
     model_config = ConfigDict(extra="ignore")
 
-    user_id: str = Field(description="User ID who owns this operator (always set by g8ed)")
+    user_id: str = Field(description="User ID who owns this operator (always set by client)")
     first_deployed: UTCDatetime | None = Field(default=None, description="When the operator was first deployed")
     name: str | None = Field(default=None, description="Human-readable operator name")
     organization_id: str | None = Field(default=None, description="Organization ID")
@@ -187,7 +187,7 @@ class OperatorDocument(G8eIdentifiableModel):
 # HEARTBEAT DATA MODELS
 # =============================================================================
 # Clean, normalized heartbeat data structure for Operator telemetry.
-# Heartbeats are stored in database (operator document) and sent via SSE to g8ed.
+# Heartbeats are stored in database (operator document) and sent via SSE to client.
 # Last 10 heartbeats are retained in a rolling buffer for historical context.
 # =============================================================================
 
@@ -314,7 +314,7 @@ class HeartbeatSnapshot(G8eBaseModel):
     
     Storage:
     - Stored in database Operator document (heartbeat_history array, max 10)
-    - Sent to g8ed via SSE for real-time UI updates
+    - Sent to client via SSE for real-time UI updates
     - NOT stored in operator cache
     
     Usage:
@@ -621,7 +621,7 @@ class StreamApprovalRequest(ApprovalRequestBase):
     kind: Literal["stream"] = Field(default="stream")
     hosts: list[str] = Field(description="Hosts to stream the operator to")
     arch: str = Field(description="Binary architecture")
-    endpoint: str = Field(description="g8ed endpoint for handshake")
+    endpoint: str = Field(description="client endpoint for handshake")
     device_token: str = Field(description="dlk_ token (UI-redacted in event)")
     concurrency: int = Field(default=5)
     timeout: int = Field(default=300)
@@ -691,7 +691,7 @@ class ApprovalContext(G8eBaseModel):
 
 
 class CommandApprovalEvent(ApprovalContext):
-    """Event payload published to g8ed when command approval is requested."""
+    """Event payload published to client when command approval is requested."""
     command: str = Field(description="Command pending approval")
     risk_analysis: CommandRiskAnalysis | None = Field(default=None)
     target_systems: list[TargetSystem] = Field(default_factory=list)
@@ -703,7 +703,7 @@ class CommandApprovalEvent(ApprovalContext):
 
 
 class StreamApprovalEvent(ApprovalContext):
-    """Event payload published to g8ed when operator stream approval is requested."""
+    """Event payload published to client when operator stream approval is requested."""
     kind: Literal["stream"] = Field(default="stream")
     hosts: list[str] = Field(description="Hosts to stream the operator to")
     concurrency: int = Field(description="Maximum parallel hosts")
@@ -712,20 +712,20 @@ class StreamApprovalEvent(ApprovalContext):
 
 
 class AgentContinueApprovalEvent(ApprovalContext):
-    """Event payload published to g8ed when agent continuation approval is requested."""
+    """Event payload published to client when agent continuation approval is requested."""
     turn_limit: int = Field(description="Tool-turn budget that triggered the approval")
     turns_completed: int = Field(description="Number of tool-use turns executed when the budget was reached")
 
 
 class FileEditApprovalEvent(ApprovalContext):
-    """Event payload published to g8ed when file edit approval is requested."""
+    """Event payload published to client when file edit approval is requested."""
     file_path: str = Field(description="File path pending approval")
     operation: FileOperation = Field(description="File operation type")
     risk_analysis: FileOperationRiskAnalysis | None = Field(default=None)
 
 
 class IntentApprovalEvent(ApprovalContext):
-    """Event payload published to g8ed when AWS intent approval is requested."""
+    """Event payload published to client when AWS intent approval is requested."""
     intent_name: CloudIntent = Field(description="Normalized AWS intent name")
     all_intents: list[CloudIntent] = Field(description="All intents being requested")
     operation_context: str | None = Field(default=None, description="Context for the operation")
@@ -839,7 +839,7 @@ class HeartbeatSSEEnvelope(G8eBaseModel):
 class OperatorStatusUpdatedPayload(G8eBaseModel):
     """Wire payload for OPERATOR_STATUS_UPDATED_* SSE events.
 
-    Mirrors components/g8ed/models/sse_models.js OperatorStatusUpdatedData.
+    Mirrors components/client/models/sse_models.js OperatorStatusUpdatedData.
     Emitted by HeartbeatStaleMonitorService when an operator transitions
     between BOUND/STALE or ACTIVE/OFFLINE due to heartbeat freshness.
     """

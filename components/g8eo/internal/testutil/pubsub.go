@@ -27,19 +27,19 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// TestPubSubAvailable checks if the g8ed pub/sub gateway is reachable.
-// Fatally fails the test when g8ed is unavailable — all callers are integration
+// TestPubSubAvailable checks if the client pub/sub gateway is reachable.
+// Fatally fails the test when client is unavailable — all callers are integration
 // tests that require a live stack.
 func TestPubSubAvailable(t *testing.T) {
 	t.Helper()
 	wsURL := GetTestOperatorDirectURL() + "/ws/pubsub"
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
-		t.Fatalf("g8ed pub/sub TLS setup failed: %v", err)
+		t.Fatalf("client pub/sub TLS setup failed: %v", err)
 	}
 	ws, _, err := dialer.Dial(wsURL, nil)
 	if err != nil {
-		t.Fatalf("g8ed pub/sub not available at %s: %v", GetTestOperatorDirectURL(), err)
+		t.Fatalf("client pub/sub not available at %s: %v", GetTestOperatorDirectURL(), err)
 	}
 	ws.Close()
 }
@@ -107,10 +107,10 @@ func SubscribeToChannel(t *testing.T, _ string, channel string) <-chan []byte {
 	return out
 }
 
-// PublishTestMessage publishes a message to a pub/sub channel via the g8ed WebSocket gateway.
-// g8ed is the single external entry point — operator is not directly accessible from outside
+// PublishTestMessage publishes a message to a pub/sub channel via the client WebSocket gateway.
+// client is the single external entry point — operator is not directly accessible from outside
 // the docker network. baseURL is accepted for API compatibility but ignored; all publishes
-// go through GetTestOperatorDirectURL() (g8ed:443) which proxies to operator internally.
+// go through GetTestOperatorDirectURL() (client:443) which proxies to operator internally.
 func PublishTestMessage(t *testing.T, _ string, channel string, message string) {
 	t.Helper()
 
@@ -122,7 +122,7 @@ func PublishTestMessage(t *testing.T, _ string, channel string, message string) 
 	}
 	ws, _, err := dialer.Dial(wsURL, nil)
 	if err != nil {
-		t.Fatalf("Failed to connect to g8ed pub/sub for publish on channel %s: %v", channel, err)
+		t.Fatalf("Failed to connect to client pub/sub for publish on channel %s: %v", channel, err)
 	}
 	defer ws.Close()
 

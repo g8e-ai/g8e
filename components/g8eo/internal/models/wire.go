@@ -23,7 +23,7 @@ type FsGrepMatch struct {
 }
 
 // RuntimeConfig captures the CLI flags and env var overrides active when the operator was started.
-// Sent to g8ed at bootstrap and stored in operator_document.runtime_config.
+// Sent to client at bootstrap and stored in operator_document.runtime_config.
 type RuntimeConfig struct {
 	CloudMode           bool   `json:"cloud_mode"`
 	CloudProvider       string `json:"cloud_provider,omitempty"`

@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 class OperatorAuthService:
     """
     OperatorAuthService for g8ee.
-    Handles operator authentication logic, moving it from g8ed.
+    Handles operator authentication logic, moving it from client.
     """
 
     def __init__(
@@ -100,9 +100,9 @@ class OperatorAuthService:
     ) -> dict[str, Any]:
         """Bootstrap an operator after device-link consumption.
 
-        Trust model: caller is g8ed via internal mTLS. No authorization header.
+        Trust model: caller is client via internal mTLS. No authorization header.
         Inputs are taken at face value (operator_id, user_id come from a verified
-        device-link token on g8ed's side).
+        device-link token on client's side).
         """
         # 1. Resolve operator slot
         operator = None
@@ -116,8 +116,8 @@ class OperatorAuthService:
             if not device_link_token:
                 return {"success": False, "error": "operator_id or device_link_token is required"}
 
-            # g8ed is authoritative for device link management (usage tracking, exhaustion checking)
-            # g8ed validates the device link before calling g8ee, so no need to re-check here
+            # client is authoritative for device link management (usage tracking, exhaustion checking)
+            # client validates the device link before calling g8ee, so no need to re-check here
 
             # Query all operators for user once, then filter in memory
             all_user_operators = await self._operator_data_service.query_operators([
@@ -219,8 +219,8 @@ class OperatorAuthService:
         if not claim_success:
             return {"success": False, "error": "Failed to claim operator slot"}
 
-        # 6. Device link usage tracking is handled by g8ed
-        # g8ed updates the 'uses' field in the device link document based on claims array length
+        # 6. Device link usage tracking is handled by client
+        # client updates the 'uses' field in the device link document based on claims array length
         # g8ee is authoritative for operator documents only
 
         # 7. Generate certificate

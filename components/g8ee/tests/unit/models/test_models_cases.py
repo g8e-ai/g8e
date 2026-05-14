@@ -74,10 +74,10 @@ class TestHistoryEntry:
         entry = HistoryEntry(
             timestamp=_TS,
             event_type=EventType.CASE_CREATED,
-            source_component=ComponentName.G8ED,
+            source_component=ComponentName.CLIENT,
             summary="test",
         )
-        assert entry.source_component == ComponentName.G8ED
+        assert entry.source_component == ComponentName.CLIENT
 
     def test_optional_fields_default_to_none(self):
         entry = HistoryEntry(

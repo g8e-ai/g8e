@@ -12,7 +12,7 @@ This document explains the unified storage architecture for the g8e platform. It
 
 ## Core Principles
 
-- **Operator-Hub Persistence**: The Operator (`g8eo`) running in `--listen` mode is the authoritative system of record and the primary **Substrate**. It provides the Coordination Store API for all clients. Optional application-layer adapters like the Dashboard (`g8ed`) and Engine (`g8ee`) are completely stateless and rely on the Operator for persistence.
+- **Operator-Hub Persistence**: The Operator (`g8eo`) running in `--listen` mode is the authoritative system of record and the primary **Substrate**. It provides the Coordination Store API for all clients. Optional application-layer adapters like the Dashboard (``) and Engine (`g8ee`) are completely stateless and rely on the Operator for persistence.
 - **Local-First Audit Architecture (LFAA)**: Every file mutation and command execution on a managed host is recorded locally in the Operator's Audit Vault and Ledger. The platform substrate receives only Sentinel-scrubbed metadata; raw data never leaves the host unless explicitly retrieved.
 - **Unified Coordination Store**: A single SQLite database on the platform hub (provided by `g8eo --listen`) provides Document, KV, SSE, and Blob storage services to stateless clients.
 - **Data Sovereignty**: Raw operational data (passwords, secrets, PII) is quarantined on the managed host. The platform only ever receives Sentinel-scrubbed summaries and metadata in the Scrubbed Vault.
@@ -33,7 +33,7 @@ This document explains the unified storage architecture for the g8e platform. It
 ### Platform Hub (g8eo --listen)
 - **Component**: `g8eo` (the "Platform Hub" and "Substrate")
 - **Persistence**: Single SQLite database at `.g8e/data/g8e.db` (The "Coordination Store").
-- **Stateless Clients**: Bundled apps (`g8ed`, `g8ee`) and BYO clients read/write via public HTTPS/WSS APIs.
+- **Stateless Clients**: Bundled apps (`g8ee`) and BYO clients read/write via public HTTPS/WSS APIs.
 - **Subsystems**:
     - **Document Store**: JSON document CRUD using a Collection/ID pattern with `json_extract` query support.
     - **KV Store**: High-speed ephemeral data with TTL support and read cache.
@@ -58,7 +58,7 @@ This document explains the unified storage architecture for the g8e platform. It
 │                      g8e platform hub (Self-Hosted)                 │
 │                                                                     │
 │  ┌──────────────────────┐      ┌──────────────────────────────────┐ │
-│  │         g8ee          │      │              g8ed                │ │
+│  │         g8ee          │      │                              │ │
 │  │  (stateless Engine)   │      │  (stateless Dashboard)           │ │
 │  │                      │      │                                  │ │
 │  │  DBClient            │      │  OperatorDocumentClient          │ │
@@ -234,6 +234,6 @@ The following collections are defined in `shared/constants/collections.json` and
 
 - [../components/g8eo.md](../components/g8eo.md) — g8eo component reference
 - [../components/g8ee.md](../components/g8ee.md) — g8ee component reference
-- [../components/g8ed.md](../components/g8ed.md) — g8ed component reference
+- [../components/.md](../components/.md) —  component reference
 - [security.md](security.md) — Full security model: mTLS, Sentinel patterns, LFAA encryption, threat detection
 - [protocol.md](protocol.md) — Governance Envelope and communication protocol

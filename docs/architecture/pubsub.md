@@ -83,7 +83,7 @@ Identity and integrity are maintained through a deterministic `transaction_hash`
 
 ### 1. Separation of Concerns
 - **Substrate (g8eo)**: Owns the broker, identity, and governance gates.
-- **Application Layer**: Consumers of the protocol (e.g., `g8ed`, `g8ee`) have no privileged access and must use the same public protocol surface as BYO clients.
+- **Application Layer**: Consumers of the protocol (e.g., `g8ee`) have no privileged access and must use the same public protocol surface as BYO clients.
 
 ### 2. Single Source of Truth
 All channel logic must use the constants in `@/shared/constants/channels.json`. 

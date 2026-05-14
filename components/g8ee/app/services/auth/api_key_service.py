@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Constants for hashing (aligned with g8ed)
+# Constants for hashing (aligned with client)
 API_KEY_HASH_ALGORITHM = "sha256"
 API_KEY_HASH_LENGTH = 32
 

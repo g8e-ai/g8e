@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical HTTP header names shared across g8ee (Python), g8eo (Go), and g8ed (JavaScript). HTTP headers are case-insensitive; these use canonical Title-Case form as the authoritative values.",
+  "_comment": "Canonical HTTP header names shared across g8ee (Python), g8eo (Go), and . HTTP headers are case-insensitive; these use canonical Title-Case form as the authoritative values.",
 
   "x-g8e.session-id":       "X-G8E-WebSession-ID",
   "x-g8e.operator-session-id": "X-G8E-Operator-Session-ID",
