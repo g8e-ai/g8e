@@ -405,19 +405,29 @@ func (s *ListenDBService) DocQuery(collection string, filters []models.DocFilter
 			return nil, fmt.Errorf("invalid filter field: %w", err)
 		}
 
-		// Use strings.Builder to construct the query safely. Identifier is already validated.
-		// Operator is from a strict allowlist.
-		query.WriteString(" AND json_extract(data, '$.")
-		query.WriteString(f.Field)
-		query.WriteString("') ")
-		query.WriteString(sqlOp)
+		// Use parameter for path and literals for operators to satisfy CodeQL.
+		query.WriteString(" AND json_extract(data, ?) ")
+		switch sqlOp {
+		case "==", "=":
+			query.WriteString("=")
+		case "!=":
+			query.WriteString("!=")
+		case "<":
+			query.WriteString("<")
+		case ">":
+			query.WriteString(">")
+		case "<=":
+			query.WriteString("<=")
+		case ">=":
+			query.WriteString(">=")
+		}
 		query.WriteString(" ?")
 
 		var nativeVal interface{}
 		if err := json.Unmarshal(f.Value, &nativeVal); err != nil {
 			return nil, fmt.Errorf("invalid filter value: %w", err)
 		}
-		args = append(args, nativeVal)
+		args = append(args, "$."+f.Field, nativeVal)
 	}
 
 	if orderBy != "" {
