@@ -78,7 +78,7 @@ func pickCategory(r *rand.Rand) category {
 
 // ── envelope construction ─────────────────────────────────────────────────────
 
-func buildGoodActorEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string) (*uap.UAPEnvelope, error) {
+func buildGoodActorEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*uap.UAPEnvelope, error) {
 	payload, err := proto.Marshal(&operatorv1.FsListRequested{
 		Path:        fmt.Sprintf("/tmp/chaos-%d", id),
 		ExecutionId: fmt.Sprintf("exec-good-%d", id),
@@ -88,10 +88,10 @@ func buildGoodActorEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey
 	}
 	return signedEnvelope("FS_LIST", "localhost", stateRoot,
 		fmt.Sprintf("good-%d-%d", id, time.Now().UnixNano()),
-		payload, false, privKey, keyID)
+		payload, false, privKey, keyID, sessionID)
 }
 
-func buildPromptInjEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string) (*uap.UAPEnvelope, error) {
+func buildPromptInjEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*uap.UAPEnvelope, error) {
 	forbiddenCmds := []string{
 		"sudo rm -rf /var/log",
 		"su root -c 'cat /etc/shadow'",
@@ -111,10 +111,10 @@ func buildPromptInjEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey
 	}
 	return signedEnvelope("EXECUTE_BASH", "localhost", stateRoot,
 		fmt.Sprintf("inject-%d-%d", id, time.Now().UnixNano()),
-		payload, false, privKey, keyID)
+		payload, false, privKey, keyID, sessionID)
 }
 
-func buildFileMutationEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string) (*uap.UAPEnvelope, error) {
+func buildFileMutationEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*uap.UAPEnvelope, error) {
 	payload, err := proto.Marshal(&operatorv1.FileEditRequested{
 		FilePath:    fmt.Sprintf("/tmp/chaos-edit-%d.txt", id),
 		Content:     fmt.Sprintf("chaos was here at %d", time.Now().UnixNano()),
@@ -126,10 +126,10 @@ func buildFileMutationEnvelope(id int, stateRoot string, privKey ed25519.Private
 	// Mutations require L3 (human proof)
 	return signedEnvelope("FILE_EDIT", "localhost", stateRoot,
 		fmt.Sprintf("edit-%d-%d", id, time.Now().UnixNano()),
-		payload, true, privKey, keyID)
+		payload, true, privKey, keyID, sessionID)
 }
 
-func buildMitMEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string) (*uap.UAPEnvelope, error) {
+func buildMitMEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*uap.UAPEnvelope, error) {
 	payload, err := proto.Marshal(&operatorv1.FsListRequested{
 		Path:        "/etc",
 		ExecutionId: fmt.Sprintf("exec-mitm-%d", id),
@@ -139,7 +139,7 @@ func buildMitMEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, key
 	}
 	env, err := signedEnvelope("FS_LIST", "localhost", stateRoot,
 		fmt.Sprintf("mitm-%d-%d", id, time.Now().UnixNano()),
-		payload, false, privKey, keyID)
+		payload, false, privKey, keyID, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +154,7 @@ func signedEnvelope(
 	isMutation bool,
 	privKey ed25519.PrivateKey,
 	keyID string,
+	sessionID string,
 ) (*uap.UAPEnvelope, error) {
 	env := &uap.UAPEnvelope{
 		ProtocolVersion:   "1.0",
@@ -161,7 +162,7 @@ func signedEnvelope(
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(30 * time.Minute)), // Increased to 30m for chaos runs
 		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
 		OperatorId:        "chaos-operator",
-		OperatorSessionId: "chaos-session-001",
+		OperatorSessionId: sessionID,
 		ActionType:        actionType,
 		TargetResource:    targetResource,
 		Payload:           payload,
@@ -367,15 +368,23 @@ func main() {
 		os.Exit(1)
 	}
 	defer av.Close()
-	session, err := av.GetSession("chaos-session-001")
-	if err != nil {
-		logger.Error("failed to inspect chaos audit session", "error", err)
-		os.Exit(1)
-	}
-	if session == nil {
-		if err := av.CreateSession("chaos-session-001", "Chaos Tester", "chaos@test.local"); err != nil {
-			logger.Error("failed to create chaos audit session", "error", err)
+
+	// ── generate session IDs for concurrency ──────────────────────────────────
+	workerCount := runtime.NumCPU() * 2
+	sessionIDs := make([]string, workerCount)
+	for i := 0; i < workerCount; i++ {
+		sessionID := fmt.Sprintf("chaos-session-%03d", i+1)
+		sessionIDs[i] = sessionID
+		session, err := av.GetSession(sessionID)
+		if err != nil {
+			logger.Error("failed to inspect chaos audit session", "error", err)
 			os.Exit(1)
+		}
+		if session == nil {
+			if err := av.CreateSession(sessionID, fmt.Sprintf("Chaos Worker %d", i+1), "chaos@test.local"); err != nil {
+				logger.Error("failed to create chaos audit session", "error", err)
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -473,16 +482,16 @@ func main() {
 	defer rejectionBatch.flush() // ensure final batch is written
 
 	// Execution phase: CPU-aware concurrency
-	workerCount := runtime.NumCPU() * 2
 	sem := make(chan struct{}, workerCount)
-	logger.Info("Starting execution phase", "workers", workerCount)
+	logger.Info("Starting execution phase", "workers", workerCount, "sessions", len(sessionIDs))
 
 	for i, cat := range payloads {
 		wg.Add(1)
 		idx := i
 		catCopy := cat
+		sessionID := sessionIDs[idx%workerCount]
 		sem <- struct{}{}
-		go func(id int, c category) {
+		go func(id int, c category, sid string) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
@@ -490,7 +499,7 @@ func main() {
 			currentRoot, _ := stateRootProvider.GetCurrentStateRoot()
 
 			// Build envelope JUST-IN-TIME to avoid expiration during pre-build
-			env, err := buildEnvelope(id, c, currentRoot, privKey, keyID)
+			env, err := buildEnvelope(id, c, currentRoot, privKey, keyID, sid)
 			if err != nil {
 				logger.Error("envelope build failed", "id", id, "error", err)
 				cnt.other.Add(1)
@@ -498,7 +507,7 @@ func main() {
 			}
 
 			fireOne(id, c, env, currentRoot, verifier, warden, logger, &cnt, rejectionBatch)
-		}(idx, catCopy)
+		}(idx, catCopy, sessionID)
 	}
 
 	wg.Wait()
@@ -539,16 +548,16 @@ func main() {
 	printDemoQueries(filepath.Join(dataDir, "g8e.db"))
 }
 
-func buildEnvelope(id int, cat category, stateRoot string, privKey ed25519.PrivateKey, keyID string) (*uap.UAPEnvelope, error) {
+func buildEnvelope(id int, cat category, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*uap.UAPEnvelope, error) {
 	switch cat {
 	case catGoodActor:
-		return buildGoodActorEnvelope(id, stateRoot, privKey, keyID)
+		return buildGoodActorEnvelope(id, stateRoot, privKey, keyID, sessionID)
 	case catPromptInj:
-		return buildPromptInjEnvelope(id, stateRoot, privKey, keyID)
+		return buildPromptInjEnvelope(id, stateRoot, privKey, keyID, sessionID)
 	case catMitM:
-		return buildMitMEnvelope(id, stateRoot, privKey, keyID)
+		return buildMitMEnvelope(id, stateRoot, privKey, keyID, sessionID)
 	case catFileMutation:
-		return buildFileMutationEnvelope(id, stateRoot, privKey, keyID)
+		return buildFileMutationEnvelope(id, stateRoot, privKey, keyID, sessionID)
 	default:
 		return nil, fmt.Errorf("unknown category: %d", cat)
 	}
@@ -634,7 +643,7 @@ func (b *batchEventWriter) recordRejection(id int, cat category, env *uap.UAPEnv
 
 	reason := classifyRejection(verErr)
 	event := &storage.Event{
-		OperatorSessionID: "chaos-session-001",
+		OperatorSessionID: env.OperatorSessionId,
 		Timestamp:         time.Now(),
 		Type:              storage.EventType(reason),
 		ContentText:       fmt.Sprintf("[chaos-id:%d] %s: %s", id, categoryName(cat), verErr.Error()),
@@ -655,7 +664,7 @@ func (b *batchEventWriter) recordExecution(id int, cat category, env *uap.UAPEnv
 	}
 
 	event := &storage.Event{
-		OperatorSessionID: "chaos-session-001",
+		OperatorSessionID: env.OperatorSessionId,
 		Timestamp:         time.Now(),
 		Type:              "action_receipt",
 		ContentText:       fmt.Sprintf("[chaos-id:%d] %s: %s", id, categoryName(cat), status),

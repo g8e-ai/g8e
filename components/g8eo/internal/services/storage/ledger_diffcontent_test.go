@@ -48,11 +48,11 @@ func TestLedgerService_GetDiffContent(t *testing.T) {
 	hash2 := result2.LedgerHashAfter
 
 	// 3. Verify diff content via GetDiffContent
-	diff := lms.GetDiffContent(hash1, hash2)
+	diff := lms.GetDiffContent(hash1, hash2, operatorSessionID)
 	assert.NotEmpty(t, diff)
 	assert.Contains(t, diff, "+Line 2")
 
 	// 4. Verify empty hashes return empty string
-	assert.Empty(t, lms.GetDiffContent("", hash2))
-	assert.Empty(t, lms.GetDiffContent(hash1, ""))
+	assert.Empty(t, lms.GetDiffContent("", hash2, operatorSessionID))
+	assert.Empty(t, lms.GetDiffContent(hash1, "", operatorSessionID))
 }
