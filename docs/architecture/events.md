@@ -14,10 +14,10 @@ The g8e platform uses a unified, hierarchical event system to drive state transi
 
 ## Architecture & Transport
 
-Events in g8e are the heartbeat of the system's reactivity. The architecture follows a decentralized model where the **Operator Substrate** (`g8eo`) provides the primary pub/sub transport and persistence hub for all clients.
+Events in g8e are the heartbeat of the system's reactivity. The architecture follows a decentralized model where a conforming Operator (reference: `g8eo`) provides the primary pub/sub transport and persistence hub for all clients.
 
-### 1. The Substrate Hub: `g8eo`
-`g8eo` in **Listen Mode** serves as the central event broker and coordination point.
+### 1. The Reference Hub: `g8eo`
+The reference Operator in **Listen Mode** serves as the central event broker and coordination point for the bundled deployment.
 - **Operator Pub/Sub**: A WebSocket-based (WSS) backbone for real-time communication between all components.
 - **Audit Logging**: `g8eo` captures and persists events into the host-authoritative audit vault.
 

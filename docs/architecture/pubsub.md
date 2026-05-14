@@ -1,110 +1,102 @@
 ---
-title: Pub/Sub Channels
+title: Pub/Sub & Protocol
 parent: Architecture
 ---
 
 # g8e Pub/Sub Architecture
 
-Last Updated: 2026-05-12
-Version: v0.2.4
+Last Updated: 2026-05-13
+Version: v0.3.0
 
-The g8e platform utilizes a high-performance, WebSocket-based Pub/Sub system for all real-time inter-component communication. This decoupled architecture allows a central engine (bundled `g8ee` or BYO agent) to orchestrate distributed agents (`g8eo` Operators) across heterogeneous environments without direct network visibility.
+The g8e platform utilizes a high-performance, WebSocket-based Pub/Sub system for all real-time communication between the substrate (Operator) and application-layer adapters (Engine, Dashboard, or BYO clients). 
 
-The host listener is the **Operator binary running in `--listen` mode**, which acts as the WebSocket broker for the platform.
+The host listener is the **Operator binary running in `--listen` mode**, which acts as the WebSocket broker and governance gate for the platform.
 
 ---
 
-## The Lifecycle of a Session
+## The Lifecycle of a Transaction
 
-The lifecycle of an Operator session is entirely governed by its pub/sub interactions.
+Every action in the g8e ecosystem is a **Transaction** wrapped in a `GovernanceEnvelope`.
 
-### 1. Bootstrap & Authentication
-When an Operator starts, it identifies itself via a **Bootstrap Handshake**:
-- **Request**: Operator publishes a UAP JSON envelope to an ephemeral `auth.publish:session:{hash}` channel.
-- **Validation**: The authentication authority (bundled `g8ee` or a substrate-native service) validates the request and responds with a bootstrap configuration (API keys, resource limits, certs) on `auth.response:session:{hash}`.
-- **Finalization**: Once authenticated, the Operator transitions to its dedicated per-session channels.
+### 1. Intent & Packaging
+A client (Engine or BYO) packages an intent (e.g., `EXECUTE_BASH`) into a `GovernanceEnvelope`. This envelope is encoded as **canonical JSON (protojson)**—the mandatory wire format for all client-facing surfaces.
 
-### 2. Activity Monitoring (Heartbeats)
-Operators maintain their `AVAILABLE` status by publishing periodic signals to their `heartbeat` channel. 
-- **Efficiency**: Clients use a single **Pattern Subscription** (`heartbeat:*`) to observe all active Operators simultaneously.
-- **Resource Tracking**: Heartbeats contain real-time CPU, Memory, and Disk metrics used for task scheduling and fleet monitoring.
+### 2. Dispatch
+The JSON envelope is published to the Operator's command channel: `cmd:{operator_id}:{operator_session_id}`.
 
-### 3. Command Orchestration
-The primary function of the platform is the delivery and execution of commands:
-- **Dispatch**: A client publishes UAP JSON envelope bytes to the Operator's `cmd` channel.
-- **Execution**: The Operator executes the typed payload and publishes UAP JSON result bytes back to the `results` channel.
-- **Completion**: The client matches the `execution_id` and processes the result.
+### 3. Verification (The Fail-Closed Gate)
+Upon receipt, the Operator's `PubSubCommandService` performs strict validation:
+- **L1 Technical Bedrock**: Checks for forbidden patterns and blacklisted commands.
+- **L2 Consensus (Tribunal)**: Verifies ED25519 signatures from trusted signers.
+- **L3 Authorization (Approval)**: Verifies human presence (WebAuthn) or auto-approval policy.
+
+If any check fails, or if the `TransactionVerifier` is unavailable, the transaction is rejected immediately.
+
+### 4. Execution & Receipt
+The `Warden` service acts as the final execution boundary. Only after successful verification does the `Warden` execute the payload. It then emits a **Signed Action Receipt** and publishes the results.
+
+### 5. Results Delivery
+Execution output (stdout, stderr, exit codes) is published back to the client via the `results:{operator_id}:{operator_session_id}` channel as a JSON-encoded `GovernanceEnvelope`.
 
 ---
 
 ## Channel Taxonomy
 
+Canonical prefixes and formats are defined in `@/shared/constants/channels.json`. 
+
 ### Per-Operator-Session Channels
-Canonical format: `{prefix}:{operator_id}:{operator_session_id}`
+Format: `{prefix}:{operator_id}:{operator_session_id}`
 
 | Prefix | Source | Destination | Purpose |
 | :--- | :--- | :--- | :--- |
-| `cmd` | Client | `g8eo` | Command delivery and system control requests. |
-| `results` | `g8eo` | Client | Return of stdout, stderr, exit codes, and file artifacts. |
-| `heartbeat` | `g8eo` | Client | Signal of life and resource utilization. |
+| `cmd` | Client | `g8eo` | Inbound mutations and control requests. |
+| `results` | `g8eo` | Client | Outbound stdout, stderr, and artifacts. |
+| `heartbeat` | `g8eo` | Client | Signal of life and resource utilization metrics. |
 
 ### Platform Broadcast Channels
-Broadcasting system-wide state changes to all listeners (primarily for the UI).
+Broadcasting system-wide state changes to all authorized listeners.
 
 | Channel | Purpose |
 | :--- | :--- |
-| `operator_heartbeats` | Aggregated stream of all heartbeats for dashboard monitoring. |
+| `operator_heartbeats` | Aggregated stream of all heartbeats for fleet monitoring. |
 | `sse_events` | Real-time event stream for browser-based UI updates. |
-| `system_events` | High-priority system notifications (e.g., config changes, outages). |
-| `g8eo_results` | **Deprecated**. Use per-session `results` channels. |
+| `system_events` | High-priority system notifications. |
 
 ---
 
-## Governance Envelope & Protocol
+## Wire Format & Governance
 
-All inter-component communication is governed by the **Governance Envelope** protocol defined in `@/shared/proto/common.proto`.
+### Canonical JSON
+As of v0.3.0, **JSON is the canonical wire format** for the `GovernanceEnvelope`. This ensures compatibility with A2A (Agent2Agent) protocols, MCP (Model Context Protocol), and LLM tool-calling ecosystems.
 
-### Why the Envelope?
-The envelope provides a cryptographic and technical contract that separates routing from logic:
-- **Identity Binding**: Every message is bound to an `operator_id`, `operator_session_id`, and `investigation_id`.
-- **State Integrity**: Includes a `state_merkle_root` for BFT verification, ensuring commands are based on the latest fleet state.
-- **Governance Metadata**: Carries L1/L2/L3 metadata required for compliance and safety.
-- **Type Safety**: Inner payloads are strictly typed `operator.proto` messages, eliminating parsing ambiguity.
+### Signing Invariant
+Identity and integrity are maintained through a deterministic `transaction_hash` computed from normalized envelope fields. The wire encoding is irrelevant to security because the verifier enforces that the `id` matches the computed hash.
 
----
-
-## Governance & Safety
-
-Pub/Sub is the primary channel for governed client-to-operator communication. This provides a critical security boundary:
-
-### 1. No Inbound TCP
-Operators only require outbound WSS connectivity to the platform. No ports are opened on the target host, significantly reducing the attack surface.
-
-### 2. 3-Layer Validation Hierarchy
-- **L1 Technical Bedrock**: Hard gates (e.g., `sudo`, `su`) enforced by code validators via Protobuf reflection.
-- **L2 Consensus (Tribunal)**: 5-agent plurality verification. Signatures are verified with trusted ED25519 signer keys.
-- **L3 Authorization (Approval)**: Human-in-the-loop by default. Auto-approval is authorization metadata and never bypasses L1 or L2.
-
-### 3. Audit & Transparency
-Every command envelope carries correlation fields and governance evidence. This ensures that every action taken on an endpoint is attributable to a specific human intent, AI consensus, and technical gate.
+### Fail-Closed Design
+- **Missing IDs**: Any envelope missing a `message_id` or `operator_session_id` is rejected.
+- **Unknown Types**: If no handler is registered for an `event_type`, the message is dropped.
+- **Missing Verifiers**: If the `TransactionVerifier` or `Warden` is nil, the service rejects all inbound commands.
 
 ---
 
 ## Technical Invariants
 
-### 1. Single Source of Truth
-All channel prefixes and segment counts are defined in `@/shared/constants/channels.json`. 
-- **Never hand-roll**: Do not use string interpolation.
-- **Use typed wrappers**: Python uses `OperatorChannel` in `@/components/g8ee/app/constants/channels.py`. Go uses constructors in `components/g8eo/constants/channels.go`.
+### 1. Separation of Concerns
+- **Substrate (g8eo)**: Owns the broker, identity, and governance gates.
+- **Application Layer**: Consumers of the protocol (e.g., `g8ed`, `g8ee`) have no privileged access and must use the same public protocol surface as BYO clients.
 
-### 2. Bounded Parsing
-The `operator_session_id` may contain the separator character (`:`). To prevent data loss, always use a **bounded split** with a maximum of 2 splits when parsing a 3-segment channel.
-```python
-# Canonical parsing logic in g8ee
-parts = channel.split(":", 2) # Ensures the session ID remains intact
+### 2. Single Source of Truth
+All channel logic must use the constants in `@/shared/constants/channels.json`. 
+- **Go**: Use constructors in `components/g8eo/internal/constants/channels.go`.
+- **Python**: Use `OperatorChannel` in `components/g8ee/app/constants/channels.py`.
+
+### 3. Bounded Parsing
+The `operator_session_id` may contain separators. Always use a **bounded split** with a maximum of 2 splits when parsing 3-segment channels to prevent data loss.
+
+```go
+// Canonical Go parsing
+parts := strings.SplitN(channel, ":", 3)
 ```
 
-### 3. Resource Management
-- **Refcounted Subscriptions**: The `PubSubClient` tracks how many services are interested in a channel. A channel is only physically `UNSUBSCRIBE`d from the broker when its local refcount reaches zero.
-- **Auto-Cleanup**: `SessionAuthListener` enforces a 300s TTL on ephemeral auth listeners to prevent memory leaks.
-- **Fail-Closed Behavior**: Envelopes missing an ID or carrying malformed payloads are rejected at the dispatcher level before reaching any service handlers.
+### 4. Zero-Trust Networking
+Operators only require outbound WSS connectivity to the platform. No inbound ports are opened, and all inputs are distrusted until verified by the 3-layer governance hierarchy.

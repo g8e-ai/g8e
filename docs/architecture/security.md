@@ -8,14 +8,14 @@ parent: Architecture
 Last Updated: 2026-05-13
 Version: v0.2.5
 
-g8e is a Zero-Trust Operator/protocol substrate for secure infrastructure operations. Security is not an "add-on" but the core constraint: the platform assumes the AI control plane is potentially adversarial or error-prone and enforces safety at the infrastructure level through a 3-layer governance hierarchy and a unified protocol architecture.
+The **g8e Protocol** is a Zero-Trust substrate for human-verified action by autonomous systems. Security is not an "add-on" but the core constraint: the protocol assumes the AI control plane is potentially adversarial or error-prone and enforces safety on the host through a 3-layer governance hierarchy and a unified envelope architecture.
 
-The platform is explicitly split into a mandatory **Substrate** (g8eo/Operator) and optional **Application-Layer Adapters** (g8ed/Dashboard, g8ee/Engine). The Substrate owns all security, trust, and execution responsibilities.
+The platform is split into the protocol substrate, an **Operator** role (with `g8eo` as the reference Go implementation), and optional reference application components (`g8ed`/Dashboard, `g8ee`/Engine). The Operator owns all security, trust, and execution responsibilities on the host; the application layer holds no privileged trust.
 
 ## Bedrock Principles
 
 1.  **Proof of Human Presence (PHP)**: The AI proposes; the human signs. No state-changing operation executes without an explicit, hardware-bound signature (Passkey/WebAuthn) appended to the transaction envelope.
-2.  **Substrate Sovereignty**: The Operator (`g8eo`) is the mandatory substrate. It is the final arbiter of execution, enforcing hard gates and protocol invariants locally on the target host.
+2.  **Operator Sovereignty**: A conforming Operator (reference: `g8eo`) is the final arbiter of execution. It enforces hard gates and protocol invariants locally on the target host. No client — bundled or BYO — may bypass it.
 3.  **Protocol-First Zero Trust**: No component or connection is implicitly trusted. Every request is carried by a Protobuf `GovernanceEnvelope` that binds identity, context, and cryptographic governance evidence.
 4.  **Fail-Closed Invariants**: Malformed envelopes, invalid signatures, or stale state roots result in immediate rejection. The system never "fails open".
 
@@ -79,7 +79,27 @@ g8e operates its own internal PKI anchored in `.g8e/pki`:
 -   **Revocation**: Strict enforcement of certificate revocation lists (CRLs).
 
 ### Secrets Management
-Authoritative secrets are stored in `.g8e/secrets` and managed via a dedicated `Vault` service:
+
+Authoritative secrets are stored in `.g8e/secrets` and managed via a dedicated `Vault` service.
+
+#### Platform Secret Seeding
+
+The Operator binary handles the seeding and initialization of platform secrets during its first boot or enrollment.
+
+1. **Satellite Seeding (via Device Token)**:
+   - Use `g8e.operator -D <device_link_token> -e <endpoint>` to authenticate.
+   - The token is validated by the Hub, which issues a short-lived certificate and identity.
+   - The Operator uses these to bootstrap its local configuration and unlock its vault.
+
+2. **Hub Seeding (Listen Mode)**:
+   - When running with `--listen`, the Operator generates core platform secrets if they are missing from `.g8e/pki` or the database.
+   - **Secrets Generated**: `session_encryption_key`, `auditor_hmac_key`.
+   - **Storage**: Secrets are saved to the SQLite `documents` table and written to the `--secrets-dir` (default: `.g8e/secrets`).
+   - **Bootstrapping Apps**: A `bootstrap_digest.json` manifest is written. Application-layer adapters (g8ed, g8ee) can read this manifest to discover endpoints and trust roots, but they never gain access to the raw underlying secrets.
+
+3. **Out-of-Band Keys**:
+   - API keys can be provided directly via the `-k` flag, the `G8E_OPERATOR_API_KEY` environment variable, or an interactive prompt.
+
 -   **Encrypted at Rest**: Sensitive data (audit logs, secrets) is encrypted using **AES-256-GCM**.
 -   **No Secret Mounts**: Application-layer adapters (g8ed, g8ee) do not have access to substrate secrets.
 -   **Tamper Evidence**: Startup checks verify SHA-256 digests of all secret material.

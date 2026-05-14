@@ -5,10 +5,19 @@ parent: Components
 
 # g8ee
 
-Last Updated: 2026-05-11
+Last Updated: 2026-05-13
 Version: v0.2.4
 
-g8ee is the AI engine for the g8e platform. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, featuring human-in-the-loop safety controls, data sovereignty, and a multi-provider LLM abstraction layer.
+g8ee is the **optional reference AI engine** of the g8e platform. It is one concrete application-layer adapter built on top of the [g8e Protocol](../architecture/protocol.md); the protocol substrate (`g8eo`, the reference Operator) is the only mandatory component. g8ee demonstrates how a Tribunal-based, multi-provider LLM reasoning system can act as a **Layer 2 (Consensus) producer** that emits typed, signed `GovernanceEnvelope` (UAP) transactions to a conforming Operator for verification and execution.
+
+If you are building a BYO client, you do not need g8ee — anything that produces protocol-conformant transactions is interchangeable with it. g8ee is shipped in-tree as the first reference consumer of that same public contract.
+
+## Position in the Platform
+
+- **Mandatory substrate**: `g8eo` Operator (Hub mode via `--listen`, Satellite mode on managed hosts). Owns L1/L2/L3 verification, PKI/mTLS, audit, and Warden execution.
+- **Optional reference application layer**: `g8ee` (this component, AI engine / L2 producer) and `g8ed` (dashboard adapter / browser BYO client). Both consume the Operator protocol surface and have no privileged substrate role.
+- **Default start (`./g8e platform start`)**: Operator only. g8ee is started explicitly via `./g8e platform start --with-apps` or `./g8e apps start g8ee`.
+- **Wire format**: canonical JSON (protojson) `GovernanceEnvelope` on all client-facing surfaces (HTTP, pub/sub, receipts). Signing is computed over a deterministic transaction hash; wire encoding is independent of the security invariant.
 
 ---
 
@@ -76,23 +85,26 @@ g8ee is a Python/FastAPI service. It follows a strict service hierarchy to ensur
 
 ```mermaid
 flowchart LR
-    subgraph Hub ["Control Plane"]
-        direction LR
-        subgraph App ["Application Layer"]
-            direction TB
-            g8ed["g8ed<br/>Dashboard & Gateway"]
-            g8ee["g8ee<br/>AI Engine"]
-            g8ee --> g8ed
-        end
-        subgraph Data ["Data Layer"]
-            operator[("operator<br/>SQLite/KV/PubSub")]
-        end
-        g8ed <--> operator
-        g8ee <--> operator
+    Client((BYO Client<br/>Browser / CLI / Agent))
+
+    subgraph Substrate ["Mandatory Substrate"]
+        Operator["g8eo (Hub: --listen)<br/>Protocol enforcement, PKI/mTLS,<br/>Document/KV/Blob/PubSub, LFAA"]
     end
 
-    Browser((Browser)) -- "HTTPS / SSE" --> g8ed
+    subgraph App ["Optional Reference Application Layer"]
+        direction TB
+        g8ee["g8ee<br/>AI Engine / L2 Producer"]
+        g8ed["g8ed<br/>Dashboard Adapter"]
+    end
+
+    Client -- "TLS 1.3 / mTLS" --> Operator
+    Client -. "HTTPS / SSE" .-> g8ed
+    g8ed <--> Operator
+    g8ee <--> Operator
+    g8ed <-. "internal HTTP<br/>(SSE relay, optional)" .-> g8ee
 ```
+
+g8ee depends only on the Operator's public protocol surface (DB / KV / PubSub / Blob over mTLS, plus canonical-JSON `GovernanceEnvelope` on pub/sub). Its historical internal-HTTP coupling to `g8ed` (SSE push, intent forwarding) is part of the optional dashboard adapter path and is not required for BYO clients.
 
 ### Data Access Hierarchy
 1. **Clients**: Handle raw transport/protocol (e.g., `DBClient`, `PubSubClient`, `BlobClient`).
@@ -788,8 +800,8 @@ For complete schema DDL, exact table/column definitions, vault encryption detail
 
 Sentinel is the platform-wide protector that runs on both the AI Engine (`g8ee`) and the Operator (`g8eo`), providing multiple layers of security for the user's remote systems and data.
 
-- **AI Engine Side (`g8ee`)** — Performs **ingress scrubbing** as a redundant layer of protection for all Operator data (command results, file contents) before it is transmitted to any model provider. It also scrubs sensitive data from user messages (27 patterns).
-- **Operator Side (`g8eo`)** — Performs **pre-execution threat detection** (46 MITRE ATT&CK-mapped categories) to block dangerous commands on the host, and **egress scrubbing** to ensure raw sensitive data never leaves the system of record.
+- **AI Engine Side (`g8ee`)** — Performs **ingress scrubbing** as a redundant layer of protection for all Operator data (command results, file contents) before it is transmitted to any model provider. It also scrubs sensitive data from user messages.
+- **Operator Side (`g8eo`)** — Performs **pre-execution threat detection** (MITRE ATT&CK-mapped categories) to block dangerous commands on the host, and **egress scrubbing** to ensure raw sensitive data never leaves the system of record.
 - **`sentinel_mode`** — Controls whether the AI reads from the scrubbed vault or the raw vault. The Python bool is converted to the wire string format at the pub/sub boundary. See [architecture/storage.md — Sentinel Mode and Vault Mode](../architecture/storage.md#sentinel-mode-and-vault-mode) for details.
 
 Sentinel ensures that sensitive information is replaced with safe placeholders (e.g., `[AWS_KEY]`, `[EMAIL]`) across the entire pipeline, standing guard on both the operator and the application side.

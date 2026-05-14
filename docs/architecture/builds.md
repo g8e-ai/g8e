@@ -14,10 +14,11 @@ This document explains the g8e component dependency chain, the lifecycle of a bu
 
 ## Architecture Philosophy
 
-g8e is architected as a clean split between a mandatory **Substrate** and an optional **Application Layer**.
+g8e is architected as a clean split between the **g8e Protocol** (the substrate), an **Operator** that implements it on a host, and an optional **Application Layer**.
 
-- **Substrate (Mandatory)**: The Operator (`g8eo`) in `--listen` mode is the foundational service. It generates the platform CA and foundational secrets and provides the protocol API.
-- **Application Layer (Optional)**: Optional adapters like the Dashboard (`g8ed`) and Engine (`g8ee`) consume the substrate's protocol surface.
+- **Protocol (Substrate)**: Shared `.proto` schemas plus the UAP JSON wire contract; the source of truth for what every Operator and client must honor.
+- **Reference Operator (`g8eo`)**: In `--listen` mode it is the foundational service for the bundled deployment — generates the platform CA and foundational secrets and exposes the public protocol API. Replaceable by any conforming Operator.
+- **Reference Application Layer (Optional)**: Reference adapters like the Engine (`g8ee`) and Dashboard (`g8ed`) consume the public protocol surface on equal footing with any BYO client.
 - **Host-Native Execution**: Core components run as native processes on the host.
 - **Zero-Config Discovery**: Services use a standardized local runtime directory (`.g8e/`) for discovery and configuration sharing.
 
@@ -27,7 +28,7 @@ g8e is architected as a clean split between a mandatory **Substrate** and an opt
 
 | Component | Role | Runtime Environment | Build Strategy |
 | :--- | :--- | :--- | :--- |
-| **Operator (g8eo)** | **Substrate**: Persistence, Pub/Sub, Root of Trust | Host Go binary | Native Go build via `Makefile` |
+| **Operator (g8eo)** | **Reference Operator**: Persistence, Pub/Sub, Root of Trust | Host Go binary | Native Go build via `Makefile` |
 | **Engine (g8ee)** | **Optional Adapter**: AI Backend & Workflow Orchestration | Python 3.12 Venv | `pip install` into local `.venv` |
 | **Dashboard (g8ed)** | **Optional Adapter**: Web Gateway & GUI | Node 22 | `npm install` for local `node_modules` |
 
