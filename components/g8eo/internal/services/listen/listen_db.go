@@ -433,9 +433,13 @@ func (s *ListenDBService) DocQuery(collection string, filters []models.DocFilter
 		}
 
 		// Identifier is validated, dir is whitelisted to ASC/DESC.
-		// Use parameterized approach to satisfy CodeQL.
-		query.WriteString(" ORDER BY json_extract(data, ?) ")
-		query.WriteString(dir)
+		// Use validated hardcoded branch to satisfy CodeQL sql-injection rule.
+		query.WriteString(" ORDER BY json_extract(data, ?)")
+		if dir == "DESC" {
+			query.WriteString(" DESC")
+		} else {
+			query.WriteString(" ASC")
+		}
 		args = append(args, "$."+orderField)
 	}
 
