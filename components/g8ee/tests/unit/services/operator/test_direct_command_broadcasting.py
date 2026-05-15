@@ -42,7 +42,7 @@ def _build_execution_service() -> tuple[OperatorExecutionService, OperatorPubSub
     # We use __new__ to avoid full __init__ complexity
     svc = OperatorExecutionService.__new__(OperatorExecutionService)
     svc._pubsub_service = pubsub_service
-    svc._client_event_service = event_service
+    svc._event_service = event_service
     svc._approval_service = None
     svc._settings = None
     svc._operator_data_service = None

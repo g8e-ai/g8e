@@ -102,10 +102,10 @@ async def test_stream_executor_internal_flow(
     executor = tool_service.stream_executor
 
     # Mock internal dependencies
-    from app.models.client_client import OperatorLinkResponse
+    from app.models.internal_api import OperatorLinkResponse
     executor._internal_http_client.generate_operator_link = AsyncMock(return_value=OperatorLinkResponse(
         success=True,
-        token="dlk_test_token"
+        link_token="dlk_test_token"
     ))
     executor._approval_service.request_stream_approval = AsyncMock(return_value=ApprovalResult(
         approved=True,

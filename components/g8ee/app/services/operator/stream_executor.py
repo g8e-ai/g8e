@@ -69,7 +69,7 @@ class OperatorStreamExecutor:
                 organization_id=g8e_context.organization_id,
                 context=g8e_context
             )
-            device_token = link_response.token
+            device_token = link_response.link_token
             if not device_token:
                 raise ExternalServiceError(
                     "Failed to mint device link token: no token in response",

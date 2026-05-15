@@ -29,7 +29,7 @@ ALLOW_LIST = {
     "app/services/ai/reputation_service.py",          # Writer (Artifact A)
     "app/services/ai/tool_service.py",               # Exposer for tribunal
     "app/services/ai/agent_tool_loop.py",            # Hook point for stake resolution
-    "app/services/infra/client_event_service.py",      # SSE emission
+    "app/services/infra/event_service.py",      # SSE emission
     "app/models/reputation.py",                      # Model definitions
     "app/models/agents/tribunal.py",                 # Result models
     "app/models/tribunal_commands.py",               # Auditor model

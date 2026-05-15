@@ -154,7 +154,7 @@ class OperatorPortService:
             await self.pubsub_service.register_operator_session(operator_id, operator_session_id)
 
             # Notify start
-            await self.execution_service.client_event_service.publish_command_event(
+            await self.execution_service.event_service.publish_command_event(
                 EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED,
                 CommandExecutingBroadcastEvent(
                     command=f"port_check {host}:{port} ({protocol})",
@@ -177,7 +177,7 @@ class OperatorPortService:
                 logger.warning("[PORT_CHECK] %s", timeout_error)
 
                 # Notify failure (timeout)
-                await self.execution_service.client_event_service.publish_command_event(
+                await self.execution_service.event_service.publish_command_event(
                     EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
                     CommandResultBroadcastEvent(
                         execution_id=exec_id,
@@ -216,7 +216,7 @@ class OperatorPortService:
                     else EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED
                 )
 
-                await self.execution_service.client_event_service.publish_command_event(
+                await self.execution_service.event_service.publish_command_event(
                     completion_event_type,
                     CommandResultBroadcastEvent(
                         execution_id=exec_id,

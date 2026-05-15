@@ -32,7 +32,7 @@ from app.models.agents.tribunal import (
 from app.services.ai.generator import generate_command
 from tests.fakes.agent_helpers import (
     make_agent_run_args,
-    make_client_event_service,
+    make_event_service,
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
@@ -50,7 +50,7 @@ class TestTribunalApprovalCorrelation:
             web_session_id="correlation-test-sess-001",
             user_id="correlation-test-user-001",
         )
-        event_svc = make_client_event_service()
+        event_svc = make_event_service()
 
         from app.constants import TribunalMember
         mock_candidates = [
@@ -78,7 +78,7 @@ class TestTribunalApprovalCorrelation:
                 request="list files in current directory",
                 guidelines="show hidden files too",
                 operator_context=None,
-                client_event_service=event_svc,
+                event_service=event_svc,
                 web_session_id=inputs.web_session_id,
                 user_id=inputs.user_id,
                 case_id=inputs.case_id,
@@ -118,7 +118,7 @@ class TestTribunalApprovalCorrelation:
             web_session_id="web-session-test-sess-001",
             user_id="web-session-test-user-001",
         )
-        event_svc = make_client_event_service()
+        event_svc = make_event_service()
 
         with patch("app.services.ai.generator._run_generation_stage", new_callable=AsyncMock) as mock_gen, \
              patch("app.services.ai.generator.TribunalAuditor") as mock_auditor_class:
@@ -143,7 +143,7 @@ class TestTribunalApprovalCorrelation:
                 request="list files",
                 guidelines="",
                 operator_context=None,
-                client_event_service=event_svc,
+                event_service=event_svc,
                 web_session_id=inputs.web_session_id,
                 user_id=inputs.user_id,
                 case_id=inputs.case_id,

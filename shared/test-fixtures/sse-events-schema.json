@@ -20,9 +20,44 @@
           "web_session_id"
         ],
         "properties": {
-          "web_session_id": {
+          "timestamp": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "UTC timestamp of the event"
+          },
+          "tool_name": {
             "type": "string",
-            "description": "Browser session identifier"
+            "description": "Canonical name of the tool"
+          },
+          "status": {
+            "type": "string",
+            "description": "Lifecycle status of the tool call (started, completed, failed)"
+          },
+          "display_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_icon": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "investigation_id": {
             "type": "string",
@@ -132,9 +167,30 @@
             "type": "boolean",
             "description": "Success flag for command events"
           },
-          "agent_mode": {
+          "finish_reason": {
             "type": "string",
-            "description": "Agent mode for LLM iteration started"
+            "description": "LLM finish reason"
+          },
+          "has_citations": {
+            "type": "boolean"
+          },
+          "token_usage": {
+            "type": "object"
+          },
+          "grounding_metadata": {
+            "type": "object"
+          },
+          "turn": {
+            "type": "number"
+          },
+          "thinking": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "action_type": {
+            "type": "string"
           },
           "request": {
             "type": "string",

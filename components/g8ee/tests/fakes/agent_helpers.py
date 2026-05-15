@@ -242,7 +242,7 @@ def patch_stream_response(agent: g8eEngine, chunks: list[StreamChunkFromModel]) 
 async def collect_stream_from_model_chunks(
     agent: g8eEngine,
     inputs: AgentInputs,
-    client_event_service: Any = None,
+    event_service: Any = None,
     llm_provider: Any = None,
 ) -> list[StreamChunkFromModel]:
     """Consume agent._stream_with_tool_loop and return all yielded chunks."""
@@ -253,14 +253,14 @@ async def collect_stream_from_model_chunks(
     chunks: list[StreamChunkFromModel] = []
     async for chunk in agent._stream_with_tool_loop(
         inputs=inputs,
-        client_event_service=client_event_service or make_client_event_service(),
+        event_service=event_service or make_event_service(),
         llm_provider=llm_provider,
     ):
         chunks.append(chunk)
     return chunks
 
 
-def make_client_event_service():
+def make_event_service():
     """Build a mock EventService for client SSE publishing."""
     from app.models.events import SessionEvent
 

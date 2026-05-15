@@ -196,3 +196,20 @@ class FakeDBClient:
 
     def is_healthy(self) -> bool:
         return True
+
+
+class FakeG8eClient:
+    """In-memory fake for g8e operator HTTP client."""
+
+    def __init__(self):
+        self.push_sse_event = AsyncMock()
+        self.grant_intent = AsyncMock()
+        self.revoke_intent = AsyncMock()
+        self.get = AsyncMock()
+        self.post = AsyncMock()
+        self.put = AsyncMock()
+        self.delete = AsyncMock()
+        self.close = AsyncMock()
+
+    def is_healthy(self):
+        return True

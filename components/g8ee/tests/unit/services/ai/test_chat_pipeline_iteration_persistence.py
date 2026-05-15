@@ -69,7 +69,7 @@ HIGH_CONFIDENCE_COMPLEX_TRIAGE = TriageResult(
 
 def _make_pipeline() -> ChatPipelineService:
     svc = ChatPipelineService.__new__(ChatPipelineService)
-    svc.client_event_service = FakeEventService()
+    svc.event_service = FakeEventService()
     svc.g8e_agent = MagicMock()
     svc.investigation_service = MagicMock()
     svc.investigation_service.investigation_data_service.add_chat_message = AsyncMock(return_value=True)

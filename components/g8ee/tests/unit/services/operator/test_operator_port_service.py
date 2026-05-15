@@ -77,7 +77,7 @@ def _make_service(
     execution = FakeExecutionService(
         resolved_operator=operator,
         resolve_error=resolve_error,
-        client_event_service=event_service,
+        event_service=event_service,
         pubsub_service=pubsub
     )
     service = OperatorPortService(

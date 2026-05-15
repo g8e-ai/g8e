@@ -76,7 +76,7 @@ def execution_service(
     return OperatorExecutionService(
         pubsub_service=mock_pubsub,
         approval_service=mock_approval,
-        client_event_service=mock_event_service,
+        event_service=mock_event_service,
         settings=mock_settings,
         ai_response_analyzer=mock_ai_analyzer,
         operator_data_service=mock_operator_data,
@@ -87,7 +87,7 @@ class TestOperatorExecutionServiceProperties:
     def test_properties(self, execution_service, mock_pubsub, mock_approval, mock_event_service, mock_operator_data, mock_ai_analyzer, mock_investigation):
         assert execution_service.pubsub_service == mock_pubsub
         assert execution_service.approval_service == mock_approval
-        assert execution_service.client_event_service == mock_event_service
+        assert execution_service.event_service == mock_event_service
         assert execution_service.operator_data_service == mock_operator_data
         assert execution_service.ai_response_analyzer == mock_ai_analyzer
         assert execution_service.investigation_service == mock_investigation

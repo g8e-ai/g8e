@@ -19,7 +19,7 @@ import pytest
 
 from app.constants import EventType
 from app.services.ai.chat_task_manager import ChatTaskManager
-from app.services.infra.client_event_service import EventService
+from app.services.infra.event_service import EventService
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
@@ -124,7 +124,7 @@ class TestCancelBehaviour:
             web_session_id="web-1",
             user_id="user-1",
             case_id="case-1",
-            client_event_service=AsyncMock()
+            event_service=AsyncMock()
         )
 
         await asyncio.sleep(0.01)
@@ -139,7 +139,7 @@ class TestCancelBehaviour:
             web_session_id="web-1",
             user_id="user-1",
             case_id="case-1",
-            client_event_service=AsyncMock()
+            event_service=AsyncMock()
         )
         assert result is False
 
@@ -159,13 +159,13 @@ class TestCancelBehaviour:
             web_session_id="web-1",
             user_id="user-1",
             case_id="case-1",
-            client_event_service=AsyncMock()
+            event_service=AsyncMock()
         )
         assert result is False
 
     async def test_cancel_publishes_stop_event(self, manager, task_tracker):
         investigation_id = "inv-123"
-        client_event_service = _make_event_service()
+        event_service = _make_event_service()
 
         async def long_task():
             try:
@@ -182,15 +182,15 @@ class TestCancelBehaviour:
             web_session_id="web-session-456",
             user_id="user-456",
             case_id="case-test-123",
-            client_event_service=client_event_service,
+            event_service=event_service,
         )
 
         await asyncio.sleep(0.01)
 
         assert result is True
         assert task.cancelled()
-        client_event_service.publish.assert_called_once()
-        event = client_event_service.publish.call_args[0][0]
+        event_service.publish.assert_called_once()
+        event = event_service.publish.call_args[0][0]
         assert event.event_type == EventType.LLM_CHAT_ITERATION_STOPPED
         assert event.payload.reason == "Test cancellation"
         from datetime import datetime
@@ -200,8 +200,8 @@ class TestCancelBehaviour:
 
     async def test_cancel_handles_event_publish_failure_gracefully(self, manager, task_tracker):
         investigation_id = "inv-123"
-        client_event_service = _make_event_service()
-        client_event_service.publish.side_effect = Exception("publish failed")
+        event_service = _make_event_service()
+        event_service.publish.side_effect = Exception("publish failed")
 
         async def long_task():
             try:
@@ -218,7 +218,7 @@ class TestCancelBehaviour:
             web_session_id="web-session-789",
             user_id="user-789",
             case_id="case-test-789",
-            client_event_service=client_event_service,
+            event_service=event_service,
         )
 
         await asyncio.sleep(0.01)
@@ -226,7 +226,7 @@ class TestCancelBehaviour:
         assert result is True
         assert task.cancelled()
 
-    async def test_cancel_warns_when_no_client_event_service(self, manager, caplog, task_tracker):
+    async def test_cancel_warns_when_no_event_service(self, manager, caplog, task_tracker):
         investigation_id = "inv-123"
 
         async def long_task():
@@ -245,18 +245,18 @@ class TestCancelBehaviour:
                 web_session_id="web-session-123",
                 user_id="user-123",
                 case_id="case-123",
-                client_event_service=None,
+                event_service=None,
             )
 
         await asyncio.sleep(0.01)
 
         assert result is True
         assert task.cancelled()
-        assert any("no client_event_service" in r.message for r in caplog.records)
+        assert any("no event_service" in r.message for r in caplog.records)
 
     async def test_cancel_warns_when_no_web_session_id(self, manager, caplog, task_tracker):
         investigation_id = "inv-123"
-        client_event_service = _make_event_service()
+        event_service = _make_event_service()
 
         async def long_task():
             try:
@@ -274,14 +274,14 @@ class TestCancelBehaviour:
                 web_session_id=None,
                 user_id="user-123",
                 case_id="case-123",
-                client_event_service=client_event_service,
+                event_service=event_service,
             )
 
         await asyncio.sleep(0.01)
 
         assert result is True
         assert task.cancelled()
-        client_event_service.publish.assert_not_called()
+        event_service.publish.assert_not_called()
         assert any("no web_session_id" in r.message for r in caplog.records)
 
 
@@ -305,7 +305,7 @@ class TestConcurrentTaskHandling:
         assert manager._active_tasks["inv-3"] == task3
 
     async def test_cancel_one_doesnt_affect_others(self, manager, task_tracker):
-        client_event_service = _make_event_service()
+        event_service = _make_event_service()
 
         async def long_task():
             try:
@@ -325,7 +325,7 @@ class TestConcurrentTaskHandling:
             web_session_id="web-session-1",
             user_id="user-1",
             case_id="case-test-1",
-            client_event_service=client_event_service,
+            event_service=event_service,
         )
         await asyncio.sleep(0.01)
 

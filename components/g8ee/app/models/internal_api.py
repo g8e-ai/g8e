@@ -381,3 +381,48 @@ class UserSettingsUpdateResponse(G8eBaseModel):
     """Response model for user settings update sync."""
     success: bool
     error: str | None = None
+
+
+# Client API response models for InternalHttpClient
+class SSEPushResponse(G8eBaseModel):
+    """Response for SSE event push to client."""
+    success: bool
+    listeners: int = 0
+    error: str | None = None
+
+
+class GrantIntentResponse(G8eBaseModel):
+    """Response for intent grant request."""
+    success: bool
+    error: str | None = None
+
+
+class IntentOperationResult(G8eBaseModel):
+    """Result of intent operation."""
+    success: bool
+    error: str | None = None
+
+
+class IntentRequestPayload(G8eBaseModel):
+    """Payload for intent request."""
+    operator_id: str
+    intent: str
+
+
+class RevokeIntentResponse(G8eBaseModel):
+    """Response for intent revoke request."""
+    success: bool
+    error: str | None = None
+
+
+class OperatorLinkResponse(G8eBaseModel):
+    """Response for operator device link generation."""
+    success: bool
+    link_token: str | None = None
+    error: str | None = None
+
+
+class OperatorLinkRequestPayload(G8eBaseModel):
+    """Payload for operator device link request."""
+    operator_id: str
+    user_id: str

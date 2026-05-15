@@ -12,9 +12,22 @@
     "type": "g8e.v1.ai.llm.chat.iteration.text.completed",
     "data": {
       "content": "Complete AI response text",
+      "finish_reason": "stop",
+      "has_citations": true,
+      "grounding_metadata": {
+        "grounding_used": true
+      },
+      "token_usage": {
+        "input_tokens": 100,
+        "output_tokens": 50,
+        "total_tokens": 150
+      },
+      "agent_mode": "g8e.operator.bound",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",
-      "web_session_id": "test-web-session-id"
+      "web_session_id": "test-web-session-id",
+      "user_id": "test-user-id",
+      "timestamp": "2026-05-15T12:00:00Z"
     }
   },
   "chat_iteration_failed": {
@@ -29,28 +42,40 @@
   "g8e_web_search_requested": {
     "type": "g8e.v1.ai.llm.tool.g8e.web.search.requested",
     "data": {
+      "tool_name": "g8e_web_search",
+      "status": "started",
+      "display_label": "Searching the web",
+      "display_icon": "search",
       "query": "test search query",
       "execution_id": "test-execution-id",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",
-      "web_session_id": "test-web-session-id"
+      "web_session_id": "test-web-session-id",
+      "user_id": "test-user-id",
+      "timestamp": "2026-05-15T12:00:00Z"
     }
   },
   "g8e_web_search_completed": {
     "type": "g8e.v1.ai.llm.tool.g8e.web.search.completed",
     "data": {
+      "tool_name": "g8e_web_search",
+      "status": "completed",
+      "display_label": "Searching the web",
+      "display_icon": "search",
       "query": "test search query",
       "results": [
         {
           "title": "Test Result",
-          "url": "https://example.com",
+          "link": "https://example.com",
           "snippet": "Test snippet"
         }
       ],
       "execution_id": "test-execution-id",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",
-      "web_session_id": "test-web-session-id"
+      "web_session_id": "test-web-session-id",
+      "user_id": "test-user-id",
+      "timestamp": "2026-05-15T12:00:05Z"
     }
   },
   "g8e_web_search_failed": {
@@ -67,22 +92,34 @@
   "g8e_investigation_query_requested": {
     "type": "g8e.v1.ai.llm.tool.g8e.investigation.query.requested",
     "data": {
+      "tool_name": "query_investigation_context",
+      "status": "started",
+      "display_label": "Querying investigation",
+      "display_icon": "database",
       "query": "test investigation query",
       "execution_id": "test-execution-id",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",
-      "web_session_id": "test-web-session-id"
+      "web_session_id": "test-web-session-id",
+      "user_id": "test-user-id",
+      "timestamp": "2026-05-15T12:00:10Z"
     }
   },
   "g8e_investigation_query_completed": {
     "type": "g8e.v1.ai.llm.tool.g8e.investigation.query.completed",
     "data": {
+      "tool_name": "query_investigation_context",
+      "status": "completed",
+      "display_label": "Querying investigation",
+      "display_icon": "database",
       "query": "test investigation query",
       "content": "Search results",
       "execution_id": "test-execution-id",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",
-      "web_session_id": "test-web-session-id"
+      "web_session_id": "test-web-session-id",
+      "user_id": "test-user-id",
+      "timestamp": "2026-05-15T12:00:12Z"
     }
   },
   "g8e_investigation_query_failed": {
@@ -99,20 +136,32 @@
   "g8e_command_constraints_requested": {
     "type": "g8e.v1.ai.llm.tool.g8e.command.constraints.requested",
     "data": {
+      "tool_name": "get_command_constraints",
+      "status": "started",
+      "display_label": "Checking constraints",
+      "display_icon": "shield-check",
       "execution_id": "test-execution-id",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",
-      "web_session_id": "test-web-session-id"
+      "web_session_id": "test-web-session-id",
+      "user_id": "test-user-id",
+      "timestamp": "2026-05-15T12:00:15Z"
     }
   },
   "g8e_command_constraints_completed": {
     "type": "g8e.v1.ai.llm.tool.g8e.command.constraints.completed",
     "data": {
+      "tool_name": "get_command_constraints",
+      "status": "completed",
+      "display_label": "Checking constraints",
+      "display_icon": "shield-check",
       "content": "constraint 1",
       "execution_id": "test-execution-id",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",
-      "web_session_id": "test-web-session-id"
+      "web_session_id": "test-web-session-id",
+      "user_id": "test-user-id",
+      "timestamp": "2026-05-15T12:00:16Z"
     }
   },
   "g8e_command_constraints_failed": {

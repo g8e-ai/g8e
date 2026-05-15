@@ -65,7 +65,7 @@ from app.models.agents.tribunal import (
 )
 from app.services.investigation.investigation_service import extract_operator_context_by_target, extract_single_operator_context
 from app.services.ai.tool_service import AIToolService
-from app.services.infra.client_event_service import EventService
+from app.services.infra.event_service import EventService
 from app.utils.ids import generate_command_execution_id
 from app.utils.safety import map_os_string_to_platform
 from app.utils.csv_commands import parse_command_csv
@@ -123,7 +123,7 @@ class TribunalInvoker:
         sage_request: SageOperatorRequest,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
-        client_event_service: EventService,
+        event_service: EventService,
         request_settings: G8eeUserSettings,
         tool_executor: AIToolService,
     ) -> tuple[ExecutorCommandArgs, CommandGenerationResult]:
@@ -168,7 +168,7 @@ class TribunalInvoker:
             request=request,
             guidelines=guidelines,
             operator_context=op_context,
-            client_event_service=client_event_service,
+            event_service=event_service,
             web_session_id=g8e_context.web_session_id or "",
             user_id=g8e_context.user_id or "",
             case_id=g8e_context.case_id or "",
@@ -308,7 +308,7 @@ async def orchestrate_tool_execution(
     tool_executor: AIToolService,
     investigation: EnrichedInvestigationContext,
     g8e_context: G8eHttpContext,
-    client_event_service: EventService,
+    event_service: EventService,
     request_settings: G8eeUserSettings,
 ) -> ToolCallResult:
     """
@@ -354,7 +354,7 @@ async def orchestrate_tool_execution(
                         sage_request=sage_request,
                         investigation=investigation,
                         g8e_context=g8e_context,
-                        client_event_service=client_event_service,
+                        event_service=event_service,
                         request_settings=request_settings,
                         tool_executor=tool_executor,
                     )
@@ -414,7 +414,7 @@ async def orchestrate_tool_execution(
 
                 for outcome in res.resolutions:
                     payload = StakeResolutionPayload.model_validate(outcome.model_dump())
-                    await client_event_service.publish_reputation_event(
+                    await event_service.publish_reputation_event(
                         EventType.REPUTATION_STATE_UPDATED,
                         payload,
                         g8e_context
@@ -422,7 +422,7 @@ async def orchestrate_tool_execution(
 
                     if outcome.slash_tier:
                         slash_event = getattr(EventType, f"REPUTATION_SLASH_TIER{outcome.slash_tier.value}")
-                        await client_event_service.publish_reputation_event(
+                        await event_service.publish_reputation_event(
                             slash_event,
                             payload,
                             g8e_context
@@ -477,7 +477,7 @@ async def execute_turn_tool_calls(
     g8e_context: G8eHttpContext,
     result_out: list[list[ToolCallResponse]],
     request_settings: G8eeUserSettings,
-    client_event_service: EventService,
+    event_service: EventService,
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """
     Execute all tool calls from one turn.
@@ -501,7 +501,7 @@ async def execute_turn_tool_calls(
             g8e_context,
             result_out,
             request_settings,
-            client_event_service,
+            event_service,
         ):
             yield chunk
     else:
@@ -513,7 +513,7 @@ async def execute_turn_tool_calls(
             g8e_context,
             result_out,
             request_settings,
-            client_event_service,
+            event_service,
         ):
             yield chunk
 
@@ -525,7 +525,7 @@ async def _process_single_tool_call(
     investigation: EnrichedInvestigationContext,
     g8e_context: G8eHttpContext,
     request_settings: G8eeUserSettings,
-    client_event_service: EventService,
+    event_service: EventService,
 ) -> ToolCallResult:
     """Helper to execute a single tool call with error handling."""
     try:
@@ -534,7 +534,7 @@ async def _process_single_tool_call(
             tool_executor=tool_executor,
             investigation=investigation,
             g8e_context=g8e_context,
-            client_event_service=client_event_service,
+            event_service=event_service,
             request_settings=request_settings,
         )
     except asyncio.CancelledError:
@@ -589,13 +589,13 @@ async def _execute_sequential(
     g8e_context: G8eHttpContext,
     result_out: list[list[ToolCallResponse]],
     request_settings: G8eeUserSettings,
-    client_event_service: EventService,
+    event_service: EventService,
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """Execute tool calls one by one."""
     responses: list[ToolCallResponse] = []
     for i, fc in enumerate(pending_tool_calls):
         tool_result = await _process_single_tool_call(
-            i, fc, tool_executor, investigation, g8e_context, request_settings, client_event_service
+            i, fc, tool_executor, investigation, g8e_context, request_settings, event_service
         )
 
         yield StreamChunkFromModel(
@@ -625,12 +625,12 @@ async def _execute_parallel(
     g8e_context: G8eHttpContext,
     result_out: list[list[ToolCallResponse]],
     request_settings: G8eeUserSettings,
-    client_event_service: EventService,
+    event_service: EventService,
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """Execute tool calls concurrently using asyncio.gather."""
     tasks = [
         _process_single_tool_call(
-            i, fc, tool_executor, investigation, g8e_context, request_settings, client_event_service
+            i, fc, tool_executor, investigation, g8e_context, request_settings, event_service
         )
         for i, fc in enumerate(pending_tool_calls)
     ]

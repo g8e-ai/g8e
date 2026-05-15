@@ -17,10 +17,8 @@ from app.clients.http_client import CircuitBreakerConfig, RetryConfig, HTTPClien
 from app.models.settings import G8eePlatformSettings
 from app.constants import (
     UNKNOWN_ERROR_MESSAGE,
-    CLIENT_CLIENT_FAILURE_THRESHOLD,
-    CLIENT_CLIENT_MAX_RETRIES,
-    CLIENT_CLIENT_RECOVERY_TIME,
-    CLIENT_CLIENT_TIMEOUT,
+    DEFAULT_HTTP_CLIENT_TIMEOUT,
+    DEFAULT_MAX_RETRIES,
     ComponentName,
     G8eHeaders,
     InternalApiPaths,
@@ -28,6 +26,7 @@ from app.constants import (
 from app.errors import ConfigurationError, NetworkError
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
 from app.models.http_context import G8eHttpContext
+from app.models.internal_api import (
     GrantIntentResponse,
     IntentOperationResult,
     IntentRequestPayload,
@@ -52,11 +51,11 @@ class InternalHttpClient:
         self._http: HTTPClient = HTTPClient(
             component_id=ComponentName.G8EE,
             base_url=self.client_url,
-            timeout=CLIENT_CLIENT_TIMEOUT,
-            retry_config=RetryConfig(max_retries=CLIENT_CLIENT_MAX_RETRIES),
+            timeout=DEFAULT_HTTP_CLIENT_TIMEOUT,
+            retry_config=RetryConfig(max_retries=DEFAULT_MAX_RETRIES),
             circuit_breaker_config=CircuitBreakerConfig(
-                failure_threshold=CLIENT_CLIENT_FAILURE_THRESHOLD,
-                recovery_time=CLIENT_CLIENT_RECOVERY_TIME,
+                failure_threshold=5,
+                recovery_time=60,
             ),
             auth_token="",
             api_key=settings.auth.g8e_api_key or "",

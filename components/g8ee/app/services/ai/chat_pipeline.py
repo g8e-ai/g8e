@@ -66,6 +66,10 @@ from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
 from app.services.data.agent_activity_data_service import AgentActivityDataService
 from app.models.agents.triage import TriageRequest
+from app.models.events import (
+    ChatErrorPayload,
+    TriageClarificationQuestionsPayload,
+)
 from app.utils.interrogation import extract_interrogation_questions
 
 logger = logging.getLogger(__name__)

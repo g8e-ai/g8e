@@ -112,7 +112,7 @@ from app.services.investigation.investigation_service import InvestigationServic
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.services.ai.title_generator import generate_case_title
-from app.services.infra.client_event_service import EventService
+from app.services.infra.event_service import EventService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.auth.api_key_service import ApiKeyService
 from app.services.auth.certificate_service import CertificateService
@@ -526,7 +526,7 @@ async def stop_ai_processing(
         web_session_id=web_session_id,
         user_id=g8e_context.user_id,
         case_id=g8e_context.case_id,
-        client_event_service=chat_pipeline.client_event_service,
+        event_service=chat_pipeline.event_service,
     )
 
     if cancelled:

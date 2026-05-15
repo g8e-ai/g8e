@@ -70,7 +70,7 @@ LOW_CONFIDENCE_TRIAGE_RESULT = TriageResult(
 
 def _make_pipeline() -> ChatPipelineService:
     svc = ChatPipelineService.__new__(ChatPipelineService)
-    svc.client_event_service = create_mock_event_service()
+    svc.event_service = create_mock_event_service()
     svc.g8e_agent = MagicMock()
     svc.g8e_agent.run_with_sse = AsyncMock()
     svc.investigation_service = MagicMock()
@@ -164,11 +164,11 @@ async def test_run_chat_exception_handler_publishes_iteration_failed():
     )
 
     # Verify ITERATION_FAILED was published
-    events = svc.client_event_service.published
+    events = svc.event_service.published
     failed_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_FAILED]
 
     assert len(failed_events) == 1
-    from app.models.client_client import ChatErrorPayload
+    from app.models.events import ChatErrorPayload
     assert isinstance(failed_events[0].payload, ChatErrorPayload)
     assert "Test error from _run_chat_impl" in failed_events[0].payload.error
 

@@ -18,8 +18,8 @@ import logging
 
 from app.constants import EventType
 from app.utils.timestamp import now
-from app.models.events import SessionEvent
-from app.services.infra.client_event_service import EventService
+from app.models.events import AiProcessingStoppedPayload, SessionEvent
+from app.services.infra.event_service import EventService
 
 logger = logging.getLogger(__name__)
 
@@ -89,13 +89,13 @@ class BackgroundTaskManager:
         web_session_id: str | None = None,
         user_id: str | None = None,
         case_id: str | None = None,
-        client_event_service: EventService | None = None,
+        event_service: EventService | None = None,
     ) -> bool:
         """Cancel active task for the given ID.
 
         Returns True if a task was cancelled, False if no active task existed.
-        Publishes AI_PROCESSING_STOPPED via client_event_service when both
-        web_session_id and client_event_service are provided.
+        Publishes AI_PROCESSING_STOPPED via event_service when both
+        web_session_id and event_service are provided.
         """
         async with self._task_lock:
             task = self._active_tasks.get(task_id)
@@ -114,9 +114,9 @@ class BackgroundTaskManager:
                 extra={"task_id": task_id, "reason": reason},
             )
 
-        if web_session_id and case_id and client_event_service:
+        if web_session_id and case_id and event_service:
             try:
-                await client_event_service.publish(
+                await event_service.publish(
                     SessionEvent(
                         event_type=EventType.LLM_CHAT_ITERATION_STOPPED,
                         payload=AiProcessingStoppedPayload(
@@ -131,9 +131,9 @@ class BackgroundTaskManager:
                 )
             except Exception as e:
                 logger.warning("Failed to send stop event: %s", e)
-        elif not client_event_service:
+        elif not event_service:
             logger.warning(
-                "Cannot send ai.processing_stopped event - no client_event_service provided",
+                "Cannot send ai.processing_stopped event - no event_service provided",
                 extra={"task_id": task_id},
             )
         elif not web_session_id:

@@ -155,7 +155,7 @@ async def generate_command(
     request: str,
     guidelines: str,
     operator_context: OperatorContext | None,
-    client_event_service: EventServiceProtocol,
+    event_service: EventServiceProtocol,
     web_session_id: str,
     user_id: str,
     case_id: str,
@@ -205,7 +205,7 @@ async def generate_command(
         source_component=ComponentName.G8EE,
     )
     correlation_id = generate_tribunal_correlation_id()
-    emitter = TribunalEmitter(client_event_service, g8e_context, correlation_id=correlation_id)
+    emitter = TribunalEmitter(event_service, g8e_context, correlation_id=correlation_id)
 
     if settings.llm is None:
         raise ConfigurationError("LLM settings are missing")

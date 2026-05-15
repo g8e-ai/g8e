@@ -31,7 +31,7 @@ from .ai.request_builder import AIRequestBuilder
 from .ai.response_analyzer import AIResponseAnalyzer
 from .ai.tool_service import AIToolService
 from .investigation.investigation_data_service import InvestigationDataService
-from .infra.client_event_service import EventService
+from .infra.event_service import EventService
 from .protocols import EventServiceProtocol
 
 __all__ = [

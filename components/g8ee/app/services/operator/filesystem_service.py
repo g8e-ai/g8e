@@ -99,7 +99,7 @@ class OperatorFilesystemService:
         )
 
         # Notify start
-        await self.execution_service.client_event_service.publish_command_event(
+        await self.execution_service.event_service.publish_command_event(
             EventType.OPERATOR_FILESYSTEM_LIST_STARTED,
             CommandExecutingBroadcastEvent(
                 command=f"ls {args.path}",
@@ -132,7 +132,7 @@ class OperatorFilesystemService:
             else EventType.OPERATOR_FILESYSTEM_LIST_FAILED
         )
 
-        await self.execution_service.client_event_service.publish_command_event(
+        await self.execution_service.event_service.publish_command_event(
             completion_event_type,
             CommandResultBroadcastEvent(
                 execution_id=exec_id,
@@ -187,7 +187,7 @@ class OperatorFilesystemService:
         )
 
         # Notify start
-        await self.execution_service.client_event_service.publish_command_event(
+        await self.execution_service.event_service.publish_command_event(
             EventType.OPERATOR_FILESYSTEM_GREP_STARTED,
             CommandExecutingBroadcastEvent(
                 command=f"grep -r {args.pattern} {args.path}",
@@ -224,7 +224,7 @@ class OperatorFilesystemService:
             else EventType.OPERATOR_FILESYSTEM_GREP_FAILED
         )
 
-        await self.execution_service.client_event_service.publish_command_event(
+        await self.execution_service.event_service.publish_command_event(
             completion_event_type,
             CommandResultBroadcastEvent(
                 execution_id=exec_id,
@@ -282,7 +282,7 @@ class OperatorFilesystemService:
         )
 
         # Notify start
-        await self.execution_service.client_event_service.publish_command_event(
+        await self.execution_service.event_service.publish_command_event(
             EventType.OPERATOR_FILESYSTEM_READ_STARTED,
             CommandExecutingBroadcastEvent(
                 command=f"cat {args.path}",
@@ -315,7 +315,7 @@ class OperatorFilesystemService:
             else EventType.OPERATOR_FILESYSTEM_READ_FAILED
         )
 
-        await self.execution_service.client_event_service.publish_command_event(
+        await self.execution_service.event_service.publish_command_event(
             completion_event_type,
             CommandResultBroadcastEvent(
                 execution_id=exec_id,

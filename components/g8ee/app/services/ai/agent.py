@@ -68,7 +68,7 @@ from app.services.ai.agent_turn import (
 )
 from app.services.ai.grounding.grounding_service import GroundingService
 from app.services.ai.tool_service import AIToolService
-from app.services.infra.client_event_service import EventService
+from app.services.infra.event_service import EventService
 from app.services.protocols import ApprovalServiceProtocol
 from app.utils.ids import generate_command_execution_id
 
@@ -108,7 +108,7 @@ class g8eEngine:
     async def stream_response(
         self,
         inputs: AgentInputs,
-        client_event_service: EventService,
+        event_service: EventService,
         llm_provider: LLMProvider,
     ) -> AsyncGenerator[StreamChunkFromModel]:
         """
@@ -156,7 +156,7 @@ class g8eEngine:
                 async for chunk in self._stream_with_tool_loop(
                     inputs=inputs,
                     llm_provider=llm_provider,
-                    client_event_service=client_event_service,
+                    event_service=event_service,
                 ):
                     # Mark streaming as started as soon as we receive any chunk
                     # This prevents retries after streaming has begun
@@ -189,7 +189,7 @@ class g8eEngine:
         self,
         inputs: AgentInputs,
         state: AgentStreamState,
-        client_event_service: EventService,
+        event_service: EventService,
         llm_provider: LLMProvider,
         on_iteration_text: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
@@ -228,11 +228,11 @@ class g8eEngine:
             stream=self.stream_response(
                 inputs=inputs,
                 llm_provider=llm_provider,
-                client_event_service=client_event_service,
+                event_service=event_service,
             ),
             inputs=inputs,
             state=state,
-            client_event_service=client_event_service,
+            event_service=event_service,
             on_iteration_text=on_iteration_text,
         )
 
@@ -240,7 +240,7 @@ class g8eEngine:
         self,
         inputs: AgentInputs,
         llm_provider: LLMProvider,
-        client_event_service: EventService,
+        event_service: EventService,
     ) -> AsyncGenerator[StreamChunkFromModel]:
         """
         ReAct function-calling loop.
@@ -362,7 +362,7 @@ class g8eEngine:
                     g8e_context=inputs.g8e_context,
                     result_out=fc_responses_out,
                     request_settings=inputs.request_settings,
-                    client_event_service=client_event_service,
+                    event_service=event_service,
                 ):
                     yield chunk
 

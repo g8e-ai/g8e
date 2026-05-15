@@ -68,13 +68,13 @@ class OperatorIntentService:
         execution_service: ExecutionServiceProtocol,
         event_service: EventServiceProtocol,
         investigation_service: InvestigationServiceProtocol,
-        client_client: G8eClientProtocol,
+        internal_http_client: G8eClientProtocol,
     ) -> None:
         self._approval_service = approval_service
         self._execution_service = execution_service
         self._event_service = event_service
         self._investigation_service = investigation_service
-        self._client_client = client_client
+        self._client_client = internal_http_client
         self._iam_builder = IamCommandBuilder()
 
     @property
@@ -94,7 +94,7 @@ class OperatorIntentService:
         return self._investigation_service
 
     @property
-    def client_client(self) -> G8eClientProtocol:
+    def internal_http_client(self) -> G8eClientProtocol:
         return self._client_client
 
     def _resolve_intent_dependencies(self, requested_intents: list[str]) -> list[str]:

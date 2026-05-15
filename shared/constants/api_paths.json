@@ -33,7 +33,7 @@
     "health": "/health",
     "settings_user": "/settings/user"
   },
-  "": {
+  "client": {
     "sse_push": "/sse/push",
     "grant_intent": "/operators/{operator_id}/grant-intent",
     "revoke_intent": "/operators/{operator_id}/revoke-intent",

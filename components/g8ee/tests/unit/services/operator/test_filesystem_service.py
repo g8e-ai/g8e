@@ -11,12 +11,12 @@ from app.constants.status import ComponentName
 
 @pytest.mark.asyncio
 async def test_filesystem_service_grep_import_fix():
+    from unittest.mock import MagicMock, AsyncMock
     # This test primarily verifies that the imports in filesystem_service.py are correct
     # and don't raise NameError when the methods are called/referenced.
     pubsub_service = MagicMock()
     execution_service = MagicMock()
-    execution_service.client_event_service.publish_command_event = MagicMock(return_value=asyncio.Future())
-    execution_service.client_event_service.publish_command_event.return_value.set_result(None)
+    execution_service.event_service.publish_command_event = AsyncMock()
     
     investigation_service = MagicMock()
     
@@ -47,8 +47,7 @@ async def test_filesystem_service_grep_import_fix():
     # we can just let it be False and verify the rest of the method.
     mock_envelope.payload = None 
     
-    execution_service.execute = MagicMock(return_value=asyncio.Future())
-    execution_service.execute.return_value.set_result((mock_result, mock_envelope))
+    execution_service.execute = AsyncMock(return_value=(mock_result, mock_envelope))
     
     args = FsGrepRequestPayload(
         path="/tmp",

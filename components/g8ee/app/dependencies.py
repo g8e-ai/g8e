@@ -53,7 +53,7 @@ from .services.ai.chat_task_manager import BackgroundTaskManager
 from .services.data.attachment_store_service import AttachmentService
 from .db.blob_service import BlobService
 from .services.protocols import SettingsServiceProtocol
-from .services.infra.client_event_service import EventService
+from .services.infra.event_service import EventService
 from .services.infra.internal_http_client import InternalHttpClient
 from .services.operator.approval_service import OperatorApprovalService
 from .services.operator.command_service import OperatorCommandService
@@ -390,18 +390,18 @@ async def get_g8ee_client_http_client(request: Request) -> InternalHttpClient:
     state = cast(G8eeAppState, request.app.state)
     client = state.internal_http_client
     if not client:
-        logger.error("client HTTP client not found in app state - g8ee initialization may have failed")
-        raise ServiceUnavailableError("client HTTP client not available")
+        logger.error("internal HTTP client not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("internal HTTP client not available")
 
     return client
 
 
 async def get_g8ee_event_service(request: Request) -> EventService:
     state = cast(G8eeAppState, request.app.state)
-    service = state.services.client_event_service
+    service = state.services.event_service
     if not service:
-        logger.error("client event service not found in app state - g8ee initialization may have failed")
-        raise ServiceUnavailableError("client event service not available")
+        logger.error("event service not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("event service not available")
 
     return cast(EventService, service)
 

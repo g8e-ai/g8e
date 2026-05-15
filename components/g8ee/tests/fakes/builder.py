@@ -125,7 +125,7 @@ def build_command_service(
     event_service: FakeEventService | None = None,
     db_service: FakeDBService | None = None,
     ai_response_analyzer: FakeAIResponseAnalyzer | None = None,
-    client_client: FakeG8eClient | None = None,
+    internal_http_client: FakeG8eClient | None = None,
     investigation_service: FakeInvestigationService | None = None,
     pubsub_client: FakePubSubClient | None = None,
     settings: G8eePlatformSettings | None = None,
@@ -142,7 +142,7 @@ def build_command_service(
     or assert on. Omitted deps default to a fresh fake with sensible defaults.
     """
     cache_aside_service = create_mock_cache_aside_service()
-    internal_http_client = client_client or FakeG8eClient()
+    internal_http_client = internal_http_client or FakeG8eClient()
 
     # Ensure all required fakes are present
     event_service = event_service or FakeEventService()
@@ -173,7 +173,7 @@ def build_command_service(
         execution_service = OperatorExecutionService(
             pubsub_service=pubsub_service,
             approval_service=approval_service,
-            client_event_service=event_service,
+            event_service=event_service,
             settings=settings,
             ai_response_analyzer=ai_response_analyzer,
             operator_data_service=operator_data_service,
@@ -194,7 +194,7 @@ def build_command_service(
     file_service = OperatorFileService(
         pubsub_service=pubsub_service,
         approval_service=approval_service,
-        client_event_service=event_service,
+        event_service=event_service,
         execution_service=execution_service,
         ai_response_analyzer=ai_response_analyzer,
         investigation_service=investigation_service,
@@ -203,9 +203,9 @@ def build_command_service(
     intent_service = OperatorIntentService(
         approval_service=approval_service,
         execution_service=execution_service,
-        client_event_service=event_service,
+        event_service=event_service,
         investigation_service=investigation_service,
-        client_client=internal_http_client,
+        internal_http_client=internal_http_client,
     )
 
     svc = OperatorCommandService(
@@ -238,7 +238,7 @@ def build_intent_service(
     execution_service: FakeExecutionService | None = None,
     event_service: FakeEventService | None = None,
     investigation_service: FakeInvestigationService | None = None,
-    client_client: FakeG8eClient | None = None,
+    internal_http_client: FakeG8eClient | None = None,
 ) -> OperatorIntentService:
     """Build an OperatorIntentService with typed fakes for all dependencies."""
     return OperatorIntentService(
@@ -246,5 +246,5 @@ def build_intent_service(
         execution_service=execution_service or FakeExecutionService(),
         event_service=event_service or FakeEventService(),
         investigation_service=investigation_service or FakeInvestigationService(),
-        client_client=client_client or FakeG8eClient(),
+        internal_http_client=internal_http_client or FakeG8eClient(),
     )

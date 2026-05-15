@@ -30,8 +30,8 @@ accordingly. publish_event_to_client() no longer exists.
 
 from typing import Any
 
-from app.constants import EventType
-from app.models.base import G8eBaseModel, Field
+from app.constants import EventType, ToolCallStatus
+from app.models.base import G8eBaseModel, Field, UTCDatetime
 
 
 class SessionEvent(G8eBaseModel):
@@ -109,3 +109,87 @@ class BackgroundEventWire(G8eBaseModel):
         if be.task_id is not None:
             data["task_id"] = be.task_id
         return cls(user_id=be.user_id, event=_SSEEventBody(type=be.event_type, data=data))
+
+
+# AI SSE event payloads
+class AiProcessingStoppedPayload(G8eBaseModel):
+    reason: str
+    timestamp: UTCDatetime
+
+
+class AIToolLifecyclePayload(G8eBaseModel):
+    tool_name: str
+    display_label: str | None = None
+    display_icon: str | None = None
+    display_detail: str | None = None
+    category: str | None = None
+    execution_id: str
+    status: ToolCallStatus
+    
+    # Optional tool-specific context (reconciled from shared fixtures)
+    query: str | None = None
+    content: str | None = None
+    results: list[dict[str, Any]] | None = None
+    error: str | None = None
+    port: str | None = None
+    host: str | None = None
+    is_open: bool | None = None
+    timestamp: str | None = None
+
+
+class ChatCitationsReadyPayload(G8eBaseModel):
+    grounding_metadata: dict[str, Any]
+    timestamp: str | None = None
+
+
+class ChatErrorPayload(G8eBaseModel):
+    error: str
+    timestamp: str | None = None
+
+
+class ChatProcessingStartedPayload(G8eBaseModel):
+    agent_mode: str
+    timestamp: str | None = None
+
+
+class ChatResponseChunkPayload(G8eBaseModel):
+    content: str
+    timestamp: str | None = None
+
+
+class ChatResponseCompletePayload(G8eBaseModel):
+    content: str
+    finish_reason: str
+    has_citations: bool
+    grounding_metadata: dict[str, Any]
+    token_usage: dict[str, Any]
+    agent_mode: str
+    timestamp: str | None = None
+
+
+class ChatRetryPayload(G8eBaseModel):
+    attempt: int
+    max_attempts: int
+    timestamp: str | None = None
+
+
+class ChatThinkingPayload(G8eBaseModel):
+    thinking: str | None
+    action_type: str
+    timestamp: str | None = None
+
+
+class ChatTurnCompletePayload(G8eBaseModel):
+    turn: int
+    timestamp: str | None = None
+
+
+class TriageClarificationQuestionsPayload(G8eBaseModel):
+    questions: list[str]
+    complexity: str
+    complexity_confidence: str
+    intent: str
+    intent_confidence: str
+    intent_summary: str
+    request_posture: str
+    posture_confidence: str

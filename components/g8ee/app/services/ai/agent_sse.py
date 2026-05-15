@@ -36,7 +36,7 @@ from app.models.agent import (
     StreamChunkFromModel,
 )
 from app.models.base import G8eBaseModel
-from app.utils.timestamp import now
+from app.models.events import (
     AiProcessingStoppedPayload,
     AIToolLifecyclePayload,
     ChatCitationsReadyPayload,
@@ -48,8 +48,9 @@ from app.utils.timestamp import now
     ChatThinkingPayload,
     ChatTurnCompletePayload,
 )
+from app.utils.timestamp import now
 from app.errors import ValidationError
-from app.services.infra.client_event_service import EventService
+from app.services.infra.event_service import EventService
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ async def deliver_via_sse(
     stream: AsyncGenerator[StreamChunkFromModel],
     inputs: AgentInputs,
     state: AgentStreamState,
-    client_event_service: EventService,
+    event_service: EventService,
     on_iteration_text: Callable[[str], Awaitable[None]] | None = None,
 ) -> None:
     """
@@ -113,7 +114,7 @@ async def deliver_via_sse(
         """
         if not has_sse:
             return
-        await client_event_service.publish_investigation_event(
+        await event_service.publish_investigation_event(
             investigation_id=investigation_id,
             event_type=event_type,
             payload=payload,
@@ -209,12 +210,21 @@ async def deliver_via_sse(
                 # Operator-gated tools are handled by their respective services.
                 if fn in AI_UNIVERSAL_TOOLS:
                     event_type = None
+                    query = None
+                    port = None
+                    host = None
+                    
                     if fn == OperatorToolName.QUERY_INVESTIGATION_CONTEXT:
                         event_type = EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED
+                        # Extract query if available
+                        if chunk.data.result and hasattr(chunk.data.result, "query"):
+                            query = chunk.data.result.query
                     elif fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
                         event_type = EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED
                     elif fn == OperatorToolName.G8E_SEARCH_WEB:
                         event_type = EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED
+                        if chunk.data.result and hasattr(chunk.data.result, "query"):
+                            query = chunk.data.result.query
 
                     if event_type:
                         await _publish(
@@ -227,6 +237,10 @@ async def deliver_via_sse(
                                 category=chunk.data.category,
                                 execution_id=exec_id,
                                 status=ToolCallStatus.STARTED,
+                                query=query,
+                                port=port,
+                                host=host,
+                                timestamp=now().isoformat(),
                             ),
                         )
 
@@ -237,15 +251,27 @@ async def deliver_via_sse(
                 # For universal tools, emit the new native lifecycle event.
                 if fn in AI_UNIVERSAL_TOOLS:
                     event_type = None
+                    content = None
+                    results = None
+                    is_open = None
+                    error = None
+                    
                     # We use RECEIVED/COMPLETED/FAILED depending on the tool.
                     # Plan says REQUESTED -> RECEIVED -> COMPLETED -> FAILED.
                     # agent_sse.py sees TOOL_RESULT which maps to COMPLETED/FAILED.
                     if fn == OperatorToolName.QUERY_INVESTIGATION_CONTEXT:
                         event_type = EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED
+                        if chunk.data.result:
+                            content = str(getattr(chunk.data.result, "data", ""))
                     elif fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
                         event_type = EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED
+                        if chunk.data.result:
+                            content = getattr(chunk.data.result, "message", None)
                     elif fn == OperatorToolName.G8E_SEARCH_WEB:
                         event_type = EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED
+                        if chunk.data.result:
+                            res = getattr(chunk.data.result, "results", [])
+                            results = [r.model_dump(mode="json") if hasattr(r, "model_dump") else r for r in res]
 
                     if event_type:
                         await _publish(
@@ -258,6 +284,11 @@ async def deliver_via_sse(
                                 category=chunk.data.category,
                                 execution_id=exec_id,
                                 status=ToolCallStatus.COMPLETED,
+                                content=content,
+                                results=results,
+                                is_open=is_open,
+                                error=error,
+                                timestamp=now().isoformat(),
                             ),
                         )
 

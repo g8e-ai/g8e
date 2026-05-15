@@ -116,7 +116,7 @@ def _build_service(auto_approved_path: Path) -> tuple[
     approval_service = FakeApprovalService()
     event_service = FakeEventService()
     execution_service = FakeExecutionService(
-        client_event_service=event_service,
+        event_service=event_service,
         ai_response_analyzer=FakeAIResponseAnalyzer(),
     )
     validator = CommandAutoApprovedValidator(

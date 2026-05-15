@@ -159,7 +159,7 @@ async def test_stop_ai_processing(g8e_context):
         web_session_id="session-123",
         user_id=g8e_context.user_id,
         case_id=g8e_context.case_id,
-        client_event_service=mock_pipeline.client_event_service,
+        event_service=mock_pipeline.event_service,
     )
 
 @pytest.mark.asyncio
@@ -243,19 +243,19 @@ async def test_operator_approval_respond(g8e_context):
 @pytest.mark.asyncio
 async def test_execute_direct_command(g8e_context):
     request = DirectCommandRequest(command="ls", execution_id="exec-123")
-    mock_exec_service = MagicMock()
-    mock_exec_service.send_command_to_operator = AsyncMock()
-    mock_exec_service.send_direct_exec_audit_event = AsyncMock()
+    mock_command_service = MagicMock()
+    mock_command_service.send_command_to_operator = AsyncMock()
+    mock_command_service.send_direct_exec_audit_event = AsyncMock()
 
     response = await execute_direct_command(
         request=request,
         g8e_context=g8e_context,
-        operator_data_service=mock_exec_service
+        operator_data_service=mock_command_service
     )
 
     assert response.success is True
-    mock_exec_service.send_command_to_operator.assert_called_once()
-    mock_exec_service.send_direct_exec_audit_event.assert_called_once()
+    mock_command_service.send_command_to_operator.assert_called_once()
+    mock_command_service.send_direct_exec_audit_event.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_get_case(g8e_context):

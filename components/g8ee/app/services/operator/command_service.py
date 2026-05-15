@@ -227,7 +227,7 @@ class OperatorCommandService:
             execution_service=execution_service,
             event_service=event_service,
             investigation_service=investigation_service,
-            client_client=internal_http_client,
+            internal_http_client=internal_http_client,
         )
 
         return cls(

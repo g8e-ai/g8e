@@ -47,7 +47,7 @@ def _build_execution_service() -> tuple[OperatorExecutionService, OperatorPubSub
     svc = OperatorExecutionService.__new__(OperatorExecutionService)
     svc._pubsub_service = pubsub_service
     svc._approval_service = None
-    svc._client_event_service = None
+    svc._event_service = None
     svc._settings = None
     svc._operator_data_service = None
     svc._ai_response_analyzer = None

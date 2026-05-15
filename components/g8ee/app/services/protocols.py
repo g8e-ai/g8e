@@ -609,7 +609,7 @@ class ApprovalServiceProtocol(Protocol):
 @runtime_checkable
 class ExecutionServiceProtocol(Protocol):
     @property
-    def client_event_service(self) -> EventServiceProtocol:
+    def event_service(self) -> EventServiceProtocol:
         raise NotImplementedError
     @property
     def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
@@ -677,7 +677,7 @@ class FileServiceProtocol(Protocol):
     def approval_service(self) -> ApprovalServiceProtocol:
         raise NotImplementedError
     @property
-    def client_event_service(self) -> EventServiceProtocol:
+    def event_service(self) -> EventServiceProtocol:
         raise NotImplementedError
     @property
     def execution_service(self) -> ExecutionServiceProtocol:
@@ -720,12 +720,10 @@ class IntentServiceProtocol(Protocol):
     def execution_service(self) -> ExecutionServiceProtocol:
         raise NotImplementedError
     @property
-    def client_event_service(self) -> EventServiceProtocol:
+    def event_service(self) -> EventServiceProtocol:
         raise NotImplementedError
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:
-        raise NotImplementedError
-    @property
         raise NotImplementedError
     async def execute_intent_permission_request(
         self,

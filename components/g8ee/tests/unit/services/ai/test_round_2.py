@@ -66,7 +66,7 @@ async def test_generate_command_round_2_triggered():
             request="test request",
             guidelines="",
             operator_context=_make_mock_operator_context(),
-            client_event_service=mock_event_service,
+            event_service=mock_event_service,
             web_session_id="ws-1",
             user_id="user-1",
             case_id="case-1",
