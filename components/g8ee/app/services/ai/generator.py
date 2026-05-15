@@ -64,7 +64,6 @@ from app.utils.ids import generate_tribunal_correlation_id
 from app.models.tool_results import CommandRiskAnalysis
 from app.services.data.reputation_data_service import ReputationDataService
 from app.utils.safety import validate_command_safety
-from app.models.model_configs import get_model_config
 
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor

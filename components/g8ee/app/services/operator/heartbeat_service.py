@@ -202,7 +202,7 @@ class HeartbeatSnapshotService:
                 logger.debug("[HEARTBEAT] Decoding binary heartbeat envelope")
                 envelope_dict = decode_g8eo_result_envelope(data)
                 raw = envelope_dict.get("payload", {})
-                
+
                 # Ensure identity fields from envelope are present in payload
                 if not raw.get("operator_id"):
                     raw["operator_id"] = envelope_dict.get("operator_id")

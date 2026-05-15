@@ -35,9 +35,6 @@ from .fake_db_service import FakeDBService
 from .fake_event_service import FakeEventService
 from .fake_execution_service import FakeExecutionService
 from tests.fakes.fake_operator_clients import (
-    FakeKVClient,
-    FakePubSubClient,
-    FakeDBClient,
     FakeG8eClient,
 )
 from .fake_investigation_service import FakeInvestigationService

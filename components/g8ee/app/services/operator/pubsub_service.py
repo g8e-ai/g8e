@@ -23,7 +23,6 @@ corresponding Pydantic models for type-safe parsing.
 """
 
 import asyncio
-import json
 import logging
 
 from pydantic import ValidationError as PydanticValidationError

@@ -21,7 +21,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Callable, TypeVar
+from typing import TYPE_CHECKING, TypeVar
+from collections.abc import Callable
 
 from app.models.settings import BatchExecutionSettings
 from app.models.tool_results import BatchExecutionMeta, PerOperatorResultBase
@@ -42,11 +43,11 @@ class BatchRunResult(BatchExecutionMeta):
     per_operator_results: list[T]
 
     @classmethod
-    def create(cls, per_operator_results: list[T], batch_id: str | None = None) -> "BatchRunResult[T]":
+    def create(cls, per_operator_results: list[T], batch_id: str | None = None) -> BatchRunResult[T]:
         """Create a BatchRunResult from per-operator results."""
         successful_count = sum(1 for r in per_operator_results if r.success)
         failed_count = len(per_operator_results) - successful_count
-        
+
         return cls(
             batch_execution=len(per_operator_results) > 1,
             batch_id=batch_id,
@@ -197,7 +198,7 @@ class BatchRunner:
             elif isinstance(result, Exception):
                 self._logger.error("[BatchRunner] Task failed for %s: %s", operator.operator_id, result)
                 if error_factory:
-                    execution_id = getattr(result, 'execution_id', 'unknown')
+                    execution_id = getattr(result, "execution_id", "unknown")
                     error_result = error_factory(operator, execution_id, str(result))
                     results.append(error_result)
             elif isinstance(result, tuple) and len(result) == 2:

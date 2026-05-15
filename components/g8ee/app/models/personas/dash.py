@@ -25,7 +25,7 @@ class DashPersona(AgentPersonaModel):
     execution for that turn so the user answers the questions before any
     state-changing action runs.
     """
-    
+
     def __init__(self):
         super().__init__(
             id="dash",

@@ -40,7 +40,7 @@ class TestTriageEndpoints:
         mock_chat_task_manager = MagicMock()
         mock_user_settings = MagicMock()
         mock_g8e_context = MagicMock()
-        
+
         investigation_id = "inv-123"
         user_id = "user-456"
 
@@ -84,7 +84,7 @@ class TestTriageEndpoints:
         mock_chat_task_manager = MagicMock()
         mock_user_settings = MagicMock()
         mock_g8e_context = MagicMock()
-        
+
         investigation_id = "inv-123"
         user_id = "user-456"
 

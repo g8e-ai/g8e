@@ -16,7 +16,6 @@ from unittest.mock import patch
 import pytest
 
 from app.constants import (
-    CloudSubtype,
     EventType,
     InvestigationStatus,
     OperatorType,

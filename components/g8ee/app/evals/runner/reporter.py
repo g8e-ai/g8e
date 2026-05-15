@@ -9,7 +9,6 @@ Provides text table, CSV, and JSON output formats for evaluation results.
 import csv
 import json
 import os
-import shutil
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any

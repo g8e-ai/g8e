@@ -102,12 +102,12 @@ class CaseCreateRequest(G8eBaseModel):
         """Derive a fallback title from the initial message if one isn't provided."""
         if not self.initial_message:
             return "Untitled Case"
-        
+
         # Take first 100 chars, strip whitespace
         title = self.initial_message[:100].strip()
         if len(self.initial_message) > 100:
             title += "..."
-        
+
         return title or "Untitled Case"
 
     @computed_field

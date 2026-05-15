@@ -14,7 +14,6 @@
 """Unit tests for CaseDataService."""
 
 from unittest.mock import MagicMock, patch
-from uuid import uuid4
 
 import pytest
 
@@ -38,7 +37,6 @@ from app.models import (
     CaseEventPayload,
     CaseUpdateRequest,
 )
-from app.models.cases import CaseModel
 from app.models.db_queries import CaseHistoryQuery
 from app.services.data.case_data_service import CaseDataService
 
@@ -195,7 +193,7 @@ class TestCaseDataService:
     async def test_update_case_success(self, service, mock_cache):
         case_id = "case-123"
         updates = CaseUpdateRequest(title="Updated Title")
-        
+
         # Mock get_case (internal call)
         mock_cache.get_document_with_cache.return_value = {
             "title": "Old Title",
@@ -233,7 +231,7 @@ class TestCaseDataService:
             "updated_at": "2026-01-01T00:00:00Z",
         }
         mock_cache.update_document.side_effect = Exception("Update fail")
-        
+
         with pytest.raises(DatabaseError, match="Failed to update case"):
             await service.update_case(case_id, CaseUpdateRequest(title="New"))
 
@@ -254,7 +252,7 @@ class TestCaseDataService:
         }
         # Line 226: except G8eError: raise
         mock_cache.update_document.side_effect = G8eError(message="G8e update failure", code=ErrorCode.DB_WRITE_ERROR, category=ErrorCategory.DATABASE)
-        
+
         with pytest.raises(G8eError, match="G8e update failure"):
             await service.update_case(case_id, CaseUpdateRequest(title="New"))
 
@@ -273,7 +271,7 @@ class TestCaseDataService:
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z",
         }
-        
+
         mock_del_result = MagicMock()
         mock_del_result.success = True
         # db.delete_document is called and its result is awaited
@@ -299,7 +297,7 @@ class TestCaseDataService:
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z",
         }
-        
+
         mock_del_result = MagicMock()
         mock_del_result.success = False
         mock_del_result.error = "Delete error"
@@ -331,7 +329,7 @@ class TestCaseDataService:
     async def test_publish_case_update_sse_success(self, service, mock_event):
         payload = CaseEventPayload(
             updated_at="2026-01-01T01:00:00Z",
-            case_id="case-123", 
+            case_id="case-123",
             status=CaseStatus.NEW
         )
         await service.publish_case_update_sse(
@@ -351,7 +349,7 @@ class TestCaseDataService:
         # We need to make the publish fail.
         # Since service.event_service is our FakeEventService from mock_event fixture,
         # we can patch its publish method.
-        with patch.object(mock_event, 'publish', side_effect=Exception("Publish fail")):
+        with patch.object(mock_event, "publish", side_effect=Exception("Publish fail")):
             await service.publish_case_update_sse(
                 case_id="c1",
                 web_session_id="ws1",
@@ -392,19 +390,19 @@ class TestCaseDataService:
         mock_cache.query_documents.return_value = []
 
         await service.get_case_history(query)
-        
+
         # Verify filters were passed
         args, kwargs = mock_cache.query_documents.call_args
         filters = kwargs["field_filters"]
         assert len(filters) == 4 # case_id, start_time, end_time, event_type
-        
+
     # --- get_case_tasks tests ---
 
     async def test_get_case_tasks_with_status(self, service, mock_cache):
         # Line 353: if task_status: ...
         mock_cache.query_documents.return_value = []
         await service.get_case_tasks("case-123", TaskStatus.COMPLETED)
-        
+
         args, kwargs = mock_cache.query_documents.call_args
         filters = kwargs["field_filters"]
         assert len(filters) == 2 # case_id, status

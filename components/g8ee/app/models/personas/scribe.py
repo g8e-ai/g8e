@@ -19,7 +19,7 @@ class ScribePersona(AgentPersonaModel):
     
     Generates concise, specific case titles.
     """
-    
+
     def __init__(self):
         super().__init__(
             id="scribe",

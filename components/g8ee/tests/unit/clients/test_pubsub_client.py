@@ -12,7 +12,6 @@
 # limitations under the License.
 
 import asyncio
-import json
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import aiohttp
@@ -535,15 +534,15 @@ class TestPubSubClientCoverage:
         mock_session = MagicMock(spec=aiohttp.ClientSession)
         mock_ws = AsyncMock(spec=aiohttp.ClientWebSocketResponse)
         mock_ws.closed = False
-        
+
         # mock_session.ws_connect is called and returned value is awaited
         # so return_value must be an awaitable that returns a context manager
         # OR just mock the whole call chain.
-        
+
         mock_cm = MagicMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_ws)
         mock_cm.__aexit__ = AsyncMock()
-        
+
         # await ws_session.ws_connect(...) -> returns mock_cm
         mock_session.ws_connect = AsyncMock(return_value=mock_cm)
 
@@ -559,11 +558,11 @@ class TestPubSubClientCoverage:
         mock_session = MagicMock(spec=aiohttp.ClientSession)
         mock_ws = AsyncMock(spec=aiohttp.ClientWebSocketResponse)
         mock_ws.closed = False
-        
+
         mock_cm = MagicMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_ws)
         mock_cm.__aexit__ = AsyncMock()
-        
+
         mock_session.ws_connect = AsyncMock(return_value=mock_cm)
 
         with patch.object(disconnected_client, "_get_http_ws_session", return_value=mock_session), \
@@ -577,7 +576,7 @@ class TestPubSubClientCoverage:
     async def test_ws_reader_unknown_event_type(self, connected_client, task_tracker):
         """Test logging of unknown wire event types."""
         from app.proto.pubsub_pb2 import PubSubEvent
-        
+
         event = PubSubEvent(type="unknown_type") # Unknown type string
         frame = MagicMock()
         frame.type = aiohttp.WSMsgType.BINARY
@@ -614,19 +613,19 @@ class TestPubSubClientCoverage:
     async def test_subscribe_refcounting(self, connected_client, task_tracker):
         """Test channel subscription refcounting."""
         channel = "ref-channel"
-        
+
         # First subscription
         async def mock_ack():
             await asyncio.sleep(0.01)
             if channel in connected_client._pending_acks:
                 for ack in connected_client._pending_acks[channel]:
                     ack.set()
-        
+
         task = task_tracker.track(asyncio.create_task(mock_ack()))
         await connected_client.subscribe(channel)
         await task
         assert connected_client._channel_refcounts[channel] == 1
-        
+
         # Second subscription (should just increment refcount)
         await connected_client.subscribe(channel)
         assert connected_client._channel_refcounts[channel] == 2
@@ -636,7 +635,7 @@ class TestPubSubClientCoverage:
         await connected_client.unsubscribe(channel)
         assert connected_client._channel_refcounts[channel] == 1
         assert channel in connected_client._subscribed_channels
-        
+
         # Unsubscribe twice
         await connected_client.unsubscribe(channel)
         assert connected_client._channel_refcounts[channel] == 0
@@ -666,10 +665,10 @@ class TestPubSubClientCoverage:
         from app.models.pubsub_messages import G8eMessage
         from app.models.command_request_payloads import CommandRequestPayload
         from app.constants import EventType
-        
+
         op_id = "op-1"
         sess_id = "sess-1"
-        
+
         # publish_command
         msg = G8eMessage(
             id="msg-1",
@@ -685,7 +684,7 @@ class TestPubSubClientCoverage:
         )
         res = await connected_client.publish_command(op_id, sess_id, msg)
         assert res == 1
-        
+
         # subscribe_execution_results
         async def mock_ack_results():
             await asyncio.sleep(0.01)
@@ -693,7 +692,7 @@ class TestPubSubClientCoverage:
             if channel in connected_client._pending_acks:
                 for ack in connected_client._pending_acks[channel]:
                     ack.set()
-        
+
         task_res = task_tracker.track(asyncio.create_task(mock_ack_results()))
         callback_res = AsyncMock()
         await connected_client.subscribe_execution_results(op_id, sess_id, callback_res)
@@ -714,7 +713,7 @@ class TestPubSubClientCoverage:
             if channel in connected_client._pending_acks:
                 for ack in connected_client._pending_acks[channel]:
                     ack.set()
-        
+
         task = task_tracker.track(asyncio.create_task(mock_ack()))
         callback = AsyncMock()
         await connected_client.subscribe_heartbeats(op_id, sess_id, callback)
@@ -722,10 +721,10 @@ class TestPubSubClientCoverage:
         channel = f"heartbeat:{op_id}:{sess_id}"
         assert channel in connected_client._subscribed_channels
         assert callback in connected_client._channel_handlers[channel]
-        
+
         # check_operator_online
         connected_client._ws.send_bytes.reset_mock()
-        
+
         with patch.object(connected_client, "publish", return_value=1):
             is_online = await connected_client.check_operator_online(op_id, sess_id)
             assert is_online is True

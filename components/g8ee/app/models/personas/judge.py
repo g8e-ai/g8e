@@ -19,7 +19,7 @@ class JudgePersona(AgentPersonaModel):
     
     Evaluates AI agent performance against gold-standard criteria.
     """
-    
+
     def __init__(self):
         super().__init__(
             id="judge",

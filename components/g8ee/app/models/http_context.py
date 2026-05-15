@@ -177,11 +177,10 @@ class G8eHttpContext(G8eBaseModel):
                     f"{G8eHeaders.WEB_SESSION_ID} header is required for all internal requests",
                     component=ComponentName.G8EE,
                 )
-            else:
-                logger.info(
-                    "[G8eHTTP-CONTEXT] web_session_id is null; allowed for CLIENT source on exempt path",
-                    extra={"endpoint": request.url.path}
-                )
+            logger.info(
+                "[G8eHTTP-CONTEXT] web_session_id is null; allowed for CLIENT source on exempt path",
+                extra={"endpoint": request.url.path}
+            )
 
         if not user_id:
             if raw_source_component != ComponentName.CLIENT or not is_exempt_path:
@@ -200,11 +199,10 @@ class G8eHttpContext(G8eBaseModel):
                     f"{G8eHeaders.USER_ID} header is required for all internal requests",
                     component=ComponentName.G8EE,
                 )
-            else:
-                logger.info(
-                    "[G8eHTTP-CONTEXT] user_id is null; allowed for CLIENT source on exempt path",
-                    extra={"endpoint": request.url.path}
-                )
+            logger.info(
+                "[G8eHTTP-CONTEXT] user_id is null; allowed for CLIENT source on exempt path",
+                extra={"endpoint": request.url.path}
+            )
 
         if not raw_source_component:
             logger.error(

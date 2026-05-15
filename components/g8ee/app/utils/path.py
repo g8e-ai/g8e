@@ -14,11 +14,11 @@ def resolve_project_root() -> Path:
 
     # Current structure for g8ee is: <root>/components/g8ee
     cwd = Path.cwd()
-    
+
     # Check if we are in components/g8ee or a subdirectory
     for parent in [cwd] + list(cwd.parents):
         if parent.name == "g8ee" and parent.parent.name == "components":
             return parent.parent.parent.resolve()
-            
+
     # Generic fallback
     return (cwd / ".." / "..").resolve()

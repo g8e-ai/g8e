@@ -147,7 +147,7 @@ class HeartbeatStaleMonitorService:
                     # ACTIVE→OFFLINE / BOUND→STALE transition fires on the next tick.
                     target = resolve_heartbeat_transition(op.status, is_stale=True)
                     if target:
-                        applied = await self._apply_transition(op, target, age_seconds=float('inf'))
+                        applied = await self._apply_transition(op, target, age_seconds=float("inf"))
                         if applied:
                             transitions += 1
                     continue

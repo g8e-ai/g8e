@@ -125,7 +125,7 @@ class AIToolLifecyclePayload(G8eBaseModel):
     category: str | None = None
     execution_id: str
     status: ToolCallStatus
-    
+
     # Optional tool-specific context (reconciled from shared fixtures)
     query: str | None = None
     content: str | None = None

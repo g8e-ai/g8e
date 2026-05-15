@@ -52,7 +52,7 @@ class OperatorLifecycleService:
         self._cache: CacheAsideService = operator_data_service.cache  # type: ignore
 
     @property
-    def api_key_service(self) -> "ApiKeyService | None":
+    def api_key_service(self) -> ApiKeyService | None:
         return self._api_key_service
 
     def set_api_key_service(self, api_key_service: ApiKeyService) -> None:

@@ -55,9 +55,9 @@ class TestOperatorLFAAService:
     async def test_send_audit_event_success(self, lfaa_service, mock_pubsub_service, valid_g8e_message):
         # Setup: publish_command returns > 0 subscribers
         mock_pubsub_service.publish_command.return_value = 1
-        
+
         result = await lfaa_service.send_audit_event(valid_g8e_message)
-        
+
         assert result is True
         mock_pubsub_service.publish_command.assert_called_once_with(
             operator_id="op_1",
@@ -69,9 +69,9 @@ class TestOperatorLFAAService:
     async def test_send_audit_event_no_subscribers(self, lfaa_service, mock_pubsub_service, valid_g8e_message):
         # Setup: publish_command returns 0 subscribers
         mock_pubsub_service.publish_command.return_value = 0
-        
+
         result = await lfaa_service.send_audit_event(valid_g8e_message)
-        
+
         assert result is False
         mock_pubsub_service.publish_command.assert_called_once()
 
@@ -129,7 +129,7 @@ class TestOperatorLFAAService:
             )
         )
         assert await lfaa_service.send_audit_event(msg_no_sess) is False
-        
+
         mock_pubsub_service.publish_command.assert_not_called()
 
     @pytest.mark.asyncio
@@ -146,15 +146,15 @@ class TestOperatorLFAAService:
     @pytest.mark.asyncio
     async def test_send_audit_event_exception_handling(self, lfaa_service, mock_pubsub_service, valid_g8e_message):
         mock_pubsub_service.publish_command.side_effect = Exception("Pubsub error")
-        
+
         result = await lfaa_service.send_audit_event(valid_g8e_message)
-        
+
         assert result is False
 
     @pytest.mark.asyncio
     async def test_send_direct_exec_audit_event_success(self, lfaa_service, mock_pubsub_service):
         mock_pubsub_service.publish_command.return_value = 1
-        
+
         g8e_context = G8eHttpContext(
             case_id="case_123",
             investigation_id="inv_456",
@@ -177,7 +177,7 @@ class TestOperatorLFAAService:
         called_args = mock_pubsub_service.publish_command.call_args[1]
         assert called_args["operator_id"] == "op_1"
         assert called_args["operator_session_id"] == "sess_1"
-        
+
         msg = called_args["command_data"]
         assert msg.id == "audit_exec_999"
         assert msg.event_type == EventType.OPERATOR_AUDIT_DIRECT_COMMAND_RECORDED
@@ -197,7 +197,7 @@ class TestOperatorLFAAService:
             user_id="user_1"
         )
         g8e_context.bound_operators = []
-        
+
         result = await lfaa_service.send_direct_exec_audit_event("ls", "exec_1", g8e_context)
         assert result is False
 
@@ -213,6 +213,6 @@ class TestOperatorLFAAService:
         g8e_context.bound_operators = [
             MagicMock(operator_id="op_1", operator_session_id=None)
         ]
-        
+
         result = await lfaa_service.send_direct_exec_audit_event("ls", "exec_1", g8e_context)
         assert result is False

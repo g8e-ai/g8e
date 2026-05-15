@@ -21,7 +21,7 @@ from app.constants.status import AITaskId, ComponentName, ExecutionStatus, Comma
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_request_payloads import CommandRequestPayload
 from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatSystemIdentity
-from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope, ExecutionResultsPayload
+from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.services.operator.execution_service import OperatorExecutionService
 from tests.fakes.factories import build_g8e_http_context
 
@@ -110,7 +110,7 @@ class TestOperatorExecutionServiceFailCommand:
             denial_reason="denied",
             feedback_reason="feedback"
         )
-        
+
         assert result.success is False
         assert result.error == "some error"
         mock_event_service.publish_command_event.assert_called_once()
@@ -176,7 +176,7 @@ class TestOperatorExecutionServiceResolveOperators:
         docs = [
             OperatorDocument(id="op-1", current_hostname="host-1", operator_type="system", user_id="user-1"),
             OperatorDocument(
-                id="op-2", 
+                id="op-2",
                 operator_type="system",
                 user_id="user-1",
                 latest_heartbeat_snapshot=HeartbeatSnapshot(
@@ -255,7 +255,7 @@ class TestOperatorExecutionServiceDispatch:
             payload=None
         )
         g8e_context = build_g8e_http_context()
-        # Since payload is Optional in Pydantic but required by envelope_builder, 
+        # Since payload is Optional in Pydantic but required by envelope_builder,
         # dispatch_command should fail gracefully or the builder will raise ValueError.
         with pytest.raises(Exception): # Catching general Exception for now as it might be ValueError from builder
             await execution_service.dispatch_command(msg, g8e_context)
@@ -335,7 +335,7 @@ class TestOperatorExecutionServiceDispatch:
             )
         )
         future.set_result(envelope)
-        
+
         msg = G8eMessage(
             id="exec-1",
             source_component=ComponentName.G8EE,
@@ -401,11 +401,11 @@ class TestOperatorExecutionServiceDirectCommand:
         g8e_context.web_session_id = "web-1"
         bound_op = MagicMock(operator_id="op-1", operator_session_id="sess-1")
         g8e_context.bound_operators = [bound_op]
-        
+
         from app.models.internal_api import DirectCommandRequest
         payload = DirectCommandRequest(execution_id="exec-1", command="echo hi", hostname="host-1")
         res = await execution_service.send_command_to_operator(payload, g8e_context)
-        
+
         assert res.status == ExecutionStatus.FAILED
         assert res.error == "No Operator listening"
         mock_pubsub.release_future.assert_called_once_with("exec-1")
@@ -424,7 +424,7 @@ class TestOperatorExecutionServiceDirectCommand:
             )
         )
         future.set_result(envelope)
-        
+
         g8e_context = build_g8e_http_context()
         await execution_service._wait_and_broadcast_direct_command_result(
             "exec-1", "echo hi", future, g8e_context, "op-1", "sess-1"
@@ -435,14 +435,14 @@ class TestOperatorExecutionServiceDirectCommand:
     async def test_wait_and_broadcast_timeout(self, execution_service, mock_event_service):
         future = asyncio.Future()
         g8e_context = build_g8e_http_context()
-        
+
         # Mock wait_for to raise TimeoutError
         from unittest.mock import patch
-        with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError()):
+        with patch("asyncio.wait_for", side_effect=TimeoutError()):
             await execution_service._wait_and_broadcast_direct_command_result(
                 "exec-1", "echo hi", future, g8e_context, "op-1", "sess-1"
             )
-        
+
         execution_service.pubsub_service.release_future.assert_called_once_with("exec-1")
 
     @pytest.mark.asyncio
@@ -450,7 +450,7 @@ class TestOperatorExecutionServiceDirectCommand:
         future = asyncio.Future()
         future.set_exception(Exception("unexpected"))
         g8e_context = build_g8e_http_context()
-        
+
         # Should not raise
         await execution_service._wait_and_broadcast_direct_command_result(
             "exec-1", "echo hi", future, g8e_context, "op-1", "sess-1"

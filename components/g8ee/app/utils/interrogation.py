@@ -12,10 +12,9 @@
 # limitations under the License.
 
 import re
-from typing import List, Optional
 
 
-def extract_interrogation_questions(text: str) -> List[str]:
+def extract_interrogation_questions(text: str) -> list[str]:
     """Extracts clarifying questions from an AI response wrapped in <interrogation> tags.
     
     The format expected is:
@@ -53,17 +52,16 @@ def extract_interrogation_questions(text: str) -> List[str]:
         line = line.strip()
         if not line:
             continue
-            
+
         # Regex to match "1. Question" or "1) Question"
         q_match = re.match(r"^\d+[\.\)]\s*(.*)$", line)
         if q_match:
             question_text = q_match.group(1).strip()
             if question_text:
                 questions.append(question_text)
-        else:
-            # If it doesn't match the numbered pattern but is a non-empty line within the tags,
-            # we still want to capture it if it looks like a question.
-            if line:
-                questions.append(line)
+        # If it doesn't match the numbered pattern but is a non-empty line within the tags,
+        # we still want to capture it if it looks like a question.
+        elif line:
+            questions.append(line)
 
     return questions

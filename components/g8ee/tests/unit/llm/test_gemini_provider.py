@@ -26,7 +26,6 @@ import httpx
 from google.genai import types as genai_types
 
 from app.llm.llm_types import (
-    Candidate,
     Content,
     GenerateContentResponse,
     Part,
@@ -34,7 +33,6 @@ from app.llm.llm_types import (
     ThoughtSignature,
     ToolCall,
     ToolResponse,
-    UsageMetadata,
     ToolGroup,
     ToolDeclaration,
     ToolConfig,
@@ -178,7 +176,7 @@ class TestGroundingFromSdkCandidate:
         mock_candidate = MagicMock()
         gm = mock_candidate.grounding_metadata
         gm.web_search_queries = ["query1"]
-        
+
         mock_chunk = MagicMock()
         mock_chunk.web.uri = "https://example.com"
         mock_chunk.web.title = "Example"
@@ -207,7 +205,7 @@ class TestGroundingFromSdkCandidate:
         gm.grounding_chunks = [mock_chunk]
         gm.grounding_supports = []
         gm.search_entry_point = None
-        
+
         grounding = _grounding_from_sdk_candidate(mock_candidate)
         assert grounding.grounding_chunks[0].web is None
 
@@ -275,7 +273,7 @@ class TestStreamParsing:
         mock_chunk = MagicMock()
         mock_chunk.candidates = []
         mock_chunk.usage_metadata.prompt_token_count = 10
-        
+
         chunks = GeminiProvider._sdk_chunk_to_stream_from_model_chunks(mock_chunk)
         assert len(chunks) == 1
         assert chunks[0].usage_metadata.prompt_token_count == 10
@@ -292,7 +290,7 @@ class TestStreamParsing:
         mock_candidate.finish_reason = None
         mock_chunk.candidates = [mock_candidate]
         mock_chunk.usage_metadata = None
-        
+
         chunks = GeminiProvider._sdk_chunk_to_stream_from_model_chunks(mock_chunk)
         assert len(chunks) == 1
         assert chunks[0].text == "hello"
@@ -312,7 +310,7 @@ class TestStreamParsing:
         mock_candidate.finish_reason = None
         mock_chunk.candidates = [mock_candidate]
         mock_chunk.usage_metadata = None
-        
+
         chunks = GeminiProvider._sdk_chunk_to_stream_from_model_chunks(mock_chunk)
         assert len(chunks) == 1
         assert chunks[0].tool_calls[0].name == "tool"
@@ -325,15 +323,15 @@ class TestResponseParsing:
     def test_parse_full_response(self, mock_client):
         provider = GeminiProvider(api_key="key")
         mock_resp = MagicMock()
-        
+
         mock_candidate = MagicMock()
         mock_candidate.content.parts = [MagicMock(text="reply", thought=False, function_call=None, thought_signature=None)]
         mock_candidate.finish_reason.name = "STOP"
         mock_candidate.grounding_metadata = None
         mock_resp.candidates = [mock_candidate]
-        
+
         mock_resp.usage_metadata.prompt_token_count = 100
-        
+
         parsed = provider._parse_response(mock_resp)
         assert parsed.candidates[0].content.parts[0].text == "reply"
         assert parsed.candidates[0].finish_reason == "STOP"
@@ -343,13 +341,13 @@ class TestGeminiProvider:
 
     def test_is_retryable(self):
         assert GeminiProvider._is_retryable(httpx.ConnectTimeout("timeout")) is True
-        
+
         exc429 = Exception("too many requests")
-        setattr(exc429, "status_code", 429)
+        exc429.status_code = 429
         assert GeminiProvider._is_retryable(exc429) is True
 
         exc500 = Exception("internal error")
-        setattr(exc500, "status_code", 500)
+        exc500.status_code = 500
         assert GeminiProvider._is_retryable(exc500) is False
 
     def test_tool_group_to_genai(self):
@@ -361,24 +359,24 @@ class TestGeminiProvider:
             parameters=params
         )
         tool_group = ToolGroup(tools=[tool_decl], google_search=True)
-        
+
         genai_tools = _tool_group_to_genai(tool_group)
         assert len(genai_tools) == 2
-        
+
         # Check function declaration
         funcs = genai_tools[0].function_declarations
         assert funcs[0].name == "get_weather"
         assert funcs[0].description == "Get weather info"
         # The SDK might return a Schema object; just check we can access it
         assert funcs[0].parameters is not None
-        
+
         # Check google search
         assert genai_tools[1].google_search is not None
 
     def test_build_thinking_config_gemini3(self):
         from app.constants import ThinkingLevel
         from app.llm.llm_types import ThinkingConfig
-        
+
         tc = ThinkingConfig(thinking_level=ThinkingLevel.HIGH, include_thoughts=True)
         # Mock translate_for_gemini to avoid actual model config lookup
         with patch("app.llm.providers.gemini.translate_for_gemini") as mock_translate:
@@ -388,7 +386,7 @@ class TestGeminiProvider:
                 thinking_level="HIGH",
                 include_thoughts=True
             )
-            
+
             sdk_tc, translation = GeminiProvider._build_thinking_config_gemini3(tc, "gemini-3.0", genai_types)
             assert sdk_tc.thinking_level == "HIGH"
             assert sdk_tc.include_thoughts is True
@@ -397,7 +395,7 @@ class TestGeminiProvider:
     def test_build_thinking_config_gemini3_off(self):
         from app.llm.llm_types import ThinkingConfig
         from app.constants import ThinkingLevel
-        
+
         tc = ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False)
         with patch("app.llm.providers.gemini.translate_for_gemini") as mock_translate:
             from app.llm.thinking import GeminiThinkingTranslation
@@ -406,7 +404,7 @@ class TestGeminiProvider:
                 thinking_level=None,
                 include_thoughts=False
             )
-            
+
             sdk_tc, translation = GeminiProvider._build_thinking_config_gemini3(tc, "gemini-3.0", genai_types)
             assert sdk_tc is None
             assert translation.enabled is False
@@ -426,7 +424,7 @@ class TestGeminiProvider:
             top_k_filtering=40
         )
         tools = [genai_types.Tool(google_search=genai_types.GoogleSearch())]
-        
+
         config = GeminiProvider._build_genai_config(settings, tools, "gemini-2.0-flash")
         assert config.max_output_tokens == 1024
         assert config.system_instruction == "be helpful"
@@ -440,7 +438,7 @@ class TestGeminiProvider:
         mock_resp = MagicMock()
         mock_resp.candidates = []
         mock_resp.usage_metadata = None
-        
+
         with patch.object(provider, "_sync_generate", return_value=mock_resp) as mock_sync:
             resp = await provider._generate_with_retry("model", [], {})
             assert isinstance(resp, GenerateContentResponse)
@@ -449,20 +447,20 @@ class TestGeminiProvider:
     @patch("google.genai.Client")
     async def test_stream_with_retry(self, mock_client):
         provider = GeminiProvider(api_key="key")
-        
+
         mock_chunk = MagicMock()
         mock_chunk.candidates = []
         mock_chunk.usage_metadata = None
-        
+
         # mock_sync_stream returns an iterator
         mock_iter = iter([mock_chunk])
-        
+
         with patch.object(provider, "_sync_stream", return_value=mock_iter) as mock_sync:
             chunks = []
             async for chunk in provider._stream_with_retry("model", [], {}):
                 chunks.append(chunk)
-            
-            # Since mock_chunk has no candidates/usage, it might not yield anything 
+
+            # Since mock_chunk has no candidates/usage, it might not yield anything
             # depending on _sdk_chunk_to_stream_from_model_chunks logic.
             # But we verify the sync call happened.
             mock_sync.assert_called_once()
@@ -471,10 +469,10 @@ class TestGeminiProvider:
     async def test_generate_content_stream_primary(self, mock_client):
         provider = GeminiProvider(api_key="key")
         settings = PrimaryLLMSettings(max_output_tokens=100)
-        
+
         async def mock_stream(*args, **kwargs):
             yield StreamChunkFromModel(text="hi")
-            
+
         with patch.object(provider, "_stream_with_retry", side_effect=mock_stream) as mock_retry:
             chunks = []
             async for chunk in provider.generate_content_stream_primary("model", [Content(role=Role.USER, parts=[Part(text="hi")])], settings):
@@ -487,11 +485,11 @@ class TestGeminiProvider:
     async def test_generate_content_stream_primary_error(self, mock_client):
         provider = GeminiProvider(api_key="key")
         settings = PrimaryLLMSettings(max_output_tokens=100)
-        
+
         async def mock_stream_error(*args, **kwargs):
             raise Exception("api error")
             yield # make it a generator
-            
+
         with patch.object(provider, "_stream_with_retry", side_effect=mock_stream_error):
             with patch("app.llm.providers.gemini.translate_capability_error") as mock_translate:
                 with pytest.raises(Exception, match="api error"):
@@ -502,7 +500,7 @@ class TestGeminiProvider:
     async def test_generate_content_primary(self, mock_client):
         provider = GeminiProvider(api_key="key")
         settings = PrimaryLLMSettings(max_output_tokens=100)
-        
+
         with patch.object(provider, "_generate_with_retry", return_value=GenerateContentResponse()) as mock_retry:
             await provider.generate_content_primary("model", [Content(role=Role.USER, parts=[Part(text="hi")])], settings)
             mock_retry.assert_called_once()
@@ -531,15 +529,15 @@ class TestGeminiProvider:
             max_output_tokens=100,
             tools=[ToolGroup(tools=[ToolDeclaration(name="t1", description="d1", parameters={})])]
         )
-        
+
         async def mock_stream(*args, **kwargs):
             yield StreamChunkFromModel(text="hi")
-            
+
         with patch.object(provider, "_stream_with_retry", side_effect=mock_stream) as mock_retry:
             chunks = []
             async for chunk in provider.generate_content_stream_primary("model", [], settings):
                 chunks.append(chunk)
-            
+
             # Verify tools were passed to _build_genai_config via the retry call
             args = mock_retry.call_args[0]
             # config is the 3rd arg
@@ -605,7 +603,7 @@ class TestGeminiProvider:
         gm.grounding_chunks = []
         gm.web_search_queries = []
         gm.search_entry_point = None
-        
+
         grounding = _grounding_from_sdk_candidate(mock_candidate)
         assert len(grounding.grounding_supports) == 0
 
@@ -707,7 +705,7 @@ class TestGeminiProvider:
         mock_cand.finish_reason = None
         mock_chunk.candidates = [mock_cand]
         mock_chunk.usage_metadata = None
-        
+
         chunks = GeminiProvider._sdk_chunk_to_stream_from_model_chunks(mock_chunk)
         assert chunks[0].text == "line1\nline2"
 
@@ -719,7 +717,7 @@ class TestGeminiProvider:
             max_output_tokens=512,
             response_format=ResponseFormat(json_schema=schema)
         )
-        
+
         config = GeminiProvider._build_genai_config(settings, None, "gemini-2.0-flash")
         assert config.max_output_tokens == 512
         assert config.response_mime_type == "application/json"
@@ -735,7 +733,7 @@ class TestGeminiProvider:
         mock_cand.finish_reason = None
         mock_chunk.candidates = [mock_cand]
         mock_chunk.usage_metadata = None
-        
+
         mock_iter = iter([mock_chunk])
         with patch.object(provider, "_sync_stream", return_value=mock_iter):
             chunks = []
@@ -772,7 +770,7 @@ class TestGeminiProvider:
         provider = GeminiProvider(api_key="key")
         provider._sync_generate("model", [], {})
         provider._client.models.generate_content.assert_called_once()
-        
+
         provider._sync_stream("model", [], {})
         provider._client.models.generate_content_stream.assert_called_once()
 
@@ -783,7 +781,7 @@ class TestGeminiProvider:
         mock_cand.content = None
         mock_chunk.candidates = [mock_cand]
         mock_chunk.usage_metadata = None
-        
+
         chunks = GeminiProvider._sdk_chunk_to_stream_from_model_chunks(mock_chunk)
         assert len(chunks) == 1
         assert chunks[0].finish_reason == "STOP"
@@ -794,11 +792,11 @@ class TestGeminiProvider:
         mock_support = MagicMock()
         mock_support.segment.text = "seg"
         # Cause TypeError in list(raw_indices)
-        mock_support.grounding_chunk_indices = 123 
+        mock_support.grounding_chunk_indices = 123
         gm.grounding_supports = [mock_support]
         gm.grounding_chunks = []
         gm.web_search_queries = []
         gm.search_entry_point = None
-        
+
         grounding = _grounding_from_sdk_candidate(mock_candidate)
         assert grounding.grounding_supports[0].grounding_chunk_indices == []

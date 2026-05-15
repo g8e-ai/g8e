@@ -86,17 +86,17 @@ async def deliver_via_sse(
             "investigation_id is required for deliver_via_sse",
             field="investigation_id", constraint="required",
         )
-    
+
     investigation_id: str = inputs.investigation_id
     web_session_id: str | None = inputs.web_session_id
     user_id: str = inputs.user_id or ""
     agent_mode = inputs.agent_mode
-    
+
     # Standard flows have web sessions for SSE delivery.
-    # If web_session_id is None, we still process the stream to populate 
+    # If web_session_id is None, we still process the stream to populate
     # state.response_text but skip EventService publishing.
     has_sse = web_session_id is not None
-    
+
     if has_sse:
         if not inputs.case_id:
             raise ValidationError(
@@ -213,7 +213,7 @@ async def deliver_via_sse(
                     query = None
                     port = None
                     host = None
-                    
+
                     if fn == OperatorToolName.QUERY_INVESTIGATION_CONTEXT:
                         event_type = EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED
                         # Extract query if available
@@ -255,7 +255,7 @@ async def deliver_via_sse(
                     results = None
                     is_open = None
                     error = None
-                    
+
                     # We use RECEIVED/COMPLETED/FAILED depending on the tool.
                     # Plan says REQUESTED -> RECEIVED -> COMPLETED -> FAILED.
                     # agent_sse.py sees TOOL_RESULT which maps to COMPLETED/FAILED.

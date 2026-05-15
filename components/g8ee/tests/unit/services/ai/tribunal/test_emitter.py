@@ -13,7 +13,7 @@
 
 from unittest.mock import AsyncMock, MagicMock
 import pytest
-from app.constants import EventType, ComponentName
+from app.constants import EventType
 from app.models.agents.tribunal import (
     TribunalSessionGenerationFailedPayload,
     TribunalPassCompletedPayload,

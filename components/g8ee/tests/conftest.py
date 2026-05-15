@@ -25,7 +25,6 @@ E2E fixtures are in tests/e2e/conftest.py.
 import logging
 import os
 import socket
-import time
 
 import pytest
 import pytest_asyncio
@@ -218,7 +217,7 @@ def _is_operator_online(host: str = "localhost", port: int = 9000, timeout: floa
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
-    except (ConnectionRefusedError, socket.timeout, OSError):
+    except (TimeoutError, ConnectionRefusedError, OSError):
         return False
 
 
@@ -280,7 +279,7 @@ def pytest_configure(config):
     # Check if operator is online once at the start
     is_online = _is_operator_online()
     config.stash[pytest.StashKey[bool]()] = is_online
-    
+
     # We use a global variable because some fixtures are session-scoped and don't have easy access to config
     global _OPERATOR_ONLINE
     _OPERATOR_ONLINE = is_online
@@ -346,9 +345,7 @@ def pytest_collection_modifyitems(config, items):
     ) if search_settings else False
 
     for item in items:
-        if item.get_closest_marker("requires_operator") and not is_operator_online:
-            item.add_marker(pytest.mark.skip(reason="operator offline"))
-        elif item.get_closest_marker("operator_wire") and not is_operator_online:
+        if (item.get_closest_marker("requires_operator") and not is_operator_online) or (item.get_closest_marker("operator_wire") and not is_operator_online):
             item.add_marker(pytest.mark.skip(reason="operator offline"))
         elif item.get_closest_marker("ai_integration") and not has_llm_credentials:
             item.add_marker(pytest.mark.skip(reason="no llm creds"))

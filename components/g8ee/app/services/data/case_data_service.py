@@ -12,10 +12,11 @@
 # limitations under the License.
 
 import logging
-from typing import Awaitable, TypeVar
+from typing import TypeVar
+from collections.abc import Awaitable
 from uuid import uuid4
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 from app.models.settings import G8eePlatformSettings
 from app.constants import (

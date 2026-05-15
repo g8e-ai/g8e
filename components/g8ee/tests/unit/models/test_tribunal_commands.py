@@ -137,7 +137,7 @@ class TestTribunalCommandModels:
                 consensus_strength=1.0
             )
         )
-        
+
         assert cmd.investigation_id == "inv-123"
         assert cmd.case_id == "case-123"
         assert cmd.request_context.request == "test"

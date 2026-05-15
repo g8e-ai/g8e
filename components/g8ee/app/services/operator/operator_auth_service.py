@@ -110,7 +110,7 @@ class OperatorAuthService:
             operator = await self._operator_data_service.get_operator(operator_id)
             if not operator:
                 return {"success": False, "error": f"Operator {operator_id} not found"}
-        
+
         # On-demand slot resolution/creation
         if not operator:
             if not device_link_token:
@@ -127,7 +127,7 @@ class OperatorAuthService:
             # 1a. Try to find existing operator by system_fingerprint (same physical device)
             if system_fingerprint:
                 operator = next(
-                    (op for op in all_user_operators 
+                    (op for op in all_user_operators
                      if op.latest_heartbeat_snapshot and op.latest_heartbeat_snapshot.system_fingerprint == system_fingerprint),
                     None
                 )
@@ -147,11 +147,11 @@ class OperatorAuthService:
                 operator_id = str(uuid.uuid4())
                 operator_suffix = operator_id.rsplit("-", maxsplit=1)[-1][:8]
                 api_key = f"g8e_{operator_suffix}_{secrets.token_hex(32)}"
-                
+
                 # Use atomic KV counter for slot number to prevent race conditions
                 # during concurrent device-link registration
                 slot_counter_key = KVKey.operator_slot_counter(user_id)
-                
+
                 # Atomically increment to get next slot number
                 # KV incr initializes to 0 if key doesn't exist, then increments
                 slot_number = await self._cache.kv.incr(slot_counter_key, amount=1)
@@ -168,9 +168,9 @@ class OperatorAuthService:
                     created_at=now(),
                     updated_at=now(),
                 )
-                
+
                 await self._operator_data_service.create_operator(operator_doc)
-                
+
                 # Issue API key (canonical)
                 # Note: This uses api_key_service which is already in __init__
                 await self._api_key_service.issue_key(
@@ -180,7 +180,7 @@ class OperatorAuthService:
                     operator_id=operator_id,
                     permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
                 )
-                
+
                 operator = operator_doc
 
         # Verify operator was resolved

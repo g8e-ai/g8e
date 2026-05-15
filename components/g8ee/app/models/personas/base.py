@@ -11,7 +11,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -31,7 +30,7 @@ class AgentPersonaModel(BaseModel):
     identity: str
     purpose: str
     autonomy: str
-    output_contract: Optional[str] = None
+    output_contract: str | None = None
 
     model_config = ConfigDict(frozen=True)
 

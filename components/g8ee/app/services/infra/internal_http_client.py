@@ -23,7 +23,7 @@ from app.constants import (
     G8eHeaders,
     InternalApiPaths,
 )
-from app.errors import ConfigurationError, NetworkError
+from app.errors import NetworkError
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import (

@@ -20,7 +20,7 @@ class WardenPersona(AgentPersonaModel):
     Orchestrates command, error, and file risk classification.
     Aligned with position_paper.md: "The Operator runs the Warden, a defensive coordinator that performs pre-execution risk assessment locally."
     """
-    
+
     def __init__(self):
         super().__init__(
             id="warden",
@@ -60,7 +60,7 @@ class WardenCommandRiskPersona(AgentPersonaModel):
     
     Classifies shell command risk as LOW, MEDIUM, or HIGH.
     """
-    
+
     def __init__(self):
         super().__init__(
             id="warden_command_risk",
@@ -101,7 +101,7 @@ class WardenErrorPersona(AgentPersonaModel):
     
     Classifies command failures as AUTO_FIXABLE, ESCALATE, or RETRY_LIMIT.
     """
-    
+
     def __init__(self):
         super().__init__(
             id="warden_error",
@@ -141,7 +141,7 @@ class WardenFileRiskPersona(AgentPersonaModel):
     
     Classifies file operation risk as LOW, MEDIUM, or HIGH.
     """
-    
+
     def __init__(self):
         super().__init__(
             id="warden_file_risk",

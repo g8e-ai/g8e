@@ -45,7 +45,7 @@ from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FailedIntentResult, IamIntentResult, IntentPermissionResult
 from app.models.command_request_payloads import CommandRequestPayload
-from app.models.operators import IntentApprovalRequest, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent, CloudSubtype
+from app.models.operators import IntentApprovalRequest, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.pubsub_messages import G8eMessage
 from app.services.operator.iam_command_builder import IamCommandBuilder
 from app.utils.ids import (

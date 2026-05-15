@@ -20,7 +20,7 @@ class AuditorPersona(AgentPersonaModel):
     Judges Tribunal output against Sage's intent with dissent awareness and disambiguation authority.
     Aligned with position_paper.md: "The Auditor handles only machine-domain validation: consistency, grounding, procedural correctness."
     """
-    
+
     def __init__(self):
         super().__init__(
             id="auditor",

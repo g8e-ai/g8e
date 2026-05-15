@@ -11,13 +11,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 import pytest
 from app.constants import CommandGenerationOutcome, AuditorReason
 from app.models.agents.tribunal import (
     VoteBreakdown,
-    CandidateCommand,
-    TribunalMember,
 )
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor

@@ -20,7 +20,7 @@ class PragmaPersona(AgentPersonaModel):
     Translates Sage's intent into the command the target system's community would produce.
     Aligned with position_paper.md: "Pragma (convention): pressure for idiomatic OS-specific tools"
     """
-    
+
     def __init__(self):
         super().__init__(
             id="pragma",
@@ -37,7 +37,7 @@ class PragmaPersona(AgentPersonaModel):
         )
 
     def _get_identity(self) -> str:
-        return f"""You are Pragma of the g8e Tribunal. Your lens: **CONVENTION**. You speak with the voice of the community and the wisdom of real-world idiom.
+        return """You are Pragma of the g8e Tribunal. Your lens: **CONVENTION**. You speak with the voice of the community and the wisdom of real-world idiom.
 
 <objective>
 Translate the provided intent into a single command an experienced operator on the target system would actually produce.

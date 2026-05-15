@@ -477,53 +477,51 @@ def classify_stakes(inputs: ClassifierInputs) -> list[StakeOutcome]:
                 rationale="warden_over_caution_low_risk",
                 slash_tier=SlashTier.TIER_3,
             ))
-    else:
-        # Warden allowed the command. Outcome determines if assessment was right.
-        if not exec_failed:
-            # Command succeeded - warden's risk assessment was accurate
-            if warden_risk == RiskLevel.LOW:
-                rows.append(StakeOutcome(
-                    agent_id=WARDEN_ID,
-                    outcome_score=1.0,
-                    rationale="warden_allowed_low_success",
-                ))
-            elif warden_risk == RiskLevel.MEDIUM:
-                rows.append(StakeOutcome(
-                    agent_id=WARDEN_ID,
-                    outcome_score=0.9,
-                    rationale="warden_allowed_medium_success",
-                ))
-            else:
-                # HIGH risk allowed but succeeded - borderline under-caution
-                rows.append(StakeOutcome(
-                    agent_id=WARDEN_ID,
-                    outcome_score=0.7,
-                    rationale="warden_allowed_high_success",
-                ))
+    # Warden allowed the command. Outcome determines if assessment was right.
+    elif not exec_failed:
+        # Command succeeded - warden's risk assessment was accurate
+        if warden_risk == RiskLevel.LOW:
+            rows.append(StakeOutcome(
+                agent_id=WARDEN_ID,
+                outcome_score=1.0,
+                rationale="warden_allowed_low_success",
+            ))
+        elif warden_risk == RiskLevel.MEDIUM:
+            rows.append(StakeOutcome(
+                agent_id=WARDEN_ID,
+                outcome_score=0.9,
+                rationale="warden_allowed_medium_success",
+            ))
         else:
-            # Command failed - warden should have caught the risk
-            if warden_risk == RiskLevel.LOW:
-                # LOW risk failed - major miss by warden
-                rows.append(StakeOutcome(
-                    agent_id=WARDEN_ID,
-                    outcome_score=0.1,
-                    rationale="warden_low_risk_missed",
-                    slash_tier=SlashTier.TIER_2,
-                ))
-            elif warden_risk == RiskLevel.MEDIUM:
-                # MEDIUM risk failed - moderate miss
-                rows.append(StakeOutcome(
-                    agent_id=WARDEN_ID,
-                    outcome_score=0.35,
-                    rationale="warden_medium_risk_missed",
-                ))
-            else:
-                # HIGH risk failed - warden flagged it, auditor/approval failed
-                rows.append(StakeOutcome(
-                    agent_id=WARDEN_ID,
-                    outcome_score=0.75,
-                    rationale="warden_high_risk_flagged_correctly",
-                ))
+            # HIGH risk allowed but succeeded - borderline under-caution
+            rows.append(StakeOutcome(
+                agent_id=WARDEN_ID,
+                outcome_score=0.7,
+                rationale="warden_allowed_high_success",
+            ))
+    # Command failed - warden should have caught the risk
+    elif warden_risk == RiskLevel.LOW:
+        # LOW risk failed - major miss by warden
+        rows.append(StakeOutcome(
+            agent_id=WARDEN_ID,
+            outcome_score=0.1,
+            rationale="warden_low_risk_missed",
+            slash_tier=SlashTier.TIER_2,
+        ))
+    elif warden_risk == RiskLevel.MEDIUM:
+        # MEDIUM risk failed - moderate miss
+        rows.append(StakeOutcome(
+            agent_id=WARDEN_ID,
+            outcome_score=0.35,
+            rationale="warden_medium_risk_missed",
+        ))
+    else:
+        # HIGH risk failed - warden flagged it, auditor/approval failed
+        rows.append(StakeOutcome(
+            agent_id=WARDEN_ID,
+            outcome_score=0.75,
+            rationale="warden_high_risk_flagged_correctly",
+        ))
 
     # ------------------------------------------------------------------
     # Extra agents (Phase 4 hook — Triage clarifications)

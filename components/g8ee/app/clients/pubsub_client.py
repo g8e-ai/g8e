@@ -20,7 +20,6 @@ publish_command, subscribe_execution_results, subscribe_heartbeats, check_operat
 """
 
 import asyncio
-import json
 import logging
 import uuid
 from collections.abc import Callable, Coroutine
@@ -38,7 +37,6 @@ from app.constants import (
     EventType,
     PubSubAction,
     PubSubChannel,
-    PubSubField,
     PubSubWireEventType,
 )
 from app.models.pubsub_messages import G8eMessage, HeartbeatRequestPayload

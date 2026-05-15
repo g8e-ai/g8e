@@ -176,7 +176,7 @@ class TribunalAuditor:
                 if status == TribunalAuditStatus.SWAP and swap_to_cluster_id:
                     final_cmd = cluster_to_cmd[swap_to_cluster_id]
                     swap_to_member = cluster_to_members[swap_to_cluster_id][0]
-                    
+
                     safety_result = validate_command_safety(final_cmd, whitelisting_enabled, blacklisting_enabled, operator_context)
                     if not safety_result.is_safe:
                         reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION

@@ -11,25 +11,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import hmac
 import logging
-from typing import cast
 from fastapi import Request
 
 from app.constants import (
-    HTTP_FORWARDED_FOR_HEADER,
-    HTTP_USER_AGENT_HEADER,
     PROXY_ORGANIZATION_ID_HEADER,
     PROXY_USER_EMAIL_HEADER,
     PROXY_USER_ID_HEADER,
     AuthMethod,
     ComponentName,
-    G8eHeaders,
 )
-from app.errors import AuthenticationError, AuthorizationError
+from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser
 from app.models.settings import G8eePlatformSettings
-from app.models.state import G8eeAppState
 
 logger = logging.getLogger(__name__)
 

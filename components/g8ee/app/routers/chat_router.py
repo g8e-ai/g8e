@@ -84,7 +84,7 @@ async def answer_triage_question(
         )
     )
 
-    # Trigger AI response by calling run_chat. 
+    # Trigger AI response by calling run_chat.
     # ChatPipeline.run_chat internally tracks the task via ChatTaskManager,
     # which will cancel any existing active task for this investigation_id.
     await chat_pipeline.run_chat(

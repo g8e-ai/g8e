@@ -99,7 +99,7 @@ class TestCommandGeneratorWithCommitment:
                 from app.models.reputation import ReputationCommitmentCreatedPayload
                 from app.models.events import SessionEvent
                 correlation_id = "mock-correlation-id"
-                
+
                 payload = ReputationCommitmentCreatedPayload(
                     commitment_id="mock-commitment-id",
                     tribunal_command_id=correlation_id,
@@ -237,7 +237,7 @@ class TestCommandGeneratorWithCommitment:
             async def mock_audit_fatal_failure(*args, **kwargs):
                 from app.models.events import SessionEvent
                 correlation_id = "test-correlation-id"
-                
+
                 payload = ReputationCommitmentFailedPayload(
                     tribunal_command_id=correlation_id,
                     investigation_id=inputs.investigation_id,
@@ -252,7 +252,7 @@ class TestCommandGeneratorWithCommitment:
                     user_id=inputs.user_id,
                 )
                 await event_svc.publish(event)
-                
+
                 raise RuntimeError(f"Reputation commitment failed for tribunal_command_id={correlation_id}: DB Offline")
 
             mock_run_auditor.side_effect = mock_audit_fatal_failure

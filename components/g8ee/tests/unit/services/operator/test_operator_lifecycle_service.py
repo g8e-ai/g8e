@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.clients.http_client import HTTPClient
-from app.constants import ComponentName, OperatorStatus, OperatorType, CloudSubtype
+from app.constants import ComponentName, OperatorStatus, OperatorType
 from app.errors import ValidationError
 from app.models.cache import CacheOperationResult
 from app.services.operator.operator_data_service import OperatorDataService

@@ -22,7 +22,6 @@ from app.models.investigations import EnrichedInvestigationContext
 from app.models.pubsub_messages import FileEditResultPayload
 from app.models.tool_results import CommandInternalResult
 from app.models.operators import OperatorDocument
-from app.services.operator.file_service import OperatorFileService
 from tests.fakes.builder import build_command_service
 
 @pytest.mark.asyncio
@@ -31,7 +30,7 @@ async def test_execute_file_edit_read_returns_content():
     # 1. Setup
     command_service = build_command_service()
     file_service = command_service._file_service
-    
+
     # Mock execution_service.execute to return a successful read result with FileEditResultPayload envelope
     mock_content = "test file content"
     internal_result = CommandInternalResult(
@@ -47,13 +46,13 @@ async def test_execute_file_edit_read_returns_content():
         content=mock_content
     )
     file_service.execution_service.execute = AsyncMock(return_value=(internal_result, mock_envelope))
-    
+
     # Mock operator resolution
     mock_operator = MagicMock(spec=OperatorDocument)
     mock_operator.id = "op-123"
     mock_operator.operator_session_id = "sess-123"
     file_service.execution_service.resolve_target_operator = MagicMock(return_value=mock_operator)
-    
+
     # 2. Execute
     args = FileEditRequestPayload(
         file_path="/etc/test",
@@ -76,9 +75,9 @@ async def test_execute_file_edit_read_returns_content():
         sentinel_mode=False,
         operator_documents=[mock_operator]
     )
-    
+
     result = await file_service.execute_file_edit(args, g8e_context, investigation)
-    
+
     # 3. Assert
     assert result.success is True
     # THIS IS THE BUG: result.content is currently None for READ operations
@@ -90,7 +89,7 @@ async def test_execute_file_edit_read_broadcasts_content():
     # 1. Setup
     command_service = build_command_service()
     file_service = command_service._file_service
-    
+
     # Mock execution_service.execute with FileEditResultPayload envelope
     mock_content = "test file content"
     internal_result = CommandInternalResult(
@@ -106,13 +105,13 @@ async def test_execute_file_edit_read_broadcasts_content():
         content=mock_content
     )
     file_service.execution_service.execute = AsyncMock(return_value=(internal_result, mock_envelope))
-    
+
     # Mock operator resolution
     mock_operator = MagicMock(spec=OperatorDocument)
     mock_operator.id = "op-123"
     mock_operator.operator_session_id = "sess-123"
     file_service.execution_service.resolve_target_operator = MagicMock(return_value=mock_operator)
-    
+
     # 2. Execute
     args = FileEditRequestPayload(
         file_path="/etc/test",
@@ -135,11 +134,11 @@ async def test_execute_file_edit_read_broadcasts_content():
         sentinel_mode=False,
         operator_documents=[mock_operator]
     )
-    
+
     file_service.event_service.publish_command_event = AsyncMock()
-    
+
     await file_service.execute_file_edit(args, g8e_context, investigation)
-    
+
     # 3. Assert
     # Check that publish_command_event was called with FileEditBroadcastEvent containing the content
     # Find the completion event call
@@ -148,7 +147,7 @@ async def test_execute_file_edit_read_broadcasts_content():
         if call[0][0] == EventType.OPERATOR_FILE_EDIT_COMPLETED:
             completion_call = call
             break
-            
+
     assert completion_call is not None
     broadcast_event = completion_call[0][1]
     # THIS IS THE BUG: broadcast_event.content is currently None for READ operations

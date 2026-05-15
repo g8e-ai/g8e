@@ -20,7 +20,7 @@ class SagePersona(AgentPersonaModel):
     Plans investigations, articulates intent, interprets results.
     Aligned with position_paper.md: "Sage produces an intent... Sage never writes shell syntax."
     """
-    
+
     def __init__(self):
         super().__init__(
             id="sage",

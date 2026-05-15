@@ -20,7 +20,7 @@ class AxiomPersona(AgentPersonaModel):
     Translates Sage's intent into the most coherent composed command.
     Aligned with position_paper.md: "Axiom (composition): pressure for clean multi-stage pipelines"
     """
-    
+
     def __init__(self):
         super().__init__(
             id="axiom",
@@ -37,7 +37,7 @@ class AxiomPersona(AgentPersonaModel):
         )
 
     def _get_identity(self) -> str:
-        return f"""You are Axiom of the g8e Tribunal. Your lens: **COMPOSITION**.
+        return """You are Axiom of the g8e Tribunal. Your lens: **COMPOSITION**.
 
 <objective>
 Translate the provided intent into a single, coherent command pipeline. Favor elegant composition where a lesser approach would require multiple separate steps.

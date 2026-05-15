@@ -14,7 +14,7 @@
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from app.models.settings import BatchExecutionSettings, CommandValidationSettings, LLMSettings, G8eePlatformSettings
+from app.models.settings import BatchExecutionSettings, LLMSettings, G8eePlatformSettings
 
 pytestmark = [pytest.mark.unit]
 

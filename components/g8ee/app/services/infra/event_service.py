@@ -42,7 +42,7 @@ class EventService(EventServiceProtocol):
         task_id: str,
     ) -> None:
         """Publish a command-related event."""
-        logger.warning(f"EventService.publish_command_event called but not implemented")
+        logger.warning("EventService.publish_command_event called but not implemented")
 
     async def publish_investigation_event(
         self,
@@ -54,4 +54,4 @@ class EventService(EventServiceProtocol):
         user_id: str,
     ) -> None:
         """Publish an investigation-related event."""
-        logger.warning(f"EventService.publish_investigation_event called but not implemented")
+        logger.warning("EventService.publish_investigation_event called but not implemented")

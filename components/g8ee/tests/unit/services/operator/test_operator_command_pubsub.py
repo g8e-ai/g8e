@@ -19,7 +19,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import EventType, ExecutionStatus, PubSubChannel
-from app.proto import common_pb2, operator_pb2
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from tests.fakes.builder import build_command_service
@@ -219,11 +218,11 @@ class TestDispatchResultsMessage:
                     "status": "completed"
                 }
             }
-            
+
             data = json.dumps(envelope_data).encode("utf-8")
-            
+
             await command_service._pubsub_service._dispatch_results_message( PubSubChannel.results("op-1", "sess-1"), data)  # noqa: SLF001
-            
+
             mock_handle.assert_called_once()
             call_args = mock_handle.call_args[0]
             assert call_args[0] == "op-1"
@@ -235,9 +234,9 @@ class TestDispatchResultsMessage:
         """Test rejects invalid JSON payload."""
         command_service._pubsub_service._handle_pubsub_result_message = AsyncMock()  # noqa: SLF001
         data = b"not-even-json"
-        
+
         await command_service._pubsub_service._dispatch_results_message(PubSubChannel.results("op-1", "sess-1"), data)  # noqa: SLF001
-        
+
         # Should NOT call handler because it's not a valid envelope
         command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()
 
@@ -253,7 +252,7 @@ class TestDispatchResultsMessage:
         command_service._pubsub_service._handle_pubsub_result_message = AsyncMock(  # noqa: SLF001
             side_effect=Exception("boom")
         )
-        
+
         # Build a valid Protobuf GovernanceEnvelope to reach the handler
         envelope_data = {
             "id": "test-id",
@@ -267,7 +266,7 @@ class TestDispatchResultsMessage:
             }
         }
         data = json.dumps(envelope_data).encode("utf-8")
-        
+
         with pytest.raises(Exception, match="boom"):
             await command_service._pubsub_service._dispatch_results_message(  # noqa: SLF001
                 PubSubChannel.results("op-1", "sess-1"), data
@@ -280,7 +279,6 @@ class TestDispatchResultsMessage:
             PubSubChannel.results("op-1", "sess-1"), b"invalid-envelope-data"
         )
         command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()
-  # noqa: SLF001
 
 
 class TestHandlePubSubResultMessage:

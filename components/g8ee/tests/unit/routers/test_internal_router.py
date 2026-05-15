@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants import NEW_CASE_ID, ComponentName, CloudSubtype
+from app.constants import NEW_CASE_ID, ComponentName
 from app.errors import ResourceNotFoundError
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.cases import CaseUpdateRequest

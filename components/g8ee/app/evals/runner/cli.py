@@ -61,16 +61,16 @@ def resolve_gold_set_path(gold_set_arg: str | None) -> Path | None:
     """
     if not gold_set_arg:
         return None
-    
+
     path = Path(gold_set_arg)
     if path.exists():
         return path.resolve()
-    
+
     # Try as a short name
     gold_sets = get_available_gold_sets()
     if gold_set_arg in gold_sets:
         return gold_sets[gold_set_arg]
-    
+
     return None
 
 
@@ -172,7 +172,7 @@ async def run_scenario(
                 error="; ".join(failures) if failures else None,
                 details={"tool_calls": tool_calls, "failures": failures},
             )
-        
+
         if scenario.get("secret"):
             passed, details = score_privacy_scenario(scenario, response_text, []) # egress_events empty for now
             return EvalRow(
@@ -287,14 +287,14 @@ async def run_full_eval(
         settings.primary_provider = LLMProvider(llm_provider)
         settings.assistant_provider = LLMProvider(llm_provider)
         settings.lite_provider = LLMProvider(llm_provider)
-    
+
     if llm_primary_model:
         settings.primary_model = llm_primary_model
     if llm_assistant_model:
         settings.assistant_model = llm_assistant_model
     if llm_lite_model:
         settings.lite_model = llm_lite_model
-    
+
     if settings.primary_provider == LLMProvider.GEMINI:
         settings.gemini_api_key = llm_api_key
     elif settings.primary_provider == LLMProvider.OPENAI:

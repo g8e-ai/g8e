@@ -11,7 +11,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 import hashlib
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
@@ -55,7 +54,7 @@ class TestSessionAuthListener:
         operator_id = "op_456"
         user_id = "user_789"
         org_id = "org_000"
-        
+
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
         expected_channel = f"auth.publish:session:{session_hash}"
 
@@ -95,7 +94,7 @@ class TestSessionAuthListener:
 
         # Start listening
         await listener.listen(operator_session_id, operator_id, user_id, org_id)
-        
+
         # Get the registered handler
         handler = mock_pubsub_client.on_channel_message.call_args[0][1]
 
@@ -105,7 +104,7 @@ class TestSessionAuthListener:
         # Assertions
         mock_session_service.validate_session.assert_called_once_with(operator_session_id)
         mock_operator_data_service.get_operator.assert_called_once_with(operator_id)
-        
+
         # Verify response published
         mock_pubsub_client.publish.assert_called_once()
         publish_args = mock_pubsub_client.publish.call_args
@@ -161,14 +160,14 @@ class TestSessionAuthListener:
 
         with patch("asyncio.sleep", new=AsyncMock()) as mock_sleep:
             await listener.listen(operator_session_id, "op1", "u1", "org1")
-            
+
             # Find the background task for auto_cleanup
             cleanup_task = None
             for task in listener._background_tasks:
                 if "auto_cleanup" in str(task):
                     cleanup_task = task
                     break
-            
+
             # We need to wait for the background task to reach sleep or finish
             # Since we mocked sleep, it will finish immediately if we await it
             if cleanup_task:
@@ -181,9 +180,9 @@ class TestSessionAuthListener:
         operator_session_id = "ops_123"
         await listener.listen(operator_session_id, "op1", "u1", "org1")
         handler = mock_pubsub_client.on_channel_message.call_args[0][1]
-        
+
         await handler("wrong_channel", {})
-        
+
         mock_session_service.validate_session.assert_not_called()
 
     async def test_cleanup_handles_missing_channel(self, listener, mock_pubsub_client):

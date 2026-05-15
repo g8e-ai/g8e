@@ -25,7 +25,6 @@ from app.constants import (
     EventType,
     LLMProvider,
     RiskLevel,
-    TieBreakReason,
     TribunalMember,
 )
 from app.llm.llm_types import Role
@@ -60,26 +59,21 @@ from app.models.agents.tribunal import (
     VoteBreakdown,
 )
 from app.models.http_context import G8eHttpContext
-from app.models.model_configs import LLMModelConfig
 from app.models.reputation import ReputationCommitment
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import (
     CommandRiskAnalysis,
     ErrorAnalysisResult,
 )
-from app.services.ai.auditor_service import AuditorClusterInfo
 from app.services.ai.generator import (
     TribunalEmitter,
     _build_and_emit_result,
     _member_for_pass,
-    _resolve_model,
     generate_command,
 )
 from app.services.ai.tribunal.stages.generation import _run_generation_pass
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 from app.services.ai.tribunal.stages.warden import _run_warden_stage
-from app.services.ai.tribunal.utils import _is_system_error
-from app.models.model_configs import get_model_config
 from app.utils.agent_persona_loader import get_agent_persona
 
 _TEST_HMAC_KEY = "a" * 64
@@ -232,7 +226,6 @@ class TestRoleImportRegression:
             consensus_strength=1.0,
         )
 
-        from app.services.ai.tribunal.stages.auditor import TribunalAuditor
         auditor = TribunalAuditor(
             emitter=emitter,
             **_REPUTATION_KWARGS,
@@ -709,7 +702,6 @@ class TestTribunalAuditorFailedError:
             consensus_strength=1.0,
         )
 
-        from app.services.ai.tribunal.stages.auditor import TribunalAuditor
         auditor = TribunalAuditor(
             emitter=emitter,
             **_REPUTATION_KWARGS,
@@ -751,7 +743,6 @@ class TestTribunalAuditorFailedError:
             consensus_strength=1.0,
         )
 
-        from app.services.ai.tribunal.stages.auditor import TribunalAuditor
         auditor = TribunalAuditor(
             emitter=emitter,
             **_REPUTATION_KWARGS,
@@ -791,7 +782,6 @@ class TestTribunalAuditorFailedError:
             consensus_strength=1.0,
         )
 
-        from app.services.ai.tribunal.stages.auditor import TribunalAuditor
         auditor = TribunalAuditor(
             emitter=emitter,
             **_REPUTATION_KWARGS,
@@ -837,8 +827,6 @@ class TestRunAuditStageWardenRiskAnalysis:
 
     @staticmethod
     def _make_analyzer(risk_level, error_user_message: str | None = None, error_suggested_fix: str | None = None):
-        from app.constants import ErrorAnalysisCategory
-        from app.models.tool_results import CommandRiskAnalysis, ErrorAnalysisResult
         analyzer = MagicMock()
         analyzer.analyze_command_risk = AsyncMock(
             return_value=CommandRiskAnalysis(risk_level=risk_level)
@@ -865,7 +853,6 @@ class TestRunAuditStageWardenRiskAnalysis:
         accessed ``risk_score`` and ``reason``, both removed when the
         Warden contract was simplified to ``risk_level`` only.
         """
-        from app.constants import RiskLevel
         analyzer = self._make_analyzer(RiskLevel.LOW)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
@@ -887,11 +874,7 @@ class TestRunAuditStageWardenRiskAnalysis:
     @pytest.mark.asyncio
     async def test_high_risk_first_strike_emits_warden_blocked_and_increments_counter(self):
         """HIGH risk on a fresh investigation raises a first-strike block."""
-        from app.constants import EventType, RiskLevel
-        from app.models.agents.tribunal import (
-            TribunalWardenBlockedError,
-            TribunalWardenBlockedPayload,
-        )
+        from app.constants import EventType
 
         analyzer = self._make_analyzer(
             RiskLevel.HIGH,
@@ -937,11 +920,7 @@ class TestRunAuditStageWardenRiskAnalysis:
     @pytest.mark.asyncio
     async def test_high_risk_second_strike_emits_agent_conflict_and_resets_counter(self):
         """HIGH risk after a prior block raises an agent-conflict second strike."""
-        from app.constants import EventType, RiskLevel
-        from app.models.agents.tribunal import (
-            TribunalWardenBlockedError,
-            TribunalWardenBlockedPayload,
-        )
+        from app.constants import EventType
 
         analyzer = self._make_analyzer(RiskLevel.HIGH)
         mock_event_service = MagicMock()
@@ -1848,7 +1827,6 @@ class TestPromptFields:
         from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
         from app.llm.prompts import PromptFile
         from app.prompts_data.loader import load_prompt
-        from app.utils.agent_persona_loader import get_agent_persona
 
         TRIBUNAL_PROMPT_TEMPLATE = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
         TRIBUNAL_AUDITOR_TEMPLATE = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
@@ -2032,7 +2010,6 @@ class TestTribunalEmitter:
         """All TRIBUNAL_SESSION_* events are terminal and should re-raise on publish failure."""
         from app.models.agents.tribunal import (
             TribunalSessionModelNotConfiguredPayload,
-            TribunalSessionStartedPayload,
             TribunalSessionSystemErrorPayload,
         )
         from app.models.http_context import G8eHttpContext

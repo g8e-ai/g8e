@@ -26,7 +26,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Mapping
 from datetime import datetime
-from typing import Any, Union
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import aiohttp

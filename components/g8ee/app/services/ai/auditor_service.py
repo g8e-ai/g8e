@@ -118,7 +118,7 @@ def parse_auditor_response(
         revised_raw = data.get("revised_command")
         swap_to_cluster = data.get("swap_to_cluster")
 
-        # Convert revised_raw and swap_to_cluster to str | None explicitly if needed, 
+        # Convert revised_raw and swap_to_cluster to str | None explicitly if needed,
         # but pydantic/type-hints will handle it if they are already strings or None.
         revised_cmd = str(revised_raw) if revised_raw is not None else None
         swap_id = str(swap_to_cluster) if swap_to_cluster is not None else None
@@ -364,10 +364,10 @@ async def run_auditor(
             # revised is defined if status == "revised" and normalise_command succeeded
             if status == TribunalAuditStatus.REVISED:
                 # Ensure revised is bound for safety, though normalise_command check above handles it
-                revised_final = locals().get('revised')
+                revised_final = locals().get("revised")
                 if not revised_final:
                      await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, "Missing revision variable", target_cmd)
-                
+
                 safety_result = validate_command_safety(revised_final, whitelisting_enabled, blacklisting_enabled, operator_context)
                 if not safety_result.is_safe:
                     reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION

@@ -17,7 +17,6 @@ The VERSION file at the component root contains the platform semver (e.g., v0.1.
 """
 
 from functools import lru_cache
-from pathlib import Path
 
 from app.models.version import VersionInfo
 from app.utils.path import resolve_project_root

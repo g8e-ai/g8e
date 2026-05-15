@@ -14,7 +14,7 @@
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.models.agent import ToolCall, StreamChunkData, StreamChunkFromModelType
+from app.models.agent import ToolCall, StreamChunkData
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.agent_tool_loop import execute_turn_tool_calls, ToolCallResult
 from app.models.http_context import G8eHttpContext
@@ -27,18 +27,18 @@ async def test_execute_turn_tool_calls_parallel():
         ToolCall(id="call_1", name="tool_1", args={}),
         ToolCall(id="call_2", name="tool_2", args={}),
     ]
-    
+
     tool_executor = MagicMock()
     investigation = MagicMock(spec=EnrichedInvestigationContext)
     g8e_context = MagicMock(spec=G8eHttpContext)
     event_service = AsyncMock()
-    
+
     request_settings = MagicMock(spec=G8eeUserSettings)
     request_settings.llm = LLMSettings(llm_parallel_tool_calls=True)
-    
+
     # Track execution order
     execution_order = []
-    
+
     async def mock_orchestrate(tool_call, **kwargs):
         execution_order.append(f"start_{tool_call.name}")
         await asyncio.sleep(0.1)  # Simulate some work
@@ -71,7 +71,7 @@ async def test_execute_turn_tool_calls_parallel():
     assert len(result_out[0]) == 2
     assert result_out[0][0].tool_name == "tool_1"
     assert result_out[0][1].tool_name == "tool_2"
-    
+
     # Verify parallel execution: both should have started before either finished
     # The order in execution_order should be [start_tool_1, start_tool_2, end_tool_1, end_tool_2]
     # (or vice versa for 1 and 2, but both starts must precede both ends)
@@ -87,18 +87,18 @@ async def test_execute_turn_tool_calls_sequential():
         ToolCall(id="call_1", name="tool_1", args={}),
         ToolCall(id="call_2", name="tool_2", args={}),
     ]
-    
+
     tool_executor = MagicMock()
     investigation = MagicMock(spec=EnrichedInvestigationContext)
     g8e_context = MagicMock(spec=G8eHttpContext)
     event_service = AsyncMock()
-    
+
     request_settings = MagicMock(spec=G8eeUserSettings)
     request_settings.llm = LLMSettings(llm_parallel_tool_calls=False)
-    
+
     # Track execution order
     execution_order = []
-    
+
     async def mock_orchestrate(tool_call, **kwargs):
         execution_order.append(f"start_{tool_call.name}")
         await asyncio.sleep(0.1)
@@ -114,7 +114,7 @@ async def test_execute_turn_tool_calls_sequential():
     # We need to patch it in the module
     original_orchestrate = app.services.ai.agent_tool_loop.orchestrate_tool_execution
     app.services.ai.agent_tool_loop.orchestrate_tool_execution = mock_orchestrate
-    
+
     try:
         result_out = []
         async for _ in execute_turn_tool_calls(

@@ -19,7 +19,7 @@ class TribunalPersona(AgentPersonaModel):
     
     This is a documentation-only persona representing the Tribunal collective.
     """
-    
+
     def __init__(self):
         super().__init__(
             id="tribunal",

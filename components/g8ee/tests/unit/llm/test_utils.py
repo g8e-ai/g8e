@@ -70,7 +70,7 @@ class TestSchemaToDict:
             type=MockType.STRING,
             description="inner desc"
         )
-        
+
         outer_schema = MockSchema(
             type=MockType.OBJECT,
             properties={"field": inner_schema},
@@ -149,7 +149,7 @@ class TestIsInternalEndpoint:
         @dataclass
         class MockSchema:
             type: Any = None
-        
+
         # Test string type (not an Enum with .value)
         schema = MockSchema(type="string")
         result = schema_to_dict(schema)
@@ -164,12 +164,11 @@ class TestIsInternalEndpoint:
 
     def test_is_internal_endpoint_exception_fallback(self, monkeypatch):
         # Force an exception in urlparse or similar
-        from urllib.parse import urlparse
         def mock_urlparse(url):
             raise Exception("Parsing failed")
-        
+
         monkeypatch.setattr("app.llm.utils.urlparse", mock_urlparse)
-        
+
         assert is_internal_endpoint("http://localhost:8080") is True
         assert is_internal_endpoint("https://google.com") is False
         assert is_internal_endpoint(None) is False
@@ -188,12 +187,11 @@ class TestIsOllamaEndpoint:
         assert is_ollama_endpoint(url) == expected
 
     def test_is_ollama_endpoint_exception_fallback(self, monkeypatch):
-        from urllib.parse import urlparse
         def mock_urlparse(url):
             raise Exception("Parsing failed")
-        
+
         monkeypatch.setattr("app.llm.utils.urlparse", mock_urlparse)
-        
+
         assert is_ollama_endpoint("http://localhost:11434") is True
         assert is_ollama_endpoint("http://ollama-host") is True
         assert is_ollama_endpoint("http://normal-host") is False

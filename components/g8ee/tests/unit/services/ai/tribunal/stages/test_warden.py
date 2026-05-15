@@ -45,10 +45,10 @@ class TestRunWardenStage:
             return_value=CommandRiskAnalysis(risk_level=RiskLevel.HIGH)
         )
         analyzer.analyze_error_and_suggest_fix = AsyncMock(return_value=MagicMock(user_message="Risk!"))
-        
+
         emitter = MagicMock(spec=TribunalEmitter)
         emitter.emit = AsyncMock()
-        
+
         settings = G8eeUserSettings(llm=LLMSettings())
         investigation_state = MagicMock()
         investigation_state.warden_block_count = 0

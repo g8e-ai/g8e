@@ -11,12 +11,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS, ThinkingLevel
+from app.constants import ThinkingLevel
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Content,
@@ -26,7 +25,6 @@ from app.llm.llm_types import (
     ResponseFormat,
     ResponseJsonSchema,
     Schema,
-    ThinkingConfig,
     ToolCall,
     ToolDeclaration,
     ToolGroup,
@@ -162,9 +160,9 @@ class TestOpenAIProvider:
     def test_build_openai_kwargs_with_thinking(self):
         with patch("app.llm.providers.open_ai.get_model_config") as mock_get_config, \
              patch("app.llm.providers.open_ai.translate_for_openai") as mock_translate:
-            
+
             mock_translate.return_value = MagicMock(enabled=True, reasoning_effort="high")
-            
+
             kwargs = OpenAIProvider._build_openai_kwargs(
                 model="gpt-5",
                 messages=[],
@@ -178,31 +176,31 @@ class TestOpenAIProvider:
     @pytest.mark.asyncio
     async def test_generate_content_primary_streaming_with_tools(self):
         provider = _make_provider()
-        
+
         # Mock response for non-streaming tool call (OpenAIProvider uses non-streaming when tools are present)
         mock_response = MagicMock()
         mock_choice = MagicMock()
         mock_choice.finish_reason = "tool_calls"
         mock_choice.message.content = "I will check the weather."
         mock_choice.message.reasoning_content = "Thinking about weather..."
-        
+
         mock_tool_call = MagicMock()
         mock_tool_call.function.name = "get_weather"
         mock_tool_call.function.arguments = '{"city": "London"}'
         mock_tool_call.id = "call_123"
         mock_choice.message.tool_calls = [mock_tool_call]
-        
+
         mock_response.choices = [mock_choice]
         mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30)
-        
+
         provider._client.chat.completions.create = AsyncMock(return_value=mock_response)
-        
+
         settings = PrimaryLLMSettings(
             max_output_tokens=100,
             tools=[ToolGroup(tools=[ToolDeclaration(name="get_weather", description="Weather", parameters=None)])],
             system_instructions="be helpful",
         )
-        
+
         chunks = []
         async for chunk in provider.generate_content_stream_primary(
             model="gpt-4",
@@ -210,7 +208,7 @@ class TestOpenAIProvider:
             primary_llm_settings=settings
         ):
             chunks.append(chunk)
-            
+
         assert len(chunks) == 4 # thought, content, tool_calls, finish+usage
         assert chunks[0].text == "Thinking about weather..."
         assert chunks[0].thought is True
@@ -222,27 +220,27 @@ class TestOpenAIProvider:
     @pytest.mark.asyncio
     async def test_generate_content_primary_streaming_no_tools(self):
         provider = _make_provider()
-        
+
         # Mock stream for regular text
         mock_chunk = MagicMock()
         mock_chunk.choices = [MagicMock()]
         mock_chunk.choices[0].delta.content = "hello"
         mock_chunk.choices[0].delta.reasoning_content = "thinking"
         mock_chunk.choices[0].finish_reason = None
-        
+
         mock_final_chunk = MagicMock()
         mock_final_chunk.choices = [MagicMock()]
         mock_final_chunk.choices[0].delta = None
         mock_final_chunk.choices[0].finish_reason = "stop"
-        
+
         async def mock_stream_iter():
             yield mock_chunk
             yield mock_final_chunk
-            
+
         provider._client.chat.completions.create = AsyncMock(return_value=mock_stream_iter())
-        
+
         settings = PrimaryLLMSettings(max_output_tokens=100)
-        
+
         chunks = []
         async for chunk in provider.generate_content_stream_primary(
             model="gpt-4",
@@ -250,14 +248,14 @@ class TestOpenAIProvider:
             primary_llm_settings=settings
         ):
             chunks.append(chunk)
-            
+
         # 1st chunk: reasoning content
         assert chunks[0].text == "thinking"
         assert chunks[0].thought is True
-        
+
         # 2nd chunk: content
         assert chunks[1].text == "hello"
-        
+
         # 3rd chunk: finish reason
         assert chunks[2].finish_reason == "stop"
 
@@ -265,9 +263,9 @@ class TestOpenAIProvider:
     async def test_generate_content_primary_error_translation(self):
         provider = _make_provider()
         provider._client.chat.completions.create = AsyncMock(side_effect=Exception("OpenAI Error"))
-        
+
         settings = PrimaryLLMSettings(max_output_tokens=100)
-        
+
         with patch("app.llm.providers.open_ai.translate_capability_error") as mock_translate:
             with pytest.raises(Exception, match="OpenAI Error"):
                 await provider.generate_content_primary(
@@ -280,34 +278,34 @@ class TestOpenAIProvider:
     @pytest.mark.asyncio
     async def test_generate_content_assistant(self):
         provider = _make_provider()
-        
+
         mock_response = MagicMock()
         mock_choice = MagicMock()
         mock_choice.message.content = "analysis"
         mock_choice.finish_reason = "stop"
         mock_response.choices = [mock_choice]
         mock_response.usage = MagicMock(prompt_tokens=5, completion_tokens=5, total_tokens=10)
-        
+
         provider._client.chat.completions.create = AsyncMock(return_value=mock_response)
-        
+
         settings = AssistantLLMSettings(
             max_output_tokens=100,
             response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="res"))
         )
-        
+
         response = await provider.generate_content_assistant(
             model="gpt-4",
             contents=[Content(role="user", parts=[Part(text="analyze")])],
             assistant_llm_settings=settings
         )
-        
+
         assert response.candidates[0].content.parts[0].text == "analysis"
         assert response.usage_metadata.total_token_count == 10
 
     @pytest.mark.asyncio
     async def test_generate_content_primary_no_streaming(self):
         provider = _make_provider()
-        
+
         mock_response = MagicMock()
         mock_choice = MagicMock()
         mock_choice.message.content = "direct response"
@@ -315,24 +313,24 @@ class TestOpenAIProvider:
         mock_choice.finish_reason = "stop"
         mock_response.choices = [mock_choice]
         mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=10, total_tokens=20)
-        
+
         provider._client.chat.completions.create = AsyncMock(return_value=mock_response)
-        
+
         settings = PrimaryLLMSettings(max_output_tokens=100)
-        
+
         response = await provider.generate_content_primary(
             model="gpt-4",
             contents=[Content(role="user", parts=[Part(text="hi")])],
             primary_llm_settings=settings
         )
-        
+
         assert response.candidates[0].content.parts[0].text == "direct response"
         assert response.usage_metadata.total_token_count == 20
 
     @pytest.mark.asyncio
     async def test_generate_content_primary_with_reasoning(self):
         provider = _make_provider()
-        
+
         mock_response = MagicMock()
         mock_choice = MagicMock()
         mock_choice.message.content = "answer"
@@ -340,17 +338,17 @@ class TestOpenAIProvider:
         mock_choice.finish_reason = "stop"
         mock_response.choices = [mock_choice]
         mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=10, total_tokens=20)
-        
+
         provider._client.chat.completions.create = AsyncMock(return_value=mock_response)
-        
+
         settings = PrimaryLLMSettings(max_output_tokens=100)
-        
+
         response = await provider.generate_content_primary(
             model="gpt-4",
             contents=[Content(role="user", parts=[Part(text="hi")])],
             primary_llm_settings=settings
         )
-        
+
         assert response.candidates[0].content.parts[0].text == "reasoning"
         assert response.candidates[0].content.parts[0].thought is True
         assert response.candidates[0].content.parts[1].text == "answer"
@@ -358,19 +356,19 @@ class TestOpenAIProvider:
     @pytest.mark.asyncio
     async def test_generate_content_stream_assistant(self):
         provider = _make_provider()
-        
+
         mock_chunk = MagicMock()
         mock_chunk.choices = [MagicMock()]
         mock_chunk.choices[0].delta.content = "assistant stream"
         mock_chunk.choices[0].finish_reason = "stop"
-        
+
         async def mock_stream_iter():
             yield mock_chunk
-            
+
         provider._client.chat.completions.create = AsyncMock(return_value=mock_stream_iter())
-        
+
         settings = AssistantLLMSettings(max_output_tokens=100)
-        
+
         chunks = []
         async for chunk in provider.generate_content_stream_assistant(
             model="gpt-4",
@@ -378,7 +376,7 @@ class TestOpenAIProvider:
             assistant_llm_settings=settings
         ):
             chunks.append(chunk)
-            
+
         assert chunks[0].text == "assistant stream"
         assert chunks[1].finish_reason == "stop"
 
@@ -444,19 +442,19 @@ class TestOpenAIProvider:
     @pytest.mark.asyncio
     async def test_generate_content_stream_lite(self):
         provider = _make_provider()
-        
+
         mock_chunk = MagicMock()
         mock_chunk.choices = [MagicMock()]
         mock_chunk.choices[0].delta.content = "lite stream"
         mock_chunk.choices[0].finish_reason = "stop"
-        
+
         async def mock_stream_iter():
             yield mock_chunk
-            
+
         provider._client.chat.completions.create = AsyncMock(return_value=mock_stream_iter())
-        
+
         settings = LiteLLMSettings(max_output_tokens=100)
-        
+
         chunks = []
         async for chunk in provider.generate_content_stream_lite(
             model="gpt-4",
@@ -464,31 +462,31 @@ class TestOpenAIProvider:
             lite_llm_settings=settings
         ):
             chunks.append(chunk)
-            
+
         assert chunks[0].text == "lite stream"
         assert chunks[1].finish_reason == "stop"
 
     @pytest.mark.asyncio
     async def test_generate_content_lite(self):
         provider = _make_provider()
-        
+
         mock_response = MagicMock()
         mock_choice = MagicMock()
         mock_choice.message.content = "lite response"
         mock_choice.finish_reason = "stop"
         mock_response.choices = [mock_choice]
         mock_response.usage = MagicMock(prompt_tokens=5, completion_tokens=5, total_tokens=10)
-        
+
         provider._client.chat.completions.create = AsyncMock(return_value=mock_response)
-        
+
         settings = LiteLLMSettings(max_output_tokens=100)
-        
+
         response = await provider.generate_content_lite(
             model="gpt-4",
             contents=[Content(role="user", parts=[Part(text="hi")])],
             lite_llm_settings=settings
         )
-        
+
         assert response.candidates[0].content.parts[0].text == "lite response"
         assert response.usage_metadata.total_token_count == 10
 

@@ -17,11 +17,9 @@ import pytest
 
 from app.constants import AuditorReason, ComponentName
 from app.models.agent import OperatorContext
-from app.models.agents.tribunal import TribunalAuditorFailedError, TribunalGenerationFailedError
+from app.models.agents.tribunal import TribunalGenerationFailedError
 from app.models.http_context import G8eHttpContext
-from app.services.ai.auditor_service import AuditorClusterInfo
 from app.services.ai.generator import TribunalEmitter, generate_command
-from app.utils.agent_persona_loader import get_agent_persona
 from app.utils.command import normalise_command
 from app.utils.safety import validate_command_safety
 
@@ -228,7 +226,6 @@ class TestStructuredOutputSupport:
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         from app.services.ai.tribunal.stages.generation import _run_generation_pass
-        from app.models.model_configs import get_model_config
         with patch("app.services.ai.tribunal.stages.generation.get_model_config") as mock_config:
             mock_config.return_value.supports_structured_output = True
 

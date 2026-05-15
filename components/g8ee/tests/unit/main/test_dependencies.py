@@ -17,8 +17,6 @@ import pytest
 from fastapi import Request
 
 from app.constants import (
-    HTTP_FORWARDED_FOR_HEADER,
-    HTTP_USER_AGENT_HEADER,
     PROXY_ORGANIZATION_ID_HEADER,
     PROXY_USER_EMAIL_HEADER,
     PROXY_USER_ID_HEADER,
@@ -46,7 +44,6 @@ from app.dependencies import (
 )
 from app.errors import (
     AuthenticationError,
-    AuthorizationError,
     ConfigurationError,
     ServiceUnavailableError,
 )

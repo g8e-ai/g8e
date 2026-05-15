@@ -15,8 +15,6 @@ import asyncio
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 
-from app.models.agent import StreamChunkFromModel, StreamChunkFromModelType
-from app.services.ai.agent import g8eEngine
 from tests.fakes.agent_helpers import (
     make_agent_inputs,
     make_g8e_agent,
@@ -34,7 +32,7 @@ class TestAgentCancellation:
         """Verify that a cancellation during the LLM call is propagated immediately."""
         tool_executor = MagicMock()
         provider = MagicMock()
-        
+
         # A stream that takes forever or until cancelled
         async def slow_stream(**kwargs):
             try:
@@ -46,7 +44,7 @@ class TestAgentCancellation:
                 raise
 
         provider.generate_content_stream_primary = slow_stream
-        
+
         agent = make_g8e_agent(fn_handler=tool_executor)
         inputs = make_agent_inputs()
         inputs.model_to_use = "test-model"
@@ -65,13 +63,13 @@ class TestAgentCancellation:
             return chunks
 
         task = asyncio.create_task(run_stream())
-        
+
         # Wait a bit for it to start
         await asyncio.sleep(0.1)
-        
+
         # Cancel the task - this simulates the stop button
         task.cancel()
-        
+
         with pytest.raises(asyncio.CancelledError):
             await task
 
@@ -79,7 +77,7 @@ class TestAgentCancellation:
         """Verify that cancellation between sequential tool calls is respected."""
         tool_executor = MagicMock()
         provider = MagicMock()
-        
+
         # LLM turn that yields tool calls
         async def tool_calling_stream(**kwargs):
             # We need to use proper types from app.llm.llm_types
@@ -120,16 +118,16 @@ class TestAgentCancellation:
             return chunks
 
         task = asyncio.create_task(run_stream())
-        
+
         # Wait for first tool call to start
         await asyncio.sleep(0.1)
-        
+
         # Cancel during the first tool call
         task.cancel()
-        
+
         with pytest.raises(asyncio.CancelledError):
             await task
-        
+
         # Verify that tool2 was NEVER called because tool1 was cancelled
         # and the loop should have broken
         # We check call_count of execute_tool_call

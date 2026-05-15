@@ -25,7 +25,7 @@ def _load_security_constraints() -> dict:
     shared_models_dir = PATHS["infra"]["shared_models_dir"]
     shared_models_path = Path(shared_models_dir) / "security_constraints.json"
     try:
-        with open(shared_models_path, "r") as f:
+        with open(shared_models_path) as f:
             constraints = json.load(f)
         return constraints
     except Exception:

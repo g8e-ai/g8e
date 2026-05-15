@@ -15,11 +15,11 @@
 
 import asyncio
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 from app.models.settings import BatchExecutionSettings
 from app.models.tool_results import PerOperatorResultBase
-from app.services.operator.batch_runner import BatchRunner, BatchRunResult, LifecycleEmitter
+from app.services.operator.batch_runner import BatchRunner, LifecycleEmitter
 
 
 class MockPerOperatorResult(PerOperatorResultBase):
@@ -33,7 +33,7 @@ class MockPerOperatorResult(PerOperatorResultBase):
 
 class MockLifecycleEmitter(LifecycleEmitter):
     """Mock lifecycle emitter for testing."""
-    
+
     def __init__(self):
         self.started_calls = []
         self.completed_calls = []
@@ -65,10 +65,10 @@ class TestBatchRunner:
     async def test_single_operator_success(self):
         settings = BatchExecutionSettings(max_concurrency=10, fail_fast=False)
         runner = BatchRunner(settings)
-        
+
         targets = [MockOperatorDocument("op-1", "host-1")]
         lifecycle = MockLifecycleEmitter()
-        
+
         async def mock_dispatch(op, execution_id):
             return MockPerOperatorResult(
                 execution_id=execution_id,
@@ -76,9 +76,9 @@ class TestBatchRunner:
                 hostname=op.hostname,
                 success=True,
             )
-        
+
         execution_id_generator = lambda: f"exec_{len(lifecycle.started_calls)}"
-        
+
         result = await runner.run(
             targets=targets,
             batch_id="batch-123",
@@ -87,7 +87,7 @@ class TestBatchRunner:
             lifecycle=lifecycle,
             execution_id_generator=execution_id_generator,
         )
-        
+
         assert result.batch_execution is False
         assert result.operators_used == 1
         assert result.successful_count == 1
@@ -101,14 +101,14 @@ class TestBatchRunner:
     async def test_multiple_operators_success(self):
         settings = BatchExecutionSettings(max_concurrency=2, fail_fast=False)
         runner = BatchRunner(settings)
-        
+
         targets = [
             MockOperatorDocument("op-1", "host-1"),
             MockOperatorDocument("op-2", "host-2"),
             MockOperatorDocument("op-3", "host-3"),
         ]
         lifecycle = MockLifecycleEmitter()
-        
+
         async def mock_dispatch(op, execution_id):
             return MockPerOperatorResult(
                 execution_id=execution_id,
@@ -116,9 +116,9 @@ class TestBatchRunner:
                 hostname=op.hostname,
                 success=True,
             )
-        
+
         execution_id_generator = lambda: f"exec_{len(lifecycle.started_calls)}"
-        
+
         result = await runner.run(
             targets=targets,
             batch_id="batch-123",
@@ -127,7 +127,7 @@ class TestBatchRunner:
             lifecycle=lifecycle,
             execution_id_generator=execution_id_generator,
         )
-        
+
         assert result.batch_execution is True
         assert result.operators_used == 3
         assert result.successful_count == 3
@@ -192,9 +192,9 @@ class TestBatchRunner:
     async def test_empty_targets_raises_error(self):
         settings = BatchExecutionSettings(max_concurrency=10, fail_fast=False)
         runner = BatchRunner(settings)
-        
+
         lifecycle = MockLifecycleEmitter()
-        
+
         with pytest.raises(ValueError, match="targets list cannot be empty"):
             await runner.run(
                 targets=[],
@@ -209,16 +209,16 @@ class TestBatchRunner:
     async def test_concurrency_limit(self):
         settings = BatchExecutionSettings(max_concurrency=1, fail_fast=False)
         runner = BatchRunner(settings)
-        
+
         targets = [
             MockOperatorDocument("op-1", "host-1"),
             MockOperatorDocument("op-2", "host-2"),
         ]
         lifecycle = MockLifecycleEmitter()
-        
+
         concurrent_count = 0
         max_concurrent = 0
-        
+
         async def mock_dispatch(op, execution_id):
             nonlocal concurrent_count, max_concurrent
             concurrent_count += 1
@@ -231,9 +231,9 @@ class TestBatchRunner:
                 hostname=op.hostname,
                 success=True,
             )
-        
+
         execution_id_generator = lambda: f"exec_{len(lifecycle.started_calls)}"
-        
+
         await runner.run(
             targets=targets,
             batch_id="batch-123",
@@ -242,5 +242,5 @@ class TestBatchRunner:
             lifecycle=lifecycle,
             execution_id_generator=execution_id_generator,
         )
-        
+
         assert max_concurrent <= 1

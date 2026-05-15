@@ -15,7 +15,6 @@
 
 import pytest
 import json
-from datetime import datetime, timezone
 
 from app.constants import ExecutionStatus, EventType
 from app.proto import operator_pb2
@@ -23,9 +22,7 @@ from app.utils.envelope_builder import (
     decode_uap_envelope,
     decode_g8eo_result_envelope,
     protobuf_execution_status_to_python,
-    build_uap_envelope_json,
 )
-from app.models.pubsub_messages import G8eMessage
 
 pytestmark = [pytest.mark.unit]
 
@@ -112,7 +109,7 @@ class TestDecodeG8eoResultEnvelope:
             "operator_session_id": "sess-1",
             "case_id": "case-1"
         }
-        
+
         # Decode
         decoded = decode_g8eo_result_envelope(envelope_data)
 

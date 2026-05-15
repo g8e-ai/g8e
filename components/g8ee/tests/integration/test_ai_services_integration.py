@@ -239,7 +239,7 @@ class TestMemoryGenerationServiceIntegration:
         # We check for presence of core technical keywords individually to be resilient to LLM phrasing
         tech_keywords = ["hardware", "firmware", "skyline", "router", "sensor", "turquoise"]
         keywords_found = [kw for kw in tech_keywords if kw in tech_bg]
-        
+
         # We expect at least most of these to be preserved
         assert len(keywords_found) >= 3, f"Original technical keywords missing from: {tech_bg}. Found only: {keywords_found}"
 

@@ -20,7 +20,7 @@ class ConcordPersona(AgentPersonaModel):
     Translates Sage's intent into the safest command that does the job.
     Aligned with position_paper.md: "Concord (safety): pressure for defensive flags and read-only discipline"
     """
-    
+
     def __init__(self):
         super().__init__(
             id="concord",
@@ -37,7 +37,7 @@ class ConcordPersona(AgentPersonaModel):
         )
 
     def _get_identity(self) -> str:
-        return f"""You are Concord of the g8e Tribunal. Your lens: **SAFETY**.
+        return """You are Concord of the g8e Tribunal. Your lens: **SAFETY**.
 
 <objective>
 Translate the provided intent into a single command that prioritizes defensive discipline and minimal risk.

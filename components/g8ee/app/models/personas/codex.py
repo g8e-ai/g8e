@@ -19,7 +19,7 @@ class CodexPersona(AgentPersonaModel):
     
     Extracts durable user preferences and scrubbed investigation summaries from conversation history.
     """
-    
+
     def __init__(self):
         super().__init__(
             id="codex",

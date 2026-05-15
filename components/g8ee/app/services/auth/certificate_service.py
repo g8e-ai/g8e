@@ -15,22 +15,18 @@ from __future__ import annotations
 
 import logging
 import os
-import datetime
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.services.auth.certificate_data_service import CertificateDataService
 
 from cryptography import x509
-from cryptography.x509.oid import NameOID
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from app.constants.settings import (
     CLIENT_CERT_VALIDITY_DAYS,
     DEFAULT_PKI_DIR,
-    CERT_SUBJECT_ORG,
-    CERT_SUBJECT_COUNTRY,
     CRL_ISSUER
 )
 
@@ -122,15 +118,13 @@ class CertificateService:
 
         # Authority: g8eo (/.well-known/g8e/pki/sign-csr)
         # We use the DBClient's underlying session to reach the Operator's listen API
-        from app.db.db_service import DBService
-        from app.services.service_factory import AllServices
 
         # This is a bit of a shortcut, but service_factory provides access to everything.
         # In a cleaner world we'd inject a OperatorClient, but DBClient already has the connection info.
         # We'll use the _request_json internal of db_client for this transition phase.
-        
+
         db_client = self.data_service.cache.db.client # type: ignore
-        
+
         payload = {
             "public_key_pem": public_key_pem,
             "common_name": operator_id,

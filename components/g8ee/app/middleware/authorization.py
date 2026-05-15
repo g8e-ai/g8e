@@ -49,7 +49,7 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
 
         # Ensure g8e_context is set by the G8eHttpContextMiddleware
         g8e_context: G8eHttpContext | None = getattr(request.state, "g8e_context", None)
-        
+
         # If no context is present, we cannot perform authorization checks
         # This middleware should run AFTER G8eHttpContextMiddleware
         if not g8e_context:
@@ -58,9 +58,9 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
         if self._is_user_scoped_path(request.url.path):
             query_params = dict(request.query_params)
             path_params = request.path_params if hasattr(request, "path_params") else {}
-            
+
             path = request.url.path
-            
+
             user_id_in_request = (
                 query_params.get("user_id") or
                 path_params.get("user_id")

@@ -97,7 +97,7 @@ async def test_score_accuracy_scenario_llm_pass():
     }
     response_text = "I am helpful"
     tool_calls = []
-    
+
     judge = MagicMock()
     judge.grade_turn = AsyncMock()
     grade = MagicMock()
@@ -105,11 +105,11 @@ async def test_score_accuracy_scenario_llm_pass():
     grade.score = 5
     grade.reasoning = "Very helpful"
     judge.grade_turn.return_value = grade
-    
+
     passed, score, reasoning = await score_accuracy_scenario_llm(
         scenario, response_text, tool_calls, judge
     )
-    
+
     assert passed is True
     assert score == 5
     assert reasoning == "Very helpful"
@@ -148,11 +148,11 @@ async def test_score_accuracy_scenario_llm_no_criteria():
     response_text = "hello"
     tool_calls = []
     judge = MagicMock()
-    
+
     passed, score, reasoning = await score_accuracy_scenario_llm(
         scenario, response_text, tool_calls, judge
     )
-    
+
     assert passed is True
     assert score is None
     assert "No evaluation criteria specified" in reasoning
@@ -168,7 +168,7 @@ async def test_score_accuracy_scenario_llm_with_tools():
         {"name": "test_tool", "args": {"a": 1}},
         {"tool_name": "other_tool"}
     ]
-    
+
     judge = MagicMock()
     judge.grade_turn = AsyncMock()
     grade = MagicMock()
@@ -176,9 +176,9 @@ async def test_score_accuracy_scenario_llm_with_tools():
     grade.score = 5
     grade.reasoning = "OK"
     judge.grade_turn.return_value = grade
-    
+
     await score_accuracy_scenario_llm(scenario, response_text, tool_calls, judge)
-    
+
     args, kwargs = judge.grade_turn.call_args
     assert "TOOL_CALL: test_tool args={'a': 1}" in kwargs["interaction_trace"]
     assert "TOOL_CALL: other_tool args={}" in kwargs["interaction_trace"]

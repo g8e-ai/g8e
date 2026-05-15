@@ -29,7 +29,6 @@ from fastapi import APIRouter, Depends, Request, status
 
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.constants import (
-    CloudSubtype,
     ComponentName,
     DB_COLLECTION_MEMORIES,
     EventType,
@@ -388,7 +387,7 @@ async def internal_triage_answer(
         )
     )
 
-    # Trigger AI response by calling run_chat. 
+    # Trigger AI response by calling run_chat.
     # ChatPipeline.run_chat internally tracks the task via ChatTaskManager,
     # which will cancel any existing active task for this investigation_id.
     await chat_pipeline.run_chat(

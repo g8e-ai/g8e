@@ -18,7 +18,7 @@ from tests.fakes.fake_approval_service import FakeApprovalService
 from tests.fakes.fake_db_service import FakeDBService
 from tests.fakes.fake_event_service import FakeEventService
 from tests.fakes.fake_execution_service import FakeExecutionService
-from tests.fakes.fake_operator_clients import FakeKVClient, FakePubSubClient, FakeDBClient, FakeG8eClient
+from tests.fakes.fake_operator_clients import FakeG8eClient
 from tests.fakes.fake_http_service import FakeHTTPService
 from tests.fakes.fake_investigation_service import FakeInvestigationService
 from tests.fakes.fake_lfaa_service import FakeLFAAService

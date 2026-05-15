@@ -144,7 +144,7 @@ class TestBuildContentsFromHistory:
             types.Part.from_text(text="att2"),
         ]
         contents = builder.build_contents_from_history(history, attachments=att_parts)
-        
+
         assert len(contents) == 3
         # Last message (USER) should have original text part + 2 attachment parts
         assert contents[2].role == types.Role.USER
@@ -161,7 +161,7 @@ class TestBuildContentsFromHistory:
         ]
         att_parts = [types.Part.from_text(text="att")]
         contents = builder.build_contents_from_history(history, attachments=att_parts)
-        
+
         assert len(contents) == 2
         assert len(contents[0].parts) == 2  # USER message got the attachment
         assert contents[0].parts[1].text == "att"
@@ -180,7 +180,7 @@ class TestBuildContentsFromHistory:
         ]
         att_parts = [types.Part.from_text(text="att")]
         contents = builder.build_contents_from_history(history, attachments=att_parts)
-        
+
         assert len(contents) == 1
         assert len(contents[0].parts) == 1
         assert contents[0].parts[0].text == "ai only"
@@ -193,13 +193,13 @@ class TestGetGenerationConfig:
         settings = G8eeUserSettings(
             llm=LLMSettings(llm_model="gemini-1.5-pro", llm_max_tokens=2048)
         )
-        
+
         config = builder.get_generation_config(
             system_instructions="instructions",
             settings=settings,
             agent_mode=AgentMode.OPERATOR_BOUND
         )
-        
+
         assert config.system_instructions == "instructions"
         assert config.max_output_tokens == 2048
         mock_tool_executor.get_tools.assert_called_once_with(AgentMode.OPERATOR_BOUND, "gemini-1.5-pro")
@@ -208,7 +208,7 @@ class TestGetGenerationConfig:
         settings = G8eeUserSettings(
             llm=LLMSettings(llm_model="") # Empty model
         )
-        
+
         with pytest.raises(ConfigurationError, match="No LLM model configured"):
             builder.get_generation_config(
                 system_instructions="...",
@@ -220,14 +220,14 @@ class TestGetGenerationConfig:
         settings = G8eeUserSettings(
             llm=LLMSettings(llm_model="default-model")
         )
-        
+
         builder.get_generation_config(
             system_instructions="...",
             settings=settings,
             agent_mode=AgentMode.OPERATOR_BOUND,
             model_override="override-model"
         )
-        
+
         mock_tool_executor.get_tools.assert_called_with(AgentMode.OPERATOR_BOUND, "override-model")
 
 
@@ -237,7 +237,7 @@ class TestFormatAttachmentParts:
     def test_delegates_to_attachment_provider(self, builder):
         from app.models.attachments import ProcessedAttachment
         from app.constants.settings import AttachmentType
-        
+
         atts = [
             ProcessedAttachment(
                 filename="test.txt",
@@ -247,11 +247,11 @@ class TestFormatAttachmentParts:
                 content="content"
             )
         ]
-        
+
         with patch.object(builder._attachment_provider, "format_parts") as mock_format:
             mock_format.return_value = [types.Part.from_text(text="formatted")]
-            
+
             res = builder.format_attachment_parts(atts)
-            
+
             assert res == [types.Part.from_text(text="formatted")]
             mock_format.assert_called_once_with(atts)

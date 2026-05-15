@@ -15,7 +15,6 @@
 
 from unittest.mock import AsyncMock, MagicMock
 import pytest
-import uuid
 
 from app.constants import (
     DB_COLLECTION_OPERATOR_SESSIONS,
@@ -70,7 +69,7 @@ class TestOperatorSessionService:
         assert session.client_ip == "1.2.3.4"
         assert session.user_agent == "g8e-daemon/1.0"
         assert session.is_active is True
-        
+
         mock_cache.create_document.assert_called_once_with(
             collection=DB_COLLECTION_OPERATOR_SESSIONS,
             document_id=session.id,
@@ -212,7 +211,7 @@ class TestOperatorSessionService:
         # Setup
         session_id = "ops_123"
         mock_cache.update_document.return_value = MagicMock(success=True)
-        
+
         # We need a session object to pass or it will call validate_session
         session = MagicMock(spec=OperatorSessionDocument)
 

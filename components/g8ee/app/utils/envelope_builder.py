@@ -26,12 +26,12 @@ import hashlib
 import hmac
 import logging
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, UTC
 
-from app.constants import ComponentName, ExecutionStatus, EventType
-from app.constants.action_type_mappings import map_event_type_to_action_type, map_action_type_to_event_type
+from app.constants import ExecutionStatus, EventType
+from app.constants.action_type_mappings import map_event_type_to_action_type
 from app.models.pubsub_messages import G8eMessage
-from app.models.uap import UAPEnvelope, Metadata, Intent, Context, GovernanceMetadata
+from app.models.uap import UAPEnvelope
 from app.proto import operator_pb2, common_pb2
 from google.protobuf.json_format import MessageToDict, ParseDict
 
@@ -86,8 +86,8 @@ def build_uap_envelope(
     payload_dict = message.payload.model_dump(mode="json")
 
     action_type = map_event_type_to_action_type(message.event_type)
-    
-    now_utc = datetime.now(timezone.utc)
+
+    now_utc = datetime.now(UTC)
     expires_at = now_utc + timedelta(minutes=5)
 
     envelope = UAPEnvelope(
@@ -201,7 +201,7 @@ def decode_g8eo_result_envelope(envelope_data: bytes | str | Dict[str, Any]) -> 
     # 2. Extract metadata
     result = {
         "id": envelope.id,
-        "timestamp": envelope.timestamp.ToDatetime(tzinfo=timezone.utc) if envelope.HasField("timestamp") else None,
+        "timestamp": envelope.timestamp.ToDatetime(tzinfo=UTC) if envelope.HasField("timestamp") else None,
         "event_type": envelope.event_type,
         "operator_id": envelope.operator_id,
         "operator_session_id": envelope.operator_session_id,
@@ -212,13 +212,13 @@ def decode_g8eo_result_envelope(envelope_data: bytes | str | Dict[str, Any]) -> 
 
     # 3. Extract and normalize payload from intent_data
     payload_dict = MessageToDict(envelope.intent_data, preserving_proto_field_name=True)
-    
+
     # 4. Canonical payload_type check
     # We prefer the 'payload_type' field injected by g8eo for strict discriminator-based parsing.
     # Fallback to manual mapping only if missing (legacy or non-g8eo sources).
     if "payload_type" not in payload_dict:
         action_type = envelope.action_type or envelope.event_type or ""
-        
+
         if "EXECUTE_BASH_RESULT" in action_type or EventType.OPERATOR_COMMAND_RESULT in action_type:
             payload_dict["payload_type"] = "execution_result"
         elif "EXECUTE_BASH_CANCELLED" in action_type or EventType.OPERATOR_COMMAND_CANCELLED in action_type:
