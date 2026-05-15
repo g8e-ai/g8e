@@ -14,9 +14,8 @@ import json
 import os
 import sys
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
-
+from app.constants.paths import PATHS
+from app.utils.path import resolve_project_root
 from app.constants import LLMProvider
 from app.llm.factory import get_llm_provider
 from app.models.settings import LLMSettings
@@ -31,7 +30,7 @@ from .scorer import (
     score_privacy_scenario,
 )
 
-_G8EE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_G8EE_ROOT = resolve_project_root() / "components" / "g8ee"
 _REPORTS_DIR = _G8EE_ROOT / "reports" / "evals"
 _GOLD_SETS_DIR = _G8EE_ROOT / "evals" / "gold_sets"
 

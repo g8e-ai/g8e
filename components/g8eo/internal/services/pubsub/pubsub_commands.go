@@ -558,10 +558,15 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 	if rs.warden != nil {
 		receipt, err := rs.warden.Execute(rs.ctx, verified, cmdMsg)
 		if err != nil {
-			rs.logger.Error("Warden execution failed", "error", err, "message_id", env.Id)
+			rs.logger.Error("Warden execution failed",
+				"error", err,
+				"message_id", env.Id,
+				"receipt_status", receipt.Status.String())
 			return
 		}
-		rs.logger.Info("Warden execution succeeded", "message_id", env.Id, "receipt_status", receipt.Status)
+		rs.logger.Info("Warden execution succeeded",
+			"message_id", env.Id,
+			"receipt_status", receipt.Status.String())
 	} else {
 		rs.logger.Error("FATAL: Warden service missing - cannot execute", "message_id", env.Id)
 		return

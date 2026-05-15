@@ -48,23 +48,23 @@ The g8e Protocol enforces safety at the point of execution. Every mutation reach
 ```mermaid
 flowchart TD
     TX[Signed GovernanceEnvelope<br>JSON Transaction] --> L1
-    
+
     subgraph Substrate [Operator Verification - protocol-mandated]
         L1{L1: Technical Bedrock<br>Forbidden Patterns?}
         L1 -- "Violated" --> Reject
-        
+
         L1 -- "Passed" --> L2{L2: Consensus<br>Tribunal Signature?}
         L2 -- "Invalid/Missing" --> Reject
-        
+
         L2 -- "Passed" --> L3{L3: Authorization<br>Human Presence?}
         L3 -- "Denied" --> Reject
-        
+
         L3 -- "Authorized" --> State{State Check<br>Merkle Root Fresh?}
         State -- "Stale" --> Reject
-        
+
         State -- "Fresh" --> Exec[Warden Execution<br>Isolated Process]
     end
-    
+
     Exec --> Receipt[Signed Action Receipt<br>Audit Commitment]
     Reject[Fail Closed<br>Error + Audit Entry] --> Client
     Receipt --> Client([Client / Hub])

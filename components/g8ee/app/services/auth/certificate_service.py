@@ -24,9 +24,9 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
+from app.constants.paths import PATHS
 from app.constants.settings import (
     CLIENT_CERT_VALIDITY_DAYS,
-    DEFAULT_PKI_DIR,
     CRL_ISSUER
 )
 
@@ -43,7 +43,9 @@ class CertificateService:
     rather than reading ca/ca.key directly. See operator-host-transition-finalization.md.
     """
 
-    def __init__(self, pki_dir: str = DEFAULT_PKI_DIR, data_service: CertificateDataService | None = None):
+    def __init__(self, pki_dir: str | None = None, data_service: CertificateDataService | None = None):
+        if pki_dir is None:
+            pki_dir = PATHS["infra"]["pki_dir"]
         self.pki_dir = pki_dir
         self.data_service = data_service
         self.ca_cert: x509.Certificate | None = None

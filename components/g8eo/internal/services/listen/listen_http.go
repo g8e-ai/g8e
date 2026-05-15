@@ -40,32 +40,34 @@ func readBody(r *http.Request) ([]byte, error) {
 
 // HTTPHandler manages the web API for the listen service.
 type HTTPHandler struct {
-	cfg     *config.Config
-	logger  *slog.Logger
-	db      *ListenDBService
-	pubsub  *PubSubBroker
-	auth    *AuthService
-	pki     *PKIAuthority
-	reg     *RegistrationService
-	passkey *PasskeyService
-	userSvc *UserService
-	apiKey  *ApiKeyService
-	isReady func() bool
+	cfg               *config.Config
+	logger            *slog.Logger
+	db                *ListenDBService
+	pubsub            *PubSubBroker
+	auth              *AuthService
+	pki               *PKIAuthority
+	reg               *RegistrationService
+	passkey           *PasskeyService
+	userSvc           *UserService
+	apiKey            *ApiKeyService
+	isReady           func() bool
+	isGovernanceReady func() bool
 }
 
-func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, isReady func() bool) *HTTPHandler {
+func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, isReady func() bool, isGovernanceReady func() bool) *HTTPHandler {
 	return &HTTPHandler{
-		cfg:     cfg,
-		logger:  logger,
-		db:      db,
-		pubsub:  pubsub,
-		auth:    auth,
-		pki:     pki,
-		reg:     reg,
-		passkey: passkey,
-		userSvc: userSvc,
-		apiKey:  apiKey,
-		isReady: isReady,
+		cfg:               cfg,
+		logger:            logger,
+		db:                db,
+		pubsub:            pubsub,
+		auth:              auth,
+		pki:               pki,
+		reg:               reg,
+		passkey:           passkey,
+		userSvc:           userSvc,
+		apiKey:            apiKey,
+		isReady:           isReady,
+		isGovernanceReady: isGovernanceReady,
 	}
 }
 
@@ -226,6 +228,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		Status:          constants.Status.ListenMode.StatusOK,
 		Mode:            constants.Status.ListenMode.Mode,
 		Version:         h.cfg.Version,
+		GovernanceReady: h.isGovernanceReady != nil && h.isGovernanceReady(),
 		StateMerkleRoot: root,
 	})
 }

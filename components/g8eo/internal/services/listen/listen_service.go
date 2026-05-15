@@ -20,7 +20,10 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -122,7 +125,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		apiKeySvc: apiKeySvc,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.IsReady, ls.IsGovernanceReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -188,7 +191,7 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		apiKeySvc: apiKeySvc,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.IsReady, ls.IsGovernanceReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -223,6 +226,22 @@ func (ls *ListenService) IsReady() bool {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 	return ls.ready
+}
+
+func (ls *ListenService) IsGovernanceReady() bool {
+	// Governance is ready if at least one trusted L2 signer is provisioned.
+	// These are stored at <PKIDir>/trusted_signers/*.pub
+	signersDir := filepath.Join(ls.cfg.Listen.PKIDir, "trusted_signers")
+	entries, err := os.ReadDir(signersDir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pub") {
+			return true
+		}
+	}
+	return false
 }
 
 // GetDB returns the underlying database service.

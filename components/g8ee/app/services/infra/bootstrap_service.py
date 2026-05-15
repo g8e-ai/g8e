@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 from typing import Any, Protocol, cast, runtime_checkable
 
+from app.constants.paths import PATHS
 from app.utils.path import resolve_project_root
 
 # Filename of the tamper-evidence manifest written by g8eo SecretManager
@@ -73,17 +74,11 @@ class BootstrapService:
 
     def __init__(self, secrets_dir: str | None = None, pki_dir: str | None = None) -> None:
         if secrets_dir is None:
-            secrets_dir = os.environ.get("G8E_SECRETS_DIR")
-            if secrets_dir is None:
-                # Fallback to .g8e/secrets relative to project root
-                secrets_dir = str(resolve_project_root() / ".g8e" / "secrets")
+            secrets_dir = PATHS["infra"]["secrets_dir"]
         self._secrets_dir = Path(secrets_dir)
 
         if pki_dir is None:
-            pki_dir = os.environ.get("G8E_PKI_DIR")
-            if pki_dir is None:
-                # Fallback to .g8e/pki relative to project root
-                pki_dir = str(resolve_project_root() / ".g8e" / "pki")
+            pki_dir = PATHS["infra"]["pki_dir"]
         self._pki_dir = Path(pki_dir)
 
         self._logger = logging.getLogger(__name__)

@@ -27,19 +27,19 @@ enum HeartbeatType {
 message CommandRequested {
   // Shell command string to execute
   string command = 1 [(g8e.common.v1.forbidden_patterns) = "sudo,su,rm -rf /"];
-  
+
   // Unique execution identifier (correlation key)
   string execution_id = 2;
-  
+
   // Justification for running this command (High-level Sage request)
   string justification = 3;
-  
+
   // Vault scrubbing mode for output storage
   string sentinel_mode = 4;
-  
+
   // Execution timeout override in seconds
   int32 timeout_seconds = 5;
-  
+
   // Intent: The high-level goal (The "Why")
   string intent = 6;
 
@@ -349,28 +349,28 @@ message ShutdownRequested {
 message ActionReceipt {
   // Original GovernanceEnvelope ID
   string transaction_id = 1;
-  
+
   // Original GovernanceEnvelope hash
   string transaction_hash = 2;
-  
+
   // Final execution status
   ExecutionStatus status = 3;
-  
+
   // Concise summary of the result (e.g. "exit code 0", "file written")
   string result_summary = 4;
-  
+
   // State root before execution
   string state_root_before = 5;
-  
+
   // State root after execution
   string state_root_after = 6;
-  
+
   // Timestamp when execution finished
   int64 executed_at_unix_ms = 7;
-  
+
   // ID of the Warden's signing key
   string signer_key_id = 8;
-  
+
   // ED25519 signature over canonical serialization of fields 1-8
   string signature = 9;
 }
@@ -384,10 +384,10 @@ message CommandResult {
   string stderr = 5;
   int32 return_code = 6;
   float execution_time_seconds = 7;
-  
+
   // Timestamp when execution started
   int64 start_time_unix_ms = 8;
-  
+
   // Timestamp when execution ended
   int64 end_time_unix_ms = 9;
 }
@@ -395,16 +395,16 @@ message CommandResult {
 service OperatorService {
   // Execute a shell command
   rpc ExecuteCommand(CommandRequested) returns (CommandResult);
-  
+
   // Cancel a running command
   rpc CancelCommand(CommandCancelRequested) returns (CommandResult);
-  
+
   // Edit a file
   rpc EditFile(FileEditRequested) returns (CommandResult);
-  
+
   // List directory contents
   rpc ListFileSystem(FsListRequested) returns (CommandResult);
-  
+
   // Read file contents
   rpc ReadFileSystem(FsReadRequested) returns (CommandResult);
 }

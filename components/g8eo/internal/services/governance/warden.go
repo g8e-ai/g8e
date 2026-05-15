@@ -61,6 +61,8 @@ func truncateHash(hash string) string {
 // Execute is the single execution boundary for all verified transactions.
 // It dispatches to the registered handler, captures status, writes a console_audit row,
 // signs and persists an ActionReceipt, and returns it.
+//
+// Fail-closed: if receipt signing or initial audit logging fails, the handler is NOT executed.
 func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg interface{}) (*operatorv1.ActionReceipt, error) {
 	if w.ExecutionHandler == nil {
 		return nil, errors.New("Warden ExecutionHandler not set")
@@ -81,14 +83,40 @@ func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg in
 	// Map action type to event type for handler lookup
 	eventType := mappings.MapActionTypeToEventType(vt.ActionType)
 
-	w.Logger.Info("Warden executing transaction",
+	w.Logger.Info("Warden preparing to execute transaction",
 		"message_id", vt.Envelope.Id,
 		"action_type", vt.ActionType,
 		"event_type", eventType)
 
-	// Execute through the handler
+	// 1. Prepare initial receipt
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId:    vt.Envelope.Id,
+		TransactionHash:  vt.Envelope.TransactionHash,
+		Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
+		ResultSummary:    "executing",
+		StateRootBefore:  stateBefore,
+		ExecutedAtUnixMs: time.Now().UnixMilli(),
+		SignerKeyId:      w.KeyID,
+	}
+
+	// 2. Sign the initial receipt (intent to execute)
+	sig, signErr := w.signReceipt(receipt)
+	if signErr != nil {
+		w.Logger.Error("Fail-closed: Failed to sign initial action receipt", "error", signErr, "message_id", vt.Envelope.Id)
+		return nil, fmt.Errorf("failed to sign initial action receipt: %w", signErr)
+	}
+	receipt.Signature = sig
+
+	// 3. Log intent to execute (Audit before execution)
+	if err := w.LogReceipt(vt.Envelope, receipt); err != nil {
+		w.Logger.Error("Fail-closed: Failed to log initial action receipt", "error", err, "message_id", vt.Envelope.Id)
+		return nil, fmt.Errorf("failed to log initial action receipt: %w", err)
+	}
+
+	// 4. Execute through the handler
 	err := w.ExecutionHandler.ExecuteVerifiedTransaction(ctx, eventType, cmdMsg)
 
+	// 5. Update receipt with final result
 	status := operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 	summary := "completed"
 	if err != nil {
@@ -98,35 +126,31 @@ func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg in
 
 	stateAfter := ""
 	if w.StateRootProvider != nil {
-		var err error
-		stateAfter, err = w.StateRootProvider.GetCurrentStateRoot()
-		if err != nil {
-			w.Logger.Warn("Failed to get state root after execution", "error", err)
+		var stateErr error
+		stateAfter, stateErr = w.StateRootProvider.GetCurrentStateRoot()
+		if stateErr != nil {
+			w.Logger.Warn("Failed to get state root after execution", "error", stateErr)
 		}
 	}
 
-	receipt := &operatorv1.ActionReceipt{
-		TransactionId:    vt.Envelope.Id,
-		TransactionHash:  vt.Envelope.TransactionHash,
-		Status:           status,
-		ResultSummary:    summary,
-		StateRootBefore:  stateBefore,
-		StateRootAfter:   stateAfter,
-		ExecutedAtUnixMs: time.Now().UnixMilli(),
-		SignerKeyId:      w.KeyID,
-	}
+	receipt.Status = status
+	receipt.ResultSummary = summary
+	receipt.StateRootAfter = stateAfter
+	receipt.ExecutedAtUnixMs = time.Now().UnixMilli()
 
-	// Sign the receipt
-	sig, signErr := w.signReceipt(receipt)
+	// 6. Sign the final receipt
+	finalSig, signErr := w.signReceipt(receipt)
 	if signErr != nil {
-		w.Logger.Error("Failed to sign action receipt", "error", signErr, "message_id", vt.Envelope.Id)
-		// We still have the execution result, but the receipt is broken
+		w.Logger.Error("Failed to sign final action receipt", "error", signErr, "message_id", vt.Envelope.Id)
+		// We already executed, so we can't fail-closed here, but we must log the error.
 	} else {
-		receipt.Signature = sig
+		receipt.Signature = finalSig
 	}
 
-	// Persist to audit
-	w.LogReceipt(vt.Envelope, receipt)
+	// 7. Log final result
+	if logErr := w.LogReceipt(vt.Envelope, receipt); logErr != nil {
+		w.Logger.Error("Failed to log final action receipt", "error", logErr, "message_id", vt.Envelope.Id)
+	}
 
 	return receipt, err
 }
@@ -136,28 +160,33 @@ func (w *Warden) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 		return "", errors.New("signing key missing")
 	}
 
-	// Canonical serialization for signing (simplified for now: pipe-delimited)
-	payload := fmt.Sprintf("%s|%s|%d|%s|%s|%s|%d|%s",
-		r.TransactionId,
-		r.TransactionHash,
-		int32(r.Status),
-		r.ResultSummary,
-		r.StateRootBefore,
-		r.StateRootAfter,
-		r.ExecutedAtUnixMs,
-		r.SignerKeyId,
-	)
+	// Use deterministic JSON serialization for signing the receipt.
+	// This ensures consistency across different platforms and versions.
+	// Field order is important; protojson is stable for this.
+	payload, err := json.Marshal(map[string]interface{}{
+		"transaction_id":      r.TransactionId,
+		"transaction_hash":    r.TransactionHash,
+		"status":              int32(r.Status),
+		"result_summary":      r.ResultSummary,
+		"state_root_before":   r.StateRootBefore,
+		"state_root_after":    r.StateRootAfter,
+		"executed_at_unix_ms": r.ExecutedAtUnixMs,
+		"signer_key_id":       r.SignerKeyId,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal receipt for signing: %w", err)
+	}
 
-	sig := ed25519.Sign(w.SigningKey, []byte(payload))
+	sig := ed25519.Sign(w.SigningKey, payload)
 	return hex.EncodeToString(sig), nil
 }
 
 // LogReceipt records the signed action receipt in the audit vault and console_audit.
-func (w *Warden) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) {
-	w.logReceiptDocument(env, r)
+func (w *Warden) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
+	docErr := w.logReceiptDocument(env, r)
 
 	if w.AuditVault == nil {
-		return
+		return docErr
 	}
 
 	event := &storage.Event{
@@ -168,16 +197,23 @@ func (w *Warden) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) {
 		CommandRaw:        fmt.Sprintf("%s / %s (hash: %s, state: %s -> %s)", env.ActionType, env.TargetResource, truncateHash(r.TransactionHash), truncateHash(r.StateRootBefore), truncateHash(r.StateRootAfter)),
 	}
 
-	if _, err := w.AuditVault.RecordEvent(event); err != nil {
+	_, err := w.AuditVault.RecordEvent(event)
+	if err != nil {
 		if w.Logger != nil {
 			w.Logger.Error("Failed to record ActionReceipt in audit vault", "error", err)
 		}
+		if docErr != nil {
+			return fmt.Errorf("audit vault error: %v, doc store error: %v", err, docErr)
+		}
+		return err
 	}
+
+	return docErr
 }
 
-func (w *Warden) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) {
+func (w *Warden) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
 	if w.AuditStore == nil || env == nil {
-		return
+		return nil
 	}
 
 	record := models.ActionReceiptRecord{
@@ -202,14 +238,16 @@ func (w *Warden) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionRe
 		if w.Logger != nil {
 			w.Logger.Error("Failed to marshal action receipt record", "error", err, "message_id", r.TransactionId)
 		}
-		return
+		return err
 	}
 
 	if err := w.AuditStore.DocSet(string(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
 		if w.Logger != nil {
 			w.Logger.Error("Failed to record action receipt document", "error", err, "message_id", r.TransactionId)
 		}
+		return err
 	}
+	return nil
 }
 
 // NoOpL3Verifier is an L3 verifier that always returns true.

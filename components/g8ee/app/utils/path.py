@@ -1,5 +1,8 @@
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 def resolve_project_root() -> Path:
     """
@@ -34,13 +37,13 @@ def resolve_config_path(filename: str) -> Path:
     if "g8ee" in PATHS and "config_dir" in PATHS["g8ee"]:
         config_dir = Path(PATHS["g8ee"]["config_dir"])
         # Handle container absolute paths when running on host
-        if not config_dir.exists() and config_dir.parts[0:2] == ("/", "app"):
+        if not config_dir.exists() and len(config_dir.parts) >= 2 and config_dir.parts[0:2] == ("/", "app"):
             try:
                 root = resolve_project_root()
                 # Remove /app/ and join with root
                 config_dir = root / Path(*config_dir.parts[2:])
-            except Exception:
-                pass
+            except (OSError, IndexError) as e:
+                logger.warning(f"Failed to remap container path {config_dir} to host: {e}")
         
         target = config_dir / filename
         if target.exists():
