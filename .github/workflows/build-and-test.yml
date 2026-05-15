@@ -17,17 +17,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
         with:
-          python-version: '3.12'
-
-      - name: Install Protobuf tools
-        run: |
-          pip install protobuf==6.33.6 grpcio-tools==1.80.0
+          github_token: ${{ github.token }}
 
       - name: Generate Proto
-        run: ./scripts/core/gen-proto.sh
+        run: make proto
 
       - name: Check for drift
         run: |
