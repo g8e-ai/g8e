@@ -121,15 +121,26 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         model_to_use=model_name,
     )
 
-    # Mock the event service publish method to capture events
+    # Mock the event service publish_investigation_event method to capture events
     published_events = []
 
-    async def mock_publish(event, **kwargs):
+    async def mock_publish_investigation_event(
+        investigation_id,
+        event_type,
+        payload,
+        web_session_id,
+        case_id,
+        user_id,
+    ):
+        # Construct a mock event object with the structure the test expects
+        from collections import namedtuple
+        MockEvent = namedtuple('MockEvent', ['event_type', 'payload'])
+        event = MockEvent(event_type=event_type, payload=payload)
         published_events.append(event)
         # Return success without calling real publish
         return "success"
 
-    event_service.publish = mock_publish
+    event_service.publish_investigation_event = mock_publish_investigation_event
 
     await agent.run_with_sse(
         inputs=agent_inputs,

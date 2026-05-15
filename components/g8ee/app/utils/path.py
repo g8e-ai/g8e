@@ -22,3 +22,29 @@ def resolve_project_root() -> Path:
 
     # Generic fallback
     return (cwd / ".." / "..").resolve()
+
+def resolve_config_path(filename: str) -> Path:
+    """
+    Resolves a config file path using centralized PATHS if available, 
+    otherwise falls back to repo-relative resolution.
+    """
+    from app.constants.paths import PATHS
+    
+    # Check if PATHS has it
+    if "g8ee" in PATHS and "config_dir" in PATHS["g8ee"]:
+        config_dir = Path(PATHS["g8ee"]["config_dir"])
+        # Handle container absolute paths when running on host
+        if not config_dir.exists() and config_dir.parts[0:2] == ("/", "app"):
+            try:
+                root = resolve_project_root()
+                # Remove /app/ and join with root
+                config_dir = root / Path(*config_dir.parts[2:])
+            except Exception:
+                pass
+        
+        target = config_dir / filename
+        if target.exists():
+            return target
+
+    # Fallback to local config dir
+    return Path(__file__).parent.parent.parent / "config" / filename

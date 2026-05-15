@@ -22,6 +22,7 @@ from app.errors import ConfigurationError
 from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 from app.utils.config_loader import load_json_config
 from app.utils.csv_commands import parse_command_csv
+from app.utils.path import resolve_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +52,12 @@ class CommandWhitelistValidator:
         if whitelist_path:
             self.load_whitelist(whitelist_path)
         else:
-            default_path = Path(__file__).parent.parent.parent / "config" / "whitelist.json"
-            if default_path.exists():
-                self.load_whitelist(str(default_path))
+            resolved_path = resolve_config_path("whitelist.json")
+            if resolved_path.exists():
+                self.load_whitelist(str(resolved_path))
             else:
                 logger.error("Command whitelist not found - AI command execution disabled for security")
-                raise ConfigurationError(f"Required whitelist configuration not found at {default_path}")
+                raise ConfigurationError(f"Required whitelist configuration not found at {resolved_path}")
 
     def load_whitelist(self, whitelist_path: str) -> None:
         """Load whitelist configuration from JSON file."""

@@ -22,6 +22,7 @@ from pathlib import Path
 
 from app.errors import ConfigurationError
 from app.utils.config_loader import load_json_config
+from app.utils.path import resolve_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class CommandBlacklistValidator:
         self._load(resolved_path)
 
     def _default_path(self) -> Path:
-        return Path(__file__).parent.parent.parent / "config" / "blacklist.json"
+        return resolve_config_path("blacklist.json")
 
     def _load(self, path: Path) -> None:
         logger.info("Loading command blacklist from %s", path)
