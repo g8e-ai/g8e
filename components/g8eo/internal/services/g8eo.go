@@ -359,12 +359,6 @@ func (a *auditVaultTransactionStore) DocSet(collection, id string, data json.Raw
 	if err := json.Unmarshal(data, &receipt); err != nil {
 		return fmt.Errorf("failed to decode action receipt record: %w", err)
 	}
-	event := &storage.Event{
-		OperatorSessionID: receipt.OperatorSessionID,
-		Timestamp:         time.Now(),
-		Type:              storage.EventType("transaction_audit"),
-		ContentText:       string(data),
-	}
-	_, err := a.vault.RecordEvent(event)
-	return err
+	// Record directly in receipts table via transaction-native API
+	return a.vault.RecordActionReceipt(&receipt)
 }

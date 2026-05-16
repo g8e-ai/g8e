@@ -48,7 +48,7 @@ L1 provides hardcoded, non-negotiable safety invariants enforced at the Operator
 ### L2: Consensus (Tribunal)
 The Consensus layer converts intent into executable commands using a verifiable proof of consensus from an ensemble of independent agents.
 -   **Tribunal Signature**: An Ed25519 signature from a trusted L2 signer (e.g., an agent ensemble).
--   **Trusted Signers**: `g8eo` loads trusted public keys from `.g8e/pki/trusted_signers/*.pub`. A first-boot Operator can start before signers are provisioned, but every transaction with a missing or unknown L2 key is rejected.
+-   **Trusted Signers**: `g8eo` loads trusted public keys from the Operator-owned database (`SignerStore`). A first-boot Operator can start before signers are provisioned, but every transaction with a missing or unknown L2 key is rejected.
 -   **Quorum Enforcement**: The Warden ensures that the required number of valid consensus votes are present.
 
 ### L3: Authorization (PHP Gate)
@@ -93,7 +93,7 @@ The Operator binary handles the seeding and initialization of platform secrets d
 
 2. **Hub Seeding (Listen Mode)**:
    - When running with `--listen`, the Operator generates core platform secrets if they are missing from `.g8e/pki` or the database.
-   - **Secrets Generated**: `session_encryption_key`, `auditor_hmac_key`.
+   - **Secrets Generated**: `session_encryption_key`.
    - **Storage**: Secrets are saved to the SQLite `documents` table and written to the `--secrets-dir` (default: `.g8e/secrets`).
    - **Bootstrapping Apps**: A `bootstrap_digest.json` manifest is written. Application-layer adapters (g8ee) can read this manifest to discover endpoints and trust roots, but they never gain access to the raw underlying secrets.
 
@@ -107,7 +107,7 @@ The Operator binary handles the seeding and initialization of platform secrets d
 ## Sovereignty & Audit
 
 ### Encrypted Audit Vault
-Every action is recorded in an encrypted SQLite database on the Operator host. Output is scrubbed by **Sentinel** for credentials and PII before being recorded or transmitted.
+Every action is recorded in an encrypted SQLite database on the Operator host. Results are recorded as signed `ActionReceipts` in a transaction-native table, ensuring unified audit for both accepted and blocked mutations. Output is scrubbed by **Sentinel** for credentials and PII before being recorded or transmitted.
 
 ### Ledger (Multi-Ledger Architecture)
 The Operator implements a **Multi-Ledger Architecture**: each operator session owns an isolated git repository at `.g8e/data/ledger/sessions/<operator_session_id>/`. Every file mutation is mirrored into the session-scoped ledger via a two-phase commit — a pre-mutation snapshot (`LedgerHashBefore`) followed by a post-mutation snapshot (`LedgerHashAfter`) — providing a verifiable, diffable history of every AI-driven edit. Session ledgers are initialized lazily on first use with a double-checked lock; concurrent sessions never share a working tree. Files are stored encrypted (`.enc`, AES-256-GCM) when the Encryption Vault is unlocked. The Ledger degrades gracefully when git is unavailable.

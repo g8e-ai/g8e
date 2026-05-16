@@ -5,17 +5,16 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/governance"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/testutil"
+	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -52,7 +51,6 @@ func TestNewPubSubCommandService_StartsWithoutTrustedSignersButRejectsL2(t *test
 		L3Verifier:        &mockL3Verifier{},
 	})
 	require.NoError(t, err)
-	require.Empty(t, svc.trustedSigners)
 	require.NotNil(t, svc.transactionVerifier)
 
 	_, signerPriv, err := ed25519.GenerateKey(rand.Reader)
@@ -62,26 +60,6 @@ func TestNewPubSubCommandService_StartsWithoutTrustedSignersButRejectsL2(t *test
 	_, err = svc.transactionVerifier.VerifyEnvelope(env)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, governance.ErrL2KeyNotConfigured), "expected missing L2 key error, got %v", err)
-}
-
-func TestNewPubSubCommandService_RejectsMalformedTrustedSignerFile(t *testing.T) {
-	cfg := testutil.NewTestConfig(t)
-	cfg.PKIDir = filepath.Join(t.TempDir(), "pki")
-	signersDir := filepath.Join(cfg.PKIDir, "trusted_signers")
-	require.NoError(t, os.MkdirAll(signersDir, 0700))
-	require.NoError(t, os.WriteFile(filepath.Join(signersDir, "bad.pub"), []byte("not-hex"), 0600))
-
-	_, err := NewPubSubCommandService(CommandServiceConfig{
-		Config:            cfg,
-		Logger:            testutil.NewTestLogger(),
-		PubSubClient:      NewMockOperatorPubSubClient(),
-		ReplayStore:       &mockReplayStore{},
-		StateRootProvider: &mockStateRootProvider{},
-		TransactionAudit:  &mockTransactionAudit{},
-		L3Verifier:        &mockL3Verifier{},
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "decode trusted L2 signer")
 }
 
 func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *uap.UAPEnvelope {

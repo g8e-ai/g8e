@@ -16,14 +16,10 @@ package pubsub
 import (
 	"context"
 	"crypto/ed25519"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -82,11 +78,6 @@ type PubSubCommandService struct {
 	mu      sync.RWMutex
 
 	reconnectBaseDelay time.Duration
-
-	// trustedSigners holds ED25519 public keys for external L2 signers.
-	// Loaded from <PKIDir>/trusted_signers/*.pub or from SignerStore
-	// DEPRECATED: use signerStore instead
-	trustedSigners map[string]ed25519.PublicKey
 
 	// UAP governance services for Phase 3 integration
 	tribunal            *governance.Tribunal
@@ -179,20 +170,10 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.signerStore = c.SignerStore
 	if rs.signerStore == nil {
-		// Fallback to filesystem-only loading if no store provided (outbound mode legacy)
-		signersDir := filepath.Join(c.Config.PKIDir, "trusted_signers")
-		trustedSigners, err := loadTrustedSigners(signersDir)
-		if err != nil {
-			return nil, err
-		}
-		rs.signerStore = &governance.SimpleSignerStore{Signers: trustedSigners}
-		if len(trustedSigners) == 0 {
-			c.Logger.Warn("No trusted L2 ED25519 signers configured; signed transactions will be rejected until a signer is provisioned", "path", signersDir)
-		} else {
-			for name := range trustedSigners {
-				c.Logger.Info("Loaded trusted L2 signer (filesystem)", "name", name, "path", filepath.Join(signersDir, name+".pub"))
-			}
-		}
+		// Provide a fallback empty signer store instead of loading from filesystem.
+		// This ensures outbound mode fails closed if no signer store is provided.
+		rs.signerStore = &governance.SimpleSignerStore{Signers: make(map[string]ed25519.PublicKey)}
+		c.Logger.Warn("No SignerStore provided; signed transactions will be rejected")
 	}
 
 	// Validate required governance dependencies (fail-closed: missing deps = fatal error)
@@ -214,38 +195,6 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	return rs, nil
 }
 
-func loadTrustedSigners(signersDir string) (map[string]ed25519.PublicKey, error) {
-	trustedSigners := make(map[string]ed25519.PublicKey)
-	entries, err := os.ReadDir(signersDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return trustedSigners, nil
-		}
-		return nil, fmt.Errorf("read trusted L2 signers directory %s: %w", signersDir, err)
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".pub") {
-			continue
-		}
-		pubPath := filepath.Join(signersDir, entry.Name())
-		pubHex, err := os.ReadFile(pubPath)
-		if err != nil {
-			return nil, fmt.Errorf("read trusted L2 signer %s: %w", pubPath, err)
-		}
-		pubBytes, err := hex.DecodeString(strings.TrimSpace(string(pubHex)))
-		if err != nil {
-			return nil, fmt.Errorf("decode trusted L2 signer %s: %w", pubPath, err)
-		}
-		if len(pubBytes) != ed25519.PublicKeySize {
-			return nil, fmt.Errorf("trusted L2 signer %s decoded to %d bytes; expected %d", pubPath, len(pubBytes), ed25519.PublicKeySize)
-		}
-		name := strings.TrimSuffix(entry.Name(), ".pub")
-		trustedSigners[name] = ed25519.PublicKey(pubBytes)
-	}
-	return trustedSigners, nil
-}
-
-// initializeUAPGovernance sets up the Tribunal and Warden services for UAP Phase 3 integration.
 func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, serviceCtx context.Context) {
 	// Initialize Tribunal with Sentinel for MITRE checks
 	rs.tribunal = &governance.Tribunal{
@@ -669,23 +618,8 @@ func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, reje
 		Timestamp:         time.Now().UTC(),
 	}
 
-	recordJSON, err := json.Marshal(record)
-	if err != nil {
-		rs.logger.Error("Failed to marshal blocked transaction record", "error", err, "message_id", env.Id)
-		return
-	}
-
-	// Log to audit vault Event table with ActionReceiptRecord in ContentText for schema consistency
-	event := &storage.Event{
-		OperatorSessionID: env.OperatorSessionId,
-		Timestamp:         time.Now(),
-		Type:              storage.EventType("action_receipt"),
-		ContentText:       string(recordJSON), // Full ActionReceiptRecord JSON for canonical schema
-		CommandRaw:        fmt.Sprintf("%s / %s (hash: %s)", env.ActionType, env.TargetResource, env.TransactionHash),
-	}
-
-	_, err = rs.audit.auditVault.RecordEvent(event)
-	if err != nil {
+	// Log to audit vault using canonical RecordActionReceipt for unified query experience
+	if err := rs.audit.auditVault.RecordActionReceipt(&record); err != nil {
 		rs.logger.Error("Failed to record blocked transaction in audit vault", "error", err, "message_id", env.Id)
 	}
 }

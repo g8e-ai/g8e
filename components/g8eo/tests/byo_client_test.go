@@ -246,10 +246,14 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	}
 
 	// 6. Attach L3 proof (Passkey)
-	// For testing, we'll use a placeholder or satisfy the L3 check.
+	// For testing, we'll use a placeholder that satisfies the L3Metadata schema
 	envelope.Governance.L3 = &commonv1.L3Metadata{
-		HumanSignature: "byo-human-sig",
-		PublicKey:      "byo-passkey-pub",
+		Proof: &commonv1.L3Proof{
+			ClientDataJson:    "byo-client-data",
+			AuthenticatorData: "byo-auth-data",
+			Signature:         "byo-signature",
+			CredentialId:      "byo-credential-id",
+		},
 	}
 
 	// 7. Submit transaction through the public Operator surface

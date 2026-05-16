@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/vault"
 )
@@ -405,6 +406,31 @@ var auditVaultMigrations = []sqliteutil.Migration{
 		CREATE INDEX IF NOT EXISTS idx_file_mutation_filepath ON file_mutation_log(filepath);
 		`,
 	},
+	{
+		Version:     2,
+		Description: "Add receipts table for transaction-native audit",
+		SQL: `
+		CREATE TABLE IF NOT EXISTS receipts (
+			transaction_id TEXT PRIMARY KEY,
+			transaction_hash TEXT NOT NULL,
+			operator_id TEXT NOT NULL,
+			operator_session_id TEXT NOT NULL,
+			action_type TEXT NOT NULL,
+			target_resource TEXT,
+			status TEXT NOT NULL,
+			result_summary TEXT,
+			state_root_before TEXT,
+			state_root_after TEXT,
+			executed_at_ms INTEGER NOT NULL,
+			signer_key_id TEXT NOT NULL,
+			signature TEXT NOT NULL,
+			timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
+			FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_receipts_session_id ON receipts(operator_session_id);
+		CREATE INDEX IF NOT EXISTS idx_receipts_timestamp ON receipts(timestamp);
+		`,
+	},
 }
 
 // CreateSession creates a new session in the audit log
@@ -652,6 +678,202 @@ func (avs *AuditVaultService) RecordEvent(event *Event) (int64, error) {
 		"encrypted", encrypted)
 
 	return eventID, nil
+}
+
+// RecordActionReceipt records a signed ActionReceipt in the audit vault.
+// This is the authoritative transaction-native audit record.
+func (avs *AuditVaultService) RecordActionReceipt(record *models.ActionReceiptRecord) error {
+	if avs == nil || avs.db == nil {
+		return nil
+	}
+
+	query := `
+	INSERT INTO receipts (
+		transaction_id, transaction_hash, operator_id, operator_session_id,
+		action_type, target_resource, status, result_summary,
+		state_root_before, state_root_after, executed_at_ms,
+		signer_key_id, signature, timestamp
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(transaction_id) DO UPDATE SET
+		status = excluded.status,
+		result_summary = excluded.result_summary,
+		state_root_after = excluded.state_root_after,
+		executed_at_ms = excluded.executed_at_ms,
+		signature = excluded.signature,
+		timestamp = excluded.timestamp
+	`
+
+	_, err := avs.db.Exec(query,
+		record.TransactionID,
+		record.TransactionHash,
+		record.OperatorID,
+		record.OperatorSessionID,
+		record.ActionType,
+		record.TargetResource,
+		record.Status,
+		record.ResultSummary,
+		record.StateRootBefore,
+		record.StateRootAfter,
+		record.ExecutedAt.UnixMilli(),
+		record.SignerKeyID,
+		record.Signature,
+		sqliteutil.FormatTimestamp(record.Timestamp),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to record action receipt: %w", err)
+	}
+
+	avs.logger.Info("ActionReceipt recorded",
+		"transaction_id", record.TransactionID,
+		"status", record.Status)
+
+	return nil
+}
+
+// GetActionReceipt retrieves a single action receipt by transaction ID.
+func (avs *AuditVaultService) GetActionReceipt(transactionID string) (*models.ActionReceiptRecord, error) {
+	if avs == nil || avs.db == nil {
+		return nil, fmt.Errorf("audit vault is disabled")
+	}
+
+	query := `
+	SELECT transaction_id, transaction_hash, operator_id, operator_session_id,
+		action_type, target_resource, status, result_summary,
+		state_root_before, state_root_after, executed_at_ms,
+		signer_key_id, signature, timestamp
+	FROM receipts
+	WHERE transaction_id = ?
+	`
+
+	var r models.ActionReceiptRecord
+	var executedAtMs int64
+	var timestampStr string
+	err := avs.db.QueryRow(query, transactionID).Scan(
+		&r.TransactionID, &r.TransactionHash, &r.OperatorID, &r.OperatorSessionID,
+		&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
+		&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
+		&r.SignerKeyID, &r.Signature, &timestampStr,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get action receipt: %w", err)
+	}
+
+	r.ExecutedAt = time.UnixMilli(executedAtMs)
+	r.Timestamp, _ = sqliteutil.ParseTimestamp(timestampStr)
+
+	return &r, nil
+}
+
+// ListActionReceipts retrieves action receipts with optional filtering and pagination.
+func (avs *AuditVaultService) ListActionReceipts(sessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error) {
+	if avs == nil || avs.db == nil {
+		return nil, fmt.Errorf("audit vault is disabled")
+	}
+
+	if limit <= 0 {
+		limit = 50
+	}
+
+	var query strings.Builder
+	query.WriteString(`
+	SELECT transaction_id, transaction_hash, operator_id, operator_session_id,
+		action_type, target_resource, status, result_summary,
+		state_root_before, state_root_after, executed_at_ms,
+		signer_key_id, signature, timestamp
+	FROM receipts
+	`)
+
+	args := []interface{}{}
+	if sessionID != "" {
+		query.WriteString(" WHERE operator_session_id = ?")
+		args = append(args, sessionID)
+	}
+
+	query.WriteString(" ORDER BY timestamp DESC LIMIT ? OFFSET ?")
+	args = append(args, limit, offset)
+
+	rows, err := avs.db.Query(query.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query action receipts: %w", err)
+	}
+	defer rows.Close()
+
+	var results []*models.ActionReceiptRecord
+	for rows.Next() {
+		var r models.ActionReceiptRecord
+		var executedAtMs int64
+		var timestampStr string
+		err := rows.Scan(
+			&r.TransactionID, &r.TransactionHash, &r.OperatorID, &r.OperatorSessionID,
+			&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
+			&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
+			&r.SignerKeyID, &r.Signature, &timestampStr,
+		)
+		if err != nil {
+			avs.logger.Warn("Failed to scan receipt row", "error", err)
+			continue
+		}
+
+		r.ExecutedAt = time.UnixMilli(executedAtMs)
+		r.Timestamp, _ = sqliteutil.ParseTimestamp(timestampStr)
+		results = append(results, &r)
+	}
+
+	return results, nil
+}
+
+// ListActionReceiptsSince retrieves action receipts newer than the given timestamp.
+func (avs *AuditVaultService) ListActionReceiptsSince(since time.Time, limit int) ([]*models.ActionReceiptRecord, error) {
+	if avs == nil || avs.db == nil {
+		return nil, fmt.Errorf("audit vault is disabled")
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	query := `
+	SELECT transaction_id, transaction_hash, operator_id, operator_session_id,
+		action_type, target_resource, status, result_summary,
+		state_root_before, state_root_after, executed_at_ms,
+		signer_key_id, signature, timestamp
+	FROM receipts
+	WHERE timestamp > ?
+	ORDER BY timestamp ASC
+	LIMIT ?
+	`
+
+	rows, err := avs.db.Query(query, sqliteutil.FormatTimestamp(since), limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query action receipts since %v: %w", since, err)
+	}
+	defer rows.Close()
+
+	var results []*models.ActionReceiptRecord
+	for rows.Next() {
+		var r models.ActionReceiptRecord
+		var executedAtMs int64
+		var timestampStr string
+		err := rows.Scan(
+			&r.TransactionID, &r.TransactionHash, &r.OperatorID, &r.OperatorSessionID,
+			&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
+			&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
+			&r.SignerKeyID, &r.Signature, &timestampStr,
+		)
+		if err != nil {
+			avs.logger.Warn("Failed to scan receipt row", "error", err)
+			continue
+		}
+
+		r.ExecutedAt = time.UnixMilli(executedAtMs)
+		r.Timestamp, _ = sqliteutil.ParseTimestamp(timestampStr)
+		results = append(results, &r)
+	}
+
+	return results, nil
 }
 
 // truncateOutput applies the head/tail truncation strategy for large outputs
@@ -955,10 +1177,22 @@ func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
 			logger.Info("Pruned old events", "rows_deleted", rowsDeleted)
 		}
 
-		// 3. Delete sessions that no longer have any events
+		// 3. Delete receipts older than retention period
+		result, err = db.Exec("DELETE FROM receipts WHERE timestamp < ?", cutoff)
+		if err != nil {
+			logger.Error("Failed to prune old receipts", "error", err)
+		} else {
+			rowsDeleted, _ = result.RowsAffected()
+			if rowsDeleted > 0 {
+				logger.Info("Pruned old receipts", "rows_deleted", rowsDeleted)
+			}
+		}
+
+		// 4. Delete sessions that no longer have any events or receipts
 		_, err = db.Exec(`
 			DELETE FROM sessions
 			WHERE id NOT IN (SELECT DISTINCT operator_session_id FROM events WHERE operator_session_id IS NOT NULL)
+			AND id NOT IN (SELECT DISTINCT operator_session_id FROM receipts WHERE operator_session_id IS NOT NULL)
 		`)
 		if err != nil {
 			logger.Warn("Failed to prune orphaned sessions", "error", err)

@@ -32,6 +32,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/services/sqliteutil"
 )
 
 func readBody(r *http.Request) ([]byte, error) {
@@ -110,6 +111,10 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/operators/bind", h.handleBindOperators)
 	mux.HandleFunc("/api/operators/unbind", h.handleUnbindOperators)
 	mux.HandleFunc("/api/operators/target", h.handleSetTargetContext)
+	mux.HandleFunc("/api/governance/signers", h.handleTrustedSigners)
+	mux.HandleFunc("/api/governance/signers/", h.handleTrustedSignerByID)
+	mux.HandleFunc("/api/audit/receipts", h.handleAuditReceipts)
+	mux.HandleFunc("/api/audit/receipts/export", h.handleAuditReceiptsExport)
 	mux.HandleFunc("/db/", h.handleDB)
 	mux.HandleFunc("/kv/", h.handleKV)
 	mux.HandleFunc("/pubsub/publish", h.handlePubSubPublish)
@@ -925,6 +930,176 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 // DELETE /db/_sse_events         → wipe all SSE events
 // GET    /db/_sse_events/count   → count rows
 // =============================================================================
+
+func (h *HTTPHandler) handleAuditReceipts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	txID := r.URL.Query().Get("tx_id")
+	if txID != "" {
+		receipt, err := h.db.AuditVault.GetActionReceipt(txID)
+		if err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if receipt == nil {
+			jsonError(w, http.StatusNotFound, "receipt not found")
+			return
+		}
+		jsonResponse(w, http.StatusOK, receipt)
+		return
+	}
+
+	sessionID := r.URL.Query().Get("session_id")
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
+
+	limit := 50
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil {
+			limit = l
+		}
+	}
+	offset := 0
+	if offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil {
+			offset = o
+		}
+	}
+
+	receipts, err := h.db.AuditVault.ListActionReceipts(sessionID, limit, offset)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"receipts": receipts,
+	})
+}
+
+func (h *HTTPHandler) handleAuditReceiptsExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	sinceStr := r.URL.Query().Get("since")
+	limitStr := r.URL.Query().Get("limit")
+
+	since := time.Time{}
+	if sinceStr != "" {
+		if t, err := time.Parse(time.RFC3339, sinceStr); err == nil {
+			since = t
+		} else if t, err := sqliteutil.ParseTimestamp(sinceStr); err == nil {
+			since = t
+		}
+	}
+
+	limit := 100
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil {
+			limit = l
+		}
+	}
+
+	receipts, err := h.db.AuditVault.ListActionReceiptsSince(since, limit)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.WriteHeader(http.StatusOK)
+	encoder := json.NewEncoder(w)
+	for _, r := range receipts {
+		if err := encoder.Encode(r); err != nil {
+			h.logger.Error("Failed to encode audit receipt for export", "transaction_id", r.TransactionID, "error", err)
+			break
+		}
+	}
+}
+
+func (h *HTTPHandler) handleTrustedSigners(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		signers, err := h.db.ListTrustedSigners()
+		if err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"signers": signers,
+		})
+
+	case http.MethodPost:
+		body, err := readBody(r)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "failed to read body")
+			return
+		}
+		var signer models.TrustedSigner
+		if err := json.Unmarshal(body, &signer); err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+		if signer.ID == "" || signer.PublicKey == "" {
+			jsonError(w, http.StatusBadRequest, "id and public_key_hex required")
+			return
+		}
+		if err := h.db.AddTrustedSigner(signer); err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		jsonResponse(w, http.StatusCreated, models.StatusResponse{Status: constants.Status.ListenMode.StatusOK})
+
+	default:
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (h *HTTPHandler) handleTrustedSignerByID(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/governance/signers/")
+	if id == "" || strings.Contains(id, "/") {
+		jsonError(w, http.StatusBadRequest, "invalid signer id")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		pubKey, err := h.db.GetTrustedSigner(id)
+		if err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if pubKey == nil {
+			jsonError(w, http.StatusNotFound, "signer not found")
+			return
+		}
+		// Return metadata rather than raw bytes
+		doc, _ := h.db.DocGet(string(constants.CollectionTrustedSigners), id)
+		jsonResponse(w, http.StatusOK, doc.ForWire())
+
+	case http.MethodDelete:
+		deleted, err := h.db.DeleteTrustedSigner(id)
+		if err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if !deleted {
+			jsonError(w, http.StatusNotFound, "signer not found")
+			return
+		}
+		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.ListenMode.StatusOK})
+
+	default:
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
 
 func (h *HTTPHandler) handleSSEEvents(w http.ResponseWriter, r *http.Request, id string) {
 	if id == "count" && r.Method == http.MethodGet {

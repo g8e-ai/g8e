@@ -203,16 +203,24 @@ func (w *Warden) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) e
 		return docErr
 	}
 
-	event := &storage.Event{
+	record := models.ActionReceiptRecord{
+		TransactionID:     r.TransactionId,
+		TransactionHash:   r.TransactionHash,
+		OperatorID:        env.OperatorId,
 		OperatorSessionID: env.OperatorSessionId,
-		Timestamp:         time.Now(),
-		Type:              storage.EventType("action_receipt"),
-		ContentText:       fmt.Sprintf("ActionReceipt: %s (Status: %s, Summary: %s)", r.TransactionId, r.Status, r.ResultSummary),
-		CommandRaw:        fmt.Sprintf("%s / %s (hash: %s, state: %s -> %s)", env.ActionType, env.TargetResource, truncateHash(r.TransactionHash), truncateHash(r.StateRootBefore), truncateHash(r.StateRootAfter)),
+		ActionType:        env.ActionType,
+		TargetResource:    env.TargetResource,
+		Status:            r.Status.String(),
+		ResultSummary:     r.ResultSummary,
+		StateRootBefore:   r.StateRootBefore,
+		StateRootAfter:    r.StateRootAfter,
+		ExecutedAt:        time.UnixMilli(r.ExecutedAtUnixMs),
+		SignerKeyID:       r.SignerKeyId,
+		Signature:         r.Signature,
+		Timestamp:         time.Now().UTC(),
 	}
 
-	_, err := w.AuditVault.RecordEvent(event)
-	if err != nil {
+	if err := w.AuditVault.RecordActionReceipt(&record); err != nil {
 		if w.Logger != nil {
 			w.Logger.Error("Failed to record ActionReceipt in audit vault", "error", err)
 		}

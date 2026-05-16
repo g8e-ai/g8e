@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/services/storage"
 )
 
 // listenSchema is the canonical operator SQLite schema, embedded at compile time
@@ -45,8 +46,9 @@ var listenSchema string
 //   - KV store with TTL: key/value with optional expiration
 //   - SSE event buffer: per-session event ring buffer
 type ListenDBService struct {
-	db     *sqliteutil.DB
-	logger *slog.Logger
+	db         *sqliteutil.DB
+	logger     *slog.Logger
+	AuditVault *storage.AuditVaultService
 }
 
 // NewListenDBService opens (or creates) the unified SQLite database.
@@ -59,7 +61,21 @@ func NewListenDBService(dataDir string, secretsDir string, logger *slog.Logger) 
 		return nil, fmt.Errorf("failed to open listen database: %w", err)
 	}
 
-	svc := &ListenDBService{db: db, logger: logger}
+	// Initialize Audit Vault for transaction-native audit recording
+	auditVaultConfig := storage.DefaultAuditVaultConfig()
+	auditVaultConfig.DataDir = dataDir
+	// Git is optional for audit vault but recommended for file history
+	auditVault, err := storage.NewAuditVaultService(auditVaultConfig, logger)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to initialize audit vault: %w", err)
+	}
+
+	svc := &ListenDBService{
+		db:         db,
+		logger:     logger,
+		AuditVault: auditVault,
+	}
 
 	if err := svc.initSchema(secretsDir); err != nil {
 		db.Close()
@@ -127,17 +143,20 @@ func (s *ListenDBService) calculateStateRoot() (string, error) {
 
 	rowsToHash := make([]row, 0)
 
-	docRows, err := s.db.Query("SELECT collection, id, data, created_at, updated_at FROM documents ORDER BY collection, id")
+	// 1. Documents (Authoritative)
+	// Exclude metadata-only timestamps (created_at, updated_at) to ensure
+	// the state root only changes when the content actually changes.
+	docRows, err := s.db.Query("SELECT collection, id, data FROM documents ORDER BY collection, id")
 	if err != nil {
 		return "", err
 	}
 	for docRows.Next() {
-		var collection, id, data, createdAt, updatedAt string
-		if err := docRows.Scan(&collection, &id, &data, &createdAt, &updatedAt); err != nil {
+		var collection, id, data string
+		if err := docRows.Scan(&collection, &id, &data); err != nil {
 			docRows.Close()
 			return "", err
 		}
-		rowsToHash = append(rowsToHash, row{"documents", []interface{}{collection, id, data, createdAt, updatedAt}})
+		rowsToHash = append(rowsToHash, row{"documents", []interface{}{collection, id, data}})
 	}
 	if err := docRows.Err(); err != nil {
 		docRows.Close()
@@ -146,17 +165,21 @@ func (s *ListenDBService) calculateStateRoot() (string, error) {
 	docRows.Close()
 
 	now := sqliteutil.NowTimestamp()
-	kvRows, err := s.db.Query("SELECT key, value, created_at, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", now)
+
+	// 2. KV Store (Authoritative)
+	// Filter for active entries only. Exclude created_at.
+	// expires_at IS included because it affects the active state of the entry.
+	kvRows, err := s.db.Query("SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", now)
 	if err != nil {
 		return "", err
 	}
 	for kvRows.Next() {
-		var key, value, createdAt, expiresAt string
-		if err := kvRows.Scan(&key, &value, &createdAt, &expiresAt); err != nil {
+		var key, value, expiresAt string
+		if err := kvRows.Scan(&key, &value, &expiresAt); err != nil {
 			kvRows.Close()
 			return "", err
 		}
-		rowsToHash = append(rowsToHash, row{"kv_store", []interface{}{key, value, createdAt, expiresAt}})
+		rowsToHash = append(rowsToHash, row{"kv_store", []interface{}{key, value, expiresAt}})
 	}
 	if err := kvRows.Err(); err != nil {
 		kvRows.Close()
@@ -164,24 +187,29 @@ func (s *ListenDBService) calculateStateRoot() (string, error) {
 	}
 	kvRows.Close()
 
-	blobRows, err := s.db.Query("SELECT namespace, id, size, content_type, hex(data), created_at, COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", now)
+	// 3. Blobs (Authoritative)
+	// Filter for active entries only. Exclude created_at.
+	// data is included (as hex for JSON determinism).
+	blobRows, err := s.db.Query("SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", now)
 	if err != nil {
 		return "", err
 	}
 	for blobRows.Next() {
-		var namespace, id, contentType, dataHex, createdAt, expiresAt string
+		var namespace, id, contentType, dataHex, expiresAt string
 		var size int64
-		if err := blobRows.Scan(&namespace, &id, &size, &contentType, &dataHex, &createdAt, &expiresAt); err != nil {
+		if err := blobRows.Scan(&namespace, &id, &size, &contentType, &dataHex, &expiresAt); err != nil {
 			blobRows.Close()
 			return "", err
 		}
-		rowsToHash = append(rowsToHash, row{"blobs", []interface{}{namespace, id, size, contentType, dataHex, createdAt, expiresAt}})
+		rowsToHash = append(rowsToHash, row{"blobs", []interface{}{namespace, id, size, contentType, dataHex, expiresAt}})
 	}
 	if err := blobRows.Err(); err != nil {
 		blobRows.Close()
 		return "", err
 	}
 	blobRows.Close()
+
+	// 4. Nonces and SSE events are EXCLUDED (volatile/metadata)
 
 	payload, err := json.Marshal(rowsToHash)
 	if err != nil {
@@ -539,6 +567,47 @@ func (s *ListenDBService) AddTrustedSigner(signer models.TrustedSigner) error {
 	}
 
 	return s.DocSet(string(constants.CollectionTrustedSigners), signer.ID, data)
+}
+
+// ListTrustedSigners returns all trusted L2 signers in the database.
+func (s *ListenDBService) ListTrustedSigners() ([]models.TrustedSigner, error) {
+	docs, err := s.DocQuery(string(constants.CollectionTrustedSigners), nil, "id", 0)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]models.TrustedSigner, 0, len(docs))
+	for _, doc := range docs {
+		data, err := json.Marshal(doc.Data)
+		if err != nil {
+			continue
+		}
+		var signer models.TrustedSigner
+		if err := json.Unmarshal(data, &signer); err != nil {
+			continue
+		}
+		// id is not in the data map usually, so we set it from doc.ID
+		signer.ID = doc.ID
+		results = append(results, signer)
+	}
+	return results, nil
+}
+
+// DeleteTrustedSigner removes a trusted L2 signer from the database.
+func (s *ListenDBService) DeleteTrustedSigner(keyID string) (bool, error) {
+	return s.DocDelete(string(constants.CollectionTrustedSigners), keyID)
+}
+
+// HasTrustedSigners returns true if at least one trusted L2 signer is provisioned in the database.
+func (s *ListenDBService) HasTrustedSigners() (bool, error) {
+	filters := []models.DocFilter{
+		{Field: "enabled", Op: "==", Value: json.RawMessage("true")},
+	}
+	docs, err := s.DocQuery(string(constants.CollectionTrustedSigners), filters, "", 1)
+	if err != nil {
+		return false, err
+	}
+	return len(docs) > 0, nil
 }
 
 func scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr string) (*models.Document, error) {

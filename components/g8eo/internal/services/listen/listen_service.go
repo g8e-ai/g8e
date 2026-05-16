@@ -20,10 +20,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -229,19 +226,12 @@ func (ls *ListenService) IsReady() bool {
 }
 
 func (ls *ListenService) IsGovernanceReady() bool {
-	// Governance is ready if at least one trusted L2 signer is provisioned.
-	// These are stored at <PKIDir>/trusted_signers/*.pub
-	signersDir := filepath.Join(ls.cfg.Listen.PKIDir, "trusted_signers")
-	entries, err := os.ReadDir(signersDir)
+	ready, err := ls.db.HasTrustedSigners()
 	if err != nil {
+		ls.logger.Error("Failed to check if governance is ready", "error", err)
 		return false
 	}
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pub") {
-			return true
-		}
-	}
-	return false
+	return ready
 }
 
 // GetDB returns the underlying database service.
