@@ -61,7 +61,8 @@ class CommandWhitelistValidator:
 
     def load_whitelist(self, whitelist_path: str) -> None:
         """Load whitelist configuration from JSON file."""
-        logger.info("Loading command whitelist from %s", whitelist_path)
+        cfg_file = str(whitelist_path)
+        logger.info("Loading command whitelist from %s", cfg_file)
         self.whitelist_data = load_json_config(Path(whitelist_path), config_name="whitelist configuration")
 
         enabled = self.whitelist_data.get("enabled", True)
@@ -69,7 +70,7 @@ class CommandWhitelistValidator:
             logger.warning(
                 "Command whitelist is disabled via 'enabled: false' in %s; "
                 "loading empty index (no commands will be allowed at the JSON level)",
-                whitelist_path,
+                cfg_file,
             )
             self.commands_by_category = {}
             self.all_commands = set()
@@ -83,7 +84,7 @@ class CommandWhitelistValidator:
         if not enforcement_policy:
             raise ConfigurationError("Whitelist missing required enforcement_policy section")
 
-        logger.info("Loaded command whitelist with %d commands from %s", len(self.all_commands), whitelist_path)
+        logger.info("Loaded command whitelist with %d commands from %s", len(self.all_commands), cfg_file)
 
     def _parse_whitelist_data(self) -> None:
         """Parse loaded whitelist data into internal structures."""

@@ -35,17 +35,17 @@ def resolve_config_path(filename: str) -> Path:
     
     # Check if PATHS has it
     if "g8ee" in PATHS and "config_dir" in PATHS["g8ee"]:
-        config_dir = Path(PATHS["g8ee"]["config_dir"])
+        target_dir = Path(PATHS["g8ee"]["config_dir"])
         # Handle container absolute paths when running on host
-        if not config_dir.exists() and len(config_dir.parts) >= 2 and config_dir.parts[0:2] == ("/", "app"):
+        if not target_dir.exists() and len(target_dir.parts) >= 2 and target_dir.parts[0:2] == ("/", "app"):
             try:
                 root = resolve_project_root()
                 # Remove /app/ and join with root
-                config_dir = root / Path(*config_dir.parts[2:])
+                target_dir = root / Path(*target_dir.parts[2:])
             except (OSError, IndexError) as e:
-                logger.warning(f"Failed to remap container path {config_dir} to host: {e}")
+                logger.warning(f"Failed to remap container path {str(target_dir)} to host: {e}")
         
-        target = config_dir / filename
+        target = target_dir / filename
         if target.exists():
             return target
 

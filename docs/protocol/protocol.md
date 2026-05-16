@@ -6,7 +6,7 @@ parent: Architecture
 # g8e Protocol
 
 Last Updated: 2026-05-12
-Version: v0.2.4
+Version: v0.2.5
 
 The g8e Protocol is the substrate of the platform: a **UAP JSON** wire contract for secure, auditable interaction between any g8e client and any host-side **Operator** implementation. An Operator is a role defined by this protocol — receive signed transactions, enforce L1/L2/L3 verification, execute through a defensive boundary, emit signed receipts anchored to a local ledger.
 

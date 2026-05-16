@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.5] - 2026-05-15
+
+### Added
+- **Multi-Ledger Audit:** Implemented session-isolated Git audit ledgers for per-investigation transaction tracing.
+- **Warden Execution Boundary:** Established `g8eo` Warden as the authoritative execution boundary with signed action receipts.
+- **Governance APIs:** Added first-class governance APIs for audit export and trust management.
+- **Protobuf Module:** Introduced a unified `protocol/` directory with formal Protobuf module definitions.
+- **Commitment Ledger:** Added definitions for the commitment ledger to support reputation staking.
+
+### Changed
+- **Directory Reorganization:** Renamed `components/` to `services/` and `shared/` to `protocol/` to align with the mandatory substrate-first architecture.
+- **g8ed Decommissioning:** Completed the removal of `g8ed` (Dashboard) remnants; migrated all core logic to the `g8eo` operator.
+- **Event Service:** Consolidated `client_event_service` into a unified `event_service` within `g8eo`.
+- **Improved Chaos Output:** Enhanced chaos test reporting for better failure visibility.
+
+### Fixed
+- **WebAuthn L3:** Fixed L3 verification issues following the `g8ed` decommissioning.
+- **Path Resolution:** Improved path resolution and environment variable handling across the platform.
+- **Test Stability:** Fixed various race conditions and failures in `g8ee` and `tribunal` tests.
+
 ## [0.2.4] - 2026-05-13
 
 ### Added

@@ -359,7 +359,7 @@ class TestPreservedOperationalData:
     def test_hostname_preserved(self):
         text = "ssh into prod-web-01.internal.example.com"
         result = _scrubber.scrub(text)
-        assert "prod-web-01.internal.example.com" in result.scrubbed_text
+        assert result.scrubbed_text == text
 
     def test_file_path_preserved(self):
         text = "edit /etc/nginx/nginx.conf and restart"

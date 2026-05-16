@@ -50,7 +50,8 @@ class CommandBlacklistValidator:
         return resolve_config_path("blacklist.json")
 
     def _load(self, path: Path) -> None:
-        logger.info("Loading command blacklist from %s", path)
+        cfg_file = str(path)
+        logger.info("Loading command blacklist from %s", cfg_file)
         data = load_json_config(path, config_name="command blacklist")
 
         enabled = data.get("enabled", True)
@@ -58,7 +59,7 @@ class CommandBlacklistValidator:
             logger.warning(
                 "Command blacklist is disabled via 'enabled: false' in %s; "
                 "loading empty index (no commands will be blocked at the JSON level)",
-                path,
+                cfg_file,
             )
             self._config = {
                 "forbidden_commands": [],

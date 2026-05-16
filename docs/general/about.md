@@ -23,7 +23,7 @@ The core product invariant is that a typed, signed, state-bound transaction reac
 # Origins & Architecture
 
 Last Updated: 2026-05-12
-Version: v0.2.4
+Version: v0.2.5
 
 For thirty years, my entire world has been managing and protecting data across remote systems... unstructured, structured, blob - nfs, smb, https, s3, ssh - linux, unix, windows - wan, lan... and all bits and pieces of the business side in-between - security reviews/audits, sales cycles, painful conversations with customers, on-site visits, RCAs, mission-critical service design... but one thing I hang my hat on is knowing all the people who I took that particular burden away from, so they can just get on with their other jobs and lives.
 

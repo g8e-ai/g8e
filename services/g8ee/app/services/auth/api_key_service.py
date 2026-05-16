@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Constants for hashing (aligned with client)
-API_KEY_HASH_ALGORITHM = "sha256"
+KEY_DERIVATION_ALGORITHM = "sha256"
 API_KEY_HASH_LENGTH = 32
 
 class ApiKeyService:
@@ -42,9 +42,9 @@ class ApiKeyService:
         self.cache = cache_aside
         self.collection = DB_COLLECTION_API_KEYS
 
-    def make_doc_id(self, api_key: str) -> str:
+    def make_doc_id(self, raw_material: str) -> str:
         """Generate a deterministic document ID from a raw API key."""
-        return hashlib.sha256(api_key.encode()).hexdigest()[:API_KEY_HASH_LENGTH]
+        return hashlib.sha256(raw_material.encode()).hexdigest()[:API_KEY_HASH_LENGTH]
 
     def generate_raw_key(self, prefix: str = "g8e_") -> str:
         """Generate a new raw API key.
@@ -55,12 +55,12 @@ class ApiKeyService:
         """
         return f"{prefix}{secrets.token_hex(32)}"
 
-    async def validate_key(self, api_key: str, system_fingerprint: str | None = None) -> tuple[bool, ApiKeyDocument | None, str | None]:
+    async def validate_key(self, raw_key: str, system_fingerprint: str | None = None) -> tuple[bool, ApiKeyDocument | None, str | None]:
         """Validate a raw API key."""
-        if not api_key:
+        if not raw_key:
             return False, None, "API key is required"
 
-        doc_id = self.make_doc_id(api_key)
+        doc_id = self.make_doc_id(raw_key)
         data = await self.cache.get_document_with_cache(self.collection, doc_id)
 
         if not data:
@@ -90,7 +90,7 @@ class ApiKeyService:
 
     async def issue_key(
         self,
-        api_key: str,
+        raw_key: str,
         user_id: str,
         organization_id: str | None = None,
         operator_id: str | None = None,
@@ -100,7 +100,7 @@ class ApiKeyService:
     ) -> bool:
         """Issue (create and store) a new API key."""
         try:
-            doc_id = self.make_doc_id(api_key)
+            doc_id = self.make_doc_id(raw_key)
             doc_data = {
                 "user_id": user_id,
                 "organization_id": organization_id,
@@ -132,15 +132,15 @@ class ApiKeyService:
             logger.error("[API-KEY-SERVICE] Failed to issue API key: %s", e)
             return False
 
-    async def revoke_key(self, api_key: str) -> bool:
+    async def revoke_key(self, raw_key: str) -> bool:
         """Mark an API key as REVOKED in the api_keys collection.
 
         Returns True on success or if the key did not exist (idempotent).
         Returns False only on storage failure.
         """
-        if not api_key:
+        if not raw_key:
             return True
-        doc_id = self.make_doc_id(api_key)
+        doc_id = self.make_doc_id(raw_key)
         try:
             existing = await self.cache.get_document_with_cache(self.collection, doc_id)
             if not existing:
@@ -162,7 +162,7 @@ class ApiKeyService:
 
     async def issue_operator_key(
         self,
-        api_key: str,
+        raw_key: str,
         user_id: str,
         organization_id: str | None,
         operator_id: str,
@@ -172,7 +172,7 @@ class ApiKeyService:
     ) -> bool:
         """Issue an operator API key."""
         return await self.issue_key(
-            api_key=api_key,
+            raw_key=raw_key,
             user_id=user_id,
             organization_id=organization_id,
             operator_id=operator_id,
@@ -183,8 +183,8 @@ class ApiKeyService:
 
     async def rotate_operator_key(
         self,
-        old_api_key: str | None,
-        new_api_key: str,
+        old_raw_key: str | None,
+        new_raw_key: str,
         user_id: str,
         organization_id: str | None,
         operator_id: str,
@@ -198,7 +198,7 @@ class ApiKeyService:
         Only after the new key is fully in place is the old key revoked.
         """
         ok = await self.issue_operator_key(
-            api_key=new_api_key,
+            raw_key=new_raw_key,
             user_id=user_id,
             organization_id=organization_id,
             operator_id=operator_id,
@@ -209,8 +209,8 @@ class ApiKeyService:
         if not ok:
             return False
 
-        if old_api_key and old_api_key != new_api_key:
-            revoked = await self.revoke_key(old_api_key)
+        if old_raw_key and old_raw_key != new_raw_key:
+            revoked = await self.revoke_key(old_raw_key)
             if not revoked:
                 logger.warning(
                     "[API-KEY-SERVICE] Old operator API key revocation failed "
@@ -222,16 +222,16 @@ class ApiKeyService:
 
     async def revoke_operator_key(
         self,
-        api_key: str,
+        raw_key: str,
         settings_service: SettingsServiceProtocol,
     ) -> bool:
         """Revoke an operator API key in the canonical store."""
-        return await self.revoke_key(api_key)
+        return await self.revoke_key(raw_key)
 
-    async def record_usage(self, api_key: str, system_fingerprint: str | None = None) -> None:
+    async def record_usage(self, raw_key: str, system_fingerprint: str | None = None) -> None:
         """Update the last used timestamp of a key and establish fingerprint if missing."""
         try:
-            doc_id = self.make_doc_id(api_key)
+            doc_id = self.make_doc_id(raw_key)
             data = await self.cache.get_document_with_cache(self.collection, doc_id)
             if not data:
                 return

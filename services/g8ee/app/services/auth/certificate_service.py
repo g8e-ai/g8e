@@ -89,13 +89,13 @@ class CertificateService:
             try:
                 with open(found_cert_path, "rb") as f:
                     self.ca_cert = x509.load_pem_x509_certificate(f.read())
-                logger.info("[CERT-SERVICE] CA certificate loaded from %s", found_cert_path)
+                logger.info("[CERT-SERVICE] CA certificate loaded from %s", str(found_cert_path))
                 self.initialized = True
             except Exception as e:
                 logger.error("[CERT-SERVICE] Failed to load CA certificate: %s", e)
                 raise RuntimeError(f"Failed to load CA cert: {e!s}") from e
         else:
-            logger.error("[CERT-SERVICE] CA certificate not found in %s", self.pki_dir)
+            logger.error("[CERT-SERVICE] CA certificate not found in %s", str(self.pki_dir))
             # We let it proceed but some operations might fail if they expect a CA cert local copy
 
     async def generate_operator_certificate(
