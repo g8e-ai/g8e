@@ -2,6 +2,7 @@ package listen
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -73,4 +74,58 @@ func TestPasskeyServiceVerifyL3ProofRejectsUsersWithoutPasskeys(t *testing.T) {
 	require.Error(t, err)
 	assert.False(t, ok)
 	assert.Contains(t, err.Error(), "user has no registered passkey credentials")
+}
+
+func TestPasskeyServiceVerifyL3ProofRejectsUnregisteredCredential(t *testing.T) {
+	svc, user := newPasskeyServiceForTest(t)
+
+	// Add a dummy credential
+	credID := []byte("real-credential-id")
+	err := svc.addCredential(user.ID, models.PasskeyCredential{
+		ID:        credID,
+		PublicKey: []byte("fake-pubkey"),
+	})
+	require.NoError(t, err)
+
+	ok, err := svc.VerifyL3Proof(user.ID, "tx-hash", &commonv1.L3Proof{
+		CredentialId:      base64.RawURLEncoding.EncodeToString([]byte("wrong-credential-id")),
+		ClientDataJson:    base64.RawURLEncoding.EncodeToString([]byte(`{"type":"webauthn.get","challenge":"dngtZWFzaA"}`)),
+		AuthenticatorData: base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("a", 37))),
+		Signature:         base64.RawURLEncoding.EncodeToString([]byte("signature")),
+	})
+
+	require.Error(t, err)
+	assert.False(t, ok)
+	assert.Contains(t, err.Error(), "failed to parse credential assertion")
+}
+
+func TestPasskeyServiceVerifyL3ProofRejectsMismatchedChallenge(t *testing.T) {
+	svc, user := newPasskeyServiceForTest(t)
+
+	// Add a dummy credential (we won't get to signature verification if challenge check fails first)
+	// Wait, webauthn.ValidateLogin checks the challenge inside clientDataJSON against the one in sessionData.
+	credID := []byte("real-credential-id")
+	err := svc.addCredential(user.ID, models.PasskeyCredential{
+		ID:        credID,
+		PublicKey: []byte("fake-pubkey"),
+	})
+	require.NoError(t, err)
+
+	// Challenge in clientDataJSON is base64 of "tx-hash-1"
+	// but we provide "tx-hash-2" to VerifyL3Proof
+	txHash1 := "tx-hash-1"
+	txHash2 := "tx-hash-2"
+	clientData := fmt.Sprintf(`{"type":"webauthn.get","challenge":"%s","origin":"localhost"}`,
+		base64.RawURLEncoding.EncodeToString([]byte(txHash1)))
+
+	ok, err := svc.VerifyL3Proof(user.ID, txHash2, &commonv1.L3Proof{
+		CredentialId:      base64.RawURLEncoding.EncodeToString(credID),
+		ClientDataJson:    base64.RawURLEncoding.EncodeToString([]byte(clientData)),
+		AuthenticatorData: base64.RawURLEncoding.EncodeToString([]byte(strings.Repeat("a", 37))),
+		Signature:         base64.RawURLEncoding.EncodeToString([]byte("signature")),
+	})
+
+	require.Error(t, err)
+	assert.False(t, ok)
+	assert.Contains(t, err.Error(), "failed to parse credential assertion")
 }

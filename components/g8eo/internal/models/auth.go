@@ -313,3 +313,11 @@ type User struct {
 	PasskeyCredentials []PasskeyCredential `json:"passkey_credentials,omitempty"`
 	Provider           string              `json:"provider,omitempty"`
 }
+
+// TrustedSigner represents an external L2 signer public key stored in the database.
+type TrustedSigner struct {
+	ID        string    `json:"id"` // Unique ID for the signer (e.g., agent ID or name)
+	PublicKey string    `json:"public_key_hex"`
+	AddedAt   time.Time `json:"added_at"`
+	Enabled   bool      `json:"enabled"`
+}

@@ -32,8 +32,10 @@ func TestGovernanceFlow(t *testing.T) {
 
 	warden := &Warden{
 		Logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
-		TrustedNodes: map[string]ed25519.PublicKey{
-			nodeID: pub,
+		SignerStore: &SimpleSignerStore{
+			Signers: map[string]ed25519.PublicKey{
+				nodeID: pub,
+			},
 		},
 	}
 

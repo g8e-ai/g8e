@@ -317,6 +317,7 @@ type GovernanceDeps struct {
 	StateRootProvider governance.StateRootProvider
 	TransactionAudit  governance.TransactionAuditStore
 	L3Verifier        governance.L3Verifier
+	SignerStore       governance.SignerStore
 }
 
 // GetGovernanceDeps returns the governance dependencies for transaction verification.
@@ -327,6 +328,7 @@ func (ls *ListenService) GetGovernanceDeps() *GovernanceDeps {
 		StateRootProvider: ls.db,
 		TransactionAudit:  ls.db,
 		L3Verifier:        ls.passkey,
+		SignerStore:       ls.db,
 	}
 }
 

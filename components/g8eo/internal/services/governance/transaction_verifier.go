@@ -68,6 +68,27 @@ type StateRootProvider interface {
 	GetCurrentStateRoot() (string, error)
 }
 
+// SignerStore defines the interface for loading trusted L2 signers.
+type SignerStore interface {
+	GetTrustedSigner(keyID string) (ed25519.PublicKey, error)
+}
+
+// SimpleSignerStore implements SignerStore using a static map.
+type SimpleSignerStore struct {
+	Signers map[string]ed25519.PublicKey
+}
+
+func (s *SimpleSignerStore) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
+	if s.Signers == nil {
+		return nil, nil
+	}
+	pubKey, ok := s.Signers[keyID]
+	if !ok {
+		return nil, nil
+	}
+	return pubKey, nil
+}
+
 // SimpleStateRootProvider returns a fixed root set at construction time.
 // Root must be non-empty; a missing root is a misconfiguration that returns an
 // error so callers fail closed rather than silently accepting any state root.
@@ -98,7 +119,7 @@ type TransactionVerifier struct {
 	logger            *slog.Logger
 	replayStore       ReplayStore
 	stateRootProvider StateRootProvider
-	trustedSigners    map[string]ed25519.PublicKey
+	signerStore       SignerStore
 	l3Verifier        L3Verifier
 	knownActionTypes  map[string]struct{}
 }
@@ -108,7 +129,7 @@ func NewTransactionVerifier(
 	logger *slog.Logger,
 	replayStore ReplayStore,
 	stateRootProvider StateRootProvider,
-	trustedSigners map[string]ed25519.PublicKey,
+	signerStore SignerStore,
 	l3Verifier L3Verifier,
 	knownActionTypes []string,
 ) *TransactionVerifier {
@@ -121,7 +142,7 @@ func NewTransactionVerifier(
 		logger:            logger,
 		replayStore:       replayStore,
 		stateRootProvider: stateRootProvider,
-		trustedSigners:    trustedSigners,
+		signerStore:       signerStore,
 		l3Verifier:        l3Verifier,
 		knownActionTypes:  knownActions,
 	}
@@ -227,8 +248,16 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 	if envelope.Governance.L2.KeyId == "" {
 		return nil, ErrL2KeyNotConfigured
 	}
-	pubKey, ok := tv.trustedSigners[envelope.Governance.L2.KeyId]
-	if !ok {
+	if tv.signerStore == nil {
+		tv.logger.Error("Signer store not configured")
+		return nil, ErrL2KeyNotConfigured
+	}
+	pubKey, err := tv.signerStore.GetTrustedSigner(envelope.Governance.L2.KeyId)
+	if err != nil {
+		tv.logger.Error("Failed to load trusted signer", "key_id", envelope.Governance.L2.KeyId, "error", err)
+		return nil, ErrL2KeyNotConfigured
+	}
+	if pubKey == nil {
 		tv.logger.Error("L2 signer key not found in trusted signers", "key_id", envelope.Governance.L2.KeyId)
 		return nil, ErrL2KeyNotConfigured
 	}

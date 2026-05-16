@@ -71,7 +71,7 @@ func newStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvider 
 		slog.New(slog.NewTextHandler(os.Stdout, nil)),
 		replayStore,
 		stateRootProvider,
-		map[string]ed25519.PublicKey{"test-key": pubKey},
+		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
 		l3Verifier,
 		[]string{"EXECUTE_BASH", "FS_LIST"},
 	), privKey

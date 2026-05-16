@@ -37,7 +37,7 @@ type TransactionAuditStore interface {
 // Warden is the execution gateway. It is the final stop for all UAP envelopes.
 type Warden struct {
 	Logger            *slog.Logger
-	TrustedNodes      map[string]ed25519.PublicKey
+	SignerStore       SignerStore
 	Execution         *execution.ExecutionService
 	AuditVault        *storage.AuditVaultService
 	AuditStore        TransactionAuditStore
@@ -142,28 +142,28 @@ func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg in
 	// 6. Sign the final receipt
 	finalSig, signErr := w.signReceipt(receipt)
 	if signErr != nil {
-		w.Logger.Error("Fail-closed: Failed to sign final action receipt", "error", signErr, "message_id", vt.Envelope.Id)
-		return nil, fmt.Errorf("failed to sign final action receipt: %w", signErr)
+		w.Logger.Error("Failed to sign final action receipt - returning EXECUTING receipt as evidence", "error", signErr, "message_id", vt.Envelope.Id)
+		// Return the EXECUTING receipt with signature from step 2 as evidence
+		// The mutation already executed, so we must preserve evidence of execution attempt
+		return receipt, fmt.Errorf("execution completed but final receipt signing failed: %w", signErr)
 	}
 	receipt.Signature = finalSig
 
-	// 7. Log final result (fail-closed)
+	// 7. Log final result (best-effort - mutation already executed)
 	if logErr := w.LogReceipt(vt.Envelope, receipt); logErr != nil {
-		w.Logger.Error("Fail-closed: Failed to log final action receipt", "error", logErr, "message_id", vt.Envelope.Id)
-		return nil, fmt.Errorf("failed to log final action receipt: %w", logErr)
+		w.Logger.Error("Failed to log final action receipt - mutation already executed", "error", logErr, "message_id", vt.Envelope.Id)
+		// Return receipt anyway - mutation already happened, evidence must be preserved
+		return receipt, fmt.Errorf("execution completed but final audit logging failed: %w", logErr)
 	}
 
 	return receipt, err
 }
 
-func (w *Warden) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
-	if len(w.SigningKey) == 0 {
-		return "", errors.New("signing key missing")
-	}
-
-	// Use deterministic JSON serialization for signing the receipt.
-	// This ensures consistency across different platforms and versions.
-	// Field order is important; protojson is stable for this.
+// CanonicalizeActionReceipt produces a deterministic byte representation for signing/verification.
+// This function must be used by both signing and verification to ensure consistency.
+// Field order: transaction_id, transaction_hash, status, result_summary, state_root_before,
+// state_root_after, executed_at_unix_ms, signer_key_id. All fields are included in the canonical form.
+func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 	payload, err := json.Marshal(map[string]interface{}{
 		"transaction_id":      r.TransactionId,
 		"transaction_hash":    r.TransactionHash,
@@ -175,7 +175,20 @@ func (w *Warden) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 		"signer_key_id":       r.SignerKeyId,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal receipt for signing: %w", err)
+		return nil, fmt.Errorf("failed to marshal receipt for canonicalization: %w", err)
+	}
+	return payload, nil
+}
+
+func (w *Warden) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
+	if len(w.SigningKey) == 0 {
+		return "", errors.New("signing key missing")
+	}
+
+	// Use canonical serialization for signing - shared with verification
+	payload, err := CanonicalizeActionReceipt(r)
+	if err != nil {
+		return "", fmt.Errorf("failed to canonicalize receipt for signing: %w", err)
 	}
 
 	sig := ed25519.Sign(w.SigningKey, payload)
@@ -249,12 +262,4 @@ func (w *Warden) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionRe
 		return err
 	}
 	return nil
-}
-
-// NoOpL3Verifier is an L3 verifier that always returns true.
-// Used for outbound mode where L3 verification happens at the platform level.
-type NoOpL3Verifier struct{}
-
-func (n *NoOpL3Verifier) VerifyL3Proof(userID, transactionHash string, proof *commonv1.L3Proof) (bool, error) {
-	return true, nil
 }

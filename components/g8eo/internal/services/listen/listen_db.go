@@ -15,6 +15,7 @@ package listen
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"database/sql"
 	_ "embed"
@@ -26,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/sqliteutil"
 )
@@ -481,6 +483,64 @@ func (s *ListenDBService) DocQuery(collection string, filters []models.DocFilter
 
 // scanDocument parses a raw SQLite row into a typed Document.
 // This is the single point where TEXT timestamps are converted to time.Time.
+// GetTrustedSigner retrieves an L2 signer public key from the database.
+// Implements governance.SignerStore.
+func (s *ListenDBService) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
+	doc, err := s.DocGet(string(constants.CollectionTrustedSigners), keyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get trusted signer %s: %w", keyID, err)
+	}
+	if doc == nil {
+		return nil, nil
+	}
+
+	data, err := json.Marshal(doc.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	var signer models.TrustedSigner
+	if err := json.Unmarshal(data, &signer); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal trusted signer: %w", err)
+	}
+
+	if !signer.Enabled {
+		return nil, nil
+	}
+
+	pubBytes, err := hex.DecodeString(signer.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode public key hex: %w", err)
+	}
+
+	if len(pubBytes) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("invalid public key size: %d", len(pubBytes))
+	}
+
+	return ed25519.PublicKey(pubBytes), nil
+}
+
+// AddTrustedSigner adds or updates a trusted L2 signer in the database.
+func (s *ListenDBService) AddTrustedSigner(signer models.TrustedSigner) error {
+	if signer.ID == "" {
+		return fmt.Errorf("signer ID is required")
+	}
+	if signer.PublicKey == "" {
+		return fmt.Errorf("signer public key is required")
+	}
+
+	if signer.AddedAt.IsZero() {
+		signer.AddedAt = time.Now().UTC()
+	}
+
+	data, err := json.Marshal(signer)
+	if err != nil {
+		return err
+	}
+
+	return s.DocSet(string(constants.CollectionTrustedSigners), signer.ID, data)
+}
+
 func scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr string) (*models.Document, error) {
 	createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
 	if err != nil {

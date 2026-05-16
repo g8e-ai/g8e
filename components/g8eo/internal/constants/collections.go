@@ -36,6 +36,7 @@ const (
 	CollectionBoundSessions       CollectionName = "bound_sessions"
 	CollectionPasskeyChallenges   CollectionName = "passkey_challenges"
 	CollectionRevokedCertificates CollectionName = "revoked_certificates"
+	CollectionTrustedSigners      CollectionName = "trusted_signers"
 )
 
 // DocumentID defines canonical document IDs for operator.

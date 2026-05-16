@@ -408,14 +408,14 @@ func main() {
 		logger,
 		replayStore,
 		stateRootProvider,
-		trustedSigners,
+		&governance.SimpleSignerStore{Signers: trustedSigners},
 		l3Verifier,
 		knownActionTypes,
 	)
 
 	warden := &governance.Warden{
 		Logger:            logger,
-		TrustedNodes:      trustedSigners,
+		SignerStore:       &governance.SimpleSignerStore{Signers: trustedSigners},
 		AuditVault:        av,
 		L3Verifier:        l3Verifier,
 		StateRootProvider: stateRootProvider,

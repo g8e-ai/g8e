@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/mappings"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/sentinel"
@@ -83,13 +84,15 @@ type PubSubCommandService struct {
 	reconnectBaseDelay time.Duration
 
 	// trustedSigners holds ED25519 public keys for external L2 signers.
-	// Loaded from <PKIDir>/trusted_signers/*.pub
+	// Loaded from <PKIDir>/trusted_signers/*.pub or from SignerStore
+	// DEPRECATED: use signerStore instead
 	trustedSigners map[string]ed25519.PublicKey
 
 	// UAP governance services for Phase 3 integration
 	tribunal            *governance.Tribunal
 	warden              *governance.Warden
 	transactionVerifier *governance.TransactionVerifier
+	signerStore         governance.SignerStore
 }
 
 // CommandServiceConfig holds all dependencies for PubSubCommandService.
@@ -110,6 +113,7 @@ type CommandServiceConfig struct {
 	ReplayStore       governance.ReplayStore
 	StateRootProvider governance.StateRootProvider
 	TransactionAudit  governance.TransactionAuditStore
+	SignerStore       governance.SignerStore
 
 	// Warden configuration
 	WardenSigningKey ed25519.PrivateKey
@@ -173,17 +177,21 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.buildHandlers()
 
-	signersDir := filepath.Join(c.Config.PKIDir, "trusted_signers")
-	trustedSigners, err := loadTrustedSigners(signersDir)
-	if err != nil {
-		return nil, err
-	}
-	rs.trustedSigners = trustedSigners
-	if len(rs.trustedSigners) == 0 {
-		c.Logger.Warn("No trusted L2 ED25519 signers configured; signed transactions will be rejected until a signer is provisioned", "path", signersDir)
-	} else {
-		for name := range rs.trustedSigners {
-			c.Logger.Info("Loaded trusted L2 signer", "name", name, "path", filepath.Join(signersDir, name+".pub"))
+	rs.signerStore = c.SignerStore
+	if rs.signerStore == nil {
+		// Fallback to filesystem-only loading if no store provided (outbound mode legacy)
+		signersDir := filepath.Join(c.Config.PKIDir, "trusted_signers")
+		trustedSigners, err := loadTrustedSigners(signersDir)
+		if err != nil {
+			return nil, err
+		}
+		rs.signerStore = &governance.SimpleSignerStore{Signers: trustedSigners}
+		if len(trustedSigners) == 0 {
+			c.Logger.Warn("No trusted L2 ED25519 signers configured; signed transactions will be rejected until a signer is provisioned", "path", signersDir)
+		} else {
+			for name := range trustedSigners {
+				c.Logger.Info("Loaded trusted L2 signer (filesystem)", "name", name, "path", filepath.Join(signersDir, name+".pub"))
+			}
 		}
 	}
 
@@ -194,9 +202,8 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	if c.StateRootProvider == nil {
 		return nil, fmt.Errorf("StateRootProvider is required for transaction verification")
 	}
-	if c.L3Verifier == nil {
-		return nil, fmt.Errorf("L3Verifier is required for transaction verification (mutations cannot execute without L3)")
-	}
+	// L3Verifier is optional for outbound mode (platform verifies L3)
+	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Verifier is nil
 
 	// Initialize UAP governance services after trusted signers are loaded
 	rs.initializeUAPGovernance(c, serviceCtx)
@@ -250,7 +257,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 	// Initialize Warden with trusted nodes and audit vault
 	rs.warden = &governance.Warden{
 		Logger:            c.Logger,
-		TrustedNodes:      rs.trustedSigners,
+		SignerStore:       rs.signerStore,
 		Execution:         c.Execution,
 		AuditVault:        c.AuditVault,
 		AuditStore:        c.TransactionAudit,
@@ -278,14 +285,14 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		c.Logger,
 		c.ReplayStore,
 		c.StateRootProvider,
-		rs.trustedSigners,
+		rs.signerStore,
 		c.L3Verifier,
 		knownActionTypes,
 	)
 
 	c.Logger.Info("UAP governance services initialized",
 		"tribunal_node_id", c.Config.OperatorID,
-		"trusted_signers_count", len(rs.trustedSigners),
+		"signer_store_configured", rs.signerStore != nil,
 		"transaction_verifier_enabled", rs.transactionVerifier != nil)
 }
 
@@ -637,21 +644,47 @@ func (rs *PubSubCommandService) SendAutomaticHeartbeat() {
 	rs.heartbeat.SendAutomatic()
 }
 
-// logBlockedTransaction records a blocked/rejected transaction in the audit vault.
+// logBlockedTransaction records a blocked/rejected transaction using the ActionReceiptRecord schema.
+// This ensures consistency with accepted/failed Warden receipts - all transaction outcomes use the same canonical schema.
 func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, rejectionReason error) {
 	if rs.audit == nil || rs.audit.auditVault == nil {
 		return
 	}
 
+	// Create ActionReceiptRecord with BLOCKED status for canonical audit trail
+	record := models.ActionReceiptRecord{
+		TransactionID:     env.Id,
+		TransactionHash:   env.TransactionHash,
+		OperatorID:        env.OperatorId,
+		OperatorSessionID: env.OperatorSessionId,
+		ActionType:        env.ActionType,
+		TargetResource:    env.TargetResource,
+		Status:            "BLOCKED",
+		ResultSummary:     fmt.Sprintf("blocked: %v", rejectionReason),
+		StateRootBefore:   "", // Not available for blocked transactions
+		StateRootAfter:    "", // Not available for blocked transactions
+		ExecutedAt:        time.Now().UTC(),
+		SignerKeyID:       "", // No Warden signature for blocked transactions
+		Signature:         "", // No signature for blocked transactions
+		Timestamp:         time.Now().UTC(),
+	}
+
+	recordJSON, err := json.Marshal(record)
+	if err != nil {
+		rs.logger.Error("Failed to marshal blocked transaction record", "error", err, "message_id", env.Id)
+		return
+	}
+
+	// Log to audit vault Event table with ActionReceiptRecord in ContentText for schema consistency
 	event := &storage.Event{
 		OperatorSessionID: env.OperatorSessionId,
 		Timestamp:         time.Now(),
 		Type:              storage.EventType("action_receipt"),
-		ContentText:       fmt.Sprintf("Transaction BLOCKED: %s (Reason: %v)", env.Id, rejectionReason),
+		ContentText:       string(recordJSON), // Full ActionReceiptRecord JSON for canonical schema
 		CommandRaw:        fmt.Sprintf("%s / %s (hash: %s)", env.ActionType, env.TargetResource, env.TransactionHash),
 	}
 
-	_, err := rs.audit.auditVault.RecordEvent(event)
+	_, err = rs.audit.auditVault.RecordEvent(event)
 	if err != nil {
 		rs.logger.Error("Failed to record blocked transaction in audit vault", "error", err, "message_id", env.Id)
 	}

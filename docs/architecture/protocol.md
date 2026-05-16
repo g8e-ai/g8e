@@ -103,7 +103,7 @@ Enforced by the Operator's transaction verifier. Reference implementation: `@/ho
 
 ### L3: Authorization (Approval)
 Human-in-the-loop authorization via Passkeys or BYO approval systems.
-- **Mechanism**: Hardware-bound signatures or verifiable approval proofs (`human_signature`).
+- **Mechanism**: Hardware-bound signatures or verifiable approval proofs (`governance.l3.proof`).
 - **Auto-Approval**: Benign commands (e.g., `uptime`) can be marked `auto_approved` by the Consensus layer, but L3 NEVER bypasses L1 or L2.
 
 ---
