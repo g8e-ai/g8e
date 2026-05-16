@@ -1,0 +1,457 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Unit tests for agent_persona_loader module."""
+
+import pytest
+from pydantic import ValidationError
+
+from app.llm.prompts import PromptFile, build_tribunal_auditor_context
+from app.prompts_data.loader import load_prompt
+from app.services.ai.auditor_service import AuditorInput
+from app.utils.agent_persona_loader import (
+    AgentPersona,
+    get_agent_persona,
+    get_tribunal_member,
+    list_all_agents,
+)
+
+pytestmark = pytest.mark.unit
+
+
+class TestGetAgentPersona:
+    """Tests for get_agent_persona function."""
+
+    def test_get_valid_agent_persona(self):
+        """Test retrieving a valid agent persona."""
+        persona = get_agent_persona("triage")
+        assert persona.agent_id == "triage"
+        assert persona.display_name == "Triage"
+        assert persona.icon == "manage_search"
+        assert persona.role == "classifier"
+        assert persona.model_tier == "lite"
+        assert persona.tools == []
+        assert persona.identity
+        assert persona.purpose
+        assert isinstance(persona.autonomy, str)
+        assert persona.autonomy
+
+    def test_get_tribunal_member_persona(self):
+        """Test retrieving Tribunal member personas."""
+        axiom = get_tribunal_member("axiom")
+        assert axiom.agent_id == "axiom"
+        assert axiom.display_name == "Axiom"
+
+        concord = get_tribunal_member("concord")
+        assert concord.agent_id == "concord"
+
+        variance = get_tribunal_member("variance")
+        assert variance.agent_id == "variance"
+
+        pragma = get_tribunal_member("pragma")
+        assert pragma.agent_id == "pragma"
+
+        nemesis = get_tribunal_member("nemesis")
+        assert nemesis.agent_id == "nemesis"
+
+    def test_tribunal_members_have_explicit_output_contract(self):
+        """Test that Tribunal members have explicit output_contract field."""
+        for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
+            member = get_tribunal_member(member_id)
+            assert member.output_contract is not None, f"{member_id} should have output_contract field"
+            assert "shell command string" in member.output_contract
+            assert "nothing else" in member.output_contract
+
+    def test_tribunal_member_system_prompt_includes_output_contract(self):
+        """Test that Tribunal member system prompts include output_contract from explicit field."""
+        axiom = get_tribunal_member("axiom")
+        system_prompt = axiom.get_system_prompt()
+        assert "<output_contract>" in system_prompt
+        assert "shell command string" in system_prompt
+        assert "nothing else" in system_prompt
+
+    def test_triage_has_explicit_output_contract(self):
+        """Test that triage persona has explicit output_contract field."""
+        triage = get_agent_persona("triage")
+        assert triage.output_contract is not None, "triage should have output_contract field"
+        assert "JSON object" in triage.output_contract
+        assert "no XML tags" in triage.output_contract
+
+    def test_get_invalid_agent_raises_keyerror(self):
+        """Test that requesting an invalid agent ID raises KeyError."""
+        with pytest.raises(KeyError) as exc_info:
+            get_agent_persona("nonexistent_agent")
+        assert "nonexistent_agent" in str(exc_info.value)
+        assert "not found in registry" in str(exc_info.value)
+
+    def test_get_system_prompt_constructs_from_fields(self):
+        """Test get_system_prompt constructs prompt from individual fields."""
+        persona = get_agent_persona("triage")
+        system_prompt = persona.get_system_prompt()
+        assert "<role>" in system_prompt
+        assert "<identity>" in system_prompt
+        assert "<purpose>" in system_prompt
+        assert "<autonomy>" in system_prompt
+        assert persona.role in system_prompt
+        assert persona.identity in system_prompt
+        assert persona.purpose in system_prompt
+        assert persona.autonomy in system_prompt
+
+    def test_get_system_prompt_constructs_from_fields_stub(self):
+        """Test get_system_prompt constructs prompt from individual fields for stub."""
+        stub = AgentPersona.model_validate({
+            "id": "stub",
+            "display_name": "Stub",
+            "icon": "x",
+            "description": "stub",
+            "role": "stub",
+            "model_tier": "primary",
+            "tools": [],
+            "identity": "I am a stub.",
+            "purpose": "To be replaced.",
+            "autonomy": "none",
+        })
+        system_prompt = stub.get_system_prompt()
+        assert "<role>" in system_prompt
+        assert "<identity>" in system_prompt
+        assert "<purpose>" in system_prompt
+        assert "<autonomy>" in system_prompt
+        assert stub.identity in system_prompt
+        assert stub.purpose in system_prompt
+
+    def test_sage_system_prompt_constructs_from_fields(self):
+        """Sage's system prompt is constructed from individual fields."""
+        sage = get_agent_persona("sage")
+        prompt = sage.get_system_prompt()
+        assert "<role>" in prompt
+        assert "<identity>" in prompt
+        assert "<purpose>" in prompt
+        assert "<autonomy>" in prompt
+        assert sage.identity in prompt
+
+    def test_dash_system_prompt_is_fast_path_with_surgical_tool_use(self):
+        """Dash is the fast-path responder. It carries the operator tool
+        surface so it can make a single targeted call when a simple request
+        genuinely requires one — but its persona explicitly bounds tool use
+        ("one well-aimed call beats a chain"). Multi-step / dissent-bearing
+        work still escalates to Sage. Both Dash and Sage carry tools; Dash's
+        differentiation is latency and minimal reasoning overhead, not the
+        absence of a tool surface.
+        """
+        dash = get_agent_persona("dash")
+        sage = get_agent_persona("sage")
+        prompt = dash.get_system_prompt()
+        assert "<role>" in prompt
+        assert "<identity>" in prompt
+        assert dash.identity in prompt
+        assert len(dash.tools) > 0, (
+            "Dash now carries the operator tool surface for fast-path "
+            "single-call resolutions; an empty list breaks that contract."
+        )
+        assert len(sage.tools) > 0, "Sage remains the tool-bearing reasoning agent."
+        # Dash's persona must still bound tool use — surgical, not chained,
+        # with multi-step work routed to Sage. If the role_boundary prose is
+        # ever stripped, Dash silently becomes a second Sage.
+        assert "Sage" in dash.identity, (
+            "Dash identity must reference Sage as the escalation target for "
+            "multi-step / non-surgical requests."
+        )
+
+    def test_tools_is_list(self):
+        """Test that tools field is always a list."""
+        triage = get_agent_persona("triage")
+        assert isinstance(triage.tools, list)
+
+        sage = get_agent_persona("sage")
+        assert isinstance(sage.tools, list)
+        assert len(sage.tools) > 0
+
+
+class TestPipelineTemplateContract:
+    """Tribunal members and Auditor personas are consumed by command_generator
+    as str.format() templates. If anyone removes the placeholders during a
+    persona rewrite, the formatted prompt silently loses the user's intent,
+    os/shell context, or the candidate command — a hard-to-debug correctness
+    regression. These tests pin the contract explicitly.
+    """
+
+    def test_tribunal_member_system_prompts_are_pure_voice(self):
+        """Tribunal member system prompts must not carry scaffolding placeholders —
+        scaffolding lives in TRIBUNAL_PROMPT_TEMPLATE in command_generator."""
+        for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
+            prompt_text = get_tribunal_member(member_id).get_system_prompt()
+            for placeholder in (
+                "{forbidden_patterns_message}",
+                "{command_constraints_message}",
+                "{request}",
+                "{guidelines}",
+                "{operator_context}",
+                "{os}",
+                "{shell}",
+                "{user_context}",
+                "{working_directory}",
+            ):
+                assert placeholder not in prompt_text, (
+                    f"{member_id} system prompt still carries scaffolding placeholder {placeholder}"
+                )
+
+    def test_tribunal_prompt_template_renders_with_member_voice(self):
+        """The protocol TRIBUNAL_PROMPT_TEMPLATE must render cleanly using the
+        kwargs command_generator._run_generation_pass supplies."""
+        template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
+
+        kwargs = {
+            "forbidden_patterns_message": "FORBIDDEN",
+            "command_constraints_message": "CONSTRAINTS",
+            "request": "list processes",
+            "guidelines": "",
+            "os": "linux",
+            "shell": "bash",
+            "user_context": "root (uid=0)",
+            "working_directory": "/home/user",
+            "operator_context": "Hostname: host1\nOS: linux",
+        }
+        for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
+            formatted = template.format(**kwargs)
+            for needle in ("FORBIDDEN", "CONSTRAINTS", "list processes", "linux", "bash"):
+                assert needle in formatted, f"{member_id}: template dropped '{needle}'"
+
+    def test_auditor_template_renders_and_enforces_ok_contract(self):
+        """TRIBUNAL_AUDITOR_TEMPLATE must carry the terse
+        'ok / corrected-command' output contract that the pipeline parses."""
+        template = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
+
+        auditor_input = AuditorInput(
+            mode="unanimous",
+            winner="ls -la",
+            clusters=[],
+            request="list files",
+            guidelines="",
+        )
+        auditor_context = build_tribunal_auditor_context(auditor_input.mode, auditor_input.winner, [])
+
+        formatted = template.format(
+            forbidden_patterns_message="FORBIDDEN",
+            command_constraints_message="CONSTRAINTS",
+            request="list files",
+            guidelines="",
+            os="linux",
+            shell="bash",
+            working_directory="/home/user",
+            user_context="root (uid=0)",
+            operator_context="Hostname: host1\nOS: linux",
+            auditor_context=auditor_context,
+        )
+        for needle in ("FORBIDDEN", "CONSTRAINTS", "list files", "linux", "ls -la"):
+            assert needle in formatted
+        # The pipeline parses JSON with status "ok" or "revised"
+        assert '"ok"' in formatted
+        assert '"revised"' in formatted
+
+
+class TestTribunalTemplatePrefixCacheOrdering:
+    """Tribunal generator and auditor templates must place per-session-static
+    sections (constraints, system_context/os/user, operator_context) before
+    per-turn-dynamic sections (guidelines, request, auditor_context) so that
+    the llama.cpp prefix cache can reuse the prefix across repeat invocations
+    of the same Tribunal member within a session.
+
+    A regression here defeats `--cache-reuse` and silently increases prefill
+    cost across the five parallel members per round.
+    """
+
+    def test_generator_template_static_prefix_precedes_dynamic_suffix(self):
+        template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
+
+        def idx(tag: str) -> int:
+            return template.index(tag)
+        constraints = idx("<constraints>")
+        system_ctx = idx("<system_context>")
+        operator_ctx = idx("<operator_context>")
+        guidelines = idx("<guidelines>")
+        request = idx("<request>")
+
+        # Static prefix order: constraints -> system_context -> operator_context
+        assert constraints < system_ctx < operator_ctx, (
+            "Static prefix sections must appear in stable order at the top of "
+            "the Tribunal generator template."
+        )
+        # Dynamic suffix must follow the entire static prefix
+        assert operator_ctx < guidelines, (
+            "<guidelines> is per-turn dynamic and must appear after the static "
+            "<operator_context> prefix."
+        )
+        assert guidelines < request, (
+            "<request> is the most dynamic per-turn input and must appear last "
+            "among the placeholder sections."
+        )
+
+    def test_auditor_template_static_prefix_precedes_dynamic_suffix(self):
+        template = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
+
+        def idx(tag: str) -> int:
+            return template.index(tag)
+        constraints = idx("<constraints>")
+        os_block = idx("<os>")
+        user_block = idx("<user>")
+        operator_ctx = idx("<operator_context>")
+        guidelines = idx("<guidelines>")
+        request = idx("<request>")
+        auditor_ctx_marker = template.index("{auditor_context}")
+
+        assert constraints < os_block < user_block < operator_ctx, (
+            "Static prefix sections (constraints/os/user/operator_context) must "
+            "appear in stable order at the top of the auditor template."
+        )
+        assert operator_ctx < guidelines < request < auditor_ctx_marker, (
+            "Per-turn dynamic sections (guidelines, request, auditor_context) "
+            "must follow the entire static prefix."
+        )
+
+
+class TestSharpenedTribunalPersonas:
+    """Guard rails for the sharpened Axiom / Concord / Variance / Pragma / Nemesis voices. Each
+    member must have a distinct worldview so the Tribunal's disagreement is
+    ideological, not just statistical."""
+
+    def test_axiom_is_the_minimalist(self):
+        axiom = get_tribunal_member("axiom")
+        assert "The Composer" in axiom.description
+
+    def test_concord_is_the_guardian(self):
+        concord = get_tribunal_member("concord")
+        assert "The Guardian" in concord.description
+
+    def test_variance_is_the_exhaustive(self):
+        variance = get_tribunal_member("variance")
+        assert "The Exhaustive" in variance.description
+
+    def test_pragma_is_the_conventional(self):
+        pragma = get_tribunal_member("pragma")
+        assert "The Conventional" in pragma.description
+
+    def test_nemesis_is_the_adversary(self):
+        nemesis = get_tribunal_member("nemesis")
+        assert "The Adversary" in nemesis.description
+        # Nemesis is the only member that should reference the adversarial
+        # request_posture signal — that coupling is part of the design.
+        assert "adversarial" in nemesis.identity.lower()
+
+
+class TestListAllAgents:
+    """Tests for list_all_agents function."""
+
+    def test_list_all_agents_returns_all_ids(self):
+        """Test that list_all_agents returns all agent IDs."""
+        agents = list_all_agents()
+        assert isinstance(agents, list)
+        assert len(agents) > 0
+        assert "triage" in agents
+        assert "sage" in agents
+        assert "dash" in agents
+        assert "tribunal" in agents
+        assert "auditor" in agents
+        assert "scribe" in agents
+        assert "axiom" in agents
+        assert "concord" in agents
+        assert "variance" in agents
+        assert "pragma" in agents
+        assert "nemesis" in agents
+        assert "codex" in agents
+        assert "judge" in agents
+        assert "warden" in agents
+
+    def test_list_all_agents_includes_sub_agents(self):
+        """Test that list_all_agents includes warden sub-agents."""
+        agents = list_all_agents()
+        assert "warden_command_risk" in agents
+        assert "warden_error" in agents
+        assert "warden_file_risk" in agents
+
+
+class TestAgentPersonaValidation:
+    """Tests for Pydantic validation of AgentPersona."""
+
+    def test_valid_agent_data_passes_validation(self):
+        """Test that valid agent data passes Pydantic validation."""
+        valid_data = {
+            "id": "test_agent",
+            "display_name": "Test Agent",
+            "icon": "test",
+            "description": "A test agent",
+            "role": "tester",
+            "model_tier": "primary",
+            "tools": ["test_tool"],
+            "identity": "Test identity",
+            "purpose": "Test purpose",
+            "autonomy": "fully_autonomous"
+        }
+        persona = AgentPersona.model_validate(valid_data)
+        assert persona.agent_id == "test_agent"
+        assert persona.display_name == "Test Agent"
+
+    def test_missing_required_field_fails_validation(self):
+        """Test that missing required fields fail Pydantic validation."""
+        invalid_data = {
+            "id": "test_agent",
+            "display_name": "Test Agent",
+            # Missing required fields: icon, description, role, model_tier, etc.
+        }
+        with pytest.raises(ValidationError):
+            AgentPersona.model_validate(invalid_data)
+
+    def test_autonomy_accepts_freeform_directive_prose(self):
+        """Autonomy is free-form empowering directive prose, not an enum."""
+        data = {
+            "id": "test_agent",
+            "display_name": "Test Agent",
+            "icon": "test",
+            "description": "A test agent",
+            "role": "tester",
+            "model_tier": "primary",
+            "tools": [],
+            "identity": "Test identity",
+            "purpose": "Test purpose",
+            "autonomy": "You operate at the maximum level of agency this seat permits."
+        }
+        persona = AgentPersona.model_validate(data)
+        assert isinstance(persona.autonomy, str)
+        assert persona.autonomy
+
+
+class TestCentralizedXmlFormatting:
+    """Tests for centralized XML formatting methods in AgentPersona."""
+
+    def test_format_xml_tag_enforces_structural_boundaries(self):
+        """format_xml_tag enforces the canonical XML scaffolding pattern."""
+        result = AgentPersona.format_xml_tag("tag_name", "content")
+        assert result == "<tag_name>\ncontent\n</tag_name>"
+
+    def test_format_xml_tag_handles_multiline_content(self):
+        """format_xml_tag correctly handles multiline content."""
+        content = "line1\nline2\nline3"
+        result = AgentPersona.format_xml_tag("tag", content)
+        assert result == "<tag>\nline1\nline2\nline3\n</tag>"
+
+    def test_format_xml_tag_handles_empty_content(self):
+        """format_xml_tag correctly handles empty content."""
+        result = AgentPersona.format_xml_tag("tag", "")
+        assert result == "<tag>\n\n</tag>"
+
+    def test_format_xml_tag_is_static_method(self):
+        """format_xml_tag is a static method that can be called without instance."""
+        result = AgentPersona.format_xml_tag("test", "value")
+        assert "<test>" in result
+        assert "value" in result
+        assert "</test>" in result
+

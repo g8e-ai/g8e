@@ -17,24 +17,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
         with:
-          python-version: '3.12'
-
-      - name: Install Protobuf tools
-        run: |
-          pip install protobuf==6.33.6 grpcio-tools==1.80.0
+          github_token: ${{ github.token }}
 
       - name: Generate Proto
-        run: ./scripts/core/gen-proto.sh
+        run: make proto
 
       - name: Check for drift
         run: |
           # Only check for changes in generated proto files, ignore untracked files
           CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$|^\s*M.*_pb2.*\.py$|^\s*M.*\.proto$" || true)
           if [ -n "$CHANGES" ]; then
-            echo "Error: Generated proto files are out of sync with shared/proto/*.proto"
+            echo "Error: Generated proto files are out of sync with protocol/proto/*.proto"
             echo "$CHANGES"
             git diff -- $(git status --porcelain | grep -E "^\s*M" | awk '{print $2}')
             exit 1
@@ -50,8 +46,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: components/g8eo/go.mod
-          cache-dependency-path: components/g8eo/go.sum
+          go-version-file: services/g8eo/go.mod
+          cache-dependency-path: services/g8eo/go.sum
 
       - name: Start Operator substrate
         run: ./g8e platform start
@@ -78,8 +74,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: components/g8eo/go.mod
-          cache-dependency-path: components/g8eo/go.sum
+          go-version-file: services/g8eo/go.mod
+          cache-dependency-path: services/g8eo/go.sum
 
       - name: Set up Python
         uses: actions/setup-python@v6

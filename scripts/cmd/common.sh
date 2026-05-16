@@ -32,6 +32,53 @@ _pid_alive() {
 _g8ee_running()    { _pid_alive "$_G8EE_PID_FILE"; }
 _operator_running() { _pid_alive "$_OPERATOR_PID_FILE"; }
 
+_operator_bootstrap() {
+    local email="${G8E_BOOTSTRAP_EMAIL:-superadmin@g8e.local}"
+    local name="${G8E_BOOTSTRAP_NAME:-Superadmin}"
+    local public_port="${OPERATOR_LISTEN_PUBLIC_PORT:-9003}"
+    local public_url="https://localhost:$public_port"
+    local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
+
+    if [[ ! -f "$trust_bundle" ]]; then
+        return 1
+    fi
+
+    # Check if already bootstrapped
+    local status_resp
+    status_resp=$(curl -sSk --cacert "$trust_bundle" "$public_url/api/auth/bootstrap/status" 2>/dev/null)
+    if [[ $(echo "$status_resp" | jq -r '.bootstrapped' 2>/dev/null) == "true" ]]; then
+        return 0
+    fi
+
+    _banner "auto-bootstrapping platform..."
+    local bootstrap_body
+    bootstrap_body=$(jq -n --arg email "$email" --arg name "$name" '{email: $email, name: $name}')
+    
+    # Perform bootstrap and capture cookies in memory
+    local resp_headers
+    resp_headers=$(curl -sS -i -k --cacert "$trust_bundle" \
+        -X POST -H "Content-Type: application/json" \
+        -d "$bootstrap_body" \
+        "$public_url/api/auth/bootstrap" 2>/dev/null)
+
+    local session_id
+    session_id=$(echo "$resp_headers" | grep -i "Set-Cookie:" | grep "g8e_session=" | sed 's/.*g8e_session=\([^;]*\).*/\1/')
+
+    if [[ -z "$session_id" ]]; then
+        echo "[g8e] bootstrap failed: no session cookie returned" >&2
+        echo "$resp_headers" >&2
+        return 1
+    fi
+
+    # Save to credentials for persistent CLI auth, but avoid raw cookie jars
+    local user_id
+    user_id=$(echo "$resp_headers" | grep -v '^[A-Z]' | jq -r '.user.id' 2>/dev/null)
+    _save_credentials "$session_id" "$user_id" "bootstrap"
+    
+    _banner "platform bootstrapped successfully (user: $email)"
+    return 0
+}
+
 _ensure_operator() {
     if ! _operator_running; then
         echo "[g8e] Operator listen mode is not running — start the platform: ./g8e platform start" >&2
@@ -65,7 +112,7 @@ _operator_curl() {
         args+=(--cert "$cli_cert" --key "$cli_key")
     else
         local cert_name
-        cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$SCRIPT_DIR/shared/constants/paths.json" 2>/dev/null || echo "g8ee")
+        cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$SCRIPT_DIR/protocol/constants/paths.json" 2>/dev/null || echo "g8ee")
         if [[ -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" && -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key" ]]; then
             args+=(--cert "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" --key "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key")
         else
@@ -76,6 +123,8 @@ _operator_curl() {
 
     if [[ -n "$OPERATOR_SESSION_ID" ]]; then
         args+=(-H "X-G8E-Operator-Session-ID: $OPERATOR_SESSION_ID")
+        # Also send as a cookie for web-authenticated routes
+        args+=(--cookie "g8e_session=$OPERATOR_SESSION_ID")
     fi
 
     args+=(-H "Content-Type: application/json")
@@ -83,20 +132,89 @@ _operator_curl() {
     curl "${args[@]}" "$OPERATOR_HTTP_URL$path"
 }
 
+_g8ee_url() {
+    printf '%s' "${G8EE_URL:-https://localhost:8443}"
+}
+
+# Build curl args for an mTLS-authenticated request to either Operator or g8ee.
+# Usage: _build_protocol_curl_args <out_array_name>
+# Required env: G8E_PKI_DIR_HOST, G8E_CLI_CERT_FILE/G8E_CLI_KEY_FILE or app cert fallback.
+_build_protocol_curl_args() {
+    local _outvar="$1"
+    local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
+    if [[ ! -f "$trust_bundle" ]]; then
+        echo "[g8e] trust bundle not found at $trust_bundle — recreate runtime PKI: ./g8e platform clean && ./g8e platform start" >&2
+        return 1
+    fi
+    local _args=(-sS --cacert "$trust_bundle")
+
+    local cli_cert="${G8E_CLI_CERT:-$G8E_CLI_CERT_FILE}"
+    local cli_key="${G8E_CLI_KEY:-$G8E_CLI_KEY_FILE}"
+    if [[ -f "$cli_cert" && -f "$cli_key" ]]; then
+        _args+=(--cert "$cli_cert" --key "$cli_key")
+    else
+        local cert_name
+        cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$SCRIPT_DIR/protocol/constants/paths.json" 2>/dev/null || echo "g8ee")
+        if [[ -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" && -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key" ]]; then
+            _args+=(--cert "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" --key "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key")
+        else
+            echo "[g8e] no mTLS client certificate available — run: ./g8e login" >&2
+            return 1
+        fi
+    fi
+
+    eval "$_outvar=(\"\${_args[@]}\")"
+}
+
+# Append the standard g8e HTTP context headers to a curl args array.
+# Required env: OPERATOR_SESSION_ID, USER_ID. Optional: G8E_CASE_ID,
+# G8E_INVESTIGATION_ID, G8E_BOUND_OPERATORS, G8E_TASK_ID.
+# NOTE: G8E_NEW_CASE is deprecated - use resource_creation in request body.
+# Usage: _append_g8e_context_headers <array_name>
+_append_g8e_context_headers() {
+    local _outvar="$1"
+    eval "local _args=(\"\${${_outvar}[@]}\")"
+    _args+=(-H "Content-Type: application/json")
+    _args+=(-H "X-G8E-Source-Component: client")
+    if [[ -n "${OPERATOR_SESSION_ID:-}" ]]; then
+        _args+=(-H "X-G8E-Operator-Session-ID: $OPERATOR_SESSION_ID")
+        _args+=(-H "X-G8E-WebSession-ID: $OPERATOR_SESSION_ID")
+        _args+=(--cookie "g8e_session=$OPERATOR_SESSION_ID")
+    fi
+    [[ -n "${USER_ID:-}" ]]              && _args+=(-H "X-G8E-User-ID: $USER_ID")
+    [[ -n "${G8E_CASE_ID:-}" ]]          && _args+=(-H "X-G8E-Case-ID: $G8E_CASE_ID")
+    [[ -n "${G8E_INVESTIGATION_ID:-}" ]] && _args+=(-H "X-G8E-Investigation-ID: $G8E_INVESTIGATION_ID")
+    [[ -n "${G8E_BOUND_OPERATORS:-}" ]]  && _args+=(-H "X-G8E-Bound-Operators: $G8E_BOUND_OPERATORS")
+    [[ -n "${G8E_TASK_ID:-}" ]]          && _args+=(-H "X-G8E-Task-ID: $G8E_TASK_ID")
+    eval "$_outvar=(\"\${_args[@]}\")"
+}
+
+# POST/GET to g8ee using mTLS + g8e context headers.
+# Usage: _g8ee_curl <method> <path> [body]
+_g8ee_curl() {
+    local method="$1" path="$2" body="${3:-}"
+    local args=()
+    _build_protocol_curl_args args || return 1
+    args+=(-X "$method")
+    _append_g8e_context_headers args
+    [[ -n "$body" ]] && args+=(-d "$body")
+    curl "${args[@]}" "$(_g8ee_url)$path"
+}
+
 _run_host_script() {
     export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"
     export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
     export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
-    export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
+    export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
     [[ -n "${OPERATOR_SESSION_ID:-}" ]] && export OPERATOR_SESSION_ID
     exec "$@"
 }
 
 _operator_bin() {
-    local bin="${G8E_OPERATOR_BIN:-$SCRIPT_DIR/components/g8eo/build/linux-amd64/g8e.operator}"
+    local bin="${G8E_OPERATOR_BIN:-$SCRIPT_DIR/services/g8eo/build/linux-amd64/g8e.operator}"
     if [ ! -x "$bin" ]; then
         echo "[g8e] Operator binary missing at $bin — building..." >&2
-        (cd "$SCRIPT_DIR/components/g8eo" && make build-local) >&2
+        (cd "$SCRIPT_DIR/services/g8eo" && make build-local) >&2
     fi
     printf '%s' "$bin"
 }
@@ -118,6 +236,8 @@ _save_credentials() {
     local user_id="$2"
     local operator_id="$3"
     mkdir -p "$G8E_CREDENTIALS_DIR"
+    # Ensure directory has restricted permissions
+    chmod 700 "$G8E_CREDENTIALS_DIR"
     cat > "$G8E_CREDENTIALS_FILE" <<EOF
 export OPERATOR_SESSION_ID="$operator_session_id"
 export USER_ID="$user_id"
@@ -126,6 +246,7 @@ export G8E_AUTH_TIMESTAMP="$(date +%s)"
 export G8E_CLI_CERT="$G8E_CLI_CERT_FILE"
 export G8E_CLI_KEY="$G8E_CLI_KEY_FILE"
 EOF
+    # Restrict file permissions to user-only
     chmod 600 "$G8E_CREDENTIALS_FILE"
 }
 
@@ -151,7 +272,7 @@ _ensure_authenticated() {
 }
 
 _help() {
-    local help_file="$SCRIPT_DIR/docs/g8e-help.md"
+    local help_file="$SCRIPT_DIR/docs/general/cli_help.md"
     if [[ -f "$help_file" ]]; then
         cat "$help_file"
     else

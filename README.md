@@ -8,9 +8,9 @@ An **Operator** is any host-side implementation that speaks the g8e Protocol: it
 
 This repository ships:
 
-- The **g8e Protocol** (`shared/proto`, `docs/architecture/protocol.md`) — the canonical wire contract.
+- The **g8e Protocol** (`protocol/proto`, `docs/architecture/protocol.md`) — the canonical wire contract.
 - **g8eo** — a reference Operator implementation in Go. Sovereign, single-binary, runs as a satellite on managed hosts or as a hub in `--listen` mode.
-- A **reference application** for AI-powered, human-driven infrastructure management built on top of the protocol, including the optional **g8ee** AI engine and Tribunal consensus model.
+- **g8ee** — an optional reference AI engine and reasoning layer.
 
 If you want to build something else on the protocol — a different Operator, a different application, a different class of governed action — the contract is the same.
 
@@ -48,23 +48,23 @@ The g8e Protocol enforces safety at the point of execution. Every mutation reach
 ```mermaid
 flowchart TD
     TX[Signed GovernanceEnvelope<br>JSON Transaction] --> L1
-    
+
     subgraph Substrate [Operator Verification - protocol-mandated]
         L1{L1: Technical Bedrock<br>Forbidden Patterns?}
         L1 -- "Violated" --> Reject
-        
+
         L1 -- "Passed" --> L2{L2: Consensus<br>Tribunal Signature?}
         L2 -- "Invalid/Missing" --> Reject
-        
+
         L2 -- "Passed" --> L3{L3: Authorization<br>Human Presence?}
         L3 -- "Denied" --> Reject
-        
+
         L3 -- "Authorized" --> State{State Check<br>Merkle Root Fresh?}
         State -- "Stale" --> Reject
-        
+
         State -- "Fresh" --> Exec[Warden Execution<br>Isolated Process]
     end
-    
+
     Exec --> Receipt[Signed Action Receipt<br>Audit Commitment]
     Reject[Fail Closed<br>Error + Audit Entry] --> Client
     Receipt --> Client([Client / Hub])
@@ -142,8 +142,8 @@ flowchart LR
 
 | Component | Stack | Role |
 |---|---|---|
-| **g8eo** | Go | **Reference Operator implementation.** Provides persistence, PKI, messaging (PubSub), and governance enforcement for the reference deployment. Runs as a sovereign satellite on managed hosts or as a central hub in `--listen` mode. Any conforming Operator can replace it. |
-| **g8ee** | Python | **Reference application component.** An optional agentic reasoning engine that orchestrates the Tribunal and Auditor workflows for the AI-powered infrastructure management use case. |
+| **g8eo** | Go | **Reference Operator implementation.** Provides persistence, PKI, messaging (PubSub), and governance enforcement. Runs as a sovereign satellite on managed hosts or as a hub in `--listen` mode. |
+| **g8ee** | Python | **Optional AI Engine.** A reference reasoning layer that orchestrates the Tribunal and Auditor workflows for agentic infrastructure management. |
 
 Every interaction with an Operator is mutually authenticated via TLS 1.3 and mTLS. State-changing workflows must pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
 
@@ -224,13 +224,13 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 ```
 
 1. **Trust the platform CA** on your workstation:
-   - macOS / Linux: `curl -fsSL http://localhost:8080/trust | sudo sh`
-   - Windows: `irm http://localhost:8080/trust | iex`
-2. **Register a passkey** at `https://localhost:9000`.
-3. **Generate a device-link token** via the CLI: `./g8e login`.
-4. **Install the Operator** on any host you want to manage:
+   - macOS / Linux: `curl -fsSL http://localhost/trust | sudo sh`
+   - Windows: `irm http://localhost/trust | iex`
+2. **Authenticate the CLI** with your email:
+   - `./g8e login --email your@email.com`
+3. **Install the Operator** on any host you want to manage:
    ```bash
-   curl -fsSL http://<hub>:8080/g8e | sh -s -- <device-link-token>
+   curl -fsSL http://<hub>/g8e | sh -s -- <device-link-token>
    ```
 
 ### CLI Reference

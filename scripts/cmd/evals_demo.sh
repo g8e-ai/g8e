@@ -31,10 +31,10 @@ _eval_gold_set_path_for_host() {
     local gold_set="$1"
     if [[ "$gold_set" == /* ]]; then
         printf '%s\n' "$gold_set"
-    elif [[ "$gold_set" == components/g8ee/* ]]; then
+    elif [[ "$gold_set" == services/g8ee/* ]]; then
         printf '%s/%s\n' "$SCRIPT_DIR" "$gold_set"
-    elif [[ -f "$SCRIPT_DIR/components/g8ee/$gold_set" ]]; then
-        printf '%s/components/g8ee/%s\n' "$SCRIPT_DIR" "$gold_set"
+    elif [[ -f "$SCRIPT_DIR/services/g8ee/$gold_set" ]]; then
+        printf '%s/services/g8ee/%s\n' "$SCRIPT_DIR" "$gold_set"
     else
         printf '%s\n' "$gold_set"
     fi
@@ -106,7 +106,7 @@ case "$TOP" in
         fi
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                help_file="$SCRIPT_DIR/docs/general/cli_help.md"
                 if [[ -f "$help_file" ]]; then
                     awk '/^### demo/,/^### evals/' "$help_file" | head -n -1
                 else
@@ -133,7 +133,7 @@ case "$TOP" in
         esac
         ;;
     evals)
-        EVALS_DIR="$SCRIPT_DIR/components/g8ee/evals"
+        EVALS_DIR="$SCRIPT_DIR/services/g8ee/evals"
         EVALS_COMPOSE="$EVALS_DIR/docker-compose.evals.yml"
         if [[ ! -f "$EVALS_COMPOSE" ]]; then
             echo "[g8e] evals compose file not found: $EVALS_COMPOSE" >&2; exit 1
@@ -158,7 +158,7 @@ case "$TOP" in
         REMAINING_ARGS=("${filtered_eval_args[@]:1}")
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                help_file="$SCRIPT_DIR/docs/general/cli_help.md"
                 if [[ -f "$help_file" ]]; then
                     awk '/^### evals/,/^## DETAILED HELP/' "$help_file" | head -n -1
                 else
@@ -184,22 +184,22 @@ case "$TOP" in
                     echo "[g8e] eval fleet is not running" >&2; exit 1
                 fi
                 if [[ -z "$operator_session_id" ]]; then
-                    echo "[g8e] Error: --operator-session-id is required (auto-discovery removed with g8ed)" >&2
+                    echo "[g8e] Error: --operator-session-id is required (auto-discovery removed with BYO client)" >&2
                     exit 1
                 fi
                 if [[ "$operator_session_id" == dlk_* ]]; then
                     echo "[g8e] Error: evals run requires a bound operator session id, not a device link token" >&2; exit 1
                 fi
                 if [[ ${#eval_llm_args[@]} -gt 0 ]]; then
-                    echo "[g8e] Warning: LLM settings via evals run is temporarily disabled (g8ed removed)." >&2
+                    echo "[g8e] Warning: LLM settings via evals run is temporarily disabled (BYO client removed)." >&2
                     echo "[g8e] Set LLM settings via the Operator API or g8ee adapter directly." >&2
                 fi
                 _banner "evals run"
-                _venv="$SCRIPT_DIR/components/g8ee/.venv"
+                _venv="$SCRIPT_DIR/services/g8ee/.venv"
                 [ ! -x "$_venv/bin/python" ] && { echo "[g8e] g8ee virtualenv missing" >&2; exit 1; }
                 (
-                    cd "$SCRIPT_DIR/components/g8ee"; export PYTHONPATH="$SCRIPT_DIR/components/g8ee:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
-                    export G8E_SHARED_DIR="$SCRIPT_DIR/shared"; export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"; export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
+                    cd "$SCRIPT_DIR/services/g8ee"; export PYTHONPATH="$SCRIPT_DIR/services/g8ee:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
+                    export G8E_PROTOCOL_DIR="$SCRIPT_DIR/protocol"; export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"; export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
                     export G8E_TRUST_BUNDLE="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
                     export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"; export G8EE_URL="$G8EE_URL"
                     "$_venv/bin/python" -m app.evals.runner.cli run "${run_args[@]}"
@@ -224,11 +224,11 @@ case "$TOP" in
             status) _banner "evals status"; COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" ps; exit 0 ;;
             logs)   [[ -z "${3:-}" ]] && { echo "[g8e] evals logs requires a node name" >&2; exit 1; }; docker logs -f "${3}"; exit 0 ;;
             list)
-                _banner "evals list"; _venv="$SCRIPT_DIR/components/g8ee/.venv"
+                _banner "evals list"; _venv="$SCRIPT_DIR/services/g8ee/.venv"
                 [ ! -x "$_venv/bin/python" ] && { echo "[g8e] g8ee virtualenv missing" >&2; exit 1; }
                 (
-                    cd "$SCRIPT_DIR/components/g8ee"; export PYTHONPATH="$SCRIPT_DIR/components/g8ee:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
-                    export G8E_SHARED_DIR="$SCRIPT_DIR/shared"; "$_venv/bin/python" -m app.evals.runner.cli list
+                    cd "$SCRIPT_DIR/services/g8ee"; export PYTHONPATH="$SCRIPT_DIR/services/g8ee:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
+                    export G8E_PROTOCOL_DIR="$SCRIPT_DIR/protocol"; "$_venv/bin/python" -m app.evals.runner.cli list
                 )
                 ;;
             *) echo "[g8e] unknown evals subcommand: '$SUB'" >&2; exit 1 ;;

@@ -49,8 +49,8 @@ assert_eval_invocation() {
     [[ "${argv[5]}" == "$expected_gold_set" ]]
 }
 
-assert_eval_invocation "/app/components/g8ee/evals/gold_sets/accuracy.json" "/app/components/g8ee/evals/gold_sets/accuracy.json"
-assert_eval_invocation "components/g8ee/evals/gold_sets/accuracy.json" "/app/components/g8ee/evals/gold_sets/accuracy.json"
-assert_eval_invocation "evals/gold_sets/accuracy.json" "/app/components/g8ee/evals/gold_sets/accuracy.json"
+assert_eval_invocation "/app/services/g8ee/evals/gold_sets/accuracy.json" "/app/services/g8ee/evals/gold_sets/accuracy.json"
+assert_eval_invocation "services/g8ee/evals/gold_sets/accuracy.json" "/app/services/g8ee/evals/gold_sets/accuracy.json"
+assert_eval_invocation "evals/gold_sets/accuracy.json" "/app/services/g8ee/evals/gold_sets/accuracy.json"
 
 echo "g8e evals wrapper tests passed"

@@ -7,7 +7,7 @@ export G8E_PROJECT_ROOT="$SCRIPT_DIR"
 # Check for common dependencies
 _check_deps() {
     local missing=()
-    for cmd in curl; do
+    for cmd in curl jq; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             missing+=("$cmd")
         fi
@@ -66,7 +66,7 @@ _menu() {
             4) ./g8e platform logs ;;
             5)
                 echo "1) g8eo (Go Operator)"; echo "2) g8ee (Python Engine)"
-                read -p "Select component [1-2]: " tcomp
+                read -p "Select service [1-2]: " tcomp
                 case $tcomp in
                     1) ./g8e test g8eo ;;
                     2) ./g8e test g8ee ;;
@@ -103,6 +103,7 @@ while [[ $i -le $# ]]; do
         --api-key|-k)   [[ $i -lt $# ]] && { ((i++)); API_KEY="${!i}"; }; ((i++)) ;;
         --device-token) [[ $i -lt $# ]] && { ((i++)); DEVICE_TOKEN="${!i}"; }; ((i++)) ;;
         --dev)          DEV_MODE=true; ((i++)) ;;
+        --with-apps|-a) export G8E_WITH_APPS=1; ((i++)) ;;
         -*)             filtered_args+=("$arg"); ((i++)) ;;
         *)              while [[ $i -le $# ]]; do filtered_args+=("${!i}"); ((i++)); done; break ;;
     esac
@@ -118,12 +119,14 @@ if [[ " ${AUTH_REQUIRED_COMMANDS[@]} " =~ " ${TOP} " ]]; then
 fi
 if [[ "$TOP" == "operator" && ("$SUB" == "deploy" || "$SUB" == "stream" || "$SUB" == "reauth") ]]; then _ensure_authenticated; fi
 if [[ "$TOP" == "platform" && "$SUB" == "settings" ]]; then _ensure_authenticated; fi
+if [[ "$TOP" == "chat" ]]; then _ensure_authenticated; fi
 
 # Dispatch to focused scripts
 case "$TOP" in
     platform)   exec bash "$SCRIPT_DIR/scripts/cmd/platform.sh" "$SUB" "${@:3}" ;;
     apps)       exec bash "$SCRIPT_DIR/scripts/cmd/apps.sh" "$SUB" "${@:3}" ;;
     operator)   exec bash "$SCRIPT_DIR/scripts/cmd/operator.sh" "$SUB" "${@:3}" ;;
+    chat)       exec bash "$SCRIPT_DIR/scripts/cmd/chat.sh" "$SUB" "${@:3}" ;;
     test)       exec bash "$SCRIPT_DIR/scripts/cmd/tests.sh" "$SUB" "${@:3}" ;;
     evals|demo) exec bash "$SCRIPT_DIR/scripts/cmd/evals_demo.sh" "$TOP" "$SUB" "${@:3}" ;;
     user)       exec bash "$SCRIPT_DIR/scripts/cmd/user.sh" "$SUB" "${@:3}" ;;

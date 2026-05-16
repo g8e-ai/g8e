@@ -8,7 +8,7 @@ if [[ -z "$_TEST_COMPONENT" || "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" 
         _TEST_COMPONENT="g8eo"
         set -- "$_TEST_COMPONENT" "${@:2}"
     else
-        help_file="$SCRIPT_DIR/docs/g8e-help.md"
+        help_file="$SCRIPT_DIR/docs/general/cli_help.md"
         if [[ -f "$help_file" ]]; then
             awk '/^### test/,/^### security/' "$help_file" | head -n -1
         else
@@ -19,7 +19,7 @@ if [[ -z "$_TEST_COMPONENT" || "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" 
     fi
 fi
 if [[ "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" == "--help" ]]; then
-    help_file="$SCRIPT_DIR/docs/g8e-help.md"
+    help_file="$SCRIPT_DIR/docs/general/cli_help.md"
     if [[ -f "$help_file" ]]; then
         awk '/^### test/,/^### security/' "$help_file" | head -n -1
     else
