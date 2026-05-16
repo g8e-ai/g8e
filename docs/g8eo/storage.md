@@ -5,17 +5,17 @@ parent: Architecture
 
 ## Storage Architecture
 
-Last Updated: 2026-05-13
-Version: v0.3.0
+Last Updated: 2026-05-16
+Version: v0.4.0
 
 This document explains the unified storage architecture for the g8e platform. It focuses on the **why** and **what** — the architectural decisions, data flows, and invariants — rather than low-level implementation.
 
 ## Core Principles
 
-- **Operator-Hub Persistence**: The Operator (`g8eo`) running in `--listen` mode is the authoritative system of record and the primary **Substrate**. It provides the Coordination Store API for all clients. Optional application-layer adapters like the Dashboard (``) and Engine (`g8ee`) are completely stateless and rely on the Operator for persistence.
-- **Local-First Audit Architecture (LFAA)**: Every file mutation and command execution on a managed host is recorded locally in the Operator's Audit Vault and Ledger. The platform substrate receives only Sentinel-scrubbed metadata; raw data never leaves the host unless explicitly retrieved.
-- **Unified Coordination Store**: A single SQLite database on the platform hub (provided by `g8eo --listen`) provides Document, KV, SSE, and Blob storage services to stateless clients.
-- **Data Sovereignty**: Raw operational data (passwords, secrets, PII) is quarantined on the managed host. The platform only ever receives Sentinel-scrubbed summaries and metadata in the Scrubbed Vault.
+- **Operator-Hub Persistence**: The Operator (`g8eo`) running in `--listen` mode is the authoritative system of record and the primary **Substrate**. It provides the Unified Coordination Store API for all clients. Application-layer adapters (like Dashboards or specialized Agents) are completely stateless and rely on the Hub for persistence.
+- **Local-First Audit Architecture (LFAA)**: Every file mutation and command execution on a managed host is recorded locally in the Operator's Audit Vault and Ledger. The platform substrate receives only Sentinel-scrubbed metadata; raw data never leaves the host unless explicitly requested by an authorized auditor.
+- **Unified Coordination Store**: A single SQLite database on the platform hub (`.g8e/data/g8e.db`) provides Document, KV, SSE, and Blob storage services to stateless clients.
+- **State Merkle Root Invariant**: All Hub data (Documents, KV, Blobs) is anchored by a platform-wide Merkle state root. This root is used to verify the state-binding of governance transactions before execution.
 
 ## Storage Tiers
 
@@ -31,16 +31,16 @@ This document explains the unified storage architecture for the g8e platform. It
 ## Storage Architecture at a Glance
 
 ### Platform Hub (g8eo --listen)
-- **Component**: `g8eo` (the "Platform Hub" and "Substrate")
-- **Persistence**: Single SQLite database at `.g8e/data/g8e.db` (The "Coordination Store").
-- **Stateless Clients**: Bundled apps (`g8ee`) and BYO clients read/write via public HTTPS/WSS APIs.
+- **Component**: `g8eo` (the "Platform Hub" or "Substrate")
+- **Persistence**: Unified SQLite database at `.g8e/data/g8e.db` (The "Coordination Store").
+- **Stateless Clients**: BYO Frontends and Agents read/write via HTTPS/WSS (mTLS) APIs.
 - **Subsystems**:
     - **Document Store**: JSON document CRUD using a Collection/ID pattern with `json_extract` query support.
-    - **KV Store**: High-speed ephemeral data with TTL support and read cache.
-    - **Blob Store**: Binary storage for investigation attachments and large objects.
+    - **KV Store**: High-speed ephemeral data with TTL support and `GLOB` pattern scanning.
+    - **Blob Store**: Binary storage for investigation attachments, certificates, and large objects.
     - **SSE Event Buffer**: Ring buffer for Server-Sent Events reconnection replay.
-    - **State Root**: Platform-wide Merkle state root for transaction verification.
-    - **Nonces**: Replay protection for governance transactions.
+    - **State Root**: Deterministic Merkle state root across all authoritative hub data.
+    - **Nonce Manager**: Replay protection for governance transactions.
 
 ### Managed Hosts (g8eo)
 - **Component**: `g8eo` (the "Operator")
@@ -117,10 +117,10 @@ This document explains the unified storage architecture for the g8e platform. It
 | Component | Technology | Path/Volume | Role |
 |---|---|---|---|
 | **Platform Hub (Substrate)** | SQLite | `.g8e/data/g8e.db` | Central platform state (Coordination Store). |
-| **Platform Hub (PKI)** | TLS Certs | `.g8e/pki` | CA hierarchy, intermediate CAs, trust bundles. **Root of Trust**. |
-| **Platform Hub (Secrets)** | Bootstrap Secrets | `.g8e/secrets` | Session encryption key with tamper-evidence manifest. |
-| **Optional Adapters** | None | - | Stateless clients; use `DBClient` and `KVCacheClient`. |
-| **Operator (Audit Vault)** | SQLite (Enc) | `.g8e/data/g8e.db` | LFAA encrypted append-only event log (`events`, `sessions`, `file_mutation_log`). |
+| **Platform Hub (PKI)** | TLS Certs | `.g8e/pki` | CA hierarchy, intermediate CAs, and trust bundles. **Root of Trust**. |
+| **Platform Hub (Secrets)** | Bootstrap Secrets | `.g8e/secrets` | Master secrets with tamper-evident manifest (`bootstrap_digest.json`). |
+| **Stateless Adapters** | None | - | BYO Frontends/Agents; use `DocumentStore` and `KVStore` APIs. |
+| **Operator (Audit Vault)** | SQLite (Enc) | `.g8e/data/g8e.db` | LFAA encrypted append-only log (`events`, `receipts`, `file_mutation_log`). |
 | **Operator (Scrubbed Vault)** | SQLite | `.g8e/local_state.db` | Sentinel-scrubbed AI context (`execution_log`, `file_diff_log`). |
 | **Operator (Raw Vault)** | SQLite | `.g8e/raw_vault.db` | Customer-only unscrubbed forensic record (`raw_execution_log`, `raw_file_diff_log`). |
 | **Operator (Ledger)** | Git | `.g8e/data/ledger/sessions/<session_id>/` | Multi-Ledger: per-session isolated git repos for cryptographic file history, diff, and rollback. |
@@ -153,10 +153,10 @@ The `.g8e/pki` and `.g8e/secrets` directories form the platform's root of trust.
 On startup, `g8eo` SecretManager validates that secrets match the bootstrap digest manifest. If a conflict occurs, startup fails hard with actionable error messages.
 
 ### State Merkle Root Invariant
-The platform state is anchored by a Merkle state root calculated across all documents, KV entries, and blobs.
-1. **Deterministic Calculation**: The root is computed by hashing a canonical JSON representation of all active records in the Hub database.
-2. **Transaction Binding**: Every governance transaction carries the `state_merkle_root` at the time of generation.
-3. **Execution Verification**: The Operator satellite verifies that the transaction's state root matches the sovereign host state or the Hub state (depending on the command scope) before execution. Stale transactions are rejected.
+The platform state is anchored by a Merkle state root calculated across all documents, active KV entries, and blobs.
+1. **Deterministic Calculation**: The root is computed by hashing a canonical JSON representation of all authoritative records in the Hub database.
+2. **Transaction Binding**: Every governance transaction carries the `state_merkle_root` required for it to be valid.
+3. **Fail-Closed Execution**: The Operator verifies that the transaction's state root matches the expected state before execution. Stale or invalid transactions are rejected.
 
 ---
 
@@ -180,11 +180,11 @@ The Ledger uses a **Multi-Ledger Architecture**: each operator session owns an i
 - **Graceful Degradation**: When git is unavailable (`--no-git`), the Ledger is disabled. The Audit Vault continues operating.
 
 ### Vault Strategy
-- **Audit Vault** (`.g8e/data/g8e.db`): Encrypted using AES-256-GCM (if configured). Stores the definitive session history and event log.
-- **Scrubbed Vault** (`.g8e/local_state.db`): Stores the "AI-ready" view of the host, including execution logs and file diffs that have been processed by Sentinel.
-- **Raw Vault** (`.g8e/raw_vault.db`): Stores unscrubbed forensic records, accessible only to authorized customer auditors.
+- **Audit Vault** (`.g8e/data/g8e.db`): Encrypted using AES-256-GCM. Stores the definitive session history and **Action Receipts**.
+- **Scrubbed Vault** (`.g8e/local_state.db`): Stores the "AI-ready" view of the host, including execution logs and file diffs processed by Sentinel.
+- **Raw Vault** (`.g8e/raw_vault.db`): Stores unscrubbed forensic records, accessible only to authorized humans.
 
-Audit events are fail-closed against session identity. The audit vault never creates sessions from event payloads; session creation is owned by explicit Operator/auth lifecycle code. `RecordEvent` and `RecordEvents` reject missing, malformed, or unknown `operator_session_id` values before inserting audit rows.
+**Fail-Closed Auditing**: Audit events are fail-closed against session identity. `RecordEvent` and `RecordEvents` reject missing, malformed, or unknown `operator_session_id` values. Sessions must be created explicitly by auth lifecycle code before any audit writes are accepted.
 
 ---
 
@@ -232,8 +232,6 @@ The following collections are defined in `protocol/constants/collections.json` a
 
 ## Related Documentation
 
-- [../services/g8eo.md](../services/g8eo.md) — g8eo component reference
-- [../services/g8ee.md](../services/g8ee.md) — g8ee component reference
-- [../services/.md](../services/.md) —  component reference
-- [security.md](security.md) — Full security model: mTLS, Sentinel patterns, LFAA encryption, threat detection
 - [protocol.md](protocol.md) — Governance Envelope and communication protocol
+- [security.md](security.md) — mTLS, Sentinel patterns, and LFAA encryption
+- [../developer/README.md](../developer/README.md) — Developer onboarding

@@ -5,168 +5,102 @@ parent: Architecture
 
 # g8e Protocol
 
-Last Updated: 2026-05-12
-Version: v0.2.5
+Last Updated: 2026-05-16
+Version: v1.0.0
 
-The g8e Protocol is the substrate of the platform: a **UAP JSON** wire contract for secure, auditable interaction between any g8e client and any host-side **Operator** implementation. An Operator is a role defined by this protocol — receive signed transactions, enforce L1/L2/L3 verification, execute through a defensive boundary, emit signed receipts anchored to a local ledger.
+The g8e Protocol is the mandatory substrate for all interactions within the platform. It defines a secure, auditable, and platform-agnostic contract between **Clients** (BYO agents, frontends) and **Operators** (sovereign host agents).
 
-The reference Operator implementation is **`g8eo`** (Go), and the bundled reference application includes **Engine ([g8ee](../g8ee/README.md))**. The protocol is designed for any Bring-Your-Own (BYO) Operator, frontend, or agent system; the bundled components are illustrative, not privileged.
+The reference Operator implementation is **`g8eo`** (Go), and the protocol ensures that no privileged "backdoors" exist for bundled components like **Engine (`g8ee`)** or **Dashboard (`g8ed`)**.
+
+---
 
 # Core Invariants
 
-1. **Canonical JSON Wire Format**: All mutation commands MUST use canonical JSON (protojson) `GovernanceEnvelope` on all client-facing surfaces (HTTPS APIs, WSS pub/sub command channels, receipts, audit exports). Binary protobuf bytes on the wire are rejected with a clear error. Schema source of truth is `.proto` files (typed, versioned, L1 field-option reflection).
-2. **Hash-Based Signing**: The signing basis is a deterministic `transaction_hash` computed from normalized envelope fields (action_type, target_resource, payload as base64, state_merkle_root, nonce, expires_at, intent_data). Wire encoding is irrelevant because the verifier enforces `id == computed transaction_hash`. Canonicalization rules: field names in proto definition order, strings as UTF-8, numbers as decimal integers, absent optional fields omitted, nested messages recursed, bytes as base64, result hashed with SHA-256.
-3. **Identity Persistence**: Every message must carry `id`, `operator_id`, and `operator_session_id`.
-4. **Immutable Governance**: Governance metadata (L1/L2/L3) is baked into the envelope and verified by the Operator before any action is taken.
-5. **BFT State Binding**: Commands are bound to a specific fleet state via `state_merkle_root`. The root is content-authoritative, calculated deterministically over stable business data (Documents, KV, Blobs) while excluding volatile metadata (nonces, SSE events) and metadata-only timestamps.
-6. **Unified Transaction Audit**: Every mutation accepted or rejected by the Operator emits an authoritative `ActionReceipt`. These are stored in a dedicated `receipts` table and are queryable via transaction-native APIs.
-7. **No Private Channels**: Bundled apps use the same public protocol surface as BYO clients. There is no internal "trust" shortcut for bundled components.
+1.  **Canonical JSON Wire Format**: All client-facing mutation paths (HTTPS APIs, WSS pub/sub) MUST use canonical JSON (**protojson**) for the `GovernanceEnvelope`. Binary protobuf is reserved for internal storage and specific high-performance peer-to-peer sync.
+2.  **Hash-Based Signing**: The `transaction_hash` is the sole authority for identity and intent. It is a SHA-256 hash computed over canonicalized fields in a specific order. The verifier enforces that `envelope.id == envelope.transaction_hash == computed_hash`.
+3.  **Fail-Closed Verification**: An Operator MUST reject any transaction that fails any layer of the 3-Layer Governance (L1/L2/L3), has an expired timestamp, or a reused nonce.
+4.  **BFT State Binding**: Mutations are bound to a specific fleet state via `state_merkle_root`. This ensures that an agent is acting on the same reality the Operator currently perceives.
+5.  **Signed Receipts**: Every mutation result MUST be accompanied by an `ActionReceipt`, signed by the Operator's Warden, providing cryptographic proof of execution or rejection.
 
 ---
 
 # Message Models
 
-The canonical schema files live in `@/home/bob/g8e/protocol/proto/`:
+The canonical schema source of truth lives in `@/home/bob/g8e/protocol/proto/`.
 
 | File | Purpose |
 |------|---------|
-| `common.proto` | Defines component identity enums and custom protobuf options (forbidden_patterns). |
-| `operator.proto` | Defines typed request/result payloads (commands, file ops, heartbeats, PKI, device-links, passkeys). |
+| `common.proto` | Defines `GovernanceEnvelope` and `GovernanceMetadata` (L1/L2/L3). |
+| `operator.proto` | Defines typed payloads for actions (`CommandRequested`, `FileEditRequested`, etc.). |
 
-## UAP JSON Mutation Envelope
+## The Governance Envelope
 
-The UAP envelope is the only canonical mutation transport. It is JSON on the wire for AI-agent interoperability, while `payload` is the required base64-encoded serialized Protobuf action message that is the sole authority for execution.
+The `GovernanceEnvelope` is the single canonical container for all g8e mutations.
 
-| Field | Role |
-|-------|------|
-| `protocol_version` | Protocol version string. |
-| `id` | SHA-256 transaction hash over critical intent/context fields. |
-| `timestamp` | UTC creation time. |
-| `expires_at` | UTC timestamp after which the transaction is invalid. |
-| `nonce` | Random salt or monotonic counter for replay protection. |
-| `metadata.sender_id` | Operator identity (mTLS cert signature or equivalent). |
-| `intent.action_type` | Action type (e.g., "EXECUTE_BASH", "QUERY_DB"). |
-| `intent.target_resource` | Target resource identifier. |
-| `context.data_format` | Data format (e.g., "markdown", "raw", "json"). |
-| `intent_data` | Structured intent parameters for audit visibility only. |
-| `payload` | Base64 binary Protobuf message. **SOLE authority for execution**. |
-| `governance` | L1/L2/L3 metadata for security enforcement. |
-| `state_merkle_root` | Fleet state root for BFT verification. |
-| `case_id`, `investigation_id`, `task_id` | Application-layer identifiers for tracking. |
+| Field | Description |
+|-------|-------------|
+| `id` | The unique transaction ID (must match `transaction_hash`). |
+| `event_type` | Canonical event name from `protocol/constants/events.json`. |
+| `payload` | **Base64-encoded binary Protobuf message**. This is the SOLE authority for execution. |
+| `transaction_hash` | SHA-256 hash of: `action_type | target_resource | payload_base64 | state_root | nonce | expires_at | intent_data`. |
+| `governance` | Cryptographic proofs for L1, L2, and L3 verification layers. |
+| `state_merkle_root` | The expected state root of the host at the time of signing. |
+| `nonce` | Unique string for replay protection. |
+| `expires_at` | UTC timestamp after which the transaction is void. |
 
 ---
 
-# Protocol Lifecycle
-
-## 1. Request Phase (Client -> Operator)
-
-1. **Generation**: A client (e.g., `g8ee` or a BYO agent) generates a typed payload (e.g., `CommandRequestPayload`).
-2. **Envelope Building**: The payload is wrapped in a UAP JSON `GovernanceEnvelope`.
-3. **L2 Signing**: The trusted L2 signer signs `transaction_hash|true` with ED25519 and sets `governance.l2.key_id` plus `governance.l2.tribunal_signature`.
-4. **Publication**: The serialized envelope is published to the Operator's command channel (WSS) or submitted via HTTPS.
-
-## 2. Verification Phase (Operator)
-
-Upon receiving an envelope, a conforming Operator must perform these checks before any action. In the reference Operator (`g8eo`), they live in `@/home/bob/g8e/services/g8eo/internal/services/pubsub/pubsub_commands.go`:
-
-1. **Parsing**: Rejects any payload that is not a valid UAP JSON `GovernanceEnvelope`.
-2. **Expiry Check**: Rejects any transaction if `expires_at` is in the past.
-3. **Replay Protection**: Rejects missing or reused `nonce` values using the durable replay store.
-4. **State Check**: Requires `state_merkle_root` and compares it against the Operator-local current state root. Missing or mismatched roots reject.
-5. **L1 Check**: Uses Protobuf reflection to find fields marked with `forbidden_patterns`. If a regex matches (e.g., `sudo`), the command is rejected.
-6. **L2 Check**: Verifies the ED25519 signature against the Operator-owned `SignerStore` (database-backed). Filesystem-only signer management is deprecated.
-7. **L3 Check**: For mutation requests, verifies the `L3Proof` (WebAuthn assertion). Missing verifier configuration rejects.
-8. **Execution**: The Operator's execution boundary (the **Warden** in the reference implementation) receives the verified transaction and routes exactly one typed action to the appropriate handler.
-
-## 3. Result Phase (Operator -> Client)
-
-1. **Execution**: The handler executes the requested action and captures results.
-2. **Envelope Building**: The Operator wraps the result payload (e.g., `CommandResult`) in a UAP JSON `GovernanceEnvelope`.
-3. **Publication**: The result envelope is published to the results channel for the subscribed client(s).
-
----
-
-# Governance Layers
+# 3-Layer Governance Bedrock
 
 ### L1: Technical Bedrock (Hard Gates)
-Enforced by the Operator's transaction verifier via Protobuf reflection before execution. In the reference Operator this is `TransactionVerifier`.
-- **Mechanism**: Custom field option `forbidden_patterns`.
-- **Scope**: Applied to fields like `CommandRequested.command`.
-- **Default Patterns**: `sudo`, `su`, `rm -rf /`.
+Enforced via Protobuf reflection before any code is executed.
+-   **Mechanism**: Custom field option `(g8e.common.v1.forbidden_patterns)`.
+-   **Scope**: Applied to fields containing raw input (e.g., shell commands).
+-   **Enforcement**: The `TransactionVerifier` regex-matches input against patterns like `sudo`, `su`, or `rm -rf /`.
 
-### L2: Consensus (Consensus)
-Enforced by the Operator's transaction verifier. Reference implementation: `@/home/bob/g8e/services/g8eo/internal/services/governance/transaction_verifier.go`.
-- **Signer**: Any trusted consensus agent or validator (e.g., `g8ee` in the reference application, or a BYO consensus implementation).
-- **Verifier**: The Operator (reference implementation: `g8eo`).
-- **Mechanism**: ED25519 asymmetric signatures. There is no HMAC fallback.
-- **Attribution**: Uses `key_id` in `GovernanceMetadata` for O(1) public key lookup.
-- **Material**: `transaction_hash|true`.
+### L2: Consensus (Tribunal)
+Enforced by the Operator via asymmetric signature verification.
+-   **Mechanism**: ED25519 signature over `transaction_hash | decision` (where decision is usually `true`).
+-   **Trust**: The Operator maintains a `SignerStore` of trusted public keys.
+-   **Material**: Signed by a consensus agent (like `g8ee`) after verifying the intent.
 
 ### L3: Authorization (Approval)
-Human-in-the-loop authorization via Passkeys or BYO approval systems.
-- **Mechanism**: Hardware-bound signatures or verifiable approval proofs (`governance.l3.proof`).
-- **Auto-Approval**: Benign commands (e.g., `uptime`) can be marked `auto_approved` by the Consensus layer, but L3 NEVER bypasses L1 or L2.
+Human-in-the-loop authorization via hardware-bound proofs.
+-   **Mechanism**: WebAuthn `L3Proof` (clientDataJSON, authenticatorData, signature).
+-   **Policy**: Mandatory for all mutation requests unless explicitly bypassed by an `auto_approved` policy for benign commands (e.g., `uptime`). L3 NEVER bypasses L1 or L2.
 
 ---
 
-# API Reference (Substrate)
+# Transaction Lifecycle
 
-## Audit & Verification
+## 1. Request Phase (Client -> Operator)
+1.  **Payload Generation**: Client creates a typed Protobuf message (e.g., `CommandRequested`).
+2.  **Envelope Construction**: Client wraps the payload in a `GovernanceEnvelope`, populating metadata, nonce, and state root.
+3.  **L2 Signing**: The Client (or a trusted consensus sidecar) computes the `transaction_hash` and signs it with an L2 private key.
+4.  **Submission**: The Client submits the JSON-encoded envelope to the Operator.
 
-### `GET /api/audit/receipts`
-Query for signed execution proof (ActionReceipts).
-- **Parameters**: `transaction_id`, `operator_session_id`, `limit`, `offset`.
-- **Auth**: Requires mTLS or valid session.
+## 2. Verification Phase (Operator)
+The Operator's `TransactionVerifier` performs the following checks in order:
+1.  **Integrity**: Verifies `id == transaction_hash == SHA256(canonical_fields)`.
+2.  **Freshness**: Checks `expires_at` and verifies the `nonce` is not in the replay store.
+3.  **State**: Compares `state_merkle_root` against the local host's current root.
+4.  **L1**: Scans the typed payload for `forbidden_patterns`.
+5.  **L2**: Verifies the `tribunal_signature` against the `SignerStore`.
+6.  **L3**: For mutations, verifies the WebAuthn `L3Proof`.
 
-### `GET /api/audit/receipts/export`
-SIEM-ready NDJSON export of action receipts.
-- **Parameters**: `since` (RFC3339 or sqlite format), `limit`.
-- **Auth**: Requires mTLS or valid session.
-- **Content-Type**: `application/x-ndjson`
-
-### `GET /api/governance/signers`
-List all trusted L2 signers.
-
-### `POST /api/governance/signers`
-Add a new trusted L2 signer.
-- **Body**: `{ "id": "agent-1", "public_key_hex": "...", "enabled": true }`
-
-### `DELETE /api/governance/signers/{id}`
-Revoke/delete a trusted L2 signer.
-
-### `GET /health`
-Returns Operator status and the current `state_merkle_root`.
+## 3. Execution & Result Phase (Operator -> Client)
+1.  **Execution**: The **Warden** routes the payload to the appropriate handler (e.g., Bash executor).
+2.  **Receipt Generation**: After execution, the Warden generates an `ActionReceipt` containing the status, state root delta, and a signature.
+3.  **Result Publication**: The Operator publishes a result envelope (also a `GovernanceEnvelope`) containing the typed result (e.g., `CommandResult`) and the `ActionReceipt`.
 
 ---
 
-# Data Conversions
-
-When the reference Engine (`g8ee`) decodes a result from the reference Operator (`g8eo`), it parses the UAP JSON `GovernanceEnvelope` and then parses the typed payload. A BYO client performs the same steps:
-
-Compatibility field shims are not part of the substrate protocol.
-
----
-
-# Implementation Map
-
-The protocol is the authoritative contract. The files below are the reference implementations bundled in this repository.
+# Implementation Reference
 
 | Responsibility | Authoritative File |
 |----------------|--------------------|
-| **Schemas (substrate)** | `@/home/bob/g8e/protocol/proto/` |
-| **Event Registry (substrate)** | `@/home/bob/g8e/protocol/constants/events.json` |
-| **Reference Request Builder (PY, g8ee)** | `@/home/bob/g8e/services/g8ee/app/utils/envelope_builder.py` |
-| **Reference Inbound Dispatch (GO, g8eo)** | `@/home/bob/g8e/services/g8eo/internal/services/pubsub/pubsub_commands.go` |
-| **Reference L1/L2/L3 Verification (GO, g8eo)** | `@/home/bob/g8e/services/g8eo/internal/services/governance/transaction_verifier.go` |
-| **Reference Result Publisher (GO, g8eo)** | `@/home/bob/g8e/services/g8eo/internal/services/pubsub/pubsub_results.go` |
-
----
-
-# Related Documentation
-
-- [Events](events.md) documents canonical event naming and lifecycle semantics.
-- [Pub/Sub Channels](pubsub.md) documents channel-level routing and subscription behavior.
-- [Governance & Mechanism Design](governance.md) documents the L1/L2/L3 safety model.
-- [Security](security.md) documents platform security mechanisms around execution and auditability.
-- [g8eo Operator](../g8eo/README.md) documents the reference Go implementation.
-- [g8ee Engine](../g8ee/README.md) documents the optional reference AI engine.
+| **Protobuf Schemas** | `@/home/bob/g8e/protocol/proto/` |
+| **Event Registry** | `@/home/bob/g8e/protocol/constants/events.json` |
+| **Verification Logic** | `@/home/bob/g8e/services/g8eo/internal/services/governance/transaction_verifier.go` |
+| **Envelope Types** | `@/home/bob/g8e/services/g8eo/pkg/uap/types.go` |
+| **Audit Storage** | `@/home/bob/g8e/services/g8eo/internal/services/storage/audit_vault.go` |

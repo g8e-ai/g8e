@@ -5,56 +5,33 @@ parent: Architecture
 
 # Security Architecture
 
-Last Updated: 2026-05-13
-Version: v0.2.5
+Last Updated: 2026-05-16
+Version: v0.3.0
 
-The **g8e Protocol** is a Zero-Trust substrate for human-verified action by autonomous systems. Security is not an "add-on" but the core constraint: the protocol assumes the AI control plane is potentially adversarial or error-prone and enforces safety on the host through a 3-layer governance hierarchy and a unified envelope architecture.
+The **g8e Protocol** is a Zero-Trust substrate for human-verified action by autonomous systems. Security is the core constraint: the protocol assumes the AI control plane is potentially adversarial and enforces host safety through a 3-layer governance hierarchy and a unified transaction envelope.
 
-The platform is split into the protocol substrate, an **Operator** role (with [g8eo](../g8eo/README.md) as the reference Go implementation), and optional reference application components ([g8ee](../g8ee/README.md)/Engine). The Operator owns all security, trust, and execution responsibilities on the host; the application layer holds no privileged trust.
+The platform is split into the protocol substrate, an **Operator** role (implemented by [g8eo](../g8eo/README.md)), and optional application-layer adapters ([g8ee](../g8ee/README.md)). The Operator owns all security, trust, and execution responsibilities; the application layer holds no privileged trust.
 
 ## Bedrock Principles
 
-1.  **Proof of Human Presence (PHP)**: The AI proposes; the human signs. No state-changing operation executes without an explicit, hardware-bound signature (Passkey/WebAuthn) appended to the transaction envelope.
-2.  **Operator Sovereignty**: A conforming Operator (reference: `g8eo`) is the final arbiter of execution. It enforces hard gates and protocol invariants locally on the target host. No client — bundled or BYO — may bypass it.
-3.  **Protocol-First Zero Trust**: No component or connection is implicitly trusted. Every request is carried by a Protobuf `GovernanceEnvelope` that binds identity, context, and cryptographic governance evidence.
+1.  **Proof of Human Presence (PHP)**: The AI proposes; the human signs. No state-changing operation executes without an explicit, hardware-bound WebAuthn signature appended to the transaction.
+2.  **Operator Sovereignty**: The Operator (`g8eo`) is the final arbiter of execution. It enforces hard gates and protocol invariants locally on the host. No client — bundled or BYO — can bypass these checks.
+3.  **Zero-Trust Protocol**: No component or connection is implicitly trusted. Every request is carried by a `GovernanceEnvelope` that binds identity, context, and cryptographic evidence.
 4.  **Fail-Closed Invariants**: Malformed envelopes, invalid signatures, or stale state roots result in immediate rejection. The system never "fails open".
 
-## Technical Positioning
+## The Governance Pipeline
 
--   **vs. SSH**: SSH is a secure pipe; g8e is a **governor**. g8e uses the pipe to enforce a governance model (scrubbing, consensus) that SSH cannot.
--   **vs. Teleport / Boundary**: These manage **human** access. g8e manages **AI-powered automation** acting on behalf of humans.
--   **vs. Ansible / Terraform**: These are deterministic. g8e is for **non-deterministic** investigation where the AI reasons about real-time state before proposing actions.
+Every inbound request follows a strict fail-closed pipeline before any execution occurs:
 
-## The Execution Boundary (Warden)
-
-All system mutations must pass through the **Warden** — the final stop for all transactions. The Warden enforces the "Execution Boundary" pattern: no code path can trigger a shell command or file edit without passing through the Warden's authorization gate.
-
-### Fail-Closed Transaction Gate
-Before reaching the Warden, every inbound request passes through a strict `TransactionVerifier` that enforces:
--   **Protobuf Integrity**: Decodes the canonical `GovernanceEnvelope`.
--   **Action Type Validation**: Rejects unknown or unauthorized action types.
--   **Hash Verification**: Validates the `id` (hash) of the entire envelope.
--   **Replay Protection**: Enforces expiry (`expires_at`) and nonce uniqueness.
--   **State Binding**: Rejects transactions with a `state_merkle_root` that does not match the current host state.
-
-## 3-Layer Governance Hierarchy
-
-### L1: Technical Bedrock (Hard Gates)
-L1 provides hardcoded, non-negotiable safety invariants enforced at the Operator boundary via Protobuf reflection.
--   **Forbidden Patterns**: Global rejection of dangerous shell patterns (e.g., `sudo`, `su`, `rm -rf /`).
--   **Allowlist/Denylist**: Configurable filters for binary names and substrings.
--   **Reflected Validation**: `g8eo` uses Protobuf options to validate typed payloads before they even reach the execution service.
-
-### L2: Consensus (Tribunal)
-The Consensus layer converts intent into executable commands using a verifiable proof of consensus from an ensemble of independent agents.
--   **Tribunal Signature**: An Ed25519 signature from a trusted L2 signer (e.g., an agent ensemble).
--   **Trusted Signers**: `g8eo` loads trusted public keys from the Operator-owned database (`SignerStore`). A first-boot Operator can start before signers are provisioned, but every transaction with a missing or unknown L2 key is rejected.
--   **Quorum Enforcement**: The Warden ensures that the required number of valid consensus votes are present.
-
-### L3: Authorization (PHP Gate)
-L3 involves explicit human authorization, governed by the **Auditor-User Partition**.
--   **Proof of Human Presence (PHP)**: Hardware-bound Passkey/WebAuthn signatures.
--   **Auto-Approval**: Benign diagnostic commands (e.g., `uptime`, `df`) can be auto-approved, but only *after* passing L1 and L2. Auto-approval **NEVER** bypasses hard gates.
+1.  **Ingress & Decode**: The Operator receives a `GovernanceEnvelope` via UAP (JSON/protojson).
+2.  **Transaction Verification**:
+    *   **Integrity**: Validates the `transaction_hash` against the envelope content.
+    *   **Liveness**: Checks `expires_at` and verifies `nonce` uniqueness (replay protection).
+    *   **State Binding**: Rejects if the `state_merkle_root` does not match the current host state.
+3.  **L1: Technical Bedrock**: Enforces forbidden patterns (e.g., `sudo`) via Protobuf reflection.
+4.  **L2: Consensus (Tribunal)**: Verifies the cryptographic signature from a trusted agent ensemble.
+5.  **L3: Authorization (PHP)**: For mutations, verifies a hardware-bound WebAuthn proof.
+6.  **The Warden**: Final stop. Signs an `ActionReceipt` (intent), executes via the handler, and signs a final `ActionReceipt` (result).
 
 ## The Governance Envelope
 
@@ -62,58 +39,66 @@ The `GovernanceEnvelope` is the single canonical BFT transaction container for a
 
 | Field | Purpose |
 |---|---|
-| `id` | Unique hash of the envelope for tracking and correlation. |
+| `id` | Unique hash of the envelope (must match `transaction_hash`). |
+| `transaction_hash` | Deterministic hash computed from envelope fields for signing. |
 | `state_merkle_root` | Binds the command to a specific host state root. |
 | `governance` | Carries L1 status, L2 Tribunal signatures, and L3 Human signatures. |
 | `payload` | Serialized bytes of the typed Protobuf message (e.g., `CommandRequested`). |
 | `nonce` | Unique string to prevent replay attacks. |
-| `expires_at` | RFC3339 timestamp after which the transaction is void. |
+| `expires_at` | Timestamp after which the transaction is void. |
+
+## 3-Layer Governance Bedrock
+
+### L1: Technical Bedrock (Hard Gates)
+L1 provides non-negotiable safety invariants enforced at the Operator boundary.
+-   **Reflected Validation**: `g8eo` uses Protobuf options (`forbidden_patterns`) to validate typed payloads before they reach the execution service.
+-   **Command Scrubbing**: Global rejection of dangerous shell patterns and binary names.
+
+### L2: Consensus (Tribunal)
+The Consensus layer converts intent into executable commands using a verifiable proof from an ensemble of independent agents.
+-   **Tribunal Signature**: An Ed25519 signature over `transaction_hash|decision`.
+-   **Trusted Signers**: `g8eo` loads trusted public keys from the Operator-owned `SignerStore`. Transactions with unknown L2 keys are rejected.
+
+### L3: Authorization (PHP Gate)
+L3 involves explicit human authorization for all system mutations.
+-   **Proof of Human Presence**: Real WebAuthn proofs (`L3Proof`) containing authenticator data and hardware-bound signatures.
+-   **Auto-Approval**: Benign diagnostic commands (e.g., `uptime`) can be auto-approved via policy, but only *after* passing L1 and L2.
+
+## The Execution Boundary (Warden)
+
+The **Warden** is the only service permitted to trigger system mutations. It enforces:
+-   **Fail-Closed Receipts**: If receipt signing or initial audit logging fails, execution is aborted.
+-   **Action Receipts**: Every mutation generates two signed receipts:
+    1.  **Executing**: Proof of intent to execute a verified transaction.
+    2.  **Completed/Failed**: Final outcome with `state_root_after`.
+-   **State Transition Proof**: Captures `state_root_before` and `state_root_after` to prove the exact impact of the mutation.
+
+## Host Sovereignty & Audit
+
+### Multi-Ledger Architecture
+The Operator implements an isolated, git-based ledger for every session:
+-   **Isolation**: Each operator session owns a unique git repository at `.g8e/data/ledger/sessions/<id>/`.
+-   **Verifiable History**: Every file mutation is mirrored via a two-phase commit (`LedgerHashBefore` -> `LedgerHashAfter`).
+-   **Encryption**: Session ledgers are stored encrypted at rest when the vault is unlocked.
+
+### Encrypted Audit Vault
+Every action and receipt is recorded in an encrypted SQLite database. The `AuditVaultService` is fail-closed; it rejects events missing valid session identifiers or malformed metadata.
+
+### Output Scrubbing (Sentinel)
+**Sentinel** performs dual-role analysis:
+1.  **Defense**: Analyzes input commands for MITRE ATT&CK patterns.
+2.  **Sovereignty**: Scrubs output for tokens, keys, and PII before it leaves the host.
 
 ## Network & PKI
 
 ### Operator-Owned PKI
-g8e operates its own internal PKI anchored in `.g8e/pki`:
--   **TLS 1.3 Only**: All communication is secured via TLS 1.3.
--   **mTLS Everywhere**: Mutual authentication is mandatory for all component communication.
--   **Short-Lived Certs**: The Operator issues short-lived certificates for workload identity.
--   **Revocation**: Strict enforcement of certificate revocation lists (CRLs).
+g8e operates an internal PKI anchored in `.g8e/pki`:
+-   **TLS 1.3 + mTLS**: Mandatory mutual authentication for all components.
+-   **Short-Lived Certs**: The Operator issues certificates with workload identity (URI SANs).
+-   **Revocation**: Strict enforcement of CRLs.
 
 ### Secrets Management
-
-Authoritative secrets are stored in `.g8e/secrets` and managed via a dedicated `Vault` service.
-
-#### Platform Secret Seeding
-
-The Operator binary handles the seeding and initialization of platform secrets during its first boot or enrollment.
-
-1. **Satellite Seeding (via Device Token)**:
-   - Use `g8e.operator -D <device_link_token> -e <endpoint>` to authenticate.
-   - The token is validated by the Hub, which issues a short-lived certificate and identity.
-   - The Operator uses these to bootstrap its local configuration and unlock its vault.
-
-2. **Hub Seeding (Listen Mode)**:
-   - When running with `--listen`, the Operator generates core platform secrets if they are missing from `.g8e/pki` or the database.
-   - **Secrets Generated**: `session_encryption_key`.
-   - **Storage**: Secrets are saved to the SQLite `documents` table and written to the `--secrets-dir` (default: `.g8e/secrets`).
-   - **Bootstrapping Apps**: A `bootstrap_digest.json` manifest is written. Application-layer adapters (g8ee) can read this manifest to discover endpoints and trust roots, but they never gain access to the raw underlying secrets.
-
-3. **Out-of-Band Keys**:
-   - API keys can be provided directly via the `-k` flag, the `G8E_OPERATOR_API_KEY` environment variable, or an interactive prompt.
-
--   **Encrypted at Rest**: Sensitive data (audit logs, secrets) is encrypted using **AES-256-GCM**.
--   **No Secret Mounts**: Application-layer adapters (g8ee) do not have access to substrate secrets.
--   **Tamper Evidence**: Startup checks verify SHA-256 digests of all secret material.
-
-## Sovereignty & Audit
-
-### Encrypted Audit Vault
-Every action is recorded in an encrypted SQLite database on the Operator host. Results are recorded as signed `ActionReceipts` in a transaction-native table, ensuring unified audit for both accepted and blocked mutations. Output is scrubbed by **Sentinel** for credentials and PII before being recorded or transmitted.
-
-### Ledger (Multi-Ledger Architecture)
-The Operator implements a **Multi-Ledger Architecture**: each operator session owns an isolated git repository at `.g8e/data/ledger/sessions/<operator_session_id>/`. Every file mutation is mirrored into the session-scoped ledger via a two-phase commit — a pre-mutation snapshot (`LedgerHashBefore`) followed by a post-mutation snapshot (`LedgerHashAfter`) — providing a verifiable, diffable history of every AI-driven edit. Session ledgers are initialized lazily on first use with a double-checked lock; concurrent sessions never share a working tree. Files are stored encrypted (`.enc`, AES-256-GCM) when the Encryption Vault is unlocked. The Ledger degrades gracefully when git is unavailable.
-
-### Output Scrubbing (Sentinel)
-Sentinel performs dual-role analysis:
-1.  **Defense**: Analyzes input commands for MITRE ATT&CK patterns before execution.
-2.  **Sovereignty**: Scrubs output for tokens, keys, and PII before it leaves the host substrate.
+Authoritative secrets are stored in `.g8e/secrets` and managed via a dedicated `Vault`.
+-   **No Secret Mounts**: Application adapters (g8ee) never gain access to raw substrate secrets.
+-   **Tmpfs Isolation**: Container entrypoints write required material into tmpfs paths to avoid persistence of sensitive keys.
 

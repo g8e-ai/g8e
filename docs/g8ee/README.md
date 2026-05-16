@@ -5,7 +5,7 @@ parent: Components
 
 # g8ee
 
-Last Updated: 2026-05-13
+Last Updated: 2026-05-16
 Version: v0.2.5
 
 g8ee is the **optional reference AI engine** of the g8e platform. It is one concrete application-layer adapter built on top of the [g8e Protocol](../protocol/README.md); the protocol substrate (`g8eo`, the reference Operator) is the only mandatory component. g8ee demonstrates how a Tribunal-based, multi-provider LLM reasoning system can act as a **Layer 2 (Consensus) producer** that emits typed, signed `GovernanceEnvelope` (UAP) transactions to a conforming Operator for verification and execution.

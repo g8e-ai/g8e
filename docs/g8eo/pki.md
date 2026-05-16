@@ -1,40 +1,66 @@
 # PKI & Identity
 
-The **g8eo Operator** owns the platform's Public Key Infrastructure (PKI). It acts as the root Certificate Authority (CA) for all platform participants, enforcing strict mutual TLS (mTLS) for all control-plane communication.
+The **g8eo Operator** owns the platform's Public Key Infrastructure (PKI). It acts as the sovereign root Certificate Authority (CA) for all platform participants, enforcing strict mutual TLS (mTLS) for all control-plane communication.
 
 ## Core Principles
 
-- **Sovereign Authority**: The Operator (in Hub mode) is the only entity permitted to sign certificates.
-- **CSR-Based Enrollment**: New operators and applications enroll by submitting a Certificate Signing Request (CSR). No long-lived API keys are used for identity.
-- **URI SAN Identity**: Every certificate is bound to a SPIFFE-compatible URI Subject Alternative Name (SAN) that defines the component's role and session.
-- **Revocation-First**: Every mTLS request is checked against the Operator's internal revocation list. Revoked certificates fail closed immediately.
+- **Sovereign Authority**: The Operator is the only entity permitted to sign certificates. It maintains a multi-layer hierarchy with intermediate CAs for isolation.
+- **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR). Long-lived API keys are deprecated for identity; the platform relies on short-lived, session-bound certificates.
+- **Workload Identity (SPIFFE)**: Every certificate is bound to a SPIFFE-compatible URI Subject Alternative Name (SAN) defining the component's role and session.
+- **Fail-Closed Revocation**: Every mTLS request is checked against a real-time revocation list. Revoked certificates are rejected at the TLS handshake or middleware boundary.
+- **Hardware Binding**: Certificates are cryptographically bound to a unique `system_fingerprint` generated during enrollment.
+
+## PKI Hierarchy
+
+The Operator manages a structured hierarchy in `.g8e/pki` to ensure isolation between different participants:
+
+- **Root CA**: The foundational trust anchor, used only to sign intermediate CAs.
+  - Path: `.g8e/pki/root/root_ca.crt`
+- **Intermediate CAs**: Scoped authorities that sign leaf certificates.
+  - **Hub CA**: Signs service certificates for the Operator itself (e.g., `operator-listen`).
+  - **Operator CA**: Signs certificates for Satellite operators during enrollment.
+  - **Bootstrap CA**: Signs temporary certificates used during the initial discovery phase.
+- **Trust Bundles**: Combinations of root and intermediate certificates used for verification.
+  - Path: `.g8e/pki/trust/hub-bundle.pem` (Root + Hub Intermediate)
 
 ## Identity Schemes
 
-Client identities follow a fixed SPIFFE URI scheme:
+Client identities follow the SPIFFE URI scheme, encoded in the certificate's URI SAN:
 
 | Role | URI SAN Pattern |
 |---|---|
-| **Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` |
-| **Application** | `spiffe://g8e.local/app/<app_id>` |
+| **Operator (Satellite)** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` |
+| **Application (Agent)** | `spiffe://g8e.local/app/<operator_id>` |
+| **Hub (Operator Listen)** | `spiffe://g8e.local/hub/operator-listen` |
 
 ## Enrollment Lifecycle
 
-1.  **Trust Bootstrap**: A new Satellite or BYO client fetches the Hub's trust bundle from `http://<hub>/trust`.
-2.  **Challenge**: The client presents a one-time device-link token to the Hub's bootstrap port (80).
-3.  **CSR Submission**: The client generates a local keypair and submits a CSR to the Hub.
-4.  **Issuance**: The Hub verifies the token, signs the CSR, and returns a short-lived mTLS certificate bound to the requested identity.
-5.  **Steady State**: The client uses the issued certificate for all subsequent communication on ports 9000 (API) and 9001 (Pub/Sub).
+The enrollment process transitions a participant from "untrusted" to "mTLS-verified":
 
-## Certificate Management
+1.  **Trust Verification**: The enrolling client fetches the Hub's root CA fingerprint from `GET /.well-known/pki/fingerprint` to verify the Hub's identity.
+2.  **Registration Request**: The client presents a one-time device-link token and a locally generated `system_fingerprint` to the **Bootstrap Port (9002)**.
+3.  **CSR Submission**: The client generates a private key (which never leaves the host) and submits a CSR.
+4.  **Issuance**: The Hub verifies the token and fingerprint, signs the CSR using the **Operator Intermediate CA**, and returns the certificate chain.
+5.  **Steady State**: The client uses the issued certificate for all subsequent mTLS communication on the **API Port (9000)** and **Pub/Sub Port (9001)**.
 
-The Operator manages the PKI hierarchy in the `.g8e/pki` directory:
+## Security Controls
 
-- `ca.crt` / `ca.key`: The platform root CA.
-- `hub.crt` / `hub.key`: The Hub's identity certificate.
-- `trusted_signers/`: Ed25519 public keys for Layer 2 (L2) consensus verification.
-- `revocation_bundle.pem`: The current list of revoked certificates.
+### Transport Security
+The platform enforces **TLS 1.3 only**. Older TLS versions and insecure cipher suites are explicitly rejected.
 
-## Hardware Fingerprinting
+### Mutual TLS (mTLS)
+mTLS is mandatory for all mutation and control-plane routes. The Operator's `ListenService` rejects any request on ports 9000 and 9001 that does not provide a valid client certificate signed by a trusted intermediate CA.
 
-For Satellites, the issued certificate is cryptographically bound to a hardware fingerprint generated at enrollment. If a certificate is presented from a host with a mismatched fingerprint, the transaction is rejected at the protocol boundary.
+### Revocation
+Revocation state is stored in the Operator's database (`revoked_certificates` collection). 
+- **Check-on-Handshake**: Certificates are verified against the revocation list during the TLS handshake or by middleware.
+- **Revocation Bundles**: The Operator provides a signed JSON bundle of revoked serials for external verification.
+
+### System Fingerprinting
+The `system_fingerprint` is a stable identifier generated from:
+- Operating System & Architecture
+- CPU Core Count
+- Machine ID (from `/etc/machine-id` or similar)
+- Hostname
+
+If a valid certificate is presented from a host with a mismatched fingerprint, the transaction is rejected.

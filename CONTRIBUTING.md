@@ -51,7 +51,7 @@ We love tests! Make sure yours pass before sending a PR:
 
 ## Get in Touch
 
-Have questions? Join our [Discord](https://discord.gg/g8e). It's the fastest way to get help or talk shop.
+Have questions? Email danny@g8e.ai. It's the fastest way to get help or talk shop.
 
 ## The Fine Print (CLA)
 

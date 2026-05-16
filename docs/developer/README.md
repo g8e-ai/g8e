@@ -4,7 +4,7 @@ title: Developer
 
 # g8e Developer Guide
 
-Last Updated: 2026-05-13
+Last Updated: 2026-05-16
 Version: v0.2.5
 
 This document defines the deterministic execution constraints for all code generated for the g8e platform. The platform is an open-source, self-hosted AI governance layer designed for offline operation. The substrate is the **g8e Protocol** (shared Protobuf schemas plus the UAP JSON wire contract). `g8eo` is the reference Operator implementation in Go; `g8ee` is a reference application-layer adapter in Python. Both reference components are replaceable by any conforming Operator or BYO client.
