@@ -280,7 +280,7 @@
   {
     "id": "bench_12_firewall_rule_inspection",
     "description": "Multi-tool: list firewall rules and check if a specific port is allowed",
-    "user_query": "Show me all active firewall rules and check whether port 8080 is allowed for incoming TCP traffic.",
+    "user_query": "Show me all active firewall rules and check whether port 8443 is allowed for incoming TCP traffic.",
     "agent_mode": "OPERATOR_BOUND",
     "expected_tool": "run_commands_with_operator",
     "expected_payload": [
@@ -291,8 +291,8 @@
       },
       {
         "field": "command",
-        "pattern": "8080",
-        "description": "Must reference port 8080"
+        "pattern": "8443",
+        "description": "Must reference port 8443"
       }
     ],
     "category": "flag_precision",

@@ -40,7 +40,6 @@ class TestTriageEndpoints:
         mock_chat_pipeline.run_chat = AsyncMock()
         mock_chat_task_manager = MagicMock()
         mock_user_settings = MagicMock()
-        mock_g8e_context = MagicMock()
 
         investigation_id = "inv-123"
         user_id = "user-456"
@@ -64,6 +63,8 @@ class TestTriageEndpoints:
             context=RequestContext(
                 investigation_id=investigation_id,
                 case_id="case-123",
+                web_session_id=investigation_id,
+                user_id=user_id,
                 source_component=ComponentName.CLIENT
             )
         )
@@ -74,7 +75,6 @@ class TestTriageEndpoints:
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
             user_settings=mock_user_settings,
-            g8e_context=mock_g8e_context,
             user_info=user_info
         )
 
@@ -93,7 +93,6 @@ class TestTriageEndpoints:
         mock_chat_pipeline.run_chat = AsyncMock()
         mock_chat_task_manager = MagicMock()
         mock_user_settings = MagicMock()
-        mock_g8e_context = MagicMock()
 
         investigation_id = "inv-123"
         user_id = "user-456"
@@ -115,6 +114,8 @@ class TestTriageEndpoints:
             context=RequestContext(
                 investigation_id=investigation_id,
                 case_id="case-123",
+                web_session_id=investigation_id,
+                user_id=user_id,
                 source_component=ComponentName.CLIENT
             )
         )
@@ -125,7 +126,6 @@ class TestTriageEndpoints:
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
             user_settings=mock_user_settings,
-            g8e_context=mock_g8e_context,
             user_info=user_info
         )
 

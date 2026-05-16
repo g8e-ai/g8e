@@ -62,8 +62,8 @@ G8EE_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ee.pid"
 G8EE_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ee.log"
 OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-$(jq -r '.ports.operator_http // "9000"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9000")}"
 OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-$(jq -r '.ports.operator_wss // "9001"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9001")}"
-OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(jq -r '.ports.operator_bootstrap // "8080"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "8080")}"
-OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(jq -r '.ports.operator_public // "8081"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "8081")}"
+OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(jq -r '.ports.operator_bootstrap // "80"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "80")}"
+OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(jq -r '.ports.operator_public // "443"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "443")}"
 OPERATOR_LISTEN_LOG_MAX_BACKUPS=5
 
 DEV_MODE=false
@@ -503,7 +503,7 @@ _print_platform_info() {
     echo ""
     echo "  Operator mTLS API:     https://localhost:$OPERATOR_LISTEN_HTTP_PORT"
     echo "  Operator Pub/Sub:       wss://localhost:$OPERATOR_LISTEN_WSS_PORT"
-    echo "  Bootstrap (device-link): https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT"
+    echo "  Bootstrap (device-link): http://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT"
     echo "  Public (browser/BYO):   https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT"
     echo "  Runtime dir:            $G8E_RUNTIME_DIR"
     echo "  Protocol schemas:       protocol/proto"

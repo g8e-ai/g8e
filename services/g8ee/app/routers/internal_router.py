@@ -153,7 +153,6 @@ from app.dependencies import (
     get_g8ee_api_key_service,
     get_g8ee_certificate_service,
     get_g8ee_settings_service_write,
-    get_g8e_http_context,
     get_g8ee_user_settings,
 )
 
@@ -1732,7 +1731,6 @@ async def health_check():
 @router.patch(InternalApiPaths.G8EE_SETTINGS_USER, response_model=UserSettingsUpdateResponse)
 async def sync_user_settings(
     request: dict,
-    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
     cache_aside: CacheAsideService = Depends(get_g8ee_cache_aside_service),
 ):
     """
@@ -1741,9 +1739,9 @@ async def sync_user_settings(
     Invalidates the local cache for the user's settings so subsequent
     requests will fetch the fresh settings from operator.
     """
-    user_id = g8e_context.user_id
+    user_id = request.get("user_id")
     if not user_id:
-        return UserSettingsUpdateResponse(success=False, error="user_id is required in context headers")
+        return UserSettingsUpdateResponse(success=False, error="user_id is required in request body")
 
     logger.info(
         "[INTERNAL-HTTP] Syncing user settings (cache invalidation)",

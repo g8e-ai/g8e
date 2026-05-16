@@ -79,7 +79,7 @@ When no operator is connected:
 
 ### Daily Operations
 ```bash
-./g8e platform start    # Start Operator listen mode only (exposes 4 ports: 9001, 9000, 8080, 8081)
+./g8e platform start    # Start Operator listen mode only (exposes 4 ports: 9001, 9000, 80, 443)
 ./g8e platform status   # Check service health and PIDs (shows all four endpoints)
 ./g8e platform logs     # Stream aggregated logs
 ./g8e platform settings # View or update platform configuration

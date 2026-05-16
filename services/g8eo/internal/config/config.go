@@ -71,8 +71,8 @@ type ListenConfig struct {
 	Enabled       bool
 	WSSPort       int    // WSS/TLS port for operator pub/sub connections (default: 443)
 	HTTPPort      int    // TLS/HTTPS port for internal g8ee/client traffic (default: 443)
-	BootstrapPort int    // Plain-TLS port for bootstrap routes (/.well-known/, /api/auth/device-link/register) (default: 8080)
-	PublicPort    int    // Plain-TLS port for browser-based auth and setup (default: 8081)
+	BootstrapPort int    // Plain-TLS port for bootstrap routes (/.well-known/, /api/auth/device-link/register) (default: 80)
+	PublicPort    int    // Plain-TLS port for browser-based auth and setup (default: 443)
 	DataDir       string // Root directory for SQLite database (default: .g8e/data in working directory)
 	PKIDir        string // Directory for TLS certificates (default: .g8e/pki)
 	SecretsDir    string // Directory for platform secrets (default: .g8e/secrets)
@@ -239,10 +239,10 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 			httpPort = 9000 // default HTTPS API port (must match protocol/constants/paths.json ports.operator_http)
 		}
 		if bootstrapPort <= 0 {
-			bootstrapPort = 8080 // default bootstrap port (must match protocol/constants/paths.json ports.operator_bootstrap)
+			bootstrapPort = 80 // default bootstrap port (must match protocol/constants/paths.json ports.operator_bootstrap)
 		}
 		if publicPort <= 0 {
-			publicPort = 8081 // default public port (must match protocol/constants/paths.json ports.operator_public)
+			publicPort = 443 // default public port (must match protocol/constants/paths.json ports.operator_public)
 		}
 	}
 	if passkeyRpID == "" {

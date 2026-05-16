@@ -31,6 +31,7 @@ from app.constants import (
 )
 from app.models.base import ValidationError
 from app.models.cases import CaseCreateRequest, CaseModel, CaseUpdateRequest, HistoryEntry
+from app.models.http_context import RequestContext
 
 pytestmark = [pytest.mark.unit]
 
@@ -365,8 +366,16 @@ class TestCaseCreateRequest:
 @pytest.mark.unit
 class TestCaseUpdateRequest:
 
+    def _make_context(self):
+        """Helper to create a valid RequestContext for tests."""
+        return RequestContext(
+            web_session_id="test-session",
+            user_id="test-user",
+            source_component=ComponentName.G8EE,
+        )
+
     def test_empty_request_is_valid(self):
-        req = CaseUpdateRequest()
+        req = CaseUpdateRequest(context=self._make_context())
         assert req.title is None
         assert req.description is None
         assert req.status is None
@@ -377,58 +386,58 @@ class TestCaseUpdateRequest:
         assert req.metadata is None
 
     def test_title_update(self):
-        req = CaseUpdateRequest(title="New Title")
+        req = CaseUpdateRequest(context=self._make_context(), title="New Title")
         assert req.title == "New Title"
 
     def test_title_min_length_enforced(self):
         with pytest.raises(ValidationError):
-            CaseUpdateRequest(title="")
+            CaseUpdateRequest(context=self._make_context(), title="")
 
     def test_title_max_length_enforced(self):
         with pytest.raises(ValidationError):
-            CaseUpdateRequest(title="x" * 501)
+            CaseUpdateRequest(context=self._make_context(), title="x" * 501)
 
     def test_description_min_length_enforced(self):
         with pytest.raises(ValidationError):
-            CaseUpdateRequest(description="")
+            CaseUpdateRequest(context=self._make_context(), description="")
 
     def test_status_update_with_enum(self):
-        req = CaseUpdateRequest(status=CaseStatus.RESOLVED)
+        req = CaseUpdateRequest(context=self._make_context(), status=CaseStatus.RESOLVED)
         assert req.status == CaseStatus.RESOLVED
 
     def test_priority_update_with_enum(self):
-        req = CaseUpdateRequest(priority=Priority.CRITICAL)
+        req = CaseUpdateRequest(context=self._make_context(), priority=Priority.CRITICAL)
         assert req.priority == Priority.CRITICAL
 
     def test_severity_update_with_enum(self):
-        req = CaseUpdateRequest(severity=Severity.HIGH)
+        req = CaseUpdateRequest(context=self._make_context(), severity=Severity.HIGH)
         assert req.severity == Severity.HIGH
 
     def test_assignee_update(self):
-        req = CaseUpdateRequest(assignee="user-456")
+        req = CaseUpdateRequest(context=self._make_context(), assignee="user-456")
         assert req.assignee == "user-456"
 
     def test_tags_update(self):
-        req = CaseUpdateRequest(tags=["nginx", "production", "502"])
+        req = CaseUpdateRequest(context=self._make_context(), tags=["nginx", "production", "502"])
         assert req.tags == ["nginx", "production", "502"]
 
     def test_metadata_update(self):
-        req = CaseUpdateRequest(metadata={"ticket_ref": "INC-9901"})
+        req = CaseUpdateRequest(context=self._make_context(), metadata={"ticket_ref": "INC-9901"})
         assert req.metadata == {"ticket_ref": "INC-9901"}
 
     def test_partial_update_leaves_unset_fields_as_none(self):
-        req = CaseUpdateRequest(title="Updated Title")
+        req = CaseUpdateRequest(context=self._make_context(), title="Updated Title")
         assert req.status is None
         assert req.priority is None
         assert req.tags is None
 
     def test_all_case_statuses_accepted(self):
         for status in CaseStatus:
-            req = CaseUpdateRequest(status=status)
+            req = CaseUpdateRequest(context=self._make_context(), status=status)
             assert req.status == status
 
     def test_model_dump_excludes_none_by_default(self):
-        req = CaseUpdateRequest(title="Only Title")
+        req = CaseUpdateRequest(context=self._make_context(), title="Only Title")
         dumped = req.model_dump()
         assert "title" in dumped
         assert "status" not in dumped

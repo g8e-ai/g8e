@@ -23,11 +23,6 @@ from app.constants import G8eHeaders
 
 TEST_G8E_HEADERS: dict[str, str] = {
     G8eHeaders.WEB_SESSION_ID.lower():       "session-test-abc123",
-    G8eHeaders.USER_ID.lower():          "user-test-001",
-    G8eHeaders.ORGANIZATION_ID.lower():  "org-test-001",
-    G8eHeaders.CASE_ID.lower():          "case-test-001",
-    G8eHeaders.INVESTIGATION_ID.lower(): "inv-test-001",
     G8eHeaders.SOURCE_COMPONENT.lower(): "client",
     G8eHeaders.EXECUTION_ID.lower():     "exec-test-001",
-    G8eHeaders.BOUND_OPERATORS.lower():  "[]",
 }

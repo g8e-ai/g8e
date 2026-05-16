@@ -120,6 +120,7 @@ from .health import (
 from .http_context import (
     BoundOperator,
     G8eHttpContext,
+    RequestContext,
 )
 from .investigations import (
     AIResponseMetadata,
@@ -407,6 +408,7 @@ __all__ = [
     "PromptSection",
     "QueryOrderBy",
     "QueryResult",
+    "RequestContext",
     "ResponseType",
     "RestoreFileErrorPayload",
     "RestoreFileRequestPayload",

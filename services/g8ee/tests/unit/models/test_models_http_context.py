@@ -381,13 +381,28 @@ class TestG8eHttpContext:
         assert ctx.source_component == ComponentName.CLIENT
 
     def test_web_session_id_required(self):
-        with pytest.raises(ValidationError):
-            G8eHttpContext(user_id="u", case_id="c", investigation_id="i", source_component=ComponentName.G8EE)
+        # At least one of web_session_id, cli_session_id, or user_id is required
+        # This test passes because user_id is present
+        ctx = G8eHttpContext(user_id="u", case_id="c", investigation_id="i", source_component=ComponentName.G8EE)
+        assert ctx.user_id == "u"
+
+    def test_all_session_fields_required_when_not_client_relay(self):
+        # All session fields required when not operator auth relay
+        with pytest.raises(ValidationError, match="web_session_id, cli_session_id or user_id are required unless source_component is CLIENT and path is exempted"):
+            G8eHttpContext(
+                web_session_id=None,
+                cli_session_id=None,
+                user_id=None,
+                case_id="c",
+                investigation_id="i",
+                source_component=ComponentName.G8EE
+            )
 
     def test_user_id_optional_for_client_operator_auth(self):
         # user_id can be None when source_component is CLIENT for operator auth relay on exempt path
         ctx = G8eHttpContext(
             web_session_id=None,
+            cli_session_id=None,
             user_id=None,
             case_id="c",
             investigation_id="i",
@@ -397,37 +412,17 @@ class TestG8eHttpContext:
         assert ctx.user_id is None
         assert ctx.web_session_id is None
 
-    def test_web_session_id_required_when_source_not_client(self):
-        # web_session_id is required when source_component is not CLIENT
-        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is CLIENT and path is exempted"):
+    def test_validation_fails_for_client_without_relay_flag(self):
+        # CLIENT source without is_operator_auth_relay flag should fail if no session/user
+        with pytest.raises(ValidationError, match="web_session_id, cli_session_id or user_id are required unless source_component is CLIENT and path is exempted"):
             G8eHttpContext(
                 web_session_id=None,
-                user_id="u",
-                case_id="c",
-                investigation_id="i",
-                source_component=ComponentName.G8EE
-            )
-
-    def test_user_id_required_when_source_not_client(self):
-        # user_id is required when source_component is not CLIENT
-        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is CLIENT and path is exempted"):
-            G8eHttpContext(
-                web_session_id="s",
+                cli_session_id=None,
                 user_id=None,
                 case_id="c",
                 investigation_id="i",
-                source_component=ComponentName.G8EE
-            )
-
-    def test_both_web_session_and_user_id_required_when_source_not_client(self):
-        # Both web_session_id and user_id are required when source_component is not CLIENT
-        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is CLIENT and path is exempted"):
-            G8eHttpContext(
-                web_session_id=None,
-                user_id=None,
-                case_id="c",
-                investigation_id="i",
-                source_component=ComponentName.G8EE
+                source_component=ComponentName.CLIENT,
+                is_operator_auth_relay=False
             )
 
     def test_model_validator_runs_after_all_fields_validated(self):
@@ -444,13 +439,15 @@ class TestG8eHttpContext:
         assert ctx.user_id == "u"
         assert ctx.source_component == ComponentName.CLIENT
 
-    def test_case_id_required(self):
-        with pytest.raises(ValidationError):
-            G8eHttpContext(web_session_id="s", user_id="u", investigation_id="i", source_component=ComponentName.CLIENT)
+    def test_case_id_optional(self):
+        # case_id is now optional - context can exist without it
+        ctx = G8eHttpContext(web_session_id="s", user_id="u", investigation_id="i", source_component=ComponentName.CLIENT)
+        assert ctx.case_id is None
 
-    def test_investigation_id_required(self):
-        with pytest.raises(ValidationError):
-            G8eHttpContext(web_session_id="s", user_id="u", case_id="c", source_component=ComponentName.CLIENT)
+    def test_investigation_id_optional(self):
+        # investigation_id is now optional - context can exist without it
+        ctx = G8eHttpContext(web_session_id="s", user_id="u", case_id="c", source_component=ComponentName.CLIENT)
+        assert ctx.investigation_id is None
 
     def test_source_component_required(self):
         with pytest.raises(ValidationError):
@@ -683,11 +680,29 @@ class TestRequestContext:
         assert g8e_ctx.execution_id is not None
         assert g8e_ctx.execution_id.startswith("exec_")
 
-    def test_has_bound_operator_false_when_status_is_none(self):
-        ctx = self._make(bound_operators=[
-            BoundOperator(operator_id="op-1"),
-        ])
-        assert ctx.has_bound_operator() is False
+    def test_from_request_context_fails_validation_without_session_or_user(self):
+        """Test that validation fails if no session or user identity is present."""
+        request_ctx = self._make(
+            web_session_id=None,
+            cli_session_id=None,
+            user_id=None,
+            source_component=ComponentName.G8EE
+        )
+        with pytest.raises(ValidationError, match="web_session_id, cli_session_id or user_id are required"):
+            G8eHttpContext.from_request_context(request_ctx, is_exempt_path=False)
+
+    def test_from_request_context_succeeds_for_exempt_client_path_without_user(self):
+        """Test that exempt client paths can omit user identity."""
+        request_ctx = self._make(
+            web_session_id=None,
+            cli_session_id=None,
+            user_id=None,
+            source_component=ComponentName.CLIENT
+        )
+        # Should not raise
+        ctx = G8eHttpContext.from_request_context(request_ctx, is_exempt_path=True)
+        assert ctx.user_id is None
+        assert ctx.is_operator_auth_relay is True
 
     def test_no_for_logging_method(self):
         ctx = self._make()

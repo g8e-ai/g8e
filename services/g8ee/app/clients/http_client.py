@@ -87,14 +87,17 @@ class RequestTrace(G8eBaseModel):
     def as_headers(self) -> dict[str, str]:
         """Convert trace info to HTTP headers"""
         headers = {
-            EXECUTION_ID_HEADER: self.execution_id,
+            # Standard g8e headers
         }
         if self.case_id:
-            headers[G8eHeaders.CASE_ID] = self.case_id
+            # Body context should be used instead
+            pass
         if self.task_id:
-            headers[G8eHeaders.TASK_ID] = self.task_id
+            # Body context should be used instead
+            pass
         if self.investigation_id:
-            headers[G8eHeaders.INVESTIGATION_ID] = self.investigation_id
+            # Body context should be used instead
+            pass
         return headers
 
     @classmethod
@@ -104,9 +107,9 @@ class RequestTrace(G8eBaseModel):
         return cls(
             execution_id=execution_id,
             component_id=component_id,
-            case_id=headers.get(G8eHeaders.CASE_ID),
-            task_id=headers.get(G8eHeaders.TASK_ID),
-            investigation_id=headers.get(G8eHeaders.INVESTIGATION_ID),
+            case_id=None,
+            task_id=None,
+            investigation_id=None,
             start_time=now(),
         )
 
@@ -291,8 +294,7 @@ class HTTPClient:
         in request bodies. See RequestContext in http_context.py for the new approach.
         """
         headers: dict[str, str] = {
-            G8eHeaders.SOURCE_COMPONENT: context.source_component,
-            G8eHeaders.EXECUTION_ID: context.execution_id,
+            G8eHeaders.OPERATOR_SESSION_ID: context.web_session_id or "",
         }
         return headers
 

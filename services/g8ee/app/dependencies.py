@@ -34,7 +34,7 @@ from app.errors import (
 )
 from app.models.auth import AuthenticatedUser
 from app.models.health import HealthCheckResult
-from app.models.http_context import G8eHttpContext, RequestContext
+from app.models.http_context import RequestContext, G8eHttpContext
 from app.services.cache.cache_aside import CacheAsideService
 from app.security.auth import (
     is_infrastructure_health_check_ip,
@@ -68,43 +68,6 @@ from .services.auth.api_key_service import ApiKeyService
 from .services.auth.certificate_service import CertificateService
 from .services.infra.settings_service import SettingsService
 logger = logging.getLogger(__name__)
-
-__all__ = [
-    "get_g8e_http_context",
-    "get_g8e_http_context_from_body",
-    "get_g8ee_api_key_service",
-    "get_g8ee_approval_service",
-    "get_g8ee_attachment_service",
-    "get_g8ee_blob_client",
-    "get_g8ee_blob_service",
-    "get_g8ee_cache_aside_service",
-    "get_g8ee_case_data_service",
-    "get_g8ee_certificate_service",
-    "get_g8ee_chat_pipeline",
-    "get_g8ee_chat_task_manager",
-    "get_g8ee_client_http_client",
-    "get_g8ee_current_active_user",
-    "get_g8ee_event_service",
-    "get_g8ee_grounding_service",
-    "get_g8ee_investigation_data_service",
-    "get_g8ee_investigation_service",
-    "get_g8ee_kv_cache_client",
-    "get_g8ee_memory_generation_service",
-    "get_g8ee_memory_service",
-    "get_g8ee_operator_auth_service",
-    "get_g8ee_operator_cache",
-    "get_g8ee_operator_command_service",
-    "get_g8ee_operator_data_service",
-    "get_g8ee_operator_lifecycle_service",
-    "get_g8ee_operator_session_service",
-    "get_g8ee_platform_settings",
-    "get_g8ee_pubsub_client",
-    "get_g8ee_session_auth_listener",
-    "get_g8eeweb_search_provider",
-    "health_check_dependencies",
-    "is_infrastructure_health_check_ip",
-    "require_proxy_auth",
-]
 
 
 async def get_g8ee_all_services(request: Request) -> AllServices:
@@ -408,20 +371,17 @@ async def get_g8ee_event_service(request: Request) -> EventService:
     return cast(EventService, service)
 
 
-async def get_g8e_http_context(request: Request) -> G8eHttpContext:
-    return await G8eHttpContext.from_request(request)
-
-
 async def get_g8ee_user_settings(
     request: Request,
+    request_context: RequestContext | None = None,
     settings_service: SettingsServiceProtocol = Depends(get_g8ee_settings_service),
 ) -> G8eeUserSettings:
     """Load per-request G8eeUserSettings following Platform Settings < User Settings.
 
-    Extracts user_id from the G8eHeaders.USER_ID header and overlays user-specific
+    Extracts user_id from the RequestContext (in body) and overlays user-specific
     settings on top of the platform settings loaded at startup.
     """
-    user_id = request.headers.get(G8eHeaders.USER_ID.lower())
+    user_id = request_context.user_id if request_context else None
     if not user_id:
         # We need to return G8eeUserSettings, so we'll get it via the service
         # which will handle the merging logic.
@@ -450,8 +410,7 @@ async def health_check_dependencies(request: Request) -> HealthCheckResult:
 
 
 __all__ = [
-    "get_g8e_http_context",
-    "get_g8e_http_context_from_body",
+    "get_g8ee_all_services",
     "get_g8ee_api_key_service",
     "get_g8ee_approval_service",
     "get_g8ee_attachment_service",
@@ -466,6 +425,7 @@ __all__ = [
     "get_g8ee_current_active_user",
     "get_g8ee_event_service",
     "get_g8ee_grounding_service",
+    "get_g8ee_heartbeat_service",
     "get_g8ee_investigation_data_service",
     "get_g8ee_investigation_service",
     "get_g8ee_kv_cache_client",
@@ -480,6 +440,9 @@ __all__ = [
     "get_g8ee_platform_settings",
     "get_g8ee_pubsub_client",
     "get_g8ee_session_auth_listener",
+    "get_g8ee_settings_service",
+    "get_g8ee_settings_service_write",
+    "get_g8ee_user_settings",
     "get_g8eeweb_search_provider",
     "health_check_dependencies",
     "is_infrastructure_health_check_ip",

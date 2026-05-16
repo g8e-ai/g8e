@@ -311,7 +311,7 @@ class TestAttachmentServiceProcessing:
         assert result[0].attachment_type == AttachmentType.IMAGE
 
     async def test_process_attachments_yaml_by_extension(self, service):
-        yaml_content = "server:\n  port: 8080"
+        yaml_content = "server:\n  port: 5432"
         b64 = base64.b64encode(yaml_content.encode()).decode()
 
         attachments = [AttachmentData(

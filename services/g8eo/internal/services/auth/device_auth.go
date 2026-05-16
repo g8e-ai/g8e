@@ -174,7 +174,7 @@ func authenticateWithDeviceTokenUsingClient(token string, endpoint string, logge
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set(constants.HeaderContentType, "application/json")
-	req.Header.Set("X-G8E-Device-Token", token)
+	req.Header.Set(constants.HeaderDeviceToken, token)
 	req.Header.Set(constants.HeaderUserAgent, "g8e operator")
 
 	resp, err := client.Do(req)

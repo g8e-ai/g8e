@@ -132,10 +132,10 @@ func TestLoad_HTTPPortOverride(t *testing.T) {
 	cfg, err := Load(LoadOptions{
 		APIKey:           "k",
 		OperatorEndpoint: constants.DefaultEndpoint,
-		HTTPPort:         8080,
+		HTTPPort:         8443,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, 8080, cfg.HTTPPort)
+	assert.Equal(t, 8443, cfg.HTTPPort)
 }
 
 func TestLoad_TLSServerName(t *testing.T) {
@@ -233,9 +233,9 @@ func TestLoadListen_Defaults(t *testing.T) {
 func TestLoadListen_ExplicitValues(t *testing.T) {
 	cfg, err := LoadListen(
 		9443,
-		8080,
-		0,
-		0,
+		9000,
+		80,
+		443,
 		"/var/data",
 		"/var/pki",
 		"/var/secrets",
@@ -246,7 +246,9 @@ func TestLoadListen_ExplicitValues(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 9443, cfg.Listen.WSSPort)
-	assert.Equal(t, 8080, cfg.Listen.HTTPPort)
+	assert.Equal(t, 9000, cfg.Listen.HTTPPort)
+	assert.Equal(t, 80, cfg.Listen.BootstrapPort)
+	assert.Equal(t, 443, cfg.Listen.PublicPort)
 	assert.Equal(t, "/var/data", cfg.Listen.DataDir)
 	assert.Equal(t, "/var/pki", cfg.Listen.PKIDir)
 	assert.Equal(t, "/var/secrets", cfg.Listen.SecretsDir)
@@ -286,31 +288,31 @@ func TestLoadListen_SucceedsWithAllDefaults(t *testing.T) {
 
 func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 	t.Run("reject wssPort 0", func(t *testing.T) {
-		_, err := LoadListen(0, 9000, 8080, 8081, "", "", "", "", "", false)
+		_, err := LoadListen(0, 9000, 80, 443, "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "wssPort cannot be 0 in production")
 	})
 
 	t.Run("reject httpPort 0", func(t *testing.T) {
-		_, err := LoadListen(9001, 0, 8080, 8081, "", "", "", "", "", false)
+		_, err := LoadListen(9001, 0, 80, 443, "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "httpPort cannot be 0 in production")
 	})
 
 	t.Run("reject bootstrapPort 0", func(t *testing.T) {
-		_, err := LoadListen(9001, 9000, 0, 8081, "", "", "", "", "", false)
+		_, err := LoadListen(9001, 9000, 0, 443, "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "bootstrapPort cannot be 0 in production")
 	})
 
 	t.Run("reject publicPort 0", func(t *testing.T) {
-		_, err := LoadListen(9001, 9000, 8080, 0, "", "", "", "", "", false)
+		_, err := LoadListen(9001, 9000, 80, 0, "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "publicPort cannot be 0 in production")
 	})
 
 	t.Run("accept all non-zero ports in production", func(t *testing.T) {
-		_, err := LoadListen(9001, 9000, 8080, 8081, "", "", "", "", "", false)
+		_, err := LoadListen(9001, 9000, 80, 443, "", "", "", "", "", false)
 		require.NoError(t, err)
 	})
 }
@@ -320,11 +322,11 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadOpenClaw_Valid(t *testing.T) {
-	cfg, err := LoadOpenClaw("wss://gateway.example.com:8080", "token123", "node-1", "My Node", "", "debug")
+	cfg, err := LoadOpenClaw("wss://gateway.example.com:18789", "token123", "node-1", "My Node", "", "debug")
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
-	assert.Equal(t, "wss://gateway.example.com:8080", cfg.GatewayURL)
+	assert.Equal(t, "wss://gateway.example.com:18789", cfg.GatewayURL)
 	assert.Equal(t, "token123", cfg.Token)
 	assert.Equal(t, "node-1", cfg.NodeID)
 	assert.Equal(t, "My Node", cfg.DisplayName)
@@ -345,7 +347,7 @@ func TestLoadOpenClaw_MissingGatewayURL(t *testing.T) {
 }
 
 func TestLoadOpenClaw_OptionalFieldsEmpty(t *testing.T) {
-	cfg, err := LoadOpenClaw("ws://gateway:8080", "", "", "", "", "")
+	cfg, err := LoadOpenClaw("ws://gateway:18789", "", "", "", "", "")
 	require.NoError(t, err)
 
 	assert.Empty(t, cfg.Token)

@@ -82,8 +82,8 @@ Listen Mode exposes four distinct ports for different protocol surfaces:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **Bootstrap / Trust Portal** | `8080` (TLS) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
-| **Public browser / BYO** | `8081` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery. |
+| **Bootstrap / Trust Portal** | `80` | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
+| **Public browser / BYO** | `443` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery. |
 | **mTLS API** | `9000` | mTLS + SPIFFE URI SAN | `/db/*` (Document Store), `/kv/*` (KV with TTL), `/blob/*`, `/pubsub/publish`, `/api/operators/*`, `/api/device-links/*`, `/api/pki/{sign-csr,revoke,revocation-bundle}`, `/api/auth/passkey/*`. |
 | **Pub/Sub** | `9001` (mTLS WSS) | mTLS + SPIFFE URI SAN | `/ws/pubsub` real-time fan-out to Satellites and clients. |
 
@@ -140,8 +140,8 @@ When local storage is enabled (`-s`), the Operator maintains a **Local-First Aud
 | `--listen` | Start in Listen Mode (Substrate Hub). |
 | `--wss-listen-port` | Port for Pub/Sub connections (default: 9001). |
 | `--http-listen-port` | Port for mTLS API (default: 9000). |
-| `--bootstrap-listen-port` | Port for device-link enrollment (default: 8080). |
-| `--public-listen-port` | Port for browser/BYO bootstrap (default: 8081). |
+| `--bootstrap-listen-port` | Port for device-link enrollment (default: 80). |
+| `--public-listen-port` | Port for browser/BYO bootstrap (default: 443). |
 | `--data-dir` | Directory for persistence (default: `.g8e/data`). |
 | `--pki-dir` | Directory for PKI hierarchy (default: `.g8e/pki`). |
 | `--secrets-dir` | Directory for platform secrets (default: `.g8e/secrets`). |

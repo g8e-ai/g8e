@@ -10,10 +10,10 @@
     Run this whenever SSL certificates are rotated (e.g. after platform rebuild).
 
 .PARAMETER Url
-    Platform URL to fetch the root CA from. Example: https://localhost:8080
+    Platform URL to fetch the root CA from. Example: http://localhost
 
 .EXAMPLE
-    .\trust-ca.ps1 -Url https://localhost:8080
+    .\trust-ca.ps1 -Url http://localhost
 #>
 
 param(

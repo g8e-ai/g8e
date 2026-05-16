@@ -75,7 +75,7 @@ func TestSentinel_ScrubText_IPv4_Preserved(t *testing.T) {
 		expected string
 	}{
 		{"Server at 192.168.1.1", "Server at 192.168.1.1"},
-		{"Connect to 10.0.0.1:8080", "Connect to 10.0.0.1:8080"},
+		{"Connect to 10.0.0.1:5432", "Connect to 10.0.0.1:5432"},
 		{"IPs: 172.16.0.1 and 8.8.8.8", "IPs: 172.16.0.1 and 8.8.8.8"},
 		{"No IP here", "No IP here"},
 	}
@@ -501,14 +501,14 @@ func TestSentinel_ScrubMap(t *testing.T) {
 		data := map[string]interface{}{
 			"server": map[string]interface{}{
 				"host": "192.168.1.1",
-				"port": 8080,
+				"port": 5432,
 			},
 		}
 
 		scrubbed := sentinel.ScrubMap(data)
 		nested := scrubbed["server"].(map[string]interface{})
 		assert.Equal(t, "192.168.1.1", nested["host"].(string))
-		assert.Equal(t, 8080, nested["port"])
+		assert.Equal(t, 5432, nested["port"])
 	})
 
 	t.Run("scrubs sensitive keys in strict mode", func(t *testing.T) {

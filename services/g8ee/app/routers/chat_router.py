@@ -36,7 +36,6 @@ from app.dependencies import (
     get_g8ee_chat_pipeline,
     get_g8ee_chat_task_manager,
     get_g8ee_user_settings,
-    get_g8e_http_context,
 )
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.investigation.investigation_data_service import InvestigationDataService
@@ -61,12 +60,12 @@ async def answer_triage_question(
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
     user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
-    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
     user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ) -> dict[str, bool]:
     """
     Receive user answer to a triage clarifying question and store in ledger.
     """
+    g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
     investigation_id = request.context.investigation_id
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != user_info.uid:
@@ -113,12 +112,12 @@ async def skip_triage_questions(
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
     user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
-    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
     user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ) -> dict[str, bool]:
     """
     Record that user skipped the triage clarifying questions.
     """
+    g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
     investigation_id = request.context.investigation_id
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != user_info.uid:

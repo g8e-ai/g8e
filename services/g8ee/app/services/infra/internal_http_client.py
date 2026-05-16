@@ -174,20 +174,8 @@ class InternalHttpClient:
             )
 
             from app.models.http_context import RequestContext
-            request_context = RequestContext(
-                web_session_id=context.web_session_id,
-                user_id=context.user_id,
-                organization_id=context.organization_id,
-                case_id=context.case_id,
-                investigation_id=context.investigation_id,
-                task_id=context.task_id,
-                bound_operators=context.bound_operators,
-                execution_id=context.execution_id,
-                source_component=context.source_component,
-                system_fingerprint=context.system_fingerprint,
-            )
             request_payload = IntentRequestPayload(
-                context=request_context,
+                context=RequestContext.from_app_context(context),
                 operator_id=operator_id,
                 intent=intent,
             )
@@ -241,20 +229,8 @@ class InternalHttpClient:
     ) -> IntentOperationResult:
         try:
             from app.models.http_context import RequestContext
-            request_context = RequestContext(
-                web_session_id=context.web_session_id,
-                user_id=context.user_id,
-                organization_id=context.organization_id,
-                case_id=context.case_id,
-                investigation_id=context.investigation_id,
-                task_id=context.task_id,
-                bound_operators=context.bound_operators,
-                execution_id=context.execution_id,
-                source_component=context.source_component,
-                system_fingerprint=context.system_fingerprint,
-            )
             request_payload = IntentRequestPayload(
-                context=request_context,
+                context=RequestContext.from_app_context(context),
                 operator_id=operator_id,
                 intent=intent,
             )
@@ -302,18 +278,16 @@ class InternalHttpClient:
             )
 
             from app.models.http_context import RequestContext
-            request_context = RequestContext(
-                web_session_id=web_session_id,
-                user_id=user_id,
-                organization_id=organization_id,
-                case_id=context.case_id if context else "",
-                investigation_id=context.investigation_id if context else "",
-                task_id=context.task_id if context else None,
-                bound_operators=context.bound_operators if context else [],
-                execution_id=context.execution_id if context else None,
-                source_component=context.source_component if context else ComponentName.G8EE,
-                system_fingerprint=context.system_fingerprint if context else None,
-            )
+            if context:
+                request_context = RequestContext.from_app_context(context)
+            else:
+                request_context = RequestContext(
+                    web_session_id=web_session_id,
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    source_component=ComponentName.G8EE,
+                )
+
             request_payload = OperatorLinkRequestPayload(
                 context=request_context,
                 operator_id=operator_id,

@@ -47,8 +47,8 @@ The platform runs host-natively. Do not use Docker for primary component develop
 4. Four-Port Contract (Listen Mode):
    - **WSS (9001)**: Pub/Sub broker for operator connections (mTLS required)
    - **HTTP (9000)**: mTLS API for Operator protocol operations (mTLS required)
-   - **Bootstrap (8080)**: Device-link enrollment and CSR-based registration (plain TLS)
-   - **Public (8081)**: Browser-based auth and BYO bootstrap (plain TLS)
+   - **Bootstrap (80)**: Device-link enrollment and CSR-based registration (plain TLS)
+   - **Public (443)**: Browser-based auth and BYO bootstrap (plain TLS)
 
 III. Anti-Tech-Debt Directives
 AI agents are prone to wrapping poorly understood code in new abstractions. This is strictly forbidden.

@@ -75,27 +75,26 @@ class G8eClient:
             operator_session_id: Optional session ID for the operator
         """
         url = f"{self.client_url}{PUBLIC_API_PATHS['chat_send']}"
-        headers = {
-            "X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-        }
-        if operator_session_id:
-            if operator_session_id.startswith("dlk_"):
-                raise ValueError("evals require a bound operator session id, not a device link token")
-            headers["X-G8E-Operator-Session-ID"] = operator_session_id
-
+        
+        # Identity and business context are now passed in the body context field
         payload = {
-            "investigation_id": investigation_id,
+            "context": {
+                "investigation_id": investigation_id,
+                "user_id": "evals_runner",
+                "source_component": "client",
+                "web_session_id": investigation_id,  # Use investigation ID as session ID for evals
+            },
             "message": message,
-            "user_id": "evals_runner"
         }
 
         # Send the chat message
-        async with self._session.post(url, json=payload, headers=headers) as resp:
+        async with self._session.post(url, json=payload) as resp:
             resp.raise_for_status()
 
         # Connect to SSE for the response
         sse_url = f"{self.client_url}{PUBLIC_API_PATHS['sse_events']}"
-        async with self._session.get(sse_url, headers=headers) as resp:
+        # Request context should eventually be passed to SSE as well if needed
+        async with self._session.get(sse_url) as resp:
             resp.raise_for_status()
 
             async for line in resp.content:
@@ -120,18 +119,18 @@ class G8eClient:
             Approval response data
         """
         url = f"{self.client_url}{PUBLIC_API_PATHS['operator_approval_respond']}"
-        headers = {
-            "X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-        }
-        if operator_session_id:
-            if operator_session_id.startswith("dlk_"):
-                raise ValueError("evals require a bound operator session id, not a device link token")
-            headers["X-G8E-Operator-Session-ID"] = operator_session_id
-
+        
+        # Identity and business context are now passed in the body context field
         payload = {
+            "context": {
+                "user_id": "evals_runner",
+                "source_component": "client",
+                "web_session_id": "evals_session",
+            },
             "approval_id": approval_id,
-            "action": "approve"
+            "approved": True,
+            "reason": "Approved by evals runner"
         }
-        async with self._session.post(url, json=payload, headers=headers) as resp:
+        async with self._session.post(url, json=payload) as resp:
             resp.raise_for_status()
             return await resp.json()

@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,7 +34,7 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
 			assert.Equal(t, "/api/auth/device-link/register", r.URL.Path)
-			assert.Equal(t, token, r.Header.Get("X-G8E-Device-Token"))
+			assert.Equal(t, token, r.Header.Get(constants.HeaderDeviceToken))
 
 			var info DeviceInfo
 			err := json.NewDecoder(r.Body).Decode(&info)

@@ -38,7 +38,7 @@ case "$TOP" in
         fi
 
         _trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
-        _bootstrap_url="${G8E_BOOTSTRAP_URL:-https://localhost:8080}"
+        _bootstrap_url="${G8E_BOOTSTRAP_URL:-http://localhost}"
 
         if [[ ! -f "$_trust_bundle" ]]; then
             echo "[g8e] Trust bundle not found at $_trust_bundle — start the platform first: ./g8e platform start" >&2

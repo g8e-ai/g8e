@@ -20,8 +20,8 @@ Client identities follow a fixed SPIFFE URI scheme:
 
 ## Enrollment Lifecycle
 
-1.  **Trust Bootstrap**: A new Satellite or BYO client fetches the Hub's trust bundle from `http://<hub>:8080/trust`.
-2.  **Challenge**: The client presents a one-time device-link token to the Hub's bootstrap port (8080).
+1.  **Trust Bootstrap**: A new Satellite or BYO client fetches the Hub's trust bundle from `http://<hub>/trust`.
+2.  **Challenge**: The client presents a one-time device-link token to the Hub's bootstrap port (80).
 3.  **CSR Submission**: The client generates a local keypair and submits a CSR to the Hub.
 4.  **Issuance**: The Hub verifies the token, signs the CSR, and returns a short-lived mTLS certificate bound to the requested identity.
 5.  **Steady State**: The client uses the issued certificate for all subsequent communication on ports 9000 (API) and 9001 (Pub/Sub).

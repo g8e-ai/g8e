@@ -26,7 +26,6 @@ from app.constants import (
     HealthStatus,
 )
 from app.dependencies import (
-    get_g8e_http_context,
     get_g8ee_attachment_service,
     get_g8ee_cache_aside_service,
     get_g8ee_case_data_service,
@@ -267,110 +266,6 @@ class TestGetG8eeCurrentActiveUser:
         assert exc_info.value.get_http_status() == 401
 
 
-class TestGetG8eHttpContext:
-    async def test_extracts_full_context_from_headers(self, mock_request):
-        mock_request.headers = {
-            **TEST_G8E_HEADERS,
-            G8eHeaders.WEB_SESSION_ID.lower(): "session-123",
-            G8eHeaders.USER_ID.lower(): "user-456",
-            G8eHeaders.ORGANIZATION_ID.lower(): "org-789",
-            G8eHeaders.CASE_ID.lower(): "case-111",
-            G8eHeaders.INVESTIGATION_ID.lower(): "inv-222",
-            G8eHeaders.BOUND_OPERATORS.lower(): '[{"operator_id": "op-333", "operator_session_id": "sess-333", "status": "bound"}]',
-            G8eHeaders.SOURCE_COMPONENT.lower(): "client",
-        }
-        context = await get_g8e_http_context(mock_request)
-        assert context.web_session_id == "session-123"
-        assert context.user_id == "user-456"
-        assert context.organization_id == "org-789"
-        assert context.case_id == "case-111"
-        assert context.investigation_id == "inv-222"
-        assert len(context.bound_operators) == 1
-        assert context.bound_operators[0].operator_id == "op-333"
-        assert context.source_component == ComponentName.CLIENT
-
-    async def test_missing_session_id_raises_authentication_error(self, mock_request):
-        mock_request.headers = {G8eHeaders.USER_ID.lower(): "user-456", G8eHeaders.SOURCE_COMPONENT.lower(): "client"}
-        with pytest.raises(AuthenticationError) as exc_info:
-            await get_g8e_http_context(mock_request)
-        assert exc_info.value.get_http_status() == 401
-
-    async def test_missing_user_id_raises_authentication_error(self, mock_request):
-        mock_request.headers = {G8eHeaders.WEB_SESSION_ID.lower(): "session-123", G8eHeaders.SOURCE_COMPONENT.lower(): "client"}
-        with pytest.raises(AuthenticationError) as exc_info:
-            await get_g8e_http_context(mock_request)
-        assert exc_info.value.get_http_status() == 401
-
-    async def test_missing_source_component_raises_authentication_error(self, mock_request):
-        mock_request.headers = {
-            G8eHeaders.WEB_SESSION_ID.lower(): "session-123",
-            G8eHeaders.USER_ID.lower(): "user-456",
-        }
-        with pytest.raises(AuthenticationError) as exc_info:
-            await get_g8e_http_context(mock_request)
-        assert exc_info.value.get_http_status() == 401
-
-    async def test_invalid_source_component_raises_authentication_error(self, mock_request):
-        mock_request.headers = {
-            G8eHeaders.WEB_SESSION_ID.lower(): "session-123",
-            G8eHeaders.USER_ID.lower(): "user-456",
-            G8eHeaders.SOURCE_COMPONENT.lower(): "unknown",
-        }
-        with pytest.raises(AuthenticationError) as exc_info:
-            await get_g8e_http_context(mock_request)
-        assert exc_info.value.get_http_status() == 401
-
-    async def test_minimal_required_headers_succeeds(self, mock_request):
-        mock_request.headers = {
-            G8eHeaders.WEB_SESSION_ID.lower(): "session-abc",
-            G8eHeaders.USER_ID.lower(): "user-xyz",
-            G8eHeaders.SOURCE_COMPONENT.lower(): "client",
-            G8eHeaders.CASE_ID.lower(): "case-min-001",
-            G8eHeaders.INVESTIGATION_ID.lower(): "inv-min-001",
-        }
-        context = await get_g8e_http_context(mock_request)
-        assert context.web_session_id == "session-abc"
-        assert context.user_id == "user-xyz"
-        assert context.organization_id is None
-        assert context.case_id == "case-min-001"
-        assert context.bound_operators == []
-
-    async def test_source_component_is_enum(self, mock_request):
-        mock_request.headers = {
-            G8eHeaders.WEB_SESSION_ID.lower(): "session-abc",
-            G8eHeaders.USER_ID.lower(): "user-xyz",
-            G8eHeaders.SOURCE_COMPONENT.lower(): "g8ee",
-            G8eHeaders.CASE_ID.lower(): "case-src-001",
-            G8eHeaders.INVESTIGATION_ID.lower(): "inv-src-001",
-        }
-        context = await get_g8e_http_context(mock_request)
-        assert context.source_component == ComponentName.G8EE
-
-    async def test_request_id_defaults_when_header_absent(self, mock_request):
-        mock_request.headers = {
-            G8eHeaders.WEB_SESSION_ID.lower(): "session-abc",
-            G8eHeaders.USER_ID.lower(): "user-xyz",
-            G8eHeaders.SOURCE_COMPONENT.lower(): "client",
-            G8eHeaders.CASE_ID.lower(): "case-req-001",
-            G8eHeaders.INVESTIGATION_ID.lower(): "inv-req-001",
-        }
-        context = await get_g8e_http_context(mock_request)
-        assert context.execution_id is not None
-        assert context.execution_id.startswith("exec")
-
-    async def test_request_id_uses_header_when_present(self, mock_request):
-        mock_request.headers = {
-            G8eHeaders.WEB_SESSION_ID.lower(): "session-abc",
-            G8eHeaders.USER_ID.lower(): "user-xyz",
-            G8eHeaders.SOURCE_COMPONENT.lower(): "client",
-            G8eHeaders.CASE_ID.lower(): "case-rid-001",
-            G8eHeaders.INVESTIGATION_ID.lower(): "inv-rid-001",
-            G8eHeaders.EXECUTION_ID.lower(): "exec_explicit_id",
-        }
-        context = await get_g8e_http_context(mock_request)
-        assert context.execution_id == "exec_explicit_id"
-
-
 def _make_internal_request(client_ip, path, headers=None, settings_token=None):
     request = MagicMock(spec=Request)
     request.client = MagicMock()
@@ -406,9 +301,8 @@ class TestRequireProxyAuth:
         settings = MagicMock()
         mock_request.headers = {
             **TEST_G8E_HEADERS,
-            G8eHeaders.USER_ID.lower(): "internal-user",
-            G8eHeaders.WEB_SESSION_ID.lower(): "sess-abc",
-            G8eHeaders.ORGANIZATION_ID.lower(): "org-internal",
+            "x-g8e-user-id": "internal-user",
+            "x-g8e-websession-id": "sess-abc",
         }
         with pytest.raises(AuthenticationError, match="Authentication required"):
             await require_proxy_auth(mock_request, settings)

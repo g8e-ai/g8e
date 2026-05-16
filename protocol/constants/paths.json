@@ -14,8 +14,8 @@
   "ports": {
     "operator_http": 9000,
     "operator_wss": 9001,
-    "operator_bootstrap": 8080,
-    "operator_public": 8081
+    "operator_bootstrap": 80,
+    "operator_public": 443
   },
   "g8ee": {
     "app_dir": "/app/services/g8ee",

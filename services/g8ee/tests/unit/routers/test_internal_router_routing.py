@@ -48,9 +48,9 @@ class TestInternalRouterPathRegistration:
         assert InternalApiPaths.G8EE_CHAT_STOP in route_paths
 
     def test_investigations_path_absolute(self):
-        """Investigations endpoint should be registered at absolute path."""
+        """Investigations query endpoint should be registered at absolute path."""
         route_paths = {route.path for route in internal_router.routes}
-        assert InternalApiPaths.G8EE_INVESTIGATIONS in route_paths
+        assert InternalApiPaths.G8EE_INVESTIGATIONS + "/query" in route_paths
 
     def test_case_path_absolute(self):
         """Case endpoint should be registered at absolute path."""

@@ -867,9 +867,9 @@ This is enforced by `KVClient.subscribe()` (`app/clients/db_client.py`):
 
 **Rule:** Never publish to a channel before `subscribe()` has returned. `subscribe()` returning is the proof that the broker has registered the subscription. Any test that calls `publish` after `subscribe` is race-free by construction — no `asyncio.sleep` is needed or permitted.
 
-### Internal HTTP Communication ( → g8ee)
+### Internal HTTP Communication (Client → g8ee)
 
-g8ee communicates with other components via direct HTTP using mTLS with operator session authentication and standard `G8eHttpContext` headers.
+g8ee communicates with other components via direct HTTP using mTLS with operator session authentication and a body-embedded `RequestContext`.
 
 #### Key Internal Endpoints
 
@@ -877,77 +877,43 @@ g8ee communicates with other components via direct HTTP using mTLS with operator
 |----------|--------|---------|
 | `/api/internal/chat` | POST | Primary non-streaming chat entry point; handles case/investigation creation and background AI processing |
 | `/api/internal/chat/stop` | POST | Stops active AI processing for an investigation |
-| `/api/internal/operator/approval/respond` | POST | Processes command approval/denial from  |
+| `/api/internal/operator/approval/respond` | POST | Processes command approval/denial from Client |
 | `/api/internal/operator/direct-command` | POST | Executes commands from the terminal UI (g8e Direct) |
 | `/api/internal/operators/register-operator-session` | POST | Subscribes g8ee to heartbeat/result channels for a new session |
 
 #### Authentication Discovery
 g8ee uses mTLS with URI SAN workload identity to communicate with the Operator. Identity is established via the client certificates issued during the bootstrap process.
 
-#### Context Propagation
-The canonical header list and ownership rules are in [services/.md — Internal HTTP Communication](.md#internal-http-communication---g8ee).
+#### Context Propagation (`RequestContext`)
 
-Key fields consumed by G8EE:
+Business context (user_id, case_id, investigation_id, etc.) is passed in the **request body** via a typed `RequestContext` field. This eliminates the fragile header-as-state pattern and ensures consistent context handling across all client types.
 
-| Header | Required | Description |
-|--------|----------|-------------|
-| `X-G8E-WebSession-ID` | Yes | Browser session identifier |
-| `X-G8E-User-ID` | Yes | User identifier |
-| `X-G8E-Case-ID` | Yes | Case identifier — `UNKNOWN_ID` sentinel when `X-G8E-New-Case: true` |
-| `X-G8E-Investigation-ID` | Yes | Investigation identifier — `UNKNOWN_ID` sentinel when `X-G8E-New-Case: true` |
-| `X-G8E-New-Case` | No | `"true"` when this is the first message of a new conversation; absent otherwise |
-| `X-G8E-Bound-Operators` | No | JSON array of all bound operators (id, session, status, hostname, type) |
-| `X-G8E-Source-Component` | Yes | Source component name (must be a valid `ComponentName` value) |
+Key fields in `RequestContext`:
 
-`operator_id` and `operator_session_id` are **not** passed as individual headers. The full bound-operator list travels in `X-G8E-Bound-Operators`; individual operator resolution happens at execution time via `OperatorExecutionService.resolve_target_operator()`.
-
-#### New Case Protocol (`X-G8E-New-Case`)
-
-When a user sends their first message in a new conversation, no `case_id` or `investigation_id` exists yet.  signals this by setting `X-G8E-New-Case: true` and sending `UNKNOWN_ID` sentinels for both `X-G8E-Case-ID` and `X-G8E-Investigation-ID`. g8ee reads `g8e_context.new_case` and branches into inline case and investigation creation.
-
-** side** (`services/clients/internal_http_client.js` → `buildG8eContextHeaders`):
-- Detects a new case when `context.case_id` is an empty string (the value set by `chat_routes.js` when no `case_id` was present in the request body)
-- Sets `X-G8E-New-Case: true`, `X-G8E-Case-ID: unknown`, `X-G8E-Investigation-ID: unknown`
-- Existing-case path: sets `X-G8E-Case-ID` and `X-G8E-Investigation-ID` to the real IDs; `X-G8E-New-Case` is omitted
-
-**g8ee side** (`app/dependencies.py` → `get_g8e_http_context`):
-- Reads `X-G8E-New-Case` and sets `G8eHttpContext.new_case = True`
-- When `new_case=True`, relaxes the normal non-empty validation for `case_id` and `investigation_id` — `UNKNOWN_ID` sentinels are accepted
-- When `new_case=False` (default), both IDs must be non-empty real values
-
-**g8ee router** (`app/routers/internal_router.py` → `internal_chat`):
-- Branches on `g8e_context.new_case` — creates `CaseModel` + `InvestigationModel` inline, stamps the new IDs onto a `model_copy` of `g8e_context`, pushes `CASE_CREATED` SSE to enqueues background AI title generation, then proceeds to `run_chat` with the updated context
-- Returns `ChatStartedResponse` with the new `case_id` and `investigation_id`
-
-**Security:** The frontend cannot forge this signal. `chat_routes.js` makes the new-case determination server-side based on whether an authenticated request body contained a valid `case_id` string — client-supplied non-string values (`0`, `false`, etc.) are explicitly rejected by the type guard and treated as new-case.
-
-#### Bound Operator Resolution Contract
-
-`X-G8E-Bound-Operators` is the **exclusive source of truth** for which operators are available to the AI on any given request. g8ee performs no independent lookup against the operator document store to determine binding state.
-
-To prevent header bloat, this header carries only minimal identity and status (`operator_id`, `operator_session_id`, `status`). Full metadata such as `operator_type` and `latest_heartbeat_snapshot` is fetched by g8ee from the shared KV cache when needed.
-
-**How g8ee consumes it:**
-
-1. `G8eHttpContext.parse_bound_operators` (`models/http_context.py`) parses the JSON array from the header into a `list[BoundOperator]` on every request.
-2. `InvestigationService.get_enriched_investigation_context` (`services/investigation/investigation_context.py`) iterates `g8e_context.bound_operators`, filters to `status == BOUND`, fetches each operator's document via `OperatorDataService` for system info, and attaches `operator_documents` + `OperatorAvailability` to the investigation context.
-3. `InvestigationService.determine_workflow_type` reads `investigation.operator_availability.operators_bound` — `True` → `WorkflowType.OPERATOR_BOUND`, `False` → `WorkflowType.OPERATOR_NOT_BOUND`. This determines whether the AI has execution capability or operates in advisory mode.
-4. At command execution time, `_resolve_target_operator()` selects the specific operator from `g8e_context.bound_operators` based on the command target.
-
-**Rule:** Never add a fallback that queries the operator document store by `web_session_id` to resolve binding state in G8EE. If `g8e_context.bound_operators` is empty, the session has no bound operators — that is the correct answer.
+| Field | Description |
+|-------|-------------|
+| `web_session_id` | Browser session identifier |
+| `cli_session_id` | CLI session identifier |
+| `user_id` | User identifier |
+| `organization_id` | Organization identifier (multi-tenant isolation) |
+| `case_id` | Case identifier |
+| `investigation_id` | Investigation identifier (AI chat session) |
+| `task_id` | Current task identifier |
+| `bound_operators` | List of bound operators with identity and status |
+| `source_component` | Source component name (`client`, `g8ee`, etc.) |
+| `execution_id` | Unique request tracking identifier |
 
 #### G8eHttpContext Application Barrier Contract
 
-`G8eHttpContext` is the **single authoritative context object** within the g8ee application boundary. It must be passed intact to all internal service methods — never dismantled into individual loose parameters (`web_session_id`, `case_id`, `investigation_id`, `user_id`) and then re-assembled downstream.
+`G8eHttpContext` is the **single authoritative context object** within the g8ee application boundary. It is initialized from the inbound `RequestContext` exactly once at the FastAPI router level.
 
 **Rules:**
 
-- `G8eHttpContext` is extracted from HTTP headers exactly once, at the FastAPI router (dependency injection via `get_g8e_http_context` / `get_g8e_http_context_for_chat`).
-- All internal service methods (`ChatPipelineService._prepare_chat_context`, `_persist_ai_response`, `run_chat`, `_run_chat_impl`, etc.) receive the full `g8e_context: G8eHttpContext` object and derive fields from it directly.
-- When new identifiers are created inline (e.g., `case_id` and `investigation_id` for a new conversation), the router updates `g8e_context` via `model_copy(update={...})` and passes the updated object downstream. No loose variables are threaded through.
-- Never use `or ""` or any coercion to produce a fallback for a field that may be `None`. If a required field is absent, that is a caller contract violation — fix the caller or the model, not the consumer.
+- All internal service methods receive the full `g8e_context: G8eHttpContext` object.
+- Services derived fields from the context directly; they never dismantle it into loose parameters.
+- When identifiers are created inline (e.g., new case/investigation), a updated copy of the context is passed downstream.
+- The `RequestContext` in the body is the **exclusive source of truth** for binding state and identity. g8ee performs no independent lookups against the operator document store for this information.
 
-**LFAA audit guard:** `web_session_id` is a required, non-empty string in all LFAA audit event payloads. The pipeline dispatches LFAA events only when `web_session_id` is present (`if op_id and op_session and web_session_id`). No coercion to `""` is permitted.
 
 ###  Internal API Methods
 

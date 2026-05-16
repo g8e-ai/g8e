@@ -298,13 +298,13 @@ class TestCheckPortRequestPayload:
     def test_all_fields_set(self):
         p = CheckPortRequestPayload(
             execution_id="exec-abc",
-            port=8080,
+            port=5432,
             host="192.168.1.1",
             protocol="tcp",
             target_operators=["op-123"],
         )
         assert p.execution_id == "exec-abc"
-        assert p.port == 8080
+        assert p.port == 5432
         assert p.host == "192.168.1.1"
         assert p.protocol == "tcp"
         assert p.target_operators == ["op-123"]

@@ -199,7 +199,9 @@ class CaseDataService:
         Returns:
             Updated CaseModel
         """
-        update_fields = updates.model_dump(mode="json")
+        # Exclude context from update_fields as it's used for business context propagation,
+        # not for updating the case document itself.
+        update_fields = updates.model_dump(mode="json", exclude={"context"}, exclude_unset=True)
 
         if not update_fields:
             raise BusinessLogicError(

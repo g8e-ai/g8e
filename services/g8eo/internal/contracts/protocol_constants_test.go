@@ -70,11 +70,11 @@ type protocolCommandApprovalEvents struct {
 }
 
 type protocolOperatorCommandEvents struct {
-	Requested string                      `json:"requested"`
-	Started   string                      `json:"started"`
-	Completed string                      `json:"completed"`
-	Failed    string                      `json:"failed"`
-	Cancelled string                      `json:"cancelled"`
+	Requested string                        `json:"requested"`
+	Started   string                        `json:"started"`
+	Completed string                        `json:"completed"`
+	Failed    string                        `json:"failed"`
+	Cancelled string                        `json:"cancelled"`
 	Output    protocolCommandOutputEvents   `json:"output"`
 	Cancel    protocolCommandCancelEvents   `json:"cancel"`
 	Approval  protocolCommandApprovalEvents `json:"approval"`
@@ -87,10 +87,10 @@ type protocolFileEditApprovalEvents struct {
 }
 
 type protocolOperatorFileEditEvents struct {
-	Requested string                       `json:"requested"`
-	Started   string                       `json:"started"`
-	Completed string                       `json:"completed"`
-	Failed    string                       `json:"failed"`
+	Requested string                         `json:"requested"`
+	Started   string                         `json:"started"`
+	Completed string                         `json:"completed"`
+	Failed    string                         `json:"failed"`
 	Approval  protocolFileEditApprovalEvents `json:"approval"`
 }
 
@@ -101,9 +101,9 @@ type protocolIntentApprovalEvents struct {
 }
 
 type protocolOperatorIntentEvents struct {
-	Granted  string                     `json:"granted"`
-	Denied   string                     `json:"denied"`
-	Revoked  string                     `json:"revoked"`
+	Granted  string                       `json:"granted"`
+	Denied   string                       `json:"denied"`
+	Revoked  string                       `json:"revoked"`
 	Approval protocolIntentApprovalEvents `json:"approval"`
 }
 
@@ -153,10 +153,10 @@ type protocolOperatorFileEditApproval struct {
 }
 
 type protocolOperatorFileEdit struct {
-	Requested string                         `json:"requested"`
-	Started   string                         `json:"started"`
-	Completed string                         `json:"completed"`
-	Failed    string                         `json:"failed"`
+	Requested string                           `json:"requested"`
+	Started   string                           `json:"started"`
+	Completed string                           `json:"completed"`
+	Failed    string                           `json:"failed"`
 	Approval  protocolOperatorFileEditApproval `json:"approval"`
 }
 
@@ -180,7 +180,7 @@ type protocolOperatorAuditDirectCommandResult struct {
 }
 
 type protocolOperatorAuditDirectCommandEvents struct {
-	Recorded string                                 `json:"recorded"`
+	Recorded string                                   `json:"recorded"`
 	Result   protocolOperatorAuditDirectCommandResult `json:"result"`
 }
 
@@ -398,28 +398,16 @@ type protocolPubSubJSON struct {
 // ---------------------------------------------------------------------------
 
 type protocolHeadersJSON struct {
-	G8eSessionID         string `json:"x-g8e.session-id"`
-	G8eOperatorSessionID string `json:"x-g8e.operator-session-id"`
-	G8eOperatorAPIKey    string `json:"x-g8e.operator-api-key"`
-	G8eUserID            string `json:"x-g8e.user-id"`
-	G8eOrganizationID    string `json:"x-g8e.organization-id"`
-	G8eCaseID            string `json:"x-g8e.case-id"`
-	G8eInvestigationID   string `json:"x-g8e.investigation-id"`
-	G8eTaskID            string `json:"x-g8e.task-id"`
-	G8eSourceComponent   string `json:"x-g8e.source-component"`
-	G8eBoundOperators    string `json:"x-g8e.bound-operators"`
-	G8eRequestID         string `json:"x-g8e.execution-id"`
-	G8eService           string `json:"x-g8e.service"`
-	G8eClient            string `json:"x-g8e.client"`
-	G8eOperatorStatus    string `json:"x-g8e.operator-status"`
-	Authorization        string `json:"http.authorization"`
-	UserAgent            string `json:"http.user-agent"`
-	ContentType          string `json:"http.content-type"`
-	ContentDisposition   string `json:"http.content-disposition"`
-	ContentLength        string `json:"http.content-length"`
-	XForwardedProto      string `json:"http.x-forwarded-proto"`
-	XForwardedHost       string `json:"http.x-forwarded-host"`
-	XRequestTimestamp    string `json:"http.x-request-timestamp"`
+	OperatorSessionID  string `json:"x-g8e.operator-session-id"`
+	DeviceToken        string `json:"x-g8e.device-token"`
+	Authorization      string `json:"http.authorization"`
+	UserAgent          string `json:"http.user-agent"`
+	ContentType        string `json:"http.content-type"`
+	ContentDisposition string `json:"http.content-disposition"`
+	ContentLength      string `json:"http.content-length"`
+	XForwardedProto    string `json:"http.x-forwarded-proto"`
+	XForwardedHost     string `json:"http.x-forwarded-host"`
+	XRequestTimestamp  string `json:"http.x-request-timestamp"`
 }
 
 func loadEventsJSON(t *testing.T) protocolEventsJSON {
@@ -669,20 +657,8 @@ func TestProtocolHeadersMatchGoConstants(t *testing.T) {
 	h := loadHeadersJSON(t)
 
 	t.Run("x-g8e headers", func(t *testing.T) {
-		assert.Equal(t, h.G8eSessionID, constants.HeaderG8eWebSessionID)
-		assert.Equal(t, h.G8eOperatorSessionID, constants.HeaderOperatorSessionID)
-		assert.Equal(t, h.G8eOperatorAPIKey, constants.HeaderOperatorAPIKey)
-		assert.Equal(t, h.G8eUserID, constants.HeaderG8eUserID)
-		assert.Equal(t, h.G8eOrganizationID, constants.HeaderG8eOrganizationID)
-		assert.Equal(t, h.G8eCaseID, constants.HeaderG8eCaseID)
-		assert.Equal(t, h.G8eInvestigationID, constants.HeaderG8eInvestigationID)
-		assert.Equal(t, h.G8eTaskID, constants.HeaderG8eTaskID)
-		assert.Equal(t, h.G8eSourceComponent, constants.HeaderG8eSourceComponent)
-		assert.Equal(t, h.G8eBoundOperators, constants.HeaderG8eBoundOperators)
-		assert.Equal(t, h.G8eRequestID, constants.HeaderG8eRequestID)
-		assert.Equal(t, h.G8eService, constants.HeaderG8eService)
-		assert.Equal(t, h.G8eClient, constants.HeaderG8eClient)
-		assert.Equal(t, h.G8eOperatorStatus, constants.HeaderG8eOperatorStatus)
+		assert.Equal(t, h.OperatorSessionID, constants.HeaderOperatorSessionID)
+		assert.Equal(t, h.DeviceToken, constants.HeaderDeviceToken)
 	})
 
 	t.Run("standard http headers", func(t *testing.T) {

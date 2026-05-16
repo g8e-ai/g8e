@@ -67,10 +67,11 @@ async def test_send_chat_message():
             assert events[0]["data"] == "Hello"
             assert events[1]["data"] == " world"
 
-            # Verify header was passed
+            # Verify context was passed in body
             mock_session.post.assert_called_once()
             _, kwargs = mock_session.post.call_args
-            assert kwargs["headers"]["X-G8E-Operator-Session-ID"] == "session-123"
+            assert kwargs["json"]["context"]["investigation_id"] == investigation_id
+            assert kwargs["json"]["context"]["source_component"] == "client"
 
 @pytest.mark.asyncio
 async def test_client_context_manager_no_session():
@@ -136,4 +137,4 @@ async def test_approve_request():
             mock_session.post.assert_called_once()
             args, kwargs = mock_session.post.call_args
             assert kwargs["json"]["approval_id"] == approval_id
-            assert kwargs["headers"]["X-G8E-Operator-Session-ID"] == "session-123"
+            assert kwargs["json"]["context"]["source_component"] == "client"

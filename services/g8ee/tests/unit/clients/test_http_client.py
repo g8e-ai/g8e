@@ -171,7 +171,8 @@ class TestRequestTrace:
         )
         assert trace.execution_id == "exec-existing-123"
 
-    def test_from_headers_extracts_case_task_investigation_ids(self):
+    def test_from_headers_does_not_extract_case_task_investigation_ids(self):
+        # Context moved to request body - RequestTrace no longer extracts these from headers
         trace = RequestTrace.from_headers(
             {
                 G8eHeaders.CASE_ID: "case-1",
@@ -180,9 +181,10 @@ class TestRequestTrace:
             },
             component_id=ComponentName.G8EE,
         )
-        assert trace.case_id == "case-1"
-        assert trace.task_id == "task-1"
-        assert trace.investigation_id == "inv-1"
+        # These fields are now None - context is in request body, not headers
+        assert trace.case_id is None
+        assert trace.task_id is None
+        assert trace.investigation_id is None
 
     def test_finish_populates_end_time_and_duration_ms(self):
         trace = RequestTrace(
@@ -199,17 +201,19 @@ class TestRequestTrace:
         assert trace.end_time.tzinfo == UTC
         assert trace.duration_ms >= 0.0
 
-    def test_as_headers_contains_request_id(self):
+    def test_as_headers_empty(self):
+        # Context moved to request body - RequestTrace.as_headers is now empty
         trace = RequestTrace.from_headers(
             {G8eHeaders.EXECUTION_ID: "req-abc"}, component_id=ComponentName.G8EE
         )
         headers = trace.as_headers
-        assert headers[G8eHeaders.EXECUTION_ID] == "req-abc"
+        assert headers == {}
 
     def test_as_headers_omits_none_optional_fields(self):
+        # Context moved to request body - RequestTrace.as_headers is now empty
         trace = RequestTrace.from_headers({}, component_id=ComponentName.G8EE)
         headers = trace.as_headers
-        assert G8eHeaders.CASE_ID not in headers
+        assert headers == {}
         assert G8eHeaders.TASK_ID not in headers
         assert G8eHeaders.INVESTIGATION_ID not in headers
 
@@ -363,34 +367,40 @@ class TestG8eHTTPClientPrepareRequest:
     """_prepare_request must build correct headers from config and context."""
 
     async def test_prepare_request_injects_request_id(self, client):
-        _url, headers, _trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
-        assert G8eHeaders.EXECUTION_ID in headers
+        _url, headers, trace, request_ctx = await client._prepare_request("GET", "/api/health", headers={}, context=None)
+        # When no context provided, request_ctx is None
+        # Execution ID is in the trace object
+        assert request_ctx is None
+        assert trace.execution_id is not None
 
     async def test_prepare_request_never_injects_component_id_header(self, client):
-        _url, headers, _trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
+        _url, headers, _trace, _ctx = await client._prepare_request("GET", "/api/health", headers={}, context=None)
         assert "X-G8E-Component-ID" not in headers
 
     async def test_prepare_request_auth_token_formatted_as_bearer(self, authed_client):
-        _url, headers, _trace = await authed_client._prepare_request("GET", "/api/health", headers={}, context=None)
+        _url, headers, _trace, _ctx = await authed_client._prepare_request("GET", "/api/health", headers={}, context=None)
         assert headers["Authorization"] == "Bearer test-token"
 
     async def test_prepare_request_api_key_set_in_header(self, authed_client):
-        _url, headers, _trace = await authed_client._prepare_request("GET", "/api/health", headers={}, context=None)
+        _url, headers, _trace, _ctx = await authed_client._prepare_request("GET", "/api/health", headers={}, context=None)
         assert headers[HTTP_API_KEY_HEADER] == "test-api-key"
 
     async def test_prepare_request_joins_base_url_with_path(self, client):
-        url, _headers, _trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
+        url, _headers, _trace, _ctx = await client._prepare_request("GET", "/api/health", headers={}, context=None)
         assert url == "https://localhost:443/api/health"
 
     async def test_prepare_request_caller_headers_override_defaults(self, client):
-        _url, headers, _trace = await client._prepare_request(
+        _url, headers, _trace, _ctx = await client._prepare_request(
             "GET", "/api/health", headers={"X-Custom": "override"}, context=None
         )
         assert headers["X-Custom"] == "override"
 
-    async def test_prepare_request_trace_id_propagated_to_headers(self, client):
-        _url, headers, trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
-        assert headers[G8eHeaders.EXECUTION_ID] == trace.execution_id
+    async def test_prepare_request_trace_id_propagated_to_request_context(self, client):
+        _url, headers, trace, request_ctx = await client._prepare_request("GET", "/api/health", headers={}, context=None)
+        # When no context provided, request_ctx is None
+        assert request_ctx is None
+        # Execution ID is in the trace object
+        assert trace.execution_id is not None
 
     async def test_prepare_request_g8e_context_headers_propagated(self, client):
         ctx = G8eHttpContext(
@@ -400,14 +410,16 @@ class TestG8eHTTPClientPrepareRequest:
             case_id="case-456",
             investigation_id="inv-789",
         )
-        _url, headers, _trace = await client._prepare_request(
+        _url, headers, _trace, request_ctx = await client._prepare_request(
             "POST", "/api/internal/chat/stream", headers={}, context=ctx
         )
-        assert headers[G8eHeaders.WEB_SESSION_ID] == "sess-abc"
-        assert headers[G8eHeaders.USER_ID] == "user-123"
-        assert headers[G8eHeaders.SOURCE_COMPONENT] == "client"
-        assert headers[G8eHeaders.CASE_ID] == "case-456"
-        assert headers[G8eHeaders.INVESTIGATION_ID] == "inv-789"
+        # Context is now embedded in request body, not headers
+        assert request_ctx is not None
+        assert request_ctx.web_session_id == "sess-abc"
+        assert request_ctx.user_id == "user-123"
+        assert request_ctx.source_component == ComponentName.CLIENT
+        assert request_ctx.case_id == "case-456"
+        assert request_ctx.investigation_id == "inv-789"
 
 
 # =============================================================================

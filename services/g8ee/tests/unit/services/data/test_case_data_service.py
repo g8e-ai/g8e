@@ -36,6 +36,7 @@ from app.models import (
     CaseCreateRequest,
     CaseEventPayload,
     CaseUpdateRequest,
+    RequestContext,
 )
 from app.models.db_queries import CaseHistoryQuery
 from app.services.data.case_data_service import CaseDataService
@@ -64,6 +65,14 @@ class TestCaseDataService:
     @pytest.fixture
     def mock_event(self, mock_event_service):
         return mock_event_service
+
+    def _make_context(self) -> RequestContext:
+        return RequestContext(
+            web_session_id="sess-abc",
+            user_id="user-123",
+            organization_id="org-789",
+            source_component=ComponentName.CLIENT,
+        )
 
     # --- create_case tests ---
 
@@ -192,7 +201,7 @@ class TestCaseDataService:
 
     async def test_update_case_success(self, service, mock_cache):
         case_id = "case-123"
-        updates = CaseUpdateRequest(title="Updated Title")
+        updates = CaseUpdateRequest(title="Updated Title", context=self._make_context())
 
         # Mock get_case (internal call)
         mock_cache.get_document_with_cache.return_value = {
@@ -215,7 +224,7 @@ class TestCaseDataService:
 
     async def test_update_case_no_updates(self, service):
         with pytest.raises(BusinessLogicError, match="No updates provided"):
-            await service.update_case("case-123", CaseUpdateRequest())
+            await service.update_case("case-123", CaseUpdateRequest(context=self._make_context()))
 
     async def test_update_case_db_error(self, service, mock_cache):
         case_id = "case-123"
@@ -233,7 +242,7 @@ class TestCaseDataService:
         mock_cache.update_document.side_effect = Exception("Update fail")
 
         with pytest.raises(DatabaseError, match="Failed to update case"):
-            await service.update_case(case_id, CaseUpdateRequest(title="New"))
+            await service.update_case(case_id, CaseUpdateRequest(title="New", context=self._make_context()))
 
     async def test_update_case_g8e_error(self, service, mock_cache):
         from app.errors import G8eError
@@ -254,7 +263,7 @@ class TestCaseDataService:
         mock_cache.update_document.side_effect = G8eError(message="G8e update failure", code=ErrorCode.DB_WRITE_ERROR, category=ErrorCategory.DATABASE)
 
         with pytest.raises(G8eError, match="G8e update failure"):
-            await service.update_case(case_id, CaseUpdateRequest(title="New"))
+            await service.update_case(case_id, CaseUpdateRequest(title="New", context=self._make_context()))
 
     # --- delete_case tests ---
 

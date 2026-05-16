@@ -184,9 +184,9 @@ class TestPortCheckSuccess:
     async def test_publishes_command_to_pubsub(self, task_tracker):
         service, pubsub, execution = _make_service()
         investigation = _make_investigation()
-        args = _make_args(port=8080, host="redis-server")
+        args = _make_args(port=6379, host="redis-server")
 
-        execution.envelope = _make_success_envelope(host="redis-server", port=8080)
+        execution.envelope = _make_success_envelope(host="redis-server", port=6379)
 
         await service.execute_port_check(args, investigation, _make_context())
 

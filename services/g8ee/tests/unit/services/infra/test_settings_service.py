@@ -80,7 +80,7 @@ class TestSettingsService:
 
         # Mock platform document (without LLM keys since they are user-specific only)
         platform_settings = G8eePlatformSettings(
-            port=8080
+            port=80
         )
         platform_doc = PlatformSettingsDocument(
             settings=platform_settings

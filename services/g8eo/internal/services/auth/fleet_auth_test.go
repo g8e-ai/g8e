@@ -65,7 +65,7 @@ func TestAuthenticateWithDeviceToken_MultiUse_Success(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "/api/auth/device-link/register", r.URL.Path)
-		assert.Equal(t, validToken, r.Header.Get("X-G8E-Device-Token"))
+		assert.Equal(t, validToken, r.Header.Get(constants.HeaderDeviceToken))
 		assert.Equal(t, "application/json", r.Header.Get(constants.HeaderContentType))
 
 		var body DeviceInfo
@@ -187,7 +187,7 @@ func TestAuthenticateWithDeviceToken_MultiUse_RegistersAtLinkEndpoint(t *testing
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedPath = r.URL.Path
-		capturedToken = r.Header.Get("X-G8E-Device-Token")
+		capturedToken = r.Header.Get(constants.HeaderDeviceToken)
 		var body DeviceInfo
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 		capturedCSR = body.CSR

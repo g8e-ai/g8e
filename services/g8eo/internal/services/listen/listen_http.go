@@ -450,9 +450,9 @@ func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Re
 	// The token usually comes from the URL in handleDeviceLink, but here we might
 	// want it in the body or header for the new protocol.
 	// For now, let's just forward to handleDeviceLink style if we have a token.
-	token := r.Header.Get("X-G8E-Device-Token")
+	token := r.Header.Get(constants.HeaderDeviceToken)
 	if token == "" {
-		jsonError(w, http.StatusBadRequest, "missing X-G8E-Device-Token")
+		jsonError(w, http.StatusBadRequest, "missing X-G8E-Device-Token header")
 		return
 	}
 

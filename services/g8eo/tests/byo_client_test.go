@@ -28,10 +28,10 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/listen"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	pubsubv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/pubsubv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/listen"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
 
@@ -138,7 +138,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	regBody, _ := json.Marshal(regReq)
 	req, err := http.NewRequest(http.MethodPost, bootstrapURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
 	require.NoError(t, err)
-	req.Header.Set("X-G8E-Device-Token", token)
+	req.Header.Set(constants.HeaderDeviceToken, token)
 
 	bootstrapClient := &http.Client{
 		Transport: &http.Transport{

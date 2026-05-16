@@ -124,11 +124,11 @@ class TestSchemaToDict:
 
 class TestIsInternalEndpoint:
     @pytest.mark.parametrize("url,expected", [
-        ("http://localhost:8080", True),
+        ("http://localhost:9000", True),
         ("http://127.0.0.1:11434", True),
         ("http://[::1]:11434", True),
         ("http://operator:8000/v1", True),
-        ("http://service.local:8080", True),
+        ("http://service.local:9000", True),
         ("http://api.internal/v1", True),
         ("http://192.168.1.1:8000", True),
         ("http://10.0.0.1:8000", True),
@@ -169,7 +169,7 @@ class TestIsInternalEndpoint:
 
         monkeypatch.setattr("app.llm.utils.urlparse", mock_urlparse)
 
-        assert is_internal_endpoint("http://localhost:8080") is True
+        assert is_internal_endpoint("http://localhost:9000") is True
         assert is_internal_endpoint("https://google.com") is False
         assert is_internal_endpoint(None) is False
 

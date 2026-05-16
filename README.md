@@ -224,13 +224,13 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 ```
 
 1. **Trust the platform CA** on your workstation:
-   - macOS / Linux: `curl -fsSL http://localhost:8080/trust | sudo sh`
-   - Windows: `irm http://localhost:8080/trust | iex`
+   - macOS / Linux: `curl -fsSL http://localhost/trust | sudo sh`
+   - Windows: `irm http://localhost/trust | iex`
 2. **Authenticate the CLI** with your email:
    - `./g8e login --email your@email.com`
 3. **Install the Operator** on any host you want to manage:
    ```bash
-   curl -fsSL http://<hub>:8080/g8e | sh -s -- <device-link-token>
+   curl -fsSL http://<hub>/g8e | sh -s -- <device-link-token>
    ```
 
 ### CLI Reference
