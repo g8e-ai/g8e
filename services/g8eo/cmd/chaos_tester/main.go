@@ -12,7 +12,7 @@
 // Usage:
 //
 //	cd /home/bob/g8e/services/g8eo
-//	go run ./cmd/chaos_tester [--count=100] [--data-dir=.g8e/data] [--pki-dir=.g8e/pki]
+//	go run ./cmd/chaos_tester [--count=100] [--data-dir=../../.g8e/data] [--pki-dir=../../.g8e/pki]
 package main
 
 import (

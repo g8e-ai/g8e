@@ -1,6 +1,6 @@
 # g8e
 
-**A governance-first protocol for trustless, human-verified action by autonomous systems.**
+**governance architecture for trustless action by autonomous systems.**
 
 The **g8e Protocol** is the substrate: a wire contract that binds typed payloads, canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3) into a single signed `GovernanceEnvelope` (UAP JSON) transaction. It is not specific to any one domain. Anything that can express an intended action as a typed payload — infrastructure mutations, data writes, financial transfers, physical-world actuation, agent-to-agent calls — can be governed by it.
 

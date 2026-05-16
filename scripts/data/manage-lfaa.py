@@ -649,7 +649,10 @@ class LFAAManager:
         else:
             for r in rows:
                 action = r['action_type'] or 'UNKNOWN'
-                outcome_color = GREEN if 'receipt' in r['outcome'] or 'EXECUTED' in r['outcome'] else RED
+                # Outcomes like L1_BLOCKED and HASH_FAIL mean the platform successfully protected itself.
+                # Only use RED for truly unexpected/unhandled errors.
+                known_expected = ('action_receipt', 'EXECUTED', 'L1_BLOCKED', 'HASH_FAIL', 'L2_REJECTED', 'EXPIRED', 'REJECTED')
+                outcome_color = GREEN if any(k in r['outcome'] for k in known_expected) else RED
                 print(f"  {action:<20} {outcome_color}{r['outcome']:<15}{RESET} {r['count']:>9,}")
 
         print(f'\n  {BOLD}INTEGRITY VERIFICATION{RESET}')
@@ -661,7 +664,8 @@ class LFAAManager:
             FROM events
             WHERE type = 'HASH_FAIL'
         """).fetchone()
-        tampered_color = RED if row['tampered_attempts'] > 0 else GREEN
+        # Finding tampered envelopes and blocking them is a successful security event (GREEN)
+        tampered_color = GREEN
         print(f"  Tampered Envelopes: {tampered_color}{row['tampered_attempts']:,} ({row['percent']}%){RESET}")
 
         print(f'\n  {BOLD}SESSION THROUGHPUT{RESET}')

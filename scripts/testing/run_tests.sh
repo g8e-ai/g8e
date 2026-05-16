@@ -286,7 +286,7 @@ run_chaos() {
     
     # Ensure binary is built or run directly with go run
     # 'go run' is simpler for a one-off tool
-    go run ./cmd/chaos_tester "${EXTRA_ARGS[@]}"
+    go run ./cmd/chaos_tester --data-dir="$PROJECT_ROOT/.g8e/data" --pki-dir="$PROJECT_ROOT/.g8e/pki" "${EXTRA_ARGS[@]}"
 }
 
 # =============================================================================
