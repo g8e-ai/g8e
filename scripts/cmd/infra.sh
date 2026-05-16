@@ -141,7 +141,7 @@ print(json.dumps({
     ssh)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                help_file="$SCRIPT_DIR/docs/general/cli_help.md"
                 if [[ -f "$help_file" ]]; then
                     awk '/^### ssh/,/^### aws/' "$help_file" | head -n -1
                 else
@@ -157,7 +157,7 @@ print(json.dumps({
     aws)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                help_file="$SCRIPT_DIR/docs/general/cli_help.md"
                 if [[ -f "$help_file" ]]; then
                     awk '/^### aws/,/^### demo/' "$help_file" | head -n -1
                 else
@@ -173,7 +173,7 @@ print(json.dumps({
     search)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                help_file="$SCRIPT_DIR/docs/general/cli_help.md"
                 if [[ -f "$help_file" ]]; then
                     awk '/^### search/,/^### ssh/' "$help_file" | head -n -1
                 else
@@ -188,7 +188,7 @@ print(json.dumps({
     llm)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                help_file="$SCRIPT_DIR/docs/general/cli_help.md"
                 if [[ -f "$help_file" ]]; then
                     awk '/^### llm/,/^### mcp/' "$help_file" | head -n -1
                 else
@@ -204,7 +204,7 @@ print(json.dumps({
     security)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                help_file="$SCRIPT_DIR/docs/general/cli_help.md"
                 if [[ -f "$help_file" ]]; then
                     awk '/^### security/,/^### data/' "$help_file" | head -n -1
                 else
@@ -235,7 +235,7 @@ print(json.dumps({
     data)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                help_file="$SCRIPT_DIR/docs/general/cli_help.md"
                 if [[ -f "$help_file" ]]; then
                     awk '/^### data/,/^### demo/' "$help_file" | head -n -1
                 else
@@ -267,7 +267,7 @@ print(json.dumps({
     mcp)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                help_file="$SCRIPT_DIR/docs/general/cli_help.md"
                 if [[ -f "$help_file" ]]; then
                     awk '/^### mcp/,/^### llm/' "$help_file" | head -n -1
                 else

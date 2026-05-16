@@ -22,7 +22,7 @@ The outcome of this process is a valid **L2 Signature** bound to a `GovernanceEn
 - **The Auditor**: An independent **Auditor** stage (primary model tier) judges the candidates against the original intent, with the authority to revise or swap the winner if technical flaws (e.g., quoting errors, flag misuse) are found.
 - **Warden Defensive Analysis**: The **Warden** stage performs pre-execution risk classification (LOW, MEDIUM, HIGH) to calibrate the human approval experience.
 
-For a deep dive into the Tribunal's mechanics, see `@/home/bob/g8e/docs/architecture/governance.md`.
+For a deep dive into the Tribunal's mechanics, see [Governance Hierarchy](../protocol/governance.md).
 
 ## 2. Provider Reasoning: Thinking Levels
 

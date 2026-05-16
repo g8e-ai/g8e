@@ -10,7 +10,7 @@ Version: v0.2.4
 
 The g8e Protocol is the substrate of the platform: a **UAP JSON** wire contract for secure, auditable interaction between any g8e client and any host-side **Operator** implementation. An Operator is a role defined by this protocol — receive signed transactions, enforce L1/L2/L3 verification, execute through a defensive boundary, emit signed receipts anchored to a local ledger.
 
-The reference Operator implementation is **`g8eo`** (Go), and the bundled reference application includes **Engine (`g8ee`)** and **Dashboard (``)**. The protocol is designed for any Bring-Your-Own (BYO) Operator, frontend, or agent system; the bundled components are illustrative, not privileged.
+The reference Operator implementation is **`g8eo`** (Go), and the bundled reference application includes **Engine ([g8ee](../g8ee/README.md))**. The protocol is designed for any Bring-Your-Own (BYO) Operator, frontend, or agent system; the bundled components are illustrative, not privileged.
 
 # Core Invariants
 
@@ -168,3 +168,5 @@ The protocol is the authoritative contract. The files below are the reference im
 - [Pub/Sub Channels](pubsub.md) documents channel-level routing and subscription behavior.
 - [Governance & Mechanism Design](governance.md) documents the L1/L2/L3 safety model.
 - [Security](security.md) documents platform security mechanisms around execution and auditability.
+- [g8eo Operator](../g8eo/README.md) documents the reference Go implementation.
+- [g8ee Engine](../g8ee/README.md) documents the optional reference AI engine.

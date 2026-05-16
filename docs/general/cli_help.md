@@ -117,7 +117,7 @@ When no operator is connected:
 - `stop`: Stop Operator listen mode and any optional app processes
 - `restart [--with-apps|--with-g8ee]`: Restart Operator listen mode by default; optional apps require explicit opt-in
 - `status`: Show substrate health first and optional application-layer status separately
-- `reset`: Destructive. Wipes Dashboard/Engine data, Operator listen-mode data, and bootstrap secrets while preserving PKI material in `.g8e/pki`
+- `reset`: Destructive. Wipes Engine data, Operator listen-mode data, and bootstrap secrets while preserving PKI material in `.g8e/pki`
 - `wipe`: Clears application data via the Operator listen-mode API. Preserves platform settings, PKI material, secrets, and authentication state
 - `clean`: Nuke all processes and the `.g8e` runtime directory
 - `logs`: Stream logs from all components
@@ -175,12 +175,12 @@ When no operator is connected:
 **To start a demo, use `deploy -d <token>`. This will automatically bring up the fleet and authenticate the operators.**
 
 ### evals
-- `deploy -d <token>`: Start and authenticate eval operators with a dashboard-issued device link token
+- `deploy -d <token>`: Start and authenticate eval operators with a device link token
 - `run --gold-set <path>`: Execute benchmark against web-session-bound eval operators
 - `list`: List available evaluation scenarios
 - `down|status|logs`: Manage the evaluation fleet
 
-**Eval operators must be manually bound to your web session in the dashboard before they can be used for benchmarking. This ensures a human is present during execution.**
+**Eval operators must be manually bound to your session before they can be used for benchmarking. This ensures a human is present during execution.**
 
 #### evals workflow
 1. `./g8e evals deploy -d <token>`

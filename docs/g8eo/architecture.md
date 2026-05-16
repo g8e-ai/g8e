@@ -80,14 +80,14 @@ Transforms the reference Operator into the platform's backbone. Started with the
 #### Four-Port Contract
 Listen Mode exposes four distinct ports for different protocol surfaces:
 
-| Port | Default | Purpose | Authentication |
-|------|---------|---------|----------------|
-| **WSS Port** | 9001 | Pub/Sub broker for operator connections | mTLS (operator session via URI SAN) |
-| **HTTP Port** | 9000 | mTLS API for authenticated substrate operations | mTLS (operator session via URI SAN) |
-| **Bootstrap Port** | 8080 | Device-link enrollment and CSR-based registration | Plain TLS (public) |
-| **Public Port** | 8081 | Browser-based auth and BYO bootstrap | Plain TLS (public) |
+| Surface | Port (default) | Auth | Purpose |
+|---|---|---|---|
+| **Bootstrap / Trust Portal** | `8080` (TLS) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
+| **Public browser / BYO** | `8081` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery. |
+| **mTLS API** | `9000` | mTLS + SPIFFE URI SAN | `/db/*` (Document Store), `/kv/*` (KV with TTL), `/blob/*`, `/pubsub/publish`, `/api/operators/*`, `/api/device-links/*`, `/api/pki/{sign-csr,revoke,revocation-bundle}`, `/api/auth/passkey/*`. |
+| **Pub/Sub** | `9001` (mTLS WSS) | mTLS + SPIFFE URI SAN | `/ws/pubsub` real-time fan-out to Satellites and clients. |
 
-- **mTLS Ports (WSS, HTTP)**: Require valid operator certificates with URI SAN binding to operator session IDs. Used for substrate operations and command dispatch.
+- **mTLS Ports (WSS, mTLS API)**: Require valid operator certificates with URI SAN binding to operator session IDs. Used for substrate operations and command dispatch.
 - **Public Ports (Bootstrap, Public)**: Plain TLS endpoints for enrollment and browser-based flows. These are the sovereign entry points for new operators and BYO clients.
 
 ### 2. Standard Mode (Target)
@@ -153,12 +153,28 @@ When local storage is enabled (`-s`), the Operator maintains a **Local-First Aud
 
 ## Exit Codes
 
-| Code | Meaning |
-|---|---|
-| `0` | Success / Graceful Shutdown |
-| `2` | Auth Failure (Invalid/Expired Key) |
-| `7` | **mTLS Trust Failure**: Certificate verification failed. |
-| `10` | **Vault Error**: Failed to unlock or initialize the local audit vault. |
+On a fatal condition g8eo self-terminates with a stable exit code so launcher scripts and supervisors can act precisely. Codes are defined in `internal/constants/exit_codes.go`.
+
+| Code | Meaning | Action |
+|---|---|---|
+| **0** | Success | — |
+| **1** | General error | Inspect logs under `.g8e/logs/` |
+| **2** | Auth failure | Verify device-link token or API key; re-enroll if needed |
+| **3** | Permission denied | Check filesystem permissions on `.g8e/` |
+| **4** | Network error | Check Hub reachability and DNS |
+| **5** | Config error | Validate CLI flags / environment |
+| **6** | Storage error | Inspect SQLite vaults and git ledger init |
+| **7** | TLS / cert trust failure | Refresh the Hub trust bundle; re-enroll if pinning failed |
+| **10** | **Vault Error** | Failed to unlock or initialize the local audit vault. |
+
+## Canonical Truths
+
+The wire contract lives in `protocol/proto/`; the shared JSON registries in `protocol/constants/` remain the source for event names, status values, and channel prefixes. g8eo mirrors them as compile-time Go constants so drift fails at build time, not at runtime.
+
+- **Protocol**: Generated Go artifacts under `internal/protocol/proto/` mirror `protocol/proto/common.proto`, `protocol/proto/operator.proto`, and `protocol/proto/pubsub.proto`.
+- **Wire format**: Canonical JSON (protojson) on all client-facing surfaces (HTTP, pub/sub, receipts, audit exports). Protobuf bytes are an internal storage detail only.
+- **Signing basis**: A deterministic `transaction_hash` is computed from normalized envelope fields; signatures are over the hash, so wire encoding is irrelevant to the security invariant.
+- **Events / Status / Channels**: `internal/constants/events.go`, `status.go`, and `channels.go` mirror their JSON counterparts under `protocol/constants/`.
 
 ---
 

@@ -8,14 +8,21 @@ parent: Components
 Last Updated: 2026-05-13
 Version: v0.2.4
 
-g8ee is the **optional reference AI engine** of the g8e platform. It is one concrete application-layer adapter built on top of the [g8e Protocol](../architecture/protocol.md); the protocol substrate (`g8eo`, the reference Operator) is the only mandatory component. g8ee demonstrates how a Tribunal-based, multi-provider LLM reasoning system can act as a **Layer 2 (Consensus) producer** that emits typed, signed `GovernanceEnvelope` (UAP) transactions to a conforming Operator for verification and execution.
+g8ee is the **optional reference AI engine** of the g8e platform. It is one concrete application-layer adapter built on top of the [g8e Protocol](../protocol/README.md); the protocol substrate (`g8eo`, the reference Operator) is the only mandatory component. g8ee demonstrates how a Tribunal-based, multi-provider LLM reasoning system can act as a **Layer 2 (Consensus) producer** that emits typed, signed `GovernanceEnvelope` (UAP) transactions to a conforming Operator for verification and execution.
+
+## Core Documents
+
+- [**Agentic AI**](ai_agents.md) — LLM adapter behavior and tool-loop orchestration.
+- [**Agent Personas**](agent_personas.md) — The five-member Tribunal ensemble (Axiom, Concord, Variance, Pragma, Nemesis).
+- [**Thinking & Reasoning**](thinking.md) — Structural vs. provider-native reasoning.
+- [**Prompt Engineering**](prompts.md) — Schema and logic for agent persona assembly.
 
 If you are building a BYO client, you do not need g8ee — anything that produces protocol-conformant transactions is interchangeable with it. g8ee is shipped in-tree as the first reference consumer of that same public contract.
 
 ## Position in the Platform
 
 - **Mandatory substrate**: `g8eo` Operator (Hub mode via `--listen`, Satellite mode on managed hosts). Owns L1/L2/L3 verification, PKI/mTLS, audit, and Warden execution.
-- **Optional reference application layer**: `g8ee` (this component, AI engine / L2 producer) and `` (dashboard adapter / browser BYO client). Both consume the Operator protocol surface and have no privileged substrate role.
+- **Optional reference application layer**: `g8ee` (this component, AI engine / L2 producer). It consumes the Operator protocol surface and has no privileged substrate role.
 - **Default start (`./g8e platform start`)**: Operator only. g8ee is started explicitly via `./g8e platform start --with-apps` or `./g8e apps start g8ee`.
 - **Wire format**: canonical JSON (protojson) `GovernanceEnvelope` on all client-facing surfaces (HTTP, pub/sub, receipts). Signing is computed over a deterministic transaction hash; wire encoding is independent of the security invariant.
 
@@ -92,17 +99,13 @@ flowchart LR
     subgraph App ["Optional Reference Application Layer"]
         direction TB
         g8ee["g8ee<br/>AI Engine / L2 Producer"]
-        ["<br/>Dashboard Adapter"]
     end
 
     Client -- "TLS 1.3 / mTLS" --> Operator
-    Client -. "HTTPS / SSE" .-> 
-     <--> Operator
     g8ee <--> Operator
-     <-. "internal HTTP<br/>(SSE relay, optional)" .-> g8ee
 ```
 
-g8ee depends only on the Operator's public protocol surface (DB / KV / PubSub / Blob over mTLS, plus canonical-JSON `GovernanceEnvelope` on pub/sub). Its historical internal-HTTP coupling to `` (SSE push, intent forwarding) is part of the optional dashboard adapter path and is not required for BYO clients.
+g8ee depends only on the Operator's public protocol surface (DB / KV / PubSub / Blob over mTLS, plus canonical-JSON `GovernanceEnvelope` on pub/sub). Any historical internal-HTTP coupling is deprecated and not required for BYO clients.
 
 ### Data Access Hierarchy
 1. **Clients**: Handle raw transport/protocol (e.g., `DBClient`, `PubSubClient`, `BlobClient`).
@@ -337,7 +340,7 @@ g8ee uses `CacheAsideService` to manage synchronization between the authoritativ
 - **`query_documents`**: Uses MD5 hashing of query parameters to cache result sets.
 - **`append_to_array`**: Atomic `arrayUnion` on DB followed by cache invalidation.
 
-For the full list of call behaviors and TTL strategies, see [architecture/storage.md](../architecture/storage.md#cache-aside-service).
+For the full list of call behaviors and TTL strategies, see [g8eo Storage](../g8eo/storage.md#cache-aside-service).
 
 ---
 
@@ -390,7 +393,7 @@ All LLM model configurations are defined in `services/g8ee/app/models/model_conf
 
 The `LLMModelConfig` class defines the schema for each model:
 - `name`: Model identifier string
-- `supported_thinking_levels`: The single source of truth for thinking capability. An empty list means the model cannot think at all. A list containing `OFF` means thinking is opt-in; a list omitting `OFF` means the model is always-on reasoning and callers must supply one of the listed non-`OFF` levels. See [architecture/thinking_levels.md](../architecture/thinking_levels.md).
+- `supported_thinking_levels`: The single source of truth for thinking capability. An empty list means the model cannot think at all. A list containing `OFF` means thinking is opt-in; a list omitting `OFF` means the model is always-on reasoning and callers must supply one of the listed non-`OFF` levels. See [Thinking & Reasoning](thinking.md).
 - `supports_thinking`: Derived read-only property — `True` iff `supported_thinking_levels` is non-empty. Do not set this field directly; change the levels list instead.
 - `thinking_budgets`: Optional per-level `dict[ThinkingLevel, int]` used by Anthropic to override the default token-budget table when a model benefits from non-default values (Opus uses this to opt into a 32_000-token HIGH budget).
 - `thinking_dialect`: Ollama-only. Selects the wire encoding for reasoning toggling (`NONE` omits the `think` kwarg; `NATIVE_TOGGLE` sends `think=True`/`False`). Cloud providers ignore this field.
@@ -552,7 +555,7 @@ g8ee also owns heartbeat status decay: `HeartbeatStaleMonitorService` (`app/serv
 
 ### Defensive Safety
 
-Before dispatching any state-changing operation, g8ee runs the L1/L2/L3 governance path: L1 technical bedrock checks, L2 Tribunal consensus and Auditor commitment, and L3 authorization state from the Governance Gateway. Command risk classification (LOW / MEDIUM / HIGH, fails closed to HIGH), file operation safety, and error analysis with auto-fix all feed that path. Dispatch to g8eo is a g8e protocol operation: a typed `operator.proto` payload is wrapped in a UAP JSON `GovernanceEnvelope` with governance metadata and published through operator pub/sub. See [architecture/protocol.md](../architecture/protocol.md) and [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo) for full details.
+Before dispatching any state-changing operation, g8ee runs the L1/L2/L3 governance path: L1 technical bedrock checks, L2 Tribunal consensus and Auditor commitment, and L3 authorization state from the Governance Gateway. Command risk classification (LOW / MEDIUM / HIGH, fails closed to HIGH), file operation safety, and error analysis with auto-fix all feed that path. Dispatch to g8eo is a g8e protocol operation: a typed `operator.proto` payload is wrapped in a UAP JSON `GovernanceEnvelope` with governance metadata and published through operator pub/sub. See [Protocol Substrate](../protocol/protocol.md) and [Security Architecture](../protocol/security.md#operator-commands-via-sentinel-g8eo) for full details.
 
 ### MCP Adapter
 
@@ -790,7 +793,7 @@ Key LFAA components on the Operator:
 - **Audit Vault** — Local SQLite database (`{workdir}/.g8e/data/g8e.db`) storing all events: user messages, command executions, file mutations, and AI responses. Sensitive fields encrypted at rest.
 - **Ledger** — Multi-Ledger Architecture: per-session isolated git repositories at `{workdir}/.g8e/data/ledger/sessions/<operator_session_id>/` providing cryptographic version history for every file the AI has modified. Each session owns an isolated git repo initialized lazily on first mutation.
 
-For complete schema DDL, exact table/column definitions, vault encryption details (AES-256-GCM envelope encryption, KEK derivation, DEK wrapping), and data flow specifics, see [architecture/storage.md — g8eo Operator Storage](../architecture/storage.md#g8eo--operator-storage).
+For complete schema DDL, exact table/column definitions, vault encryption details (AES-256-GCM envelope encryption, KEK derivation, DEK wrapping), and data flow specifics, see [g8eo Storage](../g8eo/storage.md#g8eo--operator-storage).
 
 ---
 
@@ -800,7 +803,7 @@ Sentinel is the platform-wide protector that runs on both the AI Engine (`g8ee`)
 
 - **AI Engine Side (`g8ee`)** — Performs **ingress scrubbing** as a redundant layer of protection for all Operator data (command results, file contents) before it is transmitted to any model provider. It also scrubs sensitive data from user messages.
 - **Operator Side (`g8eo`)** — Performs **pre-execution threat detection** (MITRE ATT&CK-mapped categories) to block dangerous commands on the host, and **egress scrubbing** to ensure raw sensitive data never leaves the system of record.
-- **`sentinel_mode`** — Controls whether the AI reads from the scrubbed vault or the raw vault. The Python bool is converted to the wire string format at the pub/sub boundary. See [architecture/storage.md — Sentinel Mode and Vault Mode](../architecture/storage.md#sentinel-mode-and-vault-mode) for details.
+- **`sentinel_mode`** — Controls whether the AI reads from the scrubbed vault or the raw vault. The Python bool is converted to the wire string format at the pub/sub boundary. See [g8eo Storage](../g8eo/storage.md#sentinel-mode-and-vault-mode) for details.
 
 Sentinel ensures that sensitive information is replaced with safe placeholders (e.g., `[AWS_KEY]`, `[EMAIL]`) across the entire pipeline, standing guard on both the operator and the application side.
 
@@ -842,7 +845,7 @@ g8ee uses three distinct clients for data operations.
 
 All KV keys are versioned with a `v1` prefix. Keys are constructed exclusively via the `KVKey` builder class in `app/constants/kv_keys.py` — never construct key strings manually.
 
-For the full KV key namespace (all patterns, builders, owners, TTLs) and the complete document collection registry, see [architecture/storage.md — KV Store](../architecture/storage.md#kv-store) and [architecture/storage.md — Document Store](../architecture/storage.md#document-store).
+For the full KV key namespace (all patterns, builders, owners, TTLs) and the complete document collection registry, see [g8eo Storage](../g8eo/storage.md#kv-store) and [g8eo Storage](../g8eo/storage.md#document-store).
 
 ### Pub/Sub Channels
 
@@ -967,7 +970,7 @@ For services that push many event types (operator status, heartbeat, AI progress
 
 ## Prompt System
 
-Full prompt-system reference — file layout, loader, assembly pipeline, mode selection, tool-description handling, and authoring conventions — lives in [docs/architecture/prompts.md](../architecture/prompts.md). This section covers only the g8ee-specific integration points.
+Full prompt-system reference — file layout, loader, assembly pipeline, mode selection, tool-description handling, and authoring conventions — lives in [Prompt Engineering](prompts.md). This section covers only the g8ee-specific integration points.
 
 ### Mode-Aware Prompts
 
@@ -975,7 +978,7 @@ Full prompt-system reference — file layout, loader, assembly pipeline, mode se
 
 ### Prompt Assembly
 
-`app/llm/prompts.py` owns all runtime prompt construction. `build_modular_system_prompt` is the only entry point for building system prompts — callers must not assemble prompt strings directly. The full section order is documented in `docs/architecture/prompts.md`.
+`app/llm/prompts.py` owns all runtime prompt construction. `build_modular_system_prompt` is the only entry point for building system prompts — callers must not assemble prompt strings directly. The full section order is documented in [Prompt Engineering](prompts.md).
 
 ### Prompt Constants
 
@@ -1147,7 +1150,7 @@ The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_se
 **L3 Auto-Approval Behavior:**
 When `enable_auto_approve` is true and a command's base verb is in the auto-approve list, the command can skip the human approval prompt only after it has passed all L1 Hard Gates and L2 Consensus. Auto-approval is L3 authorization state and never bypasses earlier layers.
 
-> **Note:** Command validation is configured per-user via user settings, not platform settings. Users can enable/disable whitelist and blacklist through the Settings UI or API. See [Security Architecture — Command Allowlist and Denylist](../architecture/security.md#command-allowlist-and-denylist) for details on how to configure these controls.
+> **Note:** Command validation is configured per-user via user settings, not platform settings. Users can enable/disable whitelist and blacklist through the Settings UI or API. See [Security Architecture](../protocol/security.md#command-allowlist-and-denylist) for details on how to configure these controls.
 
 #### Vertex AI Search (`VertexSearchSettings`)
 

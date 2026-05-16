@@ -106,7 +106,7 @@ case "$TOP" in
         fi
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                help_file="$SCRIPT_DIR/docs/general/cli_help.md"
                 if [[ -f "$help_file" ]]; then
                     awk '/^### demo/,/^### evals/' "$help_file" | head -n -1
                 else
@@ -158,7 +158,7 @@ case "$TOP" in
         REMAINING_ARGS=("${filtered_eval_args[@]:1}")
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                help_file="$SCRIPT_DIR/docs/general/cli_help.md"
                 if [[ -f "$help_file" ]]; then
                     awk '/^### evals/,/^## DETAILED HELP/' "$help_file" | head -n -1
                 else

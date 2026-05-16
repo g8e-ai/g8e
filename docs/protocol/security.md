@@ -10,7 +10,7 @@ Version: v0.2.5
 
 The **g8e Protocol** is a Zero-Trust substrate for human-verified action by autonomous systems. Security is not an "add-on" but the core constraint: the protocol assumes the AI control plane is potentially adversarial or error-prone and enforces safety on the host through a 3-layer governance hierarchy and a unified envelope architecture.
 
-The platform is split into the protocol substrate, an **Operator** role (with `g8eo` as the reference Go implementation), and optional reference application components (``/Dashboard, `g8ee`/Engine). The Operator owns all security, trust, and execution responsibilities on the host; the application layer holds no privileged trust.
+The platform is split into the protocol substrate, an **Operator** role (with [g8eo](../g8eo/README.md) as the reference Go implementation), and optional reference application components ([g8ee](../g8ee/README.md)/Engine). The Operator owns all security, trust, and execution responsibilities on the host; the application layer holds no privileged trust.
 
 ## Bedrock Principles
 
