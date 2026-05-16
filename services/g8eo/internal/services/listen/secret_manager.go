@@ -34,6 +34,7 @@ var requiredBootstrapSecrets = []string{
 	"session_encryption_key",
 	"warden_signing_key",
 	"warden_key_id",
+	"auditor_hmac_key",
 }
 
 // SecretManager handles generation and validation of platform security secrets.
@@ -136,11 +137,16 @@ func (m *SecretManager) createPlatformSettings(now time.Time) error {
 	if err != nil {
 		return err
 	}
+	auditorHMACKey, err := m.generateSecureToken(32)
+	if err != nil {
+		return err
+	}
 
 	secrets := map[string]string{
 		"session_encryption_key": sessionEncryptionKey,
 		"warden_signing_key":     wardenSeed, // Seed for ED25519
 		"warden_key_id":          wardenKeyID,
+		"auditor_hmac_key":       auditorHMACKey,
 	}
 
 	platformSettings := models.SettingsDocument{}
@@ -148,6 +154,7 @@ func (m *SecretManager) createPlatformSettings(now time.Time) error {
 		"session_encryption_key": secrets["session_encryption_key"],
 		"warden_signing_key":     secrets["warden_signing_key"],
 		"warden_key_id":          secrets["warden_key_id"],
+		"auditor_hmac_key":       secrets["auditor_hmac_key"],
 	}
 	platformSettings.CreatedAt = now
 	platformSettings.UpdatedAt = now

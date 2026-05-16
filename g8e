@@ -7,7 +7,7 @@ export G8E_PROJECT_ROOT="$SCRIPT_DIR"
 # Check for common dependencies
 _check_deps() {
     local missing=()
-    for cmd in curl; do
+    for cmd in curl jq; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             missing+=("$cmd")
         fi

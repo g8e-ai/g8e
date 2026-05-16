@@ -147,6 +147,8 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc("/api/auth/login/challenge", h.handleAuthLoginChallenge)
 	mux.HandleFunc("/api/auth/login/verify", h.handleAuthLoginVerify)
 	mux.HandleFunc("/api/auth/logout", h.handleAuthLogout)
+	mux.HandleFunc("/api/auth/bootstrap", h.handleBootstrap)
+	mux.HandleFunc("/api/auth/bootstrap/status", h.handleBootstrapStatus)
 
 	// PKI discovery also available on public port for BYO bootstrap
 	mux.HandleFunc("/.well-known/g8e/pki/root.pem", h.handlePKIRoot)
@@ -158,9 +160,14 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	authedMux.HandleFunc("/api/user/me", h.handleUserMe)
 	authedMux.HandleFunc("/api/auth/web-session", h.handleWebSession)
 
+	// [PIVOT] Move passkey registration to public authed mux so bootstrapped users can register
+	authedMux.HandleFunc("/api/auth/passkey/register-challenge", h.handlePasskeyRegisterChallenge)
+	authedMux.HandleFunc("/api/auth/passkey/register-verify", h.handlePasskeyRegisterVerify)
+
 	// Wrap authed routes in WebSessionAuth middleware
 	mux.Handle("/api/user/", h.auth.WebSessionAuth(authedMux, h.db))
 	mux.Handle("/api/auth/web-session", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/auth/passkey/", h.auth.WebSessionAuth(authedMux, h.db))
 
 	return pathTraversalGuard(mux)
 }
@@ -196,6 +203,9 @@ func containsTraversal(path string) bool {
 
 func jsonResponse(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set(constants.HeaderContentType, "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 }
@@ -249,6 +259,8 @@ func (h *HTTPHandler) handlePKIRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set(constants.HeaderContentType, "application/x-pem-file")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
 	w.Write(pem)
 }
@@ -264,6 +276,8 @@ func (h *HTTPHandler) handlePKIHubBundle(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	w.Header().Set(constants.HeaderContentType, "application/x-pem-file")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
 	w.Write(pem)
 }
@@ -581,6 +595,8 @@ func (h *HTTPHandler) handleG8eDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 	script := G8eDeployScript(host, h.cfg.Listen.WSSPort, h.cfg.Listen.BootstrapPort)
 	w.Header().Set("Content-Type", "text/x-shellscript")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(script))
 }
@@ -602,6 +618,8 @@ func (h *HTTPHandler) handleTrustScript(w http.ResponseWriter, r *http.Request) 
 	}
 	script := UniversalTrustScript(host, h.cfg.Listen.BootstrapPort)
 	w.Header().Set("Content-Type", "text/x-shellscript")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(script))
 }
@@ -623,6 +641,8 @@ func (h *HTTPHandler) handleTrustScriptPS1(w http.ResponseWriter, r *http.Reques
 	}
 	script := WindowsPowerShellTrustScript(host, h.cfg.Listen.BootstrapPort)
 	w.Header().Set("Content-Type", "text/plain") // PowerShell scripts often served as text or application/powershell
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(script))
 }
@@ -642,8 +662,10 @@ func (h *HTTPHandler) handleTrustScriptBat(w http.ResponseWriter, r *http.Reques
 	if host == "" {
 		host = "localhost"
 	}
-	script := WindowsTrustScript(host, h.cfg.Listen.BootstrapPort)
+	script := WindowsTrustScriptBat(host, h.cfg.Listen.BootstrapPort)
 	w.Header().Set("Content-Type", "text/plain") // Batch scripts often served as text
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(script))
 }
@@ -1468,8 +1490,29 @@ func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, http.StatusNotFound, "blob not found")
 			return
 		}
-		w.Header().Set("Content-Type", contentType)
+
+		// SECURITY: Sanitize content type to prevent XSS.
+		// Only allow safe, well-known types or default to application/octet-stream.
+		safeContentType := "application/octet-stream"
+		allowedTypes := map[string]bool{
+			"application/json":       true,
+			"application/pdf":        true,
+			"image/png":              true,
+			"image/jpeg":             true,
+			"image/gif":              true,
+			"text/plain":             true,
+			"application/x-ndjson":   true,
+			"application/x-pem-file": true,
+		}
+		if allowedTypes[contentType] {
+			safeContentType = contentType
+		}
+
+		w.Header().Set("Content-Type", safeContentType)
 		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 		w.WriteHeader(http.StatusOK)
 		w.Write(data) //nolint:errcheck
 
@@ -1557,6 +1600,20 @@ func (h *HTTPHandler) handlePasskeyRegisterChallenge(w http.ResponseWriter, r *h
 		return
 	}
 
+	// [PIVOT] Enforce session-to-user binding for public browser registration
+	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+		if req.UserID != "" && req.UserID != ctxUserID {
+			jsonError(w, http.StatusForbidden, "user_id mismatch with session")
+			return
+		}
+		req.UserID = ctxUserID
+	}
+
+	if req.UserID == "" {
+		jsonError(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
 	options, err := h.passkey.GenerateRegistrationChallenge(req.UserID, req.Email, req.UserName)
 	if err != nil {
 		h.logger.Warn("Passkey register challenge failed", "error", err, "userID", req.UserID)
@@ -1589,6 +1646,20 @@ func (h *HTTPHandler) handlePasskeyRegisterVerify(w http.ResponseWriter, r *http
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	// [PIVOT] Enforce session-to-user binding for public browser registration
+	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+		if req.UserID != "" && req.UserID != ctxUserID {
+			jsonError(w, http.StatusForbidden, "user_id mismatch with session")
+			return
+		}
+		req.UserID = ctxUserID
+	}
+
+	if req.UserID == "" {
+		jsonError(w, http.StatusBadRequest, "user_id required")
 		return
 	}
 
@@ -1631,6 +1702,14 @@ func (h *HTTPHandler) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.
 	}
 
 	userID := req.UserID
+	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+		if userID != "" && userID != ctxUserID {
+			jsonError(w, http.StatusForbidden, "user_id mismatch with session")
+			return
+		}
+		userID = ctxUserID
+	}
+
 	if userID == "" {
 		jsonError(w, http.StatusBadRequest, "user_id required")
 		return
@@ -1677,6 +1756,14 @@ func (h *HTTPHandler) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Req
 	}
 
 	userID := req.UserID
+	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
+		if userID != "" && userID != ctxUserID {
+			jsonError(w, http.StatusForbidden, "user_id mismatch with session")
+			return
+		}
+		userID = ctxUserID
+	}
+
 	if userID == "" {
 		jsonError(w, http.StatusBadRequest, "user_id required")
 		return
@@ -1933,6 +2020,101 @@ func (h *HTTPHandler) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	})
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{"success": true})
+}
+
+// handleBootstrap creates the first user in the system.
+// Rejects with 403 Forbidden if any users already exist.
+func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// 1. Safety check: Fail closed if users already exist
+	hasUsers, err := h.userSvc.HasAnyUsers()
+	if err != nil {
+		h.logger.Error("Failed to check for existing users during bootstrap", "error", err)
+		jsonError(w, http.StatusInternalServerError, "bootstrap check failed")
+		return
+	}
+	if hasUsers {
+		h.logger.Warn("Bootstrap attempted on non-empty system", "remote_addr", r.RemoteAddr)
+		jsonError(w, http.StatusForbidden, "bootstrap only available for initial setup")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	if req.Email == "" {
+		jsonError(w, http.StatusBadRequest, "email required")
+		return
+	}
+
+	// 2. Create the first user
+	user, err := h.userSvc.CreateUser(req.Email, req.Name)
+	if err != nil {
+		h.logger.Error("Failed to create bootstrap user", "error", err, "email", req.Email)
+		jsonError(w, http.StatusInternalServerError, "failed to create user")
+		return
+	}
+
+	// 3. Immediately issue a session cookie so they can register a passkey
+	session, err := h.passkey.CreateSession(user.ID)
+	if err != nil {
+		h.logger.Error("Failed to create session for bootstrap user", "error", err, "user_id", user.ID)
+		jsonError(w, http.StatusInternalServerError, "user created but session failed")
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "g8e_session",
+		Value:    session.ID,
+		Path:     "/",
+		Expires:  time.Unix(session.ExpiresAtUnixMs/1000, 0),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	h.logger.Info("[BOOTSTRAP] System initialized with first user", "user_id", user.ID, "email", user.Email)
+
+	jsonResponse(w, http.StatusCreated, map[string]interface{}{
+		"success": true,
+		"user":    user,
+		"session": session,
+	})
+}
+
+// handleBootstrapStatus returns whether the system has been bootstrapped (at least one user exists).
+func (h *HTTPHandler) handleBootstrapStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	hasUsers, err := h.userSvc.HasAnyUsers()
+	if err != nil {
+		h.logger.Error("Failed to check for existing users", "error", err)
+		jsonError(w, http.StatusInternalServerError, "status check failed")
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"bootstrapped": hasUsers,
+	})
 }
 
 // handleUserMe returns the current authenticated user.

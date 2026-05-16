@@ -22,6 +22,7 @@ from typing import Any, Protocol, cast, runtime_checkable
 
 from app.constants.paths import PATHS
 from app.utils.path import resolve_project_root
+from app.utils.security import validate_safe_path
 
 # Filename of the tamper-evidence manifest written by g8eo SecretManager
 # alongside bootstrap secrets on the host bootstrap directory (.g8e/secrets). Must stay in sync with
@@ -91,8 +92,8 @@ class BootstrapService:
         if self._cached_key is not None:
             return self._cached_key
 
-        key_path = self._secrets_dir / "session_encryption_key"
         try:
+            key_path = validate_safe_path("session_encryption_key", self._secrets_dir)
             if key_path.exists():
                 self._cached_key = key_path.read_text().strip()
                 self._logger.info("Loaded session encryption key from host secrets directory")
@@ -114,8 +115,8 @@ class BootstrapService:
         if self._cached_auditor_hmac_key is not None:
             return self._cached_auditor_hmac_key
 
-        key_path = self._secrets_dir / "auditor_hmac_key"
         try:
+            key_path = validate_safe_path("auditor_hmac_key", self._secrets_dir)
             if key_path.exists():
                 self._cached_auditor_hmac_key = key_path.read_text().strip()
                 self._logger.info("Loaded auditor HMAC key from host secrets directory")
@@ -132,14 +133,14 @@ class BootstrapService:
             return self._cached_ca_path
 
         # Check the canonical location in the PKI directory
-        ca_path = self._pki_dir / "trust" / "hub-bundle.pem"
         try:
+            ca_path = validate_safe_path("trust/hub-bundle.pem", self._pki_dir)
             if ca_path.exists():
                 self._cached_ca_path = str(ca_path)
                 self._logger.info("Loaded CA cert path from host PKI directory: %s", self._cached_ca_path)
                 return self._cached_ca_path
         except Exception as e:
-            self._logger.warning("Failed to read CA cert at %s: %s", ca_path, e)
+            self._logger.warning("Failed to read CA cert: %s", e)
 
         self._logger.info("CA certificate not found in host PKI directory")
         return None

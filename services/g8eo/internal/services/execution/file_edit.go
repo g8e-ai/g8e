@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/security"
 )
 
 // FileEditService handles file editing operations with modern best practices
@@ -74,7 +75,8 @@ func (fes *FileEditService) ExecuteFileEdit(ctx context.Context, request *models
 	}
 
 	// Validate file path (security check)
-	if err := fes.validateFilePath(request.FilePath); err != nil {
+	absPath, err := security.ValidatePath(request.FilePath, fes.config.WorkDir)
+	if err != nil {
 		result.Status = constants.ExecutionStatusFailed
 		errMsg := fmt.Sprintf("Invalid file path: %v", err)
 		result.ErrorMessage = &errMsg
@@ -83,9 +85,9 @@ func (fes *FileEditService) ExecuteFileEdit(ctx context.Context, request *models
 		fes.finalizeResult(result)
 		return result, fmt.Errorf("invalid file path: %w", err)
 	}
+	request.FilePath = absPath // Use resolved absolute path
 
 	// Execute operation based on type
-	var err error
 	switch request.Operation {
 	case models.FileEditOperationRead:
 		err = fes.executeRead(ctx, request, result)
@@ -138,26 +140,10 @@ func (fes *FileEditService) ExecuteFileEdit(ctx context.Context, request *models
 	return result, nil
 }
 
-// validateFilePath ensures the file path is safe and valid
+// validateFilePath ensures the file path is safe and valid (wrapper for centralized security logic)
 func (fes *FileEditService) validateFilePath(filePath string) error {
-	// Resolve absolute path
-	absPath, err := filepath.Abs(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve absolute path: %w", err)
-	}
-
-	// Check for path traversal attempts (basic security)
-	if strings.Contains(absPath, "..") {
-		return fmt.Errorf("path traversal detected")
-	}
-
-	// Ensure path is not empty
-	if absPath == "" {
-		return fmt.Errorf("empty file path")
-	}
-
-	fes.logger.Info("File path validated", "absolute_path", absPath)
-	return nil
+	_, err := security.ValidatePath(filePath, fes.config.WorkDir)
+	return err
 }
 
 // executeRead reads a file or file section

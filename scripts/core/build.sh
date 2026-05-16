@@ -430,11 +430,6 @@ _stop_operator_listen() {
     fi
 }
 
-_sync_operator_binaries() {
-    echo "  Binary sync disabled - X-Internal-Auth and /api/internal/* routes removed"
-    return 0
-}
-
 _wait_operator_listen_healthy() {
     local url="$1" timeout_s="$2" interval="${3:-1}"
     local waited=0
@@ -452,6 +447,10 @@ _wait_operator_listen_healthy() {
         waited=$(( waited + interval ))
     done
     echo -e "  Operator listen mode: \033[0;32mready\033[0m (${waited}s)"
+
+    # Auto-bootstrap if needed
+    source "$PROJECT_ROOT/scripts/cmd/common.sh"
+    _operator_bootstrap || true
 }
 
 _wait_service_healthy() {
@@ -533,7 +532,23 @@ if [[ "$COMMAND" == "status" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
     if _operator_listen_running; then
-        printf "  %-14s  %-10s  (PID: %s)\n" "operator" "RUNNING" "$(cat "$OPERATOR_LISTEN_PID_FILE")"
+        local pid
+        pid=$(cat "$OPERATOR_LISTEN_PID_FILE")
+        
+        # Check bootstrap status
+        local bootstrapped="UNKNOWN"
+        local trust_bundle="$OPERATOR_LISTEN_PKI_DIR/trust/hub-bundle.pem"
+        if [[ -f "$trust_bundle" ]]; then
+            local status_resp
+            status_resp=$(curl -sSk --cacert "$trust_bundle" "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/api/auth/bootstrap/status" 2>/dev/null)
+            if [[ $(echo "$status_resp" | jq -r '.bootstrapped' 2>/dev/null) == "true" ]]; then
+                bootstrapped="YES"
+            else
+                bootstrapped="NO"
+            fi
+        fi
+        
+        printf "  %-14s  %-10s  (PID: %s, Bootstrapped: %s)\n" "operator" "RUNNING" "$pid" "$bootstrapped"
     else
         printf "  %-14s  %-10s\n" "operator" "STOPPED"
     fi
@@ -579,7 +594,6 @@ if [[ "$COMMAND" == "restart" ]]; then
     echo ""
     echo "Waiting for services..."
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 60 1
-    _sync_operator_binaries
     for svc in "${RESTART_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
         _wait_optional_app_healthy "$svc"
@@ -622,7 +636,6 @@ if [[ "$COMMAND" == "reset" ]]; then
     echo ""
     echo "Waiting for services..."
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
-    _sync_operator_binaries
 
     for svc in "${RESET_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -657,7 +670,6 @@ if [[ "$COMMAND" == "wipe" ]]; then
     echo "Restarting Operator listen mode..."
     _start_operator_listen
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 120 2
-    _sync_operator_binaries
 
     echo "Clearing app data from Operator listen mode..."
     echo "  Warning: wipe endpoint removed - X-Internal-Auth and /api/internal/* routes deprecated"
@@ -721,7 +733,6 @@ if [[ "$COMMAND" == "up" ]]; then
     echo ""
     echo "Waiting for services..."
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 60 1
-    _sync_operator_binaries
     
     for svc in "${UP_COMPONENTS[@]}"; do
         _wait_optional_app_healthy "$svc"
@@ -755,7 +766,6 @@ if [[ "$COMMAND" == "setup" ]]; then
     echo ""
     echo "Waiting for services..."
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
-    _sync_operator_binaries
 
     for svc in "${SETUP_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -795,7 +805,6 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     echo ""
     echo "Waiting for services..."
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
-    _sync_operator_binaries
 
     for svc in "${REBUILD_COMPONENTS[@]}"; do
         _wait_optional_app_healthy "$svc"

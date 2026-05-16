@@ -679,6 +679,37 @@ func TestHandlePubSubPublish(t *testing.T) {
 	})
 }
 
+func TestHandleBootstrapStatus(t *testing.T) {
+	h, _ := setupTestHTTPHandler(t)
+
+	t.Run("Initially not bootstrapped", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
+		rr := httptest.NewRecorder()
+		h.handleBootstrapStatus(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, false, resp["bootstrapped"])
+	})
+
+	t.Run("Bootstrapped after creating a user", func(t *testing.T) {
+		_, err := h.userSvc.CreateUser("superadmin@g8e.local", "Superadmin")
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
+		rr := httptest.NewRecorder()
+		h.handleBootstrapStatus(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, true, resp["bootstrapped"])
+	})
+}
+
 func TestContainsTraversal(t *testing.T) {
 	assert.True(t, containsTraversal("/a/../b"))
 	assert.True(t, containsTraversal("../etc/passwd"))

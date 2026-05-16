@@ -26,6 +26,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/security"
 )
 
 // FsListService handles file system listing operations using readdirplus-style metadata
@@ -67,11 +68,12 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 		path = s.workDir
 	}
 
-	// Make path absolute
-	absPath, err := filepath.Abs(path)
+	// Validate and resolve path (security check)
+	absPath, err := security.ValidatePath(path, s.workDir)
 	if err != nil {
-		return s.failResult(result, "path_resolution_error", fmt.Sprintf("failed to resolve absolute path: %v", err))
+		return s.failResult(result, "validation_error", fmt.Sprintf("invalid path: %v", err))
 	}
+
 	result.Path = absPath
 
 	// Validate path exists and is a directory

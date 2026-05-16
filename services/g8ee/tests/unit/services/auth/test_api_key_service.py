@@ -44,7 +44,7 @@ class TestApiKeyService:
         mock_cache_aside.create_document.return_value = MagicMock(success=True)
 
         result = await api_key_service.issue_key(
-            api_key="g8e_test_key_12345",
+            raw_key="g8e_test_key_12345",
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
@@ -66,7 +66,7 @@ class TestApiKeyService:
         mock_cache_aside.create_document.return_value = MagicMock(success=False, error="Storage error")
 
         result = await api_key_service.issue_key(
-            api_key="g8e_test_key_12345",
+            raw_key="g8e_test_key_12345",
             user_id="user-123",
         )
 
@@ -108,7 +108,7 @@ class TestApiKeyService:
         mock_settings_service = AsyncMock()
 
         result = await api_key_service.issue_operator_key(
-            api_key="g8e_op_key_12345",
+            raw_key="g8e_op_key_12345",
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
@@ -123,7 +123,7 @@ class TestApiKeyService:
         mock_settings_service = AsyncMock()
 
         result = await api_key_service.issue_operator_key(
-            api_key="g8e_op_key_12345",
+            raw_key="g8e_op_key_12345",
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
@@ -138,8 +138,8 @@ class TestApiKeyService:
         mock_settings_service = AsyncMock()
 
         result = await api_key_service.rotate_operator_key(
-            old_api_key="g8e_old_key_12345",
-            new_api_key="g8e_new_key_67890",
+            old_raw_key="g8e_old_key_12345",
+            new_raw_key="g8e_new_key_67890",
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
@@ -154,8 +154,8 @@ class TestApiKeyService:
         mock_settings_service = AsyncMock()
 
         result = await api_key_service.rotate_operator_key(
-            old_api_key="g8e_old_key_12345",
-            new_api_key="g8e_new_key_67890",
+            old_raw_key="g8e_old_key_12345",
+            new_raw_key="g8e_new_key_67890",
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
@@ -171,7 +171,7 @@ class TestApiKeyService:
         mock_settings_service = AsyncMock()
 
         result = await api_key_service.revoke_operator_key(
-            api_key="g8e_op_key_12345",
+            raw_key="g8e_op_key_12345",
             settings_service=mock_settings_service,
         )
 
@@ -184,7 +184,7 @@ class TestApiKeyService:
         mock_settings_service = AsyncMock()
 
         result = await api_key_service.revoke_operator_key(
-            api_key="g8e_op_key_12345",
+            raw_key="g8e_op_key_12345",
             settings_service=mock_settings_service,
         )
 

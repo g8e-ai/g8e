@@ -27,6 +27,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/security"
 )
 
 // FsGrepService handles recursive grep operations
@@ -69,10 +70,12 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 		path = s.workDir
 	}
 
-	absPath, err := filepath.Abs(path)
+	// Validate and resolve path (security check)
+	absPath, err := security.ValidatePath(path, s.workDir)
 	if err != nil {
-		return s.failResult(result, "path_resolution_error", fmt.Sprintf("failed to resolve absolute path: %v", err))
+		return s.failResult(result, "validation_error", fmt.Sprintf("invalid path: %v", err))
 	}
+
 	result.Path = absPath
 
 	// Compile regex

@@ -15,93 +15,124 @@ package listen
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
+	"text/template"
+	"time"
+
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 )
 
-// WindowsTrustScript returns a Windows batch script that trusts the platform CA.
-func WindowsTrustScript(host string, port int) string {
+var hostSanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9\.-]`)
+
+func sanitizeHost(host string) string {
+	// Only allow alphanumeric, dots, and dashes. Reject everything else.
+	return hostSanitizeRe.ReplaceAllString(host, "")
+}
+
+func executeTemplate(name, tmpl string, data interface{}) string {
+	t := template.Must(template.New(name).Parse(tmpl))
+	var buf strings.Builder
+	if err := t.Execute(&buf, data); err != nil {
+		// Should never happen with fixed templates
+		panic(fmt.Sprintf("template execution failed: %v", err))
+	}
+	return buf.String()
+}
+
+// WindowsTrustScriptBat returns a Windows batch script that trusts the platform CA.
+func WindowsTrustScriptBat(host string, port int) string {
+	host = sanitizeHost(host)
 	portSuffix := ""
 	if port != 80 {
 		portSuffix = fmt.Sprintf(":%d", port)
 	}
 	url := fmt.Sprintf("http://%s%s/ca.crt", host, portSuffix)
-	return fmt.Sprintf(`@echo off
+
+	const tmpl = `@echo off
 :: Escalate to Administrator if not already elevated
->nul 2>&1 "%%SYSTEMROOT%%\system32\cacls.exe" "%%SYSTEMROOT%%\system32\config\system"
-if '%%errorlevel%%' NEQ '0' (
+>nul 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
+if '%errorlevel%' NEQ '0' (
     echo Requesting administrative privileges...
-    echo Set UAC = CreateObject^("Shell.Application"^) > "%%temp%%\getadmin.vbs"
-    echo UAC.ShellExecute "%%~s0", "", "", "runas", 1 >> "%%temp%%\getadmin.vbs"
-    "%%temp%%\getadmin.vbs"
+    echo Set UAC = CreateObject^("Shell.Application"^) > "%temp%\getadmin.vbs"
+    echo UAC.ShellExecute "%~s0", "", "", "runas", 1 >> "%temp%\getadmin.vbs"
+    "%temp%\getadmin.vbs"
     exit /B
 )
-if exist "%%temp%%\getadmin.vbs" ( del "%%temp%%\getadmin.vbs" )
+if exist "%temp%\getadmin.vbs" ( del "%temp%\getadmin.vbs" )
 
-set HOST=%s
+set HOST={{.Host}}
 
 echo Removing any existing g8e certificates...
-for /f "tokens=2 delims==" %%%%s in ('certutil -store Root ^| findstr /i "g8e"') do (
-    certutil -delstore Root "%%%%s" >nul 2>&1
+for /f "tokens=2 delims==" %%s in ('certutil -store Root ^| findstr /i "g8e"') do (
+    certutil -delstore Root "%%s" >nul 2>&1
 )
 
 echo Downloading g8e CA Certificate...
-curl -sSf -L -o "%%temp%%\g8e-ca.crt" %s
-if %%errorlevel%% NEQ 0 (
+curl -sSf -L -o "%temp%\g8e-ca.crt" {{.URL}}
+if %errorlevel% NEQ 0 (
     echo.
-    echo ERROR: Failed to download CA certificate from %s
-    echo Make sure the g8e platform is running and reachable on port %d.
+    echo ERROR: Failed to download CA certificate from {{.URL}}
+    echo Make sure the g8e platform is running and reachable on port {{.Port}}.
     pause
     exit /B 1
 )
 
 echo Trusting g8e CA Certificate...
-certutil -addstore -f "Root" "%%temp%%\g8e-ca.crt"
-if %%errorlevel%% NEQ 0 (
-    del /f /q "%%temp%%\g8e-ca.crt" >nul 2>&1
+certutil -addstore -f "Root" "%temp%\g8e-ca.crt"
+if %errorlevel% NEQ 0 (
+    del /f /q "%temp%\g8e-ca.crt" >nul 2>&1
     echo.
     echo ERROR: Failed to trust the certificate. Run this script as Administrator.
     pause
     exit /B 1
 )
-del /f /q "%%temp%%\g8e-ca.crt" >nul 2>&1
+del /f /q "%temp%\g8e-ca.crt" >nul 2>&1
 echo.
 echo Certificate trusted.
 
-echo %%HOST%% | findstr /R "^[0-9][0-9]*\\.[0-9][0-9]*\\.[0-9][0-9]*\\.[0-9][0-9]*$" >nul
-if %%errorlevel%% EQU 0 (
-    for /f "tokens=2 delims= " %%%%A in ('nslookup %%HOST%% 2^>nul ^| findstr /i "Name:"') do (
-        if not "%%%%A"=="" (
-            echo Resolved %%HOST%% to %%%%A
-            set HOST=%%%%A
+echo %HOST% | findstr /R "^[0-9][0-9]*\\.[0-9][0-9]*\\.[0-9][0-9]*\\.[0-9][0-9]*$" >nul
+if %errorlevel% EQU 0 (
+    for /f "tokens=2 delims= " %%A in ('nslookup %HOST% 2^>nul ^| findstr /i "Name:"') do (
+        if not "%%A"=="" (
+            echo Resolved %HOST% to %%A
+            set HOST=%%A
         ) else (
-            echo Could not resolve hostname for %%HOST%%, using IP address
+            echo Could not resolve hostname for %HOST%, using IP address
         )
     )
 )
 
-echo Restart your browser and go to https://%%HOST%%/
+echo Restart your browser and go to https://%HOST%/
 pause
-`, host, url, url, port)
+`
+	return executeTemplate(constants.Status.Platform.Windows, tmpl, map[string]interface{}{
+		"Host": host,
+		"URL":  url,
+		"Port": port,
+	})
 }
 
 // UniversalTrustScript returns a POSIX shell script for macOS and Linux.
 func UniversalTrustScript(host string, port int) string {
+	host = sanitizeHost(host)
 	portSuffix := ""
 	if port != 80 {
 		portSuffix = fmt.Sprintf(":%d", port)
 	}
-	url := fmt.Sprintf("http://%%s%s/ca.crt", portSuffix)
-	return fmt.Sprintf(`#!/bin/sh
+	urlTmpl := fmt.Sprintf("http://%%s%s/ca.crt", portSuffix)
+
+	const tmpl = `#!/bin/sh
 set -eu
 
-HOST="%s"
-URL="%s"
+HOST="{{.Host}}"
+URL="{{.URL}}"
 CERT_FILE="/tmp/g8e-ca.crt"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo ""
     echo "ERROR: This script must run as root."
-    echo "Usage: curl -fsSL http://${HOST}%s/trust | sudo sh"
+    echo "Usage: curl -fsSL http://${HOST}{{.PortSuffix}}/trust | sudo sh"
     echo ""
     exit 1
 fi
@@ -112,7 +143,7 @@ echo "Downloading g8e CA certificate..."
 if ! curl -fsSL -o "$CERT_FILE" "$URL"; then
     echo ""
     echo "ERROR: Failed to download CA certificate from $URL"
-    echo "Make sure the g8e platform is running and reachable on port %d."
+    echo "Make sure the g8e platform is running and reachable on port {{.Port}}."
     exit 1
 fi
 
@@ -182,11 +213,18 @@ if echo "$HOST" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
 fi
 
 echo "Restart your browser and navigate to https://$HOST/"
-`, host, strings.Replace(url, "%%s", host, 1), portSuffix, port)
+`
+	return executeTemplate("universal", tmpl, map[string]interface{}{
+		"Host":       host,
+		"URL":        fmt.Sprintf(urlTmpl, host),
+		"PortSuffix": portSuffix,
+		"Port":       port,
+	})
 }
 
 // G8eDeployScript returns a POSIX shell script that deploys the operator binary on any Linux system.
 func G8eDeployScript(host string, httpsPort int, httpPort int) string {
+	host = sanitizeHost(host)
 	httpPortSuffix := ""
 	if httpPort != 80 {
 		httpPortSuffix = fmt.Sprintf(":%d", httpPort)
@@ -203,20 +241,20 @@ func G8eDeployScript(host string, httpsPort int, httpPort int) string {
 		portFlags = fmt.Sprintf(" --wss-port %d --http-port %d", httpsPort, httpsPort)
 	}
 
-	return fmt.Sprintf(`#!/bin/sh
+	const tmpl = `#!/bin/sh
 # g8e-deploy — deploy the g8e Operator on any Linux system
-# Generated by the g8e platform at %s
+# Generated by the g8e platform at {{.Timestamp}}
 #
 # Usage:
-#   curl -fsSL %s/g8e | sh -s -- <device-link-token>
-#   G8E_TOKEN=<token> curl -fsSL %s/g8e | sh
+#   curl -fsSL {{.HttpUrl}}/g8e | sh -s -- <device-link-token>
+#   G8E_TOKEN=<token> curl -fsSL {{.HttpUrl}}/g8e | sh
 #
 # Requirements: curl or wget, Linux (x64, arm64, or x86)
 set -u
 
-G8E_HOST="%s"
-G8E_HTTPS_HOST="%s"
-G8E_HTTP_URL="%s"
+G8E_HOST="{{.Host}}"
+G8E_HTTPS_HOST="{{.HttpsHost}}"
+G8E_HTTP_URL="{{.HttpUrl}}"
 
 # Reverse DNS lookup if host is an IP address
 if echo "$G8E_HOST" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' > /dev/null 2>&1; then
@@ -225,17 +263,17 @@ if echo "$G8E_HOST" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' > /dev/null 2>
         if [ -n "$RESOLVED_HOST" ]; then
             _log "Resolved $G8E_HOST to $RESOLVED_HOST"
             G8E_HOST="$RESOLVED_HOST"
-            G8E_HTTPS_HOST="${RESOLVED_HOST}%s"
-            G8E_HTTP_URL="http://${RESOLVED_HOST}%s"
+            G8E_HTTPS_HOST="${RESOLVED_HOST}{{.HttpsPortSuffix}}"
+            G8E_HTTP_URL="http://${RESOLVED_HOST}{{.HttpPortSuffix}}"
         fi
     fi
 fi
 
 # --- Output helpers (color only when attached to a terminal) ---
 _C=0; [ -t 1 ] 2>/dev/null && _C=1
-_log() { if [ $_C -eq 1 ]; then printf '\033[36m[g8e]\033[0m %%s\n' "$*"; else printf '[g8e] %%s\n' "$*"; fi; }
-_ok()  { if [ $_C -eq 1 ]; then printf '\033[32m[g8e]\033[0m %%s\n' "$*"; else printf '[g8e] %%s\n' "$*"; fi; }
-_err() { if [ $_C -eq 1 ]; then printf '\033[31m[g8e] %%s\033[0m\n' "$*" >&2; else printf '[g8e] %%s\n' "$*" >&2; fi; }
+_log() { if [ $_C -eq 1 ]; then printf '\033[36m[g8e]\033[0m %s\n' "$*"; else printf '[g8e] %s\n' "$*"; fi; }
+_ok()  { if [ $_C -eq 1 ]; then printf '\033[32m[g8e]\033[0m %s\n' "$*"; else printf '[g8e] %s\n' "$*"; fi; }
+_err() { if [ $_C -eq 1 ]; then printf '\033[31m[g8e] %s\033[0m\n' "$*" >&2; else printf '[g8e] %s\n' "$*" >&2; fi; }
 _die() { _err "$@"; exit 1; }
 
 # --- Linux check ---
@@ -294,7 +332,7 @@ _log ""
 # Step 1: Fetch platform CA certificate (plain HTTP)
 _log "Fetching platform CA certificate..."
 if ! _fetch "$G8E_HTTP_URL/ca.crt" "$_ca"; then
-  _die "Failed to fetch CA certificate. Ensure the platform is running and port %d is reachable."
+  _die "Failed to fetch CA certificate. Ensure the platform is running and port {{.HttpPort}} is reachable."
 fi
 _ok "CA certificate ready"
 
@@ -302,9 +340,8 @@ _ok "CA certificate ready"
 _log "Downloading operator binary (linux/$_arch)..."
 if ! _fetch_tls "https://$G8E_HTTPS_HOST/operator/download/linux/$_arch" \
      "./g8e.operator" "$_ca" "$_token"; then
-  _die "Download failed. Check that the token is valid and the platform is accessible on port %d."
+  _die "Download failed. Check that the token is valid and the platform is accessible on port {{.HttpsPort}}."
 fi
-chmod +x ./g8e.operator
 _ok "Operator binary ready ($(wc -c < ./g8e.operator | tr -d ' ') bytes)"
 
 # Cleanup CA cert before exec replaces this process
@@ -313,23 +350,36 @@ trap - EXIT INT TERM
 
 # Step 3: Launch
 _log "Starting operator..."
-exec ./g8e.operator --device-token "$_token" --endpoint "$G8E_HOST"%s
-`, host, httpUrl, httpUrl, host, httpsHost, httpUrl, httpsPortSuffix, httpPortSuffix, httpPort, httpsPort, portFlags)
+exec ./g8e.operator --device-token "$_token" --endpoint "$G8E_HOST"{{.PortFlags}}
+`
+	return executeTemplate("deploy", tmpl, map[string]interface{}{
+		"Timestamp":       time.Now().Format(time.RFC3339),
+		"Host":            host,
+		"HttpsHost":       httpsHost,
+		"HttpUrl":         httpUrl,
+		"HttpsPortSuffix": httpsPortSuffix,
+		"HttpPortSuffix":  httpPortSuffix,
+		"HttpPort":        httpPort,
+		"HttpsPort":       httpsPort,
+		"PortFlags":       portFlags,
+	})
 }
 
 // WindowsPowerShellTrustScript returns a PowerShell script for Windows.
 func WindowsPowerShellTrustScript(host string, port int) string {
+	host = sanitizeHost(host)
 	portSuffix := ""
 	if port != 80 {
 		portSuffix = fmt.Sprintf(":%d", port)
 	}
 	url := fmt.Sprintf("http://%s%s/ca.crt", host, portSuffix)
-	return fmt.Sprintf(`#Requires -RunAsAdministrator
+
+	const tmpl = `#Requires -RunAsAdministrator
 $ErrorActionPreference = "Stop"
 
-$url = "%s"
+$url = "{{.URL}}"
 $certFile = Join-Path $env:TEMP "g8e-ca.crt"
-$g8eHost = "%s"
+$g8eHost = "{{.Host}}"
 
 Write-Host "Removing any existing g8e certificates..."
 Get-ChildItem Cert:\LocalMachine\Root | Where-Object { $_.Subject -like "*g8e*" -or $_.FriendlyName -like "*g8e*" } | Remove-Item -Force -ErrorAction SilentlyContinue
@@ -338,7 +388,7 @@ Write-Host "Downloading g8e CA certificate..."
 try {
     Invoke-WebRequest -Uri $url -OutFile $certFile -UseBasicParsing
 } catch {
-    Write-Error "Failed to download CA certificate from $url. Make sure the g8e platform is running and reachable on port %d."
+    Write-Error "Failed to download CA certificate from $url. Make sure the g8e platform is running and reachable on port {{.Port}}."
     exit 1
 }
 
@@ -366,5 +416,10 @@ if ($g8eHost -match $ipRegex) {
 }
 
 Write-Host "Restart your browser and navigate to https://$g8eHost/"
-`, url, host, port)
+`
+	return executeTemplate("powershell", tmpl, map[string]interface{}{
+		"URL":  url,
+		"Host": host,
+		"Port": port,
+	})
 }

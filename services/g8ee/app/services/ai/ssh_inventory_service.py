@@ -31,6 +31,7 @@ import os
 from pathlib import Path
 
 from app.errors import ConfigurationError
+from app.utils.security import validate_safe_path
 from app.models.ssh_inventory import SshHost, SshInventory
 
 logger = logging.getLogger(__name__)
@@ -175,8 +176,17 @@ def _resolve_include_path(pattern: str, config_dir: Path) -> list[Path]:
     # Resolve the glob pattern
     matched = glob.glob(glob_pattern)
 
-    # Sort for deterministic ordering
-    return sorted(Path(p) for p in matched)
+    # Sort for deterministic ordering and validate paths
+    safe_paths: list[Path] = []
+    for p in sorted(matched):
+        try:
+            # Prevent traversal outside the config directory
+            safe_p = validate_safe_path(p, config_dir)
+            safe_paths.append(safe_p)
+        except ValueError as exc:
+            logger.warning("[SSH_INVENTORY] Skipping unsafe include path %s: %s", p, exc)
+            continue
+    return safe_paths
 
 
 def _parse_ssh_config(

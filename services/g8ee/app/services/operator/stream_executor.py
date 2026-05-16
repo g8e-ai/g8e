@@ -19,6 +19,7 @@ Orchestrates the Phase 4 'stream' operation:
 3. Executes 'docker exec g8eo ... stream' command
 """
 
+import re
 import logging
 import asyncio
 from typing import TYPE_CHECKING
@@ -112,7 +113,31 @@ class OperatorStreamExecutor:
 
         # 3. Execute 'docker exec g8eo ... stream'
         # Construct the command
-        hosts_str = ",".join(args.hosts)
+        # SECURITY: Validate inputs to prevent flag injection or other malicious behavior
+        # hosts must be a list of alphanumeric/hyphenated strings
+        validated_hosts = []
+        for host in args.hosts:
+            if not re.match(r"^[a-zA-Z0-9.\-_]+$", host):
+                logger.error("[STREAM_EXECUTOR] Invalid host format blocked: %s", host)
+                return CommandExecutionResult(
+                    success=False,
+                    error=f"Invalid host format: {host}",
+                    error_type=CommandErrorType.VALIDATION_ERROR,
+                    execution_id=execution_id
+                )
+            validated_hosts.append(host)
+
+        # arch must be a known architecture
+        if args.arch not in ["amd64", "arm64"]:
+            logger.error("[STREAM_EXECUTOR] Invalid architecture blocked: %s", args.arch)
+            return CommandExecutionResult(
+                success=False,
+                error=f"Invalid architecture: {args.arch}",
+                error_type=CommandErrorType.VALIDATION_ERROR,
+                execution_id=execution_id
+            )
+
+        hosts_str = ",".join(validated_hosts)
         cmd = [
             "docker", "exec", "g8eo",
             "/app/g8e", "operator", "stream",

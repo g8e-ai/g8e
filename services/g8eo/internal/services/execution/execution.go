@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/security"
 	system "github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
 )
 
@@ -328,6 +329,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 			result.Status = constants.ExecutionStatusFailed
 			result.ErrorMessage = system.StringPtr(err.Error())
 			result.ErrorType = system.StringPtr("execution_error")
+			result.ReturnCode = system.IntPtr(es.errorToReturnCode(err))
 		}
 		execCtx.mu.Unlock()
 	}
@@ -387,28 +389,51 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		return fmt.Errorf("empty command")
 	}
 
-	// ALWAYS use shell execution for reliable behavior
-	// This ensures:
-	// - Variable expansion ($HOME, $USER, etc.)
-	// - Tilde expansion (~)
-	// - Glob patterns (*.txt)
-	// - Pipes, redirects, and all shell features
-	// - Consistent behavior matching what users expect from a terminal
+	// ALWAYS use direct execution for safety unless shell features are specifically required.
+	// This reduces the risk of command injection and satisfies security scanners.
 
-	// Apply memory limit via ulimit if configured
-	shellCommand := fullCommand
-	if es.maxMemoryMB > 0 {
-		// ulimit -v is virtual memory limit in KB
-		limitKB := es.maxMemoryMB * 1024
-		shellCommand = fmt.Sprintf("ulimit -v %d; %s", limitKB, fullCommand)
-		es.logger.Info("Applying memory limit via ulimit", "limit_mb", es.maxMemoryMB)
+	var cmd *exec.Cmd
+	useShell := false
+
+	// Check for shell-specific characters that might require a shell
+	// Or if the original command explicitly requested a shell (e.g. for builtins like 'exit')
+	useShell = isShellCommand || security.IsShellRequired(fullCommand)
+
+	if useShell {
+		// Apply memory limit via ulimit if configured
+		shellScript := fullCommand
+		if es.maxMemoryMB > 0 {
+			// ulimit -v is virtual memory limit in KB
+			limitKB := es.maxMemoryMB * 1024
+			shellScript = fmt.Sprintf("ulimit -v %d; %s", limitKB, fullCommand)
+		}
+
+		es.logger.Info("Executing command via shell",
+			"command", shellScript,
+			"execution_type", "shell")
+
+		// Use /bin/bash -c for shell execution.
+		// SECURITY: We use "--" to signify the end of bash options.
+		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", "--", shellScript)
+	} else {
+		// Direct execution: split into command and args
+		parts := strings.Fields(fullCommand)
+		if len(parts) == 0 {
+			return fmt.Errorf("empty command")
+		}
+
+		bin, err := exec.LookPath(parts[0])
+		if err != nil {
+			return fmt.Errorf("command not found: %s", parts[0])
+		}
+
+		es.logger.Info("Executing command directly",
+			"bin", bin,
+			"args", parts[1:],
+			"execution_type", "direct")
+
+		cmd = exec.CommandContext(ctx, bin, parts[1:]...)
 	}
-
-	es.logger.Info("Executing command via shell",
-		"command", shellCommand,
-		"execution_type", "shell")
-
-	cmd := exec.CommandContext(ctx, "/bin/bash", "-c", shellCommand)
 
 	// Update result with the full command
 	execCtx.mu.Lock()
@@ -452,6 +477,12 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 
 	// Add any additional environment variables from request
 	for k, v := range request.Environment {
+		// SECURITY: Validate key/value to prevent environment variable injection.
+		// Keys and values should not contain '=' or null characters.
+		if strings.Contains(k, "=") || strings.Contains(k, "\x00") || strings.Contains(v, "\x00") {
+			es.logger.Warn("Skipping invalid environment variable", "key", k)
+			continue
+		}
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 

@@ -409,6 +409,16 @@ func (s *ListenDBService) DocDelete(collection, id string) (bool, error) {
 	return n > 0, nil
 }
 
+// DocDeleteNamespace removes all documents in a collection.
+// Returns the count of deleted documents.
+func (s *ListenDBService) DocDeleteNamespace(collection string) (int64, error) {
+	result, err := s.db.Exec("DELETE FROM documents WHERE collection = ?", collection)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 // DocQuery returns documents matching field conditions.
 // Supported ops: ==, !=, <, >, <=, >=. orderBy is "field" or "field DESC". limit 0 means no limit.
 func (s *ListenDBService) DocQuery(collection string, filters []models.DocFilter, orderBy string, limit int) ([]*models.Document, error) {

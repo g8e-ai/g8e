@@ -32,6 +32,53 @@ _pid_alive() {
 _g8ee_running()    { _pid_alive "$_G8EE_PID_FILE"; }
 _operator_running() { _pid_alive "$_OPERATOR_PID_FILE"; }
 
+_operator_bootstrap() {
+    local email="${G8E_BOOTSTRAP_EMAIL:-superadmin@g8e.local}"
+    local name="${G8E_BOOTSTRAP_NAME:-Superadmin}"
+    local public_port="${OPERATOR_LISTEN_PUBLIC_PORT:-8081}"
+    local public_url="https://localhost:$public_port"
+    local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
+
+    if [[ ! -f "$trust_bundle" ]]; then
+        return 1
+    fi
+
+    # Check if already bootstrapped
+    local status_resp
+    status_resp=$(curl -sSk --cacert "$trust_bundle" "$public_url/api/auth/bootstrap/status" 2>/dev/null)
+    if [[ $(echo "$status_resp" | jq -r '.bootstrapped' 2>/dev/null) == "true" ]]; then
+        return 0
+    fi
+
+    _banner "auto-bootstrapping platform..."
+    local bootstrap_body
+    bootstrap_body=$(jq -n --arg email "$email" --arg name "$name" '{email: $email, name: $name}')
+    
+    # Perform bootstrap and capture cookies in memory
+    local resp_headers
+    resp_headers=$(curl -sS -i -k --cacert "$trust_bundle" \
+        -X POST -H "Content-Type: application/json" \
+        -d "$bootstrap_body" \
+        "$public_url/api/auth/bootstrap" 2>/dev/null)
+
+    local session_id
+    session_id=$(echo "$resp_headers" | grep -i "Set-Cookie:" | grep "g8e_session=" | sed 's/.*g8e_session=\([^;]*\).*/\1/')
+
+    if [[ -z "$session_id" ]]; then
+        echo "[g8e] bootstrap failed: no session cookie returned" >&2
+        echo "$resp_headers" >&2
+        return 1
+    fi
+
+    # Save to credentials for persistent CLI auth, but avoid raw cookie jars
+    local user_id
+    user_id=$(echo "$resp_headers" | grep -v '^[A-Z]' | jq -r '.user.id' 2>/dev/null)
+    _save_credentials "$session_id" "$user_id" "bootstrap"
+    
+    _banner "platform bootstrapped successfully (user: $email)"
+    return 0
+}
+
 _ensure_operator() {
     if ! _operator_running; then
         echo "[g8e] Operator listen mode is not running — start the platform: ./g8e platform start" >&2
@@ -76,6 +123,8 @@ _operator_curl() {
 
     if [[ -n "$OPERATOR_SESSION_ID" ]]; then
         args+=(-H "X-G8E-Operator-Session-ID: $OPERATOR_SESSION_ID")
+        # Also send as a cookie for web-authenticated routes
+        args+=(--cookie "g8e_session=$OPERATOR_SESSION_ID")
     fi
 
     args+=(-H "Content-Type: application/json")
