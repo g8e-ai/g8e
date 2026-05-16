@@ -600,10 +600,12 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 					result.ErrorMessage = system.StringPtr("Command not found")
 					result.ErrorType = system.StringPtr("command_not_found")
 				} else {
-					// Other non-zero exit codes (including deliberate exit 126/127) are normal completion
+					// All other non-zero exit codes (including deliberate exit 126/127) are normal completion
+					// The command executed and returned an exit code - that's a successful execution
 					result.Status = constants.ExecutionStatusCompleted
 				}
 			} else {
+				// Non-Unix system or wait status unavailable - treat as completed with exit code
 				result.Status = constants.ExecutionStatusCompleted
 			}
 		} else if strings.Contains(err.Error(), "signal: killed") {
@@ -694,12 +696,14 @@ func (es *ExecutionService) errorToReturnCode(err error) int {
 	if err == nil {
 		return 0
 	}
-	errStr := err.Error()
+	errStr := strings.ToLower(err.Error())
 	if strings.Contains(errStr, "executable file not found") ||
-		strings.Contains(errStr, "no such file or directory") {
+		strings.Contains(errStr, "no such file or directory") ||
+		strings.Contains(errStr, "command not found") {
 		return 127 // Command not found
 	}
-	if strings.Contains(errStr, "permission denied") {
+	if strings.Contains(errStr, "permission denied") ||
+		strings.Contains(errStr, "access denied") {
 		return 126 // Command not executable
 	}
 	return 1 // Generic failure

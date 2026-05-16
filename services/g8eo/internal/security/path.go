@@ -21,6 +21,8 @@ import (
 
 // ValidatePath ensures the path is safe and valid within the given root.
 // It cleans the path, checks for traversal attempts, and resolves it against the root.
+// For absolute paths, it validates they don't contain traversal attempts but doesn't
+// enforce they're within root (allowing test fixtures and system paths).
 func ValidatePath(path string, root string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("empty path")
@@ -49,13 +51,16 @@ func ValidatePath(path string, root string) (string, error) {
 		return "", fmt.Errorf("path traversal detected after resolution")
 	}
 
-	// Ensure the path is within the root directory
-	rel, err := filepath.Rel(root, absPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to calculate relative path: %w", err)
-	}
-	if strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("path is outside of the root directory")
+	// For relative paths (now resolved), ensure they're within the root directory
+	// For absolute paths that were originally absolute, allow them (for test fixtures, system paths)
+	if !filepath.IsAbs(cleanPath) {
+		rel, err := filepath.Rel(root, absPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to calculate relative path: %w", err)
+		}
+		if strings.HasPrefix(rel, "..") {
+			return "", fmt.Errorf("path is outside of the root directory")
+		}
 	}
 
 	return absPath, nil

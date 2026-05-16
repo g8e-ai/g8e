@@ -68,25 +68,26 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 		path = s.workDir
 	}
 
-	// Validate and resolve path (security check)
+	// Validate path exists and is a directory before security validation
+	// This allows us to return specific error types
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return s.failResult(result, "path_not_found", fmt.Sprintf("path does not exist: %s", path))
+		}
+		return s.failResult(result, "stat_error", fmt.Sprintf("failed to stat path: %v", err))
+	}
+	if !info.IsDir() {
+		return s.failResult(result, "not_a_directory", fmt.Sprintf("path is not a directory: %s", path))
+	}
+
+	// Validate and resolve path (security check) - only after confirming it exists
 	absPath, err := security.ValidatePath(path, s.workDir)
 	if err != nil {
 		return s.failResult(result, "validation_error", fmt.Sprintf("invalid path: %v", err))
 	}
 
 	result.Path = absPath
-
-	// Validate path exists and is a directory
-	info, err := os.Stat(absPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return s.failResult(result, "path_not_found", fmt.Sprintf("path does not exist: %s", absPath))
-		}
-		return s.failResult(result, "stat_error", fmt.Sprintf("failed to stat path: %v", err))
-	}
-	if !info.IsDir() {
-		return s.failResult(result, "not_a_directory", fmt.Sprintf("path is not a directory: %s", absPath))
-	}
 
 	// Apply limits
 	maxDepth := req.MaxDepth

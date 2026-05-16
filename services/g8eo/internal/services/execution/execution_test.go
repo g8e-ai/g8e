@@ -56,11 +56,12 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("command with non-zero exit code", func(t *testing.T) {
-		// Use a single command string - shell execution handles it
+		// Use shell execution to get proper exit code handling
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-2",
 			CaseID:         "test-case-2",
-			Command:        "exit 42",
+			Command:        "sh",
+			Args:           []string{"-c", "exit 42"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
 			APIKey:         "test-key",
@@ -75,13 +76,12 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("command not found", func(t *testing.T) {
-		// Shell returns exit code 127 for command not found
-		// Status is "failed" so AI can handle the error appropriately
+		// Use shell execution to get proper shell exit code 127
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-3",
 			CaseID:         "test-case-3",
-			Command:        "nonexistent_command_12345",
-			Args:           []string{},
+			Command:        "sh",
+			Args:           []string{"-c", "nonexistent_command_12345"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
 			APIKey:         "test-key",

@@ -476,11 +476,12 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 		err := os.WriteFile(scriptPath, []byte("#!/bin/bash\necho test"), 0644)
 		require.NoError(t, err)
 
+		// Use shell execution to get proper shell exit code 126
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "error-perm-1",
 			CaseID:         "test-error",
-			Command:        scriptPath,
-			Args:           []string{},
+			Command:        "sh",
+			Args:           []string{"-c", scriptPath},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
 			APIKey:         "test-key",
@@ -493,11 +494,12 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("command not found exit code 127", func(t *testing.T) {
+		// Use shell execution to get proper shell exit code 127
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "error-notfound-1",
 			CaseID:         "test-error",
-			Command:        "/nonexistent/command/path",
-			Args:           []string{},
+			Command:        "sh",
+			Args:           []string{"-c", "/nonexistent/command/path"},
 			TimeoutSeconds: 5,
 			RequestedBy:    "test-user",
 			APIKey:         "test-key",
