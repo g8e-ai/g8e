@@ -62,8 +62,8 @@ G8EE_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ee.pid"
 G8EE_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ee.log"
 OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-$(jq -r '.ports.operator_http // "9000"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9000")}"
 OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-$(jq -r '.ports.operator_wss // "9001"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9001")}"
-OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(jq -r '.ports.operator_bootstrap // "80"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "80")}"
-OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(jq -r '.ports.operator_public // "443"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "443")}"
+OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(jq -r '.ports.operator_bootstrap // "9002"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9002")}"
+OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(jq -r '.ports.operator_public // "9003"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9003")}"
 OPERATOR_LISTEN_LOG_MAX_BACKUPS=5
 
 DEV_MODE=false
@@ -363,7 +363,7 @@ _start_operator_listen() {
         (cd "$PROJECT_ROOT/services/g8eo" && make build-local)
     fi
 
-    echo "  Starting Operator listen mode on port $OPERATOR_LISTEN_HTTP_PORT..."
+    echo "  Starting Operator listen mode..."
     mkdir -p "$OPERATOR_LISTEN_DATA_DIR" "$OPERATOR_LISTEN_PKI_DIR" "$OPERATOR_LISTEN_SECRETS_DIR" "$OPERATOR_LISTEN_PID_DIR" "$OPERATOR_LISTEN_LOG_DIR"
 
     _rotate_logs "$OPERATOR_LISTEN_LOG_FILE"
@@ -503,7 +503,7 @@ _print_platform_info() {
     echo ""
     echo "  Operator mTLS API:     https://localhost:$OPERATOR_LISTEN_HTTP_PORT"
     echo "  Operator Pub/Sub:       wss://localhost:$OPERATOR_LISTEN_WSS_PORT"
-    echo "  Bootstrap (device-link): https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT"
+    echo "  Bootstrap (device-link): http://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT"
     echo "  Public (browser/BYO):   https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT"
     echo "  Runtime dir:            $G8E_RUNTIME_DIR"
     echo "  Protocol schemas:       protocol/proto"
@@ -511,7 +511,7 @@ _print_platform_info() {
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  Windows Trust (Run in Elevated PowerShell)"
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  iex (iwr https://${HOST_IPS%%,*}:$OPERATOR_LISTEN_BOOTSTRAP_PORT/trust.ps1 -UseBasicParsing).Content"
+    echo "  iex (iwr http://${HOST_IPS%%,*}:$OPERATOR_LISTEN_BOOTSTRAP_PORT/trust.ps1 -UseBasicParsing).Content"
     echo ""
     if _g8ee_running; then
         echo "  Optional apps:          running (see ./g8e platform status)"
@@ -599,7 +599,7 @@ if [[ "$COMMAND" == "restart" ]]; then
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 60 1
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 60 1
     for svc in "${RESTART_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
         _wait_optional_app_healthy "$svc"
@@ -641,7 +641,7 @@ if [[ "$COMMAND" == "reset" ]]; then
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 300 2
 
     for svc in "${RESET_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -675,7 +675,7 @@ if [[ "$COMMAND" == "wipe" ]]; then
 
     echo "Restarting Operator listen mode..."
     _start_operator_listen
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 120 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 120 2
 
     echo "Clearing app data from Operator listen mode..."
     echo "  Warning: wipe endpoint removed - X-Internal-Auth and /api/internal/* routes deprecated"
@@ -738,7 +738,7 @@ if [[ "$COMMAND" == "up" ]]; then
     fi
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 60 1
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 60 1
     
     for svc in "${UP_COMPONENTS[@]}"; do
         _wait_optional_app_healthy "$svc"
@@ -771,7 +771,7 @@ if [[ "$COMMAND" == "setup" ]]; then
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 300 2
 
     for svc in "${SETUP_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -810,7 +810,7 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     fi
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 300 2
 
     for svc in "${REBUILD_COMPONENTS[@]}"; do
         _wait_optional_app_healthy "$svc"

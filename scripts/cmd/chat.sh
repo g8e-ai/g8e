@@ -80,21 +80,63 @@ _chat_stream_events() {
         _build_protocol_curl_args args || return 1
         args+=(-X GET)
         local resp
-        resp=$(curl "${args[@]}" "$OPERATOR_HTTP_URL/api/internal/sse/events?session_id=${session_id}&since_id=${last_id}&limit=200" 2>/dev/null)
+        if ! resp=$(curl "${args[@]}" "$OPERATOR_HTTP_URL/api/internal/sse/events?session_id=${session_id}&since_id=${last_id}&limit=200" 2>/dev/null); then
+            # curl failed (network issue, or Operator down)
+            sleep "$interval"
+            continue
+        fi
         local count
         count=$(echo "$resp" | jq -r '.count // 0' 2>/dev/null || echo 0)
         if [[ "$count" -gt 0 ]]; then
             idle=0
             # Stream each event to stdout as: [id type] payload
-            echo "$resp" | jq -r '.events[] | "\(.id)\t\(.event_type)\t\(.payload)"' | while IFS=$'\t' read -r id etype payload; do
-                printf "\033[1;36m[%s]\033[0m %s\n" "$etype" "$payload"
+            echo "$resp" | jq -c '.events[]' | while read -r event; do
+                etype=$(echo "$event" | jq -r '.event_type')
+                payload=$(echo "$event" | jq -r '.payload')
+                id=$(echo "$event" | jq -r '.id')
+                
+                # Only show relevant events to the user
+                case "$etype" in
+                    "g8e.v1.ai.llm.chat.iteration.text.chunk.received")
+                        printf "%s" "$payload" | jq -r '.event.data.content // empty'
+                        ;;
+                    "g8e.v1.ai.llm.chat.iteration.failed"|"g8e.v1.ai.llm.chat.iteration.stopped")
+                        error_msg=$(echo "$payload" | jq -r '.event.data.error // "Unknown error"')
+                        printf "\n\033[1;31m[%s]\033[0m %s\n" "$etype" "$error_msg"
+                        ;;
+                    "g8e.v1.ai.llm.chat.iteration.thinking.started")
+                        thinking=$(echo "$payload" | jq -r '.event.data.thinking // empty')
+                        action=$(echo "$payload" | jq -r '.event.data.action_type // "UPDATE"')
+                        if [[ "$action" == "START" ]]; then
+                            printf "\n\033[1;30mThinking...\033[0m "
+                        elif [[ -n "$thinking" && "$thinking" != "null" ]]; then
+                            printf "\033[1;30m.\033[0m"
+                        fi
+                        ;;
+                    "g8e.v1.ai.llm.chat.iteration.text.completed")
+                        printf "\n"
+                        ;;
+                    "g8e.v1.ai.llm.chat.iteration.started")
+                        : # ignore start event
+                        ;;
+                    *)
+                        # Optional: show tool calls or other progress
+                        if [[ "$etype" == *"tool"* ]]; then
+                            tool_name=$(echo "$payload" | jq -r '.event.data.tool_name // "unknown"')
+                            status=$(echo "$payload" | jq -r '.event.data.status // empty')
+                            if [[ "$status" == "STARTED" ]]; then
+                                printf "\n\033[1;34m[Tool: %s]\033[0m " "$tool_name"
+                            fi
+                        fi
+                        ;;
+                esac
                 echo "$id" > "$_chat_cursor_file"
             done
             if [[ -s "$_chat_cursor_file" ]]; then
                 last_id=$(cat "$_chat_cursor_file")
             fi
             # If we saw a terminal event, exit
-            if echo "$resp" | jq -e '.events[] | select(.event_type | test("ai\\.complete|ai\\.error|chat\\.done"))' >/dev/null 2>&1; then
+            if echo "$resp" | jq -e '.events[] | select(.event_type | test("text\\.completed|failed|stopped"))' >/dev/null 2>&1; then
                 return 0
             fi
         else

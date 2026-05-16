@@ -20,6 +20,7 @@ async def test_interrogation_questions_published():
     g8e_context.case_id = "case-456"
     g8e_context.user_id = "user-789"
     g8e_context.web_session_id = "sess-000"
+    g8e_context.cli_session_id = None
 
     triage_result = TriageResult(
         complexity=TriageComplexityClassification.COMPLEX,

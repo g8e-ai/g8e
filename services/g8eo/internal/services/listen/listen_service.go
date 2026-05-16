@@ -142,7 +142,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	ls.bootstrapServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
 		Handler:           ls.handler.buildBootstrapRouter(),
-		TLSConfig:         tlsConfigPlain,
+		TLSConfig:         nil, // Bootstrap is plain HTTP
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -212,7 +212,7 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 	ls.bootstrapServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
 		Handler:           ls.handler.buildBootstrapRouter(),
-		TLSConfig:         tlsConfigPlain,
+		TLSConfig:         nil, // Bootstrap is plain HTTP
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}

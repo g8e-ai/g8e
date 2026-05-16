@@ -373,19 +373,18 @@ async def get_g8ee_event_service(request: Request) -> EventService:
 
 async def get_g8ee_user_settings(
     request: Request,
-    request_context: RequestContext | None = None,
     settings_service: SettingsServiceProtocol = Depends(get_g8ee_settings_service),
 ) -> G8eeUserSettings:
     """Load per-request G8eeUserSettings following Platform Settings < User Settings.
 
-    Extracts user_id from the RequestContext (in body) and overlays user-specific
-    settings on top of the platform settings loaded at startup.
+    Extracts user_id from headers and overlays user-specific settings on top of
+    the platform settings loaded at startup.
     """
-    user_id = request_context.user_id if request_context else None
+    user_id = request.headers.get(G8eHeaders.USER_ID)
     if not user_id:
         # We need to return G8eeUserSettings, so we'll get it via the service
         # which will handle the merging logic.
-        return await settings_service.get_user_settings("default") # This will likely return merged platform data
+        return await settings_service.get_user_settings("default")
     return await settings_service.get_user_settings(user_id)
 
 

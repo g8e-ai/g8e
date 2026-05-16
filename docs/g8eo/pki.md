@@ -49,7 +49,7 @@ The enrollment process transitions a participant from "untrusted" to "mTLS-verif
 The platform enforces **TLS 1.3 only**. Older TLS versions and insecure cipher suites are explicitly rejected.
 
 ### Mutual TLS (mTLS)
-mTLS is mandatory for all mutation and control-plane routes. The Operator's `ListenService` rejects any request on ports 9000 and 9001 that does not provide a valid client certificate signed by a trusted intermediate CA.
+mTLS is mandatory for all mutation and control-plane routes. The Operator's `ListenService` rejects any request on ports 9000 and 9001 that does not provide a valid client certificate signed by a trusted intermediate CA. The **Bootstrap Port (9002)** is an exception and serves plain HTTP to allow for initial trust discovery and CA certificate download.
 
 ### Revocation
 Revocation state is stored in the Operator's database (`revoked_certificates` collection). 

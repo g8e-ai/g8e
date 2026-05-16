@@ -83,13 +83,13 @@ Listen Mode exposes four distinct ports for different protocol surfaces:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **Bootstrap / Trust Portal** | `9002` (TLS) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
+| **Bootstrap / Trust Portal** | `9002` (HTTP) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
 | **Public browser / BYO** | `9003` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery. |
 | **mTLS API** | `9000` | mTLS + SPIFFE URI SAN | `/db/*` (Document Store), `/kv/*` (KV with TTL), `/blob/*`, `/pubsub/publish`, `/api/operators/*`, `/api/device-links/*`, `/api/pki/{sign-csr,revoke,revocation-bundle}`, `/api/auth/passkey/*`. |
 | **Pub/Sub** | `9001` (mTLS WSS) | mTLS + SPIFFE URI SAN | `/ws/pubsub` real-time fan-out to Satellites and clients. |
 
 - **mTLS Ports (WSS, mTLS API)**: Require valid operator certificates with URI SAN binding to operator session IDs. Used for substrate operations and command dispatch.
-- **Public Ports (Bootstrap, Public)**: Plain TLS endpoints for enrollment and browser-based flows. These are the sovereign entry points for new operators and BYO clients.
+- **Public Ports (Bootstrap, Public)**: The **Public Port (9003)** is a plain TLS endpoint for browser-based flows. The **Bootstrap Port (9002)** is a plain HTTP endpoint used to download the initial trust bundle and bootstrap enrollment. These are the sovereign entry points for new operators and BYO clients.
 
 ### 2. Standard Mode (Target)
 The default mode for execution on target hosts. The reference Operator initiates an outbound connection and waits for protocol-governed UAP JSON envelopes.

@@ -24,9 +24,9 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
-	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
+	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 )
 
 func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string {
@@ -210,7 +210,7 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 	}
 
 	// Use original message ID for correlation and context from originalMsg
-	env, err := BuildUniversalResultEnvelope(rr.config, eventType, status, originalMsg.ID, rr.config.OperatorID, originalMsg.CaseID, originalMsg.InvestigationID, originalMsg.TaskID)
+	env, err := BuildUniversalResultEnvelope(rr.config, eventType, status, originalMsg.ID, rr.config.OperatorID, originalMsg.CaseID, originalMsg.InvestigationID, originalMsg.TaskID, originalMsg.WebSessionID, originalMsg.CLISessionID)
 	if err != nil {
 		return fmt.Errorf("failed to build Universal status envelope: %w", err)
 	}
@@ -231,7 +231,7 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 	// Build the UAP envelope
 	operatorSessionID := rr.config.OperatorSessionId
 
-	env, err := BuildUniversalResultEnvelope(rr.config, "HEARTBEAT_RESULT", heartbeat, "", rr.config.OperatorID, "", "", nil)
+	env, err := BuildUniversalResultEnvelope(rr.config, "HEARTBEAT_RESULT", heartbeat, "", rr.config.OperatorID, "", "", nil, "", "")
 	if err != nil {
 		return fmt.Errorf("failed to build Universal heartbeat envelope: %w", err)
 	}
@@ -278,7 +278,7 @@ func (rr *PubSubResultsService) publishResultEnvelopeUniversal(
 		senderID = *originalMsg.OperatorID
 	}
 
-	env, err := BuildUniversalResultEnvelope(rr.config, eventType, payload, originalMessageID, senderID, caseID, investigationID, taskID)
+	env, err := BuildUniversalResultEnvelope(rr.config, eventType, payload, originalMessageID, senderID, caseID, investigationID, taskID, originalMsg.WebSessionID, originalMsg.CLISessionID)
 	if err != nil {
 		return fmt.Errorf("failed to build Governance Envelope: %w", err)
 	}

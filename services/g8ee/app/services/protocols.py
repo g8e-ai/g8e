@@ -142,9 +142,11 @@ class EventServiceProtocol(Protocol):
         investigation_id: str,
         event_type: EventType,
         payload: G8eBaseModel,
-        web_session_id: str,
+        web_session_id: str | None,
         case_id: str,
         user_id: str,
+        *,
+        cli_session_id: str | None = None,
     ) -> None:
         """Publish an investigation-related event."""
         raise NotImplementedError

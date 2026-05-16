@@ -93,7 +93,7 @@ func publishLFAATypedResponseTo(
 	executionID := executionIDFromMessage(msg)
 	setExecutionIDOnPayload(payload, executionID)
 
-	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID)
+	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
 	if err != nil {
 		logger.Error("Failed to build LFAA typed response Governance Envelope", "error", err)
 		return
@@ -132,7 +132,7 @@ func publishLFAAErrorTo(
 		Error:       errorMsg,
 	}
 
-	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID)
+	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
 	if err != nil {
 		logger.Error("Failed to build LFAA error Governance Envelope", "error", err)
 		return

@@ -150,6 +150,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	// Public auth routes (browser-reachable, no mTLS, uses session cookies)
+	mux.HandleFunc("/health", h.handleHealth)
 	mux.HandleFunc("/api/auth/login/challenge", h.handleAuthLoginChallenge)
 	mux.HandleFunc("/api/auth/login/verify", h.handleAuthLoginVerify)
 	mux.HandleFunc("/api/auth/logout", h.handleAuthLogout)

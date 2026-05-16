@@ -102,6 +102,8 @@ func BuildUniversalResultEnvelope(
 	caseID string,
 	investigationID string,
 	taskID *string,
+	webSessionID string,
+	cliSessionID string,
 ) (*commonv1.GovernanceEnvelope, error) {
 	payloadBytes, err := proto.Marshal(payload)
 	if err != nil {
@@ -144,6 +146,8 @@ func BuildUniversalResultEnvelope(
 		IntentData:        intentDataStruct,
 		CaseId:            caseID,
 		InvestigationId:   investigationID,
+		WebSessionId:      webSessionID,
+		CliSessionId:      cliSessionID,
 	}
 
 	if taskID != nil {

@@ -60,9 +60,11 @@ class EventService(EventServiceProtocol):
         investigation_id: str,
         event_type: EventType,
         payload: object,
-        web_session_id: str,
+        web_session_id: str | None,
         case_id: str,
         user_id: str,
+        *,
+        cli_session_id: str | None = None,
     ) -> None:
         """Publish an investigation-related event."""
         from app.models.events import SessionEvent
@@ -70,6 +72,7 @@ class EventService(EventServiceProtocol):
             event_type=event_type,
             payload=payload,
             web_session_id=web_session_id,
+            cli_session_id=cli_session_id,
             investigation_id=investigation_id,
             case_id=case_id,
             user_id=user_id,

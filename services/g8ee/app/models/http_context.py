@@ -179,13 +179,45 @@ class G8eHttpContext(G8eBaseModel):
 
     @model_validator(mode="after")
     def validate_session_or_operator_auth(self):
-        """Ensure either a session context (web_session_id or cli_session_id + user_id) or operator auth (null values with CLIENT source + exempt path)."""
-        # If no session ID and no user_id, this must be operator auth relay from client on an exempt path
-        if not self.web_session_id and not self.cli_session_id and not self.user_id:
-            if not self.is_operator_auth_relay or self.source_component != ComponentName.CLIENT:
-                raise ValueError(
-                    "web_session_id, cli_session_id or user_id are required unless source_component is CLIENT and path is exempted (operator auth relay)"
-                )
+        """Ensure strict separation of session types and validate required context.
+        
+        Rules:
+        1. For CLIENT source:
+           - MUST have either web_session_id OR cli_session_id (mutually exclusive).
+           - MUST NOT have both.
+           - MUST have user_id.
+        2. For non-CLIENT source:
+           - MUST have either web_session_id, cli_session_id, or user_id (not anonymous).
+        3. For operator auth relay (exempt paths):
+           - Can have null sessions if source is CLIENT.
+        4. If operators are bound:
+           - Every bound operator MUST have an operator_session_id.
+        """
+        if self.is_operator_auth_relay and self.source_component == ComponentName.CLIENT:
+            # Exempt paths (bootstrap) allowed to have no session for CLIENT
+            return self
+
+        # 1. Mutual Exclusivity and Presence for CLIENT source
+        if self.source_component == ComponentName.CLIENT:
+            if self.web_session_id and self.cli_session_id:
+                raise ValueError("Context cannot have both web_session_id and cli_session_id")
+            
+            if not self.web_session_id and not self.cli_session_id:
+                raise ValueError("Context must have either web_session_id or cli_session_id for CLIENT source")
+
+            if not self.user_id:
+                raise ValueError("user_id is required for CLIENT source")
+        else:
+            # 2. Minimum identity requirement for non-CLIENT sources
+            if not self.web_session_id and not self.cli_session_id and not self.user_id:
+                raise ValueError("web_session_id, cli_session_id or user_id are required")
+
+        # 3. Operator Session Validation
+        if self.bound_operators:
+            for op in self.bound_operators:
+                if op.status == OperatorStatus.BOUND and not op.operator_session_id:
+                    raise ValueError(f"Operator {op.operator_id} is BOUND but missing operator_session_id")
+
         return self
 
     def has_bound_operator(self) -> bool:

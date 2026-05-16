@@ -125,7 +125,7 @@ The `evals` subsystem manages a fleet of simulated operator nodes (via Docker) t
 When debugging connectivity, reference these standard ports:
 - `9000`: Operator mTLS API
 - `9001`: Operator Pub/Sub (WSS)
-- `9002`: Operator Bootstrap (Device Link)
+- `9002`: Operator Bootstrap (HTTP)
 - `9003`: Operator Public (BYO Client / Browser)
 - `8443`: g8ee Adapter (HTTPS)
 

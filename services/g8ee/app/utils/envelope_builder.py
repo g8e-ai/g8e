@@ -28,7 +28,7 @@ import logging
 import json
 from datetime import datetime, timedelta, UTC
 
-from app.constants import ExecutionStatus, EventType
+from app.constants import ExecutionStatus
 from app.constants.action_type_mappings import map_event_type_to_action_type
 from app.models.pubsub_messages import G8eMessage
 from app.models.uap import UAPEnvelope
@@ -100,6 +100,8 @@ def build_uap_envelope(
         target_resource="localhost",
         operator_id=message.operator_id or "",
         operator_session_id=message.operator_session_id or "",
+        web_session_id=message.web_session_id or "",
+        cli_session_id=message.cli_session_id or "",
         state_merkle_root=state_merkle_root,
         intent_data=payload_dict,
         case_id=message.case_id,
@@ -205,6 +207,8 @@ def decode_g8eo_result_envelope(envelope_data: bytes | str | Dict[str, Any]) -> 
         "event_type": envelope.event_type,
         "operator_id": envelope.operator_id,
         "operator_session_id": envelope.operator_session_id,
+        "web_session_id": envelope.web_session_id,
+        "cli_session_id": envelope.cli_session_id,
         "case_id": envelope.case_id,
         "investigation_id": envelope.investigation_id,
         "task_id": envelope.task_id,
@@ -213,34 +217,7 @@ def decode_g8eo_result_envelope(envelope_data: bytes | str | Dict[str, Any]) -> 
     # 3. Extract and normalize payload from intent_data
     payload_dict = MessageToDict(envelope.intent_data, preserving_proto_field_name=True)
 
-    # 4. Canonical payload_type check
-    # We prefer the 'payload_type' field injected by g8eo for strict discriminator-based parsing.
-    # Fallback to manual mapping only if missing (legacy or non-g8eo sources).
-    if "payload_type" not in payload_dict:
-        action_type = envelope.action_type or envelope.event_type or ""
-
-        if "EXECUTE_BASH_RESULT" in action_type or EventType.OPERATOR_COMMAND_RESULT in action_type:
-            payload_dict["payload_type"] = "execution_result"
-        elif "EXECUTE_BASH_CANCELLED" in action_type or EventType.OPERATOR_COMMAND_CANCELLED in action_type:
-            payload_dict["payload_type"] = "cancellation_result"
-        elif "EXECUTE_STATUS_UPDATE" in action_type or EventType.OPERATOR_COMMAND_STATUS_UPDATED in action_type:
-            payload_dict["payload_type"] = "execution_status"
-        elif "FILE_EDIT_RESULT" in action_type or EventType.OPERATOR_FILE_EDIT_COMPLETED in action_type:
-            payload_dict["payload_type"] = "file_edit_result"
-        elif "FS_LIST_RESULT" in action_type or EventType.OPERATOR_FS_LIST_COMPLETED in action_type:
-            payload_dict["payload_type"] = "fs_list_result"
-        elif "FS_GREP_RESULT" in action_type or EventType.OPERATOR_FS_GREP_COMPLETED in action_type:
-            payload_dict["payload_type"] = "fs_grep_result"
-        elif "FS_READ_RESULT" in action_type or EventType.OPERATOR_FS_READ_COMPLETED in action_type:
-            payload_dict["payload_type"] = "fs_read_result"
-        elif "PORT_CHECK_RESULT" in action_type or EventType.OPERATOR_PORT_CHECK_COMPLETED in action_type:
-            payload_dict["payload_type"] = "port_check_result"
-        elif "HEARTBEAT" in action_type or EventType.OPERATOR_HEARTBEAT_RECEIVED in action_type:
-            payload_dict["payload_type"] = "heartbeat"
-        else:
-            payload_dict["payload_type"] = "unknown"
-
-    # 5. Handle numeric enum status from g8eo
+    # 4. Handle numeric enum status from g8eo
     if "status" in payload_dict and isinstance(payload_dict["status"], (int, float)):
         payload_dict["status"] = protobuf_execution_status_to_python(int(payload_dict["status"])).value
 

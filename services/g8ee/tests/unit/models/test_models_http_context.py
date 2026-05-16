@@ -388,7 +388,7 @@ class TestG8eHttpContext:
 
     def test_all_session_fields_required_when_not_client_relay(self):
         # All session fields required when not operator auth relay
-        with pytest.raises(ValidationError, match="web_session_id, cli_session_id or user_id are required unless source_component is CLIENT and path is exempted"):
+        with pytest.raises(ValidationError, match="web_session_id, cli_session_id or user_id are required"):
             G8eHttpContext(
                 web_session_id=None,
                 cli_session_id=None,
@@ -414,7 +414,7 @@ class TestG8eHttpContext:
 
     def test_validation_fails_for_client_without_relay_flag(self):
         # CLIENT source without is_operator_auth_relay flag should fail if no session/user
-        with pytest.raises(ValidationError, match="web_session_id, cli_session_id or user_id are required unless source_component is CLIENT and path is exempted"):
+        with pytest.raises(ValidationError, match="Context must have either web_session_id or cli_session_id for CLIENT source"):
             G8eHttpContext(
                 web_session_id=None,
                 cli_session_id=None,
@@ -506,7 +506,7 @@ class TestG8eHttpContext:
 
     def test_bound_operators_accepts_list_of_bound_operator(self):
         ops = [
-            BoundOperator(operator_id="op-1", status=OperatorStatus.BOUND),
+            BoundOperator(operator_id="op-1", operator_session_id="sess-1", status=OperatorStatus.BOUND),
             BoundOperator(operator_id="op-2", status=OperatorStatus.ACTIVE),
         ]
         ctx = self._make(bound_operators=ops)
@@ -515,7 +515,7 @@ class TestG8eHttpContext:
 
     def test_bound_operators_accepts_list_of_dicts(self):
         ctx = self._make(bound_operators=[
-            {"operator_id": "op-1", "status": "bound"},
+            {"operator_id": "op-1", "operator_session_id": "sess-1", "status": "bound"},
             {"operator_id": "op-2", "status": "active"},
         ])
         assert len(ctx.bound_operators) == 2
@@ -580,7 +580,7 @@ class TestG8eHttpContext:
 
     def test_has_bound_operator_true_when_one_is_bound(self):
         ctx = self._make(bound_operators=[
-            BoundOperator(operator_id="op-1", status=OperatorStatus.BOUND),
+            BoundOperator(operator_id="op-1", operator_session_id="sess-1", status=OperatorStatus.BOUND),
             BoundOperator(operator_id="op-2", status=OperatorStatus.ACTIVE),
         ])
         assert ctx.has_bound_operator() is True

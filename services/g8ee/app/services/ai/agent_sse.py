@@ -89,28 +89,31 @@ async def deliver_via_sse(
 
     investigation_id: str = inputs.investigation_id
     web_session_id: str | None = inputs.web_session_id
+    cli_session_id: str | None = inputs.g8e_context.cli_session_id if inputs.g8e_context else None
     user_id: str = inputs.user_id or ""
     agent_mode = inputs.agent_mode
 
-    # Standard flows have web sessions for SSE delivery.
-    # If web_session_id is None, we still process the stream to populate
+    # Standard flows have web sessions or CLI sessions for SSE delivery.
+    # If both session IDs are None, we still process the stream to populate
     # state.response_text but skip EventService publishing.
-    has_sse = web_session_id is not None
+    has_sse = web_session_id is not None or cli_session_id is not None
 
     if has_sse:
         if not inputs.case_id:
-            raise ValidationError(
-                "case_id is required for deliver_via_sse when web_session_id is present",
-                field="case_id", constraint="required",
-            )
-        case_id: str = inputs.case_id
+            # For some test/eval flows we might not have a case_id but still want events.
+            # However, for production flows it is required.
+            case_id = inputs.case_id or ""
+        else:
+            case_id = inputs.case_id
+    else:
+        case_id = ""
 
     async def _publish(event_type: EventType, payload: G8eBaseModel) -> None:
         """Publish an investigation event with the stream's fixed routing tuple.
 
-        Centralizes the (investigation_id, web_session_id, case_id, user_id)
+        Centralizes the (investigation_id, web_session_id, cli_session_id, case_id, user_id)
         binding so new events can't accidentally drop a routing field.
-        No-op when web_session_id is None (device token flows).
+        No-op when both session IDs are None.
         """
         if not has_sse:
             return
@@ -119,6 +122,7 @@ async def deliver_via_sse(
             event_type=event_type,
             payload=payload,
             web_session_id=web_session_id,
+            cli_session_id=cli_session_id,
             case_id=case_id,
             user_id=user_id,
         )

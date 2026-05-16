@@ -27,12 +27,12 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/mappings"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	execution "github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
-	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -45,6 +45,8 @@ type PubSubCommandMessage struct {
 	CaseID            string          `json:"case_id"`
 	TaskID            *string         `json:"task_id"`
 	InvestigationID   string          `json:"investigation_id"`
+	WebSessionID      string          `json:"web_session_id"`
+	CLISessionID      string          `json:"cli_session_id"`
 	OperatorSessionID string          `json:"operator_session_id"`
 	OperatorID        *string         `json:"operator_id"`
 	Payload           json.RawMessage `json:"payload"`
@@ -510,6 +512,8 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		CaseID:            env.CaseId,
 		TaskID:            &env.TaskId,
 		InvestigationID:   env.InvestigationId,
+		WebSessionID:      env.WebSessionId,
+		CLISessionID:      env.CliSessionId,
 		OperatorSessionID: env.OperatorSessionId,
 		OperatorID:        &env.OperatorId,
 		Payload:           payload,

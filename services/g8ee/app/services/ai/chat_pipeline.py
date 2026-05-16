@@ -389,7 +389,8 @@ class ChatPipelineService:
                 request_posture=inputs.triage_result.request_posture if inputs.triage_result else "unknown",
                 posture_confidence=str(inputs.triage_result.posture_confidence) if inputs.triage_result else "0",
             ),
-            web_session_id=g8e_context.web_session_id or "",
+            web_session_id=g8e_context.web_session_id,
+            cli_session_id=g8e_context.cli_session_id,
             case_id=g8e_context.case_id or "",
             user_id=g8e_context.user_id or "",
         )
@@ -604,7 +605,8 @@ class ChatPipelineService:
                     investigation_id=investigation_id,
                     event_type=EventType.LLM_CHAT_ITERATION_FAILED,
                     payload=ChatErrorPayload(error=str(e)),
-                    web_session_id=g8e_context.web_session_id or "",
+                    web_session_id=g8e_context.web_session_id,
+                    cli_session_id=g8e_context.cli_session_id,
                     case_id=g8e_context.case_id or "",
                     user_id=g8e_context.user_id or "",
                 )

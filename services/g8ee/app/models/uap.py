@@ -45,6 +45,7 @@ class UAPEnvelope(BaseModel):
     operator_id: str | None = None
     operator_session_id: str | None = None
     web_session_id: str | None = None
+    cli_session_id: str | None = None
 
     event_type: str | None = None
     payload: bytes | None = None
