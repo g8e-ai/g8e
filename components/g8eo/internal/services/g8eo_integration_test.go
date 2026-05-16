@@ -21,6 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/pubsub"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,7 +48,7 @@ func (m *mockTransactionAudit) DocSet(collection, id string, data json.RawMessag
 
 type mockL3Verifier struct{}
 
-func (m *mockL3Verifier) VerifyL3Proof(userID, messageID, signatureHex, pubKeyHex string) (bool, error) {
+func (m *mockL3Verifier) VerifyL3Proof(userID, transactionHash string, proof *commonv1.L3Proof) (bool, error) {
 	return true, nil // Always verify in tests
 }
 

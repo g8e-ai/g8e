@@ -18,6 +18,7 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -526,11 +527,14 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 			rs.logger.Error("Transaction verification failed - command rejected",
 				"error", err,
 				"message_id", env.Id)
+			// Log blocked transaction to audit vault
+			rs.logBlockedTransaction(env, err)
 			return
 		}
 		rs.logger.Info("Transaction verification passed", "message_id", verified.Envelope.Id)
 	} else {
 		rs.logger.Error("FATAL: TransactionVerifier missing - command rejected", "message_id", env.Id)
+		rs.logBlockedTransaction(env, errors.New("TransactionVerifier not configured"))
 		return
 	}
 
@@ -631,4 +635,24 @@ func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) 
 // SendAutomaticHeartbeat publishes an automatic heartbeat immediately.
 func (rs *PubSubCommandService) SendAutomaticHeartbeat() {
 	rs.heartbeat.SendAutomatic()
+}
+
+// logBlockedTransaction records a blocked/rejected transaction in the audit vault.
+func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, rejectionReason error) {
+	if rs.audit == nil || rs.audit.auditVault == nil {
+		return
+	}
+
+	event := &storage.Event{
+		OperatorSessionID: env.OperatorSessionId,
+		Timestamp:         time.Now(),
+		Type:              storage.EventType("action_receipt"),
+		ContentText:       fmt.Sprintf("Transaction BLOCKED: %s (Reason: %v)", env.Id, rejectionReason),
+		CommandRaw:        fmt.Sprintf("%s / %s (hash: %s)", env.ActionType, env.TargetResource, env.TransactionHash),
+	}
+
+	_, err := rs.audit.auditVault.RecordEvent(event)
+	if err != nil {
+		rs.logger.Error("Failed to record blocked transaction in audit vault", "error", err, "message_id", env.Id)
+	}
 }

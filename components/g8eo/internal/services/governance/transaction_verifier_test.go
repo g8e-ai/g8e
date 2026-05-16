@@ -22,9 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
+	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -57,7 +57,7 @@ type mockL3Verifier struct {
 	shouldPass bool
 }
 
-func (m *mockL3Verifier) VerifyL3Proof(userID, messageID, signatureHex, pubKeyHex string) (bool, error) {
+func (m *mockL3Verifier) VerifyL3Proof(userID, transactionHash string, proof *commonv1.L3Proof) (bool, error) {
 	return m.shouldPass, nil
 }
 
@@ -123,7 +123,11 @@ func signedEnvelope(t *testing.T, actionType string, payload []byte, privKey ed2
 		},
 	}
 	if actionType == "EXECUTE_BASH" {
-		env.Governance.L3 = &commonv1.L3Metadata{HumanSignature: "human-proof", PublicKey: "human-key"}
+		env.Governance.L3 = &commonv1.L3Metadata{
+			Proof: &commonv1.L3Proof{
+				Signature: "human-proof",
+			},
+		}
 	}
 	return env
 }
@@ -172,7 +176,7 @@ func TestTransactionVerifier_FailClosedProofs(t *testing.T) {
 		{name: "missing l2", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2 = nil }, want: ErrL2SignatureMissing},
 		{name: "missing l2 key", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2.KeyId = "" }, want: ErrL2KeyNotConfigured},
 		{name: "invalid l2 signature", mutate: func(env *uap.UAPEnvelope) { env.Governance.L2.TribunalSignature = "deadbeef" }, want: ErrL2SignatureInvalid},
-		{name: "missing l3", mutate: func(env *uap.UAPEnvelope) { env.Governance.L3 = nil }, want: ErrL3SignatureMissing},
+		{name: "missing l3", mutate: func(env *uap.UAPEnvelope) { env.Governance.L3 = nil }, want: ErrL3ProofMissing},
 	}
 
 	for _, tc := range tests {

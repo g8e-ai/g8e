@@ -15,12 +15,13 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/storage"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 )
 
 type L3Verifier interface {
-	VerifyL3Proof(userID, messageID, signatureHex, pubKeyHex string) (bool, error)
+	VerifyL3Proof(userID, transactionHash string, proof *commonv1.L3Proof) (bool, error)
 }
 
 // ExecutionHandler is the interface for executing verified transactions.
@@ -141,15 +142,15 @@ func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg in
 	// 6. Sign the final receipt
 	finalSig, signErr := w.signReceipt(receipt)
 	if signErr != nil {
-		w.Logger.Error("Failed to sign final action receipt", "error", signErr, "message_id", vt.Envelope.Id)
-		// We already executed, so we can't fail-closed here, but we must log the error.
-	} else {
-		receipt.Signature = finalSig
+		w.Logger.Error("Fail-closed: Failed to sign final action receipt", "error", signErr, "message_id", vt.Envelope.Id)
+		return nil, fmt.Errorf("failed to sign final action receipt: %w", signErr)
 	}
+	receipt.Signature = finalSig
 
-	// 7. Log final result
+	// 7. Log final result (fail-closed)
 	if logErr := w.LogReceipt(vt.Envelope, receipt); logErr != nil {
-		w.Logger.Error("Failed to log final action receipt", "error", logErr, "message_id", vt.Envelope.Id)
+		w.Logger.Error("Fail-closed: Failed to log final action receipt", "error", logErr, "message_id", vt.Envelope.Id)
+		return nil, fmt.Errorf("failed to log final action receipt: %w", logErr)
 	}
 
 	return receipt, err
@@ -254,6 +255,6 @@ func (w *Warden) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionRe
 // Used for outbound mode where L3 verification happens at the platform level.
 type NoOpL3Verifier struct{}
 
-func (n *NoOpL3Verifier) VerifyL3Proof(userID, messageID, signatureHex, pubKeyHex string) (bool, error) {
+func (n *NoOpL3Verifier) VerifyL3Proof(userID, transactionHash string, proof *commonv1.L3Proof) (bool, error) {
 	return true, nil
 }

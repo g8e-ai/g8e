@@ -59,7 +59,7 @@ The Consensus layer converts high-level intent into executable commands using an
 ### L3: Authorization (Human Gate)
 L3 involves human authorization, governed by the **Auditor-User Partition**.
 
-*   **Proof of Human Presence (PHP)**: By default, the User must provide a hardware-bound signature (Passkey) for the final audited command.
+*   **Proof of Human Presence (PHP)**: By default, the User must provide a hardware-bound WebAuthn passkey assertion for the final audited command. The assertion challenge is the transaction's `transaction_hash`.
 *   **Auto-Approval (Skip-Approval)**: 
     Defined in `@/home/bob/g8e/components/g8ee/config/auto_approved.json`. Benign diagnostic base commands (e.g., `uptime`, `df`, `free`) can bypass the human prompt if `enable_auto_approve` is active.
 *   **Safety Invariant**: Auto-approval **NEVER** bypasses L1 or L2. It only represents L3 authorization state for commands already verified as technically safe and low-risk.
@@ -72,7 +72,7 @@ The governance hierarchy is bound to the command protocol via `@/home/bob/g8e/sh
 |---|---|---|
 | L1 Technical Bedrock | `governance.l1`, `forbidden_patterns`, `expires_at`, `nonce` | `g8eo` reflection, expiry, and replay check |
 | L2 Consensus | `governance.l2.tribunal_signature` | `g8eo` signature verification |
-| L3 Authorization | `governance.l3.human_signature`, `governance.l3.auto_approved` | `g8eo` L3 enforcement for mutations |
+| L3 Authorization | `governance.l3.proof` | `g8eo` WebAuthn L3 enforcement for mutations |
 | State Freshness | `state_merkle_root` | `g8eo` comparison to local ledger root |
 
 ## Wire Format and Signing Invariant

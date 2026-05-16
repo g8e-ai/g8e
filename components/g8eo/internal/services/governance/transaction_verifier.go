@@ -42,8 +42,8 @@ var (
 	ErrL2SignatureMissing      = errors.New("TX_L2_SIG_MISSING: L2 tribunal_signature required but missing")
 	ErrL2SignatureInvalid      = errors.New("TX_L2_SIG_INVALID: L2 tribunal_signature failed verification")
 	ErrL2KeyNotConfigured      = errors.New("TX_L2_KEY_MISSING: trusted L2 signer key not configured")
-	ErrL3SignatureMissing      = errors.New("TX_L3_SIG_MISSING: L3 human_signature required but missing")
-	ErrL3SignatureInvalid      = errors.New("TX_L3_SIG_INVALID: L3 human_signature failed verification")
+	ErrL3ProofMissing          = errors.New("TX_L3_PROOF_MISSING: L3 WebAuthn proof required but missing")
+	ErrL3ProofInvalid          = errors.New("TX_L3_PROOF_INVALID: L3 WebAuthn proof failed verification")
 	ErrL3VerifierNotConfigured = errors.New("TX_L3_VERIFIER_MISSING: L3 verifier required but not configured")
 	ErrTransactionHashMissing  = errors.New("TX_HASH_MISSING: transaction_hash required")
 	ErrTransactionIDMissing    = errors.New("TX_ID_MISSING: id required")
@@ -237,21 +237,20 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 	}
 
 	if tv.isMutation(envelope.ActionType) {
-		if envelope.Governance == nil || envelope.Governance.L3 == nil || envelope.Governance.L3.HumanSignature == "" {
-			return nil, ErrL3SignatureMissing
+		if envelope.Governance == nil || envelope.Governance.L3 == nil || envelope.Governance.L3.Proof == nil {
+			return nil, ErrL3ProofMissing
 		}
 		if tv.l3Verifier == nil {
 			return nil, ErrL3VerifierNotConfigured
 		}
 		ok, err := tv.l3Verifier.VerifyL3Proof(
 			envelope.OperatorId,
-			envelope.Id,
-			envelope.Governance.L3.HumanSignature,
-			envelope.Governance.L3.PublicKey,
+			envelope.TransactionHash,
+			envelope.Governance.L3.Proof,
 		)
 		if err != nil || !ok {
 			tv.logger.Error("L3 verification failed", "error", err)
-			return nil, ErrL3SignatureInvalid
+			return nil, ErrL3ProofInvalid
 		}
 	}
 

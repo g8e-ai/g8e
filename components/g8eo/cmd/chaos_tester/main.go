@@ -188,8 +188,9 @@ func signedEnvelope(
 
 	if isMutation {
 		env.Governance.L3 = &commonv1.L3Metadata{
-			HumanSignature: "chaos-human-proof",
-			PublicKey:      "chaos-human-pubkey",
+			Proof: &commonv1.L3Proof{
+				Signature: "chaos-human-proof",
+			},
 		}
 	}
 
@@ -228,7 +229,7 @@ func (m *memReplayStore) CheckAndSetNonce(nonce string, _ time.Time) (bool, erro
 
 type chaosL3Verifier struct{}
 
-func (c *chaosL3Verifier) VerifyL3Proof(_, _, _, _ string) (bool, error) {
+func (c *chaosL3Verifier) VerifyL3Proof(userID, transactionHash string, proof *commonv1.L3Proof) (bool, error) {
 	return true, nil
 }
 

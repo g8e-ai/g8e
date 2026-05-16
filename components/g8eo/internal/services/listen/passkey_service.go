@@ -14,9 +14,8 @@
 package listen
 
 import (
-	"crypto/ed25519"
+	"bytes"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
 )
 
 const (
@@ -39,9 +39,6 @@ const (
 
 // PasskeyService handles L3 proof brokerage for passkey/WebAuthn operations.
 // This moves the L3 authorization from client into g8eo as the sovereign authority.
-//
-// NOTE: This is a simplified ED25519-based implementation. Full WebAuthn/FIDO2
-// support will be added in a future iteration using the go-webauthn library.
 type PasskeyService struct {
 	db       *ListenDBService
 	logger   *slog.Logger
@@ -300,8 +297,31 @@ func (s *PasskeyService) CreateSession(userID string) (*models.WebSession, error
 	return session, nil
 }
 
-// VerifyL3Proof verifies a human signature against a registered passkey.
-func (s *PasskeyService) VerifyL3Proof(userID, messageID, signatureHex, pubKeyHex string) (bool, error) {
+// VerifyL3Proof verifies a WebAuthn assertion against a registered passkey.
+// The challenge is the transaction_hash.
+func (s *PasskeyService) VerifyL3Proof(userID, transactionHash string, proof *commonv1.L3Proof) (bool, error) {
+	if userID == "" {
+		return false, fmt.Errorf("user_id is required for L3 WebAuthn verification")
+	}
+	if transactionHash == "" {
+		return false, fmt.Errorf("transaction_hash is required for L3 WebAuthn verification")
+	}
+	if proof == nil {
+		return false, fmt.Errorf("L3 WebAuthn proof is required")
+	}
+	if proof.CredentialId == "" {
+		return false, fmt.Errorf("L3 WebAuthn credential_id is required")
+	}
+	if proof.ClientDataJson == "" {
+		return false, fmt.Errorf("L3 WebAuthn client_data_json is required")
+	}
+	if proof.AuthenticatorData == "" {
+		return false, fmt.Errorf("L3 WebAuthn authenticator_data is required")
+	}
+	if proof.Signature == "" {
+		return false, fmt.Errorf("L3 WebAuthn signature is required")
+	}
+
 	user, err := s.getUser(userID)
 	if err != nil {
 		return false, err
@@ -309,46 +329,49 @@ func (s *PasskeyService) VerifyL3Proof(userID, messageID, signatureHex, pubKeyHe
 	if user == nil {
 		return false, fmt.Errorf("user not found")
 	}
-
-	// 1. Verify the public key is registered for this user
-	found := false
-	for _, cred := range user.PasskeyCredentials {
-		// In a real WebAuthn impl, we'd compare ID or the extracted key
-		if hex.EncodeToString(cred.PublicKey) == pubKeyHex || hex.EncodeToString(cred.ID) == pubKeyHex {
-			found = true
-			break
-		}
+	if len(user.PasskeyCredentials) == 0 {
+		return false, fmt.Errorf("user has no registered passkey credentials")
 	}
 
-	if !found {
-		return false, fmt.Errorf("public key not registered for user")
+	allowedCredentialIDs := make([][]byte, 0, len(user.PasskeyCredentials))
+	for _, credential := range user.PasskeyCredentials {
+		allowedCredentialIDs = append(allowedCredentialIDs, credential.ID)
 	}
 
-	// 2. Verify the signature
-	// We'll use the same logic as VerifyL3Signature for now but with the user check
-	return s.VerifyL3Signature(userID, messageID, signatureHex, pubKeyHex)
-}
+	session := webauthn.SessionData{
+		Challenge:            base64.RawURLEncoding.EncodeToString([]byte(transactionHash)),
+		RelyingPartyID:       s.rpID,
+		UserID:               []byte(userID),
+		AllowedCredentialIDs: allowedCredentialIDs,
+		Expires:              time.Now().Add(passkeyChallengeTTL),
+	}
 
-// VerifyL3Signature verifies an ED25519 signature for L3 authorization.
-// This is used when L3 proof is provided as a direct signature rather than WebAuthn.
-func (s *PasskeyService) VerifyL3Signature(userID, challenge, signatureHex, pubKeyHex string) (bool, error) {
-	// Decode signature
-	sigBytes, err := hex.DecodeString(signatureHex)
+	assertionResponse := map[string]interface{}{
+		"id":    proof.CredentialId,
+		"rawId": proof.CredentialId,
+		"type":  "public-key",
+		"response": map[string]string{
+			"clientDataJSON":    proof.ClientDataJson,
+			"authenticatorData": proof.AuthenticatorData,
+			"signature":         proof.Signature,
+		},
+	}
+
+	body, err := json.Marshal(assertionResponse)
 	if err != nil {
-		return false, fmt.Errorf("invalid signature encoding: %w", err)
+		return false, fmt.Errorf("failed to marshal assertion response: %w", err)
 	}
 
-	// Decode public key
-	pubKeyBytes, err := hex.DecodeString(pubKeyHex)
+	req, _ := http.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	parsedResponse, err := protocol.ParseCredentialRequestResponse(req)
 	if err != nil {
-		return false, fmt.Errorf("invalid public key encoding: %w", err)
+		return false, fmt.Errorf("failed to parse credential assertion: %w", err)
 	}
-	pubKey := ed25519.PublicKey(pubKeyBytes)
 
-	// Verify signature
-	message := []byte(challenge)
-	if !ed25519.Verify(pubKey, message, sigBytes) {
-		return false, fmt.Errorf("signature verification failed")
+	_, err = s.webauthn.ValidateLogin(user, session, parsedResponse)
+	if err != nil {
+		return false, fmt.Errorf("L3 WebAuthn verification failed: %w", err)
 	}
 
 	return true, nil

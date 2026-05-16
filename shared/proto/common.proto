@@ -36,10 +36,16 @@ message L2Metadata {
 }
 
 // L3 Governance: Authorization (Human-in-the-loop)
+message L3Proof {
+  string client_data_json = 1;
+  string authenticator_data = 2;
+  string signature = 3;
+  string credential_id = 4;
+}
+
 message L3Metadata {
-  string human_signature = 1;    // Signature from passkey/WebAuthn
-  string public_key = 2;         // Public key used for verification
-  bool auto_approved = 3;        // True if skipped via auto-approval policy
+  L3Proof proof = 1;             // Real WebAuthn proof
+  bool auto_approved = 2;        // True if skipped via auto-approval policy
 }
 
 // Unified Governance Metadata
