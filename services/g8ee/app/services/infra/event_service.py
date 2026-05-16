@@ -30,8 +30,12 @@ class EventService(EventServiceProtocol):
 
     async def publish(self, event: SessionEvent | BackgroundEvent) -> str:
         """Publish a session or background event."""
-        logger.warning(f"EventService.publish called but not implemented - event: {event}")
-        return "event-id"
+        try:
+            await self._internal_http_client.push_sse_event(event)
+            return getattr(event, "id", "event-id")
+        except Exception as e:
+            logger.error(f"Failed to publish event: {e}")
+            return "error-id"
 
     async def publish_command_event(
         self,
@@ -42,7 +46,14 @@ class EventService(EventServiceProtocol):
         task_id: str,
     ) -> None:
         """Publish a command-related event."""
-        logger.warning("EventService.publish_command_event called but not implemented")
+        # For now, wrap in a BackgroundEvent and publish
+        from app.models.events import BackgroundEvent
+        event = BackgroundEvent(
+            event_type=event_type,
+            payload=data,
+            task_id=task_id,
+        )
+        await self.publish(event)
 
     async def publish_investigation_event(
         self,
@@ -54,4 +65,13 @@ class EventService(EventServiceProtocol):
         user_id: str,
     ) -> None:
         """Publish an investigation-related event."""
-        logger.warning("EventService.publish_investigation_event called but not implemented")
+        from app.models.events import SessionEvent
+        event = SessionEvent(
+            event_type=event_type,
+            payload=payload,
+            web_session_id=web_session_id,
+            investigation_id=investigation_id,
+            case_id=case_id,
+            user_id=user_id,
+        )
+        await self.publish(event)
