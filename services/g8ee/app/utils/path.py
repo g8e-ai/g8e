@@ -43,7 +43,7 @@ def resolve_config_path(filename: str) -> Path:
                 # Remove /app/ and join with root
                 target_dir = root / Path(*target_dir.parts[2:])
             except (OSError, IndexError) as e:
-                logger.warning(f"Failed to remap container path {str(target_dir)} to host: {e}")
+                logger.warning("Failed to remap container path to host: %s", e)
         
         target = target_dir / filename
         if target.exists():

@@ -95,7 +95,7 @@ class CertificateService:
                 logger.error("[CERT-SERVICE] Failed to load CA certificate: %s", e)
                 raise RuntimeError(f"Failed to load CA cert: {e!s}") from e
         else:
-            logger.error("[CERT-SERVICE] CA certificate not found in %s", str(self.pki_dir))
+            logger.error("[CERT-SERVICE] CA certificate not found in the configured PKI directory")
             # We let it proceed but some operations might fail if they expect a CA cert local copy
 
     async def generate_operator_certificate(

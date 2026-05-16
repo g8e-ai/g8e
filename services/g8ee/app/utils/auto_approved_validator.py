@@ -61,15 +61,14 @@ class CommandAutoApprovedValidator:
 
     def _load(self, path: Path) -> None:
         cfg_file = str(path)
-        logger.info("Loading command auto-approved list from %s", cfg_file)
+        logger.info("Loading command auto-approved list")
         data = load_json_config(path, config_name="auto-approved list")
 
         enabled = data.get("enabled", True)
         if not enabled:
             logger.warning(
-                "Command auto-approved list is disabled via 'enabled: false' in %s; "
-                "loading empty index (no commands will be auto-approved at the JSON level)",
-                cfg_file,
+                "Command auto-approved list is disabled via 'enabled: false'; "
+                "loading empty index (no commands will be auto-approved at the JSON level)"
             )
             self._entries = []
             self._index = {}
