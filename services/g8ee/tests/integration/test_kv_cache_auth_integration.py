@@ -14,11 +14,11 @@
 """
 Deep integration test for KVCacheClient with real operator authentication.
 
-This test actually makes HTTP requests to operator using the real internal auth token.
-It verifies that the X-Internal-Auth header is being sent correctly and that
+This test actually makes HTTP requests to operator using mTLS authentication.
+It verifies that client certificates are configured correctly and that
 cache-aside operations work end-to-end.
 
-This test requires operator to be running and accessible.
+This test requires operator to be running and accessible with client certificates.
 """
 
 import pytest
@@ -36,20 +36,21 @@ pytestmark = [pytest.mark.integration, pytest.mark.requires_operator]
 
 @pytest.fixture
 async def real_kv_client():
-    """Create a KVCacheClient that actually connects to operator with real auth."""
+    """Create a KVCacheClient that actually connects to operator with real mTLS auth."""
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
 
-    # Skip test if no session ID or API key is available
-    if not bootstrap_settings.auth.operator_session_id and not bootstrap_settings.auth.operator_api_key:
-        pytest.skip("No operator auth available - operator not accessible")
+    # Skip test if client certificates are not available for mTLS auth
+    if not bootstrap_settings.client_cert_path or not bootstrap_settings.client_key_path:
+        pytest.skip("No client certificates available for mTLS authentication")
 
+    # Create KVCacheClient with mTLS authentication
     client = KVCacheClient(
         http_url=bootstrap_settings.listen.http_url,
         component_name=ComponentName.G8EE,
         ca_cert_path=bootstrap_settings.ca_cert_path,
-        operator_session_id=bootstrap_settings.auth.operator_session_id,
-        operator_api_key=bootstrap_settings.auth.operator_api_key,
+        client_cert_path=bootstrap_settings.client_cert_path,
+        client_key_path=bootstrap_settings.client_key_path,
     )
 
     await client.connect()
@@ -61,18 +62,19 @@ async def real_kv_client():
 
 @pytest.fixture
 async def real_db_client():
-    """Create a DBClient that actually connects to operator with real auth."""
+    """Create a DBClient that actually connects to operator with real mTLS auth."""
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
 
-    # Skip test if no session ID or API key is available
-    if not bootstrap_settings.auth.operator_session_id and not bootstrap_settings.auth.operator_api_key:
-        pytest.skip("No operator auth available - operator not accessible")
+    # Skip test if client certificates are not available for mTLS auth
+    if not bootstrap_settings.client_cert_path or not bootstrap_settings.client_key_path:
+        pytest.skip("No client certificates available for mTLS authentication")
 
+    # Create DBClient with mTLS authentication
     client = DBClient(
         ca_cert_path=bootstrap_settings.ca_cert_path,
-        operator_session_id=bootstrap_settings.auth.operator_session_id,
-        operator_api_key=bootstrap_settings.auth.operator_api_key,
+        client_cert_path=bootstrap_settings.client_cert_path,
+        client_key_path=bootstrap_settings.client_key_path,
     )
 
     await client.connect()
@@ -95,13 +97,17 @@ async def real_cache_aside(real_kv_client, real_db_client):
 
 @pytest.mark.asyncio
 async def test_kv_cache_client_real_auth(real_kv_client):
-    """Test that KVCacheClient is configured with correct auth settings."""
-    # This test verifies the client is configured correctly with the auth
+    """Test that KVCacheClient is configured with correct mTLS auth settings."""
+    # This test verifies the client is configured correctly with mTLS auth
     # and correct port. It will catch the port mismatch issue (9001 vs 9000).
 
-    # Verify the client has auth configured
-    assert real_kv_client._operator_session_id is not None or real_kv_client._operator_api_key is not None, \
-        "No operator auth (session or API key) configured"
+    # Verify the client has mTLS auth configured
+    assert real_kv_client._ca_cert_path is not None, \
+        "No CA cert path configured for mTLS"
+    assert real_kv_client._client_cert_path is not None, \
+        "No client cert path configured for mTLS"
+    assert real_kv_client._client_key_path is not None, \
+        "No client key path configured for mTLS"
 
     # Verify the port is correct (9000 for HTTPS, not 9001 for WSS)
     assert real_kv_client.http_url.endswith(":9000"), \
@@ -112,8 +118,11 @@ async def test_kv_cache_client_real_auth(real_kv_client):
 
 @pytest.mark.asyncio
 async def test_kv_cache_client_auth_present(real_kv_client):
-    """Test that the operator auth is present."""
-    assert real_kv_client._operator_session_id is not None or real_kv_client._operator_api_key is not None
+    """Test that the operator mTLS auth is present."""
+    assert real_kv_client._client_cert_path is not None, \
+        "Client certificate not configured for mTLS auth"
+    assert real_kv_client._client_key_path is not None, \
+        "Client key not configured for mTLS auth"
 
 
 @pytest.mark.asyncio

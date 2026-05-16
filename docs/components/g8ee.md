@@ -48,8 +48,6 @@ Before invoking the primary LLM, the `TriageAgent` classifies the message:
 - **Simple**: Routed to the **Dash** agent using the **Assistant** model (e.g., greetings, simple status checks, single-tool calls).
 - **Complex**: Escalated to the **Sage** agent using the **Primary** model (e.g., troubleshooting, command execution, multi-step investigations).
 
-> **Architecture Note**: Per GDD §14.1, **Triage** is a classifier only — it does NOT generate clarifying questions. The **Interrogation Protocol** is handled by reasoning agents: **Dash** (for simple tasks) and **Sage** (for complex tasks). When an agent needs clarification, tool execution is deferred until user answers are received.
-
 ### 3. Orchestration (The ReAct Loop)
 The `g8eEngine` runs the core agentic loop:
 - **Provider Turn**: Communicates with the configured `LLMProvider` (Gemini, Anthropic, Ollama, etc.).
