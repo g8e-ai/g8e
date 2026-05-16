@@ -384,7 +384,7 @@ vertex_search_enabled not set / missing  →  search_web not registered  →  se
 
 ### Model Configuration Registry
 
-All LLM model configurations are defined in `components/g8ee/app/models/model_configs.py`. This file contains the canonical source of truth for:
+All LLM model configurations are defined in `services/g8ee/app/models/model_configs.py`. This file contains the canonical source of truth for:
 
 - **Supported models** across all providers (Anthropic, Gemini, OpenAI, Ollama)
 - **Model capabilities and constraints** (context window, thinking support, tool support, output limits)
@@ -548,7 +548,7 @@ All service contracts are defined as `Protocol` types in `app/services/protocols
 
 ### Heartbeat Flow
 
-g8ee is the persistence authority for heartbeats. It subscribes to `heartbeat:{operator_id}:{session}` channels, validates and persists each heartbeat (rolling buffer of last 10, latest snapshot, system info), then notifies  for SSE fan-out to the browser. See [components/.md — Heartbeat Architecture](.md#heartbeat-architecture) for the full end-to-end flow including 's role.
+g8ee is the persistence authority for heartbeats. It subscribes to `heartbeat:{operator_id}:{session}` channels, validates and persists each heartbeat (rolling buffer of last 10, latest snapshot, system info), then notifies  for SSE fan-out to the browser. See [services/.md — Heartbeat Architecture](.md#heartbeat-architecture) for the full end-to-end flow including 's role.
 
 g8ee also owns heartbeat status decay: `HeartbeatStaleMonitorService` (`app/services/operator/heartbeat_stale_monitor.py`) runs on a timer and transitions operator status to `stale` or `offline` when heartbeats stop arriving (60s threshold). This consolidates operator status ownership in g8ee, eliminating dual-writer race conditions on the `operators` collection.
 
@@ -848,7 +848,7 @@ For the full KV key namespace (all patterns, builders, owners, TTLs) and the com
 
 ### Pub/Sub Channels
 
-g8ee publishes commands to `cmd:{operator_id}:{operator_session_id}` and subscribes to the corresponding `results:*` and `heartbeat:*` channels. The canonical channel listing and wire format are in [components/operator.md — Channel Naming Convention](operator.md#channel-naming-convention).
+g8ee publishes commands to `cmd:{operator_id}:{operator_session_id}` and subscribes to the corresponding `results:*` and `heartbeat:*` channels. The canonical channel listing and wire format are in [services/operator.md — Channel Naming Convention](operator.md#channel-naming-convention).
 
 #### Subscribe-and-Wait Contract
 
@@ -884,7 +884,7 @@ g8ee communicates with other components via direct HTTP using mTLS with operator
 g8ee uses mTLS with URI SAN workload identity to communicate with the Operator. Identity is established via the client certificates issued during the bootstrap process.
 
 #### Context Propagation
-The canonical header list and ownership rules are in [components/.md — Internal HTTP Communication](.md#internal-http-communication---g8ee).
+The canonical header list and ownership rules are in [services/.md — Internal HTTP Communication](.md#internal-http-communication---g8ee).
 
 Key fields consumed by G8EE:
 
@@ -1167,7 +1167,7 @@ When `enable_auto_approve` is true and a command's base verb is in the auto-appr
 
 ## AI Evaluation Reporting
 
-AI agent evaluation runs through the **host-driven evals framework** at `components/g8ee/evals/`. Per the architectural mandate in [`docs/testing.md`](../testing.md#evals--public-device-token-path), evals exercise the product surface as real users experience it: device-link tokens, public  HTTPS endpoints, real operator containers via docker compose. They are NOT pytest-driven and do NOT call internal services directly.
+AI agent evaluation runs through the **host-driven evals framework** at `services/g8ee/evals/`. Per the architectural mandate in [`docs/testing.md`](../testing.md#evals--public-device-token-path), evals exercise the product surface as real users experience it: device-link tokens, public  HTTPS endpoints, real operator containers via docker compose. They are NOT pytest-driven and do NOT call internal services directly.
 
 ### Dimensions
 
@@ -1190,7 +1190,7 @@ AI agent evaluation runs through the **host-driven evals framework** at `compone
 ./g8e evals down
 ```
 
-The runner under `app/evals/runner/` (invoked as `python -m app.evals.runner.cli` from the g8ee component root) is invoked separately and writes artifacts (`report.txt`, `results.csv`, `summary.json`) to `components/g8ee/reports/evals/<timestamp>/`, with a `latest` symlink to the most recent run.
+The runner under `app/evals/runner/` (invoked as `python -m app.evals.runner.cli` from the g8ee component root) is invoked separately and writes artifacts (`report.txt`, `results.csv`, `summary.json`) to `services/g8ee/reports/evals/<timestamp>/`, with a `latest` symlink to the most recent run.
 
 ### Internal-side Reporting Library
 

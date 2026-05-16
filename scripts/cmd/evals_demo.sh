@@ -31,10 +31,10 @@ _eval_gold_set_path_for_host() {
     local gold_set="$1"
     if [[ "$gold_set" == /* ]]; then
         printf '%s\n' "$gold_set"
-    elif [[ "$gold_set" == components/g8ee/* ]]; then
+    elif [[ "$gold_set" == services/g8ee/* ]]; then
         printf '%s/%s\n' "$SCRIPT_DIR" "$gold_set"
-    elif [[ -f "$SCRIPT_DIR/components/g8ee/$gold_set" ]]; then
-        printf '%s/components/g8ee/%s\n' "$SCRIPT_DIR" "$gold_set"
+    elif [[ -f "$SCRIPT_DIR/services/g8ee/$gold_set" ]]; then
+        printf '%s/services/g8ee/%s\n' "$SCRIPT_DIR" "$gold_set"
     else
         printf '%s\n' "$gold_set"
     fi
@@ -133,7 +133,7 @@ case "$TOP" in
         esac
         ;;
     evals)
-        EVALS_DIR="$SCRIPT_DIR/components/g8ee/evals"
+        EVALS_DIR="$SCRIPT_DIR/services/g8ee/evals"
         EVALS_COMPOSE="$EVALS_DIR/docker-compose.evals.yml"
         if [[ ! -f "$EVALS_COMPOSE" ]]; then
             echo "[g8e] evals compose file not found: $EVALS_COMPOSE" >&2; exit 1
@@ -195,10 +195,10 @@ case "$TOP" in
                     echo "[g8e] Set LLM settings via the Operator API or g8ee adapter directly." >&2
                 fi
                 _banner "evals run"
-                _venv="$SCRIPT_DIR/components/g8ee/.venv"
+                _venv="$SCRIPT_DIR/services/g8ee/.venv"
                 [ ! -x "$_venv/bin/python" ] && { echo "[g8e] g8ee virtualenv missing" >&2; exit 1; }
                 (
-                    cd "$SCRIPT_DIR/components/g8ee"; export PYTHONPATH="$SCRIPT_DIR/components/g8ee:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
+                    cd "$SCRIPT_DIR/services/g8ee"; export PYTHONPATH="$SCRIPT_DIR/services/g8ee:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
                     export G8E_PROTOCOL_DIR="$SCRIPT_DIR/protocol"; export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"; export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
                     export G8E_TRUST_BUNDLE="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
                     export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"; export G8EE_URL="$G8EE_URL"
@@ -224,10 +224,10 @@ case "$TOP" in
             status) _banner "evals status"; COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" ps; exit 0 ;;
             logs)   [[ -z "${3:-}" ]] && { echo "[g8e] evals logs requires a node name" >&2; exit 1; }; docker logs -f "${3}"; exit 0 ;;
             list)
-                _banner "evals list"; _venv="$SCRIPT_DIR/components/g8ee/.venv"
+                _banner "evals list"; _venv="$SCRIPT_DIR/services/g8ee/.venv"
                 [ ! -x "$_venv/bin/python" ] && { echo "[g8e] g8ee virtualenv missing" >&2; exit 1; }
                 (
-                    cd "$SCRIPT_DIR/components/g8ee"; export PYTHONPATH="$SCRIPT_DIR/components/g8ee:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
+                    cd "$SCRIPT_DIR/services/g8ee"; export PYTHONPATH="$SCRIPT_DIR/services/g8ee:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
                     export G8E_PROTOCOL_DIR="$SCRIPT_DIR/protocol"; "$_venv/bin/python" -m app.evals.runner.cli list
                 )
                 ;;

@@ -16,7 +16,7 @@ As a **BYO (Bring Your Own) client** to the `g8eo` substrate, the Engine uses th
 
 ## The Assembly Pipeline
 
-The system prompt is built by `build_modular_system_prompt` in `@/home/bob/g8e/components/g8ee/app/llm/prompts.py:494`. Sections are concatenated in a fixed order based on their stability to optimize prefix caching (e.g., llama.cpp, vLLM).
+The system prompt is built by `build_modular_system_prompt` in `@/home/bob/g8e/services/g8ee/app/llm/prompts.py:494`. Sections are concatenated in a fixed order based on their stability to optimize prefix caching (e.g., llama.cpp, vLLM).
 
 ### Section Order & Rationale
 
@@ -41,7 +41,7 @@ The system prompt is built by `build_modular_system_prompt` in `@/home/bob/g8e/c
 ## Canonical Invariants
 
 ### 1. XML Scaffolding
-All sections are wrapped in XML tags to enforce hard structural boundaries. This is guaranteed by `AgentPersona.format_xml_tag` in `@/home/bob/g8e/components/g8ee/app/utils/agent_persona_loader.py:62`. This prevents "prompt leakage" where one section's instructions bleed into another.
+All sections are wrapped in XML tags to enforce hard structural boundaries. This is guaranteed by `AgentPersona.format_xml_tag` in `@/home/bob/g8e/services/g8ee/app/utils/agent_persona_loader.py:62`. This prevents "prompt leakage" where one section's instructions bleed into another.
 
 ### 2. Prefix Cache Optimization
 By placing the most stable sections (Safety, Loyalty, Dissent) at the very beginning, the system maximizes KV-cache hits. This significantly reduces latency when switching between different agents (e.g., Triage to Sage) within the same conversation.
@@ -92,13 +92,13 @@ The Tribunal uses a specialized set of prompts for its consensus-generation work
 ## Operational Guide
 
 ### Adding a New Agent
-1. Define a Pydantic model in `@/home/bob/g8e/components/g8ee/app/models/personas/`.
-2. Register it in `PERSONA_REGISTRY` in `@/home/bob/g8e/components/g8ee/app/models/personas/__init__.py`.
+1. Define a Pydantic model in `@/home/bob/g8e/services/g8ee/app/models/personas/`.
+2. Register it in `PERSONA_REGISTRY` in `@/home/bob/g8e/services/g8ee/app/models/personas/__init__.py`.
 3. The prompt system will automatically pick up the new persona.
 
 ### Modifying Fragments
-1. Edit the `.txt` file in `@/home/bob/g8e/components/g8ee/app/prompts_data/`.
-2. If adding a new file, register it in the `PromptFile` enum in `@/home/bob/g8e/components/g8ee/app/constants/prompts.py`.
+1. Edit the `.txt` file in `@/home/bob/g8e/services/g8ee/app/prompts_data/`.
+2. If adding a new file, register it in the `PromptFile` enum in `@/home/bob/g8e/services/g8ee/app/constants/prompts.py`.
 
 ### Verification
 Run the prompt alignment suite:

@@ -29,7 +29,7 @@ For a deep dive into the Tribunal's mechanics, see `@/home/bob/g8e/docs/architec
 Provider reasoning refers to the internal "chains of thought" produced by modern LLMs. g8e unifies these provider-specific features behind a canonical abstraction, allowing agents to request "High Reasoning" without knowing the underlying wire format.
 
 ### Canonical Vocabulary
-The `ThinkingLevel` enum (defined in `@/home/bob/g8e/components/g8ee/app/constants/settings.py`) defines intensity:
+The `ThinkingLevel` enum (defined in `@/home/bob/g8e/services/g8ee/app/constants/settings.py`) defines intensity:
 
 | Value     | Semantics                                                        |
 |-----------|------------------------------------------------------------------|
@@ -43,12 +43,12 @@ The `ThinkingLevel` enum (defined in `@/home/bob/g8e/components/g8ee/app/constan
 
 1.  **Agent Declaration**: Primary reasoning agents (like **Sage**) default to `HIGH` reasoning via the `AIGenerationConfigBuilder`.
 2.  **Clamping**: `AIGenerationConfigBuilder` looks up the `LLMModelConfig` and calls `clamp_thinking_level`. If a model has no reasoning support (e.g., legacy or "lite" models), it returns `OFF`.
-3.  **Translation**: Pure functions in `@/home/bob/g8e/components/g8ee/app/llm/thinking.py` translate the level for the provider:
+3.  **Translation**: Pure functions in `@/home/bob/g8e/services/g8ee/app/llm/thinking.py` translate the level for the provider:
     - **Gemini**: `thinking_config.thinking_level`.
     - **Anthropic**: `thinking.budget_tokens` (mapped via model-specific budgets).
     - **OpenAI**: `reasoning.effort`.
     - **Ollama**: Dispatched via `ThinkingDialect` (e.g., `native_toggle` for models supporting the `think` kwarg).
-4.  **Turn Processing**: The Engine consumes the stream through a state machine in `@/home/bob/g8e/components/g8ee/app/services/ai/agent_turn.py`:
+4.  **Turn Processing**: The Engine consumes the stream through a state machine in `@/home/bob/g8e/services/g8ee/app/services/ai/agent_turn.py`:
     - `THINKING`: Accumulates thought chunks.
     - `THINKING_END`: Signals the transition to visible output (text or tool calls).
     - **Preservation**: Thought tokens are stored in `Part` objects (`thought=True`) and preserved across turns to maintain tool-calling context.
@@ -63,5 +63,5 @@ Reasoning never bypasses the core security invariants of the g8e Protocol.
 
 ## Implementation Details
 
-- **Model Capabilities**: `LLMModelConfig` in `@/home/bob/g8e/components/g8ee/app/models/model_configs.py` is the single source of truth for which models support thinking.
+- **Model Capabilities**: `LLMModelConfig` in `@/home/bob/g8e/services/g8ee/app/models/model_configs.py` is the single source of truth for which models support thinking.
 - **Enforcement**: Structural consensus is enforced in the `g8eo` dispatch path; provider thinking is orchestrated in the `g8ee` ReAct loop.

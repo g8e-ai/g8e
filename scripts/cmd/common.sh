@@ -93,10 +93,10 @@ _run_host_script() {
 }
 
 _operator_bin() {
-    local bin="${G8E_OPERATOR_BIN:-$SCRIPT_DIR/components/g8eo/build/linux-amd64/g8e.operator}"
+    local bin="${G8E_OPERATOR_BIN:-$SCRIPT_DIR/services/g8eo/build/linux-amd64/g8e.operator}"
     if [ ! -x "$bin" ]; then
         echo "[g8e] Operator binary missing at $bin — building..." >&2
-        (cd "$SCRIPT_DIR/components/g8eo" && make build-local) >&2
+        (cd "$SCRIPT_DIR/services/g8eo" && make build-local) >&2
     fi
     printf '%s' "$bin"
 }

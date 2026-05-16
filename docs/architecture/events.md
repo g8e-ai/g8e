@@ -115,7 +115,7 @@ g8e.v1.<domain>.<resource>[.<sub-resource>...].<action>
 - `protocol/constants/events.json`: The single source of truth for event name strings.
 - `protocol/proto/`: The canonical schema source for envelopes and typed payloads.
 - **Python**: `EventType` StrEnum in `app/constants/events.py`.
-- **Go**: Constants in `components/g8eo/constants/events.go`.
+- **Go**: Constants in `services/g8eo/constants/events.go`.
 - **Node.js**: Constants in `protocol/constants/events.json` (shared via symlink or copy).
 
 ---

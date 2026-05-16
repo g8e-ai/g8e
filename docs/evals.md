@@ -18,13 +18,13 @@ Unlike standard unit tests, the evals framework exercises the entire stack:
 
 The framework is split into two primary locations:
 
-### 1. Fleet Assets (`components/g8ee/evals/`)
+### 1. Fleet Assets (`services/g8ee/evals/`)
 This directory contains the infrastructure definition for the evaluation fleet:
 - **`docker-compose.evals.yml`**: Defines a dynamically scalable fleet of nodes (e.g., `evals-eval-node-1`).
 - **`containers/eval-node/`**: Contains the `Dockerfile` and `entrypoint.sh` for the operator environment.
 - **`gold_sets/`**: JSON scenario definitions (Accuracy, Benchmark, Privacy).
 
-### 2. Runner Logic (`components/g8ee/app/evals/runner/`)
+### 2. Runner Logic (`services/g8ee/app/evals/runner/`)
 The Python package responsible for orchestrating the evaluation:
 - **`cli.py`**: Main entrypoint for `./g8e evals run`.
 - **`fleet.py`**: Manages the lifecycle (up/down/restart) of Docker containers.
@@ -94,7 +94,7 @@ Results are aggregated into a `FullReport` and persisted to `reports/evals/` in 
    ```
 5. **Run a gold set**
    ```bash
-   ./g8e evals run --gold-set components/g8ee/evals/gold_sets/benchmark.json
+   ./g8e evals run --gold-set services/g8ee/evals/gold_sets/benchmark.json
    ```
 6. **Tear down**
    ```bash

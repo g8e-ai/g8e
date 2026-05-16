@@ -287,22 +287,22 @@ _start_g8ee() {
         return 0
     fi
 
-    local venv_dir="$PROJECT_ROOT/components/g8ee/.venv"
+    local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
     if [ ! -d "$venv_dir" ]; then
         echo "  Creating g8ee virtualenv..."
         python3 -m venv "$venv_dir"
         "$venv_dir/bin/pip" install --upgrade pip
-        "$venv_dir/bin/pip" install -r "$PROJECT_ROOT/components/g8ee/requirements.txt"
+        "$venv_dir/bin/pip" install -r "$PROJECT_ROOT/services/g8ee/requirements.txt"
     fi
 
     echo "  Starting g8ee on port 8443 (HTTPS)..."
     _rotate_logs "$G8EE_LOG_FILE"
 
     (
-        cd "$PROJECT_ROOT/components/g8ee"
+        cd "$PROJECT_ROOT/services/g8ee"
         export G8E_PKI_DIR="$OPERATOR_LISTEN_PKI_DIR"
         export G8E_SECRETS_DIR="$OPERATOR_LISTEN_SECRETS_DIR"
-        export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/protocol"
+        export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol"
         export G8E_SHARED_DIR="$PROJECT_ROOT/protocol"
         export G8E_INTERNAL_HTTP_URL="https://localhost:${OPERATOR_LISTEN_HTTP_PORT}"
         export G8E_INTERNAL_PUBSUB_URL="wss://localhost:${OPERATOR_LISTEN_WSS_PORT}"
@@ -339,7 +339,7 @@ _start_operator_listen() {
         return 0
     fi
 
-    local bin="$PROJECT_ROOT/components/g8eo/build/linux-amd64/g8e.operator"
+    local bin="$PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.operator"
     local needs_build=false
 
     if [ ! -f "$bin" ]; then
@@ -348,7 +348,7 @@ _start_operator_listen() {
     else
         # Check if source files are newer than the binary
         local source_files
-        source_files=$(find "$PROJECT_ROOT/components/g8eo" -type f \( -name "*.go" -o -name "Makefile" -o -name "go.mod" -o -name "go.sum" \) -not -path "*/vendor/*" -not -path "*/build/*")
+        source_files=$(find "$PROJECT_ROOT/services/g8eo" -type f \( -name "*.go" -o -name "Makefile" -o -name "go.mod" -o -name "go.sum" \) -not -path "*/vendor/*" -not -path "*/build/*")
         for f in $source_files; do
             if [ "$f" -nt "$bin" ]; then
                 echo "  Operator source changed: $f is newer than binary. Rebuilding..."
@@ -360,7 +360,7 @@ _start_operator_listen() {
 
     if [ "$needs_build" = true ]; then
         echo "  Building Operator binary natively..."
-        (cd "$PROJECT_ROOT/components/g8eo" && make build-local)
+        (cd "$PROJECT_ROOT/services/g8eo" && make build-local)
     fi
 
     echo "  Starting Operator listen mode on port $OPERATOR_LISTEN_HTTP_PORT..."
@@ -607,7 +607,7 @@ if [[ "$COMMAND" == "reset" ]]; then
     # Wipe host data
     rm -rf "$OPERATOR_LISTEN_DATA_DIR/"* 2>/dev/null || true
     rm -rf "$OPERATOR_LISTEN_SECRETS_DIR/"* 2>/dev/null || true
-    rm -rf "$PROJECT_ROOT/components/g8ee/data/"* 2>/dev/null || true
+    rm -rf "$PROJECT_ROOT/services/g8ee/data/"* 2>/dev/null || true
 
     echo ""
 
@@ -813,7 +813,7 @@ fi
 
 if [[ "$COMMAND" == "operator-build" ]]; then
     echo "Building linux/amd64 operator binary natively..."
-    (cd "$PROJECT_ROOT/components/g8eo" && make build-local)
+    (cd "$PROJECT_ROOT/services/g8eo" && make build-local)
     echo ""
     echo "Operator binary built."
     exit 0
@@ -823,7 +823,7 @@ fi
 
 if [[ "$COMMAND" == "operator-build-all" ]]; then
     echo "Building all operator architectures natively..."
-    (cd "$PROJECT_ROOT/components/g8eo" && make build-local-all)
+    (cd "$PROJECT_ROOT/services/g8eo" && make build-local-all)
     echo ""
     echo "All operator binaries built."
     exit 0

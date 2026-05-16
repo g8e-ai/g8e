@@ -26,9 +26,9 @@ Internal authoring standards for g8e documentation. All contributors must follow
 
 | Change type | Required doc update |
 |-------------|-------------------|
-| New component or service | New component doc under `docs/components/`, entry in `docs/README.md` |
+| New component or service | New component doc under `docs/services/`, entry in `docs/README.md` |
 | New API endpoint or route | Update the relevant component doc |
-| New wire-protocol constant, event, or status | Update `docs/components/` and `protocol/` references |
+| New wire-protocol constant, event, or status | Update `docs/services/` and `protocol/` references |
 | New shared model field | Update `protocol/models/` description in component docs |
 | New environment variable | Update `docs/developer.md` environment variable table |
 | New test fixture, mock, or helper | Update `docs/testing.md` for the relevant component |
@@ -55,7 +55,7 @@ docs/
 ```
 
 **Rules:**
-- Component-specific behavior belongs in `docs/components/`.
+- Component-specific behavior belongs in `docs/services/`.
 - Cross-component data flows, protocols, and architectural decisions belong in `docs/architecture/`.
 - External reference material belongs in `docs/reference/` — never modify files under `docs/reference/`.
 - Every new doc file must be added to `docs/README.md`.
@@ -65,14 +65,14 @@ docs/
 
 | Fact | Authoritative location | Others cross-reference |
 |------|----------------------|----------------------|
-| Pub/sub channel names and wire format | `docs/components/g8eo.md` | `.md`, `g8ee.md`, `testing.md` |
-| KV key namespace and patterns | `docs/components/g8eo.md` | `.md`, `g8ee.md` |
-| `G8eHttpContext` internal HTTP header full listing | `docs/components/.md` | `g8ee.md` cross-references; do not restate in other component docs |
-| Heartbeat end-to-end flow | `docs/components/.md` | `g8eo.md`, `g8ee.md` |
+| Pub/sub channel names and wire format | `docs/services/g8eo.md` | `.md`, `g8ee.md`, `testing.md` |
+| KV key namespace and patterns | `docs/services/g8eo.md` | `.md`, `g8ee.md` |
+| `G8eHttpContext` internal HTTP header full listing | `docs/services/.md` | `g8ee.md` cross-references; do not restate in other component docs |
+| Heartbeat end-to-end flow | `docs/services/.md` | `g8eo.md`, `g8ee.md` |
 | Shared constants and models (`protocol/`) | `docs/developer.md` | `testing.md` |
 | Universal code quality rules | `docs/developer.md` | do not restate in component docs |
-| g8ee component internals (workflow modes, tools, LLM config, Sentinel, LFAA) | `docs/components/g8ee.md` | `docs/architecture/ai_agents.md` |
-| Coverage goals per g8eo package | `docs/components/g8eo.md` | do not restate in `testing.md` |
+| g8ee component internals (workflow modes, tools, LLM config, Sentinel, LFAA) | `docs/services/g8ee.md` | `docs/architecture/ai_agents.md` |
+| Coverage goals per g8eo package | `docs/services/g8eo.md` | do not restate in `testing.md` |
 
 ---
 

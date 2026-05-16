@@ -49,7 +49,7 @@ For air-gapped reasoning, g8e integrates a local inference engine within the `g8
 - **Engine:** `llama.cpp` integration via `LlamaCppProvider`.
 - **Default Model:** `Gemma 4 E2B` (optimized for local reasoning).
 - **Interface:** OpenAI-compatible internal API.
-- **Provisioning:** Model GGUF files must be pre-staged in `components/g8ee/models/`. If the file is missing, the Engine will attempt a download, which will fail in a true air-gap.
+- **Provisioning:** Model GGUF files must be pre-staged in `services/g8ee/models/`. If the file is missing, the Engine will attempt a download, which will fail in a true air-gap.
 
 ---
 
@@ -61,7 +61,7 @@ For air-gapped reasoning, g8e integrates a local inference engine within the `g8
 | **Runtime** | **None** | All components communicate exclusively over the internal `g8e-network` or localhost. |
 
 ### Vendoring & Dependency Management
-- **Operator (Go):** 100% vendored in `components/g8eo/vendor/`.
+- **Operator (Go):** 100% vendored in `services/g8eo/vendor/`.
 - **Dashboard (Node.js):** Locked via `package-lock.json`; all assets are bundled during the build.
 - **Engine (Python):** Requirements are frozen. For air-gap builds, use the pre-staged environment or Docker image strategy.
 
@@ -76,7 +76,7 @@ For air-gapped reasoning, g8e integrates a local inference engine within the `g8
 
 ### 2. Implementation (Air-Gapped Host)
 1. **Stage Binaries:** Place the `g8e.operator` binary and component source/images on the host.
-2. **Stage Model:** Place the `.gguf` file in `components/g8ee/models/`.
+2. **Stage Model:** Place the `.gguf` file in `services/g8ee/models/`.
 3. **Configure:**
    - Set `vertex_search_enabled` to `false` in Settings.
    - Ensure `llm_primary_provider` is set to `llamacpp`.

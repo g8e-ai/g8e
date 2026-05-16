@@ -20,8 +20,8 @@ help:
 	@echo "  proto         Generate all Protobuf code (Go and Python)"
 	@echo "  buf-install   Install Buf CLI locally if not found"
 	@echo ""
-	@echo "Components:"
-	@echo "  build-g8eo    Build the Operator component"
+	@echo "Services:"
+	@echo "  build-g8eo    Build the Operator service"
 	@echo "  test-g8eo     Run Operator tests"
 	@echo "  test-g8ee     Run Engine tests"
 
@@ -33,8 +33,8 @@ proto: buf-install
 	@echo "Generating Protobuf code with Buf..."
 	@$(BUF) generate protocol/proto
 	@echo "Post-processing Python code..."
-	@touch components/g8ee/app/proto/__init__.py
-	@find components/g8ee/app/proto -name "*_pb2*.py" -exec sed -i 's/^import \(.*_pb2\)/from . import \1/' {} +
+	@touch services/g8ee/app/proto/__init__.py
+	@find services/g8ee/app/proto -name "*_pb2*.py" -exec sed -i 's/^import \(.*_pb2\)/from . import \1/' {} +
 	@echo "Protobuf generation complete."
 
 .PHONY: buf-install
@@ -46,15 +46,15 @@ buf-install:
 	fi
 
 # =============================================================================
-# COMPONENT DISPATCH
+# SERVICE DISPATCH
 # =============================================================================
 .PHONY: build-g8eo
 build-g8eo:
-	@$(MAKE) -C components/g8eo build
+	@$(MAKE) -C services/g8eo build
 
 .PHONY: test-g8eo
 test-g8eo:
-	@$(MAKE) -C components/g8eo test
+	@$(MAKE) -C services/g8eo test
 
 .PHONY: test-g8ee
 test-g8ee:

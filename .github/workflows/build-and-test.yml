@@ -46,8 +46,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: components/g8eo/go.mod
-          cache-dependency-path: components/g8eo/go.sum
+          go-version-file: services/g8eo/go.mod
+          cache-dependency-path: services/g8eo/go.sum
 
       - name: Start Operator substrate
         run: ./g8e platform start
@@ -74,8 +74,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: components/g8eo/go.mod
-          cache-dependency-path: components/g8eo/go.sum
+          go-version-file: services/g8eo/go.mod
+          cache-dependency-path: services/g8eo/go.sum
 
       - name: Set up Python
         uses: actions/setup-python@v6

@@ -8,4 +8,4 @@ plugins:
   
   # Python generation
   - remote: buf.build/protocolbuffers/python:v26.1
-    out: components/g8ee/app/proto
+    out: services/g8ee/app/proto

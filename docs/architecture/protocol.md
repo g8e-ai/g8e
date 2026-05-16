@@ -67,7 +67,7 @@ The UAP envelope is the only canonical mutation transport. It is JSON on the wir
 
 ## 2. Verification Phase (Operator)
 
-Upon receiving an envelope, a conforming Operator must perform these checks before any action. In the reference Operator (`g8eo`), they live in `@/home/bob/g8e/components/g8eo/internal/services/pubsub/pubsub_commands.go`:
+Upon receiving an envelope, a conforming Operator must perform these checks before any action. In the reference Operator (`g8eo`), they live in `@/home/bob/g8e/services/g8eo/internal/services/pubsub/pubsub_commands.go`:
 
 1. **Parsing**: Rejects any payload that is not a valid UAP JSON `GovernanceEnvelope`.
 2. **Expiry Check**: Rejects any transaction if `expires_at` is in the past.
@@ -95,7 +95,7 @@ Enforced by the Operator's transaction verifier via Protobuf reflection before e
 - **Default Patterns**: `sudo`, `su`, `rm -rf /`.
 
 ### L2: Consensus (Consensus)
-Enforced by the Operator's transaction verifier. Reference implementation: `@/home/bob/g8e/components/g8eo/internal/services/governance/transaction_verifier.go`.
+Enforced by the Operator's transaction verifier. Reference implementation: `@/home/bob/g8e/services/g8eo/internal/services/governance/transaction_verifier.go`.
 - **Signer**: Any trusted consensus agent or validator (e.g., `g8ee` in the reference application, or a BYO consensus implementation).
 - **Verifier**: The Operator (reference implementation: `g8eo`).
 - **Mechanism**: ED25519 asymmetric signatures. There is no HMAC fallback.
@@ -155,10 +155,10 @@ The protocol is the authoritative contract. The files below are the reference im
 |----------------|--------------------|
 | **Schemas (substrate)** | `@/home/bob/g8e/protocol/proto/` |
 | **Event Registry (substrate)** | `@/home/bob/g8e/protocol/constants/events.json` |
-| **Reference Request Builder (PY, g8ee)** | `@/home/bob/g8e/components/g8ee/app/utils/envelope_builder.py` |
-| **Reference Inbound Dispatch (GO, g8eo)** | `@/home/bob/g8e/components/g8eo/internal/services/pubsub/pubsub_commands.go` |
-| **Reference L1/L2/L3 Verification (GO, g8eo)** | `@/home/bob/g8e/components/g8eo/internal/services/governance/transaction_verifier.go` |
-| **Reference Result Publisher (GO, g8eo)** | `@/home/bob/g8e/components/g8eo/internal/services/pubsub/pubsub_results.go` |
+| **Reference Request Builder (PY, g8ee)** | `@/home/bob/g8e/services/g8ee/app/utils/envelope_builder.py` |
+| **Reference Inbound Dispatch (GO, g8eo)** | `@/home/bob/g8e/services/g8eo/internal/services/pubsub/pubsub_commands.go` |
+| **Reference L1/L2/L3 Verification (GO, g8eo)** | `@/home/bob/g8e/services/g8eo/internal/services/governance/transaction_verifier.go` |
+| **Reference Result Publisher (GO, g8eo)** | `@/home/bob/g8e/services/g8eo/internal/services/pubsub/pubsub_results.go` |
 
 ---
 

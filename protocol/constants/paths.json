@@ -18,17 +18,17 @@
     "operator_public": 8081
   },
   "g8ee": {
-    "app_dir": "/app/components/g8ee",
-    "config_dir": "/app/components/g8ee/config",
-    "tests_dir": "/app/components/g8ee/tests",
+    "app_dir": "/app/services/g8ee",
+    "config_dir": "/app/services/g8ee/config",
+    "tests_dir": "/app/services/g8ee/tests",
     "cert_name": "g8ee",
     "evals": {
-      "reports_dir": "/app/components/g8ee/reports/evals"
+      "reports_dir": "/app/services/g8ee/reports/evals"
     }
   },
   "": {
-    "app_dir": "/app/components/",
-    "views_dir": "/app/components//views",
-    "node_modules_dir": "/app/components//node_modules"
+    "app_dir": "/app/services/",
+    "views_dir": "/app/services//views",
+    "node_modules_dir": "/app/services//node_modules"
   }
 }

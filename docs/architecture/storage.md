@@ -232,8 +232,8 @@ The following collections are defined in `protocol/constants/collections.json` a
 
 ## Related Documentation
 
-- [../components/g8eo.md](../components/g8eo.md) — g8eo component reference
-- [../components/g8ee.md](../components/g8ee.md) — g8ee component reference
-- [../components/.md](../components/.md) —  component reference
+- [../services/g8eo.md](../services/g8eo.md) — g8eo component reference
+- [../services/g8ee.md](../services/g8ee.md) — g8ee component reference
+- [../services/.md](../services/.md) —  component reference
 - [security.md](security.md) — Full security model: mTLS, Sentinel patterns, LFAA encryption, threat detection
 - [protocol.md](protocol.md) — Governance Envelope and communication protocol

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package g8e.common.v1;
 
-option go_package = "github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/commonv1";
+option go_package = "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1";
 
 import "google/protobuf/descriptor.proto";
 import "google/protobuf/timestamp.proto";

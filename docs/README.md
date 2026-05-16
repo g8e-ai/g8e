@@ -40,8 +40,8 @@ Technical deep-dives into the reference Operator and reference application compo
 
 | Component | Role | Primary Implementation |
 |-----------|------|------------------------|
-| [**g8eo**](components/g8eo.md) | **Reference Operator** | Go-based secure execution agent that implements the Operator role: protocol verification, hub/listen-mode persistence, pub/sub runtime, policy enforcement, and audit. Replaceable by any conforming Operator. |
-| [**g8ee**](components/g8ee.md) | **Reference AI Engine** | Python (FastAPI) reference application component for the AI-powered infrastructure-management use case: LLM orchestration, proposal generation, and L2 consensus proof production. |
+| [**g8eo**](services/g8eo.md) | **Reference Operator** | Go-based secure execution agent that implements the Operator role: protocol verification, hub/listen-mode persistence, pub/sub runtime, policy enforcement, and audit. Replaceable by any conforming Operator. |
+| [**g8ee**](services/g8ee.md) | **Reference AI Engine** | Python (FastAPI) reference application component for the AI-powered infrastructure-management use case: LLM orchestration, proposal generation, and L2 consensus proof production. |
 
 ## Guides & Standards
 

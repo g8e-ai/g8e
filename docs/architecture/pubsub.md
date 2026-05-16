@@ -87,8 +87,8 @@ Identity and integrity are maintained through a deterministic `transaction_hash`
 
 ### 2. Single Source of Truth
 All channel logic must use the constants in `@/protocol/constants/channels.json`. 
-- **Go**: Use constructors in `components/g8eo/internal/constants/channels.go`.
-- **Python**: Use `OperatorChannel` in `components/g8ee/app/constants/channels.py`.
+- **Go**: Use constructors in `services/g8eo/internal/constants/channels.go`.
+- **Python**: Use `OperatorChannel` in `services/g8ee/app/constants/channels.py`.
 
 ### 3. Bounded Parsing
 The `operator_session_id` may contain separators. Always use a **bounded split** with a maximum of 2 splits when parsing 3-segment channels to prevent data loss.

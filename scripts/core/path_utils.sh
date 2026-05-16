@@ -27,7 +27,7 @@ resolve_g8e_root() {
     # Final fallback: if we can't find it, use relative path from components if we are likely there
     # This is a bit risky but better than nothing
     case "$(pwd)" in
-        */components/*)
+        */services/*)
             echo "$(pwd | sed 's/\/components\/.*//')"
             ;;
         *)

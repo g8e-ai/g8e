@@ -6,7 +6,7 @@ This directory contains shared SSE event fixture definitions used across g8e com
 
 ### SSE-Delivered Events (agent_sse.py)
 
-The SSE delivery mechanism in `components/g8ee/app/services/ai/agent_sse.py` emits the following events:
+The SSE delivery mechanism in `services/g8ee/app/services/ai/agent_sse.py` emits the following events:
 
 - **LLM Chat Iteration Events**: Emits generic events for all AI chat iterations
   - `LLM_CHAT_ITERATION_STARTED` - Signals AI processing has begun
@@ -61,8 +61,8 @@ Per-tool REQUESTED/STARTED/COMPLETED/FAILED events are emitted by individual too
 - `sse-events.json` - Event payload fixtures for contract testing
 - `sse-events-schema.json` - JSON schema for event validation
 - `ledger-hash-fixtures.json` - Cross-language fixtures for the ledger hash chain.
-  Consumed by both `components/g8ee/tests/unit/utils/test_ledger_hash_fixtures.py` and
-  `components/client/test/unit/utils/ledger-verify-fixtures.spec.js` to enforce
+  Consumed by both `services/g8ee/tests/unit/utils/test_ledger_hash_fixtures.py` and
+  `services/client/test/unit/utils/ledger-verify-fixtures.spec.js` to enforce
   byte-exact agreement between the Python and JS hashers.
 
 ## Testing Guidelines
@@ -73,4 +73,4 @@ When writing SSE contract tests:
 3. Test generic tool events (`LLM_CHAT_ITERATION_TOOL_CALL_STARTED/COMPLETED`) instead
 4. For per-tool events, write integration tests against the specific tool service
 
-See `components/g8ee/tests/integration/test_sse_event_contract_integration.py` for examples.
+See `services/g8ee/tests/integration/test_sse_event_contract_integration.py` for examples.

@@ -22,9 +22,9 @@ case "$SUB" in
 
     init)
         _banner "operator init"
-        (cd "$SCRIPT_DIR/components/g8eo" && make build-local)
+        (cd "$SCRIPT_DIR/services/g8eo" && make build-local)
         echo ""
-        echo "Operator binary built on host: $SCRIPT_DIR/components/g8eo/build/linux-amd64/g8e.operator"
+        echo "Operator binary built on host: $SCRIPT_DIR/services/g8eo/build/linux-amd64/g8e.operator"
         exit 0 ;;
     build)
         _banner "operator build"
