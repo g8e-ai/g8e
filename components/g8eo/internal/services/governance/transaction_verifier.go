@@ -68,15 +68,16 @@ type StateRootProvider interface {
 	GetCurrentStateRoot() (string, error)
 }
 
-// SimpleStateRootProvider is a basic implementation that returns a fixed root.
-// Used for outbound mode where state root verification happens at the platform level.
+// SimpleStateRootProvider returns a fixed root set at construction time.
+// Root must be non-empty; a missing root is a misconfiguration that returns an
+// error so callers fail closed rather than silently accepting any state root.
 type SimpleStateRootProvider struct {
 	Root string
 }
 
 func (s *SimpleStateRootProvider) GetCurrentStateRoot() (string, error) {
 	if s.Root == "" {
-		return "outbound-mode-root", nil
+		return "", errors.New("PROVIDER_MISCONFIGURED: state root is empty")
 	}
 	return s.Root, nil
 }

@@ -375,6 +375,52 @@ message ActionReceipt {
   string signature = 9;
 }
 
+// CommitmentAttestation is the Auditor's signed record that a verified
+// transaction is consistent with the prior ledger of commitments and is
+// authorized to be executed.
+message CommitmentAttestation {
+  // TransactionID and TransactionHash identify the envelope being
+  // committed (these mirror UAPEnvelope.Id / TransactionHash).
+  string transaction_id = 1;
+  string transaction_hash = 2;
+
+  // PriorCommitmentHash is the Hash of the immediately-preceding
+  // CommitmentAttestation in the ledger, or GenesisPriorHash for the
+  // first commitment. This is what makes the ledger a chain.
+  string prior_commitment_hash = 3;
+
+  // StateRootAtCommit is the substrate's state root at the moment the
+  // Auditor signed this attestation. It is checked against the
+  // envelope.StateMerkleRoot the Tribunal/L2 signed over.
+  string state_root_at_commit = 4;
+
+  // L2SignatureDigest, WardenIntentSignatureDigest and
+  // HumanSignatureDigest are SHA-256 of the corresponding signatures,
+  // captured so the attestation cryptographically binds all three
+  // authorities into a single commitment without duplicating their
+  // raw signatures here.
+  string l2_signature_digest = 5;
+  string warden_intent_signature_digest = 6;
+  string human_signature_digest = 7;
+
+  // ActionType and TargetResource are carried for ledger readability
+  // without re-fetching the original envelope.
+  string action_type = 8;
+  string target_resource = 9;
+
+  // CommittedAtUnixMs is the Auditor's local timestamp at signing.
+  int64 committed_at_unix_ms = 10;
+
+  // AuditorKeyID identifies which Auditor key signed this attestation.
+  string auditor_key_id = 11;
+
+  // ED25519 signature over canonical serialization of fields 1-11
+  string signature = 12;
+
+  // SHA-256 of fields 1-11. It is what the next attestation chains to.
+  string hash = 13;
+}
+
 // Result payload for g8e.v1.operator.command.completed or failed
 message CommandResult {
   string execution_id = 1;

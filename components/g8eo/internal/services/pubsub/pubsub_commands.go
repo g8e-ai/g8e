@@ -37,6 +37,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 // PubSubCommandMessage is the inbound wire message received from operator pub/sub.
@@ -49,6 +50,7 @@ type PubSubCommandMessage struct {
 	OperatorSessionID string          `json:"operator_session_id"`
 	OperatorID        *string         `json:"operator_id"`
 	Payload           json.RawMessage `json:"payload"`
+	DecodedPayload    proto.Message   `json:"-"`
 	Timestamp         time.Time       `json:"timestamp"`
 }
 
