@@ -137,6 +137,8 @@ class SettingsService:
         settings.search = platform_settings.search
         settings.reputation = platform_settings.reputation
         settings.batch_execution = platform_settings.batch_execution
+        settings.component_urls = platform_settings.component_urls
+        settings.listen = platform_settings.listen
 
         # Auth: bootstrap value wins when present; platform DB fills gaps.
         # Iterating AuthSettings.model_fields makes this structural — newly

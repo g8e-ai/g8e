@@ -142,7 +142,6 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	ls.bootstrapServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
 		Handler:           ls.handler.buildBootstrapRouter(),
-		TLSConfig:         tlsConfigPlain,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -362,11 +361,17 @@ func (ls *ListenService) Start(ctx context.Context) error {
 
 		ls.logger.Info("TCP listener bound", "server", name, "addr", s.Addr)
 
-		tlsLn := tls.NewListener(ln, s.TLSConfig)
-		ls.logger.Info("TLS listener bound", "server", name, "addr", s.Addr)
+		var lnToServe net.Listener = ln
+		if s.TLSConfig != nil {
+			lnToServe = tls.NewListener(ln, s.TLSConfig)
+			ls.logger.Info("TLS listener bound", "server", name, "addr", s.Addr)
+		} else {
+			ls.logger.Info("Plain HTTP listener bound", "server", name, "addr", s.Addr)
+		}
+
 		readyChan <- struct{}{}
 		ls.logger.Info("Starting server Serve", "server", name, "addr", s.Addr)
-		errChan <- s.Serve(tlsLn)
+		errChan <- s.Serve(lnToServe)
 	}
 
 	go startServer(ls.server, "HTTP")

@@ -17,7 +17,6 @@ import uuid
 from datetime import datetime
 
 from app.constants import (
-    NEW_CASE_ID,
     AuthMethod,
     CaseStatus,
     ComponentName,
@@ -207,7 +206,6 @@ def build_g8e_http_context(
     organization_id: str | None = None,
     bound_operators: list[BoundOperator] | None = None,
     source_component: ComponentName = ComponentName.CLIENT,
-    new_case: bool = False,
     is_operator_auth_relay: bool = False,
 ) -> G8eHttpContext:
     """Build a G8eHttpContext with fixed deterministic defaults for unit tests.
@@ -216,10 +214,6 @@ def build_g8e_http_context(
         is_operator_auth_relay: Set to True for device token flows (evals) where web_session_id/user_id are None.
                                  Must be paired with source_component=ComponentName.CLIENT.
     """
-    resolved_inv_id = investigation_id
-    if resolved_inv_id is None:
-        resolved_inv_id = NEW_CASE_ID if new_case else "test-investigation-id"
-
     # Auto-set is_operator_auth_relay for device token flows
     if web_session_id is None or user_id is None:
         is_operator_auth_relay = True
@@ -227,12 +221,11 @@ def build_g8e_http_context(
     return G8eHttpContext(
         web_session_id=web_session_id,
         user_id=user_id,
-        case_id=case_id or ("test-case-id" if not new_case else NEW_CASE_ID),
-        investigation_id=resolved_inv_id,
+        case_id=case_id or "test-case-id",
+        investigation_id=investigation_id or "test-investigation-id",
         organization_id=organization_id,
         bound_operators=bound_operators or [],
         source_component=source_component,
-        new_case=new_case,
         is_operator_auth_relay=is_operator_auth_relay,
     )
 

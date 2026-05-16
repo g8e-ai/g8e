@@ -105,12 +105,14 @@ class InternalHttpClient:
         )
         wire = wire_model.model_dump(mode="json")
         web_session_id: str | None = wire.get("web_session_id")
+        cli_session_id: str | None = wire.get("cli_session_id")
         event_type: str = wire.get("event", {}).get("type") or "None"
 
         logger.info(
             "[HTTP-CLIENT] Pushing SSE event",
             extra={
                 "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
+                "cli_session_id": (cli_session_id[:8] + "...") if cli_session_id else None,
                 "event_type": event_type,
             }
         )
@@ -171,13 +173,30 @@ class InternalHttpClient:
                 extra={"operator_id": operator_id, "intent": intent}
             )
 
-            request_payload = IntentRequestPayload(intent=intent)
+            from app.models.http_context import RequestContext
+            request_context = RequestContext(
+                web_session_id=context.web_session_id,
+                user_id=context.user_id,
+                organization_id=context.organization_id,
+                case_id=context.case_id,
+                investigation_id=context.investigation_id,
+                task_id=context.task_id,
+                bound_operators=context.bound_operators,
+                execution_id=context.execution_id,
+                source_component=context.source_component,
+                system_fingerprint=context.system_fingerprint,
+            )
+            request_payload = IntentRequestPayload(
+                context=request_context,
+                operator_id=operator_id,
+                intent=intent,
+            )
 
             response = await self._http.post(
                 InternalApiPaths.CLIENT_GRANT_INTENT.format(operator_id=operator_id),
                 json_data=request_payload,
                 headers=self._auth_headers(),
-                context=context,
+                context=None,  # Context now in request body
             )
             result = GrantIntentResponse.model_validate(response.json())
             if response.is_success and result.success:
@@ -221,13 +240,30 @@ class InternalHttpClient:
         context: G8eHttpContext,
     ) -> IntentOperationResult:
         try:
-            request_payload = IntentRequestPayload(intent=intent)
+            from app.models.http_context import RequestContext
+            request_context = RequestContext(
+                web_session_id=context.web_session_id,
+                user_id=context.user_id,
+                organization_id=context.organization_id,
+                case_id=context.case_id,
+                investigation_id=context.investigation_id,
+                task_id=context.task_id,
+                bound_operators=context.bound_operators,
+                execution_id=context.execution_id,
+                source_component=context.source_component,
+                system_fingerprint=context.system_fingerprint,
+            )
+            request_payload = IntentRequestPayload(
+                context=request_context,
+                operator_id=operator_id,
+                intent=intent,
+            )
 
             response = await self._http.post(
                 InternalApiPaths.CLIENT_REVOKE_INTENT.format(operator_id=operator_id),
                 json_data=request_payload,
                 headers=self._auth_headers(),
-                context=context,
+                context=None,  # Context now in request body
             )
             result = RevokeIntentResponse.model_validate(response.json())
             if response.is_success and result.success:
@@ -265,18 +301,30 @@ class InternalHttpClient:
                 extra={"user_id": user_id, "operator_id": operator_id}
             )
 
-            request_payload = OperatorLinkRequestPayload(
+            from app.models.http_context import RequestContext
+            request_context = RequestContext(
+                web_session_id=web_session_id,
                 user_id=user_id,
                 organization_id=organization_id,
+                case_id=context.case_id if context else "",
+                investigation_id=context.investigation_id if context else "",
+                task_id=context.task_id if context else None,
+                bound_operators=context.bound_operators if context else [],
+                execution_id=context.execution_id if context else None,
+                source_component=context.source_component if context else ComponentName.G8EE,
+                system_fingerprint=context.system_fingerprint if context else None,
+            )
+            request_payload = OperatorLinkRequestPayload(
+                context=request_context,
                 operator_id=operator_id,
-                web_session_id=web_session_id,
+                user_id=user_id,
             )
 
             response = await self._http.post(
                 InternalApiPaths.CLIENT_CREATE_OPERATOR_LINK,
                 json_data=request_payload,
                 headers=self._auth_headers(),
-                context=context,
+                context=None,  # Context now in request body
             )
 
             result = OperatorLinkResponse.model_validate(response.json())

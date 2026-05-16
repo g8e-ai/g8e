@@ -35,7 +35,6 @@ from app.errors import BusinessLogicError, ConfigurationError
 from app.constants import (
     ReasoningAgent,
     AITaskId,
-    NEW_CASE_ID,
     EventType,
     LLMProvider,
     TriageComplexityClassification,
@@ -150,9 +149,9 @@ class ChatPipelineService:
             case_id, investigation_id, g8e_context.web_session_id, user_id
         )
 
-        if not investigation_id or investigation_id == NEW_CASE_ID:
+        if not investigation_id:
             raise BusinessLogicError(
-                "_prepare_chat_context requires real investigation_id, not NEW_CASE_ID",
+                "_prepare_chat_context requires investigation_id",
                 details={"investigation_id": investigation_id}
             )
 
@@ -239,7 +238,7 @@ class ChatPipelineService:
                 user_memories = await self.memory_service.get_user_memories(
                     user_id=investigation.user_id
                 )
-            if case_id and case_id != NEW_CASE_ID and investigation.user_id:
+            if case_id and investigation.user_id:
                 case_memories = await self.memory_service.get_case_memories(
                     case_id=case_id,
                     user_id=investigation.user_id

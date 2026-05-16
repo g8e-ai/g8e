@@ -24,17 +24,13 @@ object. Real parsing logic is used; no mocks.
     Segment 2 — bound_operators JSON round-trip
       X-G8E-Bound-Operators JSON string → typed BoundOperator list.
 
-    Segment 3 — new_case sentinel
-      X-G8E-New-Case: true → new_case=True; case_id and investigation_id
-      fall back to NEW_CASE_ID when absent.
-
-    Segment 4 — missing required headers raise AuthenticationError
+    Segment 3 — missing required headers raise AuthenticationError
       Each required header independently missing → AuthenticationError.
 
-    Segment 5 — source_component validation
+    Segment 4 — source_component validation
       Unrecognised component name → AuthenticationError.
 
-    Segment 6 — optional header passthrough
+    Segment 5 — optional header passthrough
       organization_id, task_id, execution_id forwarded correctly.
 
 Real code under test:
@@ -51,7 +47,6 @@ from typing import Any
 import pytest
 
 from app.constants import (
-    NEW_CASE_ID,
     ComponentName,
     G8eHeaders,
     OperatorStatus,
@@ -99,11 +94,6 @@ class TestG8eHttpContextHappyPath:
         request = _make_request(_base_headers())
         ctx = await get_g8e_http_context(request)
         assert isinstance(ctx, G8eHttpContext)
-
-    async def test_new_case_defaults_false(self):
-        request = _make_request(_base_headers())
-        ctx = await get_g8e_http_context(request)
-        assert ctx.new_case is False
 
     async def test_bound_operators_defaults_empty_list(self):
         request = _make_request(_base_headers(bound_operators="[]"))
@@ -180,71 +170,7 @@ class TestBoundOperatorsRoundTrip:
 
 
 # ---------------------------------------------------------------------------
-# Segment 3 — new_case sentinel
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio(loop_scope="session")
-@pytest.mark.integration
-class TestNewCaseSentinel:
-    """X-G8E-New-Case: true triggers new_case=True and NEW_CASE_ID fallbacks."""
-
-    async def test_new_case_true_header_sets_flag(self):
-        headers = {
-            G8eHeaders.WEB_SESSION_ID:       "sess-nc-001",
-            G8eHeaders.USER_ID:          "user-nc-001",
-            G8eHeaders.SOURCE_COMPONENT: "client",
-            G8eHeaders.NEW_CASE:         "true",
-            G8eHeaders.BOUND_OPERATORS:  "[]",
-        }
-        ctx = await get_g8e_http_context(_make_request(headers))
-        assert ctx.new_case is True
-
-    async def test_new_case_missing_case_id_falls_back_to_new_case_id(self):
-        headers = {
-            G8eHeaders.WEB_SESSION_ID:       "sess-nc-002",
-            G8eHeaders.USER_ID:          "user-nc-002",
-            G8eHeaders.SOURCE_COMPONENT: "client",
-            G8eHeaders.NEW_CASE:         "true",
-            G8eHeaders.BOUND_OPERATORS:  "[]",
-        }
-        ctx = await get_g8e_http_context(_make_request(headers))
-        assert ctx.case_id == NEW_CASE_ID
-
-    async def test_new_case_missing_investigation_id_falls_back_to_new_case_id(self):
-        headers = {
-            G8eHeaders.WEB_SESSION_ID:       "sess-nc-003",
-            G8eHeaders.USER_ID:          "user-nc-003",
-            G8eHeaders.SOURCE_COMPONENT: "client",
-            G8eHeaders.NEW_CASE:         "true",
-            G8eHeaders.BOUND_OPERATORS:  "[]",
-        }
-        ctx = await get_g8e_http_context(_make_request(headers))
-        assert ctx.investigation_id == NEW_CASE_ID
-
-    async def test_new_case_false_string_treated_as_false(self):
-        headers = _base_headers()
-        headers[G8eHeaders.NEW_CASE] = "false"
-        ctx = await get_g8e_http_context(_make_request(headers))
-        assert ctx.new_case is False
-
-    async def test_new_case_with_explicit_ids_preserved(self):
-        headers = {
-            G8eHeaders.WEB_SESSION_ID:       "sess-nc-004",
-            G8eHeaders.USER_ID:          "user-nc-004",
-            G8eHeaders.SOURCE_COMPONENT: "client",
-            G8eHeaders.NEW_CASE:         "true",
-            G8eHeaders.CASE_ID:          "case-provided",
-            G8eHeaders.INVESTIGATION_ID: "inv-provided",
-            G8eHeaders.BOUND_OPERATORS:  "[]",
-        }
-        ctx = await get_g8e_http_context(_make_request(headers))
-        assert ctx.case_id == "case-provided"
-        assert ctx.investigation_id == "inv-provided"
-
-
-# ---------------------------------------------------------------------------
-# Segment 4 — missing required headers raise AuthenticationError
+# Segment 3 — missing required headers raise AuthenticationError
 # ---------------------------------------------------------------------------
 
 
@@ -271,13 +197,13 @@ class TestMissingRequiredHeaders:
         with pytest.raises(AuthenticationError):
             await get_g8e_http_context(_make_request(headers))
 
-    async def test_missing_case_id_without_new_case_raises(self):
+    async def test_missing_case_id_raises(self):
         headers = _base_headers()
         del headers[G8eHeaders.CASE_ID]
         with pytest.raises(AuthenticationError):
             await get_g8e_http_context(_make_request(headers))
 
-    async def test_missing_investigation_id_without_new_case_raises(self):
+    async def test_missing_investigation_id_raises(self):
         headers = _base_headers()
         del headers[G8eHeaders.INVESTIGATION_ID]
         with pytest.raises(AuthenticationError):
@@ -285,7 +211,7 @@ class TestMissingRequiredHeaders:
 
 
 # ---------------------------------------------------------------------------
-# Segment 5 — source_component validation
+# Segment 4 — source_component validation
 # ---------------------------------------------------------------------------
 
 
@@ -311,7 +237,7 @@ class TestSourceComponentValidation:
 
 
 # ---------------------------------------------------------------------------
-# Segment 6 — optional header passthrough
+# Segment 5 — optional header passthrough
 # ---------------------------------------------------------------------------
 
 
@@ -366,7 +292,6 @@ def _base_headers(
     investigation_id: str = "test-investigation-id",
     source_component: str = "g8ee",
     bound_operators: str = "[]",
-    new_case: str = "false",
     **kwargs
 ) -> dict[str, str]:
     """Create base headers with all required g8e headers."""
@@ -377,7 +302,6 @@ def _base_headers(
         G8eHeaders.INVESTIGATION_ID: investigation_id,
         G8eHeaders.SOURCE_COMPONENT: source_component,
         G8eHeaders.BOUND_OPERATORS: bound_operators,
-        G8eHeaders.NEW_CASE: new_case,
     }
 
     # Add any additional headers

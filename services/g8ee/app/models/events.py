@@ -43,7 +43,8 @@ class SessionEvent(G8eBaseModel):
 
     event_type: EventType = Field(description="client event type")
     payload: G8eBaseModel = Field(description="Typed event-specific payload")
-    web_session_id: str = Field(description="Browser session to deliver to")
+    web_session_id: str | None = Field(default=None, description="Browser session to deliver to")
+    cli_session_id: str | None = Field(default=None, description="CLI session to deliver to")
     user_id: str = Field(description="User ID associated with the session")
     case_id: str | None = Field(default=None, description="Case correlation ID")
     investigation_id: str | None = Field(default=None, description="Investigation correlation ID")
@@ -72,14 +73,18 @@ class _SSEEventBody(G8eBaseModel):
 
 
 class SessionEventWire(G8eBaseModel):
-    web_session_id: str
+    web_session_id: str | None = None
+    cli_session_id: str | None = None
     user_id: str
     event: _SSEEventBody
 
     @classmethod
     def from_session_event(cls, se: SessionEvent) -> "SessionEventWire":
         data = se.payload.model_dump(mode="json")
-        data["web_session_id"] = se.web_session_id
+        if se.web_session_id:
+            data["web_session_id"] = se.web_session_id
+        if se.cli_session_id:
+            data["cli_session_id"] = se.cli_session_id
         data["user_id"] = se.user_id
         if se.case_id is not None:
             data["case_id"] = se.case_id
@@ -89,6 +94,7 @@ class SessionEventWire(G8eBaseModel):
             data["task_id"] = se.task_id
         return cls(
             web_session_id=se.web_session_id,
+            cli_session_id=se.cli_session_id,
             user_id=se.user_id,
             event=_SSEEventBody(type=se.event_type, data=data),
         )

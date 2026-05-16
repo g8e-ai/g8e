@@ -483,6 +483,7 @@ class InvestigationCreateRequest(G8eBaseModel):
 
 class InvestigationUpdateRequest(G8eBaseModel):
     """Request model for updating investigations."""
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     status: InvestigationStatus | None = Field(default=None, description="New status")
     priority: Priority | None = Field(default=None, description="Updated priority")
     case_title: str | None = Field(default=None, description="Updated case title (synced from Case document)")
@@ -496,6 +497,7 @@ class InvestigationUpdateRequest(G8eBaseModel):
 
 class InvestigationQueryRequest(G8eBaseModel):
     """Request model for querying investigations."""
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     case_id: str | None = Field(default=None, description="Filter by case ID")
     task_id: str | None = Field(default=None, description="Filter by task ID")
     web_session_id: str | None = Field(default=None, description="Filter by session ID")
@@ -506,6 +508,11 @@ class InvestigationQueryRequest(G8eBaseModel):
     limit: int = Field(default=20, ge=1, le=100, description="Maximum results to return")
     order_by: str = Field(default="created_at", description="Field to order by")
     order_direction: str = Field(default="desc", pattern="^(asc|desc)$", description="Order direction")
+
+
+class InvestigationGetRequest(G8eBaseModel):
+    """Request model for GET /investigations/{investigation_id}."""
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
 
 
 class EnrichedInvestigationContext(InvestigationModel):

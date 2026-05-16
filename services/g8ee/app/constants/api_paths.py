@@ -31,11 +31,11 @@ API_PATHS = _load("api_paths.json")
 class _InternalApiPathsMeta(type):
     def __getattr__(cls, name: str) -> str:
         if name.startswith("G8EE_"):
-            key = name[5:].lower()
+            key = name.removeprefix("G8EE_").lower()
             if key in cls._G8EE_PATHS:
                 return cls.PREFIX + cls._G8EE_PATHS[key]
         elif name.startswith("CLIENT_"):
-            key = name[5:].lower()
+            key = name.removeprefix("CLIENT_").lower()
             if key in cls._CLIENT_PATHS:
                 return cls.PREFIX + cls._CLIENT_PATHS[key]
         raise AttributeError(f"'{cls.__name__}' object has no attribute '{name}'")

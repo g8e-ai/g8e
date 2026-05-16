@@ -19,6 +19,7 @@ import pytest
 from app.constants.events import EventType
 from app.constants.status import AITaskId, ComponentName, ExecutionStatus, CommandErrorType
 from app.errors import BusinessLogicError, ValidationError
+from app.models.http_context import RequestContext, G8eHttpContext
 from app.models.command_request_payloads import CommandRequestPayload
 from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatSystemIdentity
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
@@ -403,7 +404,16 @@ class TestOperatorExecutionServiceDirectCommand:
         g8e_context.bound_operators = [bound_op]
 
         from app.models.internal_api import DirectCommandRequest
-        payload = DirectCommandRequest(execution_id="exec-1", command="echo hi", hostname="host-1")
+        payload = DirectCommandRequest(
+            execution_id="exec-1",
+            command="echo hi",
+            hostname="host-1",
+            context=RequestContext(
+                case_id="case-1",
+                investigation_id="inv-1",
+                source_component="g8ee"
+            )
+        )
         res = await execution_service.send_command_to_operator(payload, g8e_context)
 
         assert res.status == ExecutionStatus.FAILED

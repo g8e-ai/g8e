@@ -19,6 +19,7 @@ from app.constants import CaseStatus, ComponentName, EventType, Priority, Severi
 
 from .attachments import AttachmentMetadata
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
+from .http_context import RequestContext
 
 
 class HistoryEntry(G8eBaseModel):
@@ -117,8 +118,14 @@ class CaseCreateRequest(G8eBaseModel):
         return self.initial_message or "No description provided"
 
 
+class CaseGetRequest(G8eBaseModel):
+    """Request model for GET /cases/{case_id}."""
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
+
+
 class CaseUpdateRequest(G8eBaseModel):
     """Request model for updating a case"""
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     title: str | None = Field(default=None, min_length=1, max_length=500)
     description: str | None = Field(default=None, min_length=1)
     status: CaseStatus | None = None
@@ -127,6 +134,11 @@ class CaseUpdateRequest(G8eBaseModel):
     assignee: str | None = None
     tags: list[str] | None = None
     metadata: dict[str, Any] | None = None
+
+
+class CaseDeleteRequest(G8eBaseModel):
+    """Request model for DELETE /cases/{case_id}."""
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
 
 
 class CaseCreatedPayload(G8eBaseModel):

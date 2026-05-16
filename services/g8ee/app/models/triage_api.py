@@ -13,17 +13,30 @@
 
 from pydantic import Field
 from app.models.base import G8eBaseModel
+from app.models.http_context import RequestContext
 
 class TriageAnswerRequest(G8eBaseModel):
-    """Request model for answering a triage clarifying question."""
-    investigation_id: str = Field(description="The investigation ID.")
+    """Request model for answering a triage clarifying question.
+
+    Identity and business context (case_id, investigation_id, web_session_id,
+    user_id) come from the context field in the request body.
+    """
+    context: RequestContext = Field(..., description="Request context with session/case/investigation identity")
     question_index: int = Field(description="The 0-indexed position of the question being answered.")
     answer: bool = Field(description="The yes/no answer.")
 
 class TriageSkipRequest(G8eBaseModel):
-    """Request model for skipping triage clarifying questions."""
-    investigation_id: str = Field(description="The investigation ID.")
+    """Request model for skipping triage clarifying questions.
+
+    Identity and business context (case_id, investigation_id, web_session_id,
+    user_id) come from the context field in the request body.
+    """
+    context: RequestContext = Field(..., description="Request context with session/case/investigation identity")
 
 class TriageTimeoutRequest(G8eBaseModel):
-    """Request model for triage clarifying questions timeout."""
-    investigation_id: str = Field(description="The investigation ID.")
+    """Request model for triage clarifying questions timeout.
+
+    Identity and business context (case_id, investigation_id, web_session_id,
+    user_id) come from the context field in the request body.
+    """
+    context: RequestContext = Field(..., description="Request context with session/case/investigation identity")

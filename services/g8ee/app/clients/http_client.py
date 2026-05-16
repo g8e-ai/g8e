@@ -48,7 +48,7 @@ from app.errors import (
     ValidationError,
 )
 from app.models.base import G8eBaseModel
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.utils.aiohttp_session import new_component_http_session
 from app.utils.timestamp import now
 
@@ -285,23 +285,15 @@ class HTTPClient:
 
     @staticmethod
     def _context_to_headers(context: "G8eHttpContext") -> dict[str, str]:
-        """Convert a G8eHttpContext into the standard X-G8E-* outbound headers."""
+        """Convert a G8eHttpContext into the standard X-G8E-* outbound headers.
+        
+        DEPRECATED: This method is being phased out in favor of embedding context
+        in request bodies. See RequestContext in http_context.py for the new approach.
+        """
         headers: dict[str, str] = {
-            G8eHeaders.WEB_SESSION_ID: context.web_session_id,
-            G8eHeaders.USER_ID: context.user_id,
             G8eHeaders.SOURCE_COMPONENT: context.source_component,
             G8eHeaders.EXECUTION_ID: context.execution_id,
         }
-        if context.system_fingerprint:
-            headers[G8eHeaders.SYSTEM_FINGERPRINT] = context.system_fingerprint
-        if context.organization_id:
-            headers[G8eHeaders.ORGANIZATION_ID] = context.organization_id
-        if context.case_id:
-            headers[G8eHeaders.CASE_ID] = context.case_id
-        if context.investigation_id:
-            headers[G8eHeaders.INVESTIGATION_ID] = context.investigation_id
-        if context.task_id:
-            headers[G8eHeaders.TASK_ID] = context.task_id
         return headers
 
     async def _prepare_request(
@@ -310,7 +302,7 @@ class HTTPClient:
         url: str,
         headers: dict[str, str] | None,
         context: G8eHttpContext | None,
-    ) -> tuple[str, dict[str, str], RequestTrace]:
+    ) -> tuple[str, dict[str, str], RequestTrace, RequestContext | None]:
         """
         Prepare the request URL and headers.
 
@@ -318,10 +310,10 @@ class HTTPClient:
             method: HTTP method
             url: Request URL or path (will be joined with base_url if provided)
             headers: Optional headers to add to the request
-            context: Optional G8eHttpContext to propagate as X-G8E-* headers
+            context: Optional G8eHttpContext to propagate as RequestContext in body
 
         Returns:
-            Tuple of (final_url, headers, trace)
+            Tuple of (final_url, headers, trace, request_context)
         """
         final_url = urljoin(self.base_url, url) if self.base_url else url
 
@@ -340,7 +332,23 @@ class HTTPClient:
         trace = RequestTrace.from_headers(request_headers, self.component_id)
         request_headers.update(trace.as_headers)
 
-        return final_url, request_headers, trace
+        # Convert G8eHttpContext to RequestContext for body embedding
+        request_context = None
+        if context is not None:
+            request_context = RequestContext(
+                web_session_id=context.web_session_id,
+                user_id=context.user_id,
+                organization_id=context.organization_id,
+                case_id=context.case_id,
+                investigation_id=context.investigation_id,
+                task_id=context.task_id,
+                bound_operators=context.bound_operators,
+                execution_id=context.execution_id,
+                source_component=context.source_component,
+                system_fingerprint=context.system_fingerprint,
+            )
+
+        return final_url, request_headers, trace, request_context
 
     @staticmethod
     def _serialize_json_payload(json_data: JSONPayload | None) -> Mapping[str, Any] | None:
@@ -402,7 +410,7 @@ class HTTPClient:
             url: URL or path to request
             headers: Optional headers to include
             json_data: Optional typed JSON body (Pydantic model or JSON-safe mapping)
-            context: Optional G8eHttpContext to propagate as X-G8E-* headers
+            context: Optional G8eHttpContext to embed as RequestContext in body
             params: Optional query-string parameters
 
         Returns:
@@ -411,12 +419,22 @@ class HTTPClient:
         Raises:
             NetworkError: On connection or response errors
         """
-        final_url, request_headers, trace = await self._prepare_request(
+        final_url, request_headers, trace, request_context = await self._prepare_request(
             method, url, headers, context=context
         )
 
         request_kwargs: dict[str, Any] = {}
         json_body = self._serialize_json_payload(json_data)
+        
+        # Embed RequestContext into the request body if context is provided
+        if request_context is not None and json_body is not None:
+            if isinstance(json_body, dict):
+                json_body["context"] = request_context.model_dump(mode="json")
+            else:
+                # If json_body is already a Pydantic model, we can't modify it directly
+                # The caller should include context in their model via the context field
+                pass
+        
         if json_body is not None:
             request_kwargs["json"] = json_body
         if params is not None:
@@ -699,11 +717,17 @@ class HTTPClient:
         Raises:
             NetworkError: On connection or response errors
         """
-        final_url, request_headers, trace = await self._prepare_request(
+        final_url, request_headers, trace, request_context = await self._prepare_request(
             method, url, headers, context=context
         )
         request_kwargs: dict[str, Any] = {}
         json_body = self._serialize_json_payload(json_data)
+        
+        # Embed RequestContext into the request body if context is provided
+        if request_context is not None and json_body is not None:
+            if isinstance(json_body, dict):
+                json_body["context"] = request_context.model_dump(mode="json")
+        
         if json_body is not None:
             request_kwargs["json"] = json_body
 

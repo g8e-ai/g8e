@@ -526,7 +526,6 @@ INVESTIGATION_LOOKUP_MAX_RETRIES     = 3
 INVESTIGATION_LOOKUP_RETRY_DELAYS_MS = [100, 200, 300]
 
 DB_TIMESTAMP = "__SERVER_TIMESTAMP__"
-NEW_CASE_ID  = "new-case-via-client"
 
 FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = tuple(
     _SECURITY_CONSTRAINTS.get("forbidden_command_patterns", {}).get("patterns", [

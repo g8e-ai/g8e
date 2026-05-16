@@ -67,14 +67,15 @@ async def answer_triage_question(
     """
     Receive user answer to a triage clarifying question and store in ledger.
     """
-    investigation = await investigation_service.get_investigation(request.investigation_id)
+    investigation_id = request.context.investigation_id
+    investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != user_info.uid:
-        raise ResourceNotFoundError("Investigation not found", resource_id=request.investigation_id, resource_type="investigation", component="g8ee")
+        raise ResourceNotFoundError("Investigation not found", resource_id=investigation_id, resource_type="investigation", component="g8ee")
 
     # Store answer as user.chat message with structured metadata
     answer_text = f"Answered clarifying question {request.question_index}: {'Yes' if request.answer else 'No'}"
     await investigation_service.investigation_data_service.add_chat_message(
-        investigation_id=request.investigation_id,
+        investigation_id=investigation_id,
         sender=MessageSender.USER_CHAT,
         content=answer_text,
         metadata=ConversationMessageMetadata(
@@ -118,13 +119,14 @@ async def skip_triage_questions(
     """
     Record that user skipped the triage clarifying questions.
     """
-    investigation = await investigation_service.get_investigation(request.investigation_id)
+    investigation_id = request.context.investigation_id
+    investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != user_info.uid:
-        raise ResourceNotFoundError("Investigation not found", resource_id=request.investigation_id, resource_type="investigation", component="g8ee")
+        raise ResourceNotFoundError("Investigation not found", resource_id=investigation_id, resource_type="investigation", component="g8ee")
 
     skip_text = "Skipped clarifying questions"
     await investigation_service.investigation_data_service.add_chat_message(
-        investigation_id=request.investigation_id,
+        investigation_id=investigation_id,
         sender=MessageSender.USER_CHAT,
         content=skip_text,
         metadata=ConversationMessageMetadata(
@@ -162,12 +164,13 @@ async def timeout_triage_questions(
     """
     Record that triage clarifying questions timed out.
     """
-    investigation = await investigation_service.get_investigation(request.investigation_id)
+    investigation_id = request.context.investigation_id
+    investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != user_info.uid:
-        raise ResourceNotFoundError("Investigation not found", resource_id=request.investigation_id, resource_type="investigation", component="g8ee")
+        raise ResourceNotFoundError("Investigation not found", resource_id=investigation_id, resource_type="investigation", component="g8ee")
 
     await investigation_service.investigation_data_service.add_chat_message(
-        investigation_id=request.investigation_id,
+        investigation_id=investigation_id,
         sender=MessageSender.USER_CHAT,
         content="Clarifying questions timed out",
         metadata=ConversationMessageMetadata(

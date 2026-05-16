@@ -18,6 +18,7 @@ import pytest
 
 from app.constants.events import EventType
 from app.constants.status import AITaskId, ExecutionStatus
+from app.models.http_context import RequestContext
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import (
     CommandResultBroadcastEvent,
@@ -69,7 +70,12 @@ class TestDirectCommandBroadcasting:
         request = DirectCommandRequest(
             command=command,
             execution_id=exec_id,
-            hostname="test-host"
+            hostname="test-host",
+            context=RequestContext(
+                case_id="case-1",
+                investigation_id="inv-1",
+                source_component="g8ee"
+            )
         )
 
         # 1. Call send_command_to_operator
@@ -141,7 +147,12 @@ class TestDirectCommandBroadcasting:
 
         request = DirectCommandRequest(
             command=command,
-            execution_id=exec_id
+            execution_id=exec_id,
+            context=RequestContext(
+                case_id="case-1",
+                investigation_id="inv-1",
+                source_component="g8ee"
+            )
         )
 
         await svc.send_command_to_operator(request, g8e_context)

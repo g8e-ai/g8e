@@ -800,11 +800,11 @@ func (s *ListenDBService) KVExpire(key string, ttlSeconds int) bool {
 }
 
 // SSEEventsAppend inserts a row into the sse_events table.
-func (s *ListenDBService) SSEEventsAppend(operatorSessionID, eventType, payload string) error {
+func (s *ListenDBService) SSEEventsAppend(sessionKey, eventType, payload string) error {
 	now := sqliteutil.NowTimestamp()
 	_, err := s.db.Exec(
-		"INSERT INTO sse_events (operator_session_id, event_type, payload, created_at) VALUES (?, ?, ?, ?)",
-		operatorSessionID, eventType, payload, now,
+		"INSERT INTO sse_events (session_key, event_type, payload, created_at) VALUES (?, ?, ?, ?)",
+		sessionKey, eventType, payload, now,
 	)
 	return err
 }
@@ -823,6 +823,52 @@ func (s *ListenDBService) SSEEventsCount() (int64, error) {
 	var count int64
 	err := s.db.QueryRow("SELECT COUNT(*) FROM sse_events").Scan(&count)
 	return count, err
+}
+
+// SSEEventRow is a single row from the sse_events table.
+type SSEEventRow struct {
+	ID         int64  `json:"id"`
+	SessionKey string `json:"session_key"`
+	EventType  string `json:"event_type"`
+	Payload    string `json:"payload"`
+	CreatedAt  string `json:"created_at"`
+}
+
+// SSEEventsListSince returns up to `limit` events for the given session key
+// with id > sinceID, ordered by id ascending. If sessionKey is empty, returns
+// events across all sessions (admin/debug use).
+func (s *ListenDBService) SSEEventsListSince(sessionKey string, sinceID int64, limit int) ([]SSEEventRow, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	if sessionKey == "" {
+		rows, err = s.db.Query(
+			"SELECT id, session_key, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
+			sinceID, limit,
+		)
+	} else {
+		rows, err = s.db.Query(
+			"SELECT id, session_key, event_type, payload, created_at FROM sse_events WHERE session_key = ? AND id > ? ORDER BY id ASC LIMIT ?",
+			sessionKey, sinceID, limit,
+		)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]SSEEventRow, 0)
+	for rows.Next() {
+		var r SSEEventRow
+		if err := rows.Scan(&r.ID, &r.SessionKey, &r.EventType, &r.Payload, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
 // RunTTLCleanup periodically removes expired KV entries and expired blobs.

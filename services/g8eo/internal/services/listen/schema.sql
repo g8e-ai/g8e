@@ -33,12 +33,12 @@ CREATE INDEX IF NOT EXISTS idx_kv_expires ON kv_store(expires_at);
 -- SSE event buffer: per-session ring buffer for reconnection replay
 CREATE TABLE IF NOT EXISTS sse_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    operator_session_id TEXT NOT NULL,
+    session_key TEXT NOT NULL,
     event_type TEXT NOT NULL,
     payload TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_sse_session ON sse_events(operator_session_id, id);
+CREATE INDEX IF NOT EXISTS idx_sse_session ON sse_events(session_key, id);
 CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 
 -- Blob store: raw binary attachments keyed by namespace + id

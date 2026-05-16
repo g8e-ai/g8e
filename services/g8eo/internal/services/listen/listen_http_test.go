@@ -410,6 +410,69 @@ func TestHandleDB(t *testing.T) {
 	})
 }
 
+// Regression: g8ee Engine pushes typed events via /api/internal/sse/push and
+// CLI/dashboard consumers poll /api/internal/sse/events?session_id=...&since_id=N.
+// The substrate must persist with the routing key (web_session_id) and replay
+// in id-ascending order, returning the full envelope as a JSON string.
+func TestInternalSSEBridge(t *testing.T) {
+	h, _ := setupTestHTTPHandler(t)
+	_, _ = h.db.SSEEventsWipe()
+
+	push := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/internal/sse/push", strings.NewReader(body))
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEPush(rr, req)
+		return rr
+	}
+
+	t.Run("session event is persisted and replayable", func(t *testing.T) {
+		body := `{"web_session_id":"ws-1","user_id":"u-1","event":{"type":"ai.text","data":{"chunk":"hello"}}}`
+		rr := push(body)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?session_id=ws-1&since_id=0", nil)
+		rr = httptest.NewRecorder()
+		h.handleInternalSSEEvents(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"event_type":"ai.text"`)
+		assert.Contains(t, rr.Body.String(), `\"chunk\":\"hello\"`)
+	})
+
+	t.Run("background event falls back to user_id routing key", func(t *testing.T) {
+		body := `{"user_id":"u-2","event":{"type":"system.notice","data":{}}}`
+		rr := push(body)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?session_id=u-2&since_id=0", nil)
+		rr = httptest.NewRecorder()
+		h.handleInternalSSEEvents(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"event_type":"system.notice"`)
+	})
+
+	t.Run("missing routing key is rejected", func(t *testing.T) {
+		rr := push(`{"event":{"type":"x"}}`)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("missing event field is rejected", func(t *testing.T) {
+		rr := push(`{"web_session_id":"ws-3"}`)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("since_id replays only newer events", func(t *testing.T) {
+		_, _ = h.db.SSEEventsWipe()
+		_ = h.db.SSEEventsAppend("ws-x", "a", `{"event":{"type":"a"}}`)
+		_ = h.db.SSEEventsAppend("ws-x", "b", `{"event":{"type":"b"}}`)
+		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?session_id=ws-x&since_id=0&limit=1", nil)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEEvents(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"count":1`)
+		assert.Contains(t, rr.Body.String(), `"event_type":"a"`)
+	})
+}
+
 func TestHandleKV(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 

@@ -21,7 +21,7 @@ import pytest
 from app.constants.events import EventType
 from app.constants.intents import CloudIntent
 from app.constants.status import FileOperation
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import RequestContext, G8eHttpContext
 from app.models.internal_api import OperatorApprovalResponse
 from app.models.investigations import ApprovalMetadata
 from app.models.operators import (
@@ -131,6 +131,11 @@ class TestHandleApprovalResponse:
             reason="Approved",
             operator_session_id="session-1",
             operator_id="op-1",
+            context=RequestContext(
+                case_id="case-1",
+                investigation_id="inv-1",
+                source_component="g8ee"
+            )
         )
 
         await service.handle_approval_response(response)
@@ -155,6 +160,11 @@ class TestHandleApprovalResponse:
             approval_id="unknown-id",
             approved=True,
             reason="Approved",
+            context=RequestContext(
+                case_id="case-1",
+                investigation_id="inv-1",
+                source_component="g8ee"
+            )
         )
 
         await service.handle_approval_response(response)
@@ -176,6 +186,11 @@ class TestHandleApprovalResponse:
             approval_id="",
             approved=True,
             reason="Approved",
+            context=RequestContext(
+                case_id="case-1",
+                investigation_id="inv-1",
+                source_component="g8ee"
+            )
         )
 
         with pytest.raises(Exception) as exc_info:

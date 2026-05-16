@@ -115,6 +115,12 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/governance/signers/", h.handleTrustedSignerByID)
 	mux.HandleFunc("/api/audit/receipts", h.handleAuditReceipts)
 	mux.HandleFunc("/api/audit/receipts/export", h.handleAuditReceiptsExport)
+
+	// Internal SSE event bridge (used by g8ee Engine to publish typed events
+	// for browser/CLI subscribers to consume). Producers are authenticated by
+	// mTLS app identity; consumers poll /api/internal/sse/events.
+	mux.HandleFunc("/api/internal/sse/push", h.handleInternalSSEPush)
+	mux.HandleFunc("/api/internal/sse/events", h.handleInternalSSEEvents)
 	mux.HandleFunc("/db/", h.handleDB)
 	mux.HandleFunc("/kv/", h.handleKV)
 	mux.HandleFunc("/pubsub/publish", h.handlePubSubPublish)
@@ -1145,6 +1151,104 @@ func (h *HTTPHandler) handleSSEEvents(w http.ResponseWriter, r *http.Request, id
 	}
 
 	jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+}
+
+// =============================================================================
+// /api/internal/sse/push, /api/internal/sse/events — Internal SSE event bridge
+//
+// POST /api/internal/sse/push     → Producer (g8ee Engine) appends an event
+// GET  /api/internal/sse/events   → Consumer (CLI / dashboard) polls events
+//                                   ?session_id=...&since_id=N&limit=K
+// =============================================================================
+
+// internalSSEPushPayload mirrors the wire shape produced by g8ee
+// (SessionEventWire | BackgroundEventWire). Both shapes carry an `event`
+// object with a discriminator `type` plus an opaque `data` blob; SessionEvent
+// also carries a top-level `web_session_id`. We persist the routing key as
+// `session_key` — for now, web_session_id is the routing key the CLI uses.
+type internalSSEPushPayload struct {
+	WebSessionID string          `json:"web_session_id"`
+	CliSessionID string          `json:"cli_session_id"`
+	UserID       string          `json:"user_id"`
+	Event        json.RawMessage `json:"event"`
+}
+
+func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var p internalSSEPushPayload
+	if err := json.Unmarshal(body, &p); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if len(p.Event) == 0 {
+		jsonError(w, http.StatusBadRequest, "event field is required")
+		return
+	}
+
+	// Routing key: prefer web_session_id, then cli_session_id, fallback to user_id.
+	sessionKey := strings.TrimSpace(p.WebSessionID)
+	if sessionKey == "" {
+		sessionKey = strings.TrimSpace(p.CliSessionID)
+	}
+	if sessionKey == "" {
+		sessionKey = strings.TrimSpace(p.UserID)
+	}
+	if sessionKey == "" {
+		jsonError(w, http.StatusBadRequest, "web_session_id, cli_session_id or user_id required")
+		return
+	}
+
+	// Extract event.type for indexing/filtering. Store the full envelope as the payload.
+	var inner struct {
+		Type string `json:"type"`
+	}
+	_ = json.Unmarshal(p.Event, &inner)
+	if inner.Type == "" {
+		inner.Type = "unknown"
+	}
+
+	if err := h.db.SSEEventsAppend(sessionKey, inner.Type, string(body)); err != nil {
+		h.logger.Error("SSE push: failed to append event", "error", err, "type", inner.Type)
+		jsonError(w, http.StatusInternalServerError, "failed to persist event")
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]any{
+		"success":   true,
+		"delivered": 1,
+	})
+}
+
+func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	q := r.URL.Query()
+	sessionKey := q.Get("session_id")
+	sinceID, _ := strconv.ParseInt(q.Get("since_id"), 10, 64)
+	limit, _ := strconv.Atoi(q.Get("limit"))
+
+	rows, err := h.db.SSEEventsListSince(sessionKey, sinceID, limit)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]any{
+		"events": rows,
+		"count":  len(rows),
+	})
 }
 
 func (h *HTTPHandler) handleDBQuery(w http.ResponseWriter, r *http.Request, collection string) {

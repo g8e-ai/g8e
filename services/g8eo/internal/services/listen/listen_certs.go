@@ -751,7 +751,9 @@ func (pki *PKIAuthority) generateAppCert(app, keyPath, certPath string) error {
 		NotBefore:   now.Add(-1 * time.Minute),
 		NotAfter:    now.Add(time.Duration(serviceValidityDays) * 24 * time.Hour),
 		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		DNSNames:    []string{"localhost", "g8e.local", app},
+		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
 		URIs: []*url.URL{
 			{Scheme: "spiffe", Host: trustDomain, Path: "/app/" + app},
 		},

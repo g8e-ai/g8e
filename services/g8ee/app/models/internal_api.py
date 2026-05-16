@@ -17,21 +17,35 @@ from app.models.attachments import AttachmentMetadata
 from app.models.base import G8eBaseModel
 from app.models.cases import CaseModel
 from app.models.operators import PendingApproval
+from app.models.http_context import RequestContext
+
+
+class ResourceCreationRequest(G8eBaseModel):
+    """Typed request to create new case and investigation resources.
+
+    Replaces the in-band NEW_CASE_ID sentinel string with structured intent
+    in the request body. When create_case is True, the chat endpoint will
+    create a new case and investigation inline before processing the message.
+    """
+    create_case: bool = Field(default=False, description="When True, create new case and investigation")
+    case_title: str | None = Field(default=None, description="Optional case title override")
 
 
 class ChatMessageRequest(G8eBaseModel):
-    """Request model for chat messages -- user-provided content only.
+    """Request model for chat messages.
 
     Identity and business context (case_id, investigation_id, web_session_id,
-    user_id) come exclusively from G8eHttpContext headers set by client.
-    The request body carries only user-controlled content.
+    user_id) come from the context field in the request body.
+    The request body carries user-controlled content plus context.
 
-    Whether to create a new case+investigation is derived from g8e_context.case_id
-    being empty — no flag needed in the body.
+    To create a new case+investigation, set resource_creation.create_case to True.
+    This replaces the legacy X-G8E-New-Case header and NEW_CASE_ID sentinel.
     """
+    context: RequestContext = Field(..., description="Request context with session/case/investigation identity")
     message: str = Field(..., description="Chat message content")
     attachments: list[AttachmentMetadata] | None = Field(default_factory=list, description="File attachments")
     sentinel_mode: bool = Field(default=True, description="Sentinel mode - when True, data is scrubbed before storage and AI sees redacted data")
+    resource_creation: ResourceCreationRequest | None = Field(default=None, description="Resource creation configuration - when set with create_case=True, creates new case and investigation")
     llm_primary_provider: str | None = Field(default=None, description="Primary LLM provider override for complex tasks - null uses server default")
     llm_assistant_provider: str | None = Field(default=None, description="Assistant LLM provider override for simple tasks - null uses server default")
     llm_lite_provider: str | None = Field(default=None, description="Lite LLM provider override for quick tasks - null uses server default")
@@ -91,10 +105,11 @@ class OperatorApprovalResponse(G8eBaseModel):
     """Request model for operator command approval response.
 
     Identity/business context (case_id, investigation_id, etc.) comes from
-    G8eHttpContext headers. Only approval-specific fields are in the body.
+    the context field in the request body. Only approval-specific fields are in the body.
     The router enriches this with operator_session_id / operator_id from
     the bound operator before passing it to the approval service.
     """
+    context: RequestContext = Field(..., description="Request context with session/case/investigation identity")
     approval_id: str = Field(..., description="Approval ID")
     approved: bool = Field(..., description="Whether the command was approved")
     reason: str = Field(default="Approval denied by user", description="Reason for denial if not approved")
@@ -107,9 +122,11 @@ class OperatorSlotCreationRequest(G8eBaseModel):
 
     Called by client during user initialization and device link creation.
     g8ee handles the actual write to the operator document.
+
+    Identity and business context (user_id, organization_id) come from the
+    context field in the request body.
     """
-    user_id: str = Field(..., description="User ID")
-    organization_id: str = Field(..., description="Organization ID")
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     slot_number: int = Field(..., description="Slot number")
     operator_type: str = Field(..., description="Operator type (CLOUD, SYSTEM)")
     cloud_subtype: str | None = Field(default=None, description="Cloud operator subtype")
@@ -129,7 +146,11 @@ class OperatorSlotClaimRequest(G8eBaseModel):
 
     Called by client during device registration.
     g8ee handles the actual write to the operator document.
+
+    Identity and business context (user_id, organization_id) come from the
+    context field in the request body.
     """
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     operator_id: str = Field(..., description="Operator ID")
     operator_session_id: str = Field(..., description="Operator session ID")
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
@@ -147,7 +168,11 @@ class OperatorUpdateApiKeyRequest(G8eBaseModel):
 
     Called by client to issue API keys for existing slots that were created without keys.
     g8ee handles the actual write to the operator document.
+
+    Identity and business context (user_id, organization_id) come from the
+    context field in the request body.
     """
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     operator_id: str = Field(..., description="Operator ID")
     api_key: str = Field(..., description="New API key")
 
@@ -163,10 +188,12 @@ class OperatorBindRequest(G8eBaseModel):
 
     Called by client during operator bind operations.
     g8ee handles the actual write to the operator document.
+
+    Identity and business context (user_id, organization_id, web_session_id) come from the
+    context field in the request body.
     """
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     operator_ids: list[str] = Field(..., description="Operator IDs to bind")
-    web_session_id: str = Field(..., description="Web session ID")
-    user_id: str = Field(..., description="User ID")
 
 
 class OperatorBindResponse(G8eBaseModel):
@@ -182,12 +209,14 @@ class OperatorBindResponse(G8eBaseModel):
 class OperatorUnbindRequest(G8eBaseModel):
     """Request model for operator unbinding.
 
-    Called by client during operator unbind operations.
+    Called by client during operator unbinding operations.
     g8ee handles the actual write to the operator document.
+
+    Identity and business context (user_id, organization_id, web_session_id) come from the
+    context field in the request body.
     """
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     operator_ids: list[str] = Field(..., description="Operator IDs to unbind")
-    web_session_id: str = Field(..., description="Web session ID")
-    user_id: str = Field(..., description="User ID")
 
 
 class OperatorUnbindResponse(G8eBaseModel):
@@ -206,9 +235,13 @@ class InternalOperatorAuthCall(G8eBaseModel):
     """Request model for operator authentication via API key (Bearer) relayed through client.
 
     Internal g8ee-client API contract for operator authentication.
+
+    Identity and business context (web_session_id, user_id, organization_id) come from the
+    context field in the request body.
     """
     model_config = ConfigDict(extra="forbid")
 
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     authorization: str = Field(..., description="The Bearer token (API key) for the operator")
     runtime_config: dict | None = Field(default=None)
 
@@ -232,13 +265,14 @@ class OperatorDeviceLinkRegisterRequest(G8eBaseModel):
 
     Called by client after device-link token consumption.
     Trust model: caller is client via internal mTLS. No authorization header.
+
+    Identity and business context (user_id, organization_id) come from the
+    context field in the request body.
     """
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     operator_id: str | None = Field(default=None, description="Operator ID (optional if creating on-demand)")
-    user_id: str = Field(..., description="User ID")
-    organization_id: str | None = Field(default=None, description="Organization ID")
     operator_type: str = Field(default="SYSTEM", description="Operator type")
     device_link_token: str | None = Field(default=None, description="Device link token for on-demand slot creation")
-    system_fingerprint: str | None = Field(default=None, description="System fingerprint")
 
 
 class OperatorDeviceLinkRegisterResponse(G8eBaseModel):
@@ -291,17 +325,24 @@ class PendingApprovalsResponse(G8eBaseModel):
 
 
 class StopAIRequest(G8eBaseModel):
-    """Request model for stopping active AI processing."""
-    investigation_id: str = Field(..., description="Investigation ID to stop processing for")
+    """Request model for stopping active AI processing.
+
+    Identity and business context (case_id, investigation_id, web_session_id,
+    user_id) come from the context field in the request body.
+    """
+    context: RequestContext = Field(..., description="Request context with session/case/investigation identity")
     reason: str = Field(default="User requested stop", description="Reason for stopping")
-    web_session_id: str | None = Field(default=None, description="Web session ID for SSE routing")
 
 
 class StopOperatorRequest(G8eBaseModel):
-    """Request model for stopping an operator via pub/sub shutdown command."""
+    """Request model for stopping an operator via pub/sub shutdown command.
+
+    Identity and business context (user_id, organization_id, web_session_id) come from the
+    context field in the request body.
+    """
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     operator_id: str = Field(..., description="Operator ID")
     operator_session_id: str = Field(..., description="Operator session ID")
-    user_id: str | None = Field(default=None, description="User ID")
 
 
 class OperatorSessionRegistrationRequest(G8eBaseModel):
@@ -309,13 +350,22 @@ class OperatorSessionRegistrationRequest(G8eBaseModel):
 
     Called by client when an operator authenticates (register) or goes offline/stops (deregister).
     Triggers g8ee to subscribe or unsubscribe from the heartbeat pub/sub channel for this session.
+
+    Identity and business context (user_id, organization_id) come from the
+    context field in the request body.
     """
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     operator_id: str = Field(..., description="Operator ID")
     operator_session_id: str = Field(..., description="Operator session ID")
 
 
 class OperatorTerminateRequest(G8eBaseModel):
-    """Request model for operator termination."""
+    """Request model for operator termination.
+
+    Identity and business context (user_id, organization_id) come from the
+    context field in the request body.
+    """
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     operator_id: str = Field(..., description="Operator ID")
 
 
@@ -342,13 +392,15 @@ class ApiKeyGenerationResponse(G8eBaseModel):
 
 class OperatorListenSessionAuthRequest(G8eBaseModel):
     """Request model for starting a session auth listener.
-    
+
     Called by client during device registration bootstrap.
+
+    Identity and business context (user_id, organization_id) come from the
+    context field in the request body.
     """
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     operator_session_id: str = Field(..., description="Operator session ID")
     operator_id: str = Field(..., description="Operator ID")
-    user_id: str = Field(..., description="User ID")
-    organization_id: str | None = Field(default=None, description="Organization ID")
 
 
 class OperatorCertificateRevokeRequest(G8eBaseModel):
@@ -367,10 +419,11 @@ class OperatorCertificateRevokeResponse(G8eBaseModel):
 class DirectCommandRequest(G8eBaseModel):
     """Request model for direct command execution (bypasses AI).
 
-    Body carries only command-specific payload. All identity and context
+    Body carries command-specific payload plus context. All identity and context
     (user_id, web_session_id, operator_id, operator_session_id, case_id,
-    investigation_id) come from G8eHttpContext headers.
+    investigation_id) come from the context field.
     """
+    context: RequestContext = Field(..., description="Request context with session/case/investigation identity")
     command: str = Field(..., description="Command to execute on operator")
     execution_id: str = Field(..., description="Execution ID for tracking")
     hostname: str | None = Field(default=None, description="Hostname of the target operator for result display")
@@ -405,6 +458,7 @@ class IntentOperationResult(G8eBaseModel):
 
 class IntentRequestPayload(G8eBaseModel):
     """Payload for intent request."""
+    context: RequestContext = Field(..., description="Request context with session/case/investigation identity")
     operator_id: str
     intent: str
 
@@ -424,5 +478,6 @@ class OperatorLinkResponse(G8eBaseModel):
 
 class OperatorLinkRequestPayload(G8eBaseModel):
     """Payload for operator device link request."""
+    context: RequestContext = Field(..., description="Request context with session/case/investigation identity")
     operator_id: str
     user_id: str

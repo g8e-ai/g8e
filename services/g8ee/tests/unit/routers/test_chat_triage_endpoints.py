@@ -16,8 +16,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import Request
 
-from app.constants import AuthMethod, MessageSender
+from app.constants import AuthMethod, MessageSender, ComponentName
 from app.constants.events import EventType
+from app.models.http_context import RequestContext
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
 from app.routers.chat_router import (
     answer_triage_question,
@@ -56,7 +57,16 @@ class TestTriageEndpoints:
             web_session_id=investigation_id,
             auth_method=AuthMethod.TEST
         )
-        payload = TriageAnswerRequest(investigation_id=investigation_id, question_index=1, answer=True)
+        payload = TriageAnswerRequest(
+            investigation_id=investigation_id,
+            question_index=1,
+            answer=True,
+            context=RequestContext(
+                investigation_id=investigation_id,
+                case_id="case-123",
+                source_component=ComponentName.CLIENT
+            )
+        )
 
         result = await answer_triage_question(
             request=payload,
@@ -100,7 +110,14 @@ class TestTriageEndpoints:
             web_session_id=investigation_id,
             auth_method=AuthMethod.TEST
         )
-        payload = TriageSkipRequest(investigation_id=investigation_id)
+        payload = TriageSkipRequest(
+            investigation_id=investigation_id,
+            context=RequestContext(
+                investigation_id=investigation_id,
+                case_id="case-123",
+                source_component=ComponentName.CLIENT
+            )
+        )
 
         result = await skip_triage_questions(
             request=payload,
@@ -135,7 +152,14 @@ class TestTriageEndpoints:
             web_session_id=investigation_id,
             auth_method=AuthMethod.TEST
         )
-        payload = TriageTimeoutRequest(investigation_id=investigation_id)
+        payload = TriageTimeoutRequest(
+            investigation_id=investigation_id,
+            context=RequestContext(
+                investigation_id=investigation_id,
+                case_id="case-123",
+                source_component=ComponentName.CLIENT
+            )
+        )
 
         result = await timeout_triage_questions(
             request=payload,

@@ -113,9 +113,9 @@ When no operator is connected:
 - `unset <key>`: Remove a variable from `.g8e/.env`
 
 ### platform
-- `start [--with-apps|--with-g8ee]`: Start Operator listen mode by default; optional apps require explicit opt-in
+- `start [-a|--with-apps|--with-g8ee]`: Start Operator listen mode by default; optional apps require explicit opt-in
 - `stop`: Stop Operator listen mode and any optional app processes
-- `restart [--with-apps|--with-g8ee]`: Restart Operator listen mode by default; optional apps require explicit opt-in
+- `restart [-a|--with-apps|--with-g8ee]`: Restart Operator listen mode by default; optional apps require explicit opt-in
 - `status`: Show substrate health first and optional application-layer status separately
 - `reset`: Destructive. Wipes Engine data, Operator listen-mode data, and bootstrap secrets while preserving PKI material in `.g8e/pki`
 - `wipe`: Clears application data via the Operator listen-mode API. Preserves platform settings, PKI material, secrets, and authentication state

@@ -40,6 +40,7 @@ from app.models.health import (
 from app.models.http_context import (
     BoundOperator,
     G8eHttpContext,
+    RequestContext,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -597,6 +598,90 @@ class TestG8eHttpContext:
     def test_has_bound_operator_false_when_list_empty(self):
         ctx = self._make()
         assert ctx.has_bound_operator() is False
+
+
+class TestRequestContext:
+    """Tests for RequestContext model - eliminates header-as-state pattern."""
+
+    def _make(self, **overrides):
+        defaults = dict(
+            web_session_id="sess-abc123",
+            user_id="user-xyz789",
+            case_id="case-001",
+            investigation_id="inv-002",
+            source_component=ComponentName.CLIENT,
+        )
+        defaults.update(overrides)
+        return RequestContext(**defaults)
+
+    def test_instantiation_with_required_fields(self):
+        ctx = self._make()
+        assert ctx.web_session_id == "sess-abc123"
+        assert ctx.user_id == "user-xyz789"
+        assert ctx.case_id == "case-001"
+        assert ctx.investigation_id == "inv-002"
+        assert ctx.source_component == ComponentName.CLIENT
+
+    def test_optional_fields_default_to_none(self):
+        ctx = self._make()
+        assert ctx.organization_id is None
+        assert ctx.task_id is None
+        assert ctx.execution_id is None
+        assert ctx.system_fingerprint is None
+
+    def test_bound_operators_defaults_to_empty_list(self):
+        ctx = self._make()
+        assert ctx.bound_operators == []
+
+    def test_bound_operators_accepts_list(self):
+        ops = [
+            BoundOperator(operator_id="op-1", status=OperatorStatus.BOUND),
+            BoundOperator(operator_id="op-2", status=OperatorStatus.ACTIVE),
+        ]
+        ctx = self._make(bound_operators=ops)
+        assert len(ctx.bound_operators) == 2
+        assert ctx.bound_operators[0].operator_id == "op-1"
+
+    def test_model_dump_serializes_to_json_safe_dict(self):
+        ctx = self._make()
+        dumped = ctx.model_dump(mode="json")
+        assert dumped["source_component"] == "client"
+        assert isinstance(dumped["bound_operators"], list)
+
+    def test_from_request_context_creates_g8e_http_context(self):
+        """Test that G8eHttpContext.from_request_context converts RequestContext correctly."""
+        request_ctx = self._make(
+            organization_id="org-123",
+            task_id="task-456",
+            execution_id="exec-789",
+            system_fingerprint="fp-xyz",
+        )
+        g8e_ctx = G8eHttpContext.from_request_context(request_ctx, is_exempt_path=False)
+
+        assert g8e_ctx.web_session_id == request_ctx.web_session_id
+        assert g8e_ctx.user_id == request_ctx.user_id
+        assert g8e_ctx.organization_id == request_ctx.organization_id
+        assert g8e_ctx.case_id == request_ctx.case_id
+        assert g8e_ctx.investigation_id == request_ctx.investigation_id
+        assert g8e_ctx.task_id == request_ctx.task_id
+        assert g8e_ctx.execution_id == request_ctx.execution_id
+        assert g8e_ctx.source_component == request_ctx.source_component
+        assert g8e_ctx.system_fingerprint == request_ctx.system_fingerprint
+        assert g8e_ctx.bound_operators == request_ctx.bound_operators
+        assert g8e_ctx.is_operator_auth_relay is False
+
+    def test_from_request_context_with_exempt_path(self):
+        """Test that exempt path flag is passed through correctly."""
+        request_ctx = self._make()
+        g8e_ctx = G8eHttpContext.from_request_context(request_ctx, is_exempt_path=True)
+        assert g8e_ctx.is_operator_auth_relay is True
+
+    def test_from_request_context_generates_execution_id_when_missing(self):
+        """Test that execution_id is auto-generated when not provided in RequestContext."""
+        request_ctx = self._make(execution_id=None)
+        g8e_ctx = G8eHttpContext.from_request_context(request_ctx, is_exempt_path=False)
+        assert g8e_ctx.execution_id is not None
+        assert g8e_ctx.execution_id.startswith("exec_")
 
     def test_has_bound_operator_false_when_status_is_none(self):
         ctx = self._make(bound_operators=[

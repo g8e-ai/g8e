@@ -4,24 +4,21 @@
     Install the g8e platform CA certificate into the Windows trusted root store.
 
 .DESCRIPTION
-    Fetches the CA cert from the platform via SSH, removes any previously installed
+    Fetches the CA cert from the platform, removes any previously installed
     g8e CA cert, and installs the new one into LocalMachine\Root.
 
     Run this whenever SSL certificates are rotated (e.g. after platform rebuild).
 
-.PARAMETER Server
-    SSH target in the format <user>@<server>. Example: admin@10.0.0.2 or admin@localhost
+.PARAMETER Url
+    Platform URL to fetch the root CA from. Example: https://localhost:8080
 
 .EXAMPLE
-    .\trust-ca.ps1 -Server admin@10.0.0.2
-
-.EXAMPLE
-    .\trust-ca.ps1 -Server admin@localhost
+    .\trust-ca.ps1 -Url https://localhost:8080
 #>
 
 param(
     [Parameter(Mandatory = $true)]
-    [string]$Server
+    [string]$Url
 )
 
 Set-StrictMode -Version Latest
@@ -48,11 +45,12 @@ if ($existing.Count -gt 0) {
 }
 
 Write-Host ""
-Write-Host "[2/3] Fetching CA cert from ${Server}..."
-$certPem = ssh $Server "curl -s https://localhost/.well-known/g8e/pki/root.pem --insecure"
+Write-Host "[2/3] Fetching CA cert from ${Url}..."
+$certUrl = "${Url}/.well-known/g8e/pki/root.pem"
+$certPem = curl -s $certUrl --insecure
 
 if (-not $certPem) {
-    Write-Error "No certificate data received from ${Server}. Is the platform running?"
+    Write-Error "No certificate data received from ${certUrl}. Is the platform running?"
     exit 1
 }
 

@@ -25,6 +25,7 @@ from app.services.service_factory import AllServices
 from app.constants import (
     ComponentName,
     G8eHeaders,
+    InternalApiPaths,
 )
 from app.errors import (
     AuthenticationError,
@@ -33,7 +34,7 @@ from app.errors import (
 )
 from app.models.auth import AuthenticatedUser
 from app.models.health import HealthCheckResult
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.services.cache.cache_aside import CacheAsideService
 from app.security.auth import (
     is_infrastructure_health_check_ip,
@@ -70,6 +71,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "get_g8e_http_context",
+    "get_g8e_http_context_from_body",
     "get_g8ee_api_key_service",
     "get_g8ee_approval_service",
     "get_g8ee_attachment_service",
@@ -449,6 +451,7 @@ async def health_check_dependencies(request: Request) -> HealthCheckResult:
 
 __all__ = [
     "get_g8e_http_context",
+    "get_g8e_http_context_from_body",
     "get_g8ee_api_key_service",
     "get_g8ee_approval_service",
     "get_g8ee_attachment_service",
