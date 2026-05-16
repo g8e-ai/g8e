@@ -34,7 +34,7 @@ from app.utils.ledger_hash import compute_entry_hash, genesis_hash
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 from .grounding import GroundingMetadata
-from .http_context import BoundOperator, G8eHttpContext
+from .http_context import BoundOperator, G8eHttpContext, RequestContext
 from .memory import InvestigationMemory
 from .operators import OperatorDocument
 from .tool_results import TokenUsage

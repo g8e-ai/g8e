@@ -25,7 +25,7 @@ from app.constants import (
 )
 from app.errors import ExternalServiceError, ResourceNotFoundError
 from app.models.agent import OperatorContext
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.constants.message_sender import MessageSender
 from app.models.grounding import GroundingMetadata
 from app.models.investigations import (
@@ -94,6 +94,7 @@ class InvestigationService:
 
     async def get_investigation_context(
         self,
+        context: RequestContext,
         case_id: str | None = None,
         investigation_id: str | None = None,
         user_id: str | None = None
@@ -157,7 +158,8 @@ class InvestigationService:
                     )
                 investigations = await self.investigation_data_service.get_case_investigations(
                     case_id=case_id,
-                    user_id=user_id
+                    user_id=user_id,
+                    context=context
                 )
                 if investigations:
                     # Sort investigations to find the one with the latest created_at timestamp

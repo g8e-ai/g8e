@@ -85,6 +85,7 @@ from app.services.investigation.investigation_service import (
 from tests.fakes.factories import (
     build_g8e_http_context,
     build_production_operator_document,
+    build_request_context,
     create_investigation_data,
     create_investigation_memory,
     create_investigation_request,
@@ -126,6 +127,10 @@ class TestInvestigationContextResolution:
 
         # Test - use the created investigation's ID
         result = await service.get_investigation_context(
+            context=build_request_context(
+                investigation_id=created_investigation.id,
+                user_id=created_investigation.user_id
+            ),
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
@@ -180,6 +185,10 @@ class TestInvestigationContextResolution:
 
         # Test
         result = await service.get_investigation_context(
+            context=build_request_context(
+                case_id=case_id,
+                user_id=user_id
+            ),
             case_id=case_id,
             user_id=user_id
         )
@@ -208,6 +217,10 @@ class TestInvestigationContextResolution:
         # Test & Verify
         with pytest.raises(ResourceNotFoundError) as exc_info:
             await service.get_investigation_context(
+                context=build_request_context(
+                    investigation_id=unique_investigation_id,
+                    user_id=unique_user_id
+                ),
                 investigation_id=unique_investigation_id,
                 user_id=unique_user_id
             )
@@ -227,6 +240,10 @@ class TestInvestigationContextResolution:
         # Test & Verify
         with pytest.raises(ResourceNotFoundError) as exc_info:
             await service.get_investigation_context(
+                context=build_request_context(
+                    case_id=unique_case_id,
+                    user_id=unique_user_id
+                ),
                 case_id=unique_case_id,
                 user_id=unique_user_id
             )
@@ -258,6 +275,10 @@ class TestInvestigationContextResolution:
         # Test (call without user_id for case-based lookup)
         with caplog.at_level(logging.WARNING):
             result = await service.get_investigation_context(
+                context=build_request_context(
+                    case_id=created_investigation.case_id,
+                    user_id=None
+                ),
                 case_id=created_investigation.case_id
                 # Note: no user_id provided
             )
@@ -314,6 +335,10 @@ class TestMemoryContextAttachment:
 
         # Test
         result = await service.get_investigation_context(
+            context=build_request_context(
+                investigation_id=created_investigation.id,
+                user_id=created_investigation.user_id
+            ),
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
@@ -353,6 +378,10 @@ class TestMemoryContextAttachment:
 
         # Test
         result = await service.get_investigation_context(
+            context=build_request_context(
+                investigation_id=created_investigation.id,
+                user_id=created_investigation.user_id
+            ),
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
@@ -390,6 +419,10 @@ class TestMemoryContextAttachment:
 
         # Test
         result = await service.get_investigation_context(
+            context=build_request_context(
+                investigation_id=created_investigation.id,
+                user_id=created_investigation.user_id
+            ),
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
@@ -442,6 +475,10 @@ class TestMemoryContextAttachment:
 
         # Test
         result = await service.get_investigation_context(
+            context=build_request_context(
+                investigation_id=created_investigation.id,
+                user_id=created_investigation.user_id
+            ),
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
@@ -506,6 +543,10 @@ class TestOperatorEnrichment:
 
         # Get base context first
         base_context = await service.get_investigation_context(
+            context=build_request_context(
+                investigation_id=created_investigation.id,
+                user_id=created_investigation.user_id
+            ),
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
@@ -571,6 +612,10 @@ class TestOperatorEnrichment:
 
         # Get base context and enrich
         base_context = await service.get_investigation_context(
+            context=build_request_context(
+                investigation_id=created_investigation.id,
+                user_id=created_investigation.user_id
+            ),
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
@@ -641,6 +686,10 @@ class TestOperatorEnrichment:
 
         # Get base context and enrich
         base_context = await service.get_investigation_context(
+            context=build_request_context(
+                investigation_id=created_investigation.id,
+                user_id=created_investigation.user_id
+            ),
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
@@ -691,6 +740,10 @@ class TestOperatorEnrichment:
 
         # Get base context and enrich
         base_context = await service.get_investigation_context(
+            context=build_request_context(
+                investigation_id=created_investigation.id,
+                user_id=created_investigation.user_id
+            ),
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
@@ -745,6 +798,10 @@ class TestOperatorEnrichment:
         )
 
         base_context = await service.get_investigation_context(
+            context=build_request_context(
+                investigation_id=created_investigation.id,
+                user_id=created_investigation.user_id
+            ),
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
@@ -835,6 +892,10 @@ class TestCompleteContextAssembly:
 
         # Execute full pipeline
         base_context = await service.get_investigation_context(
+            context=build_request_context(
+                investigation_id=created_investigation.id,
+                user_id=created_investigation.user_id
+            ),
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
@@ -899,6 +960,10 @@ class TestCompleteContextAssembly:
 
         # Execute pipeline
         base_context = await service.get_investigation_context(
+            context=build_request_context(
+                investigation_id=created_investigation.id,
+                user_id=created_investigation.user_id
+            ),
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
@@ -963,7 +1028,9 @@ class TestContextGatheringErrorHandling:
 
         # Test with no parameters
         with pytest.raises(ResourceNotFoundError) as exc_info:
-            await service.get_investigation_context()
+            await service.get_investigation_context(
+                context=build_request_context()
+            )
 
         assert "Investigation context could not be resolved" in str(exc_info.value)
 

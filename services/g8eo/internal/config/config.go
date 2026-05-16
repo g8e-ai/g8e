@@ -239,10 +239,10 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 			httpPort = 9000 // default HTTPS API port (must match protocol/constants/paths.json ports.operator_http)
 		}
 		if bootstrapPort <= 0 {
-			bootstrapPort = 80 // default bootstrap port (must match protocol/constants/paths.json ports.operator_bootstrap)
+			bootstrapPort = 9002 // default bootstrap port (must match protocol/constants/paths.json ports.operator_bootstrap)
 		}
 		if publicPort <= 0 {
-			publicPort = 443 // default public port (must match protocol/constants/paths.json ports.operator_public)
+			publicPort = 9003 // default public port (must match protocol/constants/paths.json ports.operator_public)
 		}
 	}
 	if passkeyRpID == "" {

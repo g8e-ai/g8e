@@ -36,7 +36,7 @@ from app.models.agents.tribunal import (
 )
 from app.models.auth import AuthenticatedUser
 from app.models.cases import CaseModel
-from app.models.http_context import BoundOperator, G8eHttpContext
+from app.models.http_context import BoundOperator, G8eHttpContext, RequestContext
 from app.models.investigations import (
     ConversationHistoryMessage,
     ConversationMessageMetadata,
@@ -197,6 +197,27 @@ def create_conversation_message(
 # ---------------------------------------------------------------------------
 # HTTP & Auth Factories
 # ---------------------------------------------------------------------------
+
+def build_request_context(
+    web_session_id: str | None = "test-web-session",
+    user_id: str | None = "test-user-id",
+    case_id: str | None = None,
+    investigation_id: str | None = None,
+    organization_id: str | None = None,
+    bound_operators: list[BoundOperator] | None = None,
+    source_component: ComponentName = ComponentName.G8EE,
+) -> RequestContext:
+    """Build a RequestContext with fixed deterministic defaults for unit tests."""
+    return RequestContext(
+        web_session_id=web_session_id,
+        user_id=user_id,
+        case_id=case_id or "test-case-id",
+        investigation_id=investigation_id or "test-investigation-id",
+        organization_id=organization_id,
+        bound_operators=bound_operators or [],
+        source_component=source_component,
+    )
+
 
 def build_g8e_http_context(
     web_session_id: str = "test-web-session",

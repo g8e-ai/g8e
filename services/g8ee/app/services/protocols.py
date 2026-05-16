@@ -34,7 +34,7 @@ from app.models.cache import (
     QueryResult,
 )
 from app.models.events import BackgroundEvent, SessionEvent
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.infra import HTTPClientStatus
 from app.models.investigations import (
     ConversationHistoryMessage,
@@ -428,7 +428,7 @@ class InvestigationDataServiceProtocol(Protocol):
         raise NotImplementedError
     async def query_investigations(self, request: InvestigationQueryRequest) -> list[InvestigationModel]:
         raise NotImplementedError
-    async def get_case_investigations(self, case_id: str, user_id: str | None) -> list[InvestigationModel]:
+    async def get_case_investigations(self, case_id: str, user_id: str | None, context: RequestContext) -> list[InvestigationModel]:
         raise NotImplementedError
     async def delete_investigation(self, investigation_id: str) -> None:
         raise NotImplementedError
@@ -501,7 +501,7 @@ class InvestigationServiceProtocol(Protocol):
         raise NotImplementedError
     async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
         raise NotImplementedError
-    async def get_investigation_context(self, case_id: str | None = None, investigation_id: str | None = None, user_id: str | None = None) -> EnrichedInvestigationContext:
+    async def get_investigation_context(self, context: RequestContext, case_id: str | None = None, investigation_id: str | None = None, user_id: str | None = None) -> EnrichedInvestigationContext:
         raise NotImplementedError
     async def get_enriched_investigation_context(self, investigation: EnrichedInvestigationContext, user_id: str, g8e_context: G8eHttpContext) -> EnrichedInvestigationContext:
         raise NotImplementedError

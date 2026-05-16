@@ -39,6 +39,7 @@ from app.models.investigations import (
     InvestigationQueryRequest,
 )
 
+from app.models.http_context import RequestContext
 from app.models.operators import CommandInternalResult
 from app.models.tool_results import FileEditResult
 from app.services.cache.cache_aside import CacheAsideService
@@ -158,9 +159,10 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         self,
         case_id: str,
         user_id: str,
+        context: RequestContext,
     ) -> list[InvestigationModel]:
         """Convenience query for all investigations associated with a case."""
-        request = InvestigationQueryRequest(case_id=case_id, user_id=user_id, limit=100)
+        request = InvestigationQueryRequest(case_id=case_id, user_id=user_id, context=context, limit=100)
         return await self.query_investigations(request)
 
     async def delete_investigation(self, investigation_id: str) -> None:

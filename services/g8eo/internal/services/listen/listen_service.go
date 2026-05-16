@@ -142,6 +142,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	ls.bootstrapServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
 		Handler:           ls.handler.buildBootstrapRouter(),
+		TLSConfig:         tlsConfigPlain,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -188,9 +189,14 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 	}
 
 	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.IsReady, ls.IsGovernanceReady)
+
+	tlsConfig := pki.TLSConfig()
+	tlsConfigPlain := pki.TLSConfigPlain()
+
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
+		TLSConfig:         tlsConfig,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -198,6 +204,7 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 	ls.wssServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.WSSPort),
 		Handler:           ls.handler,
+		TLSConfig:         tlsConfig,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -205,6 +212,15 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 	ls.bootstrapServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
 		Handler:           ls.handler.buildBootstrapRouter(),
+		TLSConfig:         tlsConfigPlain,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	ls.publicServer = &http.Server{
+		Addr:              fmt.Sprintf(":%d", cfg.Listen.PublicPort),
+		Handler:           ls.handler.buildPublicRouter(),
+		TLSConfig:         tlsConfigPlain,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}

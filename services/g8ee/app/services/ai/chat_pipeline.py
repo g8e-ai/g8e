@@ -155,7 +155,10 @@ class ChatPipelineService:
                 details={"investigation_id": investigation_id}
             )
 
+        from app.models.http_context import RequestContext
+
         investigation = await self.investigation_service.get_investigation_context(
+            context=RequestContext.from_app_context(g8e_context),
             investigation_id=investigation_id, user_id=user_id or ""
         )
         investigation = await self.investigation_service.get_enriched_investigation_context(

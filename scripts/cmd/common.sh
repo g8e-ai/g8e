@@ -35,7 +35,7 @@ _operator_running() { _pid_alive "$_OPERATOR_PID_FILE"; }
 _operator_bootstrap() {
     local email="${G8E_BOOTSTRAP_EMAIL:-superadmin@g8e.local}"
     local name="${G8E_BOOTSTRAP_NAME:-Superadmin}"
-    local public_port="${OPERATOR_LISTEN_PUBLIC_PORT:-443}"
+    local public_port="${OPERATOR_LISTEN_PUBLIC_PORT:-9003}"
     local public_url="https://localhost:$public_port"
     local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
 
