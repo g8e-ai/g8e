@@ -28,8 +28,8 @@ Internal authoring standards for g8e documentation. All contributors must follow
 |-------------|-------------------|
 | New component or service | New component doc under `docs/components/`, entry in `docs/README.md` |
 | New API endpoint or route | Update the relevant component doc |
-| New wire-protocol constant, event, or status | Update `docs/components/` and `shared/` references |
-| New shared model field | Update `shared/models/` description in component docs |
+| New wire-protocol constant, event, or status | Update `docs/components/` and `protocol/` references |
+| New shared model field | Update `protocol/models/` description in component docs |
 | New environment variable | Update `docs/developer.md` environment variable table |
 | New test fixture, mock, or helper | Update `docs/testing.md` for the relevant component |
 | New test type or test infrastructure change | Update `docs/testing.md` |
@@ -69,7 +69,7 @@ docs/
 | KV key namespace and patterns | `docs/components/g8eo.md` | `.md`, `g8ee.md` |
 | `G8eHttpContext` internal HTTP header full listing | `docs/components/.md` | `g8ee.md` cross-references; do not restate in other component docs |
 | Heartbeat end-to-end flow | `docs/components/.md` | `g8eo.md`, `g8ee.md` |
-| Shared constants and models (`shared/`) | `docs/developer.md` | `testing.md` |
+| Shared constants and models (`protocol/`) | `docs/developer.md` | `testing.md` |
 | Universal code quality rules | `docs/developer.md` | do not restate in component docs |
 | g8ee component internals (workflow modes, tools, LLM config, Sentinel, LFAA) | `docs/components/g8ee.md` | `docs/architecture/ai_agents.md` |
 | Coverage goals per g8eo package | `docs/components/g8eo.md` | do not restate in `testing.md` |
@@ -150,7 +150,7 @@ All documentation updates must follow the `updatedocs` process:
 
 - Link to related docs rather than repeating content.
 - Use relative paths for all internal links — never absolute URLs.
-- When referencing a constant, model, or field defined in `shared/`, link to the relevant JSON file.
+- When referencing a constant, model, or field defined in `protocol/`, link to the relevant JSON file.
 - `docs/README.md` is the entry point — every doc must be reachable from it.
 - **Single source of truth enforcement:** when updating any doc, scan for content that properly belongs in a different doc and move it — do not leave duplicated content in both places. Add a cross-link from the source to the authoritative location after moving.
 

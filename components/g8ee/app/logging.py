@@ -199,8 +199,8 @@ def setup_logging(settings: G8eePlatformSettings, component_name: str):
             register_component_logger(component_name, component_name)
             register_component_logger(f"{component_name}.", component_name)
             register_component_logger(f"components.{component_name}", component_name)
-            register_component_logger("shared", component_name)
-            register_component_logger("shared.", component_name)
+            register_component_logger("protocol", component_name)
+            register_component_logger("protocol.", component_name)
 
         logger = logging.getLogger()
 

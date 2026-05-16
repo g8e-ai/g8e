@@ -6,9 +6,9 @@
     "ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
     "app_cert_dir": ".g8e/pki/issued/apps",
     "docs_dir": "/docs",
-    "shared_dir": "/app/shared",
-    "shared_constants_dir": "/app/shared/constants",
-    "shared_models_dir": "/app/shared/models",
+    "protocol_dir": "/app/protocol",
+    "protocol_constants_dir": "/app/protocol/constants",
+    "protocol_models_dir": "/app/protocol/models",
     "ssh_config_path": "/etc/g8e/ssh_config"
   },
   "ports": {

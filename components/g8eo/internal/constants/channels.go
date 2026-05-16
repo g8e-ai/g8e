@@ -16,7 +16,7 @@ package constants
 import "fmt"
 
 // Channel naming convention (shared across client, g8ee, g8eo):
-// Canonical values defined in shared/constants/channels.json (the source of truth).
+// Canonical values defined in protocol/constants/channels.json (the source of truth).
 // g8ee and client are also consumers of that same JSON file.
 //
 //	cmd:{operator_id}:{operator_session_id}       g8ee -> Operator

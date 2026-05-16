@@ -11,7 +11,7 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
-	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
+	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"

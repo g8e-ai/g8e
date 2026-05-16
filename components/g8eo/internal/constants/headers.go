@@ -14,7 +14,7 @@
 package constants
 
 // HTTP header name constants used across g8eo.
-// Canonical values mirror shared/constants/headers.json.
+// Canonical values mirror protocol/constants/headers.json.
 const (
 	HeaderContentType        = "Content-Type"
 	HeaderContentDisposition = "Content-Disposition"

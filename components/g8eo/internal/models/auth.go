@@ -126,7 +126,7 @@ type SessionSummary struct {
 }
 
 // OperatorDocumentGo is a Go representation of the canonical OperatorDocument.
-// Authority: shared/models/operator_document.json
+// Authority: protocol/models/operator_document.json
 type OperatorDocumentGo struct {
 	ID                   string          `json:"id"`
 	UserID               string          `json:"user_id"`

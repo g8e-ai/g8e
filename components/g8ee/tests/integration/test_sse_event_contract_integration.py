@@ -14,8 +14,8 @@
 """
 SSE Event Contract Integration Tests
 
-Ensures g8ee and client emit/consume SSE events that match the shared fixture
-definitions in shared/test-fixtures/sse-events.json. This prevents drift
+Ensures g8ee and client emit/consume SSE events that match the protocol fixture
+definitions in protocol/test-fixtures/sse-events.json. This prevents drift
 between components and ensures wire compatibility.
 """
 
@@ -36,24 +36,24 @@ from tests.fakes.agent_helpers import (
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
 
-def _load_shared_sse_fixtures():
-    """Load shared SSE event fixtures from the workspace root."""
-    # Navigate from components/g8ee/tests/integration to shared/test-fixtures/
-    fixtures_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "shared" / "test-fixtures" / "sse-events.json"
+def _load_protocol_sse_fixtures():
+    """Load protocol SSE event fixtures from the workspace root."""
+    # Navigate from components/g8ee/tests/integration to protocol/test-fixtures/
+    fixtures_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "protocol" / "test-fixtures" / "sse-events.json"
     with open(fixtures_path) as f:
         return json.load(f)
 
 
 # Load fixtures once for all tests
-SHARED_SSE_EVENTS = _load_shared_sse_fixtures()
+PROTOCOL_SSE_EVENTS = _load_protocol_sse_fixtures()
 
 
 @pytest.mark.asyncio(loop_scope="session")
 class TestSSEEventContract:
-    """Verify g8ee SSE events match shared fixture contracts."""
+    """Verify g8ee SSE events match protocol fixture contracts."""
 
-    async def test_processing_started_matches_shared_fixture(self):
-        """LLM_CHAT_ITERATION_STARTED event matches shared structure."""
+    async def test_processing_started_matches_protocol_fixture(self):
+        """LLM_CHAT_ITERATION_STARTED event matches protocol structure."""
         inputs, state = make_agent_run_args(
             case_id="contract-test-case-007",
             investigation_id="contract-test-inv-007",
@@ -86,8 +86,8 @@ class TestSSEEventContract:
         assert len(started_events) == 1
         actual_event = started_events[0]
 
-        # Compare against shared fixture
-        expected_fixture = SHARED_SSE_EVENTS["llm_chat_iteration_started"]
+        # Compare against protocol fixture
+        expected_fixture = PROTOCOL_SSE_EVENTS["llm_chat_iteration_started"]
 
         # Verify payload is typed ChatProcessingStartedPayload with agent_mode
         assert isinstance(actual_event.payload, ChatProcessingStartedPayload)
@@ -97,10 +97,10 @@ class TestSSEEventContract:
         assert actual_event.case_id == inputs.case_id
         assert actual_event.web_session_id == inputs.web_session_id
 
-    async def test_text_chunk_received_matches_shared_fixture(self):
-        """LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED event matches shared structure."""
+    async def test_text_chunk_received_matches_protocol_fixture(self):
+        """LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED event matches protocol structure."""
         # Use content from fixture to satisfy contract test
-        expected_fixture = SHARED_SSE_EVENTS["text_chunk_received"]
+        expected_fixture = PROTOCOL_SSE_EVENTS["text_chunk_received"]
         fixture_content = expected_fixture["data"]["content"]
 
         inputs, state = make_agent_run_args(
@@ -136,8 +136,8 @@ class TestSSEEventContract:
         assert len(text_chunk_events) >= 1
         actual_event = text_chunk_events[0]
 
-        # Compare against shared fixture
-        expected_fixture = SHARED_SSE_EVENTS["text_chunk_received"]
+        # Compare against protocol fixture
+        expected_fixture = PROTOCOL_SSE_EVENTS["text_chunk_received"]
 
         # Verify structure matches (using actual EventType constants)
         assert actual_event.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED
@@ -146,10 +146,10 @@ class TestSSEEventContract:
         assert actual_event.case_id == inputs.case_id
         assert actual_event.web_session_id == inputs.web_session_id
 
-    async def test_text_completed_matches_shared_fixture(self):
-        """LLM_CHAT_ITERATION_TEXT_COMPLETED event matches shared structure."""
+    async def test_text_completed_matches_protocol_fixture(self):
+        """LLM_CHAT_ITERATION_TEXT_COMPLETED event matches protocol structure."""
         # Use content from fixture to satisfy contract test
-        expected_fixture = SHARED_SSE_EVENTS["text_completed"]
+        expected_fixture = PROTOCOL_SSE_EVENTS["text_completed"]
         fixture_content = expected_fixture["data"]["content"]
 
         inputs, state = make_agent_run_args(
@@ -183,8 +183,8 @@ class TestSSEEventContract:
         assert len(completed_events) >= 1
         actual_event = completed_events[0]
 
-        # Compare against shared fixture
-        expected_fixture = SHARED_SSE_EVENTS["text_completed"]
+        # Compare against protocol fixture
+        expected_fixture = PROTOCOL_SSE_EVENTS["text_completed"]
 
         assert actual_event.event_type == expected_fixture["type"]
         assert actual_event.payload.content == expected_fixture["data"]["content"]
@@ -192,8 +192,8 @@ class TestSSEEventContract:
         assert actual_event.case_id == inputs.case_id
         assert actual_event.web_session_id == inputs.web_session_id
 
-    async def test_chat_iteration_failed_matches_shared_fixture(self):
-        """LLM_CHAT_ITERATION_FAILED event matches shared structure."""
+    async def test_chat_iteration_failed_matches_protocol_fixture(self):
+        """LLM_CHAT_ITERATION_FAILED event matches protocol structure."""
         inputs, state = make_agent_run_args(
             case_id="contract-test-case-003",
             investigation_id="contract-test-inv-003",
@@ -222,8 +222,8 @@ class TestSSEEventContract:
         assert len(failed_events) >= 1
         actual_event = failed_events[0]
 
-        # Compare against shared fixture
-        expected_fixture = SHARED_SSE_EVENTS["chat_iteration_failed"]
+        # Compare against protocol fixture
+        expected_fixture = PROTOCOL_SSE_EVENTS["chat_iteration_failed"]
 
         assert actual_event.event_type == expected_fixture["type"]
         assert actual_event.payload.error == "Contract test failure"
@@ -269,8 +269,8 @@ class TestSSEEventContract:
         completion_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED]
         assert len(completion_events) == 0, "Completion event should not be published when ERROR chunk is received"
 
-    async def test_search_web_events_match_shared_fixtures(self):
-        """Search web tool events match shared structures."""
+    async def test_search_web_events_match_protocol_fixtures(self):
+        """Search web tool events match protocol structures."""
         from app.constants import OperatorToolName
         from app.models.agent import StreamChunkData, StreamChunkFromModel
 
@@ -320,7 +320,7 @@ class TestSSEEventContract:
         assert actual_event.web_session_id == inputs.web_session_id
 
     async def test_all_required_routing_fields_present(self):
-        """All events have required routing fields matching shared fixtures."""
+        """All events have required routing fields matching protocol fixtures."""
         inputs, state = make_agent_run_args(
             case_id="contract-test-case-005",
             investigation_id="contract-test-inv-005",
@@ -360,11 +360,11 @@ class TestSSEEventContract:
             assert event.case_id == inputs.case_id
             assert event.web_session_id == inputs.web_session_id
 
-    async def test_tribunal_consensus_failed_matches_shared_fixture(self):
-        """TRIBUNAL_CONSENSUS_FAILED event matches shared structure."""
+    async def test_tribunal_consensus_failed_matches_protocol_fixture(self):
+        """TRIBUNAL_CONSENSUS_FAILED event matches protocol structure."""
         from app.models.agents.tribunal import TribunalConsensusFailedPayload, VoteBreakdown
 
-        expected_fixture = SHARED_SSE_EVENTS["tribunal_voting_consensus_failed"]
+        expected_fixture = PROTOCOL_SSE_EVENTS["tribunal_voting_consensus_failed"]
 
         # Create payload matching fixture
         vote_breakdown = VoteBreakdown(
@@ -390,11 +390,11 @@ class TestSSEEventContract:
         assert payload.vote_breakdown.winner is None
         assert payload.vote_breakdown.consensus_strength == 0.0
 
-    async def test_tribunal_dissent_recorded_matches_shared_fixture(self):
-        """TRIBUNAL_DISSENT_RECORDED event matches shared structure."""
+    async def test_tribunal_dissent_recorded_matches_protocol_fixture(self):
+        """TRIBUNAL_DISSENT_RECORDED event matches protocol structure."""
         from app.models.agents.tribunal import TribunalDissentRecordedPayload, VoteBreakdown
 
-        expected_fixture = SHARED_SSE_EVENTS["tribunal_voting_dissent_recorded"]
+        expected_fixture = PROTOCOL_SSE_EVENTS["tribunal_voting_dissent_recorded"]
 
         # Create payload matching fixture
         vote_breakdown = VoteBreakdown(
@@ -423,8 +423,8 @@ class TestSSEEventContract:
         assert payload.winner == expected_fixture["data"]["winner"]
 
 
-async def test_shared_fixtures_contain_all_required_event_types():
-    """Shared fixtures file contains all required event types."""
+async def test_protocol_fixtures_contain_all_required_event_types():
+    """Protocol fixtures file contains all required event types."""
     required_event_types = [
         "text_chunk_received",
         "text_completed",
@@ -449,10 +449,10 @@ async def test_shared_fixtures_contain_all_required_event_types():
     ]
 
     for event_type in required_event_types:
-        assert event_type in SHARED_SSE_EVENTS, f"Missing required event type: {event_type}"
+        assert event_type in PROTOCOL_SSE_EVENTS, f"Missing required event type: {event_type}"
 
         # Each fixture should have the required structure
-        fixture = SHARED_SSE_EVENTS[event_type]
+        fixture = PROTOCOL_SSE_EVENTS[event_type]
         assert "type" in fixture, f"Event {event_type} missing 'type' field"
         assert "data" in fixture, f"Event {event_type} missing 'data' field"
 
@@ -464,8 +464,8 @@ async def test_shared_fixtures_contain_all_required_event_types():
             assert "case_id" in data, f"Event {event_type} missing 'case_id' in data"
 
 
-async def test_shared_fixture_event_types_match_constants():
-    """Shared fixture event types match g8ee EventType constants."""
+async def test_protocol_fixture_event_types_match_constants():
+    """Protocol fixture event types match g8ee EventType constants."""
     # Map fixture keys to EventType constants
     fixture_to_constant_mapping = {
         "text_chunk_received": EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
@@ -490,6 +490,6 @@ async def test_shared_fixture_event_types_match_constants():
     }
 
     for fixture_key, expected_constant in fixture_to_constant_mapping.items():
-        assert fixture_key in SHARED_SSE_EVENTS, f"Missing fixture: {fixture_key}"
-        fixture_event_type = SHARED_SSE_EVENTS[fixture_key]["type"]
+        assert fixture_key in PROTOCOL_SSE_EVENTS, f"Missing fixture: {fixture_key}"
+        fixture_event_type = PROTOCOL_SSE_EVENTS[fixture_key]["type"]
         assert fixture_event_type == expected_constant, f"Fixture {fixture_key} type {fixture_event_type} doesn't match constant {expected_constant}"

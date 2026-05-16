@@ -21,7 +21,7 @@ time. `ReputationLeaf` is the in-memory leaf representation used to compute
 the Merkle root deterministically from a `ReputationState` snapshot.
 
 Authority: this file. The canonical doc-style JSON schemas live at
-`shared/models/reputation_state.json` and `shared/models/reputation_commitment.json`
+`protocol/models/reputation_state.json` and `protocol/models/reputation_commitment.json`
 and are kept aligned via the contract test in
 `tests/unit/models/test_reputation_models_alignment.py`.
 """

@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical AI tool result shapes returned by g8ee tool executor functions. These are the typed result models that flow through the operator → tool_executor → AI pipeline. Authority: G8EE. Consumers: g8ee (Python, app/models/tool_results.py). All error type values cross-reference shared/constants/status.json command.error.type. All status values cross-reference shared/constants/status.json execution.status.",
+  "_comment": "Canonical AI tool result shapes returned by g8ee tool executor functions. These are the typed result models that flow through the operator → tool_executor → AI pipeline. Authority: G8EE. Consumers: g8ee (Python, app/models/tool_results.py). All error type values cross-reference protocol/constants/status.json command.error.type. All status values cross-reference protocol/constants/status.json execution.status.",
 
   "_comment.scope": "These models are g8ee-internal result shapes — they are NOT pub/sub wire payloads. The pub/sub wire payloads (the shapes g8eo publishes) are defined in wire/result_payloads.json. The models here are the enriched, post-processed results that tool_executor.py returns to the AI pipeline after translating the wire payload.",
 
@@ -11,8 +11,8 @@
       "error_type": {
         "type": "string",
         "required": false,
-        "description": "Machine-readable error classification. See shared/constants/status.json command.error.type.",
-        "values_ref": "shared/constants/status.json#command.error.type"
+        "description": "Machine-readable error classification. See protocol/constants/status.json command.error.type.",
+        "values_ref": "protocol/constants/status.json#command.error.type"
       },
       "execution_id": { "type": "string", "required": false, "description": "Execution identifier from the originating operator command" },
       "available_operators": { "type": "integer", "required": false, "description": "Number of bound operators at time of failure. Present when error is operator-availability-related." },
@@ -20,8 +20,8 @@
       "status": {
         "type": "string",
         "required": false,
-        "description": "Execution status when failure is status-driven (e.g. timeout). See shared/constants/status.json execution.status.",
-        "values_ref": "shared/constants/status.json#execution.status"
+        "description": "Execution status when failure is status-driven (e.g. timeout). See protocol/constants/status.json execution.status.",
+        "values_ref": "protocol/constants/status.json#execution.status"
       }
     }
   },
@@ -37,8 +37,8 @@
       "operation": {
         "type": "string",
         "required": false,
-        "description": "File operation performed. See shared/constants/status.json file.operation.",
-        "values_ref": "shared/constants/status.json#file.operation"
+        "description": "File operation performed. See protocol/constants/status.json file.operation.",
+        "values_ref": "protocol/constants/status.json#file.operation"
       },
       "content": { "type": "string", "required": false, "description": "File content returned for read operations" },
       "backup_path": { "type": "string", "required": false, "description": "Path to backup file when create_backup was true" },
@@ -62,8 +62,8 @@
       "risk_level": {
         "type": "string",
         "required": true,
-        "description": "Classified risk level. See shared/constants/status.json risk.level.",
-        "values_ref": "shared/constants/status.json#risk.level"
+        "description": "Classified risk level. See protocol/constants/status.json risk.level.",
+        "values_ref": "protocol/constants/status.json#risk.level"
       },
       "is_system_file": { "type": "boolean", "required": false, "description": "Whether the target path is a system file" },
       "safe_to_proceed": { "type": "boolean", "required": true, "default": true, "description": "Whether the operation is safe to proceed" },
@@ -84,8 +84,8 @@
       "protocol": {
         "type": "string",
         "required": false,
-        "description": "Protocol used. See shared/constants/status.json network.protocol.",
-        "values_ref": "shared/constants/status.json#network.protocol"
+        "description": "Protocol used. See protocol/constants/status.json network.protocol.",
+        "values_ref": "protocol/constants/status.json#network.protocol"
       },
       "is_open": { "type": "boolean", "required": false, "description": "Whether the port is open/reachable" },
       "latency_ms": { "type": "number", "required": false, "description": "Round-trip latency in milliseconds" }
@@ -228,7 +228,7 @@
     "_consumers": ["g8ee (pending_command.py, command_results.py, file_edit_ops.py)"],
     "fields": {
       "file_path": { "type": "string", "required": true },
-      "operation": { "type": "string", "required": true, "description": "File operation performed", "values_ref": "shared/constants/status.json#file.operation" },
+      "operation": { "type": "string", "required": true, "description": "File operation performed", "values_ref": "protocol/constants/status.json#file.operation" },
       "content": { "type": "string", "required": false, "description": "File content returned for read operations" },
       "backup_path": { "type": "string", "required": false },
       "bytes_written": { "type": "integer", "required": false },
@@ -448,8 +448,8 @@
       "risk_level": {
         "type": "string",
         "required": true,
-        "description": "Classified risk level. See shared/constants/status.json risk.level.",
-        "values_ref": "shared/constants/status.json#risk.level"
+        "description": "Classified risk level. See protocol/constants/status.json risk.level.",
+        "values_ref": "protocol/constants/status.json#risk.level"
       }
     }
   },

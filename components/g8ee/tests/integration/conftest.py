@@ -14,7 +14,7 @@
 """
 Integration test fixtures and utilities.
 
-This conftest provides shared fixtures specifically for integration tests,
+This conftest provides protocol fixtures specifically for integration tests,
 extracting common patterns and ensuring consistent service construction
 across all integration test files.
 

@@ -13,12 +13,12 @@
 
 package constants
 
-// Status constants mirror shared/constants/status.json (the source of truth).
+// Status constants mirror protocol/constants/status.json (the source of truth).
 // g8eo duplicates these as compile-time Go constants (no runtime loading).
-// Contract tests in contracts/shared_constants_test.go enforce alignment.
+// Contract tests in contracts/protocol_constants_test.go enforce alignment.
 
 // ExecutionStatus is a typed string for command/file/fs execution terminal states.
-// Values mirror shared/constants/status.json execution.status.
+// Values mirror protocol/constants/status.json execution.status.
 type ExecutionStatus string
 
 const (
@@ -42,7 +42,7 @@ const (
 )
 
 // HeartbeatType is a typed string for the reason a heartbeat was sent.
-// Values mirror shared/constants/status.json heartbeat.type.
+// Values mirror protocol/constants/status.json heartbeat.type.
 type HeartbeatType string
 
 const (
@@ -51,7 +51,7 @@ const (
 	HeartbeatTypeRequested HeartbeatType = "requested"
 )
 
-// operatorStatusValues mirrors shared/constants/status.json g8e.status.
+// operatorStatusValues mirrors protocol/constants/status.json g8e.status.
 type operatorStatusValues struct {
 	Available   string
 	Unavailable string
@@ -63,54 +63,54 @@ type operatorStatusValues struct {
 	Terminated  string
 }
 
-// operatorTypeValues mirrors shared/constants/status.json g8e.type.
+// operatorTypeValues mirrors protocol/constants/status.json g8e.type.
 type operatorTypeValues struct {
 	System string
 	Cloud  string
 }
 
-// cloudSubtypeValues mirrors shared/constants/status.json cloud.subtype.
+// cloudSubtypeValues mirrors protocol/constants/status.json cloud.subtype.
 type cloudSubtypeValues struct {
 	AWS   string
 	GCP   string
 	Azure string
 }
 
-// vaultModeValues mirrors shared/constants/status.json vault.mode.
+// vaultModeValues mirrors protocol/constants/status.json vault.mode.
 type vaultModeValues struct {
 	Raw      string
 	Scrubbed string
 }
 
-// versionStabilityValues mirrors shared/constants/status.json version.stability.
+// versionStabilityValues mirrors protocol/constants/status.json version.stability.
 type versionStabilityValues struct {
 	Stable string
 	Beta   string
 	Dev    string
 }
 
-// componentNameValues mirrors shared/constants/status.json component.name.
+// componentNameValues mirrors protocol/constants/status.json component.name.
 type componentNameValues struct {
-	G8EE string
-	G8EO string
+	G8EE   string
+	G8EO   string
 	CLIENT string
 }
 
-// platformValues mirrors shared/constants/status.json platform.
+// platformValues mirrors protocol/constants/status.json platform.
 type platformValues struct {
 	Linux   string
 	Windows string
 	Darwin  string
 }
 
-// aiSourceValues mirrors shared/constants/status.json ai.source.
+// aiSourceValues mirrors protocol/constants/status.json ai.source.
 type aiSourceValues struct {
 	Tool             string
 	TerminalAnchored string
 	TerminalDirect   string
 }
 
-// aiTaskIDValues mirrors shared/constants/status.json ai.task.id.
+// aiTaskIDValues mirrors protocol/constants/status.json ai.task.id.
 type aiTaskIDValues struct {
 	Command          string
 	DirectCommand    string
@@ -131,7 +131,7 @@ type listenModeValues struct {
 	Mode     string
 }
 
-// statusValues is the top-level namespace. Canonical values from shared/constants/status.json.
+// statusValues is the top-level namespace. Canonical values from protocol/constants/status.json.
 type statusValues struct {
 	ListenMode       listenModeValues
 	OperatorStatus   operatorStatusValues
@@ -181,8 +181,8 @@ var Status = statusValues{
 		Dev:    "dev",
 	},
 	ComponentName: componentNameValues{
-		G8EE: "g8ee",
-		G8EO: "g8eo",
+		G8EE:   "g8ee",
+		G8EO:   "g8eo",
 		CLIENT: "client",
 	},
 	Platform: platformValues{

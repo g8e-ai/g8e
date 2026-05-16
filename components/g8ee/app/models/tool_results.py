@@ -14,11 +14,11 @@
 """
 Typed result models for AI tool operations.
 
-Canonical field definitions: shared/models/tool_results.json (authority).
-Enum value sources: shared/constants/status.json (command.error.type, execution.status,
+Canonical field definitions: protocol/models/tool_results.json (authority).
+Enum value sources: protocol/constants/status.json (command.error.type, execution.status,
 file.operation, network.protocol, risk.level).
 
-When adding or renaming a field, update shared/models/tool_results.json first.
+When adding or renaming a field, update protocol/models/tool_results.json first.
 """
 
 from typing import Any, Union
@@ -59,7 +59,7 @@ class PerOperatorResultBase(G8eBaseModel):
 class FsListEntry(G8eBaseModel):
     """A single directory entry returned by an fs_list operation.
 
-    Canonical shape defined in shared/proto/operator.proto (FsListEntry message).
+    Canonical shape defined in protocol/proto/operator.proto (FsListEntry message).
     """
     name: str
     path: str
@@ -87,7 +87,7 @@ class FsGrepMatch(G8eBaseModel):
 class AuditFileMutation(G8eBaseModel):
     """A single file mutation record embedded in an AuditEvent.
 
-    Canonical shape defined in shared/proto/operator.proto (AuditFileMutation message).
+    Canonical shape defined in protocol/proto/operator.proto (AuditFileMutation message).
     """
     id: int
     filepath: str
@@ -100,7 +100,7 @@ class AuditFileMutation(G8eBaseModel):
 class AuditEvent(G8eBaseModel):
     """A single audit event record returned by fetch_session_history.
 
-    Canonical shape defined in shared/proto/operator.proto (AuditEvent message).
+    Canonical shape defined in protocol/proto/operator.proto (AuditEvent message).
     """
     id: int | None = None
     web_session_id: str | None = None
@@ -121,7 +121,7 @@ class AuditEvent(G8eBaseModel):
 class FileHistoryEntry(G8eBaseModel):
     """A single commit history entry returned by fetch_file_history.
 
-    Canonical shape defined in shared/proto/operator.proto (FileHistoryEntry message).
+    Canonical shape defined in protocol/proto/operator.proto (FileHistoryEntry message).
     """
     commit_hash: str
     timestamp: str | None = None
@@ -329,7 +329,7 @@ class FetchLogsToolResult(G8eBaseModel):
 class AuditSessionMetadata(G8eBaseModel):
     """Session metadata returned by fetch_session_history.
 
-    Canonical shape defined in shared/proto/operator.proto (AuditWebSession message).
+    Canonical shape defined in protocol/proto/operator.proto (AuditWebSession message).
     """
     id: str
     title: str
@@ -340,7 +340,7 @@ class AuditSessionMetadata(G8eBaseModel):
 class FileDiffEntry(G8eBaseModel):
     """Single file diff record from the operator ledger.
 
-    Canonical shape defined in shared/proto/operator.proto (FileDiffEntry message).
+    Canonical shape defined in protocol/proto/operator.proto (FileDiffEntry message).
     """
     id: str
     timestamp: str
@@ -510,7 +510,7 @@ class InvestigationContextResult(G8eBaseModel):
 class SshInventoryToolResult(G8eBaseModel):
     """Result returned by the list_ssh_inventory tool.
 
-    Canonical shape: shared/models/tool_results.json ssh_inventory_result.
+    Canonical shape: protocol/models/tool_results.json ssh_inventory_result.
     """
     success: bool = True
     error: str | None = None

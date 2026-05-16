@@ -20,7 +20,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/pubsubv1"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/pubsubv1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"

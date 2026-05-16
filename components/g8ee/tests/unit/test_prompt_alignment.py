@@ -16,7 +16,7 @@
 Stage 2 of the prompt-alignment work established a contract between three
 surfaces:
 
-1. ``shared/constants/agents.json`` carries agent metadata (role, identity,
+1. ``protocol/constants/agents.json`` carries agent metadata (role, identity,
    purpose, autonomy). The system prompt is constructed from these fields.
    Scaffolding placeholders (``{request}``, ``{guidelines}``, ``{os}``, etc.)
    live in the *consumer* templates (``TRIBUNAL_PROMPT_TEMPLATE`` and
@@ -172,7 +172,7 @@ class TestOutputContractIsExplicitField:
 
     def test_no_persona_embeds_output_contract_in_identity(self) -> None:
         agents_json_path = (
-            Path(__file__).parent.parent.parent.parent.parent / "shared" / "constants" / "agents.json"
+            Path(__file__).parent.parent.parent.parent.parent / "protocol" / "constants" / "agents.json"
         )
         with agents_json_path.open() as f:
             agents_data = json.load(f)

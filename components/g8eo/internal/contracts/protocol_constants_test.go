@@ -12,12 +12,12 @@
 // limitations under the License.
 
 /*
-Shared Constants Contract Tests
+Protocol Constants Contract Tests
 
 Verifies that g8eo Go constants in constants/events.go and constants/status.go
-exactly match the canonical values in shared/constants/*.json.
+exactly match the canonical values in protocol/constants/*.json.
 
-g8eo duplicates shared JSON values as compile-time Go constants (no //go:embed,
+g8eo duplicates protocol JSON values as compile-time Go constants (no //go:embed,
 no runtime loading). These tests are the enforcement mechanism that detects
 drift between the JSON source of truth and the Go consumer.
 */
@@ -35,216 +35,216 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var sharedConstantsDir string
+var protocolConstantsDir string
 
 func init() {
-	sharedConstantsDir = filepath.Join(system.ResolveProjectRoot(), "shared/constants")
+	protocolConstantsDir = filepath.Join(system.ResolveProjectRoot(), "protocol/constants")
 }
 
-func loadSharedFile(t *testing.T, filename string) []byte {
+func loadProtocolFile(t *testing.T, filename string) []byte {
 	t.Helper()
-	path := filepath.Join(sharedConstantsDir, filename)
+	path := filepath.Join(protocolConstantsDir, filename)
 	data, err := os.ReadFile(path)
-	require.NoError(t, err, "shared/constants/%s must be readable", filename)
+	require.NoError(t, err, "protocol/constants/%s must be readable", filename)
 	return data
 }
 
 // ---------------------------------------------------------------------------
-// Typed structs mirroring shared/constants/events.json
+// Typed structs mirroring protocol/constants/events.json
 // ---------------------------------------------------------------------------
 
-type sharedCommandOutputEvents struct {
+type protocolCommandOutputEvents struct {
 	Received string `json:"received"`
 }
 
-type sharedCommandCancelEvents struct {
+type protocolCommandCancelEvents struct {
 	Requested    string `json:"requested"`
 	Acknowledged string `json:"acknowledged"`
 	Failed       string `json:"failed"`
 }
 
-type sharedCommandApprovalEvents struct {
+type protocolCommandApprovalEvents struct {
 	Requested string `json:"requested"`
 	Granted   string `json:"granted"`
 	Rejected  string `json:"rejected"`
 }
 
-type sharedOperatorCommandEvents struct {
+type protocolOperatorCommandEvents struct {
 	Requested string                      `json:"requested"`
 	Started   string                      `json:"started"`
 	Completed string                      `json:"completed"`
 	Failed    string                      `json:"failed"`
 	Cancelled string                      `json:"cancelled"`
-	Output    sharedCommandOutputEvents   `json:"output"`
-	Cancel    sharedCommandCancelEvents   `json:"cancel"`
-	Approval  sharedCommandApprovalEvents `json:"approval"`
+	Output    protocolCommandOutputEvents   `json:"output"`
+	Cancel    protocolCommandCancelEvents   `json:"cancel"`
+	Approval  protocolCommandApprovalEvents `json:"approval"`
 }
 
-type sharedFileEditApprovalEvents struct {
+type protocolFileEditApprovalEvents struct {
 	Requested string `json:"requested"`
 	Granted   string `json:"granted"`
 	Rejected  string `json:"rejected"`
 }
 
-type sharedOperatorFileEditEvents struct {
+type protocolOperatorFileEditEvents struct {
 	Requested string                       `json:"requested"`
 	Started   string                       `json:"started"`
 	Completed string                       `json:"completed"`
 	Failed    string                       `json:"failed"`
-	Approval  sharedFileEditApprovalEvents `json:"approval"`
+	Approval  protocolFileEditApprovalEvents `json:"approval"`
 }
 
-type sharedIntentApprovalEvents struct {
+type protocolIntentApprovalEvents struct {
 	Requested string `json:"requested"`
 	Granted   string `json:"granted"`
 	Rejected  string `json:"rejected"`
 }
 
-type sharedOperatorIntentEvents struct {
+type protocolOperatorIntentEvents struct {
 	Granted  string                     `json:"granted"`
 	Denied   string                     `json:"denied"`
 	Revoked  string                     `json:"revoked"`
-	Approval sharedIntentApprovalEvents `json:"approval"`
+	Approval protocolIntentApprovalEvents `json:"approval"`
 }
 
-type sharedFetchLeaf struct {
+type protocolFetchLeaf struct {
 	Requested string `json:"requested"`
 	Completed string `json:"completed"`
 	Failed    string `json:"failed"`
 }
 
-type sharedOperatorNetworkPortCheck struct {
+type protocolOperatorNetworkPortCheck struct {
 	Requested string `json:"requested"`
 	Completed string `json:"completed"`
 	Failed    string `json:"failed"`
 }
 
-type sharedOperatorNetworkPort struct {
-	Check sharedOperatorNetworkPortCheck `json:"check"`
+type protocolOperatorNetworkPort struct {
+	Check protocolOperatorNetworkPortCheck `json:"check"`
 }
 
-type sharedOperatorNetwork struct {
-	Port sharedOperatorNetworkPort `json:"port"`
+type protocolOperatorNetwork struct {
+	Port protocolOperatorNetworkPort `json:"port"`
 }
 
-type sharedOperatorFilesystem struct {
-	List sharedFetchLeaf `json:"list"`
-	Read sharedFetchLeaf `json:"read"`
+type protocolOperatorFilesystem struct {
+	List protocolFetchLeaf `json:"list"`
+	Read protocolFetchLeaf `json:"read"`
 }
 
-type sharedOperatorFileHistory struct {
-	Fetch sharedFetchLeaf `json:"fetch"`
+type protocolOperatorFileHistory struct {
+	Fetch protocolFetchLeaf `json:"fetch"`
 }
 
-type sharedOperatorFileDiff struct {
-	Fetch sharedFetchLeaf `json:"fetch"`
+type protocolOperatorFileDiff struct {
+	Fetch protocolFetchLeaf `json:"fetch"`
 }
 
-type sharedOperatorFileRestore struct {
+type protocolOperatorFileRestore struct {
 	Requested string `json:"requested"`
 	Completed string `json:"completed"`
 	Failed    string `json:"failed"`
 }
 
-type sharedOperatorFileEditApproval struct {
+type protocolOperatorFileEditApproval struct {
 	Requested string `json:"requested"`
 	Granted   string `json:"granted"`
 	Rejected  string `json:"rejected"`
 }
 
-type sharedOperatorFileEdit struct {
+type protocolOperatorFileEdit struct {
 	Requested string                         `json:"requested"`
 	Started   string                         `json:"started"`
 	Completed string                         `json:"completed"`
 	Failed    string                         `json:"failed"`
-	Approval  sharedOperatorFileEditApproval `json:"approval"`
+	Approval  protocolOperatorFileEditApproval `json:"approval"`
 }
 
-type sharedOperatorFileEvents struct {
-	Edit    sharedOperatorFileEdit    `json:"edit"`
-	History sharedOperatorFileHistory `json:"history"`
-	Diff    sharedOperatorFileDiff    `json:"diff"`
-	Restore sharedOperatorFileRestore `json:"restore"`
+type protocolOperatorFileEvents struct {
+	Edit    protocolOperatorFileEdit    `json:"edit"`
+	History protocolOperatorFileHistory `json:"history"`
+	Diff    protocolOperatorFileDiff    `json:"diff"`
+	Restore protocolOperatorFileRestore `json:"restore"`
 }
 
-type sharedOperatorAuditUserRecorded struct {
+type protocolOperatorAuditUserRecorded struct {
 	Recorded string `json:"recorded"`
 }
 
-type sharedOperatorAuditAIRecorded struct {
+type protocolOperatorAuditAIRecorded struct {
 	Recorded string `json:"recorded"`
 }
 
-type sharedOperatorAuditDirectCommandResult struct {
+type protocolOperatorAuditDirectCommandResult struct {
 	Recorded string `json:"recorded"`
 }
 
-type sharedOperatorAuditDirectCommandEvents struct {
+type protocolOperatorAuditDirectCommandEvents struct {
 	Recorded string                                 `json:"recorded"`
-	Result   sharedOperatorAuditDirectCommandResult `json:"result"`
+	Result   protocolOperatorAuditDirectCommandResult `json:"result"`
 }
 
-type sharedOperatorAuditDirectEvents struct {
-	Command sharedOperatorAuditDirectCommandEvents `json:"command"`
+type protocolOperatorAuditDirectEvents struct {
+	Command protocolOperatorAuditDirectCommandEvents `json:"command"`
 }
 
-type sharedOperatorAuditEvents struct {
-	User   sharedOperatorAuditUserRecorded `json:"user"`
-	AI     sharedOperatorAuditAIRecorded   `json:"ai"`
-	Direct sharedOperatorAuditDirectEvents `json:"direct"`
+type protocolOperatorAuditEvents struct {
+	User   protocolOperatorAuditUserRecorded `json:"user"`
+	AI     protocolOperatorAuditAIRecorded   `json:"ai"`
+	Direct protocolOperatorAuditDirectEvents `json:"direct"`
 }
 
-type sharedOperatorHeartbeat struct {
+type protocolOperatorHeartbeat struct {
 	Sent      string `json:"sent"`
 	Requested string `json:"requested"`
 	Received  string `json:"received"`
 	Missed    string `json:"missed"`
 }
 
-type sharedOperatorShutdown struct {
+type protocolOperatorShutdown struct {
 	Requested    string `json:"requested"`
 	Acknowledged string `json:"acknowledged"`
 }
 
-type sharedOperatorAPIKey struct {
+type protocolOperatorAPIKey struct {
 	Refreshed string `json:"refreshed"`
 }
 
-type sharedOperatorAPI struct {
-	Key sharedOperatorAPIKey `json:"key"`
+type protocolOperatorAPI struct {
+	Key protocolOperatorAPIKey `json:"key"`
 }
 
-type sharedOperatorLogs struct {
-	Fetch sharedFetchLeaf `json:"fetch"`
+type protocolOperatorLogs struct {
+	Fetch protocolFetchLeaf `json:"fetch"`
 }
 
-type sharedOperatorHistory struct {
-	Fetch sharedFetchLeaf `json:"fetch"`
+type protocolOperatorHistory struct {
+	Fetch protocolFetchLeaf `json:"fetch"`
 }
 
-type sharedOperatorEvents struct {
-	Heartbeat  sharedOperatorHeartbeat     `json:"heartbeat"`
-	Shutdown   sharedOperatorShutdown      `json:"shutdown"`
-	API        sharedOperatorAPI           `json:"api"`
-	Command    sharedOperatorCommandEvents `json:"command"`
-	Intent     sharedOperatorIntentEvents  `json:"intent"`
-	Filesystem sharedOperatorFilesystem    `json:"filesystem"`
-	Logs       sharedOperatorLogs          `json:"logs"`
-	History    sharedOperatorHistory       `json:"history"`
-	File       sharedOperatorFileEvents    `json:"file"`
-	Network    sharedOperatorNetwork       `json:"network"`
-	Audit      sharedOperatorAuditEvents   `json:"audit"`
+type protocolOperatorEvents struct {
+	Heartbeat  protocolOperatorHeartbeat     `json:"heartbeat"`
+	Shutdown   protocolOperatorShutdown      `json:"shutdown"`
+	API        protocolOperatorAPI           `json:"api"`
+	Command    protocolOperatorCommandEvents `json:"command"`
+	Intent     protocolOperatorIntentEvents  `json:"intent"`
+	Filesystem protocolOperatorFilesystem    `json:"filesystem"`
+	Logs       protocolOperatorLogs          `json:"logs"`
+	History    protocolOperatorHistory       `json:"history"`
+	File       protocolOperatorFileEvents    `json:"file"`
+	Network    protocolOperatorNetwork       `json:"network"`
+	Audit      protocolOperatorAuditEvents   `json:"audit"`
 }
 
-type sharedEventsJSON struct {
-	Operator sharedOperatorEvents `json:"operator"`
+type protocolEventsJSON struct {
+	Operator protocolOperatorEvents `json:"operator"`
 }
 
 // ---------------------------------------------------------------------------
-// Typed structs mirroring shared/constants/status.json
+// Typed structs mirroring protocol/constants/status.json
 // ---------------------------------------------------------------------------
 
-type sharedOperatorStatusValues struct {
+type protocolOperatorStatusValues struct {
 	Available   string `json:"available"`
 	Unavailable string `json:"unavailable"`
 	Offline     string `json:"offline"`
@@ -255,47 +255,47 @@ type sharedOperatorStatusValues struct {
 	Terminated  string `json:"terminated"`
 }
 
-type sharedOperatorTypeValues struct {
+type protocolOperatorTypeValues struct {
 	System string `json:"system"`
 	Cloud  string `json:"cloud"`
 }
 
-type sharedCloudSubtypeValues struct {
+type protocolCloudSubtypeValues struct {
 	AWS   string `json:"aws"`
 	GCP   string `json:"gcp"`
 	Azure string `json:"azure"`
 }
 
-type sharedVaultModeValues struct {
+type protocolVaultModeValues struct {
 	Raw      string `json:"raw"`
 	Scrubbed string `json:"scrubbed"`
 }
 
-type sharedVersionStabilityValues struct {
+type protocolVersionStabilityValues struct {
 	Stable string `json:"stable"`
 	Beta   string `json:"beta"`
 	Dev    string `json:"dev"`
 }
 
-type sharedComponentNameValues struct {
-	G8EE string `json:"g8ee"`
-	G8EO string `json:"g8eo"`
+type protocolComponentNameValues struct {
+	G8EE   string `json:"g8ee"`
+	G8EO   string `json:"g8eo"`
 	CLIENT string `json:"client"`
 }
 
-type sharedPlatformValues struct {
+type protocolPlatformValues struct {
 	Linux   string `json:"linux"`
 	Windows string `json:"windows"`
 	Darwin  string `json:"darwin"`
 }
 
-type sharedAISourceValues struct {
+type protocolAISourceValues struct {
 	Tool             string `json:"tool.call"`
 	TerminalAnchored string `json:"terminal.anchored"`
 	TerminalDirect   string `json:"terminal.direct"`
 }
 
-type sharedAITaskIDValues struct {
+type protocolAITaskIDValues struct {
 	Command          string `json:"command"`
 	DirectCommand    string `json:"direct.command"`
 	FileEdit         string `json:"file.edit"`
@@ -309,13 +309,13 @@ type sharedAITaskIDValues struct {
 	FetchFileDiff    string `json:"fetch.file.diff"`
 }
 
-type sharedHeartbeatTypeValues struct {
+type protocolHeartbeatTypeValues struct {
 	Automatic string `json:"automatic"`
 	Bootstrap string `json:"bootstrap"`
 	Requested string `json:"requested"`
 }
 
-type sharedExecutionStatusValues struct {
+type protocolExecutionStatusValues struct {
 	Pending   string `json:"pending"`
 	Executing string `json:"executing"`
 	Completed string `json:"completed"`
@@ -324,56 +324,56 @@ type sharedExecutionStatusValues struct {
 	Cancelled string `json:"cancelled"`
 }
 
-type sharedStatusJSON struct {
-	OperatorStatus   sharedOperatorStatusValues   `json:"g8e.status"`
-	OperatorType     sharedOperatorTypeValues     `json:"g8e.type"`
-	CloudSubtype     sharedCloudSubtypeValues     `json:"cloud.subtype"`
-	VaultMode        sharedVaultModeValues        `json:"vault.mode"`
-	VersionStability sharedVersionStabilityValues `json:"version.stability"`
-	ComponentName    sharedComponentNameValues    `json:"component.name"`
-	Platform         sharedPlatformValues         `json:"platform"`
-	AISource         sharedAISourceValues         `json:"ai.source"`
-	AITaskID         sharedAITaskIDValues         `json:"ai.task.id"`
-	HeartbeatType    sharedHeartbeatTypeValues    `json:"heartbeat.type"`
-	ExecutionStatus  sharedExecutionStatusValues  `json:"execution.status"`
+type protocolStatusJSON struct {
+	OperatorStatus   protocolOperatorStatusValues   `json:"g8e.status"`
+	OperatorType     protocolOperatorTypeValues     `json:"g8e.type"`
+	CloudSubtype     protocolCloudSubtypeValues     `json:"cloud.subtype"`
+	VaultMode        protocolVaultModeValues        `json:"vault.mode"`
+	VersionStability protocolVersionStabilityValues `json:"version.stability"`
+	ComponentName    protocolComponentNameValues    `json:"component.name"`
+	Platform         protocolPlatformValues         `json:"platform"`
+	AISource         protocolAISourceValues         `json:"ai.source"`
+	AITaskID         protocolAITaskIDValues         `json:"ai.task.id"`
+	HeartbeatType    protocolHeartbeatTypeValues    `json:"heartbeat.type"`
+	ExecutionStatus  protocolExecutionStatusValues  `json:"execution.status"`
 }
 
 // ---------------------------------------------------------------------------
-// Typed structs mirroring shared/constants/channels.json
+// Typed structs mirroring protocol/constants/channels.json
 // ---------------------------------------------------------------------------
 
-type sharedChannelPrefixes struct {
+type protocolChannelPrefixes struct {
 	Cmd       string `json:"cmd"`
 	Results   string `json:"results"`
 	Heartbeat string `json:"heartbeat"`
 }
 
-type sharedPubSubChannels struct {
-	Prefixes sharedChannelPrefixes `json:"prefixes"`
+type protocolPubSubChannels struct {
+	Prefixes protocolChannelPrefixes `json:"prefixes"`
 }
 
-type sharedChannelsJSON struct {
-	PubSub sharedPubSubChannels `json:"pubsub"`
+type protocolChannelsJSON struct {
+	PubSub protocolPubSubChannels `json:"pubsub"`
 }
 
 // ---------------------------------------------------------------------------
-// Typed structs mirroring shared/constants/pubsub.json
+// Typed structs mirroring protocol/constants/pubsub.json
 // ---------------------------------------------------------------------------
 
-type sharedPubSubWireActions struct {
+type protocolPubSubWireActions struct {
 	Subscribe   string `json:"subscribe"`
 	PSubscribe  string `json:"psubscribe"`
 	Unsubscribe string `json:"unsubscribe"`
 	Publish     string `json:"publish"`
 }
 
-type sharedPubSubWireEventTypes struct {
+type protocolPubSubWireEventTypes struct {
 	Message    string `json:"message"`
 	PMessage   string `json:"pmessage"`
 	Subscribed string `json:"subscribed"`
 }
 
-type sharedPubSubWireFields struct {
+type protocolPubSubWireFields struct {
 	Action  string `json:"action"`
 	Channel string `json:"channel"`
 	Data    string `json:"data"`
@@ -383,21 +383,21 @@ type sharedPubSubWireFields struct {
 	Sender  string `json:"sender"`
 }
 
-type sharedPubSubWire struct {
-	Actions    sharedPubSubWireActions    `json:"actions"`
-	EventTypes sharedPubSubWireEventTypes `json:"event_types"`
-	Fields     sharedPubSubWireFields     `json:"fields"`
+type protocolPubSubWire struct {
+	Actions    protocolPubSubWireActions    `json:"actions"`
+	EventTypes protocolPubSubWireEventTypes `json:"event_types"`
+	Fields     protocolPubSubWireFields     `json:"fields"`
 }
 
-type sharedPubSubJSON struct {
-	Wire sharedPubSubWire `json:"wire"`
+type protocolPubSubJSON struct {
+	Wire protocolPubSubWire `json:"wire"`
 }
 
 // ---------------------------------------------------------------------------
-// Typed structs mirroring shared/constants/headers.json
+// Typed structs mirroring protocol/constants/headers.json
 // ---------------------------------------------------------------------------
 
-type sharedHeadersJSON struct {
+type protocolHeadersJSON struct {
 	G8eSessionID         string `json:"x-g8e.session-id"`
 	G8eOperatorSessionID string `json:"x-g8e.operator-session-id"`
 	G8eOperatorAPIKey    string `json:"x-g8e.operator-api-key"`
@@ -422,38 +422,38 @@ type sharedHeadersJSON struct {
 	XRequestTimestamp    string `json:"http.x-request-timestamp"`
 }
 
-func loadEventsJSON(t *testing.T) sharedEventsJSON {
+func loadEventsJSON(t *testing.T) protocolEventsJSON {
 	t.Helper()
-	var ev sharedEventsJSON
-	require.NoError(t, json.Unmarshal(loadSharedFile(t, "events.json"), &ev), "events.json must unmarshal into sharedEventsJSON")
+	var ev protocolEventsJSON
+	require.NoError(t, json.Unmarshal(loadProtocolFile(t, "events.json"), &ev), "events.json must unmarshal into protocolEventsJSON")
 	return ev
 }
 
-func loadStatusJSON(t *testing.T) sharedStatusJSON {
+func loadStatusJSON(t *testing.T) protocolStatusJSON {
 	t.Helper()
-	var st sharedStatusJSON
-	require.NoError(t, json.Unmarshal(loadSharedFile(t, "status.json"), &st), "status.json must unmarshal into sharedStatusJSON")
+	var st protocolStatusJSON
+	require.NoError(t, json.Unmarshal(loadProtocolFile(t, "status.json"), &st), "status.json must unmarshal into protocolStatusJSON")
 	return st
 }
 
-func loadChannelsJSON(t *testing.T) sharedChannelsJSON {
+func loadChannelsJSON(t *testing.T) protocolChannelsJSON {
 	t.Helper()
-	var ch sharedChannelsJSON
-	require.NoError(t, json.Unmarshal(loadSharedFile(t, "channels.json"), &ch), "channels.json must unmarshal into sharedChannelsJSON")
+	var ch protocolChannelsJSON
+	require.NoError(t, json.Unmarshal(loadProtocolFile(t, "channels.json"), &ch), "channels.json must unmarshal into protocolChannelsJSON")
 	return ch
 }
 
-func loadPubSubJSON(t *testing.T) sharedPubSubJSON {
+func loadPubSubJSON(t *testing.T) protocolPubSubJSON {
 	t.Helper()
-	var ps sharedPubSubJSON
-	require.NoError(t, json.Unmarshal(loadSharedFile(t, "pubsub.json"), &ps), "pubsub.json must unmarshal into sharedPubSubJSON")
+	var ps protocolPubSubJSON
+	require.NoError(t, json.Unmarshal(loadProtocolFile(t, "pubsub.json"), &ps), "pubsub.json must unmarshal into protocolPubSubJSON")
 	return ps
 }
 
-func loadHeadersJSON(t *testing.T) sharedHeadersJSON {
+func loadHeadersJSON(t *testing.T) protocolHeadersJSON {
 	t.Helper()
-	var h sharedHeadersJSON
-	require.NoError(t, json.Unmarshal(loadSharedFile(t, "headers.json"), &h), "headers.json must unmarshal into sharedHeadersJSON")
+	var h protocolHeadersJSON
+	require.NoError(t, json.Unmarshal(loadProtocolFile(t, "headers.json"), &h), "headers.json must unmarshal into protocolHeadersJSON")
 	return h
 }
 
@@ -461,7 +461,7 @@ func loadHeadersJSON(t *testing.T) sharedHeadersJSON {
 // Events
 // =============================================================================
 
-func TestSharedEventsMatchGoConstants(t *testing.T) {
+func TestProtocolEventsMatchGoConstants(t *testing.T) {
 	ev := loadEventsJSON(t)
 	op := ev.Operator
 
@@ -562,7 +562,7 @@ func TestSharedEventsMatchGoConstants(t *testing.T) {
 // Status
 // =============================================================================
 
-func TestSharedStatusMatchesGoConstants(t *testing.T) {
+func TestProtocolStatusMatchesGoConstants(t *testing.T) {
 	st := loadStatusJSON(t)
 
 	t.Run("operator.status", func(t *testing.T) {
@@ -635,7 +635,7 @@ func TestSharedStatusMatchesGoConstants(t *testing.T) {
 // Channels
 // =============================================================================
 
-func TestSharedChannelsMatchGoConstants(t *testing.T) {
+func TestProtocolChannelsMatchGoConstants(t *testing.T) {
 	ch := loadChannelsJSON(t)
 
 	t.Run("channel prefixes used by CmdChannel/ResultsChannel/HeartbeatChannel", func(t *testing.T) {
@@ -653,7 +653,7 @@ func TestSharedChannelsMatchGoConstants(t *testing.T) {
 // Heartbeat type
 // =============================================================================
 
-func TestSharedHeartbeatTypeMatchesGoConstants(t *testing.T) {
+func TestProtocolHeartbeatTypeMatchesGoConstants(t *testing.T) {
 	st := loadStatusJSON(t)
 
 	assert.Equal(t, st.HeartbeatType.Automatic, string(constants.HeartbeatTypeAutomatic))
@@ -665,7 +665,7 @@ func TestSharedHeartbeatTypeMatchesGoConstants(t *testing.T) {
 // Headers
 // =============================================================================
 
-func TestSharedHeadersMatchGoConstants(t *testing.T) {
+func TestProtocolHeadersMatchGoConstants(t *testing.T) {
 	h := loadHeadersJSON(t)
 
 	t.Run("x-g8e headers", func(t *testing.T) {
@@ -701,7 +701,7 @@ func TestSharedHeadersMatchGoConstants(t *testing.T) {
 // PubSub wire protocol
 // =============================================================================
 
-func TestSharedPubSubWireMatchesGoConstants(t *testing.T) {
+func TestProtocolPubSubWireMatchesGoConstants(t *testing.T) {
 	ps := loadPubSubJSON(t)
 
 	t.Run("wire.actions", func(t *testing.T) {
@@ -722,7 +722,7 @@ func TestSharedPubSubWireMatchesGoConstants(t *testing.T) {
 // Execution status
 // =============================================================================
 
-func TestSharedExecutionStatusMatchesGoConstants(t *testing.T) {
+func TestProtocolExecutionStatusMatchesGoConstants(t *testing.T) {
 	st := loadStatusJSON(t)
 
 	assert.Equal(t, st.ExecutionStatus.Pending, string(constants.ExecutionStatusPending))

@@ -16,30 +16,30 @@ import os
 from pathlib import Path
 from app.utils.path import resolve_project_root
 
-# The bridge to shared paths.
-# In container, this is always /app/shared/constants/paths.json
-# On host, respect G8E_SHARED_DIR environment variable
-_SHARED_DIR = os.environ.get("G8E_SHARED_DIR")
-if _SHARED_DIR is None:
+# The bridge to protocol paths.
+# In container, this is always /app/protocol/constants/paths.json
+# On host, respect G8E_PROTOCOL_DIR environment variable
+_PROTOCOL_DIR = os.environ.get("G8E_PROTOCOL_DIR")
+if _PROTOCOL_DIR is None:
     # If not provided, try to resolve from project root
     try:
-        _SHARED_DIR = str(resolve_project_root() / "shared")
+        _PROTOCOL_DIR = str(resolve_project_root() / "protocol")
     except Exception:
-        _SHARED_DIR = "/app/shared"
+        _PROTOCOL_DIR = "/app/protocol"
 
-_CONTAINER_SHARED_CONSTANTS_DIR = _SHARED_DIR + "/constants"
-_PATH_FILE = _CONTAINER_SHARED_CONSTANTS_DIR + "/paths.json"
+_CONTAINER_PROTOCOL_CONSTANTS_DIR = _PROTOCOL_DIR + "/constants"
+_PATH_FILE = _CONTAINER_PROTOCOL_CONSTANTS_DIR + "/paths.json"
 
 def _load_paths() -> dict:
     try:
         with Path(_PATH_FILE).open() as f:
             paths = json.load(f)
     except FileNotFoundError:
-        # Emergency fallbacks for when shared volume isn't ready
+        # Emergency fallbacks for when protocol volume isn't ready
         # On host, default to .g8e/pki (Operator listen mode PKI directory)
         # In container, default to /pki for backwards compatibility
-        if _SHARED_DIR != "/app/shared":
-            default_runtime_dir = os.environ.get("G8E_RUNTIME_DIR", str(Path(_SHARED_DIR).parent / ".g8e"))
+        if _PROTOCOL_DIR != "/app/protocol":
+            default_runtime_dir = os.environ.get("G8E_RUNTIME_DIR", str(Path(_PROTOCOL_DIR).parent / ".g8e"))
             default_pki_dir = os.environ.get("G8E_PKI_DIR", str(Path(default_runtime_dir) / "pki"))
             default_secrets_dir = os.environ.get("G8E_SECRETS_DIR", str(Path(default_runtime_dir) / "secrets"))
         else:
@@ -54,9 +54,9 @@ def _load_paths() -> dict:
                 "pki_dir": os.environ.get("G8E_PKI_DIR", default_pki_dir),
                 "secrets_dir": os.environ.get("G8E_SECRETS_DIR", default_secrets_dir),
                 "docs_dir": "/docs",
-                "shared_dir": _SHARED_DIR,
-                "shared_constants_dir": _SHARED_DIR + "/constants",
-                "shared_models_dir": _SHARED_DIR + "/models",
+                "protocol_dir": _PROTOCOL_DIR,
+                "protocol_constants_dir": _PROTOCOL_DIR + "/constants",
+                "protocol_models_dir": _PROTOCOL_DIR + "/models",
                 "ssh_config_path": "/etc/g8e/ssh_config",
             },
             "g8ee": {
@@ -66,14 +66,14 @@ def _load_paths() -> dict:
     except Exception as e:
         raise RuntimeError(f"Failed to load paths from {_PATH_FILE}: {e}") from e
 
-    # Override container paths with G8E_SHARED_DIR when running on host
+    # Override container paths with G8E_PROTOCOL_DIR when running on host
     # This allows evals and other host-based commands to use host paths
-    if "infra" in paths and _SHARED_DIR != "/app/shared":
-        paths["infra"]["shared_dir"] = _SHARED_DIR
-        paths["infra"]["shared_constants_dir"] = _SHARED_DIR + "/constants"
-        paths["infra"]["shared_models_dir"] = _SHARED_DIR + "/models"
+    if "infra" in paths and _PROTOCOL_DIR != "/app/protocol":
+        paths["infra"]["protocol_dir"] = _PROTOCOL_DIR
+        paths["infra"]["protocol_constants_dir"] = _PROTOCOL_DIR + "/constants"
+        paths["infra"]["protocol_models_dir"] = _PROTOCOL_DIR + "/models"
         # Override PKI/secrets paths to use host runtime directory when running on host
-        host_runtime_dir = os.environ.get("G8E_RUNTIME_DIR", str(Path(_SHARED_DIR).parent / ".g8e"))
+        host_runtime_dir = os.environ.get("G8E_RUNTIME_DIR", str(Path(_PROTOCOL_DIR).parent / ".g8e"))
         host_pki_dir = os.environ.get("G8E_PKI_DIR", str(Path(host_runtime_dir) / "pki"))
         host_secrets_dir = os.environ.get("G8E_SECRETS_DIR", str(Path(host_runtime_dir) / "secrets"))
         paths["infra"]["pki_dir"] = host_pki_dir

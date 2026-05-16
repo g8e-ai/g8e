@@ -62,7 +62,7 @@ from app.models.pubsub_messages import (
 pytestmark = [pytest.mark.unit]
 
 
-# Canonical wire payload: every section of HeartbeatSnapshot (shared/proto/operator.proto)
+# Canonical wire payload: every section of HeartbeatSnapshot (protocol/proto/operator.proto)
 # populated. Used directly by round-trip tests; overrides use model_copy.
 PAYLOAD = G8eoHeartbeatPayload(
     event_type=EventType.OPERATOR_HEARTBEAT_SENT,

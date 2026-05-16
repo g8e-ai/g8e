@@ -65,7 +65,7 @@ _operator_curl() {
         args+=(--cert "$cli_cert" --key "$cli_key")
     else
         local cert_name
-        cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$SCRIPT_DIR/shared/constants/paths.json" 2>/dev/null || echo "g8ee")
+        cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$SCRIPT_DIR/protocol/constants/paths.json" 2>/dev/null || echo "g8ee")
         if [[ -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" && -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key" ]]; then
             args+=(--cert "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" --key "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key")
         else
@@ -87,7 +87,7 @@ _run_host_script() {
     export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"
     export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
     export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
-    export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
+    export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
     [[ -n "${OPERATOR_SESSION_ID:-}" ]] && export OPERATOR_SESSION_ID
     exec "$@"
 }

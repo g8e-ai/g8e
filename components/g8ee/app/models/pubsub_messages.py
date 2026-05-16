@@ -436,7 +436,7 @@ class G8eoHeartbeatCapabilityFlags(G8eBaseModel):
 class G8eoHeartbeatPayload(G8eBaseModel):
     """Typed wire model for the g8eo heartbeat pub/sub payload.
 
-    Canonical shape defined in shared/proto/operator.proto (HeartbeatSnapshot message).
+    Canonical shape defined in protocol/proto/operator.proto (HeartbeatSnapshot message).
     This is the boundary model — validated once when the raw pub/sub
     message arrives in command_pubsub.py, then passed typed throughout.
     """

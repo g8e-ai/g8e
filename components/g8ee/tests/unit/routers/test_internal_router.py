@@ -47,7 +47,7 @@ from app.routers.internal_router import (
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from tests.fakes.factories import build_case_model, create_investigation_data
 
-# Canonical API key format from shared/constants/api_key_patterns.json
+# Canonical API key format from protocol/constants/api_key_patterns.json
 API_KEY_OPERATOR_REGEX = re.compile(r"^g8e_[a-f0-9]{8}_[a-f0-9]{64}$")
 API_KEY_REGULAR_REGEX = re.compile(r"^g8e_[a-f0-9]{64}$")
 

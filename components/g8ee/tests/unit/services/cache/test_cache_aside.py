@@ -147,7 +147,7 @@ class TestCacheAsideService:
         assert cached is None
 
     async def test_update_document_invalidates_query_cache_for_collection(self, service, mock_kv_cache_client):
-        """Regression: a single-doc write must also invalidate the shared
+        """Regression: a single-doc write must also invalidate the protocol
         `g8e:cache:query:<collection>:*` cache so downstream readers (e.g.
         client's HeartbeatMonitorService) never serve a stale snapshot."""
         query_params = {"filters": []}

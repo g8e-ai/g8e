@@ -8,7 +8,7 @@ An **Operator** is any host-side implementation that speaks the g8e Protocol: it
 
 This repository ships:
 
-- The **g8e Protocol** (`shared/proto`, `docs/architecture/protocol.md`) — the canonical wire contract.
+- The **g8e Protocol** (`protocol/proto`, `docs/architecture/protocol.md`) — the canonical wire contract.
 - **g8eo** — a reference Operator implementation in Go. Sovereign, single-binary, runs as a satellite on managed hosts or as a hub in `--listen` mode.
 - A **reference application** for AI-powered, human-driven infrastructure management built on top of the protocol, including the optional **g8ee** AI engine and Tribunal consensus model.
 

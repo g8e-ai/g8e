@@ -14,24 +14,24 @@
 import json
 from app.constants.paths import PATHS
 
-_SHARED_DIR = PATHS["infra"]["shared_constants_dir"]
+_PROTOCOL_DIR = PATHS["infra"]["protocol_constants_dir"]
 
 def _load(filename: str) -> dict[str, object]:
-    path = _SHARED_DIR + "/" + filename
+    path = _PROTOCOL_DIR + "/" + filename
     try:
         with open(path) as f:
             return json.load(f)
     except FileNotFoundError as e:
-        raise RuntimeError(f"Shared constants file not found: {path}") from e
+        raise RuntimeError(f"Protocol constants file not found: {path}") from e
     except json.JSONDecodeError as e:
-        raise RuntimeError(f"Invalid JSON in shared constants file {path}: {e}") from e
+        raise RuntimeError(f"Invalid JSON in protocol constants file {path}: {e}") from e
 
 _KV: dict[str, object] = _load("kv_keys.json")
 
 CACHE_PREFIX = _KV["cache.prefix"]
 
 class KVKey:
-    """Canonical KV store keys. All keys use the version prefix from shared constants."""
+    """Canonical KV store keys. All keys use the version prefix from protocol constants."""
 
     @classmethod
     def doc(cls, collection: str, document_id: str) -> str:

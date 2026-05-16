@@ -50,30 +50,30 @@ async def test_concurrent_chat_appends_preserve_chain_under_load(service, mock_c
 
     created_at = initial_inv.created_at.isoformat()
 
-    # Use a shared object to represent the "database" state.
-    shared_db_state = [initial_inv.model_dump(mode="json")]
+    # Use a protocol object to represent the "database" state.
+    protocol_db_state = [initial_inv.model_dump(mode="json")]
 
     async def mock_get_document(collection, document_id):
         await asyncio.sleep(0.01)
         # Return a copy to simulate a fresh read from the "database"
-        return shared_db_state[0].copy()
+        return protocol_db_state[0].copy()
 
     async def mock_update_document(collection, document_id, data, merge=True):
         await asyncio.sleep(0.01)
         if "conversation_history" in data:
-            new_state = shared_db_state[0].copy()
+            new_state = protocol_db_state[0].copy()
             new_state["conversation_history"] = data["conversation_history"]
-            shared_db_state[0] = new_state
+            protocol_db_state[0] = new_state
         return AsyncMock(success=True)
 
     async def mock_append_to_array(collection, document_id, array_field, items_to_add, additional_updates=None):
         await asyncio.sleep(0.01)
         if array_field == "conversation_history":
             # This mimics what happens if we don't have a lock
-            new_state = shared_db_state[0].copy()
+            new_state = protocol_db_state[0].copy()
             current_history = new_state.get(array_field, [])
             new_state[array_field] = current_history + items_to_add
-            shared_db_state[0] = new_state
+            protocol_db_state[0] = new_state
         return AsyncMock(success=True)
 
     mock_cache_aside_service.get_document_with_cache.side_effect = mock_get_document
@@ -93,7 +93,7 @@ async def test_concurrent_chat_appends_preserve_chain_under_load(service, mock_c
 
     await asyncio.gather(*tasks)
 
-    history = shared_db_state[0].get("conversation_history", [])
+    history = protocol_db_state[0].get("conversation_history", [])
     print(f"Final conversation history length: {len(history)}")
 
     assert len(history) == num_concurrent, f"Expected {num_concurrent} entries, but got {len(history)}. Race condition detected!"

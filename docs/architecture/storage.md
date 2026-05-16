@@ -190,7 +190,7 @@ Audit events are fail-closed against session identity. The audit vault never cre
 
 ## Canonical Collections
 
-The following collections are defined in `shared/constants/collections.json` and are used across the platform for Document Store organization:
+The following collections are defined in `protocol/constants/collections.json` and are used across the platform for Document Store organization:
 
 | Collection | Description |
 |---|---|

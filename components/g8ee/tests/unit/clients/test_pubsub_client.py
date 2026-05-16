@@ -294,7 +294,7 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
         return msg
 
     async def test_result_with_matching_envelope_id_is_dispatched(self, connected_client):
-        exec_id = "cmd_shared_correlation_id_1234"
+        exec_id = "cmd_protocol_correlation_id_1234"
         cmd_channel = "cmd:op-1:sess-1"
         results_channel = "results:op-1:sess-1"
 
@@ -335,7 +335,7 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
         assert data == result_data
 
     async def test_pmessage_with_matching_envelope_id_is_dispatched(self, connected_client):
-        exec_id = "cmd_shared_correlation_id_pmsg"
+        exec_id = "cmd_protocol_correlation_id_pmsg"
         cmd_channel = "cmd:op-2:sess-2"
         results_pattern = "results:*"
         results_channel = "results:op-2:sess-2"

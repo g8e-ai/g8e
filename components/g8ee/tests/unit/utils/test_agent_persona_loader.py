@@ -206,7 +206,7 @@ class TestPipelineTemplateContract:
                 )
 
     def test_tribunal_prompt_template_renders_with_member_voice(self):
-        """The shared TRIBUNAL_PROMPT_TEMPLATE must render cleanly using the
+        """The protocol TRIBUNAL_PROMPT_TEMPLATE must render cleanly using the
         kwargs command_generator._run_generation_pass supplies."""
         template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
 

@@ -13,8 +13,8 @@
 
 """Cross-language fixture parity for ledger hashing.
 
-These tests consume the shared fixture file at
-``shared/test-fixtures/ledger-hash-fixtures.json`` and assert that the Python
+These tests consume the protocol fixture file at
+``protocol/test-fixtures/ledger-hash-fixtures.json`` and assert that the Python
 implementation reproduces the recorded canonical-JSON encodings, entry hashes,
 genesis hashes, and chain results. The same fixture file is consumed by the
 client JS verifier test (``ledger-verify-fixtures.spec.js``) so any drift between
@@ -37,7 +37,7 @@ from app.utils.ledger_hash import (
 def _load_fixtures():
     fixtures_path = (
         Path(__file__).resolve().parent.parent.parent.parent.parent.parent
-        / "shared"
+        / "protocol"
         / "test-fixtures"
         / "ledger-hash-fixtures.json"
     )

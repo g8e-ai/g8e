@@ -28,7 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/internal/certs"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/httpclient"
-	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/pubsubv1"
+	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/pubsubv1"
 )
 
 // PubSubClient is the interface implemented by both OperatorPubSubClient and MockOperatorPubSubClient.

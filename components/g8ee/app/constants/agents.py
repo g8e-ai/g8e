@@ -12,14 +12,14 @@
 # limitations under the License.
 
 from enum import StrEnum
-from app.constants.shared import _AGENTS
+from app.constants.protocol import _AGENTS
 
 
 class ReasoningAgent(StrEnum):
     """Canonical agent identity used to route system-prompt assembly.
 
     Each value matches the top-level id under `agent.metadata` in
-    `shared/constants/agents.json`. `SAGE` is the deep-reasoning primary
+    `protocol/constants/agents.json`. `SAGE` is the deep-reasoning primary
     agent; `DASH` is the fast-path assistant agent. The chat pipeline
     resolves a ReasoningAgent from the tier it selected (primary -> SAGE,
     assistant -> DASH) and threads it into `build_modular_system_prompt`
@@ -84,7 +84,7 @@ class AuditorReason(StrEnum):
     """The Auditor's stated reason for its verdict.
 
     These values are emitted in Tribunal SSE payloads and must match
-    the shared constants in shared/constants/agents.json.
+    the protocol constants in protocol/constants/agents.json.
     """
     OK                   = _AGENTS["tribunal.auditor_reason"]["ok"]
     REVISED              = _AGENTS["tribunal.auditor_reason"]["revised"]

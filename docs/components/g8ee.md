@@ -981,7 +981,7 @@ Full prompt-system reference — file layout, loader, assembly pipeline, mode se
 
 ### Prompt Constants
 
-`PromptFile`, `AgentMode`, and `PromptSection` enums in `app/constants/prompts.py` are the authoritative source for prompt file paths and section labels. A sibling `shared/constants/prompts.json` is loaded into `_PROMPTS` by `app/constants/shared.py` but is currently unused at runtime — the Python enums are hardcoded.
+`PromptFile`, `AgentMode`, and `PromptSection` enums in `app/constants/prompts.py` are the authoritative source for prompt file paths and section labels. A sibling `protocol/constants/prompts.json` is loaded into `_PROMPTS` by `app/constants/protocol.py` but is currently unused at runtime — the Python enums are hardcoded.
 
 **Rule:** Never hardcode prompt file paths or section label strings in application code. Always use the enums from `app/constants/prompts.py`. All new prompt files must have a corresponding `PromptFile` entry.
 
@@ -1127,7 +1127,7 @@ When supported by the underlying model, Tribunal uses JSON schema structured out
 - **Revision Safety**: The verifier's suggested revisions are strictly validated against all safety constraints before acceptance.
 - **Final Guard**: A final safety check is performed on the resulting command before completion, ensuring no unsafe command ever leaves the Tribunal.
 
-Tribunal passes do not use member-specific temperatures. All passes use the configured model's `default_temperature`. Diversity comes from the distinct personas in `shared/constants/agents.json`.
+Tribunal passes do not use member-specific temperatures. All passes use the configured model's `default_temperature`. Diversity comes from the distinct personas in `protocol/constants/agents.json`.
 
 The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_settings.command_validation` and passes them to `generate_command()`, ensuring Tribunal is aware of downstream command validation rules configured per-user.
 

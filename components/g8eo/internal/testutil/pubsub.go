@@ -22,7 +22,7 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/httpclient"
-	"github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/pubsubv1"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/pubsubv1"
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
 )

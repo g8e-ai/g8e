@@ -7,8 +7,8 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
-	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
-	pb "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/commonv1"
+	pb "github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

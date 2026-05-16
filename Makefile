@@ -31,7 +31,7 @@ help:
 .PHONY: proto
 proto: buf-install
 	@echo "Generating Protobuf code with Buf..."
-	@$(BUF) generate shared/proto
+	@$(BUF) generate protocol/proto
 	@echo "Post-processing Python code..."
 	@touch components/g8ee/app/proto/__init__.py
 	@find components/g8ee/app/proto -name "*_pb2*.py" -exec sed -i 's/^import \(.*_pb2\)/from . import \1/' {} +

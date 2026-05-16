@@ -14,7 +14,7 @@
 from enum import StrEnum
 
 class CloudIntent(StrEnum):
-    # Generated from shared/constants/intents.json
+    # Generated from protocol/constants/intents.json
     ACM_DISCOVERY = "acm_discovery"
     APIGATEWAY_DISCOVERY = "apigateway_discovery"
     ATHENA_DISCOVERY = "athena_discovery"

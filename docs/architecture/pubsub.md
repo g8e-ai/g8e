@@ -42,7 +42,7 @@ Execution output (stdout, stderr, exit codes) is published back to the client vi
 
 ## Channel Taxonomy
 
-Canonical prefixes and formats are defined in `@/shared/constants/channels.json`. 
+Canonical prefixes and formats are defined in `@/protocol/constants/channels.json`. 
 
 ### Per-Operator-Session Channels
 Format: `{prefix}:{operator_id}:{operator_session_id}`
@@ -86,7 +86,7 @@ Identity and integrity are maintained through a deterministic `transaction_hash`
 - **Application Layer**: Consumers of the protocol (e.g., `g8ee`) have no privileged access and must use the same public protocol surface as BYO clients.
 
 ### 2. Single Source of Truth
-All channel logic must use the constants in `@/shared/constants/channels.json`. 
+All channel logic must use the constants in `@/protocol/constants/channels.json`. 
 - **Go**: Use constructors in `components/g8eo/internal/constants/channels.go`.
 - **Python**: Use `OperatorChannel` in `components/g8ee/app/constants/channels.py`.
 

@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 # Load public API paths
 from app.constants.paths import PATHS
-_SHARED_DIR = Path(PATHS["infra"]["shared_dir"])
-with open(_SHARED_DIR / "constants" / "public_api_paths.json") as f:
+_PROTOCOL_DIR = Path(PATHS["infra"]["protocol_dir"])
+with open(_PROTOCOL_DIR / "constants" / "public_api_paths.json") as f:
     PUBLIC_API_PATHS = json.load(f)
 
 class G8eClient:

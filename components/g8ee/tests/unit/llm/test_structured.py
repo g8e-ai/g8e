@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unit tests for the shared structured-response parser."""
+"""Unit tests for the protocol structured-response parser."""
 
 from enum import StrEnum
 

@@ -22,9 +22,9 @@ pytestmark = [pytest.mark.unit]
 load_paths = paths_module.__dict__["_load_paths"]
 
 
-def _configure_shared_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
-    shared_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / "shared"
-    constants_dir = shared_dir / "constants"
+def _configure_protocol_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    protocol_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / "protocol"
+    constants_dir = protocol_dir / "constants"
     constants_dir.mkdir(parents=True)
     path_file = constants_dir / "paths.json"
     path_file.write_text(
@@ -36,9 +36,9 @@ def _configure_shared_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
                     "app_cert_dir": ".g8e/pki/issued/apps",
                     "pki_dir": ".g8e/pki",
                     "docs_dir": "/docs",
-                    "shared_dir": "/app/shared",
-                    "shared_constants_dir": "/app/shared/constants",
-                    "shared_models_dir": "/app/shared/models",
+                    "protocol_dir": "/app/protocol",
+                    "protocol_constants_dir": "/app/protocol/constants",
+                    "protocol_models_dir": "/app/protocol/models",
                     "ssh_config_path": "/etc/g8e/ssh_config",
                 },
                 "g8ee": {
@@ -47,14 +47,14 @@ def _configure_shared_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
             }
         )
     )
-    monkeypatch.setattr(paths_module, "_SHARED_DIR", str(shared_dir))
-    monkeypatch.setattr(paths_module, "_CONTAINER_SHARED_CONSTANTS_DIR", str(constants_dir))
+    monkeypatch.setattr(paths_module, "_PROTOCOL_DIR", str(protocol_dir))
+    monkeypatch.setattr(paths_module, "_CONTAINER_PROTOCOL_CONSTANTS_DIR", str(constants_dir))
     monkeypatch.setattr(paths_module, "_PATH_FILE", str(path_file))
-    return shared_dir
+    return protocol_dir
 
 
 def test_load_paths_prefers_explicit_host_pki_dir(monkeypatch: pytest.MonkeyPatch, tmp_path):
-    _configure_shared_paths(monkeypatch, tmp_path)
+    _configure_protocol_paths(monkeypatch, tmp_path)
     pki_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e" / "pki"
     monkeypatch.setenv("G8E_PKI_DIR", str(pki_dir))
     monkeypatch.delenv("G8E_RUNTIME_DIR", raising=False)
@@ -68,7 +68,7 @@ def test_load_paths_prefers_explicit_host_pki_dir(monkeypatch: pytest.MonkeyPatc
 
 
 def test_load_paths_uses_host_runtime_dir_when_pki_dir_unset(monkeypatch: pytest.MonkeyPatch, tmp_path):
-    _configure_shared_paths(monkeypatch, tmp_path)
+    _configure_protocol_paths(monkeypatch, tmp_path)
     runtime_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e"
     monkeypatch.delenv("G8E_PKI_DIR", raising=False)
     monkeypatch.setenv("G8E_RUNTIME_DIR", str(runtime_dir))

@@ -23,7 +23,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/components/g8eo/internal/constants"
-	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/pubsubv1"
+	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/pubsubv1"
 )
 
 // MessageHandler is a callback for in-process message processing (e.g., governance command handling).

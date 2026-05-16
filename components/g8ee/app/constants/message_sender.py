@@ -17,7 +17,7 @@ These are NOT SSE event types. They identify the source of a message
 in the database (user, AI, system, operator terminal) for conversation
 history tracking and display.
 
-Canonical source: shared/constants/senders.json
+Canonical source: protocol/constants/senders.json
 """
 
 from enum import StrEnum

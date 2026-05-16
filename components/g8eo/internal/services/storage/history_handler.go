@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/sqliteutil"
-	"github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/operatorv1"
 	"google.golang.org/protobuf/proto"
 )
 

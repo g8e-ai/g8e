@@ -756,7 +756,7 @@ async def cache_aside_service(test_settings):
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def kv_cache_client(cache_aside_service):
-    # Returns the client from the shared cache service to ensure token consistency
+    # Returns the client from the protocol cache service to ensure token consistency
     yield cache_aside_service.kv.client
 
 
@@ -790,7 +790,7 @@ async def pubsub_service(test_settings):
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def pubsub_client(pubsub_service):
-    """Returns the shared PubSubClient instance from pubsub_service."""
+    """Returns the protocol PubSubClient instance from pubsub_service."""
     yield pubsub_service.pubsub_client
 
 

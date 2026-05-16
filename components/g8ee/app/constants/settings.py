@@ -16,16 +16,16 @@ import os
 from enum import StrEnum
 from pathlib import Path
 
-from app.constants.shared import _AGENTS, _STATUS
+from app.constants.protocol import _AGENTS, _STATUS
 from app.constants.paths import PATHS
 
 
 def _load_security_constraints() -> dict:
-    """Load security constraints from shared model."""
-    shared_models_dir = PATHS["infra"]["shared_models_dir"]
-    shared_models_path = Path(shared_models_dir) / "security_constraints.json"
+    """Load security constraints from protocol model."""
+    protocol_models_dir = PATHS["infra"]["protocol_models_dir"]
+    protocol_models_path = Path(protocol_models_dir) / "security_constraints.json"
     try:
-        with open(shared_models_path) as f:
+        with open(protocol_models_path) as f:
             constraints = json.load(f)
         return constraints
     except Exception:
@@ -150,7 +150,7 @@ class AnthropicStopReason(StrEnum):
 class AttachmentType(StrEnum):
     """Attachment types for user-uploaded files.
 
-    These values must match the shared constants in shared/constants/status.json.
+    These values must match the protocol constants in protocol/constants/status.json.
     """
     def __str__(self) -> str:
         return self.value
@@ -203,7 +203,7 @@ class CommandGenerationOutcome(StrEnum):
     and the tool call fails.
 
     These values are emitted in Tribunal SSE payloads and must match
-    the shared constants in shared/constants/agents.json.
+    the protocol constants in protocol/constants/agents.json.
     """
     def __str__(self) -> str:
         return self.value
@@ -324,7 +324,7 @@ class ResponseType(StrEnum):
 class ApprovalErrorType(StrEnum):
     """Approval error types emitted in SSE payloads.
 
-    These values must match the shared constants in shared/constants/status.json.
+    These values must match the protocol constants in protocol/constants/status.json.
     """
     def __str__(self) -> str:
         return self.value

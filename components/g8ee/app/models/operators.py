@@ -114,7 +114,7 @@ class OperatorHistoryEntry(G8eBaseModel):
 class OperatorDocument(G8eIdentifiableModel):
     """g8ee read-side projection of the client OperatorDocument.
 
-    Maps to operator_status_info in shared/models/operator_document.json.
+    Maps to operator_status_info in protocol/models/operator_document.json.
     Populated from operator KV cache keyed by KVKey.doc(Collections.OPERATORS, id) or
     GET /api/internal/operators/:id/status.
     client is the authority — g8ee only reads this document.
@@ -403,7 +403,7 @@ class HeartbeatSnapshot(G8eBaseModel):
     def from_wire(cls, payload: G8eoHeartbeatPayload) -> HeartbeatSnapshot:
         """Create HeartbeatSnapshot from the typed g8eo wire payload.
 
-        Canonical shape defined in shared/proto/operator.proto (HeartbeatSnapshot message).
+        Canonical shape defined in protocol/proto/operator.proto (HeartbeatSnapshot message).
         Validation happens once at the pub/sub boundary in heartbeat_service.py
         before this is called.
         """
@@ -809,7 +809,7 @@ class HeartbeatSSEEnvelope(G8eBaseModel):
 
     Authorship boundary: g8ee owns `operator_id` and `status` (the authoritative value from
     OperatorDocument); `metrics` carries the g8eo-authored HeartbeatSnapshot
-    snapshot verbatim (defined in shared/proto/operator.proto) —
+    snapshot verbatim (defined in protocol/proto/operator.proto) —
     the same instance persisted as `latest_heartbeat_snapshot` on the operator
     document. There is no flat projection: wire, persistence, and browser
     all see the identical nested shape. Callers must never mutate fields

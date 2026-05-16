@@ -44,7 +44,7 @@ PubSubMessageType = PubSubWireEventType
 class PubSubChannel(StrEnum):
     """Well-known, non-parameterized pub/sub channel names.
 
-    Canonical values mirror `shared/constants/channels.json` -> `pubsub.prefixes`
+    Canonical values mirror `protocol/constants/channels.json` -> `pubsub.prefixes`
     and the four platform-wide broadcast channels. Parameterized per-operator
     channels (cmd/results/heartbeat) are constructed via `OperatorChannel` below.
     """
@@ -84,7 +84,7 @@ class PubSubChannel(StrEnum):
 
 # Canonical per-operator-session channel format:
 #     {prefix}{SEPARATOR}{operator_id}{SEPARATOR}{operator_session_id}
-# Mirrors `shared/constants/channels.json -> pubsub.segment_count` exactly.
+# Mirrors `protocol/constants/channels.json -> pubsub.segment_count` exactly.
 CHANNEL_SEGMENT_COUNT: Final[int] = 3
 
 

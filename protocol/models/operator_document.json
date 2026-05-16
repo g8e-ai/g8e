@@ -239,7 +239,7 @@
       "latest_heartbeat_snapshot": {
         "type": "object",
         "required": false,
-        "description": "Most recent heartbeat metrics snapshot. Shape matches HeartbeatSnapshot (defined in shared/proto/operator.proto): nested objects for system_identity, performance, network, uptime, etc. Strictly enforced across the wire."
+        "description": "Most recent heartbeat metrics snapshot. Shape matches HeartbeatSnapshot (defined in protocol/proto/operator.proto): nested objects for system_identity, performance, network, uptime, etc. Strictly enforced across the wire."
       }
     },
 
@@ -269,7 +269,7 @@
         "default": [],
         "description": "Granted AWS/cloud intent permissions. Always an array, empty when no intents are granted. Items are GrantedIntent objects with TTL.",
         "items": {
-          "name":       { "type": "string", "required": true, "description": "Intent name from shared/constants/intents.json" },
+          "name":       { "type": "string", "required": true, "description": "Intent name from protocol/constants/intents.json" },
           "granted_at": { "type": "string", "format": "iso8601", "required": true },
           "expires_at": { "type": "string", "format": "iso8601", "required": true }
         }

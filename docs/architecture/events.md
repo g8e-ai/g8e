@@ -41,7 +41,7 @@ The reference Operator in **Listen Mode** serves as the central event broker and
 
 ## The Governance Envelope
 
-The `GovernanceEnvelope` (UAP JSON, defined in `shared/proto/common.proto`) is the canonical wrapper for all platform transactions.
+The `GovernanceEnvelope` (UAP JSON, defined in `protocol/proto/common.proto`) is the canonical wrapper for all platform transactions.
 
 | Field | Description |
 |-------|-------------|
@@ -112,18 +112,18 @@ g8e.v1.<domain>.<resource>[.<sub-resource>...].<action>
 - **Action**: Always a **past-tense** verb (`created`, `failed`) or state (`active`).
 
 ### Canonical Truth
-- `shared/constants/events.json`: The single source of truth for event name strings.
-- `shared/proto/`: The canonical schema source for envelopes and typed payloads.
+- `protocol/constants/events.json`: The single source of truth for event name strings.
+- `protocol/proto/`: The canonical schema source for envelopes and typed payloads.
 - **Python**: `EventType` StrEnum in `app/constants/events.py`.
 - **Go**: Constants in `components/g8eo/constants/events.go`.
-- **Node.js**: Constants in `shared/constants/events.json` (shared via symlink or copy).
+- **Node.js**: Constants in `protocol/constants/events.json` (shared via symlink or copy).
 
 ---
 
 ## Adding New Events
 
-1. **Update Canonical Truth**: Add the new event string to `shared/constants/events.json`.
-2. **Define Schema**: If the event carries a payload, define a message in `shared/proto/operator.proto`.
+1. **Update Canonical Truth**: Add the new event string to `protocol/constants/events.json`.
+2. **Define Schema**: If the event carries a payload, define a message in `protocol/proto/operator.proto`.
 3. **Propagate**: Update the respective constant enums in `g8ee` and `g8eo`.
 4. **Verify**: Ensure the name follows the hierarchical past-tense rule.
 

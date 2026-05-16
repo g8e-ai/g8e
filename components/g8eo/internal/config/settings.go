@@ -23,7 +23,7 @@ import (
 // This is the ONE place in the application that calls os.Getenv.
 // All other code receives these values via dependency injection.
 type Settings struct {
-	// g8e operator configuration — mirrors shared/constants/env_vars.json "g8eo" section
+	// g8e operator configuration — mirrors protocol/constants/env_vars.json "g8eo" section
 	OperatorAPIKey    string
 	OperatorEndpoint  string
 	OperatorSessionID string

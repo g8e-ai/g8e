@@ -255,7 +255,7 @@ def _build_app() -> FastAPI:
         lifespan=lifespan,
         openapi_tags=[
             {"name": "health", "description": "Health checks and monitoring endpoints"},
-            {"name": "investigations", "description": "Investigation management with shared models and troubleshooting framework"},
+            {"name": "investigations", "description": "Investigation management with protocol models and troubleshooting framework"},
             {"name": "memories", "description": "Investigation memories for AI context and learning"},
         ],
         contact={

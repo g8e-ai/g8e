@@ -17,7 +17,7 @@ fi
 
 # operator readiness is gated by docker-compose `depends_on: operator: service_healthy`.
 # Execute the main application - bootstrap service handles secret loading
-CERT_NAME=$(jq -r '.g8ee.cert_name // "g8ee"' "${G8E_PROJECT_ROOT}/shared/constants/paths.json" 2>/dev/null || echo "g8ee")
+CERT_NAME=$(jq -r '.g8ee.cert_name // "g8ee"' "${G8E_PROJECT_ROOT}/protocol/constants/paths.json" 2>/dev/null || echo "g8ee")
 exec uvicorn app.main:app --host 0.0.0.0 --port 8443 \
     --ssl-keyfile "${PKI_DIR}/issued/apps/${CERT_NAME}.key" \
     --ssl-certfile "${PKI_DIR}/issued/apps/${CERT_NAME}.crt"

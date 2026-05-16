@@ -37,7 +37,7 @@ The default substrate is the Operator plus the shared protocol. Bundled apps rem
 | Layer | Component | Language | Purpose |
 |-----------|-----------|----------|---------|
 | **Substrate** | **Operator (g8eo)** | Go | Protocol hub, policy enforcement, execution, audit, receipts, persistence, and pub/sub in listen mode. |
-| **Protocol** | **shared/proto** | Protobuf | Canonical transaction schemas, typed payloads, and envelope contracts. |
+| **Protocol** | **protocol/proto** | Protobuf | Canonical transaction schemas, typed payloads, and envelope contracts. |
 | **Application Layer** | **g8ee** | Python | Optional reference Engine adapter for agentic proposal and L2 proof generation. |
 
 ### Agent Terminology

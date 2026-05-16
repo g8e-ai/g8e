@@ -13,7 +13,7 @@
 
 package constants
 
-// operatorCommandStatusUpdatedEvents mirrors shared/constants/events.json operator.command.status.updated.*
+// operatorCommandStatusUpdatedEvents mirrors protocol/constants/events.json operator.command.status.updated.*
 type operatorCommandStatusUpdatedEvents struct {
 	Queued    string
 	Running   string
@@ -22,7 +22,7 @@ type operatorCommandStatusUpdatedEvents struct {
 	Cancelled string
 }
 
-// operatorCommandEvents mirrors shared/constants/events.json operator.command.*
+// operatorCommandEvents mirrors protocol/constants/events.json operator.command.*
 type operatorCommandEvents struct {
 	Requested         string
 	Started           string
@@ -35,7 +35,7 @@ type operatorCommandEvents struct {
 	ApprovalRequested string
 }
 
-// operatorFileEditEvents mirrors shared/constants/events.json operator.file.edit.*
+// operatorFileEditEvents mirrors protocol/constants/events.json operator.file.edit.*
 type operatorFileEditEvents struct {
 	Requested         string
 	Started           string
@@ -44,7 +44,7 @@ type operatorFileEditEvents struct {
 	ApprovalRequested string
 }
 
-// operatorIntentEvents mirrors shared/constants/events.json g8e.intent.*
+// operatorIntentEvents mirrors protocol/constants/events.json g8e.intent.*
 type operatorIntentEvents struct {
 	ApprovalRequested string
 	Granted           string
@@ -52,70 +52,70 @@ type operatorIntentEvents struct {
 	Revoked           string
 }
 
-// operatorPortCheckEvents mirrors shared/constants/events.json g8e.port.check.*
+// operatorPortCheckEvents mirrors protocol/constants/events.json g8e.port.check.*
 type operatorPortCheckEvents struct {
 	Requested string
 	Completed string
 	Failed    string
 }
 
-// operatorFsListEvents mirrors shared/constants/events.json g8e.fs.list.*
+// operatorFsListEvents mirrors protocol/constants/events.json g8e.fs.list.*
 type operatorFsListEvents struct {
 	Requested string
 	Completed string
 	Failed    string
 }
 
-// operatorFsReadEvents mirrors shared/constants/events.json g8e.fs.read.*
+// operatorFsReadEvents mirrors protocol/constants/events.json g8e.fs.read.*
 type operatorFsReadEvents struct {
 	Requested string
 	Completed string
 	Failed    string
 }
 
-// operatorFsGrepEvents mirrors shared/constants/events.json g8e.fs.grep.*
+// operatorFsGrepEvents mirrors protocol/constants/events.json g8e.fs.grep.*
 type operatorFsGrepEvents struct {
 	Requested string
 	Completed string
 	Failed    string
 }
 
-// operatorFetchLogsEvents mirrors shared/constants/events.json g8e.fetch.logs.*
+// operatorFetchLogsEvents mirrors protocol/constants/events.json g8e.fetch.logs.*
 type operatorFetchLogsEvents struct {
 	Requested string
 	Completed string
 	Failed    string
 }
 
-// operatorFetchHistoryEvents mirrors shared/constants/events.json g8e.fetch.history.*
+// operatorFetchHistoryEvents mirrors protocol/constants/events.json g8e.fetch.history.*
 type operatorFetchHistoryEvents struct {
 	Requested string
 	Completed string
 	Failed    string
 }
 
-// operatorFetchFileHistoryEvents mirrors shared/constants/events.json g8e.fetch.file.history.*
+// operatorFetchFileHistoryEvents mirrors protocol/constants/events.json g8e.fetch.file.history.*
 type operatorFetchFileHistoryEvents struct {
 	Requested string
 	Completed string
 	Failed    string
 }
 
-// operatorRestoreFileEvents mirrors shared/constants/events.json g8e.restore.file.*
+// operatorRestoreFileEvents mirrors protocol/constants/events.json g8e.restore.file.*
 type operatorRestoreFileEvents struct {
 	Requested string
 	Completed string
 	Failed    string
 }
 
-// operatorFetchFileDiffEvents mirrors shared/constants/events.json g8e.fetch.file.diff.*
+// operatorFetchFileDiffEvents mirrors protocol/constants/events.json g8e.fetch.file.diff.*
 type operatorFetchFileDiffEvents struct {
 	Requested string
 	Completed string
 	Failed    string
 }
 
-// operatorAuditEvents mirrors shared/constants/events.json g8e.audit.*
+// operatorAuditEvents mirrors protocol/constants/events.json g8e.audit.*
 type operatorAuditEvents struct {
 	UserMsg         string
 	AIMsg           string
@@ -123,7 +123,7 @@ type operatorAuditEvents struct {
 	DirectCmdResult string
 }
 
-// operatorEvents mirrors shared/constants/events.json g8e.*
+// operatorEvents mirrors protocol/constants/events.json g8e.*
 type operatorEvents struct {
 	Heartbeat            string
 	HeartbeatRequested   string
@@ -150,7 +150,7 @@ type operatorEvents struct {
 	Audit            operatorAuditEvents
 }
 
-// events is the top-level namespace. Canonical values from shared/constants/events.json.
+// events is the top-level namespace. Canonical values from protocol/constants/events.json.
 type events struct {
 	Operator operatorEvents
 }

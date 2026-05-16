@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v3.21.6
-// source: shared/proto/operator.proto
+// source: protocol/proto/operator.proto
 
 package operatorv1
 
@@ -253,5 +253,5 @@ var OperatorService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "shared/proto/operator.proto",
+	Metadata: "protocol/proto/operator.proto",
 }

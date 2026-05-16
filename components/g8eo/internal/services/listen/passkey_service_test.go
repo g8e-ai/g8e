@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/components/g8eo/internal/models"
-	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

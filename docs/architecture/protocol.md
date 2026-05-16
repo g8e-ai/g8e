@@ -26,7 +26,7 @@ The reference Operator implementation is **`g8eo`** (Go), and the bundled refere
 
 # Message Models
 
-The canonical schema files live in `@/home/bob/g8e/shared/proto/`:
+The canonical schema files live in `@/home/bob/g8e/protocol/proto/`:
 
 | File | Purpose |
 |------|---------|
@@ -153,8 +153,8 @@ The protocol is the authoritative contract. The files below are the reference im
 
 | Responsibility | Authoritative File |
 |----------------|--------------------|
-| **Schemas (substrate)** | `@/home/bob/g8e/shared/proto/` |
-| **Event Registry (substrate)** | `@/home/bob/g8e/shared/constants/events.json` |
+| **Schemas (substrate)** | `@/home/bob/g8e/protocol/proto/` |
+| **Event Registry (substrate)** | `@/home/bob/g8e/protocol/constants/events.json` |
 | **Reference Request Builder (PY, g8ee)** | `@/home/bob/g8e/components/g8ee/app/utils/envelope_builder.py` |
 | **Reference Inbound Dispatch (GO, g8eo)** | `@/home/bob/g8e/components/g8eo/internal/services/pubsub/pubsub_commands.go` |
 | **Reference L1/L2/L3 Verification (GO, g8eo)** | `@/home/bob/g8e/components/g8eo/internal/services/governance/transaction_verifier.go` |

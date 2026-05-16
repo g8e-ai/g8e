@@ -18,7 +18,7 @@ These are the inbound payload shapes published by g8ee to the
 cmd:{operator_id}:{operator_session_id} pub/sub channel. g8eo deserializes
 them using Protobuf. Field names and types mirror the canonical Go structs in
 components/g8eo/models/commands.go and the Protobuf definitions in
-shared/proto/operator.proto.
+protocol/proto/operator.proto.
 """
 
 from typing import Literal, Union

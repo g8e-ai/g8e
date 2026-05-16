@@ -38,8 +38,8 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/components/g8eo/internal/services/storage"
-	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/commonv1"
-	"github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/operatorv1"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/commonv1"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 )
 

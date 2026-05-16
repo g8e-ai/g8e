@@ -127,7 +127,7 @@ class TestHeartbeatServiceLifecycle:
 
         assert service.is_ready is False
         client.punsubscribe.assert_called_once()
-        # The pattern subscription is shared across all operators; sessions
+        # The pattern subscription is protocol across all operators; sessions
         # are tracked in-memory only and are cleared on stop.
         assert service.active_sessions == set()
 
@@ -156,7 +156,7 @@ class TestHeartbeatServiceLifecycle:
 class TestRegisterDeregisterSession:
     """register_operator_session / deregister_operator_session — bookkeeping only.
 
-    Heartbeat subscription is set up once via a shared ``heartbeat:*`` pattern
+    Heartbeat subscription is set up once via a protocol ``heartbeat:*`` pattern
     in ``start()``. These methods only track which (operator, session) pairs
     are considered active and never open or close per-channel pubsub state.
     """
@@ -647,7 +647,7 @@ class TestWsDisconnectHandler:
 
     async def test_disconnect_preserves_active_sessions(self, service):
         """Disconnect should preserve active sessions for observability across
-        reconnect — the shared heartbeat:* pattern subscription is restored
+        reconnect — the protocol heartbeat:* pattern subscription is restored
         independently by the pubsub client's reconnect logic."""
         await service.start()
         await service.register_operator_session("op-1", "sess-1")

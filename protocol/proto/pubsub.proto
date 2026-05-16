@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package g8e.pubsub.v1;
 
-option go_package = "github.com/g8e-ai/g8e/components/g8eo/internal/shared/proto/pubsubv1";
+option go_package = "github.com/g8e-ai/g8e/components/g8eo/internal/protocol/proto/pubsubv1";
 
 message PubSubMessage {
   string action = 1;

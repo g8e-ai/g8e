@@ -201,8 +201,8 @@ run_g8ee() {
         exit 1
     fi
     
-    export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
-    export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
+    export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/protocol"
+    export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
     export G8E_PROJECT_ROOT="$PROJECT_ROOT"
 
     if [[ "$PYRIGHT" == "true" ]]; then
@@ -237,8 +237,8 @@ run_e2e() {
         log_err "g8ee virtualenv not found at $venv_dir. Run ./g8e platform start first."
         exit 1
     fi
-    export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
-    export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
+    export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/protocol"
+    export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
     cd "$PROJECT_ROOT/components/g8ee"
     "$venv_dir/bin/pytest" -rs -m e2e tests/e2e/ "${EXTRA_ARGS[@]}"
 }

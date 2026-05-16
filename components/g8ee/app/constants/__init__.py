@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from app.constants.shared import (
+from app.constants.protocol import (
     _EVENTS,
     _STATUS,
     _MSG,

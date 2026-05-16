@@ -98,12 +98,12 @@ Client identities follow a fixed SPIFFE scheme: operators are `spiffe://g8e.loca
 
 ## Canonical Truths
 
-The wire contract lives in `shared/proto/`; the shared JSON registries in `shared/constants/` remain the source for event names, status values, and channel prefixes. g8eo mirrors them as compile-time Go constants so drift fails at build time, not at runtime.
+The wire contract lives in `protocol/proto/`; the shared JSON registries in `protocol/constants/` remain the source for event names, status values, and channel prefixes. g8eo mirrors them as compile-time Go constants so drift fails at build time, not at runtime.
 
-- **Protocol**: Generated Go artifacts under `internal/shared/proto/` mirror `shared/proto/common.proto`, `shared/proto/operator.proto`, and `shared/proto/pubsub.proto`.
+- **Protocol**: Generated Go artifacts under `internal/protocol/proto/` mirror `protocol/proto/common.proto`, `protocol/proto/operator.proto`, and `protocol/proto/pubsub.proto`.
 - **Wire format**: Canonical JSON (protojson) on all client-facing surfaces (HTTP, pub/sub, receipts, audit exports). Protobuf bytes are an internal storage detail only.
 - **Signing basis**: A deterministic `transaction_hash` is computed from normalized envelope fields; signatures are over the hash, so wire encoding is irrelevant to the security invariant.
-- **Events / Status / Channels**: `internal/constants/events.go`, `status.go`, and `channels.go` mirror their JSON counterparts under `shared/constants/`.
+- **Events / Status / Channels**: `internal/constants/events.go`, `status.go`, and `channels.go` mirror their JSON counterparts under `protocol/constants/`.
 
 ---
 

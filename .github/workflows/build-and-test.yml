@@ -30,7 +30,7 @@ jobs:
           # Only check for changes in generated proto files, ignore untracked files
           CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$|^\s*M.*_pb2.*\.py$|^\s*M.*\.proto$" || true)
           if [ -n "$CHANGES" ]; then
-            echo "Error: Generated proto files are out of sync with shared/proto/*.proto"
+            echo "Error: Generated proto files are out of sync with protocol/proto/*.proto"
             echo "$CHANGES"
             git diff -- $(git status --porcelain | grep -E "^\s*M" | awk '{print $2}')
             exit 1

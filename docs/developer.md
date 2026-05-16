@@ -60,7 +60,7 @@ AI agents are prone to wrapping poorly understood code in new abstractions. This
 3. No Defensive Guards: Never add defensive code to handle unexpected values at the call site. You must hunt down the root cause of why the unexpected value is being received and fix it at the source.
 
 IV. Application Boundary and State Management
-1. Single Source of Truth: The `shared/` directory is the canonical source for all wire-protocol values and cross-component document schemas. Components must mirror or load these values at runtime/compile-time.
+1. Single Source of Truth: The `protocol/` directory is the canonical source for all wire-protocol values and cross-component document schemas. Components must mirror or load these values at runtime/compile-time.
 
 2. Strict Typing: Inside the application boundary, data lives exclusively as typed model instances. Raw dicts, untyped maps, and ad-hoc JSON are prohibited. Models are only flattened to plain objects when crossing a wire boundary (database, KV cache, HTTP, pub-sub).
 
@@ -83,4 +83,4 @@ V. Component Rules
 VI. Testing Invariants
 1. Reproduce First: Always reproduce a bug with a failing test before generating the fix.
 2. No Mocks: Tests must use real infrastructure (real database, real pub/sub, real LLM calls).
-3. Contract Tests: Enforce alignment between the Operator, optional adapters, and `shared/` constants/models using typed Protobuf assertions.
+3. Contract Tests: Enforce alignment between the Operator, optional adapters, and `protocol/` constants/models using typed Protobuf assertions.

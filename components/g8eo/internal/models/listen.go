@@ -167,7 +167,7 @@ type BlobDeleteResponse struct {
 }
 
 // SettingsDocument represents the platform_settings document structure.
-// Authority: shared/models/platform_settings.json
+// Authority: protocol/models/platform_settings.json
 type SettingsDocument struct {
 	Settings  map[string]interface{} `json:"settings"`
 	CreatedAt time.Time              `json:"created_at"`
@@ -175,7 +175,7 @@ type SettingsDocument struct {
 }
 
 // UserSettingsDocument represents the user_settings document structure.
-// Authority: shared/models/user_settings.json
+// Authority: protocol/models/user_settings.json
 type UserSettingsDocument struct {
 	Settings  map[string]interface{} `json:"settings"`
 	CreatedAt time.Time              `json:"created_at"`

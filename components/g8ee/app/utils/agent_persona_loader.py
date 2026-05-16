@@ -14,7 +14,7 @@
 """Agent Persona Loader
 
 Centralized loader for AI agent persona definitions from code models in app/models/personas.
-The shared/constants/agents.json file is generated from these models and consumed by Node.js.
+The protocol/constants/agents.json file is generated from these models and consumed by Node.js.
 """
 
 import logging

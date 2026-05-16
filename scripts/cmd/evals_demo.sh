@@ -198,8 +198,8 @@ case "$TOP" in
                 _venv="$SCRIPT_DIR/components/g8ee/.venv"
                 [ ! -x "$_venv/bin/python" ] && { echo "[g8e] g8ee virtualenv missing" >&2; exit 1; }
                 (
-                    cd "$SCRIPT_DIR/components/g8ee"; export PYTHONPATH="$SCRIPT_DIR/components/g8ee:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
-                    export G8E_SHARED_DIR="$SCRIPT_DIR/shared"; export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"; export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
+                    cd "$SCRIPT_DIR/components/g8ee"; export PYTHONPATH="$SCRIPT_DIR/components/g8ee:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
+                    export G8E_PROTOCOL_DIR="$SCRIPT_DIR/protocol"; export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"; export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
                     export G8E_TRUST_BUNDLE="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
                     export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"; export G8EE_URL="$G8EE_URL"
                     "$_venv/bin/python" -m app.evals.runner.cli run "${run_args[@]}"
@@ -227,8 +227,8 @@ case "$TOP" in
                 _banner "evals list"; _venv="$SCRIPT_DIR/components/g8ee/.venv"
                 [ ! -x "$_venv/bin/python" ] && { echo "[g8e] g8ee virtualenv missing" >&2; exit 1; }
                 (
-                    cd "$SCRIPT_DIR/components/g8ee"; export PYTHONPATH="$SCRIPT_DIR/components/g8ee:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
-                    export G8E_SHARED_DIR="$SCRIPT_DIR/shared"; "$_venv/bin/python" -m app.evals.runner.cli list
+                    cd "$SCRIPT_DIR/components/g8ee"; export PYTHONPATH="$SCRIPT_DIR/components/g8ee:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
+                    export G8E_PROTOCOL_DIR="$SCRIPT_DIR/protocol"; "$_venv/bin/python" -m app.evals.runner.cli list
                 )
                 ;;
             *) echo "[g8e] unknown evals subcommand: '$SUB'" >&2; exit 1 ;;

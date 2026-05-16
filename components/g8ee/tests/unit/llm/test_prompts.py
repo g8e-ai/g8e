@@ -588,7 +588,7 @@ def test_build_modular_system_prompt_dash_uses_persona_not_core_identity(mock_lo
 
 
 def test_build_modular_system_prompt_dash_includes_full_governance_stack(mock_loader, operator_context):
-    """Dash plays the same game as Sage and must load the full shared stack.
+    """Dash plays the same game as Sage and must load the full protocol stack.
 
     Per the Tribunal GDD (`.local.dev/dev/tribunal-game.md` §14.1) the
     GDD's interrogator role ("Dash" in the doc) maps to the **triage**
@@ -610,7 +610,7 @@ def test_build_modular_system_prompt_dash_includes_full_governance_stack(mock_lo
         agent_name=ReasoningAgent.DASH,
     )
 
-    # The shared governance stack must be present for Dash, exactly as
+    # The protocol governance stack must be present for Dash, exactly as
     # it is for Sage.
     for required in (
         PromptFile.CORE_SAFETY,
@@ -633,8 +633,8 @@ def test_build_modular_system_prompt_dash_includes_full_governance_stack(mock_lo
     assert f"Content of {PromptFile.CORE_IDENTITY}" not in prompt
 
 
-def test_build_modular_system_prompt_shared_prefix_precedes_persona(mock_loader, operator_context):
-    """The shared static block (safety/loyalty/dissent + mode prompts +
+def test_build_modular_system_prompt_protocol_prefix_precedes_persona(mock_loader, operator_context):
+    """The protocol static block (safety/loyalty/dissent + mode prompts +
     response constraints) must appear before the agent persona so
     llama-server / vLLM prefix caches can reuse that prefix across
     every agent that shares the mode (Dash and Sage included).
