@@ -18,17 +18,22 @@ Query and manage the operator's local audit vault (SQLite) from the CLI.
 The audit vault stores sessions, events (USER_MSG, AI_MSG, CMD_EXEC, FILE_MUTATION),
 and file mutation logs — all written locally by the operator for data sovereignty.
 
-DB location: <operator_cwd>/.g8e/data/g8e.db
+DB location: <project-root>/.g8e/data/g8e.db (default when no --db-path, --container, or --volume is specified)
 
 Usage:
+    # Default (project root .g8e/data/g8e.db)
+    python manage-operator.py audit sessions
+    python manage-operator.py audit events --session SESSION_ID
+    python manage-operator.py audit events --session SESSION_ID --type CMD_EXEC
+    python manage-operator.py audit event --id 42
+    python manage-operator.py audit files --session SESSION_ID
+    python manage-operator.py audit stats
+    python manage-operator.py audit summary
+    python manage-operator.py audit export --session SESSION_ID
+
     # Direct path to the DB file
     python manage-operator.py audit --db-path /path/to/g8e.db sessions
     python manage-operator.py audit --db-path /path/to/g8e.db events --session SESSION_ID
-    python manage-operator.py audit --db-path /path/to/g8e.db events --session SESSION_ID --type CMD_EXEC
-    python manage-operator.py audit --db-path /path/to/g8e.db event --id 42
-    python manage-operator.py audit --db-path /path/to/g8e.db files --session SESSION_ID
-    python manage-operator.py audit --db-path /path/to/g8e.db stats
-    python manage-operator.py audit --db-path /path/to/g8e.db export --session SESSION_ID
 
     # Auto-discover from a running Docker container (normal-mode operator)
     python manage-operator.py audit --container operator sessions
@@ -52,7 +57,7 @@ import tempfile
 from datetime import datetime
 from typing import Any, Dict, List
 
-from _lib import print_banner
+from _lib import print_banner, PROJECT_ROOT
 
 EVENT_TYPES = ['USER_MSG', 'AI_MSG', 'CMD_EXEC', 'FILE_MUTATION']
 
@@ -90,7 +95,8 @@ class LFAAManager:
         elif self._volume:
             self._resolve_from_volume()
         else:
-            raise RuntimeError('No DB source. Use --db-path, --container, or --volume.')
+            # Default to project root .g8e/data/g8e.db
+            self._local_db_path = str(PROJECT_ROOT / '.g8e' / 'data' / 'g8e.db')
 
         if not self._local_db_path or not os.path.exists(self._local_db_path):
             raise RuntimeError(f'Database file not found: {self._local_db_path}')
@@ -809,9 +815,9 @@ Examples:
         """
     )
 
-    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group = parser.add_mutually_exclusive_group(required=False)
     source_group.add_argument('--db-path', metavar='PATH',
-                              help='Direct path to the g8e.db SQLite file')
+                              help='Direct path to the g8e.db SQLite file (default: <project-root>/.g8e/data/g8e.db)')
     source_group.add_argument('--container', metavar='NAME',
                               help='Docker container name to copy the DB from')
     source_group.add_argument('--volume', metavar='NAME',

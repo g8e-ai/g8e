@@ -34,12 +34,13 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/mappings"
+	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
-	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 )
 
@@ -322,19 +323,27 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Find project root by looking for VERSION file
+	projectRoot := config.FindProjectRoot()
+	if projectRoot == "" {
+		logger.Warn("could not find project root (no VERSION file) - using cwd")
+		projectRoot = cwd
+	}
+
 	dataDir := *flagDataDir
 	if dataDir == "" {
-		dataDir = filepath.Join(cwd, ".g8e", "data")
+		dataDir = filepath.Join(projectRoot, ".g8e", "data")
 	}
 	pkiDir := *flagPKIDir
 	if pkiDir == "" {
-		pkiDir = filepath.Join(cwd, ".g8e", "pki")
+		pkiDir = filepath.Join(projectRoot, ".g8e", "pki")
 	}
 
 	logger.Info("Chaos tester starting",
 		"count", *flagCount,
 		"data_dir", dataDir,
-		"pki_dir", pkiDir)
+		"pki_dir", pkiDir,
+		"project_root", projectRoot)
 
 	// ── generate ephemeral L2 signing key ─────────────────────────────────────
 	// In a real deployment the trusted signer key must be pre-provisioned in

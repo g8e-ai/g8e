@@ -183,32 +183,56 @@ type Config struct {
 	Listen ListenConfig
 }
 
+// FindProjectRoot locates the g8e project root by searching for the VERSION file.
+func FindProjectRoot() string {
+	curr, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(curr, "VERSION")); err == nil {
+			return curr
+		}
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		curr = parent
+	}
+	return ""
+}
+
 // LoadListen creates configuration for --listen mode.
 // Listen mode skips all operator-mode validation — no API key, no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
 // allowTestPortZero should be true only when called from Go tests; when false,
 // port 0 is rejected to prevent dynamic port assignment in production.
 func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir string, passkeyRpID, passkeyRpName string, allowTestPortZero bool) (*Config, error) {
+	projectRoot := FindProjectRoot()
+
 	if dataDir == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine working directory: %w", err)
+		if projectRoot != "" {
+			dataDir = filepath.Join(projectRoot, ".g8e", "data")
+		} else {
+			cwd, _ := os.Getwd()
+			dataDir = filepath.Join(cwd, ".g8e", "data")
 		}
-		dataDir = filepath.Join(cwd, ".g8e", "data")
 	}
 	if pkiDir == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine working directory: %w", err)
+		if projectRoot != "" {
+			pkiDir = filepath.Join(projectRoot, ".g8e", "pki")
+		} else {
+			cwd, _ := os.Getwd()
+			pkiDir = filepath.Join(cwd, ".g8e", "pki")
 		}
-		pkiDir = filepath.Join(cwd, ".g8e", "pki")
 	}
 	if secretsDir == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine working directory: %w", err)
+		if projectRoot != "" {
+			secretsDir = filepath.Join(projectRoot, ".g8e", "secrets")
+		} else {
+			cwd, _ := os.Getwd()
+			secretsDir = filepath.Join(cwd, ".g8e", "secrets")
 		}
-		secretsDir = filepath.Join(cwd, ".g8e", "secrets")
 	}
 
 	// Reject port 0 in production (only allowed for Go tests)
@@ -273,13 +297,16 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 
 // Load creates configuration from explicit options passed by main
 func Load(opts LoadOptions) (*Config, error) {
-	// Resolve working directory — default to process cwd when not specified
+	// Resolve working directory — default to project root when not specified
 	workDir := opts.WorkDir
 	if workDir == "" {
-		var err error
-		workDir, err = os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine working directory: %w", err)
+		workDir = FindProjectRoot()
+		if workDir == "" {
+			var err error
+			workDir, err = os.Getwd()
+			if err != nil {
+				return nil, fmt.Errorf("failed to determine working directory: %w", err)
+			}
 		}
 	} else {
 		var err error
