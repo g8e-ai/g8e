@@ -170,7 +170,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 	}
 	if violations := tv.validateL1Governance(decodedPayload); len(violations) > 0 {
 		tv.logger.Error("L1 validation failed", "action_type", envelope.ActionType, "violations", violations)
-		return nil, ErrL1ValidationFailed
+		return nil, fmt.Errorf("%w: %s", ErrL1ValidationFailed, strings.Join(violations, ", "))
 	}
 
 	computedHash, err := tv.computeTransactionHash(envelope)

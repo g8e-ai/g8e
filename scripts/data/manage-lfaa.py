@@ -508,11 +508,11 @@ class LFAAManager:
         # Infer categories from command patterns and outcomes
         total = self.conn.execute('SELECT COUNT(*) FROM events').fetchone()[0]
 
-        # SAFE_EXECUTIONS: FS_LIST or FILE_EDIT that resulted in action_receipt
+        # SAFE_EXECUTIONS: FS_LIST that resulted in action_receipt (excluding FILE_EDIT)
         safe_exec = self.conn.execute("""
             SELECT COUNT(*) FROM events
             WHERE type = 'action_receipt'
-              AND (command_raw LIKE 'FS_LIST /%' OR command_raw LIKE 'FILE_EDIT /%')
+              AND command_raw LIKE 'FS_LIST /%'
         """).fetchone()[0]
 
         # FILE_MUTATIONS: FILE_EDIT specifically
@@ -556,6 +556,10 @@ class LFAAManager:
               AND command_raw NOT LIKE 'FILE_EDIT /%'
         """).fetchone()[0]
 
+        l3_rejected = self.conn.execute("""
+            SELECT COUNT(*) FROM events WHERE type = 'L3_REJECTED'
+        """).fetchone()[0]
+
         # ANSI Colors
         BOLD = '\033[1m'
         GREEN = '\033[32m'
@@ -572,7 +576,7 @@ class LFAAManager:
         print(f'  {BOLD}┃ {CYAN}g8e GOVERNANCE REPORT {RESET}{BOLD}{" " * (IW - 23)}┃{RESET}')
         print(f'  {BOLD}┗{"━" * IW}┛{RESET}')
 
-        accounted = safe_exec + forbidden + hash_fail + l2_rejected + expired + rejected + other_receipts
+        accounted = safe_exec + file_mut + forbidden + hash_fail + l2_rejected + l3_rejected + expired + rejected + other_receipts
         verification_status = f"{GREEN}VERIFIED ✓{RESET}" if accounted == total else f"{RED}MISMATCH ✗{RESET}"
         pct_categorized = (accounted / total * 100) if total > 0 else 0
 
@@ -600,9 +604,11 @@ class LFAAManager:
         print_summary_row('FORBIDDEN_PATTERNS', forbidden, 'L1_BLOCKED')
         print_summary_row('HASH_CORRUPTION', hash_fail, 'HASH_FAIL')
 
+        # Governance funnel (always show to prove L2/L3 existence)
+        print_summary_row('L2_REJECTED', l2_rejected, 'L2_REJECTED')
+        print_summary_row('L3_REJECTED', l3_rejected, 'L3_REJECTED')
+
         # Additional rejection categories if present
-        if l2_rejected > 0:
-            print_summary_row('L2_REJECTED', l2_rejected, 'L2_REJECTED')
         if expired > 0:
             print_summary_row('EXPIRED', expired, 'EXPIRED')
         if rejected > 0:
@@ -618,11 +624,15 @@ class LFAAManager:
         print(f'  {DIM}{"─" * IW}──{RESET}')
         rows = self.conn.execute("""
             SELECT
-              command_raw AS command_pattern,
+              CASE 
+                WHEN instr(CAST(content_text AS TEXT), 'violates pattern ') > 0 THEN 
+                  substr(CAST(content_text AS TEXT), instr(CAST(content_text AS TEXT), 'violates pattern ') + 17)
+                ELSE command_raw
+              END AS command_pattern,
               COUNT(*) AS attempts
             FROM events
             WHERE type = 'L1_BLOCKED'
-            GROUP BY command_raw
+            GROUP BY command_pattern
             ORDER BY attempts DESC
             LIMIT 10
         """).fetchall()
