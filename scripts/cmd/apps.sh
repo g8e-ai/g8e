@@ -46,15 +46,15 @@ case "$_APP_ACTION" in
         case "$_APP_TARGET" in
             all)
                 _banner "apps build all"
-                python3 -m venv "$SCRIPT_DIR/components/g8ee/.venv"
-                "$SCRIPT_DIR/components/g8ee/.venv/bin/pip" install --upgrade pip
-                "$SCRIPT_DIR/components/g8ee/.venv/bin/pip" install -r "$SCRIPT_DIR/components/g8ee/requirements.txt"
+                python3 -m venv "$SCRIPT_DIR/services/g8ee/.venv"
+                "$SCRIPT_DIR/services/g8ee/.venv/bin/pip" install --upgrade pip
+                "$SCRIPT_DIR/services/g8ee/.venv/bin/pip" install -r "$SCRIPT_DIR/services/g8ee/requirements.txt"
                 ;;
             g8ee)
                 _banner "apps build g8ee"
-                python3 -m venv "$SCRIPT_DIR/components/g8ee/.venv"
-                "$SCRIPT_DIR/components/g8ee/.venv/bin/pip" install --upgrade pip
-                exec "$SCRIPT_DIR/components/g8ee/.venv/bin/pip" install -r "$SCRIPT_DIR/components/g8ee/requirements.txt" ;;
+                python3 -m venv "$SCRIPT_DIR/services/g8ee/.venv"
+                "$SCRIPT_DIR/services/g8ee/.venv/bin/pip" install --upgrade pip
+                exec "$SCRIPT_DIR/services/g8ee/.venv/bin/pip" install -r "$SCRIPT_DIR/services/g8ee/requirements.txt" ;;
         esac ;;
     *)
         echo "[g8e] unknown apps subcommand: '$_APP_ACTION'" >&2

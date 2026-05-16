@@ -39,14 +39,14 @@ from _lib import (
     get_auditor_hmac_key,
 )
 
-# Constants mirrored from components/g8ee/app/models/reputation.py
+# Constants mirrored from services/g8ee/app/models/reputation.py
 GENESIS_PREV_ROOT = "0" * 64
 COLLECTION_COMMITMENTS = "reputation_commitments"
 COLLECTION_STATE = "reputation_state"
 COLLECTION_RESOLUTIONS = "stake_resolutions"
 
 # ---------------------------------------------------------------------------
-# Merkle Logic (Mirrored from components/g8ee/app/utils/merkle.py)
+# Merkle Logic (Mirrored from services/g8ee/app/utils/merkle.py)
 # ---------------------------------------------------------------------------
 
 def scalar_to_canonical_str(scalar: float) -> str:

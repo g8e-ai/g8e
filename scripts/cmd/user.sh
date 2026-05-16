@@ -18,7 +18,7 @@ case "$SUB" in
         echo "                     Defaults: first user gets SUPERADMIN, subsequent get USER"
         echo ""
         echo "Examples:"
-        echo "  ./g8e user create --email admin@example.com"
+        echo "  ./g8e user create --email superadmin@g8e.local"
         echo "  ./g8e user create --email alice@example.com --name Alice --role SUPERADMIN"
         [[ -z "$SUB" ]] && exit 1 || exit 0
         ;;

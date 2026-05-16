@@ -42,9 +42,9 @@ from _lib import (
     operator_request,
 )
 
-_SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
+_PROTOCOL_CONSTANTS = PROJECT_ROOT / 'protocol' / 'constants'
 
-with open(_SHARED_CONSTANTS / 'status.json') as _f:
+with open(_PROTOCOL_CONSTANTS / 'status.json') as _f:
     _STATUS = json.load(_f)
 VALID_ROLES: List[str] = list(_STATUS['user.role'].values())
 

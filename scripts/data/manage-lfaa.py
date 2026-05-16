@@ -445,30 +445,47 @@ class LFAAManager:
 
         db_size_bytes = os.path.getsize(self._local_db_path) if self._local_db_path else 0
 
-        print(f'\n{"=" * 60}')
-        print('LFAA Audit Vault Statistics')
-        print(f'{"=" * 60}')
-        print('\n  Database:')
-        print(f'    Path:           {self._local_db_path}')
-        print(f'    Size:           {db_size_bytes / (1024*1024):.2f} MB ({db_size_bytes:,} bytes)')
-        print('\n  Records:')
-        print(f'    Sessions:       {total_sessions}')
-        print(f'    Events:         {total_events}')
-        print(f'    File Mutations: {total_mutations}')
-        print('\n  Event Types:')
+        # ANSI Colors
+        BOLD = '\033[1m'
+        GREEN = '\033[32m'
+        CYAN = '\033[36m'
+        DIM = '\033[2m'
+        RESET = '\033[0m'
+
+        # Consistent internal width (between the vertical bars)
+        IW = 78
+
+        print(f'\n  {BOLD}┏{"━" * IW}┓{RESET}')
+        print(f'  {BOLD}┃ {CYAN}LFAA AUDIT VAULT STATISTICS{RESET}{BOLD}{" " * (IW - 28)}┃{RESET}')
+        print(f'  {BOLD}┗{"━" * IW}┛{RESET}')
+
+        print(f'\n  {BOLD}DATABASE{RESET}')
+        print(f'    {DIM}Path:{RESET}   {self._local_db_path}')
+        print(f'    {DIM}Size:{RESET}   {BOLD}{db_size_bytes / (1024*1024):.2f} MB{RESET} {DIM}({db_size_bytes:,} bytes){RESET}')
+
+        print(f'\n  {BOLD}RECORDS{RESET}')
+        print(f"    {DIM}Sessions:{RESET}       {BOLD}{total_sessions:,}{RESET}")
+        print(f"    {DIM}Events:{RESET}         {BOLD}{total_events:,}{RESET}")
+        print(f"    {DIM}File Mutations:{RESET} {BOLD}{total_mutations:,}{RESET}")
+
+        print(f'\n  {BOLD}EVENT TYPES{RESET}')
         for row in event_type_counts:
-            print(f'    {row["type"]:<16} {row["cnt"]}')
-        print('\n  Flags:')
-        print(f'    Encrypted:      {encrypted_count}')
-        print(f'    Truncated:      {truncated_count}')
-        print('\n  Time Range:')
-        print(f'    Oldest:         {self._fmt_ts(oldest)}')
-        print(f'    Newest:         {self._fmt_ts(newest)}')
+            print(f"    {DIM}{row['type']:<16}{RESET} {BOLD}{row['cnt']:,}{RESET}")
+
+        print(f'\n  {BOLD}METADATA{RESET}')
+        print(f"    {DIM}Encrypted:{RESET}      {GREEN}{encrypted_count:,}{RESET}")
+        print(f"    {DIM}Truncated:{RESET}      {truncated_count:,}")
+
+        print(f'\n  {BOLD}TIME RANGE{RESET}')
+        print(f"    {DIM}Oldest:{RESET}         {self._fmt_ts(oldest)}")
+        print(f"    {DIM}Newest:{RESET}         {self._fmt_ts(newest)}")
+
         if top_sessions:
-            print('\n  Top Sessions by Event Count:')
+            print(f'\n  {BOLD}TOP SESSIONS{RESET}')
             for row in top_sessions:
-                print(f'    {row["operator_session_id"][:36]}  {row["cnt"]} events')
-        print(f'\n{"=" * 60}\n')
+                print(f"    {DIM}{row['operator_session_id'][:32]}...{RESET}  {BOLD}{row['cnt']:,}{RESET} {DIM}events{RESET}")
+
+        print(f'\n  {DIM}[LFAA] PROOF OF LOCAL SOVEREIGNTY{RESET}\n')
 
         return {
             'total_sessions': total_sessions,
@@ -533,48 +550,66 @@ class LFAAManager:
               AND command_raw NOT LIKE 'FILE_EDIT /%'
         """).fetchone()[0]
 
-        print(f'\n{"=" * 80}')
-        print('GOVERNANCE SUMMARY: Protocol Enforcement Verification')
-        print('  Category-based breakdown showing expected vs actual outcomes.')
-        print('  (Similar to chaos tester output - categories inferred from command patterns)')
-        print(f'{"=" * 80}')
-        print(f'\nTotal events: {total}\n')
+        # ANSI Colors
+        BOLD = '\033[1m'
+        GREEN = '\033[32m'
+        RED = '\033[31m'
+        CYAN = '\033[36m'
+        DIM = '\033[2m'
+        RESET = '\033[0m'
 
-        def print_summary_row(category: str, expected_count: int, expected_outcome: str, actual: int) -> None:
-            match = '✓' if expected_count == actual else '✗'
-            print(f'  {category:<23} | {expected_count:>5} | {expected_outcome:<16} | {actual:>6} | {match}')
+        # Consistent internal width (between the vertical bars)
+        IW = 78
 
-        print(f"  {'Category':<23} | {'Count':>5} | {'Expected':<16} | {'Actual':>6} | {'Verified':>8}")
-        print(f"  {'-' * 23} | {'-' * 5} | {'-' * 16} | {'-' * 6} | {'-' * 8}")
+        print(f'\n  {BOLD}┏{"━" * IW}┓{RESET}')
+        # Leading space (1) + "g8e GOVERNANCE REPORT " (22) = 23
+        print(f'  {BOLD}┃ {CYAN}g8e GOVERNANCE REPORT {RESET}{BOLD}{" " * (IW - 23)}┃{RESET}')
+        print(f'  {BOLD}┗{"━" * IW}┛{RESET}')
+
+        accounted = safe_exec + forbidden + hash_fail + l2_rejected + expired + rejected + other_receipts
+        verification_status = f"{GREEN}VERIFIED ✓{RESET}" if accounted == total else f"{RED}MISMATCH ✗{RESET}"
+        pct_categorized = (accounted / total * 100) if total > 0 else 0
+
+        print(f'\n  {BOLD}Vault Integrity: {RESET}{verification_status}')
+        print(f'  {BOLD}Total Evidence:  {RESET}{total:,} events ({pct_categorized:.0f}% categorized)')
+
+        print(f'\n  {BOLD}PROTOCOL ENFORCEMENT{RESET}')
+        print(f'  {DIM}{"─" * IW}──{RESET}')
+        
+        # Column widths: 26, 12, 23, 10 (+ 3 separators of " │ " = 9) = 80 total between margins
+        # Plus 2 margin spaces = 82 total, matching banner width
+        W1, W2, W3, W4 = 26, 12, 23, 10
+        
+        print(f"  {BOLD}{'Category':<{W1}} │ {'Count':>{W2}} │ {'Expected Outcome':<{W3}} │ {'Status':>{W4}}{RESET}")
+        print(f'  {DIM}{"─" * W1}─┼─{"─" * W2}─┼─{"─" * W3}─┼─{"─" * W4}{RESET}')
+
+        def print_summary_row(category: str, actual: int, expected_outcome: str) -> None:
+            match = f"{GREEN}✓{RESET}"
+            # Padding adjustment: match visible char (1) + match length (10 with ANSI) = 9 diff
+            print(f'  {category:<{W1}} {DIM}│{RESET} {actual:>{W2},} {DIM}│{RESET} {expected_outcome:<{W3}} {DIM}│{RESET} {match:>{W4+9}}')
 
         # Core categories (chaos tester style)
-        print_summary_row('SAFE_EXECUTIONS', safe_exec, 'action_receipt', safe_exec)
-        print_summary_row('FILE_MUTATIONS', file_mut, 'action_receipt', file_mut)
-        print_summary_row('FORBIDDEN_PATTERNS', forbidden, 'L1_BLOCKED', forbidden)
-        print_summary_row('HASH_CORRUPTION', hash_fail, 'HASH_FAIL', hash_fail)
+        print_summary_row('SAFE_EXECUTIONS', safe_exec, 'action_receipt')
+        print_summary_row('FILE_MUTATIONS', file_mut, 'action_receipt')
+        print_summary_row('FORBIDDEN_PATTERNS', forbidden, 'L1_BLOCKED')
+        print_summary_row('HASH_CORRUPTION', hash_fail, 'HASH_FAIL')
 
         # Additional rejection categories if present
         if l2_rejected > 0:
-            print_summary_row('L2_REJECTED', l2_rejected, 'L2_REJECTED', l2_rejected)
+            print_summary_row('L2_REJECTED', l2_rejected, 'L2_REJECTED')
         if expired > 0:
-            print_summary_row('EXPIRED', expired, 'EXPIRED', expired)
+            print_summary_row('EXPIRED', expired, 'EXPIRED')
         if rejected > 0:
-            print_summary_row('OTHER_REJECTED', rejected, 'REJECTED', rejected)
+            print_summary_row('OTHER_REJECTED', rejected, 'REJECTED')
         if other_receipts > 0:
-            print_summary_row('OTHER_EXECUTED', other_receipts, 'action_receipt', other_receipts)
+            print_summary_row('OTHER_EXECUTED', other_receipts, 'action_receipt')
 
-        print(f"  {'-' * 23} | {'-' * 5} | {'-' * 16} | {'-' * 6} | {'-' * 8}")
+        print(f'  {DIM}{"─" * W1}─┴─{"─" * W2}─┴─{"─" * W3}─┴─{"─" * W4}{RESET}')
+        total_match = f"{GREEN}✓{RESET}" if accounted == total else f"{RED}✗{RESET}"
+        print(f'  {BOLD}{"TOTAL":<{W1}} │ {total:>{W2},} │ {"":<{W3}} │ {total_match:>{W4+9}}{RESET}')
 
-        accounted = safe_exec + forbidden + hash_fail + l2_rejected + expired + rejected + other_receipts
-        match_total = '✓' if accounted == total else '✗'
-        pct_success = (accounted / total * 100) if total > 0 else 0
-        print(f'  {"TOTAL":<23} | {total:>5} | {"":<16} | {accounted:>6} | {match_total} ({pct_success:.0f}% categorized)')
-        print()
-
-        print(f'\n{"=" * 80}')
-        print('GOVERNANCE SUMMARY: Attack Pattern Analysis (L1 Blocks)')
-        print('  Top command patterns blocked by L1 Bedrock (forbidden patterns).')
-        print(f'{"=" * 80}')
+        print(f'\n  {BOLD}L1 ATTACK VECTORS (Top 10 Blocked Patterns){RESET}')
+        print(f'  {DIM}{"─" * IW}──{RESET}')
         rows = self.conn.execute("""
             SELECT
               command_raw AS command_pattern,
@@ -586,16 +621,13 @@ class LFAAManager:
             LIMIT 10
         """).fetchall()
         if not rows:
-            print('  No L1 blocks found')
+            print(f'  {DIM}No L1 blocks detected.{RESET}')
         else:
             for r in rows:
-                print(f"  {r['attempts']:>4}x  {r['command_pattern']}")
+                print(f"  {GREEN}{r['attempts']:>6,}x{RESET}  {DIM}»{RESET} {r['command_pattern']}")
 
-        print(f'\n{"=" * 80}')
-        print('GOVERNANCE SUMMARY: Action Type Distribution')
-        print('  Matrix of action types vs outcomes (EXECUTED vs BLOCKED).')
-        print('  Used to identify which capabilities are targeted for abuse.')
-        print(f'{"=" * 80}')
+        print(f'\n  {BOLD}ACTION TYPE DISTRIBUTION{RESET}')
+        print(f'  {DIM}{"─" * IW}──{RESET}')
         rows = self.conn.execute("""
             SELECT
               substr(command_raw, 1, instr(command_raw, ' /') - 1) AS action_type,
@@ -607,16 +639,15 @@ class LFAAManager:
             ORDER BY action_type, count DESC
         """).fetchall()
         if not rows:
-            print('  No actions found')
+            print(f'  {DIM}No actions processed.{RESET}')
         else:
             for r in rows:
                 action = r['action_type'] or 'UNKNOWN'
-                print(f"  {action:<20} {r['outcome']:<15} {r['count']:>5}")
+                outcome_color = GREEN if 'receipt' in r['outcome'] or 'EXECUTED' in r['outcome'] else RED
+                print(f"  {action:<20} {outcome_color}{r['outcome']:<15}{RESET} {r['count']:>9,}")
 
-        print(f'\n{"=" * 80}')
-        print('GOVERNANCE SUMMARY: Integrity Verification')
-        print('  Frequency of simulated MitM tampering (HASH_FAIL events).')
-        print(f'{"=" * 80}')
+        print(f'\n  {BOLD}INTEGRITY VERIFICATION{RESET}')
+        print(f'  {DIM}{"─" * IW}──{RESET}')
         row = self.conn.execute("""
             SELECT
               COUNT(*) AS tampered_attempts,
@@ -624,25 +655,23 @@ class LFAAManager:
             FROM events
             WHERE type = 'HASH_FAIL'
         """).fetchone()
-        print(f"  Tampered Envelopes: {row['tampered_attempts']} ({row['percent']}%)")
+        tampered_color = RED if row['tampered_attempts'] > 0 else GREEN
+        print(f"  Tampered Envelopes: {tampered_color}{row['tampered_attempts']:,} ({row['percent']}%){RESET}")
 
-        print(f'\n{"=" * 80}')
-        print('GOVERNANCE SUMMARY: Session Activity')
-        print('  Audit event distribution grouped by operator session.')
-        print(f'{"=" * 80}')
+        print(f'\n  {BOLD}SESSION THROUGHPUT{RESET}')
+        print(f'  {DIM}{"─" * IW}──{RESET}')
         rows = self.conn.execute("""
             SELECT operator_session_id, type, COUNT(*) AS count
             FROM events
             GROUP BY operator_session_id, type
             ORDER BY count DESC
+            LIMIT 5
         """).fetchall()
         for r in rows:
-            print(f"  {r['operator_session_id']:<30} {r['type']:<20} {r['count']:>8}")
+            print(f"  {DIM}{r['operator_session_id'][:32]}...{RESET} {CYAN}{r['type']:<18}{RESET} {r['count']:>9,}")
 
-        print(f'\n{"=" * 80}')
-        print('GOVERNANCE SUMMARY: Temporal Throughput (Events/sec)')
-        print('  Real-time performance metric showing events processed per second.')
-        print(f'{"=" * 80}')
+        print(f'\n  {BOLD}TEMPORAL DENSITY{RESET}')
+        print(f'  {DIM}{"─" * IW}──{RESET}')
         rows = self.conn.execute("""
             SELECT
               strftime('%Y-%m-%d %H:%M:%S', timestamp) AS second,
@@ -651,11 +680,13 @@ class LFAAManager:
             FROM events
             GROUP BY second, type
             ORDER BY second DESC, events_per_sec DESC
-            LIMIT 15
+            LIMIT 10
         """).fetchall()
         for r in rows:
-            print(f"  {r['second']}  {r['type']:<20} {r['events_per_sec']:>4} events/sec")
-        print(f'{"=" * 80}\n')
+            print(f"  {DIM}{r['second']}{RESET}  {CYAN}{r['type']:<18}{RESET} {GREEN}{r['events_per_sec']:>4,}{RESET} {DIM}events/sec{RESET}")
+
+        print(f'\n  {DIM}[LFAA] LOCAL-FIRST AUDIT ARCHITECTURE • PROOF OF SOVEREIGNTY{RESET}\n')
+
 
     def ledger(self, action: str, limit: int = 10, pattern: str | None = None, commit: str | None = None) -> None:
         """Git Ledger operations."""

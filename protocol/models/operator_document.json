@@ -1,0 +1,323 @@
+{
+  "_comment": "Canonical OperatorDocument shape. client is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via client HTTP API and operator KV cache. g8eo is the source of runtime data (heartbeats) that client merges into this document. A field mismatch between client and g8ee breaks operator binding, context building, and AI execution.",
+
+  "_comment.field_naming": "FIELD NAMING CONVENTION: The canonical OperatorDocument uses 'id' as the primary key field name (core_identity.id). Wire format models and projections (e.g., operator_status_info, bound_operator_context, operator_slot, heartbeat) use 'operator_id' for clarity in cross-component contexts where the entity type may not be immediately obvious from context. When mapping between OperatorDocument and wire formats: OperatorDocument.core_identity.id ↔ wire_format.operator_id. This naming pattern is intentional and consistent across all operator-related wire formats.",
+
+  "_authority": "client (SQLite)",
+  "_consumers": ["g8ee (Python OperatorDocument)", "g8eo (identity fields at auth time)"],
+  "_cache_aside": "operator KV — keyed by g8e:doc:operators:{id}. Cache-aside pattern. SQLite is source of truth.",
+
+  "operator_document": {
+    "_description": "Full operator record as stored in client SQLite and returned by GET /api/internal/operators/:id/status and GET /api/operators/status.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "required": true,
+        "description": "Unique operator identifier (UUID v4). Mapped to 'operator_id' in wire format models and projections (see _comment.field_naming above)."
+      },
+      "user_id": {
+        "type": "string",
+        "required": true,
+        "description": "ID of the user who owns this operator"
+      },
+      "organization_id": {
+        "type": "string",
+        "required": false,
+        "description": "Organization ID (equals user_id in single-user orgs)"
+      },
+      "component": {
+        "type": "string",
+        "required": true,
+        "default": "g8eo",
+        "description": "Component type. See status.json component.name."
+      },
+      "name": {
+        "type": "string",
+        "required": false,
+        "description": "Human-readable operator name (e.g. operator-1)"
+      }
+    },
+
+    "web_session": {
+      "operator_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Current active session identifier. Set when g8eo authenticates. Cleared on termination."
+      },
+      "web_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Browser session the operator is currently bound to. Set during bind. Cleared on unbind."
+      },
+      "api_key": {
+        "type": "string",
+        "required": false,
+        "description": "Platform API key used by this operator for client authentication (hashed form for validation)"
+      },
+      "operator_api_key": {
+        "type": "string",
+        "required": false,
+        "description": "Per-operator API key provisioned in the slot. Used by g8eo to authenticate to client."
+      },
+      "operator_api_key_created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      },
+      "operator_api_key_updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      }
+    },
+
+    "certificate": {
+      "_description": "Per-operator mTLS certificate provisioned by client.",
+      "operator_cert": {
+        "type": "string",
+        "required": false,
+        "description": "PEM-encoded operator TLS certificate"
+      },
+      "operator_cert_serial": {
+        "type": "string",
+        "required": false,
+        "description": "Certificate serial number"
+      },
+      "operator_cert_not_before": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      },
+      "operator_cert_not_after": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      },
+      "operator_cert_created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      }
+    },
+
+    "status_lifecycle": {
+      "status": {
+        "type": "string",
+        "required": true,
+        "default": "available",
+        "values": ["available", "unavailable", "offline", "bound", "stale", "active", "stopped", "terminated"],
+        "description": "Current operator lifecycle status. See status.json operator.status."
+      },
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "started_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When the operator process first authenticated with client"
+      },
+      "terminated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      },
+      "first_deployed": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When this operator slot was first ever activated (persisted across resets)"
+      },
+      "claimed_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When the slot was claimed (set at claim time, not heartbeat time)"
+      }
+    },
+
+    "slot_metadata": {
+      "_description": "Operator slot provisioning fields. Slots are pre-created by client for each user.",
+      "slot_number": {
+        "type": "integer",
+        "required": false,
+        "description": "Slot index (1-based). Null for dynamically created operators."
+      },
+      "is_slot": {
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "description": "True when this document represents a pre-provisioned slot"
+      },
+      "claimed": {
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "description": "True when the slot has been claimed by a running g8eo process"
+      },
+      "operator_type": {
+        "type": "string",
+        "required": true,
+        "default": "system",
+        "values": ["system", "cloud"],
+        "description": "Operator deployment type. See status.json operator.type."
+      },
+      "cloud_subtype": {
+        "type": "string",
+        "required": false,
+        "values": ["aws", "gcp", "azure"],
+        "description": "Cloud provider. Only set when operator_type is cloud. See status.json cloud.subtype."
+      },
+      "slot_cost": {
+        "type": "integer",
+        "required": true,
+        "default": 1,
+        "description": "Number of operator slots this instance consumes"
+      },
+      "consumed_by_operator_id": {
+        "type": "string",
+        "required": false,
+        "description": "For slot documents: the operator_id of the g8eo process that claimed this slot"
+      }
+    },
+
+    "investigation_context": {
+      "_description": "Active investigation/case context. Set when the operator is bound to an investigation session.",
+      "case_id": {
+        "type": "string",
+        "required": false
+      },
+      "investigation_id": {
+        "type": "string",
+        "required": false
+      },
+      "task_id": {
+        "type": "string",
+        "required": false
+      }
+    },
+
+    "fingerprint": {
+      "_description": "Top-level fingerprint columns denormalized from latest_heartbeat_snapshot for efficient SQLite queries.",
+      "system_fingerprint": {
+        "type": "string",
+        "required": false,
+        "description": "SHA256 fingerprint of the operator host. Copied from latest_heartbeat_snapshot.system_fingerprint."
+      },
+      "fingerprint_details": {
+        "type": "object",
+        "required": false,
+        "description": "Structured fingerprint sub-fields. Copied from latest_heartbeat_snapshot.fingerprint_details."
+      }
+    },
+
+    "runtime_config": {
+      "type": "object",
+      "required": true,
+      "default": {},
+      "description": "CLI flags and env var overrides active when the operator binary was started. Sent by g8eo at bootstrap and updated on reconnect. Shape mirrors models.RuntimeConfig in g8eo wire.go.",
+      "fields": {
+        "cloud_mode":           { "type": "boolean", "description": "True when operator started with --cloud flag" },
+        "cloud_provider":       { "type": "string",  "description": "Cloud provider (aws, gcp, azure). Empty unless cloud_mode is true." },
+        "local_storage_enabled":{ "type": "boolean", "description": "True when local SQLite storage is enabled (--local-storage flag)" },
+        "no_git":               { "type": "boolean", "description": "True when ledger is disabled (--no-git flag)" },
+        "log_level":            { "type": "string",  "description": "Active log level (info, debug, error)" },
+        "wss_port":             { "type": "integer", "description": "WSS port dialled on operator for pub/sub" },
+        "http_port":            { "type": "integer", "description": "HTTPS port dialled on operator for auth/bootstrap" }
+      }
+    },
+
+    "telemetry": {
+      "latest_heartbeat_snapshot": {
+        "type": "object",
+        "required": false,
+        "description": "Most recent heartbeat metrics snapshot. Shape matches HeartbeatSnapshot (defined in protocol/proto/operator.proto): nested objects for system_identity, performance, network, uptime, etc. Strictly enforced across the wire."
+      }
+    },
+
+    "error_termination": {
+      "error_message": {
+        "type": "string",
+        "required": false
+      },
+      "termination_reason": {
+        "type": "string",
+        "required": false
+      },
+      "stop_reason": {
+        "type": "string",
+        "required": false
+      },
+      "shutdown_reason": {
+        "type": "string",
+        "required": false
+      }
+    },
+
+    "cloud_intents": {
+      "granted_intents": {
+        "type": "array",
+        "required": true,
+        "default": [],
+        "description": "Granted AWS/cloud intent permissions. Always an array, empty when no intents are granted. Items are GrantedIntent objects with TTL.",
+        "items": {
+          "name":       { "type": "string", "required": true, "description": "Intent name from protocol/constants/intents.json" },
+          "granted_at": { "type": "string", "format": "iso8601", "required": true },
+          "expires_at": { "type": "string", "format": "iso8601", "required": true }
+        }
+      }
+    }
+  },
+
+  "operator_status_info": {
+    "_description": "Lightweight projection of OperatorDocument returned by GET /api/operators/status and GET /api/internal/operators/:id/status. g8ee's OperatorDocument model maps to this shape.",
+    "_comment.field_mapping": "Wire format projections use 'operator_id' instead of 'id' for clarity in cross-component contexts. This field maps directly to OperatorDocument.core_identity.id (see _comment.field_naming above).",
+    "fields": {
+      "operator_id": { "type": "string", "required": true, "description": "Maps from OperatorDocument.core_identity.id" },
+      "user_id": { "type": "string", "required": false },
+      "status": { "type": "string", "required": true },
+      "web_session_id": { "type": "string", "required": false },
+      "operator_session_id": { "type": "string", "required": false },
+      "latest_heartbeat_snapshot": {
+        "type": "object",
+        "required": false,
+        "description": "Most recent heartbeat metrics snapshot (nested HeartbeatSnapshot shape). Strictly enforced across the wire."
+      },
+      "investigation_id": { "type": "string", "required": false },
+      "case_id": { "type": "string", "required": false },
+      "is_active": {
+        "type": "boolean",
+        "required": true,
+        "description": "True when status == active. Computed field, never stored.",
+        "computation": "status === 'active'"
+      },
+      "operator_type": { "type": "string", "required": false },
+      "granted_intents": { "type": "array", "items": "string", "required": true, "default": [], "description": "Active intent names (string projection of GrantedIntent objects). Always an array, empty when no intents are granted." },
+      "cloud_subtype": { "type": "string", "required": false },
+      "current_hostname": {
+        "type": "string",
+        "required": false,
+        "description": "Denormalized hostname from latest_heartbeat_snapshot.system_identity.hostname for quick access without traversing nested objects"
+      },
+      "session_token": {
+        "type": "string",
+        "required": false,
+        "description": "Active session token for session-based auth validation. Set by client at bootstrap time."
+      },
+      "session_expires_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "WebSession expiration timestamp. Null means no session expiry is enforced."
+      }
+    }
+  }
+}

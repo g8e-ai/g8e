@@ -60,10 +60,10 @@ OPERATOR_LISTEN_PID_FILE="$OPERATOR_LISTEN_PID_DIR/operator-listen.pid"
 OPERATOR_LISTEN_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/operator-listen.log"
 G8EE_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ee.pid"
 G8EE_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ee.log"
-OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-$(jq -r '.ports.operator_http // "9000"' "$PROJECT_ROOT/shared/constants/paths.json" 2>/dev/null || echo "9000")}"
-OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-$(jq -r '.ports.operator_wss // "9001"' "$PROJECT_ROOT/shared/constants/paths.json" 2>/dev/null || echo "9001")}"
-OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(jq -r '.ports.operator_bootstrap // "8080"' "$PROJECT_ROOT/shared/constants/paths.json" 2>/dev/null || echo "8080")}"
-OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(jq -r '.ports.operator_public // "8081"' "$PROJECT_ROOT/shared/constants/paths.json" 2>/dev/null || echo "8081")}"
+OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-$(jq -r '.ports.operator_http // "9000"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9000")}"
+OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-$(jq -r '.ports.operator_wss // "9001"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9001")}"
+OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(jq -r '.ports.operator_bootstrap // "80"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "80")}"
+OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(jq -r '.ports.operator_public // "443"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "443")}"
 OPERATOR_LISTEN_LOG_MAX_BACKUPS=5
 
 DEV_MODE=false
@@ -147,15 +147,15 @@ Usage: $(basename "$0") <command> [options]
 
 Commands:
   status                          Show substrate and optional app process status
-  up [component ...] [--with-apps] Start Operator listen mode by default
+  up [component ...] [-a|--with-apps] Start Operator listen mode by default
                                   Default (no components): operator
                                   Valid: operator g8ee
-                                  Optional apps require --with-apps or --with-g8ee
+                                  Optional apps require -a, --with-apps, or --with-g8ee
   down                            Stop Operator listen mode and optional apps -- nothing is removed
   rebuild [component ...]         Restart Operator listen mode by default
                                   Default (no components): operator
                                   Valid: operator g8ee
-                                  Optional apps require --with-apps or --with-g8ee
+                                  Optional apps require -a, --with-apps, or --with-g8ee
   reset                           Wipe Operator listen-mode data. PKI certs and secrets are preserved.
   wipe                            Clear app data from the Operator database
                                   Operator listen mode stays up; preserves: platform settings, PKI certs, secrets, auth token
@@ -166,7 +166,7 @@ Commands:
 Examples:
   $(basename "$0") status                       Show host process status and versions
   $(basename "$0") up                           Start Operator listen mode
-  $(basename "$0") up --with-apps               Start Operator plus optional bundled apps
+  $(basename "$0") up -a                        Start Operator plus optional bundled apps
   $(basename "$0") down                         Stop runtime processes
   $(basename "$0") rebuild                      Restart Operator listen mode
   $(basename "$0") wipe                         Clear app data from the Operator database
@@ -188,7 +188,7 @@ while [[ $# -gt 0 ]]; do
             DEV_MODE=true
             shift
             ;;
-        --with-apps)
+        --with-apps|-a)
             WITH_APPS=true
             OPTIONAL_COMPONENTS=("${OPTIONAL_APPS[@]}")
             shift
@@ -287,29 +287,29 @@ _start_g8ee() {
         return 0
     fi
 
-    local venv_dir="$PROJECT_ROOT/components/g8ee/.venv"
+    local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
     if [ ! -d "$venv_dir" ]; then
         echo "  Creating g8ee virtualenv..."
         python3 -m venv "$venv_dir"
         "$venv_dir/bin/pip" install --upgrade pip
-        "$venv_dir/bin/pip" install -r "$PROJECT_ROOT/components/g8ee/requirements.txt"
+        "$venv_dir/bin/pip" install -r "$PROJECT_ROOT/services/g8ee/requirements.txt"
     fi
 
     echo "  Starting g8ee on port 8443 (HTTPS)..."
     _rotate_logs "$G8EE_LOG_FILE"
 
     (
-        cd "$PROJECT_ROOT/components/g8ee"
+        cd "$PROJECT_ROOT/services/g8ee"
         export G8E_PKI_DIR="$OPERATOR_LISTEN_PKI_DIR"
         export G8E_SECRETS_DIR="$OPERATOR_LISTEN_SECRETS_DIR"
-        export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
-        export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
+        export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol"
+        export G8E_SHARED_DIR="$PROJECT_ROOT/protocol"
         export G8E_INTERNAL_HTTP_URL="https://localhost:${OPERATOR_LISTEN_HTTP_PORT}"
         export G8E_INTERNAL_PUBSUB_URL="wss://localhost:${OPERATOR_LISTEN_WSS_PORT}"
         
         local cert_name
-        cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$PROJECT_ROOT/shared/constants/paths.json" 2>/dev/null || echo "g8ee")
-        setsid "$venv_dir/bin/uvicorn" app.main:app --host 127.0.0.1 --port 8443 \
+        cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "g8ee")
+        setsid "$venv_dir/bin/uvicorn" app.main:app --host 0.0.0.0 --port 8443 \
             --ssl-keyfile "$OPERATOR_LISTEN_PKI_DIR/issued/apps/${cert_name}.key" \
             --ssl-certfile "$OPERATOR_LISTEN_PKI_DIR/issued/apps/${cert_name}.crt" \
             > "$G8EE_LOG_FILE" 2>&1 &
@@ -339,7 +339,7 @@ _start_operator_listen() {
         return 0
     fi
 
-    local bin="$PROJECT_ROOT/components/g8eo/build/linux-amd64/g8e.operator"
+    local bin="$PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.operator"
     local needs_build=false
 
     if [ ! -f "$bin" ]; then
@@ -348,7 +348,7 @@ _start_operator_listen() {
     else
         # Check if source files are newer than the binary
         local source_files
-        source_files=$(find "$PROJECT_ROOT/components/g8eo" -type f \( -name "*.go" -o -name "Makefile" -o -name "go.mod" -o -name "go.sum" \) -not -path "*/vendor/*" -not -path "*/build/*")
+        source_files=$(find "$PROJECT_ROOT/services/g8eo" -type f \( -name "*.go" -o -name "Makefile" -o -name "go.mod" -o -name "go.sum" \) -not -path "*/vendor/*" -not -path "*/build/*")
         for f in $source_files; do
             if [ "$f" -nt "$bin" ]; then
                 echo "  Operator source changed: $f is newer than binary. Rebuilding..."
@@ -360,7 +360,7 @@ _start_operator_listen() {
 
     if [ "$needs_build" = true ]; then
         echo "  Building Operator binary natively..."
-        (cd "$PROJECT_ROOT/components/g8eo" && make build-local)
+        (cd "$PROJECT_ROOT/services/g8eo" && make build-local)
     fi
 
     echo "  Starting Operator listen mode on port $OPERATOR_LISTEN_HTTP_PORT..."
@@ -377,6 +377,8 @@ _start_operator_listen() {
         --secrets-dir "$OPERATOR_LISTEN_SECRETS_DIR" \
         --http-listen-port "$OPERATOR_LISTEN_HTTP_PORT" \
         --wss-listen-port "$OPERATOR_LISTEN_WSS_PORT" \
+        --bootstrap-listen-port "$OPERATOR_LISTEN_BOOTSTRAP_PORT" \
+        --public-listen-port "$OPERATOR_LISTEN_PUBLIC_PORT" \
         > "$OPERATOR_LISTEN_LOG_FILE" 2>&1 &
 
     local pid=$!
@@ -430,11 +432,6 @@ _stop_operator_listen() {
     fi
 }
 
-_sync_operator_binaries() {
-    echo "  Binary sync disabled - X-Internal-Auth and /api/internal/* routes removed"
-    return 0
-}
-
 _wait_operator_listen_healthy() {
     local url="$1" timeout_s="$2" interval="${3:-1}"
     local waited=0
@@ -452,6 +449,10 @@ _wait_operator_listen_healthy() {
         waited=$(( waited + interval ))
     done
     echo -e "  Operator listen mode: \033[0;32mready\033[0m (${waited}s)"
+
+    # Auto-bootstrap if needed
+    source "$PROJECT_ROOT/scripts/cmd/common.sh"
+    _operator_bootstrap || true
 }
 
 _wait_service_healthy() {
@@ -505,7 +506,13 @@ _print_platform_info() {
     echo "  Bootstrap (device-link): https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT"
     echo "  Public (browser/BYO):   https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT"
     echo "  Runtime dir:            $G8E_RUNTIME_DIR"
-    echo "  Protocol schemas:       shared/proto"
+    echo "  Protocol schemas:       protocol/proto"
+    echo ""
+    echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Windows Trust (Run in Elevated PowerShell)"
+    echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  iex (iwr https://${HOST_IPS%%,*}:$OPERATOR_LISTEN_BOOTSTRAP_PORT/trust.ps1 -UseBasicParsing).Content"
+    echo ""
     if _g8ee_running; then
         echo "  Optional apps:          running (see ./g8e platform status)"
     else
@@ -533,18 +540,32 @@ if [[ "$COMMAND" == "status" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
     if _operator_listen_running; then
-        printf "  %-14s  %-10s  (PID: %s)\n" "operator" "RUNNING" "$(cat "$OPERATOR_LISTEN_PID_FILE")"
+        pid=$(cat "$OPERATOR_LISTEN_PID_FILE")
+        
+        # Check bootstrap status
+        bootstrapped="UNKNOWN"
+        trust_bundle="$OPERATOR_LISTEN_PKI_DIR/trust/hub-bundle.pem"
+        if [[ -f "$trust_bundle" ]]; then
+            status_resp=$(curl -sSk --cacert "$trust_bundle" "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/api/auth/bootstrap/status" 2>/dev/null)
+            if [[ $(echo "$status_resp" | jq -r '.bootstrapped' 2>/dev/null) == "true" ]]; then
+                bootstrapped="YES"
+            else
+                bootstrapped="NO"
+            fi
+        fi
+        
+        printf "  %-14s  \033[1;32m%-10s\033[0m  (PID: %s, Bootstrapped: %s)\n" "operator" "RUNNING" "$pid" "$bootstrapped"
     else
-        printf "  %-14s  %-10s\n" "operator" "STOPPED"
+        printf "  %-14s  \033[1;31m%-10s\033[0m\n" "operator" "STOPPED"
     fi
 
     echo ""
     echo "Optional Application Layer"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     if _g8ee_running; then
-        printf "  %-14s  %-10s  (PID: %s)\n" "g8ee" "RUNNING" "$(cat "$G8EE_PID_FILE")"
+        printf "  %-14s  \033[1;32m%-10s\033[0m  (PID: %s)\n" "g8ee" "RUNNING" "$(cat "$G8EE_PID_FILE")"
     else
-        printf "  %-14s  %-10s\n" "g8ee" "NOT RUNNING"
+        printf "  %-14s  \033[1;31m%-10s\033[0m\n" "g8ee" "NOT RUNNING"
     fi
 
     echo ""
@@ -579,7 +600,6 @@ if [[ "$COMMAND" == "restart" ]]; then
     echo ""
     echo "Waiting for services..."
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 60 1
-    _sync_operator_binaries
     for svc in "${RESTART_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
         _wait_optional_app_healthy "$svc"
@@ -607,7 +627,7 @@ if [[ "$COMMAND" == "reset" ]]; then
     # Wipe host data
     rm -rf "$OPERATOR_LISTEN_DATA_DIR/"* 2>/dev/null || true
     rm -rf "$OPERATOR_LISTEN_SECRETS_DIR/"* 2>/dev/null || true
-    rm -rf "$PROJECT_ROOT/components/g8ee/data/"* 2>/dev/null || true
+    rm -rf "$PROJECT_ROOT/services/g8ee/data/"* 2>/dev/null || true
 
     echo ""
 
@@ -622,7 +642,6 @@ if [[ "$COMMAND" == "reset" ]]; then
     echo ""
     echo "Waiting for services..."
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
-    _sync_operator_binaries
 
     for svc in "${RESET_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -657,7 +676,6 @@ if [[ "$COMMAND" == "wipe" ]]; then
     echo "Restarting Operator listen mode..."
     _start_operator_listen
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 120 2
-    _sync_operator_binaries
 
     echo "Clearing app data from Operator listen mode..."
     echo "  Warning: wipe endpoint removed - X-Internal-Auth and /api/internal/* routes deprecated"
@@ -721,7 +739,6 @@ if [[ "$COMMAND" == "up" ]]; then
     echo ""
     echo "Waiting for services..."
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 60 1
-    _sync_operator_binaries
     
     for svc in "${UP_COMPONENTS[@]}"; do
         _wait_optional_app_healthy "$svc"
@@ -755,7 +772,6 @@ if [[ "$COMMAND" == "setup" ]]; then
     echo ""
     echo "Waiting for services..."
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
-    _sync_operator_binaries
 
     for svc in "${SETUP_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -795,7 +811,6 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     echo ""
     echo "Waiting for services..."
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
-    _sync_operator_binaries
 
     for svc in "${REBUILD_COMPONENTS[@]}"; do
         _wait_optional_app_healthy "$svc"
@@ -813,7 +828,7 @@ fi
 
 if [[ "$COMMAND" == "operator-build" ]]; then
     echo "Building linux/amd64 operator binary natively..."
-    (cd "$PROJECT_ROOT/components/g8eo" && make build-local)
+    (cd "$PROJECT_ROOT/services/g8eo" && make build-local)
     echo ""
     echo "Operator binary built."
     exit 0
@@ -823,7 +838,7 @@ fi
 
 if [[ "$COMMAND" == "operator-build-all" ]]; then
     echo "Building all operator architectures natively..."
-    (cd "$PROJECT_ROOT/components/g8eo" && make build-local-all)
+    (cd "$PROJECT_ROOT/services/g8eo" && make build-local-all)
     echo ""
     echo "All operator binaries built."
     exit 0

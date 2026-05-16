@@ -195,20 +195,20 @@ _show_web_search_config() {
 
 run_g8ee() {
     log_header "Running g8ee tests (host)"
-    local venv_dir="$PROJECT_ROOT/components/g8ee/.venv"
+    local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
     if [[ ! -d "$venv_dir" ]]; then
         log_err "g8ee virtualenv not found at $venv_dir. Run ./g8e platform start first."
         exit 1
     fi
     
-    export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
-    export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
+    export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol"
+    export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
     export G8E_PROJECT_ROOT="$PROJECT_ROOT"
 
     if [[ "$PYRIGHT" == "true" ]]; then
-        (set -o pipefail && cd "$PROJECT_ROOT/components/g8ee" && "$venv_dir/bin/python" -m pyright --project pyrightconfig.services.json | sed "s|$PROJECT_ROOT/components/||g")
+        (set -o pipefail && cd "$PROJECT_ROOT/services/g8ee" && "$venv_dir/bin/python" -m pyright --project pyrightconfig.services.json | sed "s|$PROJECT_ROOT/services/||g")
     fi
-    cd "$PROJECT_ROOT/components/g8ee"
+    cd "$PROJECT_ROOT/services/g8ee"
     if [[ "$RUFF" == "true" ]]; then
         local ruff_args=(check .)
         [[ "$RUFF_FIX" == "true" ]] && ruff_args+=(--fix)
@@ -226,26 +226,26 @@ run_g8ee() {
         cov_args=("${filtered[@]}" "-n" "$PARALLEL")
         log_ok "pytest parallelism: -n $PARALLEL"
     fi
-    cd "$PROJECT_ROOT/components/g8ee"
+    cd "$PROJECT_ROOT/services/g8ee"
     "$venv_dir/bin/pytest" "${cov_args[@]}" "${EXTRA_ARGS[@]}"
 }
 
 run_e2e() {
     log_header "Running E2E operator lifecycle tests (host)"
-    local venv_dir="$PROJECT_ROOT/components/g8ee/.venv"
+    local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
     if [[ ! -d "$venv_dir" ]]; then
         log_err "g8ee virtualenv not found at $venv_dir. Run ./g8e platform start first."
         exit 1
     fi
-    export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
-    export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
-    cd "$PROJECT_ROOT/components/g8ee"
+    export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol"
+    export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
+    cd "$PROJECT_ROOT/services/g8ee"
     "$venv_dir/bin/pytest" -rs -m e2e tests/e2e/ "${EXTRA_ARGS[@]}"
 }
 
 run_g8eo() {
     log_header "Running g8eo tests (host)"
-    cd "$PROJECT_ROOT/components/g8eo"
+    cd "$PROJECT_ROOT/services/g8eo"
     local test_target="./..."
     local pass_through_args=()
 
@@ -282,7 +282,7 @@ run_g8eo() {
 
 run_chaos() {
     log_header "Running g8eo Chaos Tester (host)"
-    cd "$PROJECT_ROOT/components/g8eo"
+    cd "$PROJECT_ROOT/services/g8eo"
     
     # Ensure binary is built or run directly with go run
     # 'go run' is simpler for a one-off tool

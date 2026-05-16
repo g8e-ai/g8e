@@ -31,9 +31,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.absolute()
-_SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
+_PROTOCOL_CONSTANTS = PROJECT_ROOT / 'protocol' / 'constants'
 
-with open(_SHARED_CONSTANTS / 'collections.json') as _f:
+with open(_PROTOCOL_CONSTANTS / 'collections.json') as _f:
     _COLLECTIONS_DATA = json.load(_f)
 
 _DEFAULT_PKI_DIR = str(PROJECT_ROOT / '.g8e' / 'pki')
@@ -65,7 +65,7 @@ def _get_cli_cert() -> tuple[str, str] | None:
         return cert, key
     try:
         import json
-        paths_file = _PROJECT_ROOT / 'shared' / 'constants' / 'paths.json'
+        paths_file = PROJECT_ROOT / 'protocol' / 'constants' / 'paths.json'
         if paths_file.exists():
             with open(paths_file) as f:
                 paths = json.load(f)
