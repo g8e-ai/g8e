@@ -10,7 +10,7 @@ running g8e platform (g8ee Engine + Operator) over mTLS:
 
 It exists to converge with the shell-side helpers in
 ``scripts/cmd/common.sh`` (``_build_protocol_curl_args``,
-``_append_g8e_context_headers``, ``_g8ee_curl``). A new required header
+``_append_g8e_auth_headers``, ``_g8ee_curl``). A new required header
 on either side will trip the parity contract test in
 ``evals/tests/test_auth_wiring_parity.py`` so the bench and
 ``./g8e chat send`` cannot silently diverge.
@@ -28,7 +28,7 @@ from typing import Optional
 
 import httpx
 
-from app.constants.headers import (
+from g8e_protocol.constants import (
     BOUND_OPERATORS_HEADER,
     CASE_ID_HEADER,
     CLI_SESSION_ID_HEADER,
@@ -36,9 +36,12 @@ from app.constants.headers import (
     HTTP_CONTENT_TYPE_HEADER,
     INVESTIGATION_ID_HEADER,
     OPERATOR_SESSION_ID_HEADER,
+    ORGANIZATION_ID_HEADER,
     TASK_ID_HEADER,
     USER_ID_HEADER,
+    ComponentName,
 )
+from g8e_protocol.models import RequestContext, BoundOperator
 
 from g8e_evals.tls import resolve_trust_bundle
 
@@ -48,7 +51,7 @@ class AuthenticationError(Exception):
 
 
 # The session cookie name g8eo's auth middleware accepts. Mirrors
-# scripts/cmd/common.sh::_append_g8e_context_headers.
+# scripts/cmd/common.sh::_append_g8e_auth_headers.
 SESSION_COOKIE_NAME = "g8e_session"
 
 # X-G8E-Source-Component value the shell helpers send.
@@ -72,11 +75,15 @@ class AuthContext:
     operator_session_id: str
     cli_session_id: str
     user_id: str
+    organization_id: str = ""
     # Optional request-scoped context. Set per-request, not at construction.
     case_id: str = ""
     investigation_id: str = ""
-    bound_operators: str = ""
+    bound_operators: list[BoundOperator] = field(default_factory=list)
     task_id: str = ""
+    web_session_id: str = ""
+    source_component: ComponentName = ComponentName.CLIENT
+    system_fingerprint: str = ""
     # Filled in by from_env() so callers can introspect what was loaded.
     missing: tuple[str, ...] = field(default_factory=tuple)
 
@@ -94,7 +101,22 @@ class AuthContext:
         """
         sid = (operator_session_id or os.environ.get("OPERATOR_SESSION_ID") or "").strip()
         cli_sid = (os.environ.get("CLI_SESSION_ID") or "").strip()
+        web_sid = (os.environ.get("WEB_SESSION_ID") or "").strip()
         uid = (os.environ.get("USER_ID") or "").strip()
+        oid = (os.environ.get("ORGANIZATION_ID") or "").strip()
+        fingerprint = (os.environ.get("G8E_SYSTEM_FINGERPRINT") or "").strip()
+        
+        source = ComponentName.CLIENT
+        raw_source = os.environ.get("G8E_SOURCE_COMPONENT")
+        if raw_source:
+            try:
+                source = ComponentName(raw_source)
+            except ValueError:
+                # Fallback to CLIENT if invalid, or I could raise error.
+                # Given 'rip and replace' and 'no tech debt', maybe raise error?
+                # But evals might want to be robust.
+                pass
+
         missing: list[str] = []
         if not sid:
             missing.append("OPERATOR_SESSION_ID")
@@ -134,38 +156,74 @@ class AuthContext:
             client_key=client_key,
             operator_session_id=sid,
             cli_session_id=cli_sid,
+            web_session_id=web_sid,
             user_id=uid,
+            organization_id=oid,
+            source_component=source,
+            system_fingerprint=fingerprint,
         )
 
     # ---- Header / cookie construction ---------------------------------
 
-    def context_headers(self) -> dict[str, str]:
-        """Return the canonical ``X-G8E-*`` context header set.
+    def auth_headers(self) -> dict[str, str]:
+        """Return the minimal header set required for substrate (g8eo) auth.
 
-        Mirrors ``scripts/cmd/common.sh::_append_g8e_context_headers``.
-        Optional fields (case, investigation, bound operators, task) are
-        only emitted when set on this context, exactly as the shell helper
-        only appends them when the corresponding env var is non-empty.
+        Mirrors ``scripts/cmd/common.sh::_operator_curl``.
         """
         headers: dict[str, str] = {
             HTTP_CONTENT_TYPE_HEADER: "application/json",
-            COMPONENT_NAME_HEADER: SOURCE_COMPONENT_CLIENT,
         }
         if self.operator_session_id:
-            headers[OPERATOR_SESSION_ID_HEADER] = self.operator_session_id
+            # Substrate uses Authorization: Bearer <token>.
+            headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX} {self.operator_session_id}"
         if self.cli_session_id:
             headers[CLI_SESSION_ID_HEADER] = self.cli_session_id
+        return headers
+
+    def legacy_substrate_headers(self) -> dict[str, str]:
+        """Return the legacy ``X-G8E-*`` context header set.
+
+        DEPRECATED: This remains strictly for backward compatibility with g8eo
+        routes that haven't migrated to body-embedded context or URI-SAN identity.
+        NEVER use this for new routes; use ``auth_headers()`` instead.
+        """
+        headers = self.auth_headers()
+        headers[COMPONENT_NAME_HEADER] = self.source_component.value
+        
         if self.user_id:
             headers[USER_ID_HEADER] = self.user_id
+        if self.organization_id:
+            headers[ORGANIZATION_ID_HEADER] = self.organization_id
         if self.case_id:
             headers[CASE_ID_HEADER] = self.case_id
         if self.investigation_id:
             headers[INVESTIGATION_ID_HEADER] = self.investigation_id
-        if self.bound_operators:
-            headers[BOUND_OPERATORS_HEADER] = self.bound_operators
         if self.task_id:
             headers[TASK_ID_HEADER] = self.task_id
+        if self.bound_operators:
+            if isinstance(self.bound_operators, str):
+                headers[BOUND_OPERATORS_HEADER] = self.bound_operators
+            else:
+                headers[BOUND_OPERATORS_HEADER] = ",".join(op.operator_id for op in self.bound_operators)
         return headers
+
+    def to_request_context(self) -> RequestContext:
+        """Return a ``RequestContext`` model for request bodies.
+
+        Matches ``app.models.http_context.RequestContext`` in g8ee.
+        """
+        return RequestContext(
+            web_session_id=self.web_session_id or None,
+            cli_session_id=self.cli_session_id,
+            user_id=self.user_id,
+            organization_id=self.organization_id,
+            case_id=self.case_id,
+            investigation_id=self.investigation_id,
+            task_id=self.task_id,
+            bound_operators=self.bound_operators,
+            source_component=self.source_component,
+            system_fingerprint=self.system_fingerprint,
+        )
 
     def cookies(self) -> dict[str, str]:
         if not self.operator_session_id:

@@ -19,6 +19,7 @@ type CollectionName string
 const (
 	CollectionUsers               CollectionName = "users"
 	CollectionWebSessions         CollectionName = "web_sessions"
+	CollectionCLISessions         CollectionName = "cli_sessions"
 	CollectionOperatorSessions    CollectionName = "operator_sessions"
 	CollectionLoginAudit          CollectionName = "login_audit"
 	CollectionAuthAdminAudit      CollectionName = "auth_admin_audit"

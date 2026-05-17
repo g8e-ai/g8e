@@ -23,5 +23,7 @@ class AuthenticatedUser(G8eBaseModel):
     email: str | None = Field(default=None, description="User email address")
     name: str | None = Field(default=None, description="User display name")
     organization_id: str | None = Field(default=None, description="Organization identifier")
-    web_session_id: str | None = Field(default=None, description="Web session ID (internal auth only)")
+    web_session_id: str | None = Field(default=None, description="Web session ID (from headers)")
+    cli_session_id: str | None = Field(default=None, description="CLI session ID (from headers)")
+    operator_session_id: str | None = Field(default=None, description="Operator session ID (from headers)")
     auth_method: AuthMethod = Field(description="Authentication method used")

@@ -96,10 +96,15 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 		return nil, err
 	}
 
-	// [PIVOT] Auth depends on cryptographic validity and administrative status,
-	// not on heartbeat liveness. Only block if explicitly terminated or stopped.
-	if op.Status == constants.Status.OperatorStatus.Terminated || op.Status == constants.Status.OperatorStatus.Stopped {
-		return nil, &AuthError{Message: "operator identity disabled", Reason: op.Status, Status: http.StatusForbidden}
+	// [PIVOT] Reject terminated identities (Plan §4.6)
+	// We allow OFFLINE and STALE statuses to authenticate (to support bootstrap
+	// and recovery), but TERMINATED is a hard-gate rejection.
+	if op.Status == constants.Status.OperatorStatus.Terminated {
+		return nil, &AuthError{
+			Message: "operator identity disabled",
+			Reason:  string(constants.Status.OperatorStatus.Terminated),
+			Status:  http.StatusForbidden,
+		}
 	}
 
 	// Enforce session expiry (TTL)
@@ -171,6 +176,16 @@ func (s *AuthService) ValidateAPIKey(apiKey string) (*models.OperatorDocumentGo,
 	return &op, nil
 }
 
+// ExtractOperatorSessionID returns the operator session ID from the request headers.
+// It prefers Authorization: Bearer <token>.
+func (s *AuthService) ExtractOperatorSessionID(r *http.Request) string {
+	authHeader := r.Header.Get(constants.HeaderAuthorization)
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		return strings.TrimPrefix(authHeader, "Bearer ")
+	}
+	return ""
+}
+
 // Middleware returns an http.Handler that authenticates requests.
 func (s *AuthService) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +232,9 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		}
 
 		// We prioritize session auth for operators.
-		operatorSessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+		// [PIVOT] Prefer standard Authorization: Bearer <token> header (Plan §4.6)
+		operatorSessionID := s.ExtractOperatorSessionID(r)
+
 		cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
 
 		if operatorSessionID != "" {

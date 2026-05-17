@@ -755,9 +755,9 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	// Create session
 	operatorSessionID := uuid.NewString()
 	session := &models.SessionSummary{
-		ID:        operatorSessionID,
-		CreatedAt: time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+		OperatorSessionID: operatorSessionID,
+		CreatedAt:         time.Now().UTC(),
+		ExpiresAt:         time.Now().UTC().Add(24 * time.Hour),
 	}
 
 	// Update operator document
@@ -829,11 +829,20 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	finalCertPEM := update["operator_cert"].(string)
 	finalChainPEM := update["operator_cert_chain"].(string)
 
-	// Store the binding between operator_session_id and cli_session_id to prevent
-	// cross-tenant data leakage in /api/internal/sse/events. Without this binding,
+	// Store the binding between operator_session_id and cli_session_id in a first-class
+	// collection to support metadata, expiry, and revocation. Without this binding,
 	// any authenticated operator could drain any cli_session_id's event buffer.
-	if err := s.db.KVSet(sessionCLIBindKey(cliSessionID), operatorSessionID, 0); err != nil {
-		return nil, fmt.Errorf("failed to bind operator session to CLI session: %w", err)
+	cliSession := models.CLISession{
+		ID:                cliSessionID,
+		UserID:            linkData.UserID,
+		OperatorSessionID: operatorSessionID,
+		SystemFingerprint: sanitizedFingerprint,
+		CreatedAt:         time.Now().UTC(),
+		ExpiresAt:         time.Now().UTC().Add(24 * time.Hour), // Match operator session expiry
+	}
+	cliSessionBytes, _ := json.Marshal(cliSession)
+	if err := s.db.DocSet(string(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
+		return nil, fmt.Errorf("failed to persist CLI session: %w", err)
 	}
 
 	return &models.OperatorRegistrationResponse{

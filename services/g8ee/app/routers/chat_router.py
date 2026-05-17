@@ -66,6 +66,7 @@ async def answer_triage_question(
     Receive user answer to a triage clarifying question and store in ledger.
     """
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
     
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
@@ -127,6 +128,7 @@ async def skip_triage_questions(
     Record that user skipped the triage clarifying questions.
     """
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
     
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(

@@ -84,7 +84,7 @@ case "$SUB" in
         fi
         echo "Fetching linux/${_DEPLOY_ARCH} operator from host Operator blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
         curl -sf \
-            -H "X-G8E-Operator-Session-ID: ${OPERATOR_SESSION_ID}" \
+            -H "Authorization: Bearer ${OPERATOR_SESSION_ID}" \
             --cacert "$trust_bundle" \
             "$OPERATOR_HTTP_URL/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
             | ssh "${_DEPLOY_TARGET}" "cat > ${_DEPLOY_DEST} && chmod +x ${_DEPLOY_DEST}"

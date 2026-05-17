@@ -11,8 +11,73 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Any
+
+# Protocol Constants Loader for Python
+# Provides a single entry point for protocol constants shared across components.
+
+logger = logging.getLogger(__name__)
+
+def _get_protocol_dir() -> Path:
+    """Find the protocol directory."""
+    # 1. Check environment variable
+    if "G8E_PROTOCOL_DIR" in os.environ:
+        return Path(os.environ["G8E_PROTOCOL_DIR"]) / "constants"
+    
+    # 2. Check relative to this file
+    # protocol/python/g8e_protocol/constants.py -> protocol/constants
+    rel_path = Path(__file__).parent.parent.parent / "constants"
+    if rel_path.exists():
+        return rel_path
+    
+    # 3. Fallback for containerized environments
+    container_path = Path("/app/protocol/constants")
+    if container_path.exists():
+        return container_path
+    
+    return Path("./protocol/constants")
+
+_PROTOCOL_CONSTANTS_DIR = _get_protocol_dir()
+
+def _load_protocol_json(filename: str) -> dict[str, Any]:
+    path = _PROTOCOL_CONSTANTS_DIR / filename
+    if not path.exists():
+        logger.warning("Protocol JSON %s not found at %s", filename, path)
+        return {}
+
+    with open(path) as f:
+        return json.load(f)
+
+# Exported constants
+EVENTS = _load_protocol_json("events.json")
+STATUS = _load_protocol_json("status.json")
+MSG = _load_protocol_json("senders.json")
+COLLECTIONS = _load_protocol_json("collections.json")
+KV = _load_protocol_json("kv_keys.json")
+CHANNELS = _load_protocol_json("channels.json")
+PUBSUB = _load_protocol_json("pubsub.json")
+INTENTS = _load_protocol_json("intents.json")
+PROMPTS = _load_protocol_json("prompts.json")
+TIMESTAMP = _load_protocol_json("timestamp.json")
+HEADERS = _load_protocol_json("headers.json")
+DOCUMENT_IDS = _load_protocol_json("document_ids.json")
+PLATFORM = _load_protocol_json("platform.json")
+AGENTS = _load_protocol_json("agents.json")
+
 from enum import StrEnum
 
+# Helper to get Component names (formerly ComponentName enum)
+class ComponentName(StrEnum):
+    CLIENT = "client"
+    G8EE = "g8ee"
+    G8EO = "g8eo"
+    OPERATOR = "g8eo" # Alias
+
+# Headers from g8ee/app/constants/headers.py
 HTTP_ACCEL_BUFFERING_HEADER = "X-Accel-Buffering"
 HTTP_ACCEPT_HEADER = "Accept"
 HTTP_ACCEPT_LANGUAGE_HEADER = "Accept-Language"
@@ -56,18 +121,3 @@ TASK_ID_HEADER = "X-G8E-Task-ID"
 BOUND_OPERATORS_HEADER = "X-G8E-Bound-Operators"
 EXECUTION_ID_HEADER = "X-G8E-Request-ID"
 COMPONENT_NAME_HEADER = "X-G8E-Source-Component"
-
-class G8eHeaders(StrEnum):
-    WEB_SESSION_ID = WEB_SESSION_ID_HEADER
-    CLI_SESSION_ID = CLI_SESSION_ID_HEADER
-    SERVICE = HTTP_G8E_SERVICE_HEADER
-    CLIENT = HTTP_G8E_CLIENT_HEADER
-    SYSTEM_FINGERPRINT = HTTP_G8E_SYSTEM_FINGERPRINT_HEADER
-    OPERATOR_STATUS = HTTP_G8E_OPERATOR_STATUS_HEADER
-    SOURCE_COMPONENT = COMPONENT_NAME_HEADER
-    EXECUTION_ID = EXECUTION_ID_HEADER
-    CASE_ID = CASE_ID_HEADER
-    INVESTIGATION_ID = INVESTIGATION_ID_HEADER
-    TASK_ID = TASK_ID_HEADER
-    USER_ID = USER_ID_HEADER
-    ORGANIZATION_ID = ORGANIZATION_ID_HEADER

@@ -202,7 +202,7 @@ _chat_stream_events() {
         # the mTLS URI SAN, or a /app/<id> SAN. CLI certs carry the operator
         # session SAN, so we must include the matching session header for the
         # Operator middleware to accept this request.
-        _append_g8e_context_headers args
+        _append_g8e_auth_headers args
         local resp
         # CLI is a first-class BYO session type: poll only the cli namespace so
         # we never accidentally drain a colliding web session id. The substrate

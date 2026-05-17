@@ -338,7 +338,7 @@ _ok "CA certificate ready"
 
 # Step 2: Download operator binary (HTTPS with platform CA + bearer auth)
 _log "Downloading operator binary (linux/$_arch)..."
-if ! _fetch_tls "https://$G8E_HTTPS_HOST/operator/download/linux/$_arch" \
+if ! _fetch_tls "https://$G8E_HTTPS_HOST/blob/operator-binary/linux-$_arch" \
      "./g8e.operator" "$_ca" "$_token"; then
   _die "Download failed. Check that the token is valid and the platform is accessible on port {{.HttpsPort}}."
 fi

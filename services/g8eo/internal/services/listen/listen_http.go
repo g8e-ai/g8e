@@ -836,7 +836,7 @@ func (h *HTTPHandler) handleReauth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Reauth is basically a session refresh. For now, we validate the current session.
-	sessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+	sessionID := h.auth.ExtractOperatorSessionID(r)
 	if sessionID == "" {
 		jsonError(w, http.StatusUnauthorized, "missing session id")
 		return
@@ -1270,7 +1270,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	// to access the requested routing buffer. Without this check, any operator
 	// could drain any other client's event buffer, creating a multi-tenant
 	// data leak.
-	operatorSessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+	operatorSessionID := h.auth.ExtractOperatorSessionID(r)
 	if operatorSessionID == "" {
 		jsonError(w, http.StatusUnauthorized, "missing operator session id")
 		return
@@ -1282,13 +1282,24 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	switch {
 	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
 		// Verify operator_session_id is bound to this cli_session_id.
-		cliBindKey := sessionCLIBindKey(route.CLISessionID)
-		boundOperatorSessionID, found := h.db.KVGet(cliBindKey)
-		if !found {
-			jsonError(w, http.StatusForbidden, "cli session not found or not bound to any operator")
+		doc, err := h.db.DocGet(string(constants.CollectionCLISessions), route.CLISessionID)
+		if err != nil {
+			h.logger.Error("Failed to fetch CLI session", "error", err, "cli_session_id", route.CLISessionID)
+			jsonError(w, http.StatusInternalServerError, "failed to verify cli session")
 			return
 		}
-		if boundOperatorSessionID != operatorSessionID {
+		if doc == nil {
+			jsonError(w, http.StatusForbidden, "cli session not found")
+			return
+		}
+		var cliSess models.CLISession
+		b, _ := json.Marshal(doc.ForWire())
+		if err := json.Unmarshal(b, &cliSess); err != nil {
+			h.logger.Error("Failed to unmarshal CLI session", "error", err)
+			jsonError(w, http.StatusInternalServerError, "failed to verify cli session")
+			return
+		}
+		if cliSess.OperatorSessionID != operatorSessionID {
 			jsonError(w, http.StatusForbidden, "operator session does not own this cli session")
 			return
 		}
@@ -1342,7 +1353,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	sinceID, _ := strconv.ParseInt(q.Get("since_id"), 10, 64)
 
 	// 1. Authorization (re-use logic from handleInternalSSEEvents)
-	operatorSessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+	operatorSessionID := h.auth.ExtractOperatorSessionID(r)
 	if operatorSessionID == "" {
 		jsonError(w, http.StatusUnauthorized, "missing operator session id")
 		return
@@ -1351,9 +1362,18 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	var channel string
 	switch {
 	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
-		cliBindKey := sessionCLIBindKey(route.CLISessionID)
-		boundOperatorSessionID, found := h.db.KVGet(cliBindKey)
-		if !found || boundOperatorSessionID != operatorSessionID {
+		doc, err := h.db.DocGet(string(constants.CollectionCLISessions), route.CLISessionID)
+		if err != nil || doc == nil {
+			jsonError(w, http.StatusForbidden, "not authorized for this cli session")
+			return
+		}
+		var cliSess models.CLISession
+		b, _ := json.Marshal(doc.ForWire())
+		if err := json.Unmarshal(b, &cliSess); err != nil {
+			jsonError(w, http.StatusInternalServerError, "failed to verify cli session")
+			return
+		}
+		if cliSess.OperatorSessionID != operatorSessionID {
 			jsonError(w, http.StatusForbidden, "not authorized for this cli session")
 			return
 		}
@@ -2529,10 +2549,20 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		// outbound request bodies. Conflating the two would let an operator
 		// session drain another client's event stream — and vice versa.
 
-		// Store the binding between operator_session_id and cli_session_id to prevent
-		// cross-tenant data leakage in /api/internal/sse/events.
-		if err := h.db.KVSet(sessionCLIBindKey(cliSessionID), sessionID, 0); err != nil {
-			h.logger.Error("Failed to bind operator session to CLI session during bootstrap", "error", err)
+		// Store the binding between operator_session_id and cli_session_id in a first-class
+		// collection to support metadata, expiry, and revocation. Without this binding,
+		// any authenticated operator could drain any cli_session_id's event buffer.
+		cliSession := models.CLISession{
+			ID:                cliSessionID,
+			UserID:            user.ID,
+			OperatorSessionID: sessionID,
+			SystemFingerprint: req.SystemFingerprint,
+			CreatedAt:         time.Now().UTC(),
+			ExpiresAt:         time.Now().UTC().Add(24 * time.Hour), // Match operator session expiry
+		}
+		cliSessionBytes, _ := json.Marshal(cliSession)
+		if err := h.db.DocSet(string(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
+			h.logger.Error("Failed to persist CLI session during bootstrap", "error", err)
 			jsonError(w, http.StatusInternalServerError, "failed to bind CLI session")
 			return
 		}

@@ -72,11 +72,15 @@ _operator_bootstrap() {
         return 1
     fi
 
-    # Check if already bootstrapped - no rotation on normal start
+    # Check if already bootstrapped AND we have valid local credentials - no rotation on normal start
     local status_resp
-    status_resp=$(curl -sSk --cacert "$trust_bundle" "$public_url/api/auth/bootstrap/status" 2>/dev/null)
+    status_resp=$(curl -sS --cacert "$trust_bundle" "$public_url/api/auth/bootstrap/status" 2>/dev/null)
     if [[ $(echo "$status_resp" | jq -r '.bootstrapped' 2>/dev/null) == "true" ]]; then
-        return 0
+        # Check if local credentials exist and are valid
+        if [[ -f "$G8E_CLI_CERT_FILE" ]] && openssl x509 -noout -in "$G8E_CLI_CERT_FILE" -checkend 0 >/dev/null 2>&1; then
+            return 0
+        fi
+        # If bootstrapped but local cert is missing/invalid, we proceed to re-bootstrap (rotation)
     fi
 
     _banner "auto-bootstrapping platform..."
@@ -222,7 +226,7 @@ _operator_curl() {
     fi
 
     if [[ -n "$OPERATOR_SESSION_ID" ]]; then
-        args+=(-H "X-G8E-Operator-Session-ID: $OPERATOR_SESSION_ID")
+        args+=(-H "Authorization: Bearer $OPERATOR_SESSION_ID")
         # Also send as a cookie for web-authenticated routes
         args+=(--cookie "g8e_session=$OPERATOR_SESSION_ID")
     fi
@@ -266,43 +270,49 @@ _build_protocol_curl_args() {
     eval "$_outvar=(\"\${_args[@]}\")"
 }
 
-# Append the standard g8e HTTP context headers to a curl args array.
-# Required env: OPERATOR_SESSION_ID, USER_ID. Optional: G8E_CASE_ID,
-# G8E_INVESTIGATION_ID, G8E_BOUND_OPERATORS, G8E_TASK_ID.
-# NOTE: G8E_NEW_CASE is deprecated - use resource_creation in request body.
-# Usage: _append_g8e_context_headers <array_name>
-_append_g8e_context_headers() {
+# Append the minimal g8e HTTP substrate auth headers to a curl args array.
+# Required env: OPERATOR_SESSION_ID or CLI_SESSION_ID.
+# Usage: _append_g8e_auth_headers <array_name>
+_append_g8e_auth_headers() {
     local _outvar="$1"
-    eval "local _args=(\"\${${_outvar}[@]}\")"
-    _args+=(-H "Content-Type: application/json")
-    _args+=(-H "X-G8E-Source-Component: client")
+    eval "local __auth_args=(\"\${${_outvar}[@]}\")"
+    __auth_args+=(-H "Content-Type: application/json")
     if [[ -n "${OPERATOR_SESSION_ID:-}" ]]; then
-        _args+=(-H "X-G8E-Operator-Session-ID: $OPERATOR_SESSION_ID")
-        _args+=(--cookie "g8e_session=$OPERATOR_SESSION_ID")
+        # Substrate uses Authorization: Bearer <token>.
+        __auth_args+=(-H "Authorization: Bearer $OPERATOR_SESSION_ID")
+        __auth_args+=(--cookie "g8e_session=$OPERATOR_SESSION_ID")
     fi
-    # cli_session_id rides in the request body for chat / engine calls; it
-    # is NOT smuggled through an X-G8E-WebSession-ID header. Web sessions
-    # and CLI sessions are first-class disjoint session types — never
-    # conflate one into the other's header.
     if [[ -n "${CLI_SESSION_ID:-}" ]]; then
-        _args+=(-H "X-G8E-CLI-Session-ID: $CLI_SESSION_ID")
+        __auth_args+=(-H "X-G8E-CLI-Session-ID: $CLI_SESSION_ID")
     fi
-    [[ -n "${USER_ID:-}" ]]              && _args+=(-H "X-G8E-User-ID: $USER_ID")
-    [[ -n "${G8E_CASE_ID:-}" ]]          && _args+=(-H "X-G8E-Case-ID: $G8E_CASE_ID")
-    [[ -n "${G8E_INVESTIGATION_ID:-}" ]] && _args+=(-H "X-G8E-Investigation-ID: $G8E_INVESTIGATION_ID")
-    [[ -n "${G8E_BOUND_OPERATORS:-}" ]]  && _args+=(-H "X-G8E-Bound-Operators: $G8E_BOUND_OPERATORS")
-    [[ -n "${G8E_TASK_ID:-}" ]]          && _args+=(-H "X-G8E-Task-ID: $G8E_TASK_ID")
-    eval "$_outvar=(\"\${_args[@]}\")"
+    eval "$_outvar=(\"\${__auth_args[@]}\")"
 }
 
-# POST/GET to g8ee using mTLS + g8e context headers.
+# DEPRECATED: Append legacy X-G8E-* context headers.
+# This remains strictly for backward compatibility with unmigrated routes.
+# NEVER use this for new routes; use body-embedded RequestContext instead.
+# Usage: _append_legacy_g8e_context_headers <array_name>
+_append_legacy_g8e_context_headers() {
+    local _outvar="$1"
+    eval "local __args_internal=(\"\${${_outvar}[@]}\")"
+    _append_g8e_auth_headers __args_internal
+    __args_internal+=(-H "X-G8E-Source-Component: ${G8E_SOURCE_COMPONENT:-client}")
+    [[ -n "${USER_ID:-}" ]]              && __args_internal+=(-H "X-G8E-User-ID: $USER_ID")
+    [[ -n "${G8E_CASE_ID:-}" ]]          && __args_internal+=(-H "X-G8E-Case-ID: $G8E_CASE_ID")
+    [[ -n "${G8E_INVESTIGATION_ID:-}" ]] && __args_internal+=(-H "X-G8E-Investigation-ID: $G8E_INVESTIGATION_ID")
+    [[ -n "${G8E_BOUND_OPERATORS:-}" ]]  && __args_internal+=(-H "X-G8E-Bound-Operators: $G8E_BOUND_OPERATORS")
+    [[ -n "${G8E_TASK_ID:-}" ]]          && __args_internal+=(-H "X-G8E-Task-ID: $G8E_TASK_ID")
+    eval "$_outvar=(\"\${__args_internal[@]}\")"
+}
+
+# POST/GET to g8ee using mTLS + g8e auth headers.
 # Usage: _g8ee_curl <method> <path> [body]
 _g8ee_curl() {
     local method="$1" path="$2" body="${3:-}"
     local args=()
     _build_protocol_curl_args args || return 1
     args+=(-X "$method")
-    _append_g8e_context_headers args
+    _append_g8e_auth_headers args
     [[ -n "$body" ]] && args+=(-d "$body")
     curl "${args[@]}" "$(_g8ee_url)$path"
 }

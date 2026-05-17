@@ -224,6 +224,42 @@ class G8eHttpContext(G8eBaseModel):
         """Returns True if at least one operator has status bound."""
         return any(op.status == OperatorStatus.BOUND for op in self.bound_operators)
 
+    def validate_against_user(self, user: Any):
+        """Verify that session IDs in context match the authenticated user's sessions.
+        
+        Args:
+            user: AuthenticatedUser object (from headers).
+        """
+        # 1. User ID must match
+        if self.user_id and self.user_id != user.uid:
+             from app.errors import AuthenticationError
+             raise AuthenticationError(f"User ID mismatch: context={self.user_id}, auth={user.uid}")
+
+        # 2. Web session validation
+        if self.web_session_id:
+            if not user.web_session_id:
+                 from app.errors import AuthenticationError
+                 raise AuthenticationError("Web session context provided but not authenticated as a web session")
+            if self.web_session_id != user.web_session_id:
+                 from app.errors import AuthenticationError
+                 raise AuthenticationError(f"Web session ID mismatch: context={self.web_session_id}, auth={user.web_session_id}")
+
+        # 3. CLI session validation
+        if self.cli_session_id:
+            if not user.cli_session_id:
+                 from app.errors import AuthenticationError
+                 raise AuthenticationError("CLI session context provided but not authenticated as a CLI session")
+            if self.cli_session_id != user.cli_session_id:
+                 from app.errors import AuthenticationError
+                 raise AuthenticationError(f"CLI session ID mismatch: context={self.cli_session_id}, auth={user.cli_session_id}")
+
+        # 4. Operator session check for bound operators
+        if self.bound_operators and user.operator_session_id:
+            for op in self.bound_operators:
+                if op.operator_session_id and op.operator_session_id != user.operator_session_id:
+                    from app.errors import AuthenticationError
+                    raise AuthenticationError(f"Operator session ID mismatch for operator {op.operator_id}")
+
     @classmethod
     def from_request_context(cls, request_context: RequestContext, is_exempt_path: bool = False) -> "G8eHttpContext":
         """Create G8eHttpContext from RequestContext (extracted from request body).

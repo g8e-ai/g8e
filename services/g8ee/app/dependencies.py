@@ -399,9 +399,28 @@ async def get_g8ee_current_active_user(request: Request) -> AuthenticatedUser:
 
 async def require_proxy_auth(
     request: Request,
-    settings: G8eePlatformSettings = Depends(get_g8ee_platform_settings)
+    settings: G8eePlatformSettings = Depends(get_g8ee_platform_settings),
+    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service)
 ) -> AuthenticatedUser:
-    return await authenticate_proxy_or_internal(request, settings)
+    user = await authenticate_proxy_or_internal(request, settings)
+
+    # [PIVOT] Validate session bindings for CLI sessions (Plan §4.6)
+    # If a CLI session ID is provided, it must be bound to the authenticated
+    # operator session. This prevents cross-session routing leaks.
+    if user.cli_session_id:
+        if not user.operator_session_id:
+            from app.errors import AuthenticationError
+            from app.constants import ComponentName
+            raise AuthenticationError("CLI session requires operator session", component=ComponentName.G8EE)
+
+        if not await operator_data_service.validate_cli_session_ownership(
+            user.cli_session_id, user.operator_session_id
+        ):
+            from app.errors import AuthenticationError
+            from app.constants import ComponentName
+            raise AuthenticationError("CLI session ownership mismatch", component=ComponentName.G8EE)
+
+    return user
 
 
 async def health_check_dependencies(request: Request) -> HealthCheckResult:

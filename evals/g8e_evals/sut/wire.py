@@ -1,17 +1,16 @@
 """Typed SSE wire envelopes consumed by the bench.
 
-These models mirror the canonical wire shape produced by the g8ee Engine in
-`services/g8ee/app/models/events.py` (`SessionEventWire` / `BackgroundEventWire`).
+These models mirror the canonical wire shape produced by the g8e Engine
+(`g8e_protocol.models.events.SessionEventWire` / `BackgroundEventWire`).
 The Operator's `/api/internal/sse/events` endpoint returns one of these
 envelopes per row in the `payload` field (see
 `services/g8eo/internal/services/listen/listen_http.go:internalSSEPushPayload`).
 
 The bench must NOT do ad-hoc dict-spelunking against this shape: any schema
-drift in g8ee silently breaks the bench. Parsing through these typed models
+drift in the protocol silently breaks the bench. Parsing through these typed models
 makes drift visible — fields that disappear or change type fail validation
 loudly, and the contract test in `evals/tests/test_sse_wire.py` pins the
-shape against the publisher's tests in
-`services/g8ee/tests/unit/models/test_sse_wire_contract.py`.
+shape against the protocol definition.
 """
 
 from __future__ import annotations
@@ -63,7 +62,7 @@ class SSEWireEnvelope(BaseModel):
         """Return the streaming text chunk content, or "" if absent.
 
         Source of truth: `ChatResponseChunkPayload.content` in
-        `services/g8ee/app/models/events.py`.
+        `g8e_protocol.models.events`.
         """
         if self.event is None:
             return ""

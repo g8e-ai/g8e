@@ -18,7 +18,7 @@ _ensure_evals_venv() {
     fi
 }
 
-EVALS_PYTHONPATH="$SCRIPT_DIR/services/g8ee:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
+EVALS_PYTHONPATH="$SCRIPT_DIR/protocol/python${PYTHONPATH:+:$PYTHONPATH}"
 SUB="${1:-}"
 REMAINING_ARGS=("${@:2}")
 

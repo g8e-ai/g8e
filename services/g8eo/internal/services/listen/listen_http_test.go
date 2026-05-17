@@ -445,7 +445,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		h.db.KVSet(sessionOperatorBindKey("op-session-1"), "ws-1", 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?web_session_id=ws-1&since_id=0", nil)
-		req.Header.Set(constants.HeaderOperatorSessionID, "op-session-1")
+		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr = httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -462,7 +462,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		h.db.KVSet(sessionCLIBindKey("cli-1"), "op-session-1", 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-1&since_id=0", nil)
-		req.Header.Set(constants.HeaderOperatorSessionID, "op-session-1")
+		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr = httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -481,7 +481,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		h.db.KVSet(sessionCLIBindKey("shared-id"), "op-session-1", 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=shared-id&since_id=0", nil)
-		req.Header.Set(constants.HeaderOperatorSessionID, "op-session-1")
+		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr = httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -510,7 +510,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		h.db.DocSet(string(constants.CollectionOperators), "op-u2", opBytes)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?user_id=u-2&since_id=0", nil)
-		req.Header.Set(constants.HeaderOperatorSessionID, "op-session-u2")
+		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-u2")
 		rr = httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -529,7 +529,7 @@ func TestInternalSSEBridge(t *testing.T) {
 
 	t.Run("events GET requires exactly one routing key", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?since_id=0", nil)
-		req.Header.Set(constants.HeaderOperatorSessionID, "op-session-1")
+		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
@@ -544,7 +544,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		h.db.KVSet(sessionOperatorBindKey("op-session-1"), "ws-x", 0)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?web_session_id=ws-x&since_id=0&limit=1", nil)
-		req.Header.Set(constants.HeaderOperatorSessionID, "op-session-1")
+		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -555,7 +555,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	t.Run("authorization: operator cannot access unbound cli_session_id", func(t *testing.T) {
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-unbound"}, "test", `{"event":{"type":"x"}}`)
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-unbound&since_id=0", nil)
-		req.Header.Set(constants.HeaderOperatorSessionID, "op-session-1")
+		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusForbidden, rr.Code)
@@ -569,7 +569,7 @@ func TestInternalSSEBridge(t *testing.T) {
 
 		// Try to access with op-session-2
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-owned&since_id=0", nil)
-		req.Header.Set(constants.HeaderOperatorSessionID, "op-session-2")
+		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-2")
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusForbidden, rr.Code)
@@ -582,7 +582,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-mine"}, "x", `{"event":{"type":"x"}}`)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-mine&since_id=0", nil)
-		req.Header.Set(constants.HeaderOperatorSessionID, "op-session-1")
+		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -593,7 +593,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-other"}, "test", `{"event":{"type":"x"}}`)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?web_session_id=ws-other&since_id=0", nil)
-		req.Header.Set(constants.HeaderOperatorSessionID, "op-session-1")
+		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusForbidden, rr.Code)
@@ -604,7 +604,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		_ = h.db.SSEEventsAppend(SSERoute{UserID: "user-other"}, "test", `{"event":{"type":"x"}}`)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?user_id=user-other&since_id=0", nil)
-		req.Header.Set(constants.HeaderOperatorSessionID, "op-session-1")
+		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)

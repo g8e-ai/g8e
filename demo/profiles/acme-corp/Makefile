@@ -11,6 +11,10 @@ COMPOSE := docker compose
 COMPOSE_FILES = $(shell if [ -f .batch-files ]; then for f in $$(cat .batch-files); do printf -- "-f %s " $$f; done; fi)
 CONTAINER_PREFIX := acme-
 
+# Platform endpoint for operators to connect back to.
+# Defaults to the standard Docker bridge gateway on Linux.
+G8E_ENDPOINT ?= 172.17.0.1
+
 help:
 	@echo "ACME Corp Global Fleet Demo"
 	@echo ""
@@ -179,11 +183,11 @@ deploy:
 	for c in $$(docker ps --filter "label=demo.service=acme-edge" --format '{{.Names}}'); do \
 		echo "  Deploying to $$c..."; \
 		docker exec -d -e DEVICE_TOKEN="$$TOKEN" $$c bash -c '\
-			CURL_OPTS="-fsSL"; \
-			[ -f /operator/ca.crt ] && CURL_OPTS="$$CURL_OPTS --cacert /operator/ca.crt" || CURL_OPTS="$$CURL_OPTS -k"; \
-			curl $$CURL_OPTS -H "Authorization: Bearer $$DEVICE_TOKEN" -o /home/appuser/g8e.operator "https://localhost/operator/download/linux/amd64" && \
+			CURL_OPTS="-fsSL --cacert /operator/ca.crt"; \
+			[ ! -f /operator/ca.crt ] && echo "CRITICAL: /operator/ca.crt missing" && exit 1; \
+			curl $$CURL_OPTS -H "Authorization: Bearer $$DEVICE_TOKEN" -o /home/appuser/g8e.operator "https://$(G8E_ENDPOINT)/blob/operator-binary/linux-amd64" && \
 			chmod +x /home/appuser/g8e.operator && \
-			nohup /home/appuser/g8e.operator --endpoint localhost --working-dir /home/appuser --log info --cloud=false -D "$$DEVICE_TOKEN" > /home/appuser/g8e.operator.log 2>&1 & \
+			nohup /home/appuser/g8e.operator --endpoint $(G8E_ENDPOINT) --working-dir /home/appuser --log info --cloud=false -D "$$DEVICE_TOKEN" > /home/appuser/g8e.operator.log 2>&1 & \
 		'; \
 	done; \
 	echo "Done."

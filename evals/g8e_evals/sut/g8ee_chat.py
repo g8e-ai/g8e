@@ -33,12 +33,18 @@ import asyncio
 import json
 import logging
 import time
-from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
 
 import httpx
+from pydantic import BaseModel, Field
 from httpx_sse import aconnect_sse
 
+from g8e_protocol.models import (
+    ChatMessageRequest,
+    G8eeUserSettings,
+    ResourceCreationRequest,
+    RequestContext,
+)
 from g8e_evals.harness import BindingType, Response, SUTConfig, Task
 from g8e_evals.sut.wire import SSEWireEnvelope
 from g8e_evals.transport import AuthContext, AuthenticationError
@@ -71,14 +77,24 @@ _FAILURE_TERMINAL_EVENTS = {
 }
 
 
-@dataclass
-class AgentTrailEvent:
+class AgentTrailEvent(BaseModel):
     """A single SSE event observed during one chat turn."""
     id: int
     event_type: str
     payload: dict[str, Any]
-    received_at: float = field(default_factory=time.time)
+    received_at: float = Field(default_factory=time.time)
 
+
+class ChatEvaluationReceipt(BaseModel):
+    """Bundle of agent trail events and metadata for a single chat turn."""
+    binding: str = "g8ee_chat"
+    case_id: str
+    investigation_id: str
+    terminal_event: Optional[str] = None
+    answer_chars: int
+    event_count: int
+    event_counts_by_type: dict[str, int]
+    agent_trail: list[AgentTrailEvent]
 
 # Callback invoked for every observed agent event so the CLI can render
 # each stage live. Receives (event_type, payload_dict).
@@ -111,7 +127,7 @@ class G8eeChatSUT:
         else:
             self.model_provider = config.primary.model or "g8ee:server-default"
 
-    async def check_settings(self) -> dict[str, Any]:
+    async def check_settings(self) -> G8eeUserSettings | None:
         """Fetch current user settings from g8ee for pre-flight validation."""
         async with self._client() as client:
             try:
@@ -121,10 +137,10 @@ class G8eeChatSUT:
                     headers=self._g8ee_headers(),
                 )
                 resp.raise_for_status()
-                return resp.json()
+                return G8eeUserSettings.model_validate(resp.json())
             except Exception as e:
                 logger.warning("Failed to fetch settings from g8ee: %s", e)
-                return {}
+                return None
 
     # ---- HTTP client construction --------------------------------------
 
@@ -132,7 +148,8 @@ class G8eeChatSUT:
         return self.env.make_async_client()
 
     def _g8ee_headers(self) -> dict[str, str]:
-        return self.env.context_headers()
+        """Minimal headers for g8ee (now authenticated by substrate/mTLS)."""
+        return self.env.auth_headers()
 
     # ---- Main entry point ----------------------------------------------
 
@@ -144,12 +161,12 @@ class G8eeChatSUT:
 
             # 2. POST chat — creates a fresh case+investigation and fires
             #    run_chat as a g8ee background task.
-            body = self._build_chat_body(task)
+            request = self._build_chat_request(task)
             try:
                 resp = await client.post(
                     f"{self.env.g8ee_url}/api/internal/chat",
                     headers=self._g8ee_headers(),
-                    json=body,
+                    content=request.model_dump_json(),
                 )
             except httpx.HTTPError as e:
                 return Response(
@@ -205,7 +222,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 transaction_id=substrate_tx_id,
-                receipt=receipt,
+                receipt=receipt.model_dump(),
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"chat terminated with {terminal_event}",
             )
@@ -216,7 +233,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 transaction_id=substrate_tx_id,
-                receipt=receipt,
+                receipt=receipt.model_dump(),
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"idle timeout after {self.idle_timeout_s}s without terminal event",
             )
@@ -226,7 +243,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 transaction_id=substrate_tx_id,
-                receipt=receipt,
+                receipt=receipt.model_dump(),
                 binding=BindingType.RECEIPT_BOUND,
             )
 
@@ -234,61 +251,38 @@ class G8eeChatSUT:
             answer=answer_text,
             model=self.model_provider,
             transaction_id=None,
-            receipt=receipt,
+            receipt=receipt.model_dump(),
             binding=BindingType.UNBOUND,
             unbound_reason="answer-only turn (no Warden-signed ActionReceipt emitted)",
         )
 
     # ---- Helpers --------------------------------------------------------
 
-    def _build_chat_body(self, task: Task) -> dict[str, Any]:
-        body: dict[str, Any] = {
-            "context": {
-                "cli_session_id": self.env.cli_session_id,
-                "user_id": self.env.user_id,
-                "case_id": "",
-                "investigation_id": "",
-                "source_component": "client",
-            },
-            "message": task.prompt,
-            "attachments": [],
-            "sentinel_mode": False,
-            "resource_creation": {"create_case": True},
-        }
-
-        # Per-role provider/model overrides — the *request* drives which
-        # models the pipeline uses, so the bench actually exercises the
-        # model under test through Triage / Dash / Sage / Tribunal.
+    def _build_chat_request(self, task: Task) -> ChatMessageRequest:
+        """Assemble a strictly typed ChatMessageRequest for the g8ee Engine."""
         primary = self.config.primary
         assistant = self.config.assistant
         lite = self.config.lite
 
-        if primary.provider:
-            body["llm_primary_provider"] = primary.provider
-        if primary.model:
-            body["llm_primary_model"] = primary.model
-        if assistant.provider:
-            body["llm_assistant_provider"] = assistant.provider
-        if assistant.model:
-            body["llm_assistant_model"] = assistant.model
-        if lite.provider:
-            body["llm_lite_provider"] = lite.provider
-        if lite.model:
-            body["llm_lite_model"] = lite.model
-
-        if primary.api_key:
-            body["llm_primary_api_key"] = primary.api_key
-        if primary.endpoint:
-            body["llm_primary_endpoint"] = primary.endpoint
-        if assistant.api_key:
-            body["llm_assistant_api_key"] = assistant.api_key
-        if assistant.endpoint:
-            body["llm_assistant_endpoint"] = assistant.endpoint
-        if lite.api_key:
-            body["llm_lite_api_key"] = lite.api_key
-        if lite.endpoint:
-            body["llm_lite_endpoint"] = lite.endpoint
-        return body
+        return ChatMessageRequest(
+            context=self.env.to_request_context(),
+            message=task.prompt,
+            attachments=[],
+            sentinel_mode=False,
+            resource_creation=ResourceCreationRequest(create_case=True),
+            llm_primary_provider=primary.provider,
+            llm_primary_model=primary.model,
+            llm_assistant_provider=assistant.provider,
+            llm_assistant_model=assistant.model,
+            llm_lite_provider=lite.provider,
+            llm_lite_model=lite.model,
+            llm_primary_api_key=primary.api_key,
+            llm_primary_endpoint=primary.endpoint,
+            llm_assistant_api_key=assistant.api_key,
+            llm_assistant_endpoint=assistant.endpoint,
+            llm_lite_api_key=lite.api_key,
+            llm_lite_endpoint=lite.endpoint,
+        )
 
     async def _current_cursor(self, client: httpx.AsyncClient) -> int:
         """Return the highest SSE event id currently in the operator buffer for our session."""
@@ -300,6 +294,7 @@ class G8eeChatSUT:
                     "since_id": 0,
                     "limit": 1000,
                 },
+                headers=self.env.auth_headers(),
             )
             resp.raise_for_status()
             payload = resp.json()
@@ -332,7 +327,11 @@ class G8eeChatSUT:
 
         try:
             async with aconnect_sse(
-                client, "GET", f"{self.env.operator_url}/api/internal/sse/stream", params=params
+                client,
+                "GET",
+                f"{self.env.operator_url}/api/internal/sse/stream",
+                params=params,
+                headers=self.env.auth_headers(),
             ) as event_source:
                 async for event in event_source.aiter_sse():
                     last_event_at = time.time()
@@ -397,29 +396,20 @@ class G8eeChatSUT:
         trail: list[AgentTrailEvent],
         answer_text: str,
         terminal_event: Optional[str],
-    ) -> dict[str, Any]:
+    ) -> ChatEvaluationReceipt:
         event_counts: dict[str, int] = {}
         for evt in trail:
             event_counts[evt.event_type] = event_counts.get(evt.event_type, 0) + 1
 
-        return {
-            "binding": "g8ee_chat",
-            "case_id": case_id,
-            "investigation_id": investigation_id,
-            "terminal_event": terminal_event,
-            "answer_chars": len(answer_text),
-            "event_count": len(trail),
-            "event_counts_by_type": event_counts,
-            "agent_trail": [
-                {
-                    "id": evt.id,
-                    "event_type": evt.event_type,
-                    "received_at": evt.received_at,
-                    "payload": evt.payload,
-                }
-                for evt in trail
-            ],
-        }
+        return ChatEvaluationReceipt(
+            case_id=case_id,
+            investigation_id=investigation_id,
+            terminal_event=terminal_event,
+            answer_chars=len(answer_text),
+            event_count=len(trail),
+            event_counts_by_type=event_counts,
+            agent_trail=trail,
+        )
 
 
 

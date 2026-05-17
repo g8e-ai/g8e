@@ -26,14 +26,10 @@ if [ -z "${DEVICE_TOKEN:-}" ]; then
     exec tail -f /dev/null
 fi
 
-# In production k3s/docker setups, the ca.crt might be mounted. If not, use standard CAs.
-# We'll allow insecure curl if needed for local dev, but try with system CA first.
-CURL_OPTS="-fsSL"
-if [ -f /operator/ca.crt ]; then
-    CURL_OPTS="$CURL_OPTS --cacert /operator/ca.crt"
-else
-    # Fallback to insecure if hitting a .local endpoint without certs mounted
-    CURL_OPTS="$CURL_OPTS -k"
+CURL_OPTS="-fsSL --cacert /operator/ca.crt"
+if [ ! -f /operator/ca.crt ]; then
+    echo "$_operator_log_prefix CRITICAL: /operator/ca.crt missing; PKI enforcement requires CA cert"
+    exit 1
 fi
 
 # Download binary
@@ -44,7 +40,7 @@ while [ ! -x "$_operator_binary" ]; do
     if curl $CURL_OPTS \
             -H "Authorization: Bearer $DEVICE_TOKEN" \
             -o "$_operator_binary" \
-            "https://$_operator_endpoint/operator/download/linux/amd64" 2>/dev/null; then
+            "https://$_operator_endpoint/blob/operator-binary/linux-amd64" 2>/dev/null; then
         chmod +x "$_operator_binary"
         echo "$_operator_log_prefix binary ready"
     else

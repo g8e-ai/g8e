@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 )
@@ -135,9 +136,9 @@ type OperatorRegistrationResponse struct {
 
 // SessionSummary provides a brief overview of the created operator session.
 type SessionSummary struct {
-	ID        string    `json:"id"`
-	ExpiresAt time.Time `json:"expires_at"`
-	CreatedAt time.Time `json:"created_at"`
+	OperatorSessionID string    `json:"operator_session_id"`
+	ExpiresAt         time.Time `json:"expires_at"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 // OperatorDocumentGo is a Go representation of the canonical OperatorDocument.
@@ -183,7 +184,7 @@ func (o *OperatorDocumentGo) MarshalJSON() ([]byte, error) {
 
 	// Apply defaults for enum fields
 	if defaulted.OperatorType == "" {
-		defaulted.OperatorType = "system"
+		defaulted.OperatorType = constants.Status.OperatorType.System
 	}
 	// CloudSubtype defaults to empty string (no default subtype)
 
@@ -338,6 +339,17 @@ type WebSession struct {
 	UserID          string `json:"user_id"`
 	CreatedAtUnixMs int64  `json:"created_at_unix_ms"`
 	ExpiresAtUnixMs int64  `json:"expires_at_unix_ms"`
+}
+
+// CLISession represents an authenticated CLI/BYO session.
+// Strictly disjoint from operator_session_id.
+type CLISession struct {
+	ID                string    `json:"id"`
+	UserID            string    `json:"user_id"`
+	OperatorSessionID string    `json:"operator_session_id"` // Bind to the specific operator session that created it
+	SystemFingerprint string    `json:"system_fingerprint,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	ExpiresAt         time.Time `json:"expires_at"`
 }
 
 // UserStatus controls whether a user is permitted to authenticate.

@@ -2,6 +2,8 @@ import asyncio
 import time
 from typing import Any, Dict, Optional
 
+from google.protobuf import json_format
+from g8e_evals.proto.operator_pb2 import ActionReceipt
 from g8e_evals.transport import AuthContext
 
 
@@ -29,7 +31,7 @@ class ReceiptCollector:
     async def collect_receipt(self, transaction_id: str) -> Optional[Dict[str, Any]]:
         """Poll the Operator for an ActionReceipt by transaction_id."""
         start_time = time.time()
-        headers = self.auth.context_headers()
+        headers = self.auth.auth_headers()
         async with self.auth.make_async_client() as client:
             while time.time() - start_time < self.timeout_seconds:
                 try:
@@ -42,10 +44,19 @@ class ReceiptCollector:
                     )
                     if resp.status_code == 200:
                         data = resp.json()
+                        raw_receipt = None
                         if isinstance(data, list) and len(data) > 0:
-                            return data[0]
-                        if isinstance(data, dict) and data.get("transaction_id") == transaction_id:
-                            return data
+                            raw_receipt = data[0]
+                        elif isinstance(data, dict) and data.get("transaction_id") == transaction_id:
+                            raw_receipt = data
+
+                        if raw_receipt:
+                            # Parse into proto to validate shape
+                            receipt = ActionReceipt()
+                            json_format.ParseDict(raw_receipt, receipt, ignore_unknown_fields=True)
+                            # Return as dict for consistency with current Response model
+                            return json_format.MessageToDict(receipt)
+
                     # 404 == not yet committed; any other status falls through
                     # to the retry/backoff path.
                 except Exception:

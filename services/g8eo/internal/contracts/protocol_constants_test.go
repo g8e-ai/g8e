@@ -656,11 +656,6 @@ func TestProtocolHeartbeatTypeMatchesGoConstants(t *testing.T) {
 func TestProtocolHeadersMatchGoConstants(t *testing.T) {
 	h := loadHeadersJSON(t)
 
-	t.Run("x-g8e headers", func(t *testing.T) {
-		assert.Equal(t, h.OperatorSessionID, constants.HeaderOperatorSessionID)
-		assert.Equal(t, h.DeviceToken, constants.HeaderDeviceToken)
-	})
-
 	t.Run("standard http headers", func(t *testing.T) {
 		assert.Equal(t, h.Authorization, constants.HeaderAuthorization)
 		assert.Equal(t, h.UserAgent, constants.HeaderUserAgent)

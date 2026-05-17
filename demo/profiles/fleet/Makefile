@@ -4,6 +4,10 @@
 
 COMPOSE := docker compose
 
+# Platform endpoint for operators to connect back to.
+# Defaults to the standard Docker bridge gateway on Linux.
+G8E_ENDPOINT ?= 172.17.0.1
+
 help:
 	@echo "Fleet Demo (20-1000 nodes)"
 	@echo "Usage: make [target]"
@@ -82,13 +86,11 @@ deploy:
 		name=$$(docker inspect --format '{{.Name}}' $$id | sed 's/^\///'); \
 		echo "  Deploying to $$name..."; \
 		docker exec -e DEVICE_TOKEN="$$TOKEN" $$id sh -c '\
+			[ ! -f /operator/ca.crt ] && echo "CRITICAL: /operator/ca.crt missing" && exit 1; \
 			curl -fsSL --cacert /operator/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
-				-o g8e.operator "https://localhost/operator/download/linux/amd64" && \
-			curl -fsSL --cacert /operator/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
-				-o g8e.operator.sha256 "https://localhost/operator/download/linux/amd64/sha256" && \
-			sha256sum -c g8e.operator.sha256 && \
+				-o g8e.operator "https://$(G8E_ENDPOINT)/blob/operator-binary/linux-amd64" && \
 			chmod +x g8e.operator && \
-			nohup ./g8e.operator -D "$$DEVICE_TOKEN" -e localhost > g8e.operator.log 2>&1 & \
+			nohup ./g8e.operator -D "$$DEVICE_TOKEN" -e $(G8E_ENDPOINT) > g8e.operator.log 2>&1 & \
 			echo "    operator started (pid: $$!)"' || true; \
 	done; \
 	echo "Done."

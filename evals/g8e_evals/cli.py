@@ -109,7 +109,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
 
     # 3. Pre-flight validation: ensure we have API keys for active providers.
     remote_settings = await sut.check_settings()
-    llm_settings = remote_settings.get("llm", {})
+    llm_settings = remote_settings.llm if remote_settings else None
 
     errors = []
     for role_name in ["primary", "assistant", "lite"]:
@@ -121,6 +121,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
         if role_config.api_key:
             continue
 
+        if not llm_settings:
+            errors.append(f"Missing API key for {role_name} provider '{role_config.provider}' (could not fetch remote settings)")
+            continue
+
         # Key exists in remote settings for this provider?
         provider_key_map = {
             "openai": "openai_api_key",
@@ -130,11 +134,11 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
             "llamacpp": "llamacpp_api_key",
         }
         remote_key_field = provider_key_map.get(role_config.provider)
-        if remote_key_field and llm_settings.get(remote_key_field):
+        if remote_key_field and getattr(llm_settings, remote_key_field, None):
             continue
 
         # Role-specific override in remote settings?
-        if llm_settings.get(f"{role_name}_api_key"):
+        if getattr(llm_settings, f"{role_name}_api_key", None):
             continue
 
         errors.append(f"Missing API key for {role_name} provider '{role_config.provider}'")

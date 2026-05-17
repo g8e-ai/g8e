@@ -47,7 +47,7 @@ if ($existing.Count -gt 0) {
 Write-Host ""
 Write-Host "[2/3] Fetching CA cert from ${Url}..."
 $certUrl = "${Url}/.well-known/g8e/pki/root.pem"
-$certPem = curl -s $certUrl --insecure
+$certPem = curl -s $certUrl
 
 if (-not $certPem) {
     Write-Error "No certificate data received from ${certUrl}. Is the platform running?"

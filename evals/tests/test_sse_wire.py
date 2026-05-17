@@ -1,8 +1,8 @@
 """Contract tests for the bench-side SSE wire envelope.
 
 Pins `g8e_evals.sut.wire.SSEWireEnvelope` against the canonical shape
-produced by `services/g8ee/app/models/events.py:SessionEventWire` /
-`BackgroundEventWire` and persisted by the Operator's
+produced by the protocol (`g8e_protocol.models.events.SessionEventWire` /
+`BackgroundEventWire`) and persisted by the Operator's
 `/api/internal/sse/events` endpoint.
 
 If the publisher renames `event`, `event.type`, `event.data`, or moves

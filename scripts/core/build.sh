@@ -439,9 +439,10 @@ _wait_operator_listen_healthy() {
 _wait_service_healthy() {
     local service_name="$1" url="$2" timeout_s="$3" interval="${4:-1}" log_file="$5"
     local waited=0
+    local trust_bundle="${G8E_TRUST_BUNDLE:-$OPERATOR_LISTEN_PKI_DIR/trust/hub-bundle.pem}"
     echo "  $service_name: waiting for healthy status..."
 
-    until curl -sfk "$url" >/dev/null 2>&1; do
+    until [[ -f "$trust_bundle" ]] && curl -sf --cacert "$trust_bundle" "$url" >/dev/null 2>&1; do
         if (( waited >= timeout_s )); then
             echo -e "  $service_name: \033[0;31mTIMEOUT\033[0m"
             echo "  $service_name did not become healthy within ${timeout_s}s. See $log_file"
@@ -527,7 +528,7 @@ if [[ "$COMMAND" == "status" ]]; then
         bootstrapped="UNKNOWN"
         trust_bundle="$OPERATOR_LISTEN_PKI_DIR/trust/hub-bundle.pem"
         if [[ -f "$trust_bundle" ]]; then
-            status_resp=$(curl -sSk --cacert "$trust_bundle" "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/api/auth/bootstrap/status" 2>/dev/null)
+            status_resp=$(curl -sS --cacert "$trust_bundle" "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/api/auth/bootstrap/status" 2>/dev/null)
             if [[ $(echo "$status_resp" | jq -r '.bootstrapped' 2>/dev/null) == "true" ]]; then
                 bootstrapped="YES"
             else

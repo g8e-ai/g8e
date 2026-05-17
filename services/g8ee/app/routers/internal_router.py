@@ -106,6 +106,7 @@ from app.models.investigations import (
 InvestigationUpdateRequest.model_rebuild()
 InvestigationQueryRequest.model_rebuild()
 InvestigationGetRequest.model_rebuild()
+from app.models.auth import AuthenticatedUser
 from app.models.events import SessionEvent
 from app.models.http_context import G8eHttpContext
 from app.models.operators import OperatorDocument, OperatorStatusUpdatedPayload
@@ -154,6 +155,7 @@ from app.dependencies import (
     get_g8ee_certificate_service,
     get_g8ee_settings_service_write,
     get_g8ee_user_settings,
+    require_proxy_auth,
 )
 
 logger = logging.getLogger(__name__)
@@ -223,6 +225,7 @@ async def internal_chat(
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     attachment_service: AttachmentService = Depends(get_g8ee_attachment_service),
     event_service: EventService = Depends(get_g8ee_event_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Non-streaming chat endpoint — default path for browser sessions.
@@ -238,6 +241,7 @@ async def internal_chat(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
     
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
@@ -409,6 +413,7 @@ async def internal_triage_answer(
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
     user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Receive user answer to a triage clarifying question - internal cluster use only.
@@ -418,6 +423,7 @@ async def internal_triage_answer(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
@@ -482,6 +488,7 @@ async def internal_triage_skip(
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
     user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Skip triage clarifying questions - internal cluster use only.
@@ -491,6 +498,7 @@ async def internal_triage_skip(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
@@ -547,6 +555,7 @@ async def internal_triage_skip(
 async def internal_triage_timeout(
     request: TriageTimeoutRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Record triage clarifying questions timeout - internal cluster use only.
@@ -556,6 +565,7 @@ async def internal_triage_timeout(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     logger.info(
         "[INTERNAL-HTTP] Triage timeout received",
@@ -581,6 +591,7 @@ async def stop_ai_processing(
     request: StopAIRequest,
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Stop active AI processing for an investigation - internal cluster use only.
@@ -593,6 +604,7 @@ async def stop_ai_processing(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     investigation_id = g8e_context.investigation_id
     reason = request.reason
@@ -641,6 +653,7 @@ async def stop_ai_processing(
 async def operator_approval_respond(
     request: OperatorApprovalResponse,
     approval_service: OperatorApprovalService = Depends(get_g8ee_approval_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Handle Operator command approval response from client.
@@ -651,6 +664,7 @@ async def operator_approval_respond(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     bound_op = g8e_context.bound_operators[0] if g8e_context.bound_operators else None
     request.operator_session_id = bound_op.operator_session_id or "" if bound_op else ""
@@ -709,6 +723,7 @@ async def get_pending_approvals(
 async def execute_direct_command(
     request: DirectCommandRequest,
     operator_data_service: OperatorCommandService = Depends(get_g8ee_operator_command_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Execute direct command on operator.
@@ -718,6 +733,7 @@ async def execute_direct_command(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     logger.info(
         "[INTERNAL-HTTP] Direct command request received",
@@ -758,10 +774,12 @@ async def get_case(
     case_id: str,
     request: CaseGetRequest,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """Get a case by ID - internal cluster use only."""
     # Extract context from request body
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     case = await case_service.get_case(case_id)
     return CaseResponse(success=True, case=case)
@@ -772,10 +790,12 @@ async def update_case(
     case_id: str,
     request: CaseUpdateRequest,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """Update a case - internal cluster use only."""
     # Extract context from request body
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     case = await case_service.update_case(case_id, request)
     if g8e_context.web_session_id:
@@ -801,6 +821,7 @@ async def delete_case(
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     cache_aside_service: CacheAsideService = Depends(get_g8ee_cache_aside_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Delete a case and all related data - internal cluster use only.
@@ -812,6 +833,7 @@ async def delete_case(
     """
     # Extract context from request body
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     try:
         case = await case_service.get_case(case_id)
@@ -887,6 +909,7 @@ async def delete_case(
 async def terminate_operator(
     request: OperatorTerminateRequest,
     operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Terminate an operator slot.
@@ -903,6 +926,7 @@ async def terminate_operator(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     operator = await operator_lifecycle_service.operator_data_service.get_operator(request.operator_id)
     if not operator:
@@ -926,10 +950,15 @@ async def terminate_operator(
 async def listen_session_auth(
     request: OperatorListenSessionAuthRequest,
     session_auth_listener: SessionAuthListener = Depends(get_g8ee_session_auth_listener),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Start a session auth listener on PubSub.
     """
+    if request.context:
+        g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=True)
+        g8e_context.validate_against_user(user_info)
+
     try:
         await session_auth_listener.listen(
             operator_session_id=request.operator_session_id,
@@ -949,6 +978,7 @@ async def create_operator_slot(
     operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
     settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
     api_key_service: ApiKeyService = Depends(get_g8ee_api_key_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Create an operator slot.
@@ -963,6 +993,7 @@ async def create_operator_slot(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     try:
         operator_id = str(uuid.uuid4())
@@ -1044,6 +1075,7 @@ async def update_operator_api_key(
     operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
     settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
     api_key_service: ApiKeyService = Depends(get_g8ee_api_key_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Update an operator's API key.
@@ -1059,6 +1091,7 @@ async def update_operator_api_key(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     try:
         operator = await operator_data_service.get_operator(request.operator_id)
@@ -1114,12 +1147,17 @@ async def update_operator_api_key(
 async def generate_api_key(
     request: ApiKeyGenerationRequest,
     api_key_service: ApiKeyService = Depends(get_g8ee_api_key_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """Generate a new API key.
     
     Authority: g8ee.
     SECURITY: Internal only - client component.
     """
+    if request.context:
+        g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=True)
+        g8e_context.validate_against_user(user_info)
+
     try:
         api_key = api_key_service.generate_raw_key(prefix=request.prefix)
         return ApiKeyGenerationResponse(
@@ -1138,12 +1176,17 @@ async def generate_api_key(
 async def revoke_operator_certificate(
     request: OperatorCertificateRevokeRequest,
     certificate_service: CertificateService = Depends(get_g8ee_certificate_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """Revoke an operator certificate.
     
     Authority: g8ee.
     SECURITY: Internal only - client component.
     """
+    if request.context:
+        g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=True)
+        g8e_context.validate_against_user(user_info)
+
     try:
         success = await certificate_service.revoke_certificate(
             serial=request.serial,
@@ -1160,6 +1203,7 @@ async def revoke_operator_certificate(
 async def claim_operator_slot(
     request: OperatorSlotClaimRequest,
     operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Claim an operator slot for device registration.
@@ -1174,6 +1218,7 @@ async def claim_operator_slot(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     try:
         success = await operator_lifecycle_service.claim_operator_slot(
@@ -1215,6 +1260,7 @@ async def bind_operators(
     request: OperatorBindRequest,
     operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
     event_service: EventService = Depends(get_g8ee_event_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Bind operators to a web session.
@@ -1229,6 +1275,7 @@ async def bind_operators(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     bound = []
     failed = []
@@ -1317,6 +1364,7 @@ async def unbind_operators(
     request: OperatorUnbindRequest,
     operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
     event_service: EventService = Depends(get_g8ee_event_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Unbind operators from a web session.
@@ -1331,6 +1379,7 @@ async def unbind_operators(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     unbound = []
     failed = []
@@ -1418,6 +1467,7 @@ async def unbind_operators(
 async def authenticate_operator(
     request: InternalOperatorAuthCall,
     operator_auth_service: OperatorAuthService = Depends(get_g8ee_operator_auth_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth),
     http_request: Request = None,
 ):
     """
@@ -1436,6 +1486,7 @@ async def authenticate_operator(
     g8e_context = G8eHttpContext.from_request_context(
         request.context, is_exempt_path=True
     )
+    g8e_context.validate_against_user(user_info)
 
     result = await operator_auth_service.authenticate_operator(
         authorization_header=request.authorization,
@@ -1456,6 +1507,7 @@ async def authenticate_operator(
 async def register_device_link_operator(
     request: OperatorDeviceLinkRegisterRequest,
     operator_auth_service: OperatorAuthService = Depends(get_g8ee_operator_auth_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth),
     http_request: Request = None,
 ) -> OperatorDeviceLinkRegisterResponse:
     """Bootstrap an operator after device-link consumption (client-internal).
@@ -1467,6 +1519,7 @@ async def register_device_link_operator(
     g8e_context = G8eHttpContext.from_request_context(
         request.context, is_exempt_path=True
     )
+    g8e_context.validate_against_user(user_info)
 
     if not g8e_context.user_id:
         return OperatorDeviceLinkRegisterResponse(
@@ -1495,10 +1548,15 @@ async def register_device_link_operator(
 async def validate_operator_session(
     request: OperatorSessionValidateRequest,
     session_service: OperatorSessionService = Depends(get_g8ee_operator_session_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Validate an operator session.
     """
+    if request.context:
+        g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=True)
+        g8e_context.validate_against_user(user_info)
+
     try:
         session = await session_service.validate_session(request.operator_session_id)
         if session:
@@ -1519,10 +1577,15 @@ async def validate_operator_session(
 async def refresh_operator_session(
     request: OperatorSessionRefreshRequest,
     session_service: OperatorSessionService = Depends(get_g8ee_operator_session_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Refresh an operator session.
     """
+    if request.context:
+        g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=True)
+        g8e_context.validate_against_user(user_info)
+
     try:
         success = await session_service.refresh_session(request.operator_session_id)
         if success:
@@ -1545,6 +1608,7 @@ async def refresh_operator_session(
 async def register_operator_session(
     request: OperatorSessionRegistrationRequest,
     heartbeat_service: HeartbeatSnapshotService = Depends(get_g8ee_heartbeat_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Subscribe g8ee to the heartbeat pub/sub channel for an operator session.
@@ -1558,6 +1622,7 @@ async def register_operator_session(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     await heartbeat_service.register_operator_session(
         operator_id=request.operator_id,
@@ -1584,6 +1649,7 @@ async def register_operator_session(
 async def deregister_operator_session(
     request: OperatorSessionRegistrationRequest,
     heartbeat_service: HeartbeatSnapshotService = Depends(get_g8ee_heartbeat_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Unsubscribe g8ee from the heartbeat pub/sub channel for an operator session.
@@ -1596,6 +1662,7 @@ async def deregister_operator_session(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     await heartbeat_service.deregister_operator_session(
         operator_id=request.operator_id,
@@ -1621,7 +1688,8 @@ async def deregister_operator_session(
 @router.post(InternalApiPaths.G8EE_OPERATORS_STOP, response_model=OperatorStoppedResponse)
 async def stop_operator(
     request: StopOperatorRequest,
-    operator_command_service: OperatorCommandService = Depends(get_g8ee_operator_command_service)
+    operator_command_service: OperatorCommandService = Depends(get_g8ee_operator_command_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """
     Stop an Operator by sending shutdown command via operator pub/sub.
@@ -1632,6 +1700,7 @@ async def stop_operator(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     operator_id = request.operator_id
     operator_session_id = request.operator_session_id
@@ -1683,10 +1752,12 @@ async def stop_operator(
 async def query_investigations(
     request: InvestigationQueryRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """Query investigations - internal cluster use only."""
     # Extract context from request body
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     logger.info(
         "[INTERNAL-HTTP] Investigation query via RequestContext",
@@ -1703,6 +1774,7 @@ async def get_investigation(
     investigation_id: str,
     request: InvestigationGetRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ):
     """Get investigation by ID - internal cluster use only.
     
@@ -1710,6 +1782,7 @@ async def get_investigation(
     """
     # Extract context from request body
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    g8e_context.validate_against_user(user_info)
 
     logger.info(
         "[INTERNAL-HTTP] Get investigation via RequestContext",

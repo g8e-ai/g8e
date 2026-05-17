@@ -20,6 +20,7 @@ from app.constants import (
     PROXY_USER_ID_HEADER,
     AuthMethod,
     ComponentName,
+    G8eHeaders,
 )
 from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser
@@ -59,6 +60,10 @@ async def authenticate_proxy_or_internal(request: Request, settings: G8eePlatfor
     proxy_user_id = request.headers.get(PROXY_USER_ID_HEADER)
     proxy_user_email = request.headers.get(PROXY_USER_EMAIL_HEADER)
     proxy_org_id = request.headers.get(PROXY_ORGANIZATION_ID_HEADER)
+    
+    web_session_id = request.headers.get(G8eHeaders.WEB_SESSION_ID)
+    cli_session_id = request.headers.get(G8eHeaders.CLI_SESSION_ID)
+    operator_session_id = request.headers.get(G8eHeaders.OPERATOR_SESSION_ID)
 
     if proxy_user_id and proxy_user_email:
         logger.info(
@@ -66,7 +71,10 @@ async def authenticate_proxy_or_internal(request: Request, settings: G8eePlatfor
             extra={
                 "user_id": proxy_user_id,
                 "email": proxy_user_email,
-                "organization_id": proxy_org_id
+                "organization_id": proxy_org_id,
+                "web_session_id": web_session_id,
+                "cli_session_id": cli_session_id,
+                "operator_session_id": operator_session_id,
             }
         )
         return AuthenticatedUser(
@@ -74,6 +82,9 @@ async def authenticate_proxy_or_internal(request: Request, settings: G8eePlatfor
             user_id=proxy_user_id,
             email=proxy_user_email,
             organization_id=proxy_org_id,
+            web_session_id=web_session_id,
+            cli_session_id=cli_session_id,
+            operator_session_id=operator_session_id,
             auth_method=AuthMethod.PROXY,
         )
 

@@ -63,7 +63,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	// Since we used port 0, we need to know what ports were assigned.
 	// We'll add getters for the servers in ListenService.
 	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
-	bootstrapURL := fmt.Sprintf("https://localhost:%d", ls.GetBootstrapPort())
+	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	wssURL := fmt.Sprintf("wss://localhost:%d/ws/pubsub", ls.GetWSSPort())
 
@@ -140,13 +140,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	req.Header.Set(constants.HeaderDeviceToken, token)
 
-	bootstrapClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs: rootPool,
-			},
-		},
-	}
+	bootstrapClient := &http.Client{}
 	resp, err = bootstrapClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -267,7 +261,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		},
 	}
 	wsHeader := http.Header{}
-	wsHeader.Set(constants.HeaderOperatorSessionID, regResp.OperatorSessionID)
+	wsHeader.Set(constants.HeaderAuthorization, "Bearer "+regResp.OperatorSessionID)
 
 	wsConn, _, err := dialer.Dial(wssURL, wsHeader)
 	require.NoError(t, err)
@@ -305,7 +299,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	httpReq, err := http.NewRequest(http.MethodPost, mtlsURL+"/pubsub/publish", bytes.NewReader(pubBody))
 	require.NoError(t, err)
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set(constants.HeaderOperatorSessionID, regResp.OperatorSessionID)
+	httpReq.Header.Set(constants.HeaderAuthorization, "Bearer "+regResp.OperatorSessionID)
 
 	resp, err = mtlsClient.Do(httpReq)
 	require.NoError(t, err)
@@ -347,7 +341,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	httpReqRes, err := http.NewRequest(http.MethodPost, mtlsURL+"/pubsub/publish", bytes.NewReader(pubResBody))
 	require.NoError(t, err)
 	httpReqRes.Header.Set("Content-Type", "application/json")
-	httpReqRes.Header.Set(constants.HeaderOperatorSessionID, regResp.OperatorSessionID)
+	httpReqRes.Header.Set(constants.HeaderAuthorization, "Bearer "+regResp.OperatorSessionID)
 
 	resp, err = mtlsClient.Do(httpReqRes)
 	require.NoError(t, err)
