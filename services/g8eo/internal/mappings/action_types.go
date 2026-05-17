@@ -45,6 +45,8 @@ func MapEventTypeToActionType(eventType string) string {
 		return "SHUTDOWN"
 	case constants.Event.Operator.HeartbeatRequested:
 		return "HEARTBEAT"
+	case constants.Event.Operator.Eval.AnswerRequested:
+		return "EVAL_ANSWER"
 	default:
 		// For unknown event types, use the event type itself as action type
 		return eventType
@@ -79,6 +81,8 @@ func MapActionTypeToEventType(actionType string) string {
 		return constants.Event.Operator.ShutdownRequested
 	case "HEARTBEAT":
 		return constants.Event.Operator.HeartbeatRequested
+	case "EVAL_ANSWER":
+		return constants.Event.Operator.Eval.AnswerRequested
 	default:
 		// For unknown action types, use the action type itself as event type
 		return actionType

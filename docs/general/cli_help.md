@@ -178,17 +178,17 @@ When no operator is connected:
 **To start a demo, use `deploy -d <token>`. This will automatically bring up the fleet and authenticate the operators.**
 
 ### evals
-- `deploy -d <token>`: Start and authenticate eval operators with a device link token
-- `run --gold-set <path>`: Execute benchmark against web-session-bound eval operators
-- `list`: List available evaluation scenarios
-- `down|status|logs`: Manage the evaluation fleet
+- `bench --suite <suite> --mode <baseline|receipt>`: Run a benchmark suite against the new harness
+- `verify-receipts <report-dir>`: Re-verify receipt signatures offline
+- `list`: List benchmark suites and bundled gold sets
+- `run|status|deploy|down|logs`: (LEGACY) These commands have been removed in favor of `bench`.
 
-**Eval operators must be manually bound to your session before they can be used for benchmarking. This ensures a human is present during execution.**
+**Receipt mode requires a running Operator and a bound `--operator-session-id`/`--operator-id`. Baseline mode runs the SUT without binding.**
 
-#### evals workflow
-1. `./g8e evals deploy -d <token>`
-2. **Bind the eval operators to your session**
-3. `./g8e evals run --gold-set <path>`
+#### evals workflow (new harness)
+1. `./g8e evals bench --suite ifeval --mode baseline`
+2. `./g8e evals bench --suite ifeval --mode receipt --operator-session-id <id> --operator-id <id>`
+3. `./g8e evals verify-receipts reports/ifeval-<ts>`
 
 ### Integration Tools
 - `mcp`: Model Context Protocol integration (config, test, status)

@@ -261,10 +261,10 @@ type chaosExecutionHandler struct {
 	mutationCount atomic.Int64
 }
 
-func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, eventType string, cmdMsg interface{}) error {
+func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, eventType string, cmdMsg interface{}) (string, error) {
 	msg, ok := cmdMsg.(pubsub.PubSubCommandMessage)
 	if !ok {
-		return nil
+		return "", nil
 	}
 
 	// Simulate ledger activity for file mutations
@@ -296,7 +296,7 @@ func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, ev
 			slog.Error("Failed to unmarshal FileEditRequested", "error", err)
 		}
 	}
-	return nil
+	return "", nil
 }
 
 // Result counters
@@ -408,6 +408,7 @@ func main() {
 	knownActionTypes := []string{
 		"EXECUTE_BASH", "FILE_EDIT", "RESTORE_FILE", "SHUTDOWN",
 		"FS_LIST", "FS_READ", "FS_GREP", "PORT_CHECK", "FETCH_LOGS",
+		"EVAL_ANSWER",
 	}
 
 	// Initialize Ledger
@@ -616,7 +617,7 @@ func fireOne(
 
 	// Execute through the handler
 	eventType := mappings.MapActionTypeToEventType(env.ActionType)
-	err := warden.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, cmdMsg)
+	_, err := warden.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, cmdMsg)
 
 	if err != nil {
 		logger.Warn("execution error", "id", id, "error", err)

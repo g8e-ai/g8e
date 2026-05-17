@@ -64,3 +64,26 @@ The `system_fingerprint` is a stable identifier generated from:
 - Hostname
 
 If a valid certificate is presented from a host with a mismatched fingerprint, the transaction is rejected.
+
+## Warden Public Key Export
+
+The **Warden** (the governance execution boundary) signs all mutation receipts with an Ed25519 key. For external verification (e.g., by the evals harness), the Warden's public key is exported at Operator bootstrap in listen mode.
+
+### Export Location
+
+The Warden public key is written to the PKI directory in two formats:
+
+- **PEM format**: `.g8e/pki/warden_pub.pem`
+  - Standard PEM-encoded public key for use with cryptographic libraries
+- **JSON format**: `.g8e/pki/warden_pub.json`
+  - JSON object containing `key_id`, `public_key` (hex-encoded), and `algorithm` fields
+
+### Usage
+
+The evals harness loads the Warden public key from these files to verify signed receipts for EVAL_ANSWER actions. The public key is exported automatically when the Operator starts in listen mode (`--listen`).
+
+### Key Lifecycle
+
+- The Warden signing key is generated once during first boot and stored in the platform secrets (`.g8e/secrets/warden_signing_key`)
+- The public key is deterministic: it is derived from the private key and exported on every startup
+- The `key_id` in the JSON format is the hex-encoded public key itself, used for signer identification in governance metadata

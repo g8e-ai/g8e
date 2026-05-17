@@ -68,6 +68,11 @@
         "failed": "g8e.v1.operator.slot.initialization.failed"
       }
     },
+    "eval": {
+      "answer": {
+        "requested": "g8e.v1.operator.eval.answer.requested"
+      }
+    },
     "heartbeat": {
       "sent": "g8e.v1.operator.heartbeat.sent",
       "requested": "g8e.v1.operator.heartbeat.requested",

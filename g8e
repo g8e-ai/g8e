@@ -76,9 +76,9 @@ _menu() {
                 read -p "Select demo action [1-3]: " dact
                 case $dact in 1) ./g8e demo up ;; 2) ./g8e demo status ;; 3) ./g8e demo down ;; esac ;;
             7)
-                echo "1) Run benchmark"; echo "2) List evals"; echo "3) Status"
-                read -p "Select eval action [1-3]: " eact
-                case $eact in 1) ./g8e evals run --gold-set benchmark ;; 2) ./g8e evals list ;; 3) ./g8e evals status ;; esac ;;
+                echo "1) Run benchmark"; echo "2) List evals"
+                read -p "Select eval action [1-2]: " eact
+                case $eact in 1) ./g8e evals bench ;; 2) ./g8e evals list ;; esac ;;
             8) ./g8e vars list ;;
             9) if _credentials_exist; then echo "Current Session: $OPERATOR_ID"; read -p "Logout? [y/N]: " lout; [[ "$lout" == "y" ]] && ./g8e logout; else ./g8e login; fi ;;
             10)
@@ -128,7 +128,8 @@ case "$TOP" in
     operator)   exec bash "$SCRIPT_DIR/scripts/cmd/operator.sh" "$SUB" "${@:3}" ;;
     chat)       exec bash "$SCRIPT_DIR/scripts/cmd/chat.sh" "$SUB" "${@:3}" ;;
     test)       exec bash "$SCRIPT_DIR/scripts/cmd/tests.sh" "$SUB" "${@:3}" ;;
-    evals|demo) exec bash "$SCRIPT_DIR/scripts/cmd/evals_demo.sh" "$TOP" "$SUB" "${@:3}" ;;
+    evals)      exec bash "$SCRIPT_DIR/scripts/cmd/evals.sh" "$SUB" "${@:3}" ;;
+    demo)       exec bash "$SCRIPT_DIR/scripts/cmd/demo.sh" "$SUB" "${@:3}" ;;
     user)       exec bash "$SCRIPT_DIR/scripts/cmd/user.sh" "$SUB" "${@:3}" ;;
     vars|login|logout|ssh|aws|search|llm|security|data|mcp)
                 exec bash "$SCRIPT_DIR/scripts/cmd/infra.sh" "$TOP" "$SUB" "${@:3}" ;;

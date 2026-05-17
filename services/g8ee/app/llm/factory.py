@@ -94,28 +94,34 @@ def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool = False, i
     """Generate a cache key for provider instances based on configuration."""
     if is_lite:
         provider_type = settings.lite_provider
+        role_key = settings.lite_api_key
+        role_url = settings.lite_endpoint
     elif is_assistant:
         provider_type = settings.assistant_provider
+        role_key = settings.assistant_api_key
+        role_url = settings.assistant_endpoint
     else:
         provider_type = settings.primary_provider
+        role_key = settings.primary_api_key
+        role_url = settings.primary_endpoint
 
     provider_value = provider_type.value if provider_type else "none"
     key_parts = [provider_value]
 
     if provider_value == LLMProvider.GEMINI.value:
-        key_parts.append(settings.gemini_api_key or "")
+        key_parts.append(role_key or settings.gemini_api_key or "")
     elif provider_value == LLMProvider.OPENAI.value:
-        key_parts.append(settings.openai_endpoint or "")
-        key_parts.append(settings.openai_api_key or "")
+        key_parts.append(role_url or settings.openai_endpoint or "")
+        key_parts.append(role_key or settings.openai_api_key or "")
     elif provider_value == LLMProvider.ANTHROPIC.value:
-        key_parts.append(settings.anthropic_endpoint or "")
-        key_parts.append(settings.anthropic_api_key or "")
+        key_parts.append(role_url or settings.anthropic_endpoint or "")
+        key_parts.append(role_key or settings.anthropic_api_key or "")
     elif provider_value == LLMProvider.OLLAMA.value:
-        key_parts.append(_normalize_ollama_host(settings.ollama_endpoint or ""))
-        key_parts.append(settings.ollama_api_key or "")
+        key_parts.append(_normalize_ollama_host(role_url or settings.ollama_endpoint or ""))
+        key_parts.append(role_key or settings.ollama_api_key or "")
     elif provider_value == LLMProvider.LLAMACPP.value:
-        key_parts.append(_normalize_ollama_host(settings.llamacpp_endpoint or ""))
-        key_parts.append(settings.llamacpp_api_key or "")
+        key_parts.append(_normalize_ollama_host(role_url or settings.llamacpp_endpoint or ""))
+        key_parts.append(role_key or settings.llamacpp_api_key or "")
 
     return "|".join(key_parts)
 
@@ -158,32 +164,38 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False, is_lite:
 
     if is_lite:
         provider_type = settings.lite_provider
+        role_key = settings.lite_api_key
+        role_url = settings.lite_endpoint
     elif is_assistant:
         provider_type = settings.assistant_provider
+        role_key = settings.assistant_api_key
+        role_url = settings.assistant_endpoint
     else:
         provider_type = settings.primary_provider
+        role_key = settings.primary_api_key
+        role_url = settings.primary_endpoint
 
     if provider_type == LLMProvider.OLLAMA:
         provider = OllamaProvider(
-            endpoint=settings.ollama_endpoint,
-            api_key=settings.ollama_api_key,
+            endpoint=role_url or settings.ollama_endpoint,
+            api_key=role_key or settings.ollama_api_key,
         )
     elif provider_type == LLMProvider.OPENAI:
         provider = OpenAIProvider(
-            endpoint=settings.openai_endpoint,
-            api_key=settings.openai_api_key,
+            endpoint=role_url or settings.openai_endpoint,
+            api_key=role_key or settings.openai_api_key,
         )
     elif provider_type == LLMProvider.GEMINI:
-        provider = GeminiProvider(api_key=settings.gemini_api_key)
+        provider = GeminiProvider(api_key=role_key or settings.gemini_api_key)
     elif provider_type == LLMProvider.ANTHROPIC:
         provider = AnthropicProvider(
-            endpoint=settings.anthropic_endpoint,
-            api_key=settings.anthropic_api_key,
+            endpoint=role_url or settings.anthropic_endpoint,
+            api_key=role_key or settings.anthropic_api_key,
         )
     elif provider_type == LLMProvider.LLAMACPP:
         provider = LlamaCppProvider(
-            endpoint=settings.llamacpp_endpoint,
-            api_key=settings.llamacpp_api_key,
+            endpoint=role_url or settings.llamacpp_endpoint,
+            api_key=role_key or settings.llamacpp_api_key,
         )
     else:
         from app.errors import ConfigurationError

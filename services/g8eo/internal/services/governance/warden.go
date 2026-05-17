@@ -13,10 +13,10 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/mappings"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
-	execution "github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
+	execution "github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 )
 
@@ -27,7 +27,7 @@ type L3Verifier interface {
 // ExecutionHandler is the interface for executing verified transactions.
 // This avoids import cycles between governance and pubsub packages.
 type ExecutionHandler interface {
-	ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) error
+	ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) (string, error)
 }
 
 type TransactionAuditStore interface {
@@ -115,11 +115,13 @@ func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg in
 	}
 
 	// 4. Execute through the handler
-	err := w.ExecutionHandler.ExecuteVerifiedTransaction(ctx, eventType, cmdMsg)
+	summary, err := w.ExecutionHandler.ExecuteVerifiedTransaction(ctx, eventType, cmdMsg)
 
 	// 5. Update receipt with final result
 	status := operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
-	summary := "completed"
+	if summary == "" {
+		summary = "completed"
+	}
 	if err != nil {
 		status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 		summary = fmt.Sprintf("failed: %v", err)

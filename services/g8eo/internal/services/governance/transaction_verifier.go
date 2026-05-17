@@ -322,6 +322,8 @@ func (tv *TransactionVerifier) decodePayloadForAction(actionType string, payload
 		msg = &operatorv1.FetchHistoryRequested{}
 	case "FETCH_FILE_HISTORY":
 		msg = &operatorv1.FetchFileHistoryRequested{}
+	case "EVAL_ANSWER":
+		msg = &operatorv1.EvalAnswerRequested{}
 	default:
 		return nil, ErrUnknownActionType
 	}
@@ -388,6 +390,8 @@ func (tv *TransactionVerifier) isMutation(actionType string) bool {
 	switch actionType {
 	case "EXECUTE_BASH", "FILE_EDIT", "RESTORE_FILE", "SHUTDOWN":
 		return true
+	case "EVAL_ANSWER":
+		return false
 	default:
 		return false
 	}

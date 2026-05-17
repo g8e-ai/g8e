@@ -36,10 +36,10 @@ The platform maintains distinct test harnesses with strictly separated lifecycle
 - **Rationale:** Verifies bundled clients without making them substrate dependencies.
 
 ### 3. Evals (Application-Layer Benchmark Path)
-**Command:** `./g8e evals run --operator-session-id <id> --gold-set <path>`
-**Purpose:** Evaluates AI agent (Sage) reasoning and tool-calling accuracy against the product surface experienced by users.
-- **Pattern:** Uses a bound operator session and hits public HTTPS endpoints.
-- **Rationale:** Exercises the product exactly as a user would, asserting that the AI translates intent into safe, correct actions.
+**Command:** `./g8e evals bench --suite ifeval`
+**Purpose:** Evaluates AI agent reasoning and tool-calling accuracy using signed ActionReceipts.
+- **Pattern:** Uses a real Operator and produces verified audit references.
+- **Rationale:** Exercises the product exactly as a user would, asserting that the AI translates intent into safe, correct actions with host-authoritative proof.
 
 ## Running Tests
 
@@ -86,19 +86,14 @@ The `evals` subsystem manages a fleet of simulated operator nodes (via Docker) t
 ### Eval Workflow
 
 ```bash
-# 1. Bring up a fleet of eval nodes (requires a device token)
-./g8e evals deploy --nodes 3 --device-token dlk_...
+# 1. Start the platform
+./g8e platform start
 
-# 2. Run the evaluation against a gold set
-# Requires a bound operator_session_id from a logged-in session
-./g8e evals run --operator-session-id osid_... --gold-set benchmark
+# 2. Run the evaluation benchmark
+./g8e evals bench --suite ifeval --model openai:gpt-4o
 
-# 3. View status or logs
-./g8e evals status
-./g8e evals logs <node-name>
-
-# 4. Tear down the fleet
-./g8e evals down
+# 3. Verify ActionReceipts offline
+./g8e evals verify-receipts reports/ifeval-<timestamp>/
 ```
 
 ### Evaluation Scenarios

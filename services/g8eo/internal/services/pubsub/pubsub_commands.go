@@ -231,6 +231,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		"FS_GREP",
 		"PORT_CHECK",
 		"FETCH_LOGS",
+		"EVAL_ANSWER",
 	}
 	rs.transactionVerifier = governance.NewTransactionVerifier(
 		c.Logger,
@@ -262,6 +263,7 @@ func (rs *PubSubCommandService) buildHandlers() {
 		constants.Event.Operator.FetchFileHistory.Requested: rs.history.HandleFetchFileHistoryRequest,
 		constants.Event.Operator.RestoreFile.Requested:      rs.history.HandleRestoreFileRequest,
 		constants.Event.Operator.ShutdownRequested:          func(ctx context.Context, msg PubSubCommandMessage) { rs.handleShutdownRequest(msg) },
+		constants.Event.Operator.Eval.AnswerRequested:       rs.handleEvalAnswerRequest,
 		constants.Event.Operator.Audit.UserMsg:              rs.audit.HandleUserMsgRequest,
 		constants.Event.Operator.Audit.AIMsg:                rs.audit.HandleAIMsgRequest,
 		constants.Event.Operator.Audit.DirectCmd:            rs.audit.HandleDirectCmdRequest,
@@ -550,23 +552,29 @@ func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
 
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler.
 // This is called by Warden to execute verified transactions, making Warden the execution boundary.
-func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) error {
+func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) (string, error) {
 	handler, ok := rs.handlers[eventType]
 	if !ok {
 		rs.logger.Error("No handler registered for event type", "event_type", eventType)
-		return fmt.Errorf("no handler for event type: %s", eventType)
+		return "", fmt.Errorf("no handler for event type: %s", eventType)
 	}
 
 	// Type assert to PubSubCommandMessage
 	pubsubMsg, ok := cmdMsg.(PubSubCommandMessage)
 	if !ok {
 		rs.logger.Error("Invalid cmdMsg type", "expected", "PubSubCommandMessage", "got", fmt.Sprintf("%T", cmdMsg))
-		return fmt.Errorf("invalid cmdMsg type: %T", cmdMsg)
+		return "", fmt.Errorf("invalid cmdMsg type: %T", cmdMsg)
 	}
 
 	rs.logger.Info("Executing verified transaction through Warden", "event_type", eventType)
+
+	// Special case for EVAL_ANSWER which is synchronous and returns the answer as summary
+	if eventType == constants.Event.Operator.Eval.AnswerRequested {
+		return rs.handleEvalAnswerRequestSync(ctx, pubsubMsg)
+	}
+
 	handler(ctx, pubsubMsg)
-	return nil
+	return "", nil
 }
 
 func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {
@@ -590,6 +598,40 @@ func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) 
 	}
 	rs.logger.Info("Shutting down operator (UAP)", "reason", reason)
 	rs.ShutdownChan <- reason
+}
+
+func (rs *PubSubCommandService) handleEvalAnswerRequest(ctx context.Context, msg PubSubCommandMessage) {
+	_, _ = rs.handleEvalAnswerRequestSync(ctx, msg)
+}
+
+func (rs *PubSubCommandService) handleEvalAnswerRequestSync(ctx context.Context, msg PubSubCommandMessage) (string, error) {
+	rs.logger.Info("Eval answer request received")
+
+	req, err := unmarshalPayload(msg.EventType, msg.Payload)
+	if err != nil {
+		rs.logger.Error("Failed to unmarshal eval answer request", "error", err)
+		return "", err
+	}
+
+	evalReq, ok := req.(*operatorv1.EvalAnswerRequested)
+	if !ok {
+		rs.logger.Error("Invalid payload type for eval answer request", "got", fmt.Sprintf("%T", req))
+		return "", fmt.Errorf("invalid payload type: %T", req)
+	}
+
+	rs.logger.Info("Eval answer recorded",
+		"prompt_id", evalReq.PromptId,
+		"benchmark", evalReq.Benchmark,
+		"model", evalReq.Model,
+		"answer_length", len(evalReq.Answer))
+
+	// Truncate answer to sane bound for receipt (4 KiB per plan)
+	summary := evalReq.Answer
+	if len(summary) > 4096 {
+		summary = summary[:4096]
+	}
+
+	return summary, nil
 }
 
 // SendAutomaticHeartbeat publishes an automatic heartbeat immediately.

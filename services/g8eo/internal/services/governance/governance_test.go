@@ -12,13 +12,17 @@ import (
 )
 
 type mockExecutionHandler struct {
-	executed bool
-	err      error
+	executed                       bool
+	err                            error
+	ExecuteVerifiedTransactionFunc func(ctx context.Context, eventType string, cmdMsg interface{}) (string, error)
 }
 
-func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) error {
+func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) (string, error) {
 	m.executed = true
-	return m.err
+	if m.ExecuteVerifiedTransactionFunc != nil {
+		return m.ExecuteVerifiedTransactionFunc(ctx, eventType, cmdMsg)
+	}
+	return "", m.err
 }
 
 func TestGovernanceFlow(t *testing.T) {

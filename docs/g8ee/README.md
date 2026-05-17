@@ -265,7 +265,7 @@ LLM SDK  →  GeminiProvider  →  stream_response  →  deliver_via_sse
 
 Each `TEXT` chunk produces exactly one HTTP POST to  (`LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` event) when `web_session_id` is present.  relays it to the browser immediately via its SSE connection. `LLM_CHAT_ITERATION_TEXT_COMPLETED` is published once after the loop exits, carrying finish reason, citation metadata, and aggregate token usage.
 
-**Operator-Bound Evals:** When `web_session_id` is None (e.g., if a CLI tool was allowed to run against a bound session without a browser attachment), SSE publishing is skipped entirely. Stream processing still occurs unconditionally to populate `AgentStreamState.response_text`, enabling agent execution without a browser session. The `has_sse` flag controls SSE publishing while stream state mutation runs in all cases. Note that evals now require operators to be bound to a human web session for execution authorization.
+**Operator-Bound Evals:** Stream processing occurs unconditionally to populate `AgentStreamState.response_text`, enabling agent execution without a browser session. Note that evals now require operators to be bound to a human web session for execution authorization.
 
 `deliver_via_sse` chunk dispatch:
 
@@ -1134,30 +1134,25 @@ When `enable_auto_approve` is true and a command's base verb is in the auto-appr
 
 ## AI Evaluation Reporting
 
-AI agent evaluation runs through the **host-driven evals framework** at `services/g8ee/evals/`. Per the architectural mandate in [`docs/testing.md`](../testing.md#evals--public-device-token-path), evals exercise the product surface as real users experience it: device-link tokens, public  HTTPS endpoints, real operator containers via docker compose. They are NOT pytest-driven and do NOT call internal services directly.
+AI agent evaluation runs through the **substrate-first evals framework** at `evals/`. Evals exercise the product surface as real users experience it: canonical JSON UAP envelopes, mTLS-authenticated protocol endpoints, and real operator interactions.
 
 ### Dimensions
 
 | Dimension | Purpose | Gold Set |
 |-----------|---------|----------|
-| **Accuracy** | LLM-as-a-judge grading of agent responses against gold-standard expected behavior and required concepts | `evals/gold_sets/accuracy.json` |
-| **Safety / Benchmark** | Deterministic regex matching on tool-call payloads, including security-refusal scenarios | `evals/gold_sets/benchmark.json` |
-| **Privacy** | Sentinel PII redaction across egress layers | `evals/gold_sets/privacy.json` |
+| **Accuracy** | LLM-as-a-judge grading of agent responses against gold-standard expected behavior and required concepts | `evals/gold_sets/accuracy.json` (planned) |
+| **Safety / Benchmark** | Deterministic regex matching on tool-call payloads, including security-refusal scenarios | `evals/gold_sets/benchmark.json` (planned) |
+| **Privacy** | Sentinel PII redaction across egress layers | `evals/gold_sets/privacy.json` (planned) |
+| **IFEval** | Instruction Following Evaluation benchmark | `evals/gold_sets/ifeval/input_data.jsonl` |
 
 ### Running Evals
 
 ```bash
-# Bring up real-operator fleet
-./g8e evals deploy -d dlk_xxx
-
-# Inspect fleet status
-./g8e evals status
-
-# Tear down
-./g8e evals down
+# Run benchmark
+./g8e evals bench --suite ifeval --operator-session-id <session_id>
 ```
 
-The runner under `app/evals/runner/` (invoked as `python -m app.evals.runner.cli` from the g8ee component root) is invoked separately and writes artifacts (`report.txt`, `results.csv`, `summary.json`) to `services/g8ee/reports/evals/<timestamp>/`, with a `latest` symlink to the most recent run.
+The runner under `evals/` (invoked via `./g8e evals bench`) writes artifacts to `reports/` (default).
 
 ### Internal-side Reporting Library
 

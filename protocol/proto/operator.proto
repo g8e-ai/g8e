@@ -344,6 +344,20 @@ message ShutdownRequested {
   string reason = 1;
 }
 
+message EvalAnswerRequested {
+  // Unique identifier for this prompt/task in the benchmark
+  string prompt_id = 1;
+
+  // Benchmark name (e.g., "ifeval", "simpleqa", "gpqa")
+  string benchmark = 2;
+
+  // The model's answer text (opaque to the substrate)
+  string answer = 3;
+
+  // Model identifier (provider:model format, e.g., "openai:gpt-4")
+  string model = 4;
+}
+
 // ActionReceipt is the signed proof of a completed or failed mutation.
 // It is emitted by the Warden after execution.
 message ActionReceipt {

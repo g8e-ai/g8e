@@ -115,6 +115,11 @@ type operatorFetchFileDiffEvents struct {
 	Failed    string
 }
 
+// operatorEvalEvents mirrors protocol/constants/events.json operator.eval.*
+type operatorEvalEvents struct {
+	AnswerRequested string
+}
+
 // operatorAuditEvents mirrors protocol/constants/events.json g8e.audit.*
 type operatorAuditEvents struct {
 	UserMsg         string
@@ -147,6 +152,7 @@ type operatorEvents struct {
 	FetchFileHistory operatorFetchFileHistoryEvents
 	RestoreFile      operatorRestoreFileEvents
 	FetchFileDiff    operatorFetchFileDiffEvents
+	Eval             operatorEvalEvents
 	Audit            operatorAuditEvents
 }
 
@@ -243,6 +249,9 @@ var Event = events{
 			Requested: "g8e.v1.operator.file.diff.fetch.requested",
 			Completed: "g8e.v1.operator.file.diff.fetch.completed",
 			Failed:    "g8e.v1.operator.file.diff.fetch.failed",
+		},
+		Eval: operatorEvalEvents{
+			AnswerRequested: "g8e.v1.operator.eval.answer.requested",
 		},
 		Audit: operatorAuditEvents{
 			UserMsg:         "g8e.v1.operator.audit.user.recorded",

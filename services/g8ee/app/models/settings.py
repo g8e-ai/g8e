@@ -257,6 +257,13 @@ class LLMSettings(G8eBaseModel):
     assistant_model: str | None = Field(default=None, alias="llm_assistant_model")
     lite_model: str | None = Field(default=None, alias="llm_lite_model")
 
+    primary_api_key: str | None = Field(default=None)
+    primary_endpoint: str | None = Field(default=None)
+    assistant_api_key: str | None = Field(default=None)
+    assistant_endpoint: str | None = Field(default=None)
+    lite_api_key: str | None = Field(default=None)
+    lite_endpoint: str | None = Field(default=None)
+
     openai_endpoint: str | None = Field(default=OPENAI_DEFAULT_ENDPOINT)
     openai_api_key: str | None = Field(default=None)
 
@@ -290,8 +297,10 @@ class LLMSettings(G8eBaseModel):
         return self.lite_model or self.assistant_model or None
 
     @property
-    def primary_endpoint(self) -> str | None:
-        """Return the active primary provider endpoint."""
+    def primary_endpoint_resolved(self) -> str | None:
+        """Return the active primary provider endpoint, role-specific first."""
+        if self.primary_endpoint:
+            return self.primary_endpoint
         endpoints = {
             LLMProvider.OPENAI: self.openai_endpoint,
             LLMProvider.ANTHROPIC: self.anthropic_endpoint,
@@ -302,8 +311,10 @@ class LLMSettings(G8eBaseModel):
         return endpoints.get(self.primary_provider)
 
     @property
-    def assistant_endpoint(self) -> str | None:
-        """Return the active assistant provider endpoint."""
+    def assistant_endpoint_resolved(self) -> str | None:
+        """Return the active assistant provider endpoint, role-specific first."""
+        if self.assistant_endpoint:
+            return self.assistant_endpoint
         endpoints = {
             LLMProvider.OPENAI: self.openai_endpoint,
             LLMProvider.ANTHROPIC: self.anthropic_endpoint,
@@ -312,6 +323,59 @@ class LLMSettings(G8eBaseModel):
             LLMProvider.LLAMACPP: self.llamacpp_endpoint,
         }
         return endpoints.get(self.assistant_provider)
+
+    @property
+    def lite_endpoint_resolved(self) -> str | None:
+        """Return the active lite provider endpoint, role-specific first."""
+        if self.lite_endpoint:
+            return self.lite_endpoint
+        endpoints = {
+            LLMProvider.OPENAI: self.openai_endpoint,
+            LLMProvider.ANTHROPIC: self.anthropic_endpoint,
+            LLMProvider.OLLAMA: self.ollama_endpoint,
+            LLMProvider.GEMINI: None,
+            LLMProvider.LLAMACPP: self.llamacpp_endpoint,
+        }
+        return endpoints.get(self.lite_provider)
+
+    def get_primary_api_key(self) -> str | None:
+        """Return the active primary provider API key, role-specific first."""
+        if self.primary_api_key:
+            return self.primary_api_key
+        keys = {
+            LLMProvider.OPENAI: self.openai_api_key,
+            LLMProvider.ANTHROPIC: self.anthropic_api_key,
+            LLMProvider.GEMINI: self.gemini_api_key,
+            LLMProvider.OLLAMA: self.ollama_api_key,
+            LLMProvider.LLAMACPP: self.llamacpp_api_key,
+        }
+        return keys.get(self.primary_provider)
+
+    def get_assistant_api_key(self) -> str | None:
+        """Return the active assistant provider API key, role-specific first."""
+        if self.assistant_api_key:
+            return self.assistant_api_key
+        keys = {
+            LLMProvider.OPENAI: self.openai_api_key,
+            LLMProvider.ANTHROPIC: self.anthropic_api_key,
+            LLMProvider.GEMINI: self.gemini_api_key,
+            LLMProvider.OLLAMA: self.ollama_api_key,
+            LLMProvider.LLAMACPP: self.llamacpp_api_key,
+        }
+        return keys.get(self.assistant_provider)
+
+    def get_lite_api_key(self) -> str | None:
+        """Return the active lite provider API key, role-specific first."""
+        if self.lite_api_key:
+            return self.lite_api_key
+        keys = {
+            LLMProvider.OPENAI: self.openai_api_key,
+            LLMProvider.ANTHROPIC: self.anthropic_api_key,
+            LLMProvider.GEMINI: self.gemini_api_key,
+            LLMProvider.OLLAMA: self.ollama_api_key,
+            LLMProvider.LLAMACPP: self.llamacpp_api_key,
+        }
+        return keys.get(self.lite_provider)
 
 class BatchExecutionSettings(G8eBaseModel):
     """Batch execution configuration for operator tools.

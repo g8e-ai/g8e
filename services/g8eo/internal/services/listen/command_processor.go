@@ -61,6 +61,7 @@ func (cp *CommandProcessor) Start(ctx context.Context) error {
 	knownActionTypes := []string{
 		"EXECUTE_BASH", "FILE_EDIT", "RESTORE_FILE", "SHUTDOWN",
 		"FS_LIST", "FS_READ", "FS_GREP", "PORT_CHECK", "FETCH_LOGS",
+		"EVAL_ANSWER",
 	}
 
 	// The governance interfaces from GovernanceDeps need to be converted to the expected interface types.

@@ -15,7 +15,11 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/x509"
+	"encoding/hex"
+	"encoding/json"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"io"
@@ -580,6 +584,13 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 		os.Exit(constants.ExitConfigError)
 	}
 
+	// Export Warden public key for receipt verification by evals harness
+	wardenPub := wardenPriv.Public().(ed25519.PublicKey)
+	if err := exportWardenPublicKey(cfg.PKIDir, wardenPub, wardenKeyID, logger); err != nil {
+		logger.Error("Failed to export Warden public key", "error", err)
+		os.Exit(constants.ExitConfigError)
+	}
+
 	// Loopback Pub/Sub for in-process command dispatch
 	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetHTTPHandler().GetPubSubBroker())
 
@@ -816,4 +827,45 @@ func handleResetVault(vault *vault.Vault, logger *slog.Logger) {
 
 	logger.Info("Vault has been reset, all encrypted data has been destroyed")
 	os.Exit(constants.ExitSuccess)
+}
+
+// exportWardenPublicKey writes the Warden's public key to both PEM and JSON formats
+// in the PKI directory for receipt verification by the evals harness.
+func exportWardenPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
+	if err := os.MkdirAll(pkiDir, 0700); err != nil {
+		return fmt.Errorf("create PKI directory: %w", err)
+	}
+
+	// Write PEM format
+	pemPath := filepath.Join(pkiDir, "warden_pub.pem")
+	pemData := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubKey,
+	})
+	if err := os.WriteFile(pemPath, pemData, 0644); err != nil {
+		return fmt.Errorf("write warden_pub.pem: %w", err)
+	}
+	if logger != nil {
+		logger.Info("Warden public key exported", "path", pemPath, "format", "PEM")
+	}
+
+	// Write JSON format
+	jsonPath := filepath.Join(pkiDir, "warden_pub.json")
+	jsonData := map[string]string{
+		"key_id":     keyID,
+		"public_key": hex.EncodeToString(pubKey),
+		"algorithm":  "ed25519",
+	}
+	jsonBytes, err := json.MarshalIndent(jsonData, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal warden_pub.json: %w", err)
+	}
+	if err := os.WriteFile(jsonPath, jsonBytes, 0644); err != nil {
+		return fmt.Errorf("write warden_pub.json: %w", err)
+	}
+	if logger != nil {
+		logger.Info("Warden public key exported", "path", jsonPath, "format", "JSON")
+	}
+
+	return nil
 }
