@@ -30,25 +30,46 @@ accordingly. publish_event_to_client() no longer exists.
 
 from typing import Any
 
+from pydantic import model_validator
+
 from app.constants import EventType, ToolCallStatus
 from app.models.base import G8eBaseModel, Field, UTCDatetime
 
 
 class SessionEvent(G8eBaseModel):
-    """Event that must reach a specific connected browser session.
+    """Event that must reach a specific connected client session.
 
-    Use this when the triggering request arrived on a known web_session_id
-    (approval requests, command broadcasts, AI stream events, etc.).
+    Use this when the triggering request arrived on a known client session —
+    either a browser (web_session_id) or a BYO CLI client (cli_session_id).
+    Both are first-class session types and the substrate keeps their routing
+    namespaces strictly disjoint, so producers MUST set exactly one of the two
+    session id fields. Setting neither (anonymous) or both (ambiguous) is a
+    construction error caught here, before the wire layer would otherwise
+    collapse the event into the wrong namespace.
     """
 
     event_type: EventType = Field(description="client event type")
     payload: G8eBaseModel = Field(description="Typed event-specific payload")
     web_session_id: str | None = Field(default=None, description="Browser session to deliver to")
-    cli_session_id: str | None = Field(default=None, description="CLI session to deliver to")
+    cli_session_id: str | None = Field(default=None, description="CLI/BYO session to deliver to")
     user_id: str = Field(description="User ID associated with the session")
     case_id: str | None = Field(default=None, description="Case correlation ID")
     investigation_id: str | None = Field(default=None, description="Investigation correlation ID")
     task_id: str | None = Field(default=None, description="AI task ID for routing")
+
+    @model_validator(mode="after")
+    def _exactly_one_session_id(self) -> "SessionEvent":
+        if self.web_session_id and self.cli_session_id:
+            raise ValueError(
+                "SessionEvent cannot set both web_session_id and cli_session_id; "
+                "web and CLI are disjoint first-class session types"
+            )
+        if not self.web_session_id and not self.cli_session_id:
+            raise ValueError(
+                "SessionEvent requires exactly one of web_session_id or cli_session_id; "
+                "use BackgroundEvent for user-fanout events"
+            )
+        return self
 
 
 class BackgroundEvent(G8eBaseModel):

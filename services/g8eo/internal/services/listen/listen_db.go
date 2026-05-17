@@ -799,12 +799,39 @@ func (s *ListenDBService) KVExpire(key string, ttlSeconds int) bool {
 	return n > 0
 }
 
-// SSEEventsAppend inserts a row into the sse_events table.
-func (s *ListenDBService) SSEEventsAppend(sessionKey, eventType, payload string) error {
+// Allowed values for sse_events.session_type. 'web' and 'cli' are first-class
+// client session types — both deliver investigation events from g8ee, but they
+// occupy disjoint routing namespaces so a CLI session can never accidentally
+// receive a browser session's events (or vice versa). 'user' is reserved for
+// background fanout to every session owned by a user.
+const (
+	SSESessionTypeWeb  = "web"
+	SSESessionTypeCLI  = "cli"
+	SSESessionTypeUser = "user"
+)
+
+// IsValidSSESessionType reports whether t is an accepted session_type.
+func IsValidSSESessionType(t string) bool {
+	switch t {
+	case SSESessionTypeWeb, SSESessionTypeCLI, SSESessionTypeUser:
+		return true
+	}
+	return false
+}
+
+// SSEEventsAppend inserts a row into the sse_events table. sessionType MUST be
+// one of SSESessionType{Web,CLI,User}; sessionID MUST be non-empty.
+func (s *ListenDBService) SSEEventsAppend(sessionType, sessionID, eventType, payload string) error {
+	if !IsValidSSESessionType(sessionType) {
+		return fmt.Errorf("invalid sse session_type %q (want web|cli|user)", sessionType)
+	}
+	if sessionID == "" {
+		return fmt.Errorf("sse session_id must not be empty")
+	}
 	now := sqliteutil.NowTimestamp()
 	_, err := s.db.Exec(
-		"INSERT INTO sse_events (session_key, event_type, payload, created_at) VALUES (?, ?, ?, ?)",
-		sessionKey, eventType, payload, now,
+		"INSERT INTO sse_events (session_type, session_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?)",
+		sessionType, sessionID, eventType, payload, now,
 	)
 	return err
 }
@@ -827,17 +854,19 @@ func (s *ListenDBService) SSEEventsCount() (int64, error) {
 
 // SSEEventRow is a single row from the sse_events table.
 type SSEEventRow struct {
-	ID         int64  `json:"id"`
-	SessionKey string `json:"session_key"`
-	EventType  string `json:"event_type"`
-	Payload    string `json:"payload"`
-	CreatedAt  string `json:"created_at"`
+	ID          int64  `json:"id"`
+	SessionType string `json:"session_type"`
+	SessionID   string `json:"session_id"`
+	EventType   string `json:"event_type"`
+	Payload     string `json:"payload"`
+	CreatedAt   string `json:"created_at"`
 }
 
-// SSEEventsListSince returns up to `limit` events for the given session key
-// with id > sinceID, ordered by id ascending. If sessionKey is empty, returns
-// events across all sessions (admin/debug use).
-func (s *ListenDBService) SSEEventsListSince(sessionKey string, sinceID int64, limit int) ([]SSEEventRow, error) {
+// SSEEventsListSince returns up to `limit` events for the given typed session
+// with id > sinceID, ordered by id ascending. If sessionType AND sessionID are
+// both empty, returns events across all sessions (admin/debug use). Otherwise
+// sessionType MUST be a valid value and sessionID MUST be non-empty.
+func (s *ListenDBService) SSEEventsListSince(sessionType, sessionID string, sinceID int64, limit int) ([]SSEEventRow, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
@@ -845,15 +874,21 @@ func (s *ListenDBService) SSEEventsListSince(sessionKey string, sinceID int64, l
 		rows *sql.Rows
 		err  error
 	)
-	if sessionKey == "" {
+	if sessionType == "" && sessionID == "" {
 		rows, err = s.db.Query(
-			"SELECT id, session_key, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
+			"SELECT id, session_type, session_id, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
 			sinceID, limit,
 		)
 	} else {
+		if !IsValidSSESessionType(sessionType) {
+			return nil, fmt.Errorf("invalid sse session_type %q (want web|cli|user)", sessionType)
+		}
+		if sessionID == "" {
+			return nil, fmt.Errorf("sse session_id must not be empty")
+		}
 		rows, err = s.db.Query(
-			"SELECT id, session_key, event_type, payload, created_at FROM sse_events WHERE session_key = ? AND id > ? ORDER BY id ASC LIMIT ?",
-			sessionKey, sinceID, limit,
+			"SELECT id, session_type, session_id, event_type, payload, created_at FROM sse_events WHERE session_type = ? AND session_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
+			sessionType, sessionID, sinceID, limit,
 		)
 	}
 	if err != nil {
@@ -863,7 +898,7 @@ func (s *ListenDBService) SSEEventsListSince(sessionKey string, sinceID int64, l
 	out := make([]SSEEventRow, 0)
 	for rows.Next() {
 		var r SSEEventRow
-		if err := rows.Scan(&r.ID, &r.SessionKey, &r.EventType, &r.Payload, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.SessionType, &r.SessionID, &r.EventType, &r.Payload, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

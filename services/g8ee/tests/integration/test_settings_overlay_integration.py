@@ -79,7 +79,7 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "component_urls": {
                     "g8ee_url": "https://localhost:8443",
-                    "client_url": "https://localhost:443"
+                    "client_url": "https://localhost:9000"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
@@ -161,7 +161,7 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "component_urls": {
                     "g8ee_url": "https://localhost:8443",
-                    "client_url": "https://localhost:443"
+                    "client_url": "https://localhost:9000"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
@@ -317,7 +317,7 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "component_urls": {
                     "g8ee_url": "https://localhost:8443",
-                    "client_url": "https://localhost:443"
+                    "client_url": "https://localhost:9000"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,

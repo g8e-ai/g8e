@@ -30,15 +30,20 @@ CREATE TABLE IF NOT EXISTS kv_store (
 );
 CREATE INDEX IF NOT EXISTS idx_kv_expires ON kv_store(expires_at);
 
--- SSE event buffer: per-session ring buffer for reconnection replay
+-- SSE event buffer: per-session ring buffer for reconnection replay.
+-- session_type is a first-class discriminator: 'web' (browser UI), 'cli' (BYO
+-- CLI / scripted client), or 'user' (background fanout to all of a user's
+-- sessions). web and cli are routed identically by the substrate but MUST
+-- never be conflated under a single shared session_id namespace.
 CREATE TABLE IF NOT EXISTS sse_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_key TEXT NOT NULL,
+    session_type TEXT NOT NULL,
+    session_id TEXT NOT NULL,
     event_type TEXT NOT NULL,
     payload TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_sse_session ON sse_events(session_key, id);
+CREATE INDEX IF NOT EXISTS idx_sse_session ON sse_events(session_type, session_id, id);
 CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 
 -- Blob store: raw binary attachments keyed by namespace + id

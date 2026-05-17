@@ -264,6 +264,30 @@ _credentials_exist() {
 
 _ensure_authenticated() {
     if _load_credentials; then
+        # Validate the saved CLI certificate against the *current* trust bundle.
+        # `./g8e platform clean` regenerates the runtime PKI but leaves the
+        # per-user credentials in $HOME/.g8e untouched, so without this check
+        # the CLI presents a cert signed by a previous Root CA and every mTLS
+        # handshake fails with `x509: ECDSA verification failure`. We refuse to
+        # paper over that — clear the stale credentials and require re-login so
+        # the cause is obvious.
+        local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
+        local cert_file="${G8E_CLI_CERT:-$G8E_CLI_CERT_FILE}"
+        local key_file="${G8E_CLI_KEY:-$G8E_CLI_KEY_FILE}"
+        if [[ ! -f "$trust_bundle" ]]; then
+            echo "[g8e] Trust bundle not found at $trust_bundle — start the platform first: ./g8e platform start" >&2
+            exit 1
+        fi
+        if [[ ! -f "$cert_file" || ! -f "$key_file" ]]; then
+            echo "[g8e] CLI certificate is missing — re-authenticate: ./g8e login" >&2
+            _clear_credentials
+            exit 1
+        fi
+        if ! openssl verify -CAfile "$trust_bundle" "$cert_file" >/dev/null 2>&1; then
+            echo "[g8e] CLI certificate is no longer trusted by the current Operator CA (likely after ./g8e platform clean). Re-authenticate: ./g8e login" >&2
+            _clear_credentials
+            exit 1
+        fi
         export OPERATOR_SESSION_ID USER_ID OPERATOR_ID G8E_CLI_CERT G8E_CLI_KEY
         return 0
     fi

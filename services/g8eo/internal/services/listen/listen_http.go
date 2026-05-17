@@ -1163,10 +1163,15 @@ func (h *HTTPHandler) handleSSEEvents(w http.ResponseWriter, r *http.Request, id
 // =============================================================================
 
 // internalSSEPushPayload mirrors the wire shape produced by g8ee
-// (SessionEventWire | BackgroundEventWire). Both shapes carry an `event`
-// object with a discriminator `type` plus an opaque `data` blob; SessionEvent
-// also carries a top-level `web_session_id`. We persist the routing key as
-// `session_key` — for now, web_session_id is the routing key the CLI uses.
+// (SessionEventWire | BackgroundEventWire). Both shapes carry an `event` object
+// with a discriminator `type` plus an opaque `data` blob.
+//
+// CLI is a first-class BYO frontend: it receives investigation events from
+// g8ee identically to a browser, but the substrate keeps the two routing
+// namespaces strictly disjoint. Producers MUST set exactly one of
+// web_session_id (web UI session) or cli_session_id (CLI / BYO session) for
+// SessionEvent envelopes; user_id alone is reserved for BackgroundEvent fanout
+// and persisted under session_type='user'.
 type internalSSEPushPayload struct {
 	WebSessionID string          `json:"web_session_id"`
 	CliSessionID string          `json:"cli_session_id"`
@@ -1197,15 +1202,27 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Routing key: prefer web_session_id, then cli_session_id, fallback to user_id.
-	sessionKey := strings.TrimSpace(p.WebSessionID)
-	if sessionKey == "" {
-		sessionKey = strings.TrimSpace(p.CliSessionID)
+	web := strings.TrimSpace(p.WebSessionID)
+	cli := strings.TrimSpace(p.CliSessionID)
+	user := strings.TrimSpace(p.UserID)
+
+	// SessionEvent envelopes MUST select exactly one client session type.
+	// Refusing both prevents a producer from accidentally double-routing the
+	// same event into two disjoint client namespaces.
+	if web != "" && cli != "" {
+		jsonError(w, http.StatusBadRequest, "web_session_id and cli_session_id are mutually exclusive")
+		return
 	}
-	if sessionKey == "" {
-		sessionKey = strings.TrimSpace(p.UserID)
-	}
-	if sessionKey == "" {
+
+	var sessionType, sessionID string
+	switch {
+	case web != "":
+		sessionType, sessionID = SSESessionTypeWeb, web
+	case cli != "":
+		sessionType, sessionID = SSESessionTypeCLI, cli
+	case user != "":
+		sessionType, sessionID = SSESessionTypeUser, user
+	default:
 		jsonError(w, http.StatusBadRequest, "web_session_id, cli_session_id or user_id required")
 		return
 	}
@@ -1219,8 +1236,8 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		inner.Type = "unknown"
 	}
 
-	if err := h.db.SSEEventsAppend(sessionKey, inner.Type, string(body)); err != nil {
-		h.logger.Error("SSE push: failed to append event", "error", err, "type", inner.Type)
+	if err := h.db.SSEEventsAppend(sessionType, sessionID, inner.Type, string(body)); err != nil {
+		h.logger.Error("SSE push: failed to append event", "error", err, "type", inner.Type, "session_type", sessionType)
 		jsonError(w, http.StatusInternalServerError, "failed to persist event")
 		return
 	}
@@ -1237,11 +1254,25 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 		return
 	}
 	q := r.URL.Query()
-	sessionKey := q.Get("session_id")
+	sessionType := strings.TrimSpace(q.Get("session_type"))
+	sessionID := strings.TrimSpace(q.Get("session_id"))
 	sinceID, _ := strconv.ParseInt(q.Get("since_id"), 10, 64)
 	limit, _ := strconv.Atoi(q.Get("limit"))
 
-	rows, err := h.db.SSEEventsListSince(sessionKey, sinceID, limit)
+	// Consumers MUST declare which session namespace they are reading from.
+	// A CLI/BYO client polls with session_type=cli; a browser with web. The
+	// substrate refuses to fall back to a single shared namespace because that
+	// is precisely the conflation we are eliminating.
+	if sessionID == "" {
+		jsonError(w, http.StatusBadRequest, "session_id is required")
+		return
+	}
+	if !IsValidSSESessionType(sessionType) {
+		jsonError(w, http.StatusBadRequest, "session_type is required (web|cli|user)")
+		return
+	}
+
+	rows, err := h.db.SSEEventsListSince(sessionType, sessionID, sinceID, limit)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return

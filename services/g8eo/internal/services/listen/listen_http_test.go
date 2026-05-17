@@ -388,7 +388,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("SSE Events count", func(t *testing.T) {
-		h.db.SSEEventsAppend("s1", "T", "{}")
+		h.db.SSEEventsAppend(SSESessionTypeWeb, "s1", "T", "{}")
 		req := httptest.NewRequest(http.MethodGet, "/db/_sse_events/count", nil)
 		rr := httptest.NewRecorder()
 		h.handleSSEEvents(rr, req, "count")
@@ -411,9 +411,10 @@ func TestHandleDB(t *testing.T) {
 }
 
 // Regression: g8ee Engine pushes typed events via /api/internal/sse/push and
-// CLI/dashboard consumers poll /api/internal/sse/events?session_id=...&since_id=N.
-// The substrate must persist with the routing key (web_session_id) and replay
-// in id-ascending order, returning the full envelope as a JSON string.
+// CLI/dashboard consumers poll /api/internal/sse/events?session_type=...&
+// session_id=...&since_id=N. The substrate persists each event under a typed
+// (session_type, session_id) tuple so CLI (BYO frontend) and web sessions
+// occupy disjoint routing namespaces and never receive each other's events.
 func TestInternalSSEBridge(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 	_, _ = h.db.SSEEventsWipe()
@@ -425,12 +426,12 @@ func TestInternalSSEBridge(t *testing.T) {
 		return rr
 	}
 
-	t.Run("session event is persisted and replayable", func(t *testing.T) {
+	t.Run("web session event is persisted and replayable", func(t *testing.T) {
 		body := `{"web_session_id":"ws-1","user_id":"u-1","event":{"type":"ai.text","data":{"chunk":"hello"}}}`
 		rr := push(body)
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?session_id=ws-1&since_id=0", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?session_type=web&session_id=ws-1&since_id=0", nil)
 		rr = httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -438,12 +439,45 @@ func TestInternalSSEBridge(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), `\"chunk\":\"hello\"`)
 	})
 
-	t.Run("background event falls back to user_id routing key", func(t *testing.T) {
+	t.Run("cli session event is persisted and replayable as a first-class type", func(t *testing.T) {
+		body := `{"cli_session_id":"cli-1","user_id":"u-1","event":{"type":"ai.text","data":{"chunk":"byo"}}}`
+		rr := push(body)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?session_type=cli&session_id=cli-1&since_id=0", nil)
+		rr = httptest.NewRecorder()
+		h.handleInternalSSEEvents(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"event_type":"ai.text"`)
+		assert.Contains(t, rr.Body.String(), `\"chunk\":\"byo\"`)
+	})
+
+	t.Run("cli and web with colliding ids do not cross namespaces", func(t *testing.T) {
+		_, _ = h.db.SSEEventsWipe()
+		rr := push(`{"web_session_id":"shared-id","user_id":"u","event":{"type":"web.only","data":{}}}`)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		rr = push(`{"cli_session_id":"shared-id","user_id":"u","event":{"type":"cli.only","data":{}}}`)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?session_type=cli&session_id=shared-id&since_id=0", nil)
+		rr = httptest.NewRecorder()
+		h.handleInternalSSEEvents(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"event_type":"cli.only"`)
+		assert.NotContains(t, rr.Body.String(), `"event_type":"web.only"`)
+	})
+
+	t.Run("web and cli session ids are mutually exclusive on push", func(t *testing.T) {
+		rr := push(`{"web_session_id":"w","cli_session_id":"c","event":{"type":"x"}}`)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("background event uses user_id session_type", func(t *testing.T) {
 		body := `{"user_id":"u-2","event":{"type":"system.notice","data":{}}}`
 		rr := push(body)
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?session_id=u-2&since_id=0", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?session_type=user&session_id=u-2&since_id=0", nil)
 		rr = httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -460,11 +494,18 @@ func TestInternalSSEBridge(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
+	t.Run("events GET requires session_type", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?session_id=ws-1&since_id=0", nil)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEEvents(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
 	t.Run("since_id replays only newer events", func(t *testing.T) {
 		_, _ = h.db.SSEEventsWipe()
-		_ = h.db.SSEEventsAppend("ws-x", "a", `{"event":{"type":"a"}}`)
-		_ = h.db.SSEEventsAppend("ws-x", "b", `{"event":{"type":"b"}}`)
-		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?session_id=ws-x&since_id=0&limit=1", nil)
+		_ = h.db.SSEEventsAppend(SSESessionTypeWeb, "ws-x", "a", `{"event":{"type":"a"}}`)
+		_ = h.db.SSEEventsAppend(SSESessionTypeWeb, "ws-x", "b", `{"event":{"type":"b"}}`)
+		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?session_type=web&session_id=ws-x&since_id=0&limit=1", nil)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)

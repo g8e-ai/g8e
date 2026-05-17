@@ -80,7 +80,9 @@ _chat_stream_events() {
         _build_protocol_curl_args args || return 1
         args+=(-X GET)
         local resp
-        if ! resp=$(curl "${args[@]}" "$OPERATOR_HTTP_URL/api/internal/sse/events?session_id=${session_id}&since_id=${last_id}&limit=200" 2>/dev/null); then
+        # CLI is a first-class BYO session type: poll only the cli namespace so
+        # we never accidentally drain a colliding web session id.
+        if ! resp=$(curl "${args[@]}" "$OPERATOR_HTTP_URL/api/internal/sse/events?session_type=cli&session_id=${session_id}&since_id=${last_id}&limit=200" 2>/dev/null); then
             # curl failed (network issue, or Operator down)
             sleep "$interval"
             continue
