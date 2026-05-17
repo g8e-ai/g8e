@@ -26,7 +26,7 @@ This SUT drains agent events by polling the Operator's per-session SSE
 This is acceptable for v1 (the replay buffer is the only consumer-facing
 surface today) but is *not* the long-term shape. The correct fix is to
 subscribe to a real ``text/event-stream`` endpoint on the Operator
-(server-pushed SSE keyed by ``session_id`` + ``since_id``) so the bench
+(server-pushed SSE keyed by ``cli_session_id`` + ``since_id``) so the bench
 receives each event as it is produced, with no polling and no buffer
 scan.
 
@@ -253,7 +253,7 @@ class G8eeChatSUT:
     def _build_chat_body(self, task: Task) -> dict[str, Any]:
         body: dict[str, Any] = {
             "context": {
-                "cli_session_id": self.env.operator_session_id,
+                "cli_session_id": self.env.cli_session_id,
                 "user_id": self.env.user_id,
                 "case_id": "",
                 "investigation_id": "",
@@ -305,7 +305,7 @@ class G8eeChatSUT:
             resp = await client.get(
                 f"{self.env.operator_url}/api/internal/sse/events",
                 params={
-                    "session_id": self.env.operator_session_id,
+                    "cli_session_id": self.env.cli_session_id,
                     "since_id": 0,
                     "limit": 1000,
                 },
@@ -345,7 +345,7 @@ class G8eeChatSUT:
                 resp = await client.get(
                     f"{self.env.operator_url}/api/internal/sse/events",
                     params={
-                        "session_id": self.env.operator_session_id,
+                        "cli_session_id": self.env.cli_session_id,
                         "since_id": cursor,
                         "limit": 500,
                     },

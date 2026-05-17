@@ -33,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
+	"github.com/google/uuid"
 )
 
 func readBody(r *http.Request) ([]byte, error) {
@@ -328,18 +329,19 @@ func (h *HTTPHandler) handlePKISignCSR(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		CSR            string `json:"csr_pem"`
-		LeafType       string `json:"leaf_type"`
-		OrganizationID string `json:"organization_id"`
-		OperatorID     string `json:"operator_id"`
-		SessionID      string `json:"session_id"`
+		CSR               string `json:"csr_pem"`
+		LeafType          string `json:"leaf_type"`
+		OrganizationID    string `json:"organization_id"`
+		OperatorID        string `json:"operator_id"`
+		UserID            string `json:"user_id"`
+		WorkloadSessionID string `json:"workload_session_id"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
-	certPEM, chainPEM, err := h.pki.SignCSR(req.CSR, req.LeafType, req.OrganizationID, req.OperatorID, req.SessionID)
+	certPEM, chainPEM, err := h.pki.SignCSR(req.CSR, req.LeafType, req.OrganizationID, req.OperatorID, req.UserID, req.WorkloadSessionID)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -981,7 +983,7 @@ func (h *HTTPHandler) handleAuditReceipts(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	sessionID := r.URL.Query().Get("session_id")
+	operatorSessionID := r.URL.Query().Get("operator_session_id")
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
 
@@ -998,7 +1000,7 @@ func (h *HTTPHandler) handleAuditReceipts(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	receipts, err := h.db.AuditVault.ListActionReceipts(sessionID, limit, offset)
+	receipts, err := h.db.AuditVault.ListActionReceipts(operatorSessionID, limit, offset)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -1157,21 +1159,23 @@ func (h *HTTPHandler) handleSSEEvents(w http.ResponseWriter, r *http.Request, id
 // =============================================================================
 // /api/internal/sse/push, /api/internal/sse/events — Internal SSE event bridge
 //
-// POST /api/internal/sse/push     → Producer (g8ee Engine) appends an event
-// GET  /api/internal/sse/events   → Consumer (CLI / dashboard) polls events
-//                                   ?session_id=...&since_id=N&limit=K
+// POST /api/internal/sse/push     → Producer (g8ee Engine) appends an event.
+//                                   Body MUST set exactly one of
+//                                   web_session_id, cli_session_id, user_id.
+// GET  /api/internal/sse/events   → Consumer (CLI / dashboard) polls events.
+//                                   Query string MUST set exactly one of
+//                                   web_session_id, cli_session_id, user_id,
+//                                   plus since_id=N and limit=K.
+//
+// The substrate refuses to talk about a bare session id — every routing
+// target is tagged at the type level so a web_session_id can never be
+// mis-delivered as a cli_session_id (or vice versa).
 // =============================================================================
 
 // internalSSEPushPayload mirrors the wire shape produced by g8ee
-// (SessionEventWire | BackgroundEventWire). Both shapes carry an `event` object
-// with a discriminator `type` plus an opaque `data` blob.
-//
-// CLI is a first-class BYO frontend: it receives investigation events from
-// g8ee identically to a browser, but the substrate keeps the two routing
-// namespaces strictly disjoint. Producers MUST set exactly one of
-// web_session_id (web UI session) or cli_session_id (CLI / BYO session) for
-// SessionEvent envelopes; user_id alone is reserved for BackgroundEvent fanout
-// and persisted under session_type='user'.
+// (SessionEventWire | BackgroundEventWire). Producers MUST set exactly one of
+// web_session_id (web UI session), cli_session_id (CLI / BYO session), or
+// user_id (background fan-out across every session a user owns).
 type internalSSEPushPayload struct {
 	WebSessionID string          `json:"web_session_id"`
 	CliSessionID string          `json:"cli_session_id"`
@@ -1202,29 +1206,10 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	web := strings.TrimSpace(p.WebSessionID)
-	cli := strings.TrimSpace(p.CliSessionID)
-	user := strings.TrimSpace(p.UserID)
-
-	// SessionEvent envelopes MUST select exactly one client session type.
-	// Refusing both prevents a producer from accidentally double-routing the
-	// same event into two disjoint client namespaces.
-	if web != "" && cli != "" {
-		jsonError(w, http.StatusBadRequest, "web_session_id and cli_session_id are mutually exclusive")
-		return
-	}
-
-	var sessionType, sessionID string
-	switch {
-	case web != "":
-		sessionType, sessionID = SSESessionTypeWeb, web
-	case cli != "":
-		sessionType, sessionID = SSESessionTypeCLI, cli
-	case user != "":
-		sessionType, sessionID = SSESessionTypeUser, user
-	default:
-		jsonError(w, http.StatusBadRequest, "web_session_id, cli_session_id or user_id required")
-		return
+	route := SSERoute{
+		WebSessionID: strings.TrimSpace(p.WebSessionID),
+		CLISessionID: strings.TrimSpace(p.CliSessionID),
+		UserID:       strings.TrimSpace(p.UserID),
 	}
 
 	// Extract event.type for indexing/filtering. Store the full envelope as the payload.
@@ -1236,9 +1221,9 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		inner.Type = "unknown"
 	}
 
-	if err := h.db.SSEEventsAppend(sessionType, sessionID, inner.Type, string(body)); err != nil {
-		h.logger.Error("SSE push: failed to append event", "error", err, "type", inner.Type, "session_type", sessionType)
-		jsonError(w, http.StatusInternalServerError, "failed to persist event")
+	if err := h.db.SSEEventsAppend(route, inner.Type, string(body)); err != nil {
+		h.logger.Error("SSE push: failed to append event", "error", err, "type", inner.Type)
+		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -1254,27 +1239,67 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 		return
 	}
 	q := r.URL.Query()
-	sessionType := strings.TrimSpace(q.Get("session_type"))
-	sessionID := strings.TrimSpace(q.Get("session_id"))
+	route := SSERoute{
+		WebSessionID: strings.TrimSpace(q.Get("web_session_id")),
+		CLISessionID: strings.TrimSpace(q.Get("cli_session_id")),
+		UserID:       strings.TrimSpace(q.Get("user_id")),
+	}
 	sinceID, _ := strconv.ParseInt(q.Get("since_id"), 10, 64)
 	limit, _ := strconv.Atoi(q.Get("limit"))
 
-	// Consumers MUST declare which session namespace they are reading from.
-	// A CLI/BYO client polls with session_type=cli; a browser with web. The
-	// substrate refuses to fall back to a single shared namespace because that
-	// is precisely the conflation we are eliminating.
-	if sessionID == "" {
-		jsonError(w, http.StatusBadRequest, "session_id is required")
-		return
-	}
-	if !IsValidSSESessionType(sessionType) {
-		jsonError(w, http.StatusBadRequest, "session_type is required (web|cli|user)")
+	// Authorization: ensure the authenticated operator session has the right
+	// to access the requested routing buffer. Without this check, any operator
+	// could drain any other client's event buffer, creating a multi-tenant
+	// data leak.
+	operatorSessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+	if operatorSessionID == "" {
+		jsonError(w, http.StatusUnauthorized, "missing operator session id")
 		return
 	}
 
-	rows, err := h.db.SSEEventsListSince(sessionType, sessionID, sinceID, limit)
+	// Consumers MUST declare exactly one routing target. The substrate refuses
+	// to fall back to a single shared namespace because that is precisely the
+	// conflation we are eliminating.
+	switch {
+	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
+		// Verify operator_session_id is bound to this cli_session_id.
+		cliBindKey := sessionCLIBindKey(route.CLISessionID)
+		boundOperatorSessionID, found := h.db.KVGet(cliBindKey)
+		if !found {
+			jsonError(w, http.StatusForbidden, "cli session not found or not bound to any operator")
+			return
+		}
+		if boundOperatorSessionID != operatorSessionID {
+			jsonError(w, http.StatusForbidden, "operator session does not own this cli session")
+			return
+		}
+	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
+		// Verify operator_session_id is bound to this web_session_id.
+		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
+		boundWebSessionID, found := h.db.KVGet(operatorBindKey)
+		if !found || boundWebSessionID != route.WebSessionID {
+			jsonError(w, http.StatusForbidden, "operator session does not own this web session")
+			return
+		}
+	case route.UserID != "" && route.WebSessionID == "" && route.CLISessionID == "":
+		// User-scoped events are accessible to any operator owned by that user.
+		op, err := h.auth.ValidateOperatorSession(operatorSessionID)
+		if err != nil {
+			jsonError(w, http.StatusUnauthorized, "invalid operator session")
+			return
+		}
+		if op.UserID != route.UserID {
+			jsonError(w, http.StatusForbidden, "operator does not belong to this user")
+			return
+		}
+	default:
+		jsonError(w, http.StatusBadRequest, "exactly one of web_session_id, cli_session_id, user_id is required")
+		return
+	}
+
+	rows, err := h.db.SSEEventsListSince(route, sinceID, limit)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]any{
@@ -2158,24 +2183,11 @@ func (h *HTTPHandler) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]interface{}{"success": true})
 }
 
-// handleBootstrap creates the first user in the system.
-// Rejects with 403 Forbidden if any users already exist.
+// handleBootstrap creates the first user in the system and optionally issues a CLI mTLS cert.
+// Rejects with 403 Forbidden if any users already exist (unless rotating an active bootstrap user over loopback).
 func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	// 1. Safety check: Fail closed if users already exist
-	hasUsers, err := h.userSvc.HasAnyUsers()
-	if err != nil {
-		h.logger.Error("Failed to check for existing users during bootstrap", "error", err)
-		jsonError(w, http.StatusInternalServerError, "bootstrap check failed")
-		return
-	}
-	if hasUsers {
-		h.logger.Warn("Bootstrap attempted on non-empty system", "remote_addr", r.RemoteAddr)
-		jsonError(w, http.StatusForbidden, "bootstrap only available for initial setup")
 		return
 	}
 
@@ -2186,8 +2198,11 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
+		Email             string `json:"email"`
+		Name              string `json:"name"`
+		CSRPEM            string `json:"csr_pem"`
+		CLICSRPEM         string `json:"cli_csr_pem,omitempty"`
+		SystemFingerprint string `json:"system_fingerprint"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid JSON")
@@ -2199,15 +2214,72 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Create the first user
-	user, err := h.userSvc.CreateUser(req.Email, req.Name)
+	// Check if CSR signing is requested
+	csrRequested := req.CSRPEM != ""
+
+	// If CSR is requested, enforce loopback gate (plan §4.2)
+	if csrRequested {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
+		ip := net.ParseIP(host)
+		if ip == nil || !ip.IsLoopback() {
+			h.logger.Warn("Bootstrap CSR request rejected: not from loopback", "remote_addr", r.RemoteAddr)
+			jsonError(w, http.StatusForbidden, "CSR auto-issue only available over loopback")
+			return
+		}
+	}
+
+	// Check for existing bootstrap user (plan §4.2, §9.1 rotation carve-out)
+	bootstrapUser, err := h.userSvc.FindBootstrapUser()
 	if err != nil {
-		h.logger.Error("Failed to create bootstrap user", "error", err, "email", req.Email)
-		jsonError(w, http.StatusInternalServerError, "failed to create user")
+		h.logger.Error("Failed to check for existing bootstrap user", "error", err)
+		jsonError(w, http.StatusInternalServerError, "bootstrap check failed")
 		return
 	}
 
-	// 3. Immediately issue a session cookie so they can register a passkey
+	var user *models.User
+	if bootstrapUser != nil {
+		// Bootstrap user exists - check if rotation is allowed
+		if !bootstrapUser.IsActive() {
+			h.logger.Warn("Bootstrap user is disabled, refusing rotation", "user_id", bootstrapUser.ID)
+			jsonError(w, http.StatusConflict, "bootstrap user is disabled, cannot rotate")
+			return
+		}
+		if !csrRequested {
+			h.logger.Warn("Bootstrap user exists but no CSR requested", "user_id", bootstrapUser.ID)
+			jsonError(w, http.StatusForbidden, "bootstrap already exists, CSR required for rotation")
+			return
+		}
+		// Rotation allowed: active bootstrap user + CSR + loopback
+		user = bootstrapUser
+		h.logger.Info("[BOOTSTRAP] Rotating existing bootstrap user", "user_id", user.ID, "email", user.Email)
+	} else {
+		// No bootstrap user exists - create one
+		// But first check if ANY users exist (legacy safety check)
+		hasUsers, err := h.userSvc.HasAnyUsers()
+		if err != nil {
+			h.logger.Error("Failed to check for existing users during bootstrap", "error", err)
+			jsonError(w, http.StatusInternalServerError, "bootstrap check failed")
+			return
+		}
+		if hasUsers {
+			h.logger.Warn("Bootstrap attempted on non-empty system", "remote_addr", r.RemoteAddr)
+			jsonError(w, http.StatusForbidden, "bootstrap only available for initial setup")
+			return
+		}
+
+		// Create the bootstrap user
+		user, err = h.userSvc.CreateBootstrapUser(req.Email, req.Name)
+		if err != nil {
+			h.logger.Error("Failed to create bootstrap user", "error", err, "email", req.Email)
+			jsonError(w, http.StatusInternalServerError, "failed to create user")
+			return
+		}
+	}
+
+	// Issue a session cookie for passkey registration
 	session, err := h.passkey.CreateSession(user.ID)
 	if err != nil {
 		h.logger.Error("Failed to create session for bootstrap user", "error", err, "user_id", user.ID)
@@ -2225,13 +2297,108 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	h.logger.Info("[BOOTSTRAP] System initialized with first user", "user_id", user.ID, "email", user.Email)
-
-	jsonResponse(w, http.StatusCreated, map[string]interface{}{
+	response := map[string]interface{}{
 		"success": true,
 		"user":    user,
 		"session": session,
-	})
+	}
+
+	// If CSR is requested and loopback, sign and return cert (plan §4.2)
+	if csrRequested {
+		// Create operator slot for the bootstrap user
+		operatorID := uuid.NewString()
+		sessionID := uuid.NewString()
+		cliSessionID := uuid.NewString()
+		orgID := user.ID // Use user ID as org ID for bootstrap
+		now := time.Now().UTC()
+
+		operator := &models.OperatorDocumentGo{
+			ID:                operatorID,
+			UserID:            user.ID,
+			OrganizationID:    orgID,
+			Component:         constants.Status.ComponentName.G8EO,
+			Name:              "bootstrap-operator",
+			Status:            constants.Status.OperatorStatus.Active,
+			OperatorSessionID: sessionID,
+			OperatorType:      constants.Status.OperatorType.System,
+			SystemFingerprint: req.SystemFingerprint,
+			Claimed:           true,
+			ClaimedAt:         &now,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+
+		// Sign the CSR
+		certPEM, chainPEM, err := h.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, sessionID)
+		if err != nil {
+			h.logger.Error("Failed to sign bootstrap CSR", "error", err, "user_id", user.ID)
+			jsonError(w, http.StatusInternalServerError, "failed to sign CSR")
+			return
+		}
+
+		operator.OperatorCert = certPEM
+
+		// CLI certificate generation (optional)
+		var cliCertPEM, cliCertChainPEM string
+		if req.CLICSRPEM != "" {
+			cliCertPEM, cliCertChainPEM, err = h.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID)
+			if err != nil {
+				h.logger.Error("Failed to sign bootstrap CLI CSR", "error", err, "user_id", user.ID)
+				jsonError(w, http.StatusInternalServerError, "failed to sign CLI CSR")
+				return
+			}
+		}
+
+		// Persist operator document
+		opBytes, err := json.Marshal(operator)
+		if err != nil {
+			h.logger.Error("Failed to marshal operator document", "error", err)
+			jsonError(w, http.StatusInternalServerError, "failed to create operator")
+			return
+		}
+		if err := h.db.DocSet(string(constants.CollectionOperators), operatorID, opBytes); err != nil {
+			h.logger.Error("Failed to persist operator document", "error", err)
+			jsonError(w, http.StatusInternalServerError, "failed to create operator")
+			return
+		}
+
+		// Fetch trust bundle
+		hubBundle, err := h.pki.HubTrustBundle()
+		if err != nil {
+			h.logger.Warn("Failed to fetch hub trust bundle", "error", err)
+			// Non-fatal - continue without bundle
+		}
+
+		// CLI session id is a first-class session type, strictly disjoint from
+		// operator_session_id. The operator_session_id authenticates the host
+		// agent (mTLS URI SAN); the cli_session_id is the routing namespace
+		// the BYO/CLI client uses to receive SessionEvents (SSE) and embed in
+		// outbound request bodies. Conflating the two would let an operator
+		// session drain another client's event stream — and vice versa.
+
+		// Store the binding between operator_session_id and cli_session_id to prevent
+		// cross-tenant data leakage in /api/internal/sse/events.
+		if err := h.db.KVSet(sessionCLIBindKey(cliSessionID), sessionID, 0); err != nil {
+			h.logger.Error("Failed to bind operator session to CLI session during bootstrap", "error", err)
+			jsonError(w, http.StatusInternalServerError, "failed to bind CLI session")
+			return
+		}
+
+		response["operator_cert"] = certPEM
+		response["operator_cert_chain"] = chainPEM
+		response["hub_trust_bundle"] = string(hubBundle)
+		response["operator_session_id"] = sessionID
+		response["operator_id"] = operatorID
+		response["cli_session_id"] = cliSessionID
+		response["cli_cert"] = cliCertPEM
+		response["cli_cert_chain"] = cliCertChainPEM
+
+		h.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI cert", "user_id", user.ID, "email", user.Email, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
+	} else {
+		h.logger.Info("[BOOTSTRAP] System initialized with bootstrap user (no CSR)", "user_id", user.ID, "email", user.Email)
+	}
+
+	jsonResponse(w, http.StatusCreated, response)
 }
 
 // handleBootstrapStatus returns whether the system has been bootstrapped (at least one user exists).
@@ -2286,14 +2453,14 @@ func (h *HTTPHandler) handleWebSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cookie, _ := r.Cookie("g8e_session")
-	sessionID := ""
+	webSessionID := ""
 	if cookie != nil {
-		sessionID = cookie.Value
+		webSessionID = cookie.Value
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":    true,
-		"user_id":    userID,
-		"session_id": sessionID,
+		"success":        true,
+		"user_id":        userID,
+		"web_session_id": webSessionID,
 	})
 }

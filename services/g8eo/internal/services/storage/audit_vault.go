@@ -245,12 +245,12 @@ func (avs *AuditVaultService) verifyWritePermissions() error {
 }
 
 // GetSessionLedgerPath returns the ledger path for a specific session, initializing it if needed.
-func (avs *AuditVaultService) GetSessionLedgerPath(sessionID string) (string, error) {
-	if sessionID == "" {
+func (avs *AuditVaultService) GetSessionLedgerPath(operatorSessionID string) (string, error) {
+	if operatorSessionID == "" {
 		return avs.ledgerPath, nil
 	}
 
-	sessionPath := filepath.Join(avs.sessionsRoot, sessionID)
+	sessionPath := filepath.Join(avs.sessionsRoot, operatorSessionID)
 
 	avs.mu.RLock()
 	_, err := os.Stat(filepath.Join(sessionPath, ".git"))
@@ -277,7 +277,7 @@ func (avs *AuditVaultService) GetSessionLedgerPath(sessionID string) (string, er
 		return "", fmt.Errorf("failed to initialize session git repo: %w", err)
 	}
 
-	avs.logger.Info("Initialized new session ledger", "session_id", sessionID, "path", sessionPath)
+	avs.logger.Info("Initialized new session ledger", "operator_session_id", operatorSessionID, "path", sessionPath)
 	return sessionPath, nil
 }
 
@@ -768,7 +768,7 @@ func (avs *AuditVaultService) GetActionReceipt(transactionID string) (*models.Ac
 }
 
 // ListActionReceipts retrieves action receipts with optional filtering and pagination.
-func (avs *AuditVaultService) ListActionReceipts(sessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error) {
+func (avs *AuditVaultService) ListActionReceipts(operatorSessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error) {
 	if avs == nil || avs.db == nil {
 		return nil, fmt.Errorf("audit vault is disabled")
 	}
@@ -787,9 +787,9 @@ func (avs *AuditVaultService) ListActionReceipts(sessionID string, limit, offset
 	`)
 
 	args := []interface{}{}
-	if sessionID != "" {
+	if operatorSessionID != "" {
 		query.WriteString(" WHERE operator_session_id = ?")
-		args = append(args, sessionID)
+		args = append(args, operatorSessionID)
 	}
 
 	query.WriteString(" ORDER BY timestamp DESC LIMIT ? OFFSET ?")

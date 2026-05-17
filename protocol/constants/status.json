@@ -8,6 +8,11 @@
     "operator": "operator"
   },
 
+  "user.status": {
+    "active": "active",
+    "disabled": "disabled"
+  },
+
   "g8e.status": {
     "available": "available",
     "unavailable": "unavailable",

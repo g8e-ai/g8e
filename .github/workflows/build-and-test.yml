@@ -36,6 +36,9 @@ jobs:
             exit 1
           fi
 
+      - name: Lint no bare session_id
+        run: make lint-no-bare-session-id
+
   test-g8eo:
     runs-on: ubuntu-latest
     timeout-minutes: 30

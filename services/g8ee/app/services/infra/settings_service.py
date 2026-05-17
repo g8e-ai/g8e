@@ -69,10 +69,6 @@ class SettingsService:
         self._bootstrap = bootstrap_service or BootstrapService()
         self._logger = logging.getLogger(__name__)
 
-    def _get_env(self, env_key: str, default: str | None = None) -> str | None:
-        """DEPRECATED: Configuration is now loaded from operator or bootstrap volumes.
-        """
-        return default
 
     def get_local_settings(self) -> G8eePlatformSettings:
         """Load settings using canonical defaults and bootstrap service.
@@ -193,21 +189,16 @@ class SettingsService:
         )
 
         if not user_doc_dict:
-            # LLM settings are user-specific only. Return empty LLMSettings if user doc missing.
-            # Search settings can fall back to platform defaults.
-            platform_doc_dict = await self._cache_aside.get_document_with_cache(
-                collection=DB_COLLECTION_SETTINGS,
-                document_id=PLATFORM_SETTINGS_DOC,
+            # No persisted user settings — return an empty default so the
+            # request-scoped LLM overrides supplied by BYO/CLI clients can
+            # populate validation. validate_llm_config still fails closed
+            # when neither the user doc nor the request supplies a complete
+            # provider+credential set.
+            self._logger.info(
+                "No user settings document for user %s; using empty defaults so request overrides can complete validation",
+                user_id,
             )
-            platform_doc = PlatformSettingsDocument.model_validate(platform_doc_dict)
-
-            return G8eeUserSettings(
-                llm=LLMSettings(),
-                search=self._build_search_settings(platform_doc.settings),
-                eval_judge=platform_doc.settings.eval_judge,
-                command_validation=platform_doc.settings.command_validation,
-                batch_execution=platform_doc.settings.batch_execution,
-            )
+            return G8eeUserSettings(llm=LLMSettings())
 
         user_doc = UserSettingsDocument.model_validate(user_doc_dict)
         data = user_doc.settings

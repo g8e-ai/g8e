@@ -306,7 +306,7 @@ _start_g8ee() {
         export G8E_SHARED_DIR="$PROJECT_ROOT/protocol"
         export G8E_INTERNAL_HTTP_URL="https://localhost:${OPERATOR_LISTEN_HTTP_PORT}"
         export G8E_INTERNAL_PUBSUB_URL="wss://localhost:${OPERATOR_LISTEN_WSS_PORT}"
-        
+
         local cert_name
         cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "g8ee")
         setsid "$venv_dir/bin/uvicorn" app.main:app --host 0.0.0.0 --port 8443 \
@@ -340,28 +340,9 @@ _start_operator_listen() {
     fi
 
     local bin="$PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.operator"
-    local needs_build=false
-
-    if [ ! -f "$bin" ]; then
-        echo "  Operator binary not found at $bin. Building it..."
-        needs_build=true
-    else
-        # Check if source files are newer than the binary
-        local source_files
-        source_files=$(find "$PROJECT_ROOT/services/g8eo" -type f \( -name "*.go" -o -name "Makefile" -o -name "go.mod" -o -name "go.sum" \) -not -path "*/vendor/*" -not -path "*/build/*")
-        for f in $source_files; do
-            if [ "$f" -nt "$bin" ]; then
-                echo "  Operator source changed: $f is newer than binary. Rebuilding..."
-                needs_build=true
-                break
-            fi
-        done
-    fi
-
-    if [ "$needs_build" = true ]; then
-        echo "  Building Operator binary natively..."
-        (cd "$PROJECT_ROOT/services/g8eo" && make build-local)
-    fi
+    # Always run make build-local - Go's build caching makes this cheap when nothing changed
+    echo "  Building Operator binary natively..."
+    (cd "$PROJECT_ROOT/services/g8eo" && make build-local)
 
     echo "  Starting Operator listen mode..."
     mkdir -p "$OPERATOR_LISTEN_DATA_DIR" "$OPERATOR_LISTEN_PKI_DIR" "$OPERATOR_LISTEN_SECRETS_DIR" "$OPERATOR_LISTEN_PID_DIR" "$OPERATOR_LISTEN_LOG_DIR"

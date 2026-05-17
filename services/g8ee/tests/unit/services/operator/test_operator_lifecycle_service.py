@@ -275,20 +275,20 @@ class TestOperatorLifecycleService:
 
     async def test_claim_operator_slot_active_status_same_session_fails(self, lifecycle_service, mock_cache):
         operator_id = "op-same-session"
-        session_id = "session-same"
+        operator_session_id = "session-same"
 
         mock_cache.get_document_with_cache.return_value = {
             "id": operator_id,
             "user_id": "user-test",
             "status": OperatorStatus.ACTIVE,
-            "operator_session_id": session_id,
+            "operator_session_id": operator_session_id,
             "first_deployed": now().isoformat(),
             "history_trail": [],
         }
 
         success = await lifecycle_service.claim_operator_slot(
             operator_id=operator_id,
-            operator_session_id=session_id,
+            operator_session_id=operator_session_id,
             bound_web_session_id="web-123",
         )
 

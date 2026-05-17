@@ -142,6 +142,7 @@ def _baseline_env(fake_pki: dict[str, Path]) -> dict[str, str]:
     return {
         **os.environ,
         "OPERATOR_SESSION_ID": "sess-parity-001",
+        "CLI_SESSION_ID": "cli-parity-001",
         "USER_ID": "user-parity-001",
         "G8E_CLI_CERT": str(fake_pki["cert"]),
         "G8E_CLI_KEY": str(fake_pki["key"]),
@@ -206,8 +207,12 @@ def test_auth_wiring_matches_shell_helpers(fake_pki):
     assert h["Content-Type"] == "application/json"
     assert h["X-G8E-Source-Component"] == SOURCE_COMPONENT_CLIENT
     assert h["X-G8E-Operator-Session-ID"] == env["OPERATOR_SESSION_ID"]
-    assert h["X-G8E-WebSession-ID"] == env["OPERATOR_SESSION_ID"]
+    assert h["X-G8E-CLI-Session-ID"] == env["CLI_SESSION_ID"]
     assert h["X-G8E-User-ID"] == env["USER_ID"]
+
+    # Invert the conflation check: ensure no web session header carries CLI/operator values
+    assert "X-G8E-WebSession-ID" not in h
+    assert "X-G8E-Web-Session-ID" not in h
 
 
 def test_optional_context_headers_match_when_set(fake_pki):

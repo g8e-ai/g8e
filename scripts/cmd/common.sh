@@ -32,6 +32,24 @@ _pid_alive() {
 _g8ee_running()    { _pid_alive "$_G8EE_PID_FILE"; }
 _operator_running() { _pid_alive "$_OPERATOR_PID_FILE"; }
 
+# _generate_cli_csr generates an ECDSA P-256 key and CSR for CLI authentication
+# Outputs: sets _cli_key_file, _cli_csr_pem variables
+_generate_cli_csr() {
+    local tmp_dir="$1"
+    _cli_key_file="${tmp_dir}/cli.key"
+    
+    openssl ecparam -name prime256v1 -genkey -noout -out "$_cli_key_file" 2>/dev/null
+    chmod 600 "$_cli_key_file"
+    _cli_csr_pem=$(openssl req -new -key "$_cli_key_file" \
+        -subj "/CN=g8e-cli-$(hostname)/O=g8e" 2>/dev/null)
+    
+    if [[ -z "$_cli_csr_pem" ]]; then
+        echo "[g8e] Failed to generate CSR" >&2
+        return 1
+    fi
+    return 0
+}
+
 _operator_bootstrap() {
     local email="${G8E_BOOTSTRAP_EMAIL:-superadmin@g8e.local}"
     local name="${G8E_BOOTSTRAP_NAME:-Superadmin}"
@@ -43,7 +61,7 @@ _operator_bootstrap() {
         return 1
     fi
 
-    # Check if already bootstrapped
+    # Check if already bootstrapped - no rotation on normal start
     local status_resp
     status_resp=$(curl -sSk --cacert "$trust_bundle" "$public_url/api/auth/bootstrap/status" 2>/dev/null)
     if [[ $(echo "$status_resp" | jq -r '.bootstrapped' 2>/dev/null) == "true" ]]; then
@@ -51,31 +69,87 @@ _operator_bootstrap() {
     fi
 
     _banner "auto-bootstrapping platform..."
+
+    # Generate CSR for CLI mTLS cert (plan §4.3)
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    trap 'rm -rf "$tmp_dir"' EXIT
+
+    if ! _generate_cli_csr "$tmp_dir"; then
+        echo "[g8e] bootstrap failed: CSR generation failed" >&2
+        return 1
+    fi
+
+    local system_fingerprint
+    system_fingerprint=$(echo "g8e-cli-$(hostname)-$(whoami)" | sha256sum | awk '{print $1}')
+
+    # Build bootstrap request with CSR (plan §4.3)
     local bootstrap_body
-    bootstrap_body=$(jq -n --arg email "$email" --arg name "$name" '{email: $email, name: $name}')
-    
-    # Perform bootstrap and capture cookies in memory
-    local resp_headers
-    resp_headers=$(curl -sS -i -k --cacert "$trust_bundle" \
+    bootstrap_body=$(jq -n \
+        --arg email "$email" \
+        --arg name "$name" \
+        --arg csr "$_cli_csr_pem" \
+        --arg fingerprint "$system_fingerprint" \
+        '{email: $email, name: $name, csr_pem: $csr, system_fingerprint: $fingerprint}')
+
+    # Perform bootstrap over loopback
+    local resp
+    resp=$(curl -sS --cacert "$trust_bundle" \
         -X POST -H "Content-Type: application/json" \
         -d "$bootstrap_body" \
         "$public_url/api/auth/bootstrap" 2>/dev/null)
 
-    local session_id
-    session_id=$(echo "$resp_headers" | grep -i "Set-Cookie:" | grep "g8e_session=" | sed 's/.*g8e_session=\([^;]*\).*/\1/')
-
-    if [[ -z "$session_id" ]]; then
-        echo "[g8e] bootstrap failed: no session cookie returned" >&2
-        echo "$resp_headers" >&2
+    local success
+    success=$(echo "$resp" | jq -r '.success' 2>/dev/null)
+    if [[ "$success" != "true" ]]; then
+        echo "[g8e] bootstrap failed: $resp" >&2
         return 1
     fi
 
-    # Save to credentials for persistent CLI auth, but avoid raw cookie jars
+    # Extract response fields (plan §4.3).
+    # operator_session_id authenticates the host agent (mTLS-bound).
+    # cli_session_id is the strictly disjoint routing namespace this CLI uses
+    # to receive SessionEvents and embed in outbound request bodies. The
+    # substrate refuses to conflate the two session types.
+    local operator_id operator_session_id cli_session_id operator_cert operator_cert_chain hub_trust_bundle
+    operator_id=$(echo "$resp" | jq -r '.operator_id' 2>/dev/null)
+    operator_session_id=$(echo "$resp" | jq -r '.operator_session_id' 2>/dev/null)
+    cli_session_id=$(echo "$resp" | jq -r '.cli_session_id' 2>/dev/null)
+    operator_cert=$(echo "$resp" | jq -r '.operator_cert' 2>/dev/null)
+    operator_cert_chain=$(echo "$resp" | jq -r '.operator_cert_chain' 2>/dev/null)
+    hub_trust_bundle=$(echo "$resp" | jq -r '.hub_trust_bundle' 2>/dev/null)
     local user_id
-    user_id=$(echo "$resp_headers" | grep -v '^[A-Z]' | jq -r '.user.id' 2>/dev/null)
-    _save_credentials "$session_id" "$user_id" "bootstrap"
-    
-    _banner "platform bootstrapped successfully (user: $email)"
+    user_id=$(echo "$resp" | jq -r '.user.id' 2>/dev/null)
+
+    if [[ -z "$operator_id" || -z "$operator_session_id" || -z "$operator_cert" || -z "$cli_session_id" || "$cli_session_id" == "null" ]]; then
+        echo "[g8e] bootstrap failed: incomplete response (missing operator_id, operator_session_id, cli_session_id, or operator_cert)" >&2
+        echo "$resp" >&2
+        return 1
+    fi
+
+    # Write CLI cert (chain already includes leaf) to $HOME/.g8e/ (plan §4.3)
+    mkdir -p "$G8E_CREDENTIALS_DIR"
+    if [[ -n "$operator_cert_chain" ]]; then
+        printf '%s\n' "$operator_cert_chain" > "$G8E_CLI_CERT_FILE"
+    else
+        printf '%s\n' "$operator_cert" > "$G8E_CLI_CERT_FILE"
+    fi
+    chmod 600 "$G8E_CLI_CERT_FILE"
+
+    # Write CLI key
+    cp "$_cli_key_file" "$G8E_CLI_KEY_FILE"
+    chmod 600 "$G8E_CLI_KEY_FILE"
+
+    # Write hub trust bundle
+    if [[ -n "$hub_trust_bundle" ]]; then
+        printf '%s\n' "$hub_trust_bundle" > "$G8E_CREDENTIALS_DIR/hub-bundle.pem"
+        chmod 600 "$G8E_CREDENTIALS_DIR/hub-bundle.pem"
+    fi
+
+    # Save credentials
+    _save_credentials "$operator_session_id" "$user_id" "$operator_id" "$cli_session_id"
+
+    _banner "platform bootstrapped successfully (user: $email, operator_id: $operator_id)"
     return 0
 }
 
@@ -178,8 +252,14 @@ _append_g8e_context_headers() {
     _args+=(-H "X-G8E-Source-Component: client")
     if [[ -n "${OPERATOR_SESSION_ID:-}" ]]; then
         _args+=(-H "X-G8E-Operator-Session-ID: $OPERATOR_SESSION_ID")
-        _args+=(-H "X-G8E-WebSession-ID: $OPERATOR_SESSION_ID")
         _args+=(--cookie "g8e_session=$OPERATOR_SESSION_ID")
+    fi
+    # cli_session_id rides in the request body for chat / engine calls; it
+    # is NOT smuggled through an X-G8E-WebSession-ID header. Web sessions
+    # and CLI sessions are first-class disjoint session types — never
+    # conflate one into the other's header.
+    if [[ -n "${CLI_SESSION_ID:-}" ]]; then
+        _args+=(-H "X-G8E-CLI-Session-ID: $CLI_SESSION_ID")
     fi
     [[ -n "${USER_ID:-}" ]]              && _args+=(-H "X-G8E-User-ID: $USER_ID")
     [[ -n "${G8E_CASE_ID:-}" ]]          && _args+=(-H "X-G8E-Case-ID: $G8E_CASE_ID")
@@ -212,10 +292,8 @@ _run_host_script() {
 
 _operator_bin() {
     local bin="${G8E_OPERATOR_BIN:-$SCRIPT_DIR/services/g8eo/build/linux-amd64/g8e.operator}"
-    if [ ! -x "$bin" ]; then
-        echo "[g8e] Operator binary missing at $bin — building..." >&2
-        (cd "$SCRIPT_DIR/services/g8eo" && make build-local) >&2
-    fi
+    # Always run make build-local - Go's build caching makes this cheap when nothing changed
+    (cd "$SCRIPT_DIR/services/g8eo" && make build-local) >&2
     printf '%s' "$bin"
 }
 
@@ -235,11 +313,13 @@ _save_credentials() {
     local operator_session_id="$1"
     local user_id="$2"
     local operator_id="$3"
+    local cli_session_id="$4"
     mkdir -p "$G8E_CREDENTIALS_DIR"
     # Ensure directory has restricted permissions
     chmod 700 "$G8E_CREDENTIALS_DIR"
     cat > "$G8E_CREDENTIALS_FILE" <<EOF
 export OPERATOR_SESSION_ID="$operator_session_id"
+export CLI_SESSION_ID="$cli_session_id"
 export USER_ID="$user_id"
 export OPERATOR_ID="$operator_id"
 export G8E_AUTH_TIMESTAMP="$(date +%s)"
@@ -255,7 +335,32 @@ _clear_credentials() {
         rm -f "$G8E_CREDENTIALS_FILE"
     fi
     rm -f "$G8E_CLI_CERT_FILE" "$G8E_CLI_KEY_FILE"
-    unset OPERATOR_SESSION_ID USER_ID OPERATOR_ID G8E_AUTH_TIMESTAMP G8E_CLI_CERT G8E_CLI_KEY
+    unset OPERATOR_SESSION_ID CLI_SESSION_ID USER_ID OPERATOR_ID G8E_AUTH_TIMESTAMP G8E_CLI_CERT G8E_CLI_KEY
+}
+
+_check_g8e_error() {
+    local resp="$1" label="${2:-request}"
+    if [[ -z "$resp" ]]; then
+        return 0
+    fi
+    
+    # Check for structured g8e error response
+    if echo "$resp" | jq -e '.error' >/dev/null 2>&1; then
+        local code message component
+        code=$(echo "$resp" | jq -r '.error.code // "UNKNOWN"')
+        message=$(echo "$resp" | jq -r '.error.message // "An unexpected error occurred"')
+        component=$(echo "$resp" | jq -r '.error.component // "unknown"')
+        
+        echo -e "\033[1;31m[g8e error]\033[0m \033[1m$code\033[0m ($component): $message" >&2
+        
+        # If there are remediation steps, show them
+        if echo "$resp" | jq -e '.error.remediation_steps | length > 0' >/dev/null 2>&1; then
+            echo -e "\033[1;34mRemediation:\033[0m" >&2
+            echo "$resp" | jq -r '.error.remediation_steps[]' | sed 's/^/  - /' >&2
+        fi
+        
+        exit 1
+    fi
 }
 
 _credentials_exist() {
@@ -271,7 +376,14 @@ _ensure_authenticated() {
         # handshake fails with `x509: ECDSA verification failure`. We refuse to
         # paper over that — clear the stale credentials and require re-login so
         # the cause is obvious.
-        local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
+        local trust_bundle="${G8E_TRUST_BUNDLE:-}"
+        if [[ -z "$trust_bundle" ]]; then
+            if [[ -f "$G8E_CREDENTIALS_DIR/hub-bundle.pem" ]]; then
+                trust_bundle="$G8E_CREDENTIALS_DIR/hub-bundle.pem"
+            else
+                trust_bundle="$G8E_PKI_DIR_HOST/trust/hub-bundle.pem"
+            fi
+        fi
         local cert_file="${G8E_CLI_CERT:-$G8E_CLI_CERT_FILE}"
         local key_file="${G8E_CLI_KEY:-$G8E_CLI_KEY_FILE}"
         if [[ ! -f "$trust_bundle" ]]; then
@@ -283,7 +395,7 @@ _ensure_authenticated() {
             _clear_credentials
             exit 1
         fi
-        if ! openssl verify -CAfile "$trust_bundle" "$cert_file" >/dev/null 2>&1; then
+        if ! openssl verify -CAfile "$trust_bundle" "$cert_file"; then
             echo "[g8e] CLI certificate is no longer trusted by the current Operator CA (likely after ./g8e platform clean). Re-authenticate: ./g8e login" >&2
             _clear_credentials
             exit 1

@@ -326,23 +326,29 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 		return fmt.Errorf("failed to write root bundle: %w", err)
 	}
 
-	// Hub bundle (root + hub intermediate)
+	// Hub bundle (root + hub intermediate + operator intermediate + bootstrap intermediate)
 	hubBundlePath := filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem")
 	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt"))
 	if err != nil {
 		return fmt.Errorf("failed to read hub CA: %w", err)
 	}
+	operatorPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt"))
+	if err != nil {
+		return fmt.Errorf("failed to read operator CA: %w", err)
+	}
+	bootstrapPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "bootstrap_ca.crt"))
+	if err != nil {
+		return fmt.Errorf("failed to read bootstrap CA: %w", err)
+	}
 	hubBundle := append([]byte(rootPEM), hubPEM...)
+	hubBundle = append(hubBundle, operatorPEM...)
+	hubBundle = append(hubBundle, bootstrapPEM...)
 	if err := os.WriteFile(hubBundlePath, hubBundle, 0644); err != nil {
 		return fmt.Errorf("failed to write hub bundle: %w", err)
 	}
 
 	// Operator bundle (root + operator intermediate)
 	operatorBundlePath := filepath.Join(pki.pkiDir, "trust", "operator-bundle.pem")
-	operatorPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt"))
-	if err != nil {
-		return fmt.Errorf("failed to read operator CA: %w", err)
-	}
 	operatorBundle := append([]byte(rootPEM), operatorPEM...)
 	if err := os.WriteFile(operatorBundlePath, operatorBundle, 0644); err != nil {
 		return fmt.Errorf("failed to write operator bundle: %w", err)
@@ -350,10 +356,6 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 
 	// Bootstrap bundle (root + bootstrap intermediate)
 	bootstrapBundlePath := filepath.Join(pki.pkiDir, "trust", "bootstrap-bundle.pem")
-	bootstrapPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "bootstrap_ca.crt"))
-	if err != nil {
-		return fmt.Errorf("failed to read bootstrap CA: %w", err)
-	}
 	bootstrapBundle := append([]byte(rootPEM), bootstrapPEM...)
 	if err := os.WriteFile(bootstrapBundlePath, bootstrapBundle, 0644); err != nil {
 		return fmt.Errorf("failed to write bootstrap bundle: %w", err)
@@ -480,8 +482,12 @@ func (pki *PKIAuthority) signData(data []byte, key *ecdsa.PrivateKey) (string, e
 }
 
 // SignCSR signs a certificate signing request using the operator intermediate CA.
-// leafType should be "operator" or "app".
-func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID, operatorID, sessionID string) (certPEM, chainPEM string, err error) {
+// leafType should be "operator", "app", or "cli".
+// Parameters:
+//   - For "operator": organizationID, operatorID, sessionID (operator_session_id)
+//   - For "cli": userID, sessionID (cli_session_id)
+//   - For "app": operatorID (app identity)
+func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID, operatorID, userID, sessionID string) (certPEM, chainPEM string, err error) {
 	pki.mu.Lock()
 	defer pki.mu.Unlock()
 
@@ -524,6 +530,8 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 	var uriSAN string
 	if leafType == "operator" {
 		uriSAN = fmt.Sprintf("spiffe://%s/operator/%s/%s/%s", trustDomain, organizationID, operatorID, sessionID)
+	} else if leafType == "cli" {
+		uriSAN = fmt.Sprintf("spiffe://%s/cli/%s/%s", trustDomain, userID, sessionID)
 	} else if leafType == "app" {
 		uriSAN = fmt.Sprintf("spiffe://%s/app/%s", trustDomain, operatorID)
 	}

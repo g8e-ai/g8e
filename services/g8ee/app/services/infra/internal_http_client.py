@@ -48,6 +48,8 @@ class InternalHttpClient:
     def __init__(self, settings: G8eePlatformSettings):
         self.client_url = get_client_url(settings)
         self._settings = settings
+        self._cached_cert_path: str | None = None
+        self._cached_key_path: str | None = None
         self._http: HTTPClient = HTTPClient(
             component_id=ComponentName.G8EE,
             base_url=self.client_url,
@@ -61,8 +63,12 @@ class InternalHttpClient:
             api_key=settings.auth.g8e_api_key or "",
             headers={G8eHeaders.SOURCE_COMPONENT: ComponentName.G8EE},
             ca_cert_path=settings.ca_cert_path or "",
+            client_cert_path=settings.client_cert_path,
+            client_key_path=settings.client_key_path,
         )
 
+        self._cached_cert_path = settings.client_cert_path
+        self._cached_key_path = settings.client_key_path
         logger.info("InternalHttpClient initialized with URL: %s", self.client_url)
 
     def configure(self, settings: G8eePlatformSettings) -> None:
@@ -84,6 +90,24 @@ class InternalHttpClient:
 
     async def close(self) -> None:
         await self._http.close()
+
+    def _ensure_mtls(self) -> None:
+        """Ensure mTLS credentials are up to date from settings.
+        
+        Caches cert/key paths to avoid redundant refresh calls on every request.
+        Only refreshes when paths actually change.
+        """
+        current_cert_path = self._settings.client_cert_path
+        current_key_path = self._settings.client_key_path
+
+        if (current_cert_path != self._cached_cert_path or
+            current_key_path != self._cached_key_path):
+            self._http.refresh_mtls_credentials(
+                current_cert_path,
+                current_key_path,
+            )
+            self._cached_cert_path = current_cert_path
+            self._cached_key_path = current_key_path
 
     async def push_sse_event(
         self,
@@ -117,6 +141,7 @@ class InternalHttpClient:
             }
         )
 
+        self._ensure_mtls()
         try:
             response = await self._http.post(
                 InternalApiPaths.CLIENT_SSE_PUSH,
@@ -156,7 +181,7 @@ class InternalHttpClient:
                 "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
                 "event_type": event_type,
                 "success": result.success,
-                "delivered": result.delivered,
+                "listeners": result.listeners,
             }
         )
         return result
@@ -173,6 +198,7 @@ class InternalHttpClient:
                 extra={"operator_id": operator_id, "intent": intent}
             )
 
+            self._ensure_mtls()
             from app.models.http_context import RequestContext
             request_payload = IntentRequestPayload(
                 context=RequestContext.from_app_context(context),
@@ -228,6 +254,7 @@ class InternalHttpClient:
         context: G8eHttpContext,
     ) -> IntentOperationResult:
         try:
+            self._ensure_mtls()
             from app.models.http_context import RequestContext
             request_payload = IntentRequestPayload(
                 context=RequestContext.from_app_context(context),
@@ -277,6 +304,7 @@ class InternalHttpClient:
                 extra={"user_id": user_id, "operator_id": operator_id}
             )
 
+            self._ensure_mtls()
             from app.models.http_context import RequestContext
             if context:
                 request_context = RequestContext.from_app_context(context)

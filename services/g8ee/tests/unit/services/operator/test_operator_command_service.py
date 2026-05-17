@@ -268,11 +268,11 @@ class TestExecuteCommandTargetSystems:
 
     pytestmark: ClassVar = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
-    def _make_operator(self, operator_id: str, session_id: str, hostname: str):
+    def _make_operator(self, operator_id: str, operator_session_id: str, hostname: str):
         return OperatorDocument(
             id=operator_id,
             user_id="user-1",
-            operator_session_id=session_id,
+            operator_session_id=operator_session_id,
             current_hostname=hostname,
             operator_type=OperatorType.SYSTEM,
             bound_web_session_id="ws-1",

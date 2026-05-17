@@ -79,11 +79,9 @@ class HeartbeatSnapshotService:
             raise ConfigurationError("pubsub_client must be set before calling start()", component="g8ee")
         await self._pubsub_client.ensure_connected()
 
-        # Pattern-subscribe to every operator heartbeat channel. g8eo publishes
-        # its bootstrap heartbeat the instant authentication completes, so g8ee
-        # MUST be listening before any specific operator session exists. A single
-        # pattern subscription captures every operator's heartbeats from the
-        # first packet onward without per-session register/deregister races.
+        # Pattern-subscribe to every operator heartbeat channel. A single pattern
+        # subscription captures every operator's heartbeats from the first packet
+        # onward without per-session register/deregister races.
         pattern = f"{PubSubChannel.HEARTBEAT_PREFIX.value}:*"
         self._pubsub_client.on_pmessage(pattern, self._on_pattern_heartbeat_message)
         await self._pubsub_client.psubscribe(pattern)

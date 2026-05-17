@@ -1149,7 +1149,7 @@ AI agent evaluation runs through the **substrate-first evals framework** at `eva
 
 ```bash
 # Run benchmark
-./g8e evals bench --suite ifeval --operator-session-id <session_id>
+./g8e evals bench --suite ifeval --operator-session-id <operator_session_id>
 ```
 
 The runner under `evals/` (invoked via `./g8e evals bench`) writes artifacts to `reports/` (default).

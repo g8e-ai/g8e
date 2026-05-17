@@ -274,11 +274,11 @@ func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bo
 
 // CreateSession creates a web session after successful authentication.
 func (s *PasskeyService) CreateSession(userID string) (*models.WebSession, error) {
-	sessionID := uuid.New().String()
+	webSessionID := uuid.New().String()
 	now := time.Now()
 
 	session := &models.WebSession{
-		ID:              sessionID,
+		ID:              webSessionID,
 		UserID:          userID,
 		CreatedAtUnixMs: now.UnixMilli(),
 		ExpiresAtUnixMs: now.Add(webSessionTTL).UnixMilli(),
@@ -288,12 +288,12 @@ func (s *PasskeyService) CreateSession(userID string) (*models.WebSession, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal session: %w", err)
 	}
-	if err := s.db.DocSet(string(constants.CollectionWebSessions), sessionID, data); err != nil {
+	if err := s.db.DocSet(string(constants.CollectionWebSessions), webSessionID, data); err != nil {
 		s.logger.Error("Failed to create session", "error", err, "userID", userID)
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
-	s.logger.Info("Session created", "userID", userID, "sessionID", sessionID[:8])
+	s.logger.Info("Session created", "userID", userID, "webSessionID", webSessionID[:8])
 	return session, nil
 }
 

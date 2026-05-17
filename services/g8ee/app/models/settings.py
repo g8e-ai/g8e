@@ -305,86 +305,93 @@ class LLMSettings(G8eBaseModel):
         """Return the configured lite model, or assistant_model as fallback if lite is not set."""
         return self.lite_model or self.assistant_model or None
 
+    def resolve(
+        self,
+        role: str,
+        provider_override: str | None = None,
+        api_key_override: str | None = None,
+        endpoint_override: str | None = None,
+    ) -> tuple[str | None, str | None, str | None]:
+        """Resolve provider, API key, and endpoint for a given role.
+
+        Args:
+            role: One of 'primary', 'assistant', or 'lite'.
+            provider_override: Optional provider string to override the stored provider.
+            api_key_override: Optional API key to override the resolved key.
+            endpoint_override: Optional endpoint to override the resolved endpoint.
+
+        Returns:
+            Tuple of (provider, api_key, endpoint). Provider is the string value of the LLMProvider enum.
+        """
+        role_to_attrs = {
+            "primary": (self.primary_provider, self.primary_api_key, self.primary_endpoint),
+            "assistant": (self.assistant_provider, self.assistant_api_key, self.assistant_endpoint),
+            "lite": (self.lite_provider, self.lite_api_key, self.lite_endpoint),
+        }
+
+        if role not in role_to_attrs:
+            raise ValueError(f"Invalid role: {role}. Must be one of: primary, assistant, lite")
+
+        stored_provider, stored_role_key, stored_role_endpoint = role_to_attrs[role]
+
+        effective_provider = provider_override or (stored_provider.value if stored_provider else None)
+        api_key = api_key_override or stored_role_key
+        endpoint = endpoint_override or stored_role_endpoint
+
+        if not api_key and effective_provider:
+            provider_keys = {
+                LLMProvider.OPENAI.value: self.openai_api_key,
+                LLMProvider.ANTHROPIC.value: self.anthropic_api_key,
+                LLMProvider.GEMINI.value: self.gemini_api_key,
+                LLMProvider.OLLAMA.value: self.ollama_api_key,
+                LLMProvider.LLAMACPP.value: self.llamacpp_api_key,
+            }
+            api_key = provider_keys.get(effective_provider)
+
+        if not endpoint and effective_provider:
+            provider_endpoints = {
+                LLMProvider.OPENAI.value: self.openai_endpoint,
+                LLMProvider.ANTHROPIC.value: self.anthropic_endpoint,
+                LLMProvider.OLLAMA.value: self.ollama_endpoint,
+                LLMProvider.GEMINI.value: None,
+                LLMProvider.LLAMACPP.value: self.llamacpp_endpoint,
+            }
+            endpoint = provider_endpoints.get(effective_provider)
+
+        return effective_provider, api_key, endpoint
+
     @property
     def primary_endpoint_resolved(self) -> str | None:
         """Return the active primary provider endpoint, role-specific first."""
-        if self.primary_endpoint:
-            return self.primary_endpoint
-        endpoints = {
-            LLMProvider.OPENAI: self.openai_endpoint,
-            LLMProvider.ANTHROPIC: self.anthropic_endpoint,
-            LLMProvider.OLLAMA: self.ollama_endpoint,
-            LLMProvider.GEMINI: None,
-            LLMProvider.LLAMACPP: self.llamacpp_endpoint,
-        }
-        return endpoints.get(self.primary_provider)
+        _, _, endpoint = self.resolve("primary")
+        return endpoint
 
     @property
     def assistant_endpoint_resolved(self) -> str | None:
         """Return the active assistant provider endpoint, role-specific first."""
-        if self.assistant_endpoint:
-            return self.assistant_endpoint
-        endpoints = {
-            LLMProvider.OPENAI: self.openai_endpoint,
-            LLMProvider.ANTHROPIC: self.anthropic_endpoint,
-            LLMProvider.OLLAMA: self.ollama_endpoint,
-            LLMProvider.GEMINI: None,
-            LLMProvider.LLAMACPP: self.llamacpp_endpoint,
-        }
-        return endpoints.get(self.assistant_provider)
+        _, _, endpoint = self.resolve("assistant")
+        return endpoint
 
     @property
     def lite_endpoint_resolved(self) -> str | None:
         """Return the active lite provider endpoint, role-specific first."""
-        if self.lite_endpoint:
-            return self.lite_endpoint
-        endpoints = {
-            LLMProvider.OPENAI: self.openai_endpoint,
-            LLMProvider.ANTHROPIC: self.anthropic_endpoint,
-            LLMProvider.OLLAMA: self.ollama_endpoint,
-            LLMProvider.GEMINI: None,
-            LLMProvider.LLAMACPP: self.llamacpp_endpoint,
-        }
-        return endpoints.get(self.lite_provider)
+        _, _, endpoint = self.resolve("lite")
+        return endpoint
 
     def get_primary_api_key(self) -> str | None:
         """Return the active primary provider API key, role-specific first."""
-        if self.primary_api_key:
-            return self.primary_api_key
-        keys = {
-            LLMProvider.OPENAI: self.openai_api_key,
-            LLMProvider.ANTHROPIC: self.anthropic_api_key,
-            LLMProvider.GEMINI: self.gemini_api_key,
-            LLMProvider.OLLAMA: self.ollama_api_key,
-            LLMProvider.LLAMACPP: self.llamacpp_api_key,
-        }
-        return keys.get(self.primary_provider)
+        _, api_key, _ = self.resolve("primary")
+        return api_key
 
     def get_assistant_api_key(self) -> str | None:
         """Return the active assistant provider API key, role-specific first."""
-        if self.assistant_api_key:
-            return self.assistant_api_key
-        keys = {
-            LLMProvider.OPENAI: self.openai_api_key,
-            LLMProvider.ANTHROPIC: self.anthropic_api_key,
-            LLMProvider.GEMINI: self.gemini_api_key,
-            LLMProvider.OLLAMA: self.ollama_api_key,
-            LLMProvider.LLAMACPP: self.llamacpp_api_key,
-        }
-        return keys.get(self.assistant_provider)
+        _, api_key, _ = self.resolve("assistant")
+        return api_key
 
     def get_lite_api_key(self) -> str | None:
         """Return the active lite provider API key, role-specific first."""
-        if self.lite_api_key:
-            return self.lite_api_key
-        keys = {
-            LLMProvider.OPENAI: self.openai_api_key,
-            LLMProvider.ANTHROPIC: self.anthropic_api_key,
-            LLMProvider.GEMINI: self.gemini_api_key,
-            LLMProvider.OLLAMA: self.ollama_api_key,
-            LLMProvider.LLAMACPP: self.llamacpp_api_key,
-        }
-        return keys.get(self.lite_provider)
+        _, api_key, _ = self.resolve("lite")
+        return api_key
 
 class BatchExecutionSettings(G8eBaseModel):
     """Batch execution configuration for operator tools.

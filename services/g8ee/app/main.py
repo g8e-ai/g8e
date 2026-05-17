@@ -83,6 +83,7 @@ from .db.kv_service import KVService
 from .logging import setup_logging
 from .routers import chat_router, health_router
 from .routers.internal_router import router as internal_router
+from .middleware.exception_handlers import setup_exception_handlers
 from .services.cache.cache_aside import CacheAsideService
 from .services.infra.settings_service import SettingsService
 from .services.service_factory import ServiceFactory
@@ -268,6 +269,8 @@ def _build_app() -> FastAPI:
             "url": G8EE_APP_LICENSE_URL,
         },
     )
+
+    setup_exception_handlers(application)
 
     application.add_middleware(
         CORSMiddleware,

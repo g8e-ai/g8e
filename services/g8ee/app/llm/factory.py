@@ -92,36 +92,26 @@ def get_search_settings() -> SearchSettings | None:
 
 def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool = False, is_lite: bool = False) -> str:
     """Generate a cache key for provider instances based on configuration."""
-    if is_lite:
-        provider_type = settings.lite_provider
-        role_key = settings.lite_api_key
-        role_url = settings.lite_endpoint
-    elif is_assistant:
-        provider_type = settings.assistant_provider
-        role_key = settings.assistant_api_key
-        role_url = settings.assistant_endpoint
-    else:
-        provider_type = settings.primary_provider
-        role_key = settings.primary_api_key
-        role_url = settings.primary_endpoint
+    role = "lite" if is_lite else "assistant" if is_assistant else "primary"
+    provider, api_key, endpoint = settings.resolve(role)
 
-    provider_value = provider_type.value if provider_type else "none"
+    provider_value = provider or "none"
     key_parts = [provider_value]
 
     if provider_value == LLMProvider.GEMINI.value:
-        key_parts.append(role_key or settings.gemini_api_key or "")
+        key_parts.append(api_key or "")
     elif provider_value == LLMProvider.OPENAI.value:
-        key_parts.append(role_url or settings.openai_endpoint or "")
-        key_parts.append(role_key or settings.openai_api_key or "")
+        key_parts.append(endpoint or "")
+        key_parts.append(api_key or "")
     elif provider_value == LLMProvider.ANTHROPIC.value:
-        key_parts.append(role_url or settings.anthropic_endpoint or "")
-        key_parts.append(role_key or settings.anthropic_api_key or "")
+        key_parts.append(endpoint or "")
+        key_parts.append(api_key or "")
     elif provider_value == LLMProvider.OLLAMA.value:
-        key_parts.append(_normalize_ollama_host(role_url or settings.ollama_endpoint or ""))
-        key_parts.append(role_key or settings.ollama_api_key or "")
+        key_parts.append(_normalize_ollama_host(endpoint or ""))
+        key_parts.append(api_key or "")
     elif provider_value == LLMProvider.LLAMACPP.value:
-        key_parts.append(_normalize_ollama_host(role_url or settings.llamacpp_endpoint or ""))
-        key_parts.append(role_key or settings.llamacpp_api_key or "")
+        key_parts.append(_normalize_ollama_host(endpoint or ""))
+        key_parts.append(api_key or "")
 
     return "|".join(key_parts)
 
@@ -162,40 +152,36 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False, is_lite:
     if cache_key in _provider_cache:
         return _provider_cache[cache_key]
 
-    if is_lite:
-        provider_type = settings.lite_provider
-        role_key = settings.lite_api_key
-        role_url = settings.lite_endpoint
-    elif is_assistant:
-        provider_type = settings.assistant_provider
-        role_key = settings.assistant_api_key
-        role_url = settings.assistant_endpoint
-    else:
-        provider_type = settings.primary_provider
-        role_key = settings.primary_api_key
-        role_url = settings.primary_endpoint
+    role = "lite" if is_lite else "assistant" if is_assistant else "primary"
+    provider_str, api_key, endpoint = settings.resolve(role)
+
+    if not provider_str:
+        from app.errors import ConfigurationError
+        raise ConfigurationError(f"No provider configured for role: {role}")
+
+    provider_type = LLMProvider(provider_str)
 
     if provider_type == LLMProvider.OLLAMA:
         provider = OllamaProvider(
-            endpoint=role_url or settings.ollama_endpoint,
-            api_key=role_key or settings.ollama_api_key,
+            endpoint=endpoint,
+            api_key=api_key,
         )
     elif provider_type == LLMProvider.OPENAI:
         provider = OpenAIProvider(
-            endpoint=role_url or settings.openai_endpoint,
-            api_key=role_key or settings.openai_api_key,
+            endpoint=endpoint,
+            api_key=api_key,
         )
     elif provider_type == LLMProvider.GEMINI:
-        provider = GeminiProvider(api_key=role_key or settings.gemini_api_key)
+        provider = GeminiProvider(api_key=api_key)
     elif provider_type == LLMProvider.ANTHROPIC:
         provider = AnthropicProvider(
-            endpoint=role_url or settings.anthropic_endpoint,
-            api_key=role_key or settings.anthropic_api_key,
+            endpoint=endpoint,
+            api_key=api_key,
         )
     elif provider_type == LLMProvider.LLAMACPP:
         provider = LlamaCppProvider(
-            endpoint=role_url or settings.llamacpp_endpoint,
-            api_key=role_key or settings.llamacpp_api_key,
+            endpoint=endpoint,
+            api_key=api_key,
         )
     else:
         from app.errors import ConfigurationError

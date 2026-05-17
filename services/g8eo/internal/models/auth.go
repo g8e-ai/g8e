@@ -97,6 +97,7 @@ type DeviceLinkClaim struct {
 // OperatorRegistrationRequest is the inbound body for /api/auth/device-link/register.
 type OperatorRegistrationRequest struct {
 	CSR               string `json:"csr_pem"`
+	CLICSR            string `json:"cli_csr_pem,omitempty"`
 	SystemFingerprint string `json:"system_fingerprint"`
 	Hostname          string `json:"hostname"`
 	OS                string `json:"os"`
@@ -106,12 +107,26 @@ type OperatorRegistrationRequest struct {
 }
 
 // OperatorRegistrationResponse is the response for /api/auth/device-link/register.
+//
+// OperatorSessionID and CLISessionID are strictly disjoint session types:
+//   - operator_session_id authenticates the host agent and is bound to the
+//     mTLS certificate URI SAN (spiffe://g8e.local/operator/...).
+//   - cli_session_id is the routing namespace the BYO/CLI client uses to
+//     receive SessionEvents (SSE) and embed in outbound request bodies.
+//     The CLI has its own distinct mTLS certificate with SPIFFE ID
+//     spiffe://g8e.local/cli/<user_id>/<cli_session_id>.
+//
+// Conflating the two would let an operator session drain another client's
+// event stream — the substrate refuses to do so.
 type OperatorRegistrationResponse struct {
 	Success           bool            `json:"success"`
 	OperatorSessionID string          `json:"operator_session_id,omitempty"`
+	CLISessionID      string          `json:"cli_session_id,omitempty"`
 	OperatorID        string          `json:"operator_id,omitempty"`
 	OperatorCert      string          `json:"operator_cert,omitempty"`
 	OperatorCertChain string          `json:"operator_cert_chain,omitempty"`
+	CLICert           string          `json:"cli_cert,omitempty"`
+	CLICertChain      string          `json:"cli_cert_chain,omitempty"`
 	HubTrustBundle    string          `json:"hub_trust_bundle,omitempty"`
 	Session           *SessionSummary `json:"session,omitempty"`
 	Config            json.RawMessage `json:"config,omitempty"`
@@ -143,7 +158,7 @@ type OperatorDocumentGo struct {
 	SlotNumber           int             `json:"slot_number,omitempty"`
 	IsSlot               bool            `json:"is_slot"`
 	Claimed              bool            `json:"claimed"`
-	OperatorType         string          `json:"operator_type"`
+	OperatorType         string          `json:"operator_type,omitempty"`
 	CloudSubtype         string          `json:"cloud_subtype,omitempty"`
 	SystemFingerprint    string          `json:"system_fingerprint,omitempty"`
 	CreatedAt            time.Time       `json:"created_at"`
@@ -153,6 +168,26 @@ type OperatorDocumentGo struct {
 	LatestHeartbeat      json.RawMessage `json:"latest_heartbeat_snapshot,omitempty"`
 	RuntimeConfig        *RuntimeConfig  `json:"runtime_config,omitempty"`
 	ConsumedByOperatorID string          `json:"consumed_by_operator_id,omitempty"`
+}
+
+// MarshalJSON implements json.Marshaler with default enum values.
+// Ensures OperatorType and CloudSubtype are defaulted before serialization
+// to eliminate the need for coercion logic in downstream consumers (e.g., Python engine).
+func (o *OperatorDocumentGo) MarshalJSON() ([]byte, error) {
+	type Alias OperatorDocumentGo
+	defaulted := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(o),
+	}
+
+	// Apply defaults for enum fields
+	if defaulted.OperatorType == "" {
+		defaulted.OperatorType = "system"
+	}
+	// CloudSubtype defaults to empty string (no default subtype)
+
+	return json.Marshal(defaulted)
 }
 
 type OperatorSlotResponse struct {
@@ -181,9 +216,9 @@ type TerminateOperatorResponse struct {
 
 // BindOperatorsRequest is the inbound body for /api/operators/bind
 type BindOperatorsRequest struct {
-	OperatorIDs []string `json:"operator_ids"`
-	UserID      string   `json:"user_id"`
-	SessionID   string   `json:"session_id"`
+	OperatorIDs  []string `json:"operator_ids"`
+	UserID       string   `json:"user_id"`
+	WebSessionID string   `json:"web_session_id"`
 }
 
 // BindOperatorsResponse is the response for /api/operators/bind
@@ -198,9 +233,9 @@ type BindOperatorsResponse struct {
 
 // UnbindOperatorsRequest is the inbound body for /api/operators/unbind
 type UnbindOperatorsRequest struct {
-	OperatorIDs []string `json:"operator_ids"`
-	UserID      string   `json:"user_id"`
-	SessionID   string   `json:"session_id"`
+	OperatorIDs  []string `json:"operator_ids"`
+	UserID       string   `json:"user_id"`
+	WebSessionID string   `json:"web_session_id"`
 }
 
 // UnbindOperatorsResponse is the response for /api/operators/unbind
@@ -215,9 +250,9 @@ type UnbindOperatorsResponse struct {
 
 // SetTargetContextRequest is the inbound body for /api/operators/target
 type SetTargetContextRequest struct {
-	OperatorID string `json:"operator_id"`
-	UserID     string `json:"user_id"`
-	SessionID  string `json:"session_id"`
+	OperatorID   string `json:"operator_id"`
+	UserID       string `json:"user_id"`
+	WebSessionID string `json:"web_session_id"`
 }
 
 // SetTargetContextResponse is the response for /api/operators/target
@@ -305,14 +340,65 @@ type WebSession struct {
 	ExpiresAtUnixMs int64  `json:"expires_at_unix_ms"`
 }
 
+// UserStatus controls whether a user is permitted to authenticate.
+//
+// Disabled users keep their record so audit trails and historical references
+// remain resolvable, but every authentication chokepoint (mTLS + web session)
+// MUST refuse to act on their behalf. Status changes are append-only events
+// recorded in the auth admin audit log.
+type UserStatus string
+
+const (
+	UserStatusActive   UserStatus = "active"
+	UserStatusDisabled UserStatus = "disabled"
+)
+
 // User represents a platform user with passkey credentials.
+//
+// IsBootstrap identifies the ephemeral local-superadmin identity created by
+// `./g8e platform start -a` over loopback. It is *not* a privilege tier — it
+// marks an identity that exists purely to make a fresh local install usable
+// without ceremony, and that is retired automatically the first time a real
+// device-link login completes.
 type User struct {
 	ID                 string              `json:"id"`
 	Email              string              `json:"email"`
 	Name               string              `json:"name,omitempty"`
 	PasskeyCredentials []PasskeyCredential `json:"passkey_credentials,omitempty"`
 	Provider           string              `json:"provider,omitempty"`
+
+	Status      UserStatus `json:"status,omitempty"`
+	IsBootstrap bool       `json:"is_bootstrap,omitempty"`
 }
+
+// IsActive reports whether the user is permitted to authenticate. Treats the
+// zero value as active so pre-existing user docs (written before Status was
+// introduced) keep working without a migration step.
+func (u *User) IsActive() bool {
+	if u == nil {
+		return false
+	}
+	return u.Status == "" || u.Status == UserStatusActive
+}
+
+// AdminAuditEntry is a single row in the `auth_admin_audit` collection.
+// New admin-side state changes (retire, disable, role mutation, etc.) MUST
+// append a row here so the lifecycle is auditable from the protocol substrate.
+type AdminAuditEntry struct {
+	ID         string                 `json:"id"`
+	At         time.Time              `json:"at"`
+	Action     string                 `json:"action"`
+	Actor      string                 `json:"actor,omitempty"`
+	Target     string                 `json:"target,omitempty"`
+	OperatorID string                 `json:"operator_id,omitempty"`
+	Details    map[string]interface{} `json:"details,omitempty"`
+}
+
+// Admin audit action constants. Keep these stable — downstream tooling and
+// receipts join on the string value.
+const (
+	AdminAuditActionRetireLocalSuperadmin = "retire_local_superadmin"
+)
 
 // TrustedSigner represents an external L2 signer public key stored in the database.
 type TrustedSigner struct {

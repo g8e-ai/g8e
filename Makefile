@@ -19,6 +19,7 @@ help:
 	@echo "Development:"
 	@echo "  proto         Generate all Protobuf code (Go and Python)"
 	@echo "  buf-install   Install Buf CLI locally if not found"
+	@echo "  lint-no-bare-session-id  Check for bare session_id regression"
 	@echo ""
 	@echo "Services:"
 	@echo "  build-g8eo    Build the Operator service"
@@ -49,6 +50,21 @@ buf-install:
 		curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$$(uname -s)-$$(uname -m)" -o ./buf; \
 		chmod +x ./buf; \
 	fi
+
+# =============================================================================
+# LINTING
+# =============================================================================
+.PHONY: lint-no-bare-session-id
+lint-no-bare-session-id:
+	@echo "Checking for bare session_id regression..."
+	@if grep -rE "\bsession_id\b" . \
+		--exclude-dir={.git,vendor,node_modules,.g8e,.ruff_cache,.venv,dist,build,__pycache__,.local.dev,.github} \
+		--exclude={*.pb.go,*_pb2.py,*_pb2_grpc.py,*.pyc,Makefile} \
+		-I; then \
+		echo "Error: Bare 'session_id' found. Use 'operator_session_id', 'cli_session_id', or 'web_session_id' instead."; \
+		exit 1; \
+	fi
+	@echo "No bare session_id found."
 
 # =============================================================================
 # SERVICE DISPATCH

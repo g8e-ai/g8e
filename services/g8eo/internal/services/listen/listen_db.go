@@ -799,41 +799,61 @@ func (s *ListenDBService) KVExpire(key string, ttlSeconds int) bool {
 	return n > 0
 }
 
-// Allowed values for sse_events.session_type. 'web' and 'cli' are first-class
-// client session types — both deliver investigation events from g8ee, but they
-// occupy disjoint routing namespaces so a CLI session can never accidentally
-// receive a browser session's events (or vice versa). 'user' is reserved for
-// background fanout to every session owned by a user.
-const (
-	SSESessionTypeWeb  = "web"
-	SSESessionTypeCLI  = "cli"
-	SSESessionTypeUser = "user"
-)
-
-// IsValidSSESessionType reports whether t is an accepted session_type.
-func IsValidSSESessionType(t string) bool {
-	switch t {
-	case SSESessionTypeWeb, SSESessionTypeCLI, SSESessionTypeUser:
-		return true
-	}
-	return false
+// SSERoute is the routing target for an SSE event row. Exactly one of the
+// three id fields MUST be non-empty. The substrate refuses to talk about a
+// bare session id — every routing key is tagged at the type level so a
+// web_session_id can never be mis-delivered as a cli_session_id (or vice
+// versa) and a user_id (background fan-out) can never be mistaken for a
+// per-session id.
+type SSERoute struct {
+	WebSessionID string
+	CLISessionID string
+	UserID       string
 }
 
-// SSEEventsAppend inserts a row into the sse_events table. sessionType MUST be
-// one of SSESessionType{Web,CLI,User}; sessionID MUST be non-empty.
-func (s *ListenDBService) SSEEventsAppend(sessionType, sessionID, eventType, payload string) error {
-	if !IsValidSSESessionType(sessionType) {
-		return fmt.Errorf("invalid sse session_type %q (want web|cli|user)", sessionType)
+// validate ensures exactly one routing id is set.
+func (r SSERoute) validate() error {
+	n := 0
+	if r.WebSessionID != "" {
+		n++
 	}
-	if sessionID == "" {
-		return fmt.Errorf("sse session_id must not be empty")
+	if r.CLISessionID != "" {
+		n++
+	}
+	if r.UserID != "" {
+		n++
+	}
+	switch n {
+	case 0:
+		return fmt.Errorf("sse route requires exactly one of web_session_id, cli_session_id, user_id")
+	case 1:
+		return nil
+	default:
+		return fmt.Errorf("sse route is mutually-exclusive: set exactly one of web_session_id, cli_session_id, user_id")
+	}
+}
+
+// SSEEventsAppend inserts a row into the sse_events table. The route MUST set
+// exactly one of WebSessionID, CLISessionID, UserID.
+func (s *ListenDBService) SSEEventsAppend(route SSERoute, eventType, payload string) error {
+	if err := route.validate(); err != nil {
+		return err
 	}
 	now := sqliteutil.NowTimestamp()
 	_, err := s.db.Exec(
-		"INSERT INTO sse_events (session_type, session_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?)",
-		sessionType, sessionID, eventType, payload, now,
+		"INSERT INTO sse_events (web_session_id, cli_session_id, user_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		nullIfEmpty(route.WebSessionID), nullIfEmpty(route.CLISessionID), nullIfEmpty(route.UserID), eventType, payload, now,
 	)
 	return err
+}
+
+// nullIfEmpty returns sql.NullString{Valid: false} for empty strings so the
+// CHECK constraint on sse_events sees a NULL rather than an empty string.
+func nullIfEmpty(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // SSEEventsWipe deletes all rows from the sse_events table. Returns the number of rows deleted.
@@ -852,21 +872,25 @@ func (s *ListenDBService) SSEEventsCount() (int64, error) {
 	return count, err
 }
 
-// SSEEventRow is a single row from the sse_events table.
+// SSEEventRow is a single row from the sse_events table. Exactly one of the
+// three routing id fields will be populated per row.
 type SSEEventRow struct {
-	ID          int64  `json:"id"`
-	SessionType string `json:"session_type"`
-	SessionID   string `json:"session_id"`
-	EventType   string `json:"event_type"`
-	Payload     string `json:"payload"`
-	CreatedAt   string `json:"created_at"`
+	ID           int64  `json:"id"`
+	WebSessionID string `json:"web_session_id,omitempty"`
+	CLISessionID string `json:"cli_session_id,omitempty"`
+	UserID       string `json:"user_id,omitempty"`
+	EventType    string `json:"event_type"`
+	Payload      string `json:"payload"`
+	CreatedAt    string `json:"created_at"`
 }
 
-// SSEEventsListSince returns up to `limit` events for the given typed session
-// with id > sinceID, ordered by id ascending. If sessionType AND sessionID are
-// both empty, returns events across all sessions (admin/debug use). Otherwise
-// sessionType MUST be a valid value and sessionID MUST be non-empty.
-func (s *ListenDBService) SSEEventsListSince(sessionType, sessionID string, sinceID int64, limit int) ([]SSEEventRow, error) {
+// SSEEventsListSince returns up to `limit` events with id > sinceID, ordered by
+// id ascending. The route MUST set exactly one of WebSessionID, CLISessionID,
+// UserID. SSEEventsListAllSince is the admin-only "all routes" variant.
+func (s *ListenDBService) SSEEventsListSince(route SSERoute, sinceID int64, limit int) ([]SSEEventRow, error) {
+	if err := route.validate(); err != nil {
+		return nil, err
+	}
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
@@ -874,33 +898,59 @@ func (s *ListenDBService) SSEEventsListSince(sessionType, sessionID string, sinc
 		rows *sql.Rows
 		err  error
 	)
-	if sessionType == "" && sessionID == "" {
+	switch {
+	case route.WebSessionID != "":
 		rows, err = s.db.Query(
-			"SELECT id, session_type, session_id, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
-			sinceID, limit,
+			"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE web_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
+			route.WebSessionID, sinceID, limit,
 		)
-	} else {
-		if !IsValidSSESessionType(sessionType) {
-			return nil, fmt.Errorf("invalid sse session_type %q (want web|cli|user)", sessionType)
-		}
-		if sessionID == "" {
-			return nil, fmt.Errorf("sse session_id must not be empty")
-		}
+	case route.CLISessionID != "":
 		rows, err = s.db.Query(
-			"SELECT id, session_type, session_id, event_type, payload, created_at FROM sse_events WHERE session_type = ? AND session_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
-			sessionType, sessionID, sinceID, limit,
+			"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE cli_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
+			route.CLISessionID, sinceID, limit,
+		)
+	default:
+		rows, err = s.db.Query(
+			"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
+			route.UserID, sinceID, limit,
 		)
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	return scanSSEEventRows(rows)
+}
+
+// SSEEventsListAllSince is an admin/debug helper that returns events across
+// every routing target with id > sinceID. Production paths MUST use
+// SSEEventsListSince with a typed route.
+func (s *ListenDBService) SSEEventsListAllSince(sinceID int64, limit int) ([]SSEEventRow, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	rows, err := s.db.Query(
+		"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
+		sinceID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanSSEEventRows(rows)
+}
+
+func scanSSEEventRows(rows *sql.Rows) ([]SSEEventRow, error) {
 	out := make([]SSEEventRow, 0)
 	for rows.Next() {
 		var r SSEEventRow
-		if err := rows.Scan(&r.ID, &r.SessionType, &r.SessionID, &r.EventType, &r.Payload, &r.CreatedAt); err != nil {
+		var web, cli, user sql.NullString
+		if err := rows.Scan(&r.ID, &web, &cli, &user, &r.EventType, &r.Payload, &r.CreatedAt); err != nil {
 			return nil, err
 		}
+		r.WebSessionID = web.String
+		r.CLISessionID = cli.String
+		r.UserID = user.String
 		out = append(out, r)
 	}
 	return out, rows.Err()

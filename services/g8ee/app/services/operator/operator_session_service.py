@@ -46,7 +46,7 @@ class OperatorSessionService:
         self.session_ttl = DEFAULT_SESSION_TTL
         self.absolute_timeout = DEFAULT_ABSOLUTE_TIMEOUT
 
-    def _generate_session_id(self) -> str:
+    def _generate_operator_session_id(self) -> str:
         return f"ops_{uuid.uuid4().hex}"
 
     async def create_operator_session(
@@ -56,7 +56,7 @@ class OperatorSessionService:
         ttl_seconds: int | None = None
     ) -> OperatorSessionDocument:
         """Create a new operator session."""
-        session_id = self._generate_session_id()
+        operator_session_id = self._generate_operator_session_id()
         ts = now()
 
         ttl = ttl_seconds if ttl_seconds is not None else self.session_ttl
@@ -68,7 +68,7 @@ class OperatorSessionService:
         ctx = request_context or {}
 
         session = OperatorSessionDocument(
-            id=session_id,
+            id=operator_session_id,
             session_type=SessionType.OPERATOR,
             user_id=session_data.get("user_id"),
             organization_id=session_data.get("organization_id"),
@@ -90,22 +90,22 @@ class OperatorSessionService:
 
         result = await self.cache.create_document(
             collection=self.collection,
-            document_id=session_id,
+            document_id=operator_session_id,
             data=session
         )
 
         if not result.success:
             raise Exception(f"Failed to persist operator session: {result.error}")
 
-        logger.info("[OPERATOR-SESSION-SERVICE] Operator session created: %s", session_id)
+        logger.info("[OPERATOR-SESSION-SERVICE] Operator session created: %s", operator_session_id)
         return session
 
-    async def validate_session(self, session_id: str) -> OperatorSessionDocument | None:
+    async def validate_session(self, operator_session_id: str) -> OperatorSessionDocument | None:
         """Validate an operator session and check for expiry."""
-        if not session_id:
+        if not operator_session_id:
             return None
 
-        data = await self.cache.get_document_with_cache(self.collection, session_id)
+        data = await self.cache.get_document_with_cache(self.collection, operator_session_id)
         if not data:
             return None
 
@@ -117,21 +117,21 @@ class OperatorSessionService:
         check_time = now()
 
         if session.absolute_expires_at and check_time > session.absolute_expires_at:
-            logger.warning("[OPERATOR-SESSION-SERVICE] Session %s absolute timeout", session_id)
-            await self.end_session(session_id, reason=SessionEndReason.TIMEOUT_ABSOLUTE)
+            logger.warning("[OPERATOR-SESSION-SERVICE] Session %s absolute timeout", operator_session_id)
+            await self.end_session(operator_session_id, reason=SessionEndReason.TIMEOUT_ABSOLUTE)
             return None
 
         if session.idle_expires_at and check_time > session.idle_expires_at:
-            logger.warning("[OPERATOR-SESSION-SERVICE] Session %s idle timeout", session_id)
-            await self.end_session(session_id, reason=SessionEndReason.TIMEOUT_IDLE)
+            logger.warning("[OPERATOR-SESSION-SERVICE] Session %s idle timeout", operator_session_id)
+            await self.end_session(operator_session_id, reason=SessionEndReason.TIMEOUT_IDLE)
             return None
 
         return session
 
-    async def refresh_session(self, session_id: str, session: OperatorSessionDocument | None = None) -> bool:
+    async def refresh_session(self, operator_session_id: str, session: OperatorSessionDocument | None = None) -> bool:
         """Refresh session idle timeout."""
         if not session:
-            session = await self.validate_session(session_id)
+            session = await self.validate_session(operator_session_id)
             if not session:
                 return False
 
@@ -145,20 +145,20 @@ class OperatorSessionService:
 
         result = await self.cache.update_document(
             collection=self.collection,
-            document_id=session_id,
+            document_id=operator_session_id,
             data=updates,
             merge=True
         )
         return result.success
 
-    async def end_session(self, session_id: str, reason: str = SessionEndReason.LOGOUT) -> bool:
+    async def end_session(self, operator_session_id: str, reason: str = SessionEndReason.LOGOUT) -> bool:
         """End an operator session."""
         result = await self.cache.delete_document(
             collection=self.collection,
-            document_id=session_id
+            document_id=operator_session_id
         )
 
         if result.success:
-            logger.info("[OPERATOR-SESSION-SERVICE] Operator session ended: %s (reason: %s)", session_id, reason)
+            logger.info("[OPERATOR-SESSION-SERVICE] Operator session ended: %s (reason: %s)", operator_session_id, reason)
 
         return result.success

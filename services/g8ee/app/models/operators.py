@@ -138,6 +138,14 @@ class OperatorDocument(G8eIdentifiableModel):
     api_key: str | None = Field(default=None, description="Operator API key (authority: g8ee)")
     is_active: bool = Field(default=False, description="Whether Operator is in active status")
     operator_type: OperatorType = Field(default=OperatorType.SYSTEM, description="Operator deployment type")
+
+    @field_validator("operator_type", mode="before")
+    @classmethod
+    def coerce_operator_type(cls, v: object) -> OperatorType:
+        if v == "" or v is None:
+            return OperatorType.SYSTEM
+        return OperatorType(v)
+
     granted_intents: list[str] | None = Field(default=None, description="Granted intent permissions (cloud operators)")
     cloud_subtype: CloudSubtype | None = Field(default=None, description="Cloud provider subtype")
     current_hostname: str | None = Field(default=None, description="Denormalized hostname from latest_heartbeat_snapshot for quick access")

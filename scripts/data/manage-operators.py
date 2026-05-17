@@ -19,11 +19,11 @@ Manage operator documents via the Operator (g8eo) HTTP API.
 Usage:
     python manage-operator.py operators list --user-id USER_ID
     python manage-operator.py operators list --email user@example.com
-    python manage-operator.py operators get --id OPERATOR_ID
+    python manage-operator.py operators get --operator-id OPERATOR_ID
     python manage-operator.py operators init-slots --user-id USER_ID
     python manage-operator.py operators init-slots --email user@example.com
-    python manage-operator.py operators refresh-key --id OPERATOR_ID
-    python manage-operator.py operators terminate --id OPERATOR_ID
+    python manage-operator.py operators refresh-key --operator-id OPERATOR_ID
+    python manage-operator.py operators terminate --operator-id OPERATOR_ID
 """
 
 from __future__ import annotations
@@ -292,43 +292,43 @@ Examples:
   python manage-operator.py operators list --user-id USER_ID
   python manage-operator.py operators list --email user@example.com
   python manage-operator.py operators list --email user@example.com --all
-  python manage-operator.py operators get --id OPERATOR_ID
+  python manage-operator.py operators get --operator-id OPERATOR_ID
   python manage-operator.py operators init-slots --user-id USER_ID
   python manage-operator.py operators init-slots --email user@example.com
-  python manage-operator.py operators refresh-key --id OPERATOR_ID
-  python manage-operator.py operators refresh-key --id OPERATOR_ID --force
-  python manage-operator.py operators terminate --id OPERATOR_ID
-  python manage-operator.py operators terminate --id OPERATOR_ID --force
+  python manage-operator.py operators refresh-key --operator-id OPERATOR_ID
+  python manage-operator.py operators refresh-key --operator-id OPERATOR_ID --force
+  python manage-operator.py operators terminate --operator-id OPERATOR_ID
+  python manage-operator.py operators terminate --operator-id OPERATOR_ID --force
         """
     )
 
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
 
     sp = subparsers.add_parser('list', help='List operators for a user')
-    sp.add_argument('--user-id', dest='user_id', help='User ID')
-    sp.add_argument('--email', help='User email (resolved to user ID)')
+    sp.add_argument('--user-id', type=str, dest='user_id', help='User ID')
+    sp.add_argument('--email', type=str, help='User email (resolved to user ID)')
     sp.add_argument('--all', dest='all_statuses', action='store_true',
                     help='Include all statuses (default: excludes terminated)')
 
     sp = subparsers.add_parser('get', help='Get full operator details')
-    sp.add_argument('--id', dest='operator_id', required=True, help='Operator ID')
+    sp.add_argument('--operator-id', type=str, required=True, help='Operator ID')
 
     sp = subparsers.add_parser('init-slots', help='Initialize operator slots for a user')
-    sp.add_argument('--user-id', dest='user_id', help='User ID')
-    sp.add_argument('--email', help='User email (resolved to user ID)')
+    sp.add_argument('--user-id', type=str, dest='user_id', help='User ID')
+    sp.add_argument('--email', type=str, help='User email (resolved to user ID)')
 
     sp = subparsers.add_parser(
         'refresh-key',
         help='Refresh operator API key in place'
     )
-    sp.add_argument('--id', dest='operator_id', required=True, help='Operator ID')
+    sp.add_argument('--operator-id', type=str, required=True, help='Operator ID')
     sp.add_argument('--force', action='store_true', help='Skip confirmation prompt')
 
     sp = subparsers.add_parser(
         'terminate',
         help='Terminate an operator session'
     )
-    sp.add_argument('--id', dest='operator_id', required=True, help='Operator ID')
+    sp.add_argument('--operator-id', type=str, required=True, help='Operator ID')
     sp.add_argument('--force', action='store_true', help='Skip confirmation prompt')
 
     return parser

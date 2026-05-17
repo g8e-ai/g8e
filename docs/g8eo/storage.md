@@ -104,7 +104,7 @@ This document explains the unified storage architecture for the g8e platform. It
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │                  Ledger (Multi-Ledger)                        │   │
-│  │         data/ledger/sessions/<session_id>/ (Git)              │   │
+│  │    data/ledger/sessions/<operator_session_id>/ (Git)          │   │
 │  │   Per-session isolated git repos; two-phase commits          │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
@@ -123,7 +123,7 @@ This document explains the unified storage architecture for the g8e platform. It
 | **Operator (Audit Vault)** | SQLite (Enc) | `.g8e/data/g8e.db` | LFAA encrypted append-only log (`events`, `receipts`, `file_mutation_log`). |
 | **Operator (Scrubbed Vault)** | SQLite | `.g8e/local_state.db` | Sentinel-scrubbed AI context (`execution_log`, `file_diff_log`). |
 | **Operator (Raw Vault)** | SQLite | `.g8e/raw_vault.db` | Customer-only unscrubbed forensic record (`raw_execution_log`, `raw_file_diff_log`). |
-| **Operator (Ledger)** | Git | `.g8e/data/ledger/sessions/<session_id>/` | Multi-Ledger: per-session isolated git repos for cryptographic file history, diff, and rollback. |
+| **Operator (Ledger)** | Git | `.g8e/data/ledger/sessions/<operator_session_id>/` | Multi-Ledger: per-session isolated git repos for cryptographic file history, diff, and rollback. |
 
 ---
 

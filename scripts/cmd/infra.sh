@@ -99,15 +99,20 @@ print(json.dumps({
             exit 1
         fi
 
-        # 5. Extract and save results
+        # 5. Extract and save results.
+        # cli_session_id is the disjoint BYO/CLI routing namespace minted at
+        # login alongside operator_session_id. The CLI must NEVER reuse the
+        # operator_session_id as a cli session — those are first-class disjoint
+        # session types.
         _session_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_session_id',''))" 2>/dev/null)
+        _cli_session_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('cli_session_id',''))" 2>/dev/null)
         _operator_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_id',''))" 2>/dev/null)
         _cert_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_cert',''))" 2>/dev/null)
         _chain_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_cert_chain',''))" 2>/dev/null)
         _hub_bundle=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('hub_trust_bundle',''))" 2>/dev/null)
 
-        if [[ -z "$_session_id" || -z "$_operator_id" || -z "$_cert_pem" ]]; then
-            echo "[g8e] Unexpected registration response: $_reg_resp" >&2
+        if [[ -z "$_session_id" || -z "$_operator_id" || -z "$_cert_pem" || -z "$_cli_session_id" ]]; then
+            echo "[g8e] Unexpected registration response (missing operator_session_id, cli_session_id, operator_id, or operator_cert): $_reg_resp" >&2
             exit 1
         fi
 
@@ -124,8 +129,8 @@ print(json.dumps({
             chmod 600 "$G8E_CREDENTIALS_DIR/hub-bundle.pem"
         fi
 
-        _save_credentials "$_session_id" "$_login_user_id" "$_operator_id"
-        echo "[g8e] Authenticated — operator_id=$_operator_id session=$_session_id"
+        _save_credentials "$_session_id" "$_login_user_id" "$_operator_id" "$_cli_session_id"
+        echo "[g8e] Authenticated — operator_id=$_operator_id operator_session=${_session_id:0:8}... cli_session=${_cli_session_id:0:8}..."
         echo "[g8e] Credentials saved to $G8E_CREDENTIALS_FILE"
         exit 0 ;;
 

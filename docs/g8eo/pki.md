@@ -30,8 +30,23 @@ Client identities follow the SPIFFE URI scheme, encoded in the certificate's URI
 | Role | URI SAN Pattern |
 |---|---|
 | **Operator (Satellite)** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` |
+| **CLI (BYO Client)** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` |
 | **Application (Agent)** | `spiffe://g8e.local/app/<operator_id>` |
 | **Hub (Operator Listen)** | `spiffe://g8e.local/hub/operator-listen` |
+
+### CLI vs Operator Identity Separation
+
+The CLI is a logically separate principal from the operator agent and has its own distinct SPIFFE identity:
+
+- **Operator certificates** authenticate the host agent and are bound to `operator_session_id`. The operator agent represents the sovereign host that executes mutations.
+- **CLI certificates** authenticate BYO/CLI clients and are bound to `cli_session_id`. The CLI is a client tool that issues commands and receives SSE events.
+
+This separation ensures that:
+- CLI sessions cannot impersonate operator agents
+- Operator sessions cannot drain another client's event stream
+- Each principal has a cryptographically distinct identity for audit and authorization
+
+During enrollment, clients may submit both an operator CSR and a CLI CSR to receive both certificates. The CLI certificate is optional for backwards compatibility.
 
 ## Enrollment Lifecycle
 

@@ -50,6 +50,10 @@ If you work in an industry that could use a fully self-hosted, data sovereign, A
 Hit me up: danny@g8e.ai
 
 
+## Local Bootstrap & Identity Lifecycle
+
+Fresh local installs use a zero-touch bootstrap model: `./g8e platform start -a` automatically creates a local superadmin (`superadmin@g8e.local`) and issues an mTLS certificate for CLI authentication over loopback. This ephemeral identity exists solely to make the platform immediately usable without ceremony. The moment a real user completes `./g8e login --email …`, the bootstrap user is permanently disabled and its credentials are cleared—retirement is irreversible and requires `./g8e platform clean` to re-bootstrap. This design bounds the security surface of the local-only identity while eliminating friction for first-time users.
+
 ## The Architecture at a Glance
 
 The industry's current trajectory for agentic AI is structurally broken. Relying on a single Large Language Model creates a system vulnerable to auto-regressive collapse. Conversely, traditional "Human-in-the-Loop" setups rapidly degrade into alert fatigue, where human approval becomes a rubber-stamp.

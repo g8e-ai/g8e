@@ -31,13 +31,13 @@ import httpx
 from app.constants.headers import (
     BOUND_OPERATORS_HEADER,
     CASE_ID_HEADER,
+    CLI_SESSION_ID_HEADER,
     COMPONENT_NAME_HEADER,
     HTTP_CONTENT_TYPE_HEADER,
     INVESTIGATION_ID_HEADER,
     OPERATOR_SESSION_ID_HEADER,
     TASK_ID_HEADER,
     USER_ID_HEADER,
-    WEB_SESSION_ID_HEADER,
 )
 
 from g8e_evals.tls import resolve_trust_bundle
@@ -70,6 +70,7 @@ class AuthContext:
     client_cert: str
     client_key: str
     operator_session_id: str
+    cli_session_id: str
     user_id: str
     # Optional request-scoped context. Set per-request, not at construction.
     case_id: str = ""
@@ -92,10 +93,13 @@ class AuthContext:
         the mTLS client certificate files do not exist on disk.
         """
         sid = (operator_session_id or os.environ.get("OPERATOR_SESSION_ID") or "").strip()
+        cli_sid = (os.environ.get("CLI_SESSION_ID") or "").strip()
         uid = (os.environ.get("USER_ID") or "").strip()
         missing: list[str] = []
         if not sid:
             missing.append("OPERATOR_SESSION_ID")
+        if not cli_sid:
+            missing.append("CLI_SESSION_ID")
         if not uid:
             missing.append("USER_ID")
         if missing:
@@ -129,6 +133,7 @@ class AuthContext:
             client_cert=client_cert,
             client_key=client_key,
             operator_session_id=sid,
+            cli_session_id=cli_sid,
             user_id=uid,
         )
 
@@ -148,7 +153,8 @@ class AuthContext:
         }
         if self.operator_session_id:
             headers[OPERATOR_SESSION_ID_HEADER] = self.operator_session_id
-            headers[WEB_SESSION_ID_HEADER] = self.operator_session_id
+        if self.cli_session_id:
+            headers[CLI_SESSION_ID_HEADER] = self.cli_session_id
         if self.user_id:
             headers[USER_ID_HEADER] = self.user_id
         if self.case_id:

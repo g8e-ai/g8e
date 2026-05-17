@@ -143,13 +143,15 @@ class HeartbeatStaleMonitorService:
 
                 last_hb = op.latest_heartbeat_snapshot.timestamp if op.latest_heartbeat_snapshot else None
                 if not last_hb:
-                    # No heartbeat ever received — treat as immediately stale so the
-                    # ACTIVE→OFFLINE / BOUND→STALE transition fires on the next tick.
-                    target = resolve_heartbeat_transition(op.status, is_stale=True)
-                    if target:
-                        applied = await self._apply_transition(op, target, age_seconds=float("inf"))
-                        if applied:
-                            transitions += 1
+                    # No heartbeat data yet — operator is freshly registered (e.g.
+                    # the local CLI bootstrap operator that owns the listener
+                    # itself). Do NOT flip its status; wait for the threshold-based
+                    # path to make a decision once the operator has actually
+                    # reported at least one heartbeat. The previous "treat as
+                    # immediately stale" behaviour conflated "never connected" with
+                    # "stopped connecting" and broke `./g8e chat send` on a fresh
+                    # install because the listener-bound operator can never produce
+                    # heartbeats against itself.
                     continue
 
                 if isinstance(last_hb, str):

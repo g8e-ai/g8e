@@ -44,9 +44,19 @@ class KVKey:
         return f"{CACHE_PREFIX}:cache:query:{collection}:{query_hash}"
 
     @classmethod
-    def session(cls, session_type: str, session_id: str) -> str:
-        """g8e:session:{session.type}:{session.id}"""
-        return f"{CACHE_PREFIX}:session:{session_type}:{session_id}"
+    def operator_session(cls, operator_session_id: str) -> str:
+        """g8e:session:operator:{operator_session_id}"""
+        return f"{CACHE_PREFIX}:session:operator:{operator_session_id}"
+
+    @classmethod
+    def web_session(cls, web_session_id: str) -> str:
+        """g8e:session:web:{web_session_id}"""
+        return f"{CACHE_PREFIX}:session:web:{web_session_id}"
+
+    @classmethod
+    def cli_session(cls, cli_session_id: str) -> str:
+        """g8e:session:cli:{cli_session_id}"""
+        return f"{CACHE_PREFIX}:session:cli:{cli_session_id}"
 
     @classmethod
     def session_operator_bind(cls, operator_session_id: str) -> str:

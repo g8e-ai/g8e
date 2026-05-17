@@ -36,7 +36,7 @@ def pubsub_service():
 async def test_uap_envelope_flow_integration(pubsub_service):
     """Verify full flow from UAP JSON GovernanceEnvelope bytes to completed Future with converted enums."""
     operator_id = "op-test-1"
-    session_id = "sess-test-1"
+    operator_session_id = "sess-test-1"
     execution_id = "exec-test-1"
 
     # 1. Register a future for the execution
@@ -48,7 +48,7 @@ async def test_uap_envelope_flow_integration(pubsub_service):
         "event_type": EventType.OPERATOR_COMMAND_RESULT,
         "action_type": "EXECUTE_BASH_RESULT",
         "operator_id": operator_id,
-        "operator_session_id": session_id,
+        "operator_session_id": operator_session_id,
         "case_id": "case-test-1",
         "intent_data": {
             "payload_type": "execution_result",
@@ -62,7 +62,7 @@ async def test_uap_envelope_flow_integration(pubsub_service):
     raw_bytes = json.dumps(envelope_data).encode("utf-8")
 
     # 3. Dispatch the message through the pubsub service
-    channel = PubSubChannel.results(operator_id, session_id)
+    channel = PubSubChannel.results(operator_id, operator_session_id)
     await pubsub_service._dispatch_results_message(channel, raw_bytes)
 
     # 4. Verify the future was completed with correct data and converted enums
@@ -71,7 +71,7 @@ async def test_uap_envelope_flow_integration(pubsub_service):
 
     # Verify envelope fields
     assert result_envelope.operator_id == operator_id
-    assert result_envelope.operator_session_id == session_id
+    assert result_envelope.operator_session_id == operator_session_id
     assert result_envelope.event_type == EventType.OPERATOR_COMMAND_RESULT
 
     # Verify payload fields and enum conversion
@@ -84,7 +84,7 @@ async def test_uap_envelope_flow_integration(pubsub_service):
 async def test_uap_envelope_flow_status_update(pubsub_service):
     """Verify flow for EXECUTE_STATUS_UPDATE Protobuf GovernanceEnvelope messages."""
     operator_id = "op-test-2"
-    session_id = "sess-test-2"
+    operator_session_id = "sess-test-2"
     execution_id = "exec-test-2"
 
     future = pubsub_service.register_future(execution_id)
@@ -95,7 +95,7 @@ async def test_uap_envelope_flow_status_update(pubsub_service):
         "event_type": EventType.OPERATOR_COMMAND_STATUS_UPDATED,
         "action_type": "EXECUTE_STATUS_UPDATE",
         "operator_id": operator_id,
-        "operator_session_id": session_id,
+        "operator_session_id": operator_session_id,
         "intent_data": {
             "payload_type": "execution_status",
             "execution_id": execution_id,
@@ -107,7 +107,7 @@ async def test_uap_envelope_flow_status_update(pubsub_service):
 
     raw_bytes = json.dumps(envelope_data).encode("utf-8")
 
-    channel = PubSubChannel.results(operator_id, session_id)
+    channel = PubSubChannel.results(operator_id, operator_session_id)
     await pubsub_service._dispatch_results_message(channel, raw_bytes)
 
     assert future.done()

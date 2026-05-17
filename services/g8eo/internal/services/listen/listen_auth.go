@@ -31,28 +31,32 @@ type AuthService struct {
 	db         *ListenDBService
 	pki        *PKIAuthority
 	logger     *slog.Logger
+	userSvc    *UserService
 	secretsDir string
 }
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *ListenDBService, pki *PKIAuthority, logger *slog.Logger, secretsDir string) *AuthService {
+func NewAuthService(db *ListenDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, secretsDir string) *AuthService {
 	return &AuthService{
 		db:         db,
 		pki:        pki,
 		logger:     logger,
+		userSvc:    userSvc,
 		secretsDir: secretsDir,
 	}
 }
 
 // ValidateOperatorSession checks if a session ID is valid and returns the operator document.
-func (s *AuthService) ValidateOperatorSession(sessionID string) (*models.OperatorDocumentGo, error) {
-	if sessionID == "" {
-		return nil, fmt.Errorf("missing session id")
+// Auth depends on session validity (existence + certificate revocation), not on operator
+// status liveness signals from other processes. The primary session invalidation mechanism
+// is certificate revocation via PKI authority.
+func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models.OperatorDocumentGo, error) {
+	if operatorSessionID == "" {
+		return nil, fmt.Errorf("missing operator_session_id")
 	}
 
 	filters := []models.DocFilter{
-		{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sessionID))},
-		{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.Status.OperatorStatus.Active))},
+		{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", operatorSessionID))},
 	}
 
 	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
@@ -73,6 +77,20 @@ func (s *AuthService) ValidateOperatorSession(sessionID string) (*models.Operato
 	var op models.OperatorDocumentGo
 	if err := json.Unmarshal(b, &op); err != nil {
 		return nil, err
+	}
+
+	// Check if the linked user is active (plan §4.6)
+	// This is the single chokepoint that makes retirement real — without it,
+	// a stale CLI cert can still talk to the substrate.
+	if s.userSvc != nil && op.UserID != "" {
+		user, err := s.userSvc.GetByID(op.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load user %s: %w", op.UserID, err)
+		}
+		if user != nil && !user.IsActive() {
+			// Return structured error for disabled users
+			return nil, fmt.Errorf(`{"error":"identity disabled","reason":"retired_by_real_login"}`)
+		}
 	}
 
 	return &op, nil
@@ -106,6 +124,17 @@ func (s *AuthService) ValidateAPIKey(apiKey string) (*models.OperatorDocumentGo,
 	var op models.OperatorDocumentGo
 	if err := json.Unmarshal(b, &op); err != nil {
 		return nil, err
+	}
+
+	// Check if the linked user is active (plan §4.6)
+	if s.userSvc != nil && op.UserID != "" {
+		user, err := s.userSvc.GetByID(op.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load user %s: %w", op.UserID, err)
+		}
+		if user != nil && !user.IsActive() {
+			return nil, fmt.Errorf(`{"error":"identity disabled","reason":"retired_by_real_login"}`)
+		}
 	}
 
 	return &op, nil
@@ -157,10 +186,11 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		}
 
 		// We prioritize session auth for operators.
-		sessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+		operatorSessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+		cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
 
-		if sessionID != "" {
-			op, err := s.ValidateOperatorSession(sessionID)
+		if operatorSessionID != "" {
+			op, err := s.ValidateOperatorSession(operatorSessionID)
 			if err == nil {
 				// [PIVOT] Verify URI SAN identity (Phase 6)
 				// The client cert must bind to the same operator session.
@@ -169,13 +199,13 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 					match := false
 					for _, uri := range cert.URIs {
 						// spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
-						if strings.Contains(uri.String(), "/"+op.ID+"/"+sessionID) {
+						if strings.Contains(uri.String(), "/"+op.ID+"/"+operatorSessionID) {
 							match = true
 							break
 						}
 					}
 					if !match {
-						s.logger.Warn("mTLS URI SAN mismatch for operator session", "path", r.URL.Path, "operator_id", op.ID, "session_id", sessionID)
+						s.logger.Warn("mTLS URI SAN mismatch for operator session", "path", r.URL.Path, "operator_id", op.ID, "operator_session_id", operatorSessionID)
 						s.jsonError(w, http.StatusForbidden, "mTLS identity mismatch")
 						return
 					}
@@ -184,7 +214,29 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			s.logger.Warn("Invalid operator session attempt", "session_id", sessionID[:8]+"...")
+			s.logger.Warn("Invalid operator session attempt", "operator_session_id", operatorSessionID[:8]+"...", "error", err)
+		} else if cliSessionID != "" {
+			// CLI authentication via CLI session ID and CLI certificate
+			// Verify the CLI certificate matches the CLI session ID
+			if len(r.TLS.PeerCertificates) > 0 {
+				cert := r.TLS.PeerCertificates[0]
+				match := false
+				for _, uri := range cert.URIs {
+					// spiffe://g8e.local/cli/<user_id>/<cli_session_id>
+					if strings.Contains(uri.String(), "/"+cliSessionID) {
+						match = true
+						break
+					}
+				}
+				if !match {
+					s.logger.Warn("mTLS URI SAN mismatch for CLI session", "path", r.URL.Path, "cli_session_id", cliSessionID)
+					s.jsonError(w, http.StatusForbidden, "mTLS identity mismatch")
+					return
+				}
+			}
+
+			next.ServeHTTP(w, r)
+			return
 		} else {
 			// [PIVOT] System/App Authentication via URI SAN (Phase 6)
 			// If no session ID is provided, we check if the certificate belongs to a trusted system app.
@@ -272,6 +324,19 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *ListenDBService) htt
 		if time.Now().UnixMilli() > session.ExpiresAtUnixMs {
 			s.jsonError(w, http.StatusUnauthorized, "session expired")
 			return
+		}
+
+		// Check if the user is active (plan §4.6)
+		if s.userSvc != nil {
+			user, err := s.userSvc.GetByID(session.UserID)
+			if err != nil {
+				s.jsonError(w, http.StatusUnauthorized, "user validation failed")
+				return
+			}
+			if user != nil && !user.IsActive() {
+				s.jsonError(w, http.StatusUnauthorized, "identity disabled")
+				return
+			}
 		}
 
 		// Stamp context with user_id

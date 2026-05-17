@@ -65,7 +65,8 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	err = pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	token := "dlk_test_token_12345678901234567890"
 	userID := "user-1"
@@ -118,6 +119,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 			OrganizationID: orgID,
 			Component:      "g8eo",
 			Status:         constants.Status.OperatorStatus.Offline,
+			OperatorType:   constants.Status.OperatorType.System,
 			CreatedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
 		}
@@ -467,7 +469,8 @@ func TestRegistrationService_DeviceLinks(t *testing.T) {
 	defer db.Close()
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	resp, err := reg.CreateDeviceLink(models.CreateDeviceLinkRequest{
 		UserID:         "user-1",
@@ -506,7 +509,8 @@ func TestRegistrationService_CreateDeviceLinkRejectsWrongOperatorOwner(t *testin
 	defer db.Close()
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 	op := &models.OperatorDocumentGo{
 		ID:        "op-1",
 		UserID:    "other-user",
@@ -551,7 +555,8 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 	defer db.Close()
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	userID := "user-1"
 	opID := "op-1"
@@ -602,7 +607,8 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	defer db.Close()
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	userID := "user-1"
 
@@ -647,7 +653,8 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	defer db.Close()
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	userID := "user-1"
 	opID := "op-terminate-1"
@@ -727,7 +734,8 @@ func TestRegistrationService_Binding(t *testing.T) {
 	defer db.Close()
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	userID := "user-1"
 	sessionID := "sess-1"
@@ -746,9 +754,9 @@ func TestRegistrationService_Binding(t *testing.T) {
 
 	t.Run("BindOperators", func(t *testing.T) {
 		req := models.BindOperatorsRequest{
-			OperatorIDs: []string{opID},
-			UserID:      userID,
-			SessionID:   sessionID,
+			OperatorIDs:  []string{opID},
+			UserID:       userID,
+			WebSessionID: sessionID,
 		}
 		resp, err := reg.BindOperators(req)
 		require.NoError(t, err)
@@ -781,9 +789,9 @@ func TestRegistrationService_Binding(t *testing.T) {
 
 	t.Run("SetTargetContext", func(t *testing.T) {
 		req := models.SetTargetContextRequest{
-			OperatorID: opID,
-			UserID:     userID,
-			SessionID:  sessionID,
+			OperatorID:   opID,
+			UserID:       userID,
+			WebSessionID: sessionID,
 		}
 		resp, err := reg.SetTargetContext(req)
 		require.NoError(t, err)
@@ -793,9 +801,9 @@ func TestRegistrationService_Binding(t *testing.T) {
 
 	t.Run("UnbindOperators", func(t *testing.T) {
 		req := models.UnbindOperatorsRequest{
-			OperatorIDs: []string{opID},
-			UserID:      userID,
-			SessionID:   sessionID,
+			OperatorIDs:  []string{opID},
+			UserID:       userID,
+			WebSessionID: sessionID,
 		}
 		resp, err := reg.UnbindOperators(req)
 		require.NoError(t, err)

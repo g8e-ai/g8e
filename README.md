@@ -74,7 +74,7 @@ flowchart TD
 2. **L2 (Consensus)**: The transaction must carry a valid cryptographic signature from a trusted consensus panel (The Tribunal).
 3. **L3 (Authorization)**: State-changing mutations require a hardware-bound signature (FIDO2/WebAuthn) or match an explicit auto-approval policy for benign diagnostics.
 4. **State Freshness**: The `state_merkle_root` binds the command to the host state at generation time; the Operator rejects stale or replayed transactions.
-5. **Warden Execution**: The Operator's on-host execution boundary performs the action and captures results into the session-scoped audit ledger. The reference implementation calls this the Warden and writes to the session's LFAA git-backed ledger (Multi-Ledger Architecture: one isolated git repo per operator session under `.g8e/data/ledger/sessions/<session_id>/`).
+5. **Warden Execution**: The Operator's on-host execution boundary performs the action and captures results into the session-scoped audit ledger. The reference implementation calls this the Warden and writes to the session's LFAA git-backed ledger (Multi-Ledger Architecture: one isolated git repo per operator session under `.g8e/data/ledger/sessions/<operator_session_id>/`).
 6. **Signed Receipt**: Every execution (success or failure) emits a signed `ActionReceipt` providing an immutable proof of the mutation.
 
 ---

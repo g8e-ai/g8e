@@ -67,7 +67,7 @@ Results are aggregated and persisted to `reports/` (default) in JSON and summary
    ```
 2. **Run a benchmark**
    ```bash
-   ./g8e evals bench --suite ifeval --operator-session-id <session_id>
+   ./g8e evals bench --suite ifeval --operator-session-id <operator_session_id>
    ```
 
 ## Invariants

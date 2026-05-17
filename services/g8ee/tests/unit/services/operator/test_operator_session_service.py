@@ -106,10 +106,10 @@ class TestOperatorSessionService:
 
     async def test_validate_session_happy(self, session_service, mock_cache):
         # Setup
-        session_id = "ops_123"
+        operator_session_id = "ops_123"
         ts = now()
         session_dict = {
-            "id": session_id,
+            "id": operator_session_id,
             "session_type": SessionType.OPERATOR,
             "user_id": "u1",
             "operator_id": "o1",
@@ -122,11 +122,11 @@ class TestOperatorSessionService:
         mock_cache.get_document_with_cache.return_value = session_dict
 
         # Execute
-        session = await session_service.validate_session(session_id)
+        session = await session_service.validate_session(operator_session_id)
 
         # Assert
         assert session is not None
-        assert session.id == session_id
+        assert session.id == operator_session_id
         assert session.is_active is True
 
     async def test_validate_session_not_found(self, session_service, mock_cache):
@@ -138,9 +138,9 @@ class TestOperatorSessionService:
 
     async def test_validate_session_inactive(self, session_service, mock_cache):
         # Setup
-        session_id = "ops_123"
+        operator_session_id = "ops_123"
         session_dict = {
-            "id": session_id,
+            "id": operator_session_id,
             "session_type": SessionType.OPERATOR,
             "user_id": "u1",
             "operator_id": "o1",
@@ -151,15 +151,15 @@ class TestOperatorSessionService:
         mock_cache.get_document_with_cache.return_value = session_dict
 
         # Execute & Assert
-        assert await session_service.validate_session(session_id) is None
+        assert await session_service.validate_session(operator_session_id) is None
 
     async def test_validate_session_absolute_timeout(self, session_service, mock_cache):
         # Setup
-        session_id = "ops_123"
+        operator_session_id = "ops_123"
         ts = now()
         # Expired in the past
         session_dict = {
-            "id": session_id,
+            "id": operator_session_id,
             "session_type": SessionType.OPERATOR,
             "user_id": "u1",
             "operator_id": "o1",
@@ -171,22 +171,22 @@ class TestOperatorSessionService:
         mock_cache.delete_document.return_value = MagicMock(success=True)
 
         # Execute
-        session = await session_service.validate_session(session_id)
+        session = await session_service.validate_session(operator_session_id)
 
         # Assert
         assert session is None
         mock_cache.delete_document.assert_called_once_with(
             collection=DB_COLLECTION_OPERATOR_SESSIONS,
-            document_id=session_id
+            document_id=operator_session_id
         )
 
-    async def test_validate_session_idle_timeout(self, session_service, mock_cache):
+    async def test_validate_operator_session_idle_timeout(self, session_service, mock_cache):
         # Setup
-        session_id = "ops_123"
+        operator_session_id = "ops_123"
         ts = now()
         # Idle timeout in the past
         session_dict = {
-            "id": session_id,
+            "id": operator_session_id,
             "session_type": SessionType.OPERATOR,
             "user_id": "u1",
             "operator_id": "o1",
@@ -198,41 +198,41 @@ class TestOperatorSessionService:
         mock_cache.delete_document.return_value = MagicMock(success=True)
 
         # Execute
-        session = await session_service.validate_session(session_id)
+        session = await session_service.validate_session(operator_session_id)
 
         # Assert
         assert session is None
         mock_cache.delete_document.assert_called_once_with(
             collection=DB_COLLECTION_OPERATOR_SESSIONS,
-            document_id=session_id
+            document_id=operator_session_id
         )
 
     async def test_refresh_session_happy(self, session_service, mock_cache):
         # Setup
-        session_id = "ops_123"
+        operator_session_id = "ops_123"
         mock_cache.update_document.return_value = MagicMock(success=True)
 
         # We need a session object to pass or it will call validate_session
         session = MagicMock(spec=OperatorSessionDocument)
 
         # Execute
-        success = await session_service.refresh_session(session_id, session=session)
+        success = await session_service.refresh_session(operator_session_id, session=session)
 
         # Assert
         assert success is True
         mock_cache.update_document.assert_called_once()
         call_args = mock_cache.update_document.call_args[1]
         assert call_args["collection"] == DB_COLLECTION_OPERATOR_SESSIONS
-        assert call_args["document_id"] == session_id
+        assert call_args["document_id"] == operator_session_id
         assert "last_activity" in call_args["data"]
         assert "idle_expires_at" in call_args["data"]
 
     async def test_refresh_session_via_validation(self, session_service, mock_cache):
         # Setup
-        session_id = "ops_123"
+        operator_session_id = "ops_123"
         ts = now()
         session_dict = {
-            "id": session_id,
+            "id": operator_session_id,
             "session_type": SessionType.OPERATOR,
             "user_id": "u1",
             "operator_id": "o1",
@@ -244,7 +244,7 @@ class TestOperatorSessionService:
         mock_cache.update_document.return_value = MagicMock(success=True)
 
         # Execute
-        success = await session_service.refresh_session(session_id)
+        success = await session_service.refresh_session(operator_session_id)
 
         # Assert
         assert success is True
@@ -253,37 +253,37 @@ class TestOperatorSessionService:
 
     async def test_refresh_session_invalid_session(self, session_service, mock_cache):
         # Setup
-        session_id = "ops_123"
+        operator_session_id = "ops_123"
         mock_cache.get_document_with_cache.return_value = None
 
         # Execute
-        success = await session_service.refresh_session(session_id)
+        success = await session_service.refresh_session(operator_session_id)
 
         # Assert
         assert success is False
 
     async def test_end_session_happy(self, session_service, mock_cache):
         # Setup
-        session_id = "ops_123"
+        operator_session_id = "ops_123"
         mock_cache.delete_document.return_value = MagicMock(success=True)
 
         # Execute
-        success = await session_service.end_session(session_id, reason=SessionEndReason.LOGOUT)
+        success = await session_service.end_session(operator_session_id, reason=SessionEndReason.LOGOUT)
 
         # Assert
         assert success is True
         mock_cache.delete_document.assert_called_once_with(
             collection=DB_COLLECTION_OPERATOR_SESSIONS,
-            document_id=session_id
+            document_id=operator_session_id
         )
 
     async def test_end_session_failure(self, session_service, mock_cache):
         # Setup
-        session_id = "ops_123"
+        operator_session_id = "ops_123"
         mock_cache.delete_document.return_value = MagicMock(success=False)
 
         # Execute
-        success = await session_service.end_session(session_id)
+        success = await session_service.end_session(operator_session_id)
 
         # Assert
         assert success is False

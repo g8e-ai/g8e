@@ -239,6 +239,23 @@ async def internal_chat(
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
     
+    # Fail-fast if no LLM models are configured
+    chat_pipeline.validate_llm_config(
+        user_settings=user_settings,
+        primary_model_override=request.llm_primary_model,
+        assistant_model_override=request.llm_assistant_model,
+        lite_model_override=request.llm_lite_model,
+        primary_provider_override=request.llm_primary_provider,
+        assistant_provider_override=request.llm_assistant_provider,
+        lite_provider_override=request.llm_lite_provider,
+        primary_api_key_override=request.llm_primary_api_key,
+        primary_endpoint_override=request.llm_primary_endpoint,
+        assistant_api_key_override=request.llm_assistant_api_key,
+        assistant_endpoint_override=request.llm_assistant_endpoint,
+        lite_api_key_override=request.llm_lite_api_key,
+        lite_endpoint_override=request.llm_lite_endpoint,
+    )
+
     resource_creation = request.resource_creation
     create_new_case = resource_creation.create_case if resource_creation else False
 
@@ -402,6 +419,14 @@ async def internal_triage_answer(
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
 
+    # Fail-fast if no LLM models are configured
+    chat_pipeline.validate_llm_config(
+        user_settings=user_settings,
+        primary_model_override=None,
+        assistant_model_override=None,
+        lite_model_override=None,
+    )
+
     logger.info(
         "[INTERNAL-HTTP] Triage answer received",
         extra={
@@ -466,6 +491,14 @@ async def internal_triage_skip(
     """
     # Extract context from request body instead of headers
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+
+    # Fail-fast if no LLM models are configured
+    chat_pipeline.validate_llm_config(
+        user_settings=user_settings,
+        primary_model_override=None,
+        assistant_model_override=None,
+        lite_model_override=None,
+    )
 
     logger.info(
         "[INTERNAL-HTTP] Triage skip received",

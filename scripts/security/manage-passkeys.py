@@ -17,13 +17,13 @@ Passkey Management Script for g8e Platform
 Manage FIDO2/WebAuthn passkey credentials via the Operator (g8eo) HTTP API.
 
 Usage:
-    ./g8e security passkeys list --id USER_ID
+    ./g8e security passkeys list --user-id USER_ID
     ./g8e security passkeys list --email user@example.com
-    ./g8e security passkeys revoke --id USER_ID --credential CRED_ID
-    ./g8e security passkeys revoke-all --id USER_ID
+    ./g8e security passkeys revoke --user-id USER_ID --credential CRED_ID
+    ./g8e security passkeys revoke-all --user-id USER_ID
     ./g8e security passkeys revoke-all --email user@example.com
     ./g8e security passkeys reset --email user@example.com
-    ./g8e security passkeys reset --id USER_ID --force
+    ./g8e security passkeys reset --user-id USER_ID --force
 """
 
 from __future__ import annotations
@@ -220,37 +220,37 @@ def main():
         epilog="""
 Examples:
   ./g8e security passkeys list --email user@example.com
-  ./g8e security passkeys list --id USER_ID
+  ./g8e security passkeys list --user-id USER_ID
   ./g8e security passkeys reset --email user@example.com
-  ./g8e security passkeys reset --id USER_ID --force
-  ./g8e security passkeys revoke --id USER_ID --credential CRED_ID
+  ./g8e security passkeys reset --user-id USER_ID --force
+  ./g8e security passkeys revoke --user-id USER_ID --credential CRED_ID
   ./g8e security passkeys revoke --email user@example.com --credential CRED_ID --force
   ./g8e security passkeys revoke-all --email user@example.com
-  ./g8e security passkeys revoke-all --id USER_ID --force
+  ./g8e security passkeys revoke-all --user-id USER_ID --force
         """
     )
 
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
 
     list_parser = subparsers.add_parser('list', help='List passkey credentials for a user')
-    list_parser.add_argument('--id', dest='user_id', help='User ID')
-    list_parser.add_argument('--email', help='User email')
+    list_parser.add_argument('--user-id', type=str, help='User ID')
+    list_parser.add_argument('--email', type=str, help='User email')
 
     revoke_parser = subparsers.add_parser('revoke', help='Revoke a specific passkey credential')
-    revoke_parser.add_argument('--id', dest='user_id', help='User ID')
-    revoke_parser.add_argument('--email', help='User email')
-    revoke_parser.add_argument('--credential', required=True, dest='credential_id',
+    revoke_parser.add_argument('--user-id', type=str, help='User ID')
+    revoke_parser.add_argument('--email', type=str, help='User email')
+    revoke_parser.add_argument('--credential', type=str, required=True, dest='credential_id',
                                help='Full credential ID to revoke (from list output)')
     revoke_parser.add_argument('--force', action='store_true', help='Skip confirmation')
 
     reset_parser = subparsers.add_parser('reset', help='Reset passkey credentials — user will be prompted to register a new passkey on next login')
-    reset_parser.add_argument('--id', dest='user_id', help='User ID')
-    reset_parser.add_argument('--email', help='User email')
+    reset_parser.add_argument('--user-id', type=str, help='User ID')
+    reset_parser.add_argument('--email', type=str, help='User email')
     reset_parser.add_argument('--force', action='store_true', help='Skip confirmation')
 
     revoke_all_parser = subparsers.add_parser('revoke-all', help='Revoke all passkey credentials for a user')
-    revoke_all_parser.add_argument('--id', dest='user_id', help='User ID')
-    revoke_all_parser.add_argument('--email', help='User email')
+    revoke_all_parser.add_argument('--user-id', type=str, help='User ID')
+    revoke_all_parser.add_argument('--email', type=str, help='User email')
     revoke_all_parser.add_argument('--force', action='store_true', help='Skip confirmation')
 
     args = parser.parse_args()
@@ -261,7 +261,7 @@ Examples:
 
     if args.command in ('list', 'revoke', 'revoke-all', 'reset'):
         if not args.user_id and not args.email:
-            parser.error('--id or --email is required')
+            parser.error('--user-id or --email is required')
 
     manager = PasskeyManager()
 

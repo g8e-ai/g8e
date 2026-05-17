@@ -21,7 +21,7 @@
       "operator_api_key": {
         "type": "string",
         "required": false,
-        "description": "Long-lived API key for the operator component (fallback for session_id)."
+        "description": "Long-lived API key for the operator component (fallback for operator_session_id)."
       },
       "session_encryption_key": {
         "type": "string",

@@ -65,7 +65,8 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 
 	pubsub := NewPubSubBroker(logger)
 	pki := newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, db, logger)
-	auth := NewAuthService(db, pki, logger, cfg.Listen.SecretsDir)
+	userSvc := NewUserService(db, logger)
+	auth := NewAuthService(db, pki, logger, userSvc, cfg.Listen.SecretsDir)
 
 	var tlsConfig *tls.Config
 
@@ -94,7 +95,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	tlsConfig = pki.TLSConfig()
 	tlsConfigPlain := pki.TLSConfigPlain()
 
-	reg := NewRegistrationService(db, pki, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	// Initialize passkey service for L3 brokerage
 	passkeyCfg := &PasskeyConfig{
@@ -106,7 +107,6 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		return nil, fmt.Errorf("failed to initialize passkey service: %w", err)
 	}
 
-	userSvc := NewUserService(db, logger)
 	apiKeySvc := NewApiKeyService(db, logger)
 
 	ls := &ListenService{
@@ -162,8 +162,9 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 // Used in tests where the DB and pub/sub broker are constructed independently.
 func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker) *ListenService {
 	pki := newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, db, logger)
-	auth := NewAuthService(db, pki, logger, cfg.Listen.SecretsDir)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	auth := NewAuthService(db, pki, logger, userSvc, cfg.Listen.SecretsDir)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	// Initialize passkey service for L3 brokerage (test configuration)
 	passkeyCfg := &PasskeyConfig{
@@ -172,7 +173,6 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 	}
 	passkey, _ := NewPasskeyService(db, logger, passkeyCfg)
 
-	userSvc := NewUserService(db, logger)
 	apiKeySvc := NewApiKeyService(db, logger)
 
 	ls := &ListenService{

@@ -76,7 +76,7 @@ class OperatorLifecycleService:
         This orchestrates the transition from AVAILABLE to ACTIVE status,
         sets session bindings, and records first deployment if applicable.
 
-        Allows re-claiming ACTIVE or STALE slots with a different session_id
+        Allows re-claiming ACTIVE or STALE slots with a different operator_session_id
         to handle re-authentication race conditions.
 
         Authority: g8ee (single writer for the operator document).

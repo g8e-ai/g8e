@@ -18,12 +18,12 @@ Manage platform users via the Operator (g8eo) HTTP API.
 
 Usage:
     python manage-operator.py users list
-    python manage-operator.py users get --id USER_ID
+    python manage-operator.py users get --user-id USER_ID
     python manage-operator.py users get --email user@example.com
     python manage-operator.py users search "john"
     python manage-operator.py users create --email user@example.com --name "John Doe"
-    python manage-operator.py users update-role --id USER_ID --role admin
-    python manage-operator.py users delete --id USER_ID
+    python manage-operator.py users update-role --user-id USER_ID --role admin
+    python manage-operator.py users delete --user-id USER_ID
     python manage-operator.py users stats
 """
 
@@ -129,7 +129,7 @@ class UserManager:
     def get_user(self, user_id: str | None,
                  email: str | None) -> Dict[str, Any] | None:
         if not user_id and not email:
-            print("Provide --id or --email")
+            print("Provide --user-id or --email")
             return None
 
         if user_id:
@@ -283,9 +283,9 @@ Examples:
   python manage-operator.py users get --email user@example.com
   python manage-operator.py users search "john"
   python manage-operator.py users create --email new@example.com --name "New User"
-  python manage-operator.py users update-role --id USER_ID --role admin
-  python manage-operator.py users update-role --id USER_ID --role admin --action add
-  python manage-operator.py users delete --id USER_ID
+  python manage-operator.py users update-role --user-id USER_ID --role admin
+  python manage-operator.py users update-role --user-id USER_ID --role admin --action add
+  python manage-operator.py users delete --user-id USER_ID
   python manage-operator.py users stats
         """
     )
@@ -296,27 +296,27 @@ Examples:
     sp.add_argument('--limit', type=int, default=50, help='Max users to show (default: 50)')
 
     sp = subparsers.add_parser('get', help='Get user details')
-    sp.add_argument('--id', dest='user_id', help='User ID')
-    sp.add_argument('--email', help='User email')
+    sp.add_argument('--user-id', type=str, help='User ID')
+    sp.add_argument('--email', type=str, help='User email')
 
     sp = subparsers.add_parser('search', help='Search users by name or email')
-    sp.add_argument('query', help='Search query (substring match)')
+    sp.add_argument('query', type=str, help='Search query (substring match)')
     sp.add_argument('--limit', type=int, default=50, help='Max results (default: 50)')
 
     sp = subparsers.add_parser('create', help='Create a new user')
-    sp.add_argument('--email', required=True, help='User email')
-    sp.add_argument('--name', required=True, help='Display name')
-    sp.add_argument('--roles', nargs='+', default=None,
+    sp.add_argument('--email', type=str, required=True, help='User email')
+    sp.add_argument('--name', type=str, required=True, help='Display name')
+    sp.add_argument('--roles', type=str, nargs='+', default=None,
                     help=f'Roles to assign (default: user). Valid: {VALID_ROLES}')
 
     sp = subparsers.add_parser('delete', help='Delete a user')
-    sp.add_argument('--id', dest='user_id', required=True, help='User ID')
+    sp.add_argument('--user-id', type=str, required=True, help='User ID')
     sp.add_argument('--force', action='store_true', help='Skip confirmation')
 
     sp = subparsers.add_parser('update-role', help='Update user roles')
-    sp.add_argument('--id', dest='user_id', required=True, help='User ID')
-    sp.add_argument('--role', required=True, help=f'Role to set. Valid: {VALID_ROLES}')
-    sp.add_argument('--action', choices=['set', 'add', 'remove'], default='set',
+    sp.add_argument('--user-id', type=str, required=True, help='User ID')
+    sp.add_argument('--role', type=str, required=True, help=f'Role to set. Valid: {VALID_ROLES}')
+    sp.add_argument('--action', type=str, choices=['set', 'add', 'remove'], default='set',
                     help="'set' replaces all roles, 'add' appends, 'remove' removes (default: set)")
 
     subparsers.add_parser('stats', help='Show user statistics')

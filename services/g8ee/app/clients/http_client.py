@@ -85,19 +85,13 @@ class RequestTrace(G8eBaseModel):
 
     @property
     def as_headers(self) -> dict[str, str]:
-        """Convert trace info to HTTP headers"""
-        headers = {
-            # Standard g8e headers
-        }
-        if self.case_id:
-            # Body context should be used instead
-            pass
-        if self.task_id:
-            # Body context should be used instead
-            pass
-        if self.investigation_id:
-            # Body context should be used instead
-            pass
+        """Convert trace info to HTTP headers
+        
+        Note: Context fields (case_id, task_id, investigation_id) are now embedded
+        in request bodies via RequestContext, not in headers. This property only
+        returns execution tracking headers.
+        """
+        headers: dict[str, str] = {}
         return headers
 
     @classmethod
@@ -245,6 +239,8 @@ class HTTPClient:
         api_key: str,
         headers: dict[str, str],
         ca_cert_path: str,
+        client_cert_path: str | None = None,
+        client_key_path: str | None = None,
     ):
         self.component_id = component_id
         self.base_url = base_url
@@ -255,6 +251,8 @@ class HTTPClient:
         self.api_key = api_key
         self.default_headers = headers
         self._ca_cert_path = ca_cert_path
+        self._client_cert_path = client_cert_path
+        self._client_key_path = client_key_path
 
         self._session: aiohttp.ClientSession | None = None
         self.circuit_breakers: dict[str, CircuitBreaker] = {}
@@ -264,6 +262,22 @@ class HTTPClient:
         """Check if the internal session is closed."""
         return self._session is None or self._session.closed
 
+    def refresh_mtls_credentials(self, cert_path: str | None, key_path: str | None) -> None:
+        """Update the client's mTLS credentials.
+        
+        If the paths have changed, the next request will create a new session
+        with the updated credentials.
+        """
+        if cert_path != self._client_cert_path or key_path != self._client_key_path:
+            self._client_cert_path = cert_path
+            self._client_key_path = key_path
+            # Close existing session to force recreation with new certs
+            if self._session and not self._session.closed:
+                # We can't easily await here since this isn't async, 
+                # but setting _session to None is enough to force recreation.
+                # The old session will be eventually GC'd or we can schedule close.
+                self._session = None
+
     async def _get_http_session(self) -> aiohttp.ClientSession:
         """Get or create a persistent aiohttp session."""
         self._session = new_component_http_session(
@@ -271,6 +285,8 @@ class HTTPClient:
             timeout=self.timeout,
             ca_cert_path=self._ca_cert_path,
             headers=self.default_headers,
+            client_cert_path=self._client_cert_path,
+            client_key_path=self._client_key_path,
         )
         return self._session
 
@@ -285,18 +301,6 @@ class HTTPClient:
             )
 
         return self.circuit_breakers[endpoint]
-
-    @staticmethod
-    def _context_to_headers(context: "G8eHttpContext") -> dict[str, str]:
-        """Convert a G8eHttpContext into the standard X-G8E-* outbound headers.
-        
-        DEPRECATED: This method is being phased out in favor of embedding context
-        in request bodies. See RequestContext in http_context.py for the new approach.
-        """
-        headers: dict[str, str] = {
-            G8eHeaders.OPERATOR_SESSION_ID: context.web_session_id or "",
-        }
-        return headers
 
     async def _prepare_request(
         self,
@@ -324,9 +328,6 @@ class HTTPClient:
             request_headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX} {self.auth_token}"
         if self.api_key:
             request_headers[HTTP_API_KEY_HEADER] = self.api_key
-
-        if context is not None:
-            request_headers.update(self._context_to_headers(context))
 
         if headers:
             request_headers.update(headers)
@@ -808,6 +809,8 @@ def get_service_client(
     api_key: str = "",
     headers: dict[str, str] | None = None,
     ca_cert_path: str = "",
+    client_cert_path: str | None = None,
+    client_key_path: str | None = None,
 ) -> HTTPClient:
     """Get an HTTP client configured for inter-service communication.
 
@@ -841,6 +844,8 @@ def get_service_client(
         api_key=api_key,
         headers=headers or {},
         ca_cert_path=ca_cert_path,
+        client_cert_path=client_cert_path,
+        client_key_path=client_key_path,
     )
 
     logger.info("Created HTTP client for service %s with base URL %s", target_service, base_url)

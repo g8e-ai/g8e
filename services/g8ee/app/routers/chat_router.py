@@ -66,6 +66,15 @@ async def answer_triage_question(
     Receive user answer to a triage clarifying question and store in ledger.
     """
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    
+    # Fail-fast if no LLM models are configured
+    chat_pipeline.validate_llm_config(
+        user_settings=user_settings,
+        primary_model_override=None,
+        assistant_model_override=None,
+        lite_model_override=None,
+    )
+
     investigation_id = request.context.investigation_id
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != user_info.uid:
@@ -118,6 +127,15 @@ async def skip_triage_questions(
     Record that user skipped the triage clarifying questions.
     """
     g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
+    
+    # Fail-fast if no LLM models are configured
+    chat_pipeline.validate_llm_config(
+        user_settings=user_settings,
+        primary_model_override=None,
+        assistant_model_override=None,
+        lite_model_override=None,
+    )
+
     investigation_id = request.context.investigation_id
     investigation = await investigation_service.get_investigation(investigation_id)
     if not investigation or investigation.user_id != user_info.uid:
