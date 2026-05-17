@@ -39,24 +39,28 @@ Client identities follow the SPIFFE URI scheme, encoded in the certificate's URI
 The CLI is a logically separate principal from the operator agent and has its own distinct SPIFFE identity:
 
 - **Operator certificates** authenticate the host agent and are bound to `operator_session_id`. The operator agent represents the sovereign host that executes mutations.
+  - SPIFFE ID: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`
+  - Path: `~/.g8e/operator.crt`, `~/.g8e/operator.key`
 - **CLI certificates** authenticate BYO/CLI clients and are bound to `cli_session_id`. The CLI is a client tool that issues commands and receives SSE events.
+  - SPIFFE ID: `spiffe://g8e.local/cli/<user_id>/<cli_session_id>`
+  - Path: `~/.g8e/cli.crt`, `~/.g8e/cli.key`
 
 This separation ensures that:
-- CLI sessions cannot impersonate operator agents
-- Operator sessions cannot drain another client's event stream
-- Each principal has a cryptographically distinct identity for audit and authorization
+- CLI sessions cannot impersonate operator agents.
+- Operator sessions cannot drain another client's event stream (SSERoutes are bound to CLI sessions).
+- Each principal has a cryptographically distinct identity for audit and authorization.
 
-During enrollment, clients may submit both an operator CSR and a CLI CSR to receive both certificates. The CLI certificate is optional for backwards compatibility.
+During enrollment (via `./g8e login` or `./g8e platform start`), the client generates **two distinct private keys** and submits **two distinct CSRs**. The Operator signs both, returning separate certificate chains for each workload role.
 
 ## Enrollment Lifecycle
 
 The enrollment process transitions a participant from "untrusted" to "mTLS-verified":
 
 1.  **Trust Verification**: The enrolling client fetches the Hub's root CA fingerprint from `GET /.well-known/pki/fingerprint` to verify the Hub's identity.
-2.  **Registration Request**: The client presents a one-time device-link token and a locally generated `system_fingerprint` to the **Bootstrap Port (9002)**.
-3.  **CSR Submission**: The client generates a private key (which never leaves the host) and submits a CSR.
-4.  **Issuance**: The Hub verifies the token and fingerprint, signs the CSR using the **Operator Intermediate CA**, and returns the certificate chain.
-5.  **Steady State**: The client uses the issued certificate for all subsequent mTLS communication on the **API Port (9000)** and **Pub/Sub Port (9001)**.
+2.  **Registration Request**: The client presents a one-time device-link token and a locally generated `system_fingerprint` to the **Bootstrap Port (9003)**.
+3.  **CSR Submission**: The client generates **two private keys** (Operator and CLI) and submits **two CSRs** (`csr_pem` for Operator, `cli_csr_pem` for CLI).
+4.  **Issuance**: The Hub verifies the token and fingerprint, signs both CSRs using the **Operator Intermediate CA** (with role-specific URI SANs), and returns both certificate chains (`operator_cert` and `cli_cert`).
+5.  **Steady State**: The client uses the `cli_cert` for CLI-based operations (like chat or management) and the `operator_cert` for host-side agent operations. Both are used for mTLS communication on the **API Port (9000)** and **Pub/Sub Port (9001)** depending on the routing target.
 
 ## Security Controls
 
@@ -64,7 +68,7 @@ The enrollment process transitions a participant from "untrusted" to "mTLS-verif
 The platform enforces **TLS 1.3 only**. Older TLS versions and insecure cipher suites are explicitly rejected.
 
 ### Mutual TLS (mTLS)
-mTLS is mandatory for all mutation and control-plane routes. The Operator's `ListenService` rejects any request on ports 9000 and 9001 that does not provide a valid client certificate signed by a trusted intermediate CA. The **Bootstrap Port (9002)** is an exception and serves plain HTTP to allow for initial trust discovery and CA certificate download.
+mTLS is mandatory for all mutation and control-plane routes. The Operator's `ListenService` rejects any request on ports 9000 and 9001 that does not provide a valid client certificate signed by a trusted intermediate CA. The **Bootstrap Port (9003)** is an exception and serves plain HTTP to allow for initial trust discovery and CA certificate download.
 
 ### Revocation
 Revocation state is stored in the Operator's database (`revoked_certificates` collection). 

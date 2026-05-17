@@ -807,6 +807,13 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign CLI CSR: %w", err)
 		}
+	} else {
+		// [SPIFFE-DRIFT] Fallback: If no CLI CSR provided, the CLI cert returned MUST be
+		// the operator cert for backwards compatibility with older binaries, even though
+		// they will fail modern /cli/ path checks.
+		// NOTE: New protocol requires CLI CSR for distinct /cli/ SPIFFE ID.
+		cliCertPEM = update["operator_cert"].(string)
+		cliCertChainPEM = update["operator_cert_chain"].(string)
 	}
 
 	updateBytes, _ := json.Marshal(update)

@@ -36,7 +36,7 @@ This document explains the unified storage architecture for the g8e platform. It
 - **Stateless Clients**: BYO Frontends and Agents read/write via HTTPS/WSS (mTLS) APIs.
 - **Subsystems**:
     - **Document Store**: JSON document CRUD using a Collection/ID pattern with `json_extract` query support.
-    - **KV Store**: High-speed ephemeral data with TTL support and `GLOB` pattern scanning.
+    - **KV Store**: High-speed ephemeral data with TTL support and `GLOB` pattern scanning. Supports **Write-Only Mode** for application-layer adapters to ensure fresh reads from the authoritative DB while still warming the cache for ecosystem consumers.
     - **Blob Store**: Binary storage for investigation attachments, certificates, and large objects.
     - **SSE Event Buffer**: Ring buffer for Server-Sent Events reconnection replay.
     - **State Root**: Deterministic Merkle state root across all authoritative hub data.
@@ -133,7 +133,7 @@ The Coordination Store is the platform's central coordination point. It is imple
 
 ### Subsystems
 - **Document Store**: Unified storage for JSON documents. Clients use a collection/ID pattern. All documents include `created_at` and `updated_at` timestamps managed by the store.
-- **KV Store**: High-speed ephemeral data and read cache. Supports TTL, `GLOB` pattern matching, and cursor-based scanning (`KVScan`).
+- **KV Store**: High-speed ephemeral data and read cache. Supports TTL, `GLOB` pattern matching, and cursor-based scanning (`KVScan`). **Read Policy**: Application-layer adapters (like `g8ee`) default to `enable_cache_read: false`, ensuring every read is satisfied by the authoritative database while still populating the cache for high-performance ecosystem consumers.
 - **Blob Store**: Binary storage for investigation attachments, large objects, and certificate material.
 - **SSE Buffer**: A per-session ring buffer for Server-Sent Events, ensuring clients can catch up after disconnects.
 - **State Root Provider**: Calculates and maintains the platform-wide Merkle state root, binding all Hub data into a single verifiable hash.

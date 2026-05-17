@@ -72,7 +72,7 @@ The reference Operator (`g8eo`) supports the following modes. A BYO Operator may
 Transforms the reference Operator into the platform's backbone. Started with the `--listen` flag.
 
 - **Role**: Reference hub for the bundled deployment.
-- **Persistence**: Document-store and TTL-aware KV store backed by SQLite.
+- **Persistence**: Document-store and TTL-aware KV store backed by SQLite. Supports an optional **Write-Only** read policy for application-layer adapters to ensure fresh reads from the authoritative database.
 - **Messaging**: High-performance WebSocket Pub/Sub broker using UAP JSON `GovernanceEnvelope` messages. Wire format is strictly canonical JSON (protojson) for all client-facing surfaces.
 - **Identity (PKI)**: Acts as the platform's root Certificate Authority, issuing mTLS certificates via CSR-based enrollment.
 - **Security**: Manages the platform's Encryption Vault and secret rotation.
@@ -130,6 +130,21 @@ A conforming Operator enforces a 3-layer validation hierarchy for every command.
 - **Hash-to-ID Binding**: `envelope.id` MUST equal the `transaction_hash`.
 - **State Bound**: Every transaction must include a `state_merkle_root` that matches the Operator's current state.
 - **Replay Protection**: Every transaction must include a unique `nonce` and `expires_at` timestamp.
+
+### Session Types
+
+The g8e Protocol enforces strict separation between disjoint session types to prevent cross-tenant data leakage and identity conflation.
+
+| Session Type | Identifier | Purpose | Authentication |
+|---|---|---|---|
+| **Operator Session** | `operator_session_id` | Authenticates a specific host-side **operator agent**. Bound to the machine fingerprint. | mTLS (Operator Cert) |
+| **CLI Session** | `cli_session_id` | Authenticates a specific **BYO/CLI client** (e.g., `./g8e chat`). Used for receiving real-time events. | mTLS (CLI Cert) |
+| **Web Session** | `web_session_id` | Authenticates a **browser-based client** (e.g., Dashboard). Bound to a secure session cookie. | Passkey (WebAuthn) |
+
+**Key Invariants:**
+- **Disjoint Routing**: The substrate (SSE/PubSub) routes events based on these identifiers. A `web_session_id` can never receive events intended for a `cli_session_id`.
+- **Identity Binding**: CLI and Operator sessions are cryptographically bound to their respective mTLS certificates via SPIFFE URI SANs.
+- **No Conflation**: The substrate refuses to "fallback" to a single session ID; every request must explicitly declare which session context it is operating within.
 
 ## Local Storage & Persistence (LFAA)
 

@@ -34,6 +34,7 @@ from app.models.cache import (
     BatchWriteOperation,
     CacheOperationResult,
     DocumentResult,
+    QueryResult,
 )
 from app.services.cache.cache_aside import CacheAsideService
 from tests.fakes.fake_operator_clients import FakeDBClient, FakeKVClient
@@ -60,6 +61,7 @@ class TestCacheAsideService:
             db=DBService(mock_db_client),
             component_name=ComponentName.G8EE,
             default_ttl=CACHE_TTL_DEFAULT,
+            read_enabled=True,
         )
 
     def test_make_key_format(self, service):
@@ -506,3 +508,50 @@ class TestCacheAsideService:
         assert stats.enabled is True
         assert stats.healthy is False
         assert stats.error is not None
+
+    async def test_get_document_skips_cache_when_read_disabled(self, service, mock_kv_cache_client, mock_db_client):
+        service.read_enabled = False
+        key = service._make_key(DB_COLLECTION_USERS, "user-99")
+        cached_data = {"id": "user-99", "name": "Cached"}
+        mock_kv_cache_client.seed_json(key, cached_data)
+
+        db_data = {"id": "user-99", "name": "From DB"}
+        mock_db_client.get_document.side_effect = None
+        mock_db_client.get_document.return_value = DocumentResult(success=True, data=db_data)
+
+        result = await service.get_document_with_cache(DB_COLLECTION_USERS, "user-99")
+
+        assert result == db_data
+        # DB must be called even though cache has data
+        mock_db_client.get_document.assert_called_once()
+
+    async def test_query_collection_skips_cache_when_read_disabled(self, service, mock_kv_cache_client, mock_db_client):
+        service.read_enabled = False
+        query_params = {"filters": []}
+        filter_hash = hashlib.md5(json.dumps(query_params, sort_keys=True).encode()).hexdigest()
+        query_key = KVKey.query(DB_COLLECTION_USERS, filter_hash)
+        mock_kv_cache_client.seed_json(query_key, [{"id": "cached"}])
+
+        db_results = [{"id": "db-1"}, {"id": "db-2"}]
+        mock_db_client.query_collection.side_effect = None
+        mock_db_client.query_collection.return_value = QueryResult(success=True, data=db_results)
+
+        from app.models.cache import FieldFilter
+        result = await service.query_collection(
+            collection=DB_COLLECTION_USERS,
+            field_filters=[],
+            order_by={},
+            limit=10,
+        )
+
+        assert result.data == db_results
+        mock_db_client.query_collection.assert_called_once()
+
+    async def test_get_stats_reflects_read_enabled(self, service):
+        service.read_enabled = True
+        stats = await service.get_stats()
+        assert stats.read_enabled is True
+
+        service.read_enabled = False
+        stats = await service.get_stats()
+        assert stats.read_enabled is False

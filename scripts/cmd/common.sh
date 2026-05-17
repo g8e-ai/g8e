@@ -19,6 +19,8 @@ G8E_CREDENTIALS_DIR="$HOME/.g8e"
 G8E_CREDENTIALS_FILE="$G8E_CREDENTIALS_DIR/credentials"
 G8E_CLI_CERT_FILE="$G8E_CREDENTIALS_DIR/cli.crt"
 G8E_CLI_KEY_FILE="$G8E_CREDENTIALS_DIR/cli.key"
+G8E_OPERATOR_CERT_FILE="$G8E_CREDENTIALS_DIR/operator.crt"
+G8E_OPERATOR_KEY_FILE="$G8E_CREDENTIALS_DIR/operator.key"
 
 _banner() {
     echo -e "\033[1;34m[g8e]\033[0m $*"
@@ -32,19 +34,28 @@ _pid_alive() {
 _g8ee_running()    { _pid_alive "$_G8EE_PID_FILE"; }
 _operator_running() { _pid_alive "$_OPERATOR_PID_FILE"; }
 
-# _generate_cli_csr generates an ECDSA P-256 key and CSR for CLI authentication
-# Outputs: sets _cli_key_file, _cli_csr_pem variables
-_generate_cli_csr() {
+# _generate_workload_csrs generates ECDSA P-256 keys and CSRs for both
+# Operator and CLI identities.
+# Outputs: sets _op_key_file, _op_csr_pem, _cli_key_file, _cli_csr_pem
+_generate_workload_csrs() {
     local tmp_dir="$1"
+    _op_key_file="${tmp_dir}/operator.key"
     _cli_key_file="${tmp_dir}/cli.key"
     
+    # 1. Operator CSR
+    openssl ecparam -name prime256v1 -genkey -noout -out "$_op_key_file" 2>/dev/null
+    chmod 600 "$_op_key_file"
+    _op_csr_pem=$(openssl req -new -key "$_op_key_file" \
+        -subj "/CN=g8e-operator-$(hostname)/O=g8e" 2>/dev/null)
+    
+    # 2. CLI CSR
     openssl ecparam -name prime256v1 -genkey -noout -out "$_cli_key_file" 2>/dev/null
     chmod 600 "$_cli_key_file"
     _cli_csr_pem=$(openssl req -new -key "$_cli_key_file" \
         -subj "/CN=g8e-cli-$(hostname)/O=g8e" 2>/dev/null)
-    
-    if [[ -z "$_cli_csr_pem" ]]; then
-        echo "[g8e] Failed to generate CSR" >&2
+
+    if [[ -z "$_op_csr_pem" || -z "$_cli_csr_pem" ]]; then
+        echo "[g8e] Failed to generate CSRs" >&2
         return 1
     fi
     return 0
@@ -75,7 +86,7 @@ _operator_bootstrap() {
     tmp_dir=$(mktemp -d)
     trap 'rm -rf "$tmp_dir"' EXIT
 
-    if ! _generate_cli_csr "$tmp_dir"; then
+    if ! _generate_workload_csrs "$tmp_dir"; then
         echo "[g8e] bootstrap failed: CSR generation failed" >&2
         return 1
     fi
@@ -83,21 +94,22 @@ _operator_bootstrap() {
     local system_fingerprint
     system_fingerprint=$(echo "g8e-cli-$(hostname)-$(whoami)" | sha256sum | awk '{print $1}')
 
-    # Build bootstrap request with CSR (plan §4.3)
+    # Build bootstrap request with CSRs (plan §4.3)
     local bootstrap_body
     bootstrap_body=$(jq -n \
         --arg email "$email" \
         --arg name "$name" \
-        --arg csr "$_cli_csr_pem" \
+        --arg op_csr "$_op_csr_pem" \
+        --arg cli_csr "$_cli_csr_pem" \
         --arg fingerprint "$system_fingerprint" \
-        '{email: $email, name: $name, csr_pem: $csr, system_fingerprint: $fingerprint}')
+        '{email: $email, name: $name, csr_pem: $op_csr, cli_csr_pem: $cli_csr, system_fingerprint: $fingerprint}')
 
     # Perform bootstrap over loopback
     local resp
     resp=$(curl -sS --cacert "$trust_bundle" \
         -X POST -H "Content-Type: application/json" \
         -d "$bootstrap_body" \
-        "$public_url/api/auth/bootstrap" 2>/dev/null)
+        "$public_url/api/auth/bootstrap")
 
     local success
     success=$(echo "$resp" | jq -r '.success' 2>/dev/null)
@@ -111,34 +123,48 @@ _operator_bootstrap() {
     # cli_session_id is the strictly disjoint routing namespace this CLI uses
     # to receive SessionEvents and embed in outbound request bodies. The
     # substrate refuses to conflate the two session types.
-    local operator_id operator_session_id cli_session_id operator_cert operator_cert_chain hub_trust_bundle
+    local operator_id operator_session_id cli_session_id operator_cert operator_cert_chain cli_cert cli_cert_chain hub_trust_bundle
     operator_id=$(echo "$resp" | jq -r '.operator_id' 2>/dev/null)
     operator_session_id=$(echo "$resp" | jq -r '.operator_session_id' 2>/dev/null)
     cli_session_id=$(echo "$resp" | jq -r '.cli_session_id' 2>/dev/null)
     operator_cert=$(echo "$resp" | jq -r '.operator_cert' 2>/dev/null)
     operator_cert_chain=$(echo "$resp" | jq -r '.operator_cert_chain' 2>/dev/null)
+    cli_cert=$(echo "$resp" | jq -r '.cli_cert' 2>/dev/null)
+    cli_cert_chain=$(echo "$resp" | jq -r '.cli_cert_chain' 2>/dev/null)
     hub_trust_bundle=$(echo "$resp" | jq -r '.hub_trust_bundle' 2>/dev/null)
     local user_id
     user_id=$(echo "$resp" | jq -r '.user.id' 2>/dev/null)
 
-    if [[ -z "$operator_id" || -z "$operator_session_id" || -z "$operator_cert" || -z "$cli_session_id" || "$cli_session_id" == "null" ]]; then
-        echo "[g8e] bootstrap failed: incomplete response (missing operator_id, operator_session_id, cli_session_id, or operator_cert)" >&2
+    if [[ -z "$operator_id" || -z "$operator_session_id" || -z "$operator_cert" || -z "$cli_session_id" || "$cli_session_id" == "null" || -z "$cli_cert" ]]; then
+        echo "[g8e] bootstrap failed: incomplete response (missing operator_id, operator_session_id, cli_session_id, operator_cert, or cli_cert)" >&2
         echo "$resp" >&2
         return 1
     fi
 
     # Write CLI cert (chain already includes leaf) to $HOME/.g8e/ (plan §4.3)
     mkdir -p "$G8E_CREDENTIALS_DIR"
-    if [[ -n "$operator_cert_chain" ]]; then
-        printf '%s\n' "$operator_cert_chain" > "$G8E_CLI_CERT_FILE"
+    if [[ -n "$cli_cert_chain" ]]; then
+        printf '%s\n' "$cli_cert_chain" > "$G8E_CLI_CERT_FILE"
     else
-        printf '%s\n' "$operator_cert" > "$G8E_CLI_CERT_FILE"
+        printf '%s\n' "$cli_cert" > "$G8E_CLI_CERT_FILE"
     fi
     chmod 600 "$G8E_CLI_CERT_FILE"
 
     # Write CLI key
     cp "$_cli_key_file" "$G8E_CLI_KEY_FILE"
     chmod 600 "$G8E_CLI_KEY_FILE"
+
+    # Write Operator cert
+    if [[ -n "$operator_cert_chain" ]]; then
+        printf '%s\n' "$operator_cert_chain" > "$G8E_OPERATOR_CERT_FILE"
+    else
+        printf '%s\n' "$operator_cert" > "$G8E_OPERATOR_CERT_FILE"
+    fi
+    chmod 600 "$G8E_OPERATOR_CERT_FILE"
+
+    # Write Operator key
+    cp "$_op_key_file" "$G8E_OPERATOR_KEY_FILE"
+    chmod 600 "$G8E_OPERATOR_KEY_FILE"
 
     # Write hub trust bundle
     if [[ -n "$hub_trust_bundle" ]]; then
@@ -325,6 +351,8 @@ export OPERATOR_ID="$operator_id"
 export G8E_AUTH_TIMESTAMP="$(date +%s)"
 export G8E_CLI_CERT="$G8E_CLI_CERT_FILE"
 export G8E_CLI_KEY="$G8E_CLI_KEY_FILE"
+export G8E_OPERATOR_CERT="$G8E_OPERATOR_CERT_FILE"
+export G8E_OPERATOR_KEY="$G8E_OPERATOR_KEY_FILE"
 EOF
     # Restrict file permissions to user-only
     chmod 600 "$G8E_CREDENTIALS_FILE"
@@ -334,8 +362,8 @@ _clear_credentials() {
     if [[ -f "$G8E_CREDENTIALS_FILE" ]]; then
         rm -f "$G8E_CREDENTIALS_FILE"
     fi
-    rm -f "$G8E_CLI_CERT_FILE" "$G8E_CLI_KEY_FILE"
-    unset OPERATOR_SESSION_ID CLI_SESSION_ID USER_ID OPERATOR_ID G8E_AUTH_TIMESTAMP G8E_CLI_CERT G8E_CLI_KEY
+    rm -f "$G8E_CLI_CERT_FILE" "$G8E_CLI_KEY_FILE" "$G8E_OPERATOR_CERT_FILE" "$G8E_OPERATOR_KEY_FILE"
+    unset OPERATOR_SESSION_ID CLI_SESSION_ID USER_ID OPERATOR_ID G8E_AUTH_TIMESTAMP G8E_CLI_CERT G8E_CLI_KEY G8E_OPERATOR_CERT G8E_OPERATOR_KEY
 }
 
 _check_g8e_error() {
@@ -400,7 +428,7 @@ _ensure_authenticated() {
             _clear_credentials
             exit 1
         fi
-        export OPERATOR_SESSION_ID USER_ID OPERATOR_ID G8E_CLI_CERT G8E_CLI_KEY
+        export OPERATOR_SESSION_ID USER_ID OPERATOR_ID G8E_CLI_CERT G8E_CLI_KEY G8E_OPERATOR_CERT G8E_OPERATOR_KEY
         return 0
     fi
     echo "[g8e] Not authenticated. Run: ./g8e login" >&2

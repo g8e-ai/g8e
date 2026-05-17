@@ -433,7 +433,7 @@ _wait_operator_listen_healthy() {
 
     # Auto-bootstrap if needed
     source "$PROJECT_ROOT/scripts/cmd/common.sh"
-    _operator_bootstrap || true
+    _operator_bootstrap
 }
 
 _wait_service_healthy() {

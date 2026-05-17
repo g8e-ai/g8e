@@ -119,9 +119,10 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	// Internal SSE event bridge (used by g8ee Engine to publish typed events
 	// for browser/CLI subscribers to consume). Producers are authenticated by
-	// mTLS app identity; consumers poll /api/internal/sse/events.
+	// mTLS app identity; consumers poll /api/internal/sse/events or stream /api/internal/sse/stream.
 	mux.HandleFunc("/api/internal/sse/push", h.handleInternalSSEPush)
 	mux.HandleFunc("/api/internal/sse/events", h.handleInternalSSEEvents)
+	mux.HandleFunc("/api/internal/sse/stream", h.handleInternalSSEStream)
 	mux.HandleFunc("/db/", h.handleDB)
 	mux.HandleFunc("/kv/", h.handleKV)
 	mux.HandleFunc("/pubsub/publish", h.handlePubSubPublish)
@@ -1227,6 +1228,24 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Publish to pub/sub for real-time streaming
+	// We use the same routing logic: exactly one of web_session_id, cli_session_id, or user_id.
+	var channel string
+	switch {
+	case route.CLISessionID != "":
+		channel = "sse:cli:" + route.CLISessionID
+	case route.WebSessionID != "":
+		channel = "sse:web:" + route.WebSessionID
+	case route.UserID != "":
+		channel = "sse:user:" + route.UserID
+	}
+
+	if channel != "" {
+		// We publish the full body which is the internalSSEPushPayload JSON.
+		// The streamer will wrap this in SSE format.
+		h.pubsub.Publish(channel, body)
+	}
+
 	jsonResponse(w, http.StatusOK, map[string]any{
 		"success":   true,
 		"delivered": 1,
@@ -1306,6 +1325,134 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 		"events": rows,
 		"count":  len(rows),
 	})
+}
+
+func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	q := r.URL.Query()
+	route := SSERoute{
+		WebSessionID: strings.TrimSpace(q.Get("web_session_id")),
+		CLISessionID: strings.TrimSpace(q.Get("cli_session_id")),
+		UserID:       strings.TrimSpace(q.Get("user_id")),
+	}
+	sinceID, _ := strconv.ParseInt(q.Get("since_id"), 10, 64)
+
+	// 1. Authorization (re-use logic from handleInternalSSEEvents)
+	operatorSessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+	if operatorSessionID == "" {
+		jsonError(w, http.StatusUnauthorized, "missing operator session id")
+		return
+	}
+
+	var channel string
+	switch {
+	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
+		cliBindKey := sessionCLIBindKey(route.CLISessionID)
+		boundOperatorSessionID, found := h.db.KVGet(cliBindKey)
+		if !found || boundOperatorSessionID != operatorSessionID {
+			jsonError(w, http.StatusForbidden, "not authorized for this cli session")
+			return
+		}
+		channel = "sse:cli:" + route.CLISessionID
+	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
+		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
+		boundWebSessionID, found := h.db.KVGet(operatorBindKey)
+		if !found || boundWebSessionID != route.WebSessionID {
+			jsonError(w, http.StatusForbidden, "not authorized for this web session")
+			return
+		}
+		channel = "sse:web:" + route.WebSessionID
+	case route.UserID != "" && route.WebSessionID == "" && route.CLISessionID == "":
+		op, err := h.auth.ValidateOperatorSession(operatorSessionID)
+		if err != nil || op.UserID != route.UserID {
+			jsonError(w, http.StatusForbidden, "not authorized for this user")
+			return
+		}
+		channel = "sse:user:" + route.UserID
+	default:
+		jsonError(w, http.StatusBadRequest, "exactly one routing target required")
+		return
+	}
+
+	// 2. Set SSE Headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Accel-Buffering", "no") // For Nginx
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Subscribe to real-time events FIRST to avoid missing any during replay
+	eventCh := make(chan []byte, 100)
+	unregister := h.pubsub.RegisterHandler(channel, func(ch string, data []byte) {
+		select {
+		case eventCh <- data:
+		default:
+			h.logger.Warn("SSE Stream: back-pressure dropping event", "channel", channel)
+		}
+	})
+	defer unregister()
+
+	// 4. Replay from DB if sinceID is provided
+	if sinceID > 0 {
+		rows, err := h.db.SSEEventsListSince(route, sinceID, 1000)
+		if err == nil {
+			for _, row := range rows {
+				fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", row.ID, row.EventType, row.Payload)
+			}
+			flusher.Flush()
+		}
+	}
+
+	// 5. Stream from pubsub
+	ctx := r.Context()
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	h.logger.Info("SSE Stream: client connected", "channel", channel, "operator_session_id", operatorSessionID)
+
+	for {
+		select {
+		case <-ctx.Done():
+			h.logger.Info("SSE Stream: client disconnected", "channel", channel)
+			return
+		case <-ticker.C:
+			// Heartbeat
+			fmt.Fprintf(w, ": heartbeat\n\n")
+			flusher.Flush()
+		case raw := <-eventCh:
+			// The raw data from internalSSEPush is the full JSON payload
+			var p internalSSEPushPayload
+			if err := json.Unmarshal(raw, &p); err == nil {
+				// We need the ID from the DB append, but we don't have it here easily
+				// without doing another query. For now, we use a 0 or skip ID for real-time.
+				// Actually, we can just omit 'id:' for real-time pushes and let the client
+				// rely on the sequence. Or we can have SSEEventsAppend return the ID and
+				// pass it through pubsub.
+
+				// Re-extract type
+				var inner struct {
+					Type string `json:"type"`
+				}
+				_ = json.Unmarshal(p.Event, &inner)
+				if inner.Type == "" {
+					inner.Type = "unknown"
+				}
+
+				fmt.Fprintf(w, "event: %s\ndata: %s\n\n", inner.Type, string(raw))
+				flusher.Flush()
+			}
+		}
+	}
 }
 
 func (h *HTTPHandler) handleDBQuery(w http.ResponseWriter, r *http.Request, collection string) {
@@ -2347,6 +2494,12 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 				jsonError(w, http.StatusInternalServerError, "failed to sign CLI CSR")
 				return
 			}
+		} else {
+			// [SPIFFE-DRIFT] Fallback: If no CLI CSR provided, the CLI cert returned MUST be
+			// the operator cert for backwards compatibility with older binaries, even though
+			// they will fail modern /cli/ path checks.
+			cliCertPEM = certPEM
+			cliCertChainPEM = chainPEM
 		}
 
 		// Persist operator document

@@ -221,6 +221,7 @@ class ListenSettings(G8eBaseModel):
     pubsub_url: str = Field(os.environ.get("G8E_INTERNAL_PUBSUB_URL", "wss://localhost:9001"))
     blob_url: str = Field(os.environ.get("G8E_INTERNAL_HTTP_URL", "https://localhost:9000"))
     default_ttl: int = Field(CACHE_TTL_DEFAULT)
+    enable_cache_read: bool = Field(False)
 
     @field_validator("http_url", "pubsub_url", "blob_url", mode="after")
     @classmethod

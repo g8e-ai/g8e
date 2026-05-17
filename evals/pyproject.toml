@@ -11,6 +11,7 @@ dependencies = [
     "rich>=13.7.0",
     "python-dotenv>=1.0.0",
     "protobuf>=5.26.1",
+    "httpx-sse>=0.4.0",
 ]
 
 [project.scripts]

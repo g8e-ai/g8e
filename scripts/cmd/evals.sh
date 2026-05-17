@@ -46,7 +46,7 @@ case "$SUB" in
             exit 1
         fi
         if ! _load_credentials; then
-            _operator_bootstrap || true
+            _operator_bootstrap
             _load_credentials || {
                 echo "[g8e] no cached credentials — run: ./g8e login" >&2
                 exit 1

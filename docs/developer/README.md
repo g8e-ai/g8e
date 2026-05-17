@@ -40,15 +40,15 @@ The platform runs host-natively. Do not use Docker for primary component develop
 3. State & Logs:
    - `.g8e/logs/`: Component stdout/stderr.
    - `.g8e/pids/`: Process IDs for running components.
-   - `.g8e/pki/`: Operator PKI hierarchy (CA, intermediate, workload certs).
+   - `.g8e/pki/`: Operator PKI hierarchy (CA, intermediate, workload certs for operator and cli).
    - `.g8e/secrets/`: Bootstrap secrets with tamper-evidence manifest.
    - `.g8e/data/`: SQLite databases and KV storage.
 
 4. Four-Port Contract (Listen Mode):
    - **WSS (9001)**: Pub/Sub broker for operator connections (mTLS required)
    - **HTTP (9000)**: mTLS API for Operator protocol operations (mTLS required)
-   - **Bootstrap (80)**: Device-link enrollment and CSR-based registration (plain TLS)
-   - **Public (443)**: Browser-based auth and BYO bootstrap (plain TLS)
+   - **Bootstrap (9003)**: Device-link enrollment and CSR-based registration (plain TLS)
+   - **Public (9000)**: Browser-based auth and BYO bootstrap (mTLS or plain TLS depending on route)
 
 III. Anti-Tech-Debt Directives
 AI agents are prone to wrapping poorly understood code in new abstractions. This is strictly forbidden.

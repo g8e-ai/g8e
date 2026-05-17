@@ -26,6 +26,23 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 )
 
+// AuthError represents a structured authentication error.
+type AuthError struct {
+	Message string `json:"error"`
+	Reason  string `json:"reason,omitempty"`
+	Status  int    `json:"-"`
+}
+
+func (e *AuthError) Error() string {
+	b, _ := json.Marshal(e)
+	return string(b)
+}
+
+func (e *AuthError) Is(target error) bool {
+	_, ok := target.(*AuthError)
+	return ok
+}
+
 // AuthService handles authentication for the Listen service.
 type AuthService struct {
 	db         *ListenDBService
@@ -52,7 +69,7 @@ func NewAuthService(db *ListenDBService, pki *PKIAuthority, logger *slog.Logger,
 // is certificate revocation via PKI authority.
 func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models.OperatorDocumentGo, error) {
 	if operatorSessionID == "" {
-		return nil, fmt.Errorf("missing operator_session_id")
+		return nil, &AuthError{Message: "missing operator_session_id", Status: http.StatusUnauthorized}
 	}
 
 	filters := []models.DocFilter{
@@ -65,7 +82,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	}
 
 	if len(docs) == 0 {
-		return nil, fmt.Errorf("invalid or expired operator session")
+		return nil, &AuthError{Message: "invalid or expired operator session", Status: http.StatusUnauthorized}
 	}
 
 	// Convert Document to OperatorDocumentGo
@@ -77,6 +94,20 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	var op models.OperatorDocumentGo
 	if err := json.Unmarshal(b, &op); err != nil {
 		return nil, err
+	}
+
+	// [PIVOT] Auth depends on cryptographic validity and administrative status,
+	// not on heartbeat liveness. Only block if explicitly terminated or stopped.
+	if op.Status == constants.Status.OperatorStatus.Terminated || op.Status == constants.Status.OperatorStatus.Stopped {
+		return nil, &AuthError{Message: "operator identity disabled", Reason: op.Status, Status: http.StatusForbidden}
+	}
+
+	// Enforce session expiry (TTL)
+	// Default session TTL is 24h if not specified.
+	sessionTTL := 24 * time.Hour
+	// We use the Document store's authoritative CreatedAt for TTL enforcement.
+	if !docs[0].CreatedAt.IsZero() && time.Since(docs[0].CreatedAt) > sessionTTL {
+		return nil, &AuthError{Message: "operator session expired", Reason: "ttl_exceeded", Status: http.StatusUnauthorized}
 	}
 
 	// Check if the linked user is active (plan §4.6)
@@ -89,7 +120,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 		}
 		if user != nil && !user.IsActive() {
 			// Return structured error for disabled users
-			return nil, fmt.Errorf(`{"error":"identity disabled","reason":"retired_by_real_login"}`)
+			return nil, &AuthError{Message: "identity disabled", Reason: "retired_by_real_login", Status: http.StatusForbidden}
 		}
 	}
 
@@ -99,7 +130,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 // ValidateAPIKey checks if an API key is valid and returns the operator document.
 func (s *AuthService) ValidateAPIKey(apiKey string) (*models.OperatorDocumentGo, error) {
 	if apiKey == "" {
-		return nil, fmt.Errorf("missing api key")
+		return nil, &AuthError{Message: "missing api key", Status: http.StatusUnauthorized}
 	}
 
 	filters := []models.DocFilter{
@@ -112,7 +143,7 @@ func (s *AuthService) ValidateAPIKey(apiKey string) (*models.OperatorDocumentGo,
 	}
 
 	if len(docs) == 0 {
-		return nil, fmt.Errorf("invalid api key")
+		return nil, &AuthError{Message: "invalid api key", Status: http.StatusUnauthorized}
 	}
 
 	// Convert Document to OperatorDocumentGo
@@ -133,7 +164,7 @@ func (s *AuthService) ValidateAPIKey(apiKey string) (*models.OperatorDocumentGo,
 			return nil, fmt.Errorf("failed to load user %s: %w", op.UserID, err)
 		}
 		if user != nil && !user.IsActive() {
-			return nil, fmt.Errorf(`{"error":"identity disabled","reason":"retired_by_real_login"}`)
+			return nil, &AuthError{Message: "identity disabled", Reason: "retired_by_real_login", Status: http.StatusForbidden}
 		}
 	}
 
@@ -215,6 +246,12 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				return
 			}
 			s.logger.Warn("Invalid operator session attempt", "operator_session_id", operatorSessionID[:8]+"...", "error", err)
+
+			// If it's a structured AuthError, return it properly
+			if ae, ok := err.(*AuthError); ok {
+				s.jsonError(w, ae.Status, ae.Message) // Note: jsonError wraps it in {"error": ...}
+				return
+			}
 		} else if cliSessionID != "" {
 			// CLI authentication via CLI session ID and CLI certificate
 			// Verify the CLI certificate matches the CLI session ID
@@ -223,7 +260,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				match := false
 				for _, uri := range cert.URIs {
 					// spiffe://g8e.local/cli/<user_id>/<cli_session_id>
-					if strings.Contains(uri.String(), "/"+cliSessionID) {
+					if strings.Contains(uri.String(), "/cli/"+cliSessionID) {
 						match = true
 						break
 					}

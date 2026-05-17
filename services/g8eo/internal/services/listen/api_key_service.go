@@ -100,13 +100,15 @@ func (s *ApiKeyService) ValidateKey(rawKey string) (*models.Document, error) {
 	}
 
 	// Check status
+	// [PIVOT] Auth depends on existence and revocation, not on heartbeat-driven status.
+	// Liveness is a UI/UX signal, not an authentication gate.
 	var status string
 	if statusVal, ok := doc.Data["status"]; ok {
 		json.Unmarshal(statusVal, &status)
 	}
 
-	if status != constants.Status.OperatorStatus.Active {
-		return nil, fmt.Errorf("key is %s", status)
+	if status == constants.Status.OperatorStatus.Terminated {
+		return nil, fmt.Errorf("key is terminated")
 	}
 
 	// Update last used

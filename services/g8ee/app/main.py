@@ -188,6 +188,7 @@ async def lifespan(app: FastAPI):
             db=db_service,
             component_name=ComponentName.G8EE,
             default_ttl=settings.listen.default_ttl,
+            read_enabled=settings.listen.enable_cache_read,
         )
         settings_service._cache_aside = cache_aside_service
 

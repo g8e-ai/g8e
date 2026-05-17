@@ -19,8 +19,9 @@ The reference Operator implementation is **`g8eo`** (Go), and the protocol ensur
 1.  **Canonical JSON Wire Format**: All client-facing mutation paths (HTTPS APIs, WSS pub/sub) MUST use canonical JSON (**protojson**) for the `GovernanceEnvelope`. Binary protobuf is reserved for internal storage and specific high-performance peer-to-peer sync.
 2.  **Hash-Based Signing**: The `transaction_hash` is the sole authority for identity and intent. It is a SHA-256 hash computed over canonicalized fields in a specific order. The verifier enforces that `envelope.id == envelope.transaction_hash == computed_hash`.
 3.  **Fail-Closed Verification**: An Operator MUST reject any transaction that fails any layer of the 3-Layer Governance (L1/L2/L3), has an expired timestamp, or a reused nonce.
-4.  **BFT State Binding**: Mutations are bound to a specific fleet state via `state_merkle_root`. This ensures that an agent is acting on the same reality the Operator currently perceives.
-5.  **Signed Receipts**: Every mutation result MUST be accompanied by an `ActionReceipt`, signed by the Operator's Warden, providing cryptographic proof of execution or rejection.
+4.  **Authoritative Persistence**: Mutations are written to the Hub's Document Store. While a KV cache exists for high-performance lookups, application-layer adapters default to a **Write-Only** cache policy to guarantee every read is satisfied by the authoritative database.
+5.  **BFT State Binding**: Mutations are bound to a specific fleet state via `state_merkle_root`. This ensures that an agent is acting on the same reality the Operator currently perceives.
+6.  **Signed Receipts**: Every mutation result MUST be accompanied by an `ActionReceipt`, signed by the Operator's Warden, providing cryptographic proof of execution or rejection.
 
 ---
 

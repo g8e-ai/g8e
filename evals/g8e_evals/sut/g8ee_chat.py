@@ -1,8 +1,8 @@
 """G8eeChatSUT — drives the real g8ee chat pipeline end-to-end.
 
 This SUT submits every task as a real chat turn against the running g8ee
-Engine via POST /api/internal/chat (mTLS + g8e_session cookie), then drains
-the Operator's per-session SSE buffer to capture *every* agent stage the
+Engine via POST /api/internal/chat (mTLS + g8e_session cookie), then streams
+events from the Operator's SSE endpoint to capture *every* agent stage the
 pipeline executes (Triage, Dash/Sage, Tribunal, Auditor, Warden, tool calls,
 reputation updates, thinking, response chunks, etc.).
 
@@ -13,26 +13,18 @@ CLI as it fires.
 This is the gold-standard evaluation path: the model under test exercises
 the same code paths a real user hits via `./g8e chat send` — no shortcuts.
 
-KNOWN LIMITATION (v1 — busy-poll, not a real stream)
-----------------------------------------------------
-This SUT drains agent events by polling the Operator's per-session SSE
-*replay buffer* (`GET /api/internal/sse/events?since_id=...`) every
-``poll_interval_s`` seconds (default 0.25s). Consequences:
+Event Streaming
+---------------
+This SUT consumes agent events via a real Server-Sent Events (SSE) stream
+from the Operator's `/api/internal/sse/stream` endpoint. The stream:
 
-  - Wall-clock latency floor of one ``poll_interval_s`` per observed event.
-  - For long Sage ReAct turns, the bench issues thousands of GETs against
-    the Operator while it waits for the terminal event.
+  - Replays historical events from the buffer (via `since_id` cursor).
+  - Pushes new events in real-time via the Operator's PubSub broker.
+  - Filters events by `cli_session_id` and optionally `investigation_id`.
+  - Maintains a heartbeat keep-alive to detect idle timeouts.
 
-This is acceptable for v1 (the replay buffer is the only consumer-facing
-surface today) but is *not* the long-term shape. The correct fix is to
-subscribe to a real ``text/event-stream`` endpoint on the Operator
-(server-pushed SSE keyed by ``cli_session_id`` + ``since_id``) so the bench
-receives each event as it is produced, with no polling and no buffer
-scan.
-
-TODO(evals): replace ``_drain_events`` with an httpx streaming reader
-against an Operator-native SSE endpoint once one is exposed; remove
-``poll_interval_s`` from the public constructor at that point.
+This eliminates the wall-clock latency floor and excessive HTTP requests
+that existed in the previous polling-based implementation.
 """
 
 from __future__ import annotations
@@ -45,6 +37,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
 
 import httpx
+from httpx_sse import aconnect_sse
 
 from g8e_evals.harness import BindingType, Response, SUTConfig, Task
 from g8e_evals.sut.wire import SSEWireEnvelope
@@ -99,12 +92,10 @@ class G8eeChatSUT:
         self,
         config: SUTConfig,
         on_event: Optional[EventCallback] = None,
-        poll_interval_s: float = 0.25,
         idle_timeout_s: float = 180.0,
     ):
         self.config = config
         self.on_event = on_event
-        self.poll_interval_s = poll_interval_s
         self.idle_timeout_s = idle_timeout_s
         # Canonical transport/auth wiring — single source of truth shared
         # with the shell-side helpers in scripts/cmd/common.sh. See
@@ -325,61 +316,44 @@ class G8eeChatSUT:
         since_id: int,
         investigation_id: str,
     ) -> tuple[str, list[AgentTrailEvent], Optional[str]]:
-        """Poll the SSE buffer until a terminal event or idle timeout.
+        """Stream events from the Operator's SSE endpoint until terminal or idle.
 
         Returns (assembled_answer_text, trail, terminal_event_type_or_None).
-
-        NOTE: This is a busy-poll against the Operator's replay buffer, not
-        a real SSE subscription. See the module docstring's "KNOWN
-        LIMITATION" section. The long-term fix is to consume an
-        Operator-native ``text/event-stream`` endpoint instead.
         """
-        cursor = since_id
         text_buf: list[str] = []
         trail: list[AgentTrailEvent] = []
         terminal: Optional[str] = None
         last_event_at = time.time()
 
-        while True:
-            try:
-                resp = await client.get(
-                    f"{self.env.operator_url}/api/internal/sse/events",
-                    params={
-                        "cli_session_id": self.env.cli_session_id,
-                        "since_id": cursor,
-                        "limit": 500,
-                    },
-                )
-                resp.raise_for_status()
-                data = resp.json()
-            except (httpx.HTTPError, ValueError) as e:
-                # transient — back off and retry until idle timeout.
-                if time.time() - last_event_at > self.idle_timeout_s:
-                    return ("".join(text_buf), trail, None)
-                await asyncio.sleep(self.poll_interval_s)
-                continue
+        params = {
+            "cli_session_id": self.env.cli_session_id,
+            "since_id": since_id,
+        }
 
-            rows = data.get("events") or []
-            if rows:
-                last_event_at = time.time()
-                for row in rows:
-                    row_id = int(row.get("id", 0))
-                    event_type = row.get("event_type") or ""
-                    raw_payload = row.get("payload") or "{}"
+        try:
+            async with aconnect_sse(
+                client, "GET", f"{self.env.operator_url}/api/internal/sse/stream", params=params
+            ) as event_source:
+                async for event in event_source.aiter_sse():
+                    last_event_at = time.time()
+                    
+                    if event.event == "heartbeat":
+                        continue
+
                     try:
-                        payload_obj = json.loads(raw_payload) if isinstance(raw_payload, str) else raw_payload
+                        payload_obj = json.loads(event.data)
                     except json.JSONDecodeError:
-                        payload_obj = {"_raw": raw_payload}
+                        payload_obj = {"_raw": event.data}
+
+                    row_id = int(event.id) if event.id else 0
+                    event_type = event.event or "unknown"
 
                     envelope = SSEWireEnvelope.parse(payload_obj)
 
-                    # Filter on the current investigation when available —
-                    # other parallel SSE traffic on this session id (e.g.
-                    # operator heartbeats) shouldn't bleed into the trail.
+                    # Filter on the current investigation when available
                     if investigation_id and envelope is not None:
                         evt_inv = envelope.investigation_id()
                         if evt_inv and evt_inv != investigation_id:
-                            cursor = max(cursor, row_id)
                             continue
 
                     trail.append(AgentTrailEvent(
@@ -387,7 +361,6 @@ class G8eeChatSUT:
                         event_type=event_type,
                         payload=payload_obj,
                     ))
-                    cursor = max(cursor, row_id)
 
                     # Accumulate response text.
                     if event_type == "g8e.v1.ai.llm.chat.iteration.text.chunk.received" and envelope is not None:
@@ -405,14 +378,17 @@ class G8eeChatSUT:
 
                     if event_type in _TERMINAL_EVENTS:
                         terminal = event_type
+                        return ("".join(text_buf), trail, terminal)
 
-                if terminal is not None:
-                    return ("".join(text_buf), trail, terminal)
+                    if time.time() - last_event_at > self.idle_timeout_s:
+                        break
 
-            if time.time() - last_event_at > self.idle_timeout_s:
-                return ("".join(text_buf), trail, terminal)
+        except Exception as e:
+            logger.warning("SSE Stream interrupted: %s", e)
+            # If we were interrupted but already have some events, return them.
+            # The higher-level logic will decide if it's a failure.
 
-            await asyncio.sleep(self.poll_interval_s)
+        return ("".join(text_buf), trail, terminal)
 
     def _build_receipt(
         self,

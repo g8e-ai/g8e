@@ -114,6 +114,7 @@ class ArrayRemove:
 class CacheStats(G8eBaseModel):
     """Statistics snapshot for the KV cache service."""
     enabled: bool = Field(..., description="Whether caching is enabled")
+    read_enabled: bool = Field(default=False, description="Whether reading from cache is enabled")
     healthy: bool = Field(..., description="Whether the KV backend is healthy")
     document_keys: int = Field(default=0, description="Number of document cache keys")
     query_keys: int = Field(default=0, description="Number of query cache keys")

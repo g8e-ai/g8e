@@ -62,21 +62,17 @@ case "$TOP" in
         fi
         echo "[g8e] Device-link token obtained"
 
-        # 3. Generate ECDSA private key + CSR
-        echo "[g8e] Generating client key and CSR..."
-        mkdir -p "$G8E_CREDENTIALS_DIR"
-        openssl ecparam -name prime256v1 -genkey -noout -out "$G8E_CLI_KEY_FILE" 2>/dev/null
-        chmod 600 "$G8E_CLI_KEY_FILE"
-        _csr_pem=$(openssl req -new -key "$G8E_CLI_KEY_FILE" \
-            -subj "/CN=g8e-cli-$(hostname)/O=g8e" 2>/dev/null)
-        if [[ -z "$_csr_pem" ]]; then
-            echo "[g8e] Failed to generate CSR" >&2
+        # 3. Generate ECDSA private keys + CSRs
+        echo "[g8e] Generating keys and CSRs..."
+        _tmp_dir=$(mktemp -d)
+        trap 'rm -rf "$_tmp_dir"' EXIT
+        if ! _generate_workload_csrs "$_tmp_dir"; then
+            echo "[g8e] CSR generation failed" >&2
             exit 1
         fi
 
         # 4. Register via bootstrap port (no mTLS required on this route)
         echo "[g8e] Registering with operator..."
-        _csr_json=$(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$_csr_pem")
         _reg_body=$(python3 -c "
 import json, socket, os
 print(json.dumps({
@@ -85,7 +81,8 @@ print(json.dumps({
     'os': 'linux',
     'arch': os.uname().machine,
     'username': os.environ.get('USER', os.environ.get('LOGNAME', 'unknown')),
-    'csr_pem': $(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$_csr_pem"),
+    'csr_pem': $(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$_op_csr_pem"),
+    'cli_csr_pem': $(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$_cli_csr_pem"),
 }))")
         _reg_resp=$( curl -sS --cacert "$_trust_bundle" \
             -X POST -H "Content-Type: application/json" \
@@ -107,21 +104,38 @@ print(json.dumps({
         _session_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_session_id',''))" 2>/dev/null)
         _cli_session_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('cli_session_id',''))" 2>/dev/null)
         _operator_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_id',''))" 2>/dev/null)
-        _cert_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_cert',''))" 2>/dev/null)
-        _chain_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_cert_chain',''))" 2>/dev/null)
+        _op_cert_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_cert',''))" 2>/dev/null)
+        _op_chain_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_cert_chain',''))" 2>/dev/null)
+        _cli_cert_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('cli_cert',''))" 2>/dev/null)
+        _cli_chain_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('cli_cert_chain',''))" 2>/dev/null)
         _hub_bundle=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('hub_trust_bundle',''))" 2>/dev/null)
 
-        if [[ -z "$_session_id" || -z "$_operator_id" || -z "$_cert_pem" || -z "$_cli_session_id" ]]; then
-            echo "[g8e] Unexpected registration response (missing operator_session_id, cli_session_id, operator_id, or operator_cert): $_reg_resp" >&2
+        if [[ -z "$_session_id" || -z "$_operator_id" || -z "$_op_cert_pem" || -z "$_cli_session_id" || -z "$_cli_cert_pem" ]]; then
+            echo "[g8e] Unexpected registration response (missing operator_session_id, cli_session_id, operator_id, operator_cert, or cli_cert): $_reg_resp" >&2
             exit 1
         fi
 
         # Write CLI cert (leaf + chain)
-        printf '%s\n' "$_cert_pem" > "$G8E_CLI_CERT_FILE"
-        if [[ -n "$_chain_pem" ]]; then
-            printf '%s\n' "$_chain_pem" >> "$G8E_CLI_CERT_FILE"
+        printf '%s\n' "$_cli_cert_pem" > "$G8E_CLI_CERT_FILE"
+        if [[ -n "$_cli_chain_pem" ]]; then
+            printf '%s\n' "$_cli_chain_pem" >> "$G8E_CLI_CERT_FILE"
         fi
         chmod 600 "$G8E_CLI_CERT_FILE"
+
+        # Write CLI key
+        cp "$_cli_key_file" "$G8E_CLI_KEY_FILE"
+        chmod 600 "$G8E_CLI_KEY_FILE"
+
+        # Write Operator cert (leaf + chain)
+        printf '%s\n' "$_op_cert_pem" > "$G8E_OPERATOR_CERT_FILE"
+        if [[ -n "$_op_chain_pem" ]]; then
+            printf '%s\n' "$_op_chain_pem" >> "$G8E_OPERATOR_CERT_FILE"
+        fi
+        chmod 600 "$G8E_OPERATOR_CERT_FILE"
+
+        # Write Operator key
+        cp "$_op_key_file" "$G8E_OPERATOR_KEY_FILE"
+        chmod 600 "$G8E_OPERATOR_KEY_FILE"
 
         # Update trust bundle if operator returned a fresher one
         if [[ -n "$_hub_bundle" ]]; then

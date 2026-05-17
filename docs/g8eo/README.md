@@ -12,7 +12,7 @@
 
 A single `g8eo` binary runs in one of two primary roles:
 
-1.  **Hub (`--listen`)**: The platform substrate. Provides central persistence, PKI authority, and pub/sub for a fleet.
+1.  **Hub (`--listen`)**: The platform substrate. Provides central persistence (authoritative DB + optional KV cache), PKI authority, and pub/sub for a fleet.
 2.  **Satellite**: The execution role. Runs on a managed host, dials the Hub via outbound-only mTLS, and executes protocol-governed transactions.
 
 ## Capabilities
