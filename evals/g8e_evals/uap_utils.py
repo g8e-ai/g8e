@@ -112,7 +112,7 @@ def build_envelope(
     env.protocol_version = "1.0"
     env.timestamp.FromDatetime(datetime.now(timezone.utc))
     env.expires_at.FromDatetime(datetime.now(timezone.utc).replace(microsecond=0) + timedelta(seconds=expires_in_seconds))
-    env.source_component = common_pb2.Component.COMPONENT_BYO_CLIENT
+    env.source_component = common_pb2.Component.COMPONENT_CLIENT
     env.operator_id = operator_id
     env.operator_session_id = operator_session_id
     env.action_type = action_type

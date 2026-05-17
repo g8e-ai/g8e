@@ -9,7 +9,8 @@ import click
 from rich.console import Console
 
 from g8e_evals.harness import RowResult, BindingType, SUTConfig, LLMRoleConfig
-from g8e_evals.sut.answer_only import AnswerOnlySUT
+from g8e_evals.sut.g8ee_chat import G8eeChatSUT, AuthenticationError
+from g8e_evals.agent_trail_renderer import TurnRenderer
 from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
 from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
 from g8e_evals.receipts.collector import ReceiptCollector
@@ -32,7 +33,10 @@ def main():
 @click.option("--assistant-model", help="Assistant model name")
 @click.option("--lite-provider", type=click.Choice(["openai", "anthropic", "gemini", "ollama", "llamacpp"]), help="Lite LLM provider")
 @click.option("--lite-model", help="Lite model name")
-@click.option("--mode", type=click.Choice(["receipt", "baseline"]), default="receipt")
+@click.option("--verbose-text/--no-verbose-text", default=False,
+              help="Stream the agent's response text inline as chunks arrive")
+@click.option("--idle-timeout", type=float, default=180.0,
+              help="Seconds without an SSE event before declaring a task idle")
 @click.option("--operator-url", default="https://localhost:9000")
 @click.option("--operator-id", envvar="OPERATOR_ID")
 @click.option("--operator-session-id", envvar="OPERATOR_SESSION_ID")
@@ -48,10 +52,12 @@ def main():
 @click.option("--assistant-endpoint", help="Endpoint URL for the assistant provider")
 @click.option("--lite-api-key", help="API key for the lite provider")
 @click.option("--lite-endpoint", help="Endpoint URL for the lite provider")
-def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, mode, operator_url, operator_id, operator_session_id, state_root, output_dir, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint):
+def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, verbose_text, idle_timeout, operator_url, operator_id, operator_session_id, state_root, output_dir, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint):
     """Run a benchmark suite"""
-    if mode == "receipt" and not (operator_id and operator_session_id):
-        raise click.UsageError("operator-id and operator-session-id are required for receipt mode")
+    if not operator_session_id:
+        raise click.UsageError(
+            "operator-session-id is required (run `./g8e login` first)"
+        )
 
     config = SUTConfig(
         primary=LLMRoleConfig(provider=provider, model=model, api_key=primary_api_key, endpoint=primary_endpoint),
@@ -63,12 +69,12 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         state_root=state_root,
         l2_private_key=l2_key,
         l2_key_id=l2_key_id,
-        mode=mode
+        mode="receipt"
     )
 
-    asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit))
+    asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout))
 
-async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], output_dir: Path, limit: Optional[int] = None):
+async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], output_dir: Path, limit: Optional[int] = None, verbose_text: bool = False, idle_timeout: float = 180.0):
     # 1. Load benchmark
     if suite == "ifeval":
         if not gold_set:
@@ -79,9 +85,67 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
             tasks = tasks[:limit]
         verifier = IFEvalVerifier()
     
-    # 2. Initialize SUT
-    sut = AnswerOnlySUT(config)
-    
+    # 2. Initialize SUT (real g8ee chat pipeline by default).
+    # The renderer is task-scoped, so the SUT-level callback delegates
+    # to whichever TurnRenderer is active for the current task.
+    current_renderer: dict[str, Optional[TurnRenderer]] = {"r": None}
+
+    async def _on_event(event_type: str, payload: dict) -> None:
+        r = current_renderer["r"]
+        if r is not None:
+            r.render(event_type, payload)
+
+    try:
+        sut = G8eeChatSUT(
+            config,
+            on_event=_on_event,
+            idle_timeout_s=idle_timeout,
+        )
+    except AuthenticationError as e:
+        console.print("[bold red]Authentication Error:[/bold red]")
+        console.print(f"  {e}")
+        console.print("\n[yellow]Did you run ./g8e login?[/yellow]")
+        return
+
+    # 3. Pre-flight validation: ensure we have API keys for active providers.
+    remote_settings = await sut.check_settings()
+    llm_settings = remote_settings.get("llm", {})
+
+    errors = []
+    for role_name in ["primary", "assistant", "lite"]:
+        role_config = getattr(config, role_name)
+        if not role_config or not role_config.provider:
+            continue
+
+        # Key provided via CLI flag?
+        if role_config.api_key:
+            continue
+
+        # Key exists in remote settings for this provider?
+        provider_key_map = {
+            "openai": "openai_api_key",
+            "anthropic": "anthropic_api_key",
+            "gemini": "gemini_api_key",
+            "ollama": "ollama_api_key",
+            "llamacpp": "llamacpp_api_key",
+        }
+        remote_key_field = provider_key_map.get(role_config.provider)
+        if remote_key_field and llm_settings.get(remote_key_field):
+            continue
+
+        # Role-specific override in remote settings?
+        if llm_settings.get(f"{role_name}_api_key"):
+            continue
+
+        errors.append(f"Missing API key for {role_name} provider '{role_config.provider}'")
+
+    if errors:
+        console.print("[bold red]Pre-flight validation failed:[/bold red]")
+        for err in errors:
+            console.print(f"  - {err}")
+        console.print("\n[yellow]Provide keys via --primary-api-key, etc. or configure them in g8ee settings.[/yellow]")
+        return
+
     collector = ReceiptCollector(config.operator_url)
     
     # Load warden pub key for verification
@@ -93,7 +157,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
     results = []
     
     display_model = f"{config.primary.provider}:{config.primary.model}" if config.primary.provider and config.primary.model else (config.primary.model or "openai:gpt-4")
-    console.print(f"[bold blue]Running {suite} with {display_model} in {config.mode} mode...[/bold blue]")
+    console.print(f"[bold blue]Running {suite} with {display_model}...[/bold blue]")
     
     # 3. Execution loop
     for task in tasks:
@@ -108,19 +172,33 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
         if len(task.prompt) > 50:
             prompt_preview += "..."
             
-        console.print(f"  [cyan]{task.id:>4}[/cyan]: {prompt_preview}{intent} ...", end="")
-        
-        # Get answer
+        console.print(f"  [cyan]{task.id:>4}[/cyan]: {prompt_preview}{intent}")
+
+        # Per-task live renderer captures every agent stage.
+        renderer = TurnRenderer(console, task_id=str(task.id), verbose_text=verbose_text)
+        current_renderer["r"] = renderer
+
+        # Get answer (drives the full g8ee chat pipeline end-to-end).
         response = await sut.get_answer(task)
+        current_renderer["r"] = None
+        renderer.finish(
+            terminal_event=(response.receipt or {}).get("terminal_event") if response.receipt else None,
+            answer_chars=len(response.answer or ""),
+        )
         
-        # Collect receipt if bound
+        # Collect on-substrate receipt (if any) and merge with the in-bench
+        # agent trail. The agent_trail is the canonical evidence the chat
+        # pipeline ran end-to-end; an Operator-issued signed receipt only
+        # exists when the agent triggered a mutation (Tribunal->Warden path).
         if response.binding == BindingType.RECEIPT_BOUND and response.transaction_id:
-            receipt = await collector.collect_receipt(response.transaction_id)
-            if receipt:
-                response.receipt = receipt
-                response.receipt_signature = receipt.get("signature")
+            on_chain_receipt = await collector.collect_receipt(response.transaction_id)
+            if on_chain_receipt:
+                merged = dict(response.receipt or {})
+                merged["substrate_receipt"] = on_chain_receipt
+                response.receipt = merged
+                response.receipt_signature = on_chain_receipt.get("signature")
                 if warden_pub:
-                    response.receipt_verified = verify_receipt_signature(receipt, warden_pub)
+                    response.receipt_verified = verify_receipt_signature(on_chain_receipt, warden_pub)
         
         # Score
         if suite == "ifeval":
@@ -139,11 +217,18 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
         receipt_status = ""
         if response.binding == BindingType.RECEIPT_BOUND:
             if response.receipt_verified:
-                receipt_status = " [cyan](verified)[/cyan]"
+                receipt_status = " [cyan](receipt verified)[/cyan]"
             else:
-                receipt_status = " [yellow](unverified)[/yellow]"
-                
-        console.print(f" [{status_color}]Done[/{status_color}]{receipt_status}")
+                receipt_status = " [yellow](receipt unverified)[/yellow]"
+        elif response.unbound_reason:
+            receipt_status = f" [yellow]({response.unbound_reason})[/yellow]"
+
+        event_count = (response.receipt or {}).get("event_count", 0) if response.receipt else 0
+        console.print(
+            f"  [dim]{task.id}[/dim] [{status_color}]{'PASS' if score.passed else 'FAIL'}[/{status_color}]"
+            f" answer_chars={len(response.answer or '')}"
+            f" agent_events={event_count}{receipt_status}"
+        )
 
     # 4. Aggregate & Report
     agg = aggregate_results(suite, results)

@@ -12,7 +12,6 @@ import pytest
 
 from g8e_evals.tls import resolve_trust_bundle
 from g8e_evals.receipts import collector as collector_mod
-from g8e_evals.sut import answer_only as answer_only_mod
 
 
 @pytest.fixture
@@ -51,7 +50,7 @@ def test_no_bundle_raises(tmp_path, clean_env, monkeypatch):
 
 def test_no_verify_false_in_clients():
     """The harness must never disable TLS verification."""
-    for mod in (collector_mod, answer_only_mod):
+    for mod in (collector_mod,):
         src = inspect.getsource(mod)
         assert "verify=False" not in src, (
             f"{mod.__name__} disables TLS verification; use resolve_trust_bundle()"

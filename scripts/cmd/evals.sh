@@ -34,6 +34,30 @@ case "$SUB" in
     bench)
         _ensure_evals_venv
         _banner "evals bench"
+        # The bench drives the *full* g8ee chat pipeline (Triage → Dash/Sage →
+        # Tribunal → Warden) via /api/internal/chat, so the platform must be
+        # running and the caller must be authenticated.
+        if ! _operator_running; then
+            echo "[g8e] Operator listen mode is not running — start it: ./g8e platform start" >&2
+            exit 1
+        fi
+        if ! _g8ee_running; then
+            echo "[g8e] g8ee Engine is not running — start it: ./g8e apps start g8ee" >&2
+            exit 1
+        fi
+        if ! _load_credentials; then
+            _operator_bootstrap || true
+            _load_credentials || {
+                echo "[g8e] no cached credentials — run: ./g8e login" >&2
+                exit 1
+            }
+        fi
+        export OPERATOR_SESSION_ID USER_ID OPERATOR_ID
+        export G8E_CLI_CERT="${G8E_CLI_CERT:-$G8E_CLI_CERT_FILE}"
+        export G8E_CLI_KEY="${G8E_CLI_KEY:-$G8E_CLI_KEY_FILE}"
+        export G8EE_URL="${G8EE_URL:-https://localhost:8443}"
+        export G8E_INTERNAL_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-$OPERATOR_HTTP_URL}"
+        export G8E_TRUST_BUNDLE="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
         cd "$EVALS_PROJECT_DIR"
         export G8E_PKI_DIR="${G8E_PKI_DIR:-$G8E_PKI_DIR_HOST}"
         export G8E_PROTOCOL_DIR="$SCRIPT_DIR/protocol"

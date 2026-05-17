@@ -544,6 +544,12 @@ class ChatPipelineService:
         llm_lite_model: str,
         _task_manager: BackgroundTaskManager,
         user_settings: G8eeUserSettings,
+        llm_primary_api_key: str | None = None,
+        llm_primary_endpoint: str | None = None,
+        llm_assistant_api_key: str | None = None,
+        llm_assistant_endpoint: str | None = None,
+        llm_lite_api_key: str | None = None,
+        llm_lite_endpoint: str | None = None,
         _track_task: bool = True,
     ) -> None:
         """Non-streaming chat path — AI response delivered via SSE through client.
@@ -586,6 +592,12 @@ class ChatPipelineService:
                 llm_primary_model=llm_primary_model,
                 llm_assistant_model=llm_assistant_model,
                 llm_lite_model=llm_lite_model,
+                llm_primary_api_key=llm_primary_api_key,
+                llm_primary_endpoint=llm_primary_endpoint,
+                llm_assistant_api_key=llm_assistant_api_key,
+                llm_assistant_endpoint=llm_assistant_endpoint,
+                llm_lite_api_key=llm_lite_api_key,
+                llm_lite_endpoint=llm_lite_endpoint,
                 user_settings=user_settings,
                 task_manager=_task_manager,
             )
@@ -631,6 +643,12 @@ class ChatPipelineService:
         llm_assistant_model: str,
         llm_lite_model: str,
         user_settings: G8eeUserSettings,
+        llm_primary_api_key: str | None = None,
+        llm_primary_endpoint: str | None = None,
+        llm_assistant_api_key: str | None = None,
+        llm_assistant_endpoint: str | None = None,
+        llm_lite_api_key: str | None = None,
+        llm_lite_endpoint: str | None = None,
         task_manager: BackgroundTaskManager | None = None,
     ) -> None:
         """Run the chat implementation - main logic flow."""
@@ -654,6 +672,19 @@ class ChatPipelineService:
         if llm_lite_provider:
             logger.info("[SSE-CHAT] Applying lite_provider override: %s", llm_lite_provider)
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_provider": LLMProvider(llm_lite_provider)})})
+
+        if llm_primary_api_key:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_api_key": llm_primary_api_key})})
+        if llm_primary_endpoint:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_endpoint": llm_primary_endpoint})})
+        if llm_assistant_api_key:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_api_key": llm_assistant_api_key})})
+        if llm_assistant_endpoint:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_endpoint": llm_assistant_endpoint})})
+        if llm_lite_api_key:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_api_key": llm_lite_api_key})})
+        if llm_lite_endpoint:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_endpoint": llm_lite_endpoint})})
 
         logger.info("[SSE-CHAT] About to call _prepare_chat_context")
         model_overrides = ModelOverrideResolver(

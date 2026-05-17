@@ -362,6 +362,12 @@ async def internal_chat(
             llm_primary_model=request.llm_primary_model,
             llm_assistant_model=request.llm_assistant_model,
             llm_lite_model=request.llm_lite_model or user_settings.llm.resolved_lite_model,
+            llm_primary_api_key=request.llm_primary_api_key,
+            llm_primary_endpoint=request.llm_primary_endpoint,
+            llm_assistant_api_key=request.llm_assistant_api_key,
+            llm_assistant_endpoint=request.llm_assistant_endpoint,
+            llm_lite_api_key=request.llm_lite_api_key,
+            llm_lite_endpoint=request.llm_lite_endpoint,
             _task_manager=chat_task_manager,
             user_settings=user_settings,
         )
@@ -1726,6 +1732,21 @@ async def health_check():
             InternalApiPaths.G8EE_SETTINGS_USER,
         ]
     }
+
+
+@router.get(InternalApiPaths.G8EE_SETTINGS_USER, response_model=G8eeUserSettings)
+async def get_user_settings(
+    user_id: str,
+    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+):
+    """
+    Get user settings - internal cluster use only.
+    """
+    logger.info(
+        "[INTERNAL-HTTP] Retrieving user settings",
+        extra={"user_id": user_id}
+    )
+    return await settings_service.get_user_settings(user_id)
 
 
 @router.patch(InternalApiPaths.G8EE_SETTINGS_USER, response_model=UserSettingsUpdateResponse)

@@ -21,9 +21,11 @@ def render_summary(agg: Aggregate):
     if agg.receipt_coverage_pct == 0:
         console.print(Panel(
             "[bold yellow]HINT:[/bold yellow] Receipt coverage is 0.00%. To enable receipts:\n"
-            "1. Ensure the Operator is running: [cyan]./g8e platform start[/cyan]\n"
-            "2. Login to get a session: [cyan]./g8e login[/cyan]\n"
-            "3. Run without [cyan]--mode baseline[/cyan] and provide [cyan]--operator-session-id[/cyan]",
+            "1. Ensure the Operator is running: [cyan]./g8e platform start[/cyan] "
+            "(auto-bootstraps the default [bold]superadmin@g8e.local[/bold] user)\n"
+            "2. Re-run without [cyan]--mode baseline[/cyan]. [cyan]OPERATOR_SESSION_ID[/cyan]/[cyan]OPERATOR_ID[/cyan] "
+            "are picked up from [cyan]~/.g8e/credentials[/cyan] automatically; [cyan]./g8e login[/cyan] is only needed "
+            "to switch to a non-default user.",
             border_style="yellow"
         ))
     elif agg.receipt_verification_pct < 100.0:

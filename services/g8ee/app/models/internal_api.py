@@ -52,6 +52,12 @@ class ChatMessageRequest(G8eBaseModel):
     llm_primary_model: str | None = Field(default=None, description="Primary LLM model override for complex tasks - null uses server default")
     llm_assistant_model: str | None = Field(default=None, description="Assistant LLM model override for simple tasks - null uses server default")
     llm_lite_model: str | None = Field(default=None, description="Lite LLM model override for quick tasks - null uses server default")
+    llm_primary_api_key: str | None = Field(default=None, description="Primary LLM API key override")
+    llm_primary_endpoint: str | None = Field(default=None, description="Primary LLM endpoint override")
+    llm_assistant_api_key: str | None = Field(default=None, description="Assistant LLM API key override")
+    llm_assistant_endpoint: str | None = Field(default=None, description="Assistant LLM endpoint override")
+    llm_lite_api_key: str | None = Field(default=None, description="Lite LLM API key override")
+    llm_lite_endpoint: str | None = Field(default=None, description="Lite LLM endpoint override")
 
 
 class ChatStartedResponse(G8eBaseModel):

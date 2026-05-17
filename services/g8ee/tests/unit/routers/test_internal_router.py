@@ -541,3 +541,63 @@ async def test_unbind_operators_unauthorized(request_context):
     assert response.failed_count == 1
     assert len(response.errors) == 1
     assert "Unauthorized" in response.errors[0]["error"]
+
+
+@pytest.mark.asyncio
+async def test_get_user_settings():
+    from app.routers.internal_router import get_user_settings
+    mock_settings_service = MagicMock()
+    mock_settings = MagicMock()
+    mock_settings_service.get_user_settings = AsyncMock(return_value=mock_settings)
+
+    response = await get_user_settings(
+        user_id="user-123",
+        settings_service=mock_settings_service
+    )
+
+    assert response == mock_settings
+    mock_settings_service.get_user_settings.assert_called_once_with("user-123")
+
+
+@pytest.mark.asyncio
+async def test_internal_chat_with_llm_overrides(request_context, task_tracker):
+    request = ChatMessageRequest(
+        context=request_context,
+        message="test message",
+        sentinel_mode=True,
+        llm_primary_api_key="sk-test-key",
+        llm_primary_endpoint="https://test-endpoint.com"
+    )
+
+    # Mock dependencies
+    mock_platform_settings = MagicMock()
+    mock_user_settings = MagicMock()
+    mock_chat_pipeline = MagicMock()
+    mock_chat_task_manager = MagicMock()
+    mock_case_service = MagicMock()
+    mock_investigation_service = MagicMock()
+    mock_attachment_service = MagicMock()
+    mock_event_service = MagicMock()
+
+    # Setup mocks for background title generation which is triggered by internal_chat
+    mock_case = build_case_model(case_id="case-123", user_id="user-123")
+    mock_case_service.get_case = AsyncMock(return_value=mock_case)
+
+    with task_tracker.patch_create_task("app.routers.internal_router"):
+        await internal_chat(
+            request=request,
+            platform_settings=mock_platform_settings,
+            user_settings=mock_user_settings,
+            chat_pipeline=mock_chat_pipeline,
+            chat_task_manager=mock_chat_task_manager,
+            case_service=mock_case_service,
+            investigation_service=mock_investigation_service,
+            attachment_service=mock_attachment_service,
+            event_service=mock_event_service,
+        )
+
+    # Verify chat_pipeline.run_chat was called with overrides
+    mock_chat_pipeline.run_chat.assert_called_once()
+    call_kwargs = mock_chat_pipeline.run_chat.call_args.kwargs
+    assert call_kwargs["llm_primary_api_key"] == "sk-test-key"
+    assert call_kwargs["llm_primary_endpoint"] == "https://test-endpoint.com"
