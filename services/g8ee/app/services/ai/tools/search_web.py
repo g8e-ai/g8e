@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.G8E_SEARCH_WEB,
-        description=load_prompt(PromptFile.TOOL_SEARCH_WEB),
+        description=load_prompt(PromptFile.TOOLS_G8E_WEB_SEARCH),
         parameters=schema_from_model(SearchWebArgs),
     )
     return declaration

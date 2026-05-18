@@ -260,11 +260,11 @@ func (avs *AuditVaultService) GetSessionLedgerPath(operatorSessionID string) (st
 	}
 
 	if err := os.MkdirAll(sessionPath, 0755); err != nil {
-		return "", fmt.Errorf("failed to create session ledger directory: %w", err)
+		return "", fmt.Errorf("failed to create operator session ledger directory: %w", err)
 	}
 
 	if err := avs.initGitRepo(sessionPath); err != nil {
-		return "", fmt.Errorf("failed to initialize session git repo: %w", err)
+		return "", fmt.Errorf("failed to initialize operator session git repo: %w", err)
 	}
 
 	avs.logger.Info("Initialized new session ledger", "operator_session_id", operatorSessionID, "path", sessionPath)
@@ -435,7 +435,7 @@ func (avs *AuditVaultService) CreateSession(id, title, userIdentity string) erro
 	query := `INSERT INTO sessions (id, title, user_identity) VALUES (?, ?, ?)`
 	_, err := avs.db.Exec(query, id, title, userIdentity)
 	if err != nil {
-		return fmt.Errorf("failed to create session: %w", err)
+		return fmt.Errorf("failed to create operator session: %w", err)
 	}
 
 	avs.logger.Info("OperatorSession created", "operator_session_id", id, "title", title)

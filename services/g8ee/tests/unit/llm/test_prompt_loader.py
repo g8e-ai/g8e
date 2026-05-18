@@ -94,7 +94,7 @@ class TestLoadPrompt:
         assert identity != safety
 
     def test_loads_tool_description(self):
-        content = load_prompt(PromptFile.TOOL_RUN_COMMANDS)
+        content = load_prompt(PromptFile.TOOLS_RUN_COMMANDS)
 
         assert isinstance(content, str)
         assert len(content) > 0

@@ -50,19 +50,23 @@ def _resolve_ssl_context(
     for path in ca_cert_paths:
         if path:
             try:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info("[SSL] Probing CA cert path: %s", path)
                 with open(path):
                     pass
                 ctx = ssl.create_default_context(cafile=path)
                 if certfile and keyfile:
+                    logger.info("[SSL] Loading cert chain: cert=%s, key=%s", certfile, keyfile)
                     try:
                         with open(certfile), open(keyfile):
                             ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
                     except (OSError, ssl.SSLError) as e:
-                        # Log but continue with just CA if client cert loading fails
-                        import logging
-                        logging.getLogger(__name__).warning("Failed to load client cert chain: %s", e)
+                        logger.warning("Failed to load client cert chain: %s", e)
                 return ctx
-            except OSError:
+            except OSError as e:
+                import logging
+                logging.getLogger(__name__).warning("[SSL] Failed to open CA cert path %s: %s", path, e)
                 continue
     return True if use_tls else False
 

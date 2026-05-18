@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.QUERY_INVESTIGATION_CONTEXT,
-        description=load_prompt(PromptFile.TOOL_QUERY_INVESTIGATION_CONTEXT),
+        description=load_prompt(PromptFile.TOOLS_QUERY_INVESTIGATION_CONTEXT),
         parameters=schema_from_model(QueryInvestigationContextArgs),
     )
     return declaration

@@ -788,6 +788,13 @@
       "_go_name": "G8eNotBound",
       "_python_name": "G8E_NOT_BOUND"
     },
+    "g8e.cloud.bound": {
+      "value": "g8e.cloud.bound",
+      "_go_const": "WorkflowTypeG8eCloudBound",
+      "_python_const": "WORKFLOW_TYPE_G8E_CLOUD_BOUND",
+      "_go_name": "G8eCloudBound",
+      "_python_name": "G8E_CLOUD_BOUND"
+    },
     "_meta": {
       "_go_name": "WorkflowType",
       "_go_type": "WorkflowType",
@@ -2852,6 +2859,20 @@
       "_python_const": "SESSION_END_REASON_USER_DELETED",
       "_go_name": "UserDeleted",
       "_python_name": "USER_DELETED"
+    },
+    "timeout.absolute": {
+      "value": "timeout_absolute",
+      "_go_const": "SessionEndReasonTimeoutAbsolute",
+      "_python_const": "SESSION_END_REASON_TIMEOUT_ABSOLUTE",
+      "_go_name": "TimeoutAbsolute",
+      "_python_name": "TIMEOUT_ABSOLUTE"
+    },
+    "timeout.idle": {
+      "value": "timeout_idle",
+      "_go_const": "SessionEndReasonTimeoutIdle",
+      "_python_const": "SESSION_END_REASON_TIMEOUT_IDLE",
+      "_go_name": "TimeoutIdle",
+      "_python_name": "TIMEOUT_IDLE"
     },
     "_meta": {
       "_go_name": "SessionEndReason",

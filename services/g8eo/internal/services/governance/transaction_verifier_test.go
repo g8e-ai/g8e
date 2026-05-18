@@ -105,7 +105,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
 		OperatorId:        "operator-1",
-		OperatorSessionId: "session-1",
+		OperatorSessionId: "operator-session-1",
 		ActionType:        string(actionType),
 		TargetResource:    "localhost",
 		Payload:           payload,

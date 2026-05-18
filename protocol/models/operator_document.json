@@ -43,7 +43,7 @@
       "operator_session_id": {
         "type": "string",
         "required": false,
-        "description": "Current active session identifier. Set when g8eo authenticates. Cleared on termination."
+        "description": "Current active operator session identifier. Set when g8eo authenticates. Cleared on termination."
       },
       "web_session_id": {
         "type": "string",
@@ -190,7 +190,7 @@
     },
 
     "investigation_context": {
-      "_description": "Active investigation/case context. Set when the operator is bound to an investigation session.",
+      "_description": "Active investigation/case context. Set when the operator is bound to an investigation web session.",
       "case_id": {
         "type": "string",
         "required": false
@@ -310,13 +310,13 @@
       "session_token": {
         "type": "string",
         "required": false,
-        "description": "Active session token for session-based auth validation. Set by client at bootstrap time."
+        "description": "Active session token for web session-based auth validation. Set by client at bootstrap time."
       },
       "session_expires_at": {
         "type": "string",
         "format": "iso8601",
         "required": false,
-        "description": "WebSession expiration timestamp. Null means no session expiry is enforced."
+        "description": "WebSession expiration timestamp. Null means no web session expiry is enforced."
       }
     }
   }

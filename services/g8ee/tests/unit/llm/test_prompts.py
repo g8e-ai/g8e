@@ -64,7 +64,7 @@ def operator_context():
 @pytest.fixture
 def enriched_investigation():
     msg = ConversationHistoryMessage(
-        sender=EventType.EVENT_SOURCE_USER_CHAT,
+        sender=EventType.SOURCE_USER_CHAT,
         content="Help me with my server",
         metadata=ConversationMessageMetadata(),
         prev_hash="0" * 64,

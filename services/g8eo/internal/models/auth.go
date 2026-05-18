@@ -120,18 +120,18 @@ type OperatorRegistrationRequest struct {
 // Conflating the two would let an operator session drain another client's
 // event stream — the substrate refuses to do so.
 type OperatorRegistrationResponse struct {
-	Success           bool            `json:"success"`
-	OperatorSessionID string          `json:"operator_session_id,omitempty"`
-	CLISessionID      string          `json:"cli_session_id,omitempty"`
-	OperatorID        string          `json:"operator_id,omitempty"`
-	OperatorCert      string          `json:"operator_cert,omitempty"`
-	OperatorCertChain string          `json:"operator_cert_chain,omitempty"`
-	CLICert           string          `json:"cli_cert,omitempty"`
-	CLICertChain      string          `json:"cli_cert_chain,omitempty"`
-	HubTrustBundle    string          `json:"hub_trust_bundle,omitempty"`
-	Session           *SessionSummary `json:"session,omitempty"`
-	Config            json.RawMessage `json:"config,omitempty"`
-	Error             string          `json:"error,omitempty"`
+	Success                bool            `json:"success"`
+	OperatorSessionID      string          `json:"operator_session_id,omitempty"`
+	CLISessionID           string          `json:"cli_session_id,omitempty"`
+	OperatorID             string          `json:"operator_id,omitempty"`
+	OperatorCert           string          `json:"operator_cert,omitempty"`
+	OperatorCertChain      string          `json:"operator_cert_chain,omitempty"`
+	CLICert                string          `json:"cli_cert,omitempty"`
+	CLICertChain           string          `json:"cli_cert_chain,omitempty"`
+	HubTrustBundle         string          `json:"hub_trust_bundle,omitempty"`
+	OperatorSessionSummary *SessionSummary `json:"operator_session_summary,omitempty"`
+	Config                 json.RawMessage `json:"config,omitempty"`
+	Error                  string          `json:"error,omitempty"`
 }
 
 // SessionSummary provides a brief overview of the created operator session.

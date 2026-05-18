@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.GET_COMMAND_CONSTRAINTS,
-        description=load_prompt(PromptFile.TOOL_GET_COMMAND_CONSTRAINTS),
+        description=load_prompt(PromptFile.TOOLS_GET_COMMAND_CONSTRAINTS),
         parameters=types.Schema(type=types.Type.OBJECT, properties={}, required=None),
     )
     return declaration

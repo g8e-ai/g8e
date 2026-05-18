@@ -76,7 +76,7 @@ func TestWardenExecuteHappyPath(t *testing.T) {
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
+		OperatorSessionId: "test-operator-session",
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -145,7 +145,7 @@ func TestWardenExecuteHandlerError(t *testing.T) {
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
+		OperatorSessionId: "test-operator-session",
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -204,7 +204,7 @@ func TestWardenExecuteAuditWriteFailInitial(t *testing.T) {
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
+		OperatorSessionId: "test-operator-session",
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -237,7 +237,7 @@ func TestWardenExecuteReceiptPersistFail(t *testing.T) {
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
+		OperatorSessionId: "test-operator-session",
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -262,7 +262,7 @@ func TestWardenExecuteMissingSigningKey(t *testing.T) {
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
+		OperatorSessionId: "test-operator-session",
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
@@ -287,7 +287,7 @@ func TestWardenExecuteMissingExecutionHandler(t *testing.T) {
 		Id:                uuid.New().String(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
-		OperatorSessionId: "test-session",
+		OperatorSessionId: "test-operator-session",
 		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}

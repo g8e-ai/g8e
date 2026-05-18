@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
+# Use canonical root detection heuristic
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export G8E_PROJECT_ROOT="$SCRIPT_DIR"
+source "$SCRIPT_DIR/scripts/core/path_utils.sh"
+G8E_PROJECT_ROOT="$(resolve_g8e_root)"
+export G8E_PROJECT_ROOT
 
 # Check for common dependencies
 _check_deps() {

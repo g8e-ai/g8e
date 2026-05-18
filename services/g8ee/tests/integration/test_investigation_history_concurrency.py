@@ -88,7 +88,7 @@ async def test_concurrent_chat_appends_preserve_chain_under_load(service, mock_c
             investigation_id=investigation_id,
             sender="user.chat",
             content=f"Concurrent message {i}",
-            metadata=ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
+            metadata=ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER)
         ))
 
     await asyncio.gather(*tasks)

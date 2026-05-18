@@ -2,9 +2,9 @@
   "_comment": "Canonical prompt file paths and AI mode constants for g8ee. All values are relative to the prompts_data/ directory. Consumers: g8ee (Python).",
 
   "agent.mode": {
-    "operator.bound": "operator_bound",
-    "operator.not.bound": "operator_not_bound",
-    "cloud.operator.bound": "cloud_operator_bound"
+    "operator.bound": "g8e.bound",
+    "operator.not.bound": "g8e.not.bound",
+    "cloud.operator.bound": "g8e.cloud.bound"
   },
 
   "prompt.section": {

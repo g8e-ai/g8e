@@ -141,7 +141,7 @@ async def deliver_via_sse(
 
     # Emit iteration started event to signal AI processing has begun
     await _publish(
-        EventType.LLM_CHAT_ITERATION_STARTED,
+        EventType.AI_LLM_CHAT_ITERATION_STARTED,
         ChatProcessingStartedPayload(agent_mode=agent_mode),
     )
 
@@ -158,7 +158,7 @@ async def deliver_via_sse(
             if chunk.type == StreamChunkFromModelType.TEXT:
                 state.response_text += chunk.data.content or ""
                 await _publish(
-                    EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+                    EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
                     ChatResponseChunkPayload(content=chunk.data.content),
                 )
 
@@ -168,7 +168,7 @@ async def deliver_via_sse(
                 _thinking_started = True
 
                 await _publish(
-                    EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+                    EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
                     ChatThinkingPayload(
                         thinking=chunk.data.thinking,
                         action_type=action_type,
@@ -179,7 +179,7 @@ async def deliver_via_sse(
                 _thinking_started = False
                 # Emit thinking event with END action to indicate thinking phase is complete
                 await _publish(
-                    EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+                    EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
                     ChatThinkingPayload(
                         thinking=None,
                         action_type=ThinkingActionType.END,
@@ -194,7 +194,7 @@ async def deliver_via_sse(
                     attempt, max_attempts,
                 )
                 await _publish(
-                    EventType.LLM_CHAT_ITERATION_RETRY,
+                    EventType.AI_LLM_CHAT_ITERATION_RETRY,
                     ChatRetryPayload(
                         attempt=attempt,
                         max_attempts=max_attempts,
@@ -219,14 +219,14 @@ async def deliver_via_sse(
                     host = None
 
                     if fn == OperatorToolName.QUERY_INVESTIGATION_CONTEXT:
-                        event_type = EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED
+                        event_type = EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED
                         # Extract query if available
                         if chunk.data.result and hasattr(chunk.data.result, "query"):
                             query = chunk.data.result.query
                     elif fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
-                        event_type = EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED
+                        event_type = EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED
                     elif fn == OperatorToolName.G8E_SEARCH_WEB:
-                        event_type = EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED
+                        event_type = EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED
                         if chunk.data.result and hasattr(chunk.data.result, "query"):
                             query = chunk.data.result.query
 
@@ -264,15 +264,15 @@ async def deliver_via_sse(
                     # Plan says REQUESTED -> RECEIVED -> COMPLETED -> FAILED.
                     # agent_sse.py sees TOOL_RESULT which maps to COMPLETED/FAILED.
                     if fn == OperatorToolName.QUERY_INVESTIGATION_CONTEXT:
-                        event_type = EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED
+                        event_type = EventType.AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED
                         if chunk.data.result:
                             content = str(getattr(chunk.data.result, "data", ""))
                     elif fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
-                        event_type = EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED
+                        event_type = EventType.AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED
                         if chunk.data.result:
                             content = getattr(chunk.data.result, "message", None)
                     elif fn == OperatorToolName.G8E_SEARCH_WEB:
-                        event_type = EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED
+                        event_type = EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED
                         if chunk.data.result:
                             res = getattr(chunk.data.result, "results", [])
                             results = [r.model_dump(mode="json") if hasattr(r, "model_dump") else r for r in res]
@@ -299,7 +299,7 @@ async def deliver_via_sse(
                 _turn += 1
 
                 await _publish(
-                    EventType.LLM_CHAT_ITERATION_COMPLETED,
+                    EventType.AI_LLM_CHAT_ITERATION_COMPLETED,
                     ChatTurnCompletePayload(turn=_turn),
                 )
 
@@ -319,7 +319,7 @@ async def deliver_via_sse(
                 grounding_metadata = chunk.data.grounding_metadata
                 if grounding_metadata and grounding_metadata.grounding_used:
                     await _publish(
-                        EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
+                        EventType.AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
                         ChatCitationsReadyPayload(
                             grounding_metadata=grounding_metadata.model_dump(mode="json"),
                         ),
@@ -355,7 +355,7 @@ async def deliver_via_sse(
 
                 # Publish the error event and continue - don't raise exception
                 await _publish(
-                    EventType.LLM_CHAT_ITERATION_FAILED,
+                    EventType.AI_LLM_CHAT_ITERATION_FAILED,
                     ChatErrorPayload(error=error_message),
                 )
                 error_occurred = True
@@ -371,7 +371,7 @@ async def deliver_via_sse(
             logger.info("[SSE] Skipping completion event due to prior error")
         else:
             await _publish(
-                EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
+                EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED,
                 ChatResponseCompletePayload(
                     content=state.response_text,
                     finish_reason=state.finish_reason or DEFAULT_FINISH_REASON,
@@ -394,7 +394,7 @@ async def deliver_via_sse(
         logger.info("[SSE] Cancelled for investigation %s", investigation_id)
         # Emit STOPPED event instead of FAILED when processing is cancelled
         await _publish(
-            EventType.LLM_CHAT_ITERATION_STOPPED,
+            EventType.AI_LLM_CHAT_ITERATION_STOPPED,
             AiProcessingStoppedPayload(
                 reason="AI processing stopped",
                 timestamp=now(),
@@ -405,6 +405,6 @@ async def deliver_via_sse(
     except Exception as e:
         logger.error("[SSE] Error: %s", e, exc_info=True)
         await _publish(
-            EventType.LLM_CHAT_ITERATION_FAILED,
+            EventType.AI_LLM_CHAT_ITERATION_FAILED,
             ChatErrorPayload(error=str(e)),
         )

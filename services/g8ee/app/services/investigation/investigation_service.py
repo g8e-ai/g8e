@@ -342,7 +342,7 @@ class InvestigationService:
             return investigation
 
         investigation.add_history_entry(
-            event_type=EventType.INVESTIGATION_UPDATED,
+            event_type=EventType.APP_INVESTIGATION_UPDATED,
             actor=actor,
             summary="Investigation updated",
             details=ConversationMessageMetadata(),
@@ -387,9 +387,9 @@ class InvestigationService:
             return False
 
         # Map MessageSender to appropriate EventSource for metadata
-        source = EventType.EVENT_SOURCE_AI_PRIMARY
+        source = EventType.SOURCE_AI_PRIMARY
         if sender == MessageSender.AI_ASSISTANT:
-            source = EventType.EVENT_SOURCE_AI_ASSISTANT
+            source = EventType.SOURCE_AI_ASSISTANT
 
         return await self.investigation_data_service.add_chat_message(
             investigation_id=investigation_id,

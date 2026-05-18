@@ -415,7 +415,7 @@ async def orchestrate_tool_execution(
                 for outcome in res.resolutions:
                     payload = StakeResolutionPayload.model_validate(outcome.model_dump())
                     await event_service.publish_reputation_event(
-                        EventType.REPUTATION_STATE_UPDATED,
+                        EventType.AI_REPUTATION_STATE_UPDATED,
                         payload,
                         g8e_context
                     )

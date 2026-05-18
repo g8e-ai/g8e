@@ -46,8 +46,8 @@ This document explains the unified storage architecture for the g8e platform. It
 - **Component**: `g8eo` (the "Operator")
 - **Scrubbed Vault** (`.g8e/local_state.db`): Sentinel-processed command output (`execution_log`) and file diffs (`file_diff_log`) for AI context.
 - **Raw Vault** (`.g8e/raw_vault.db`): Unscrubbed command output (`raw_execution_log`) and file diffs (`raw_file_diff_log`) for forensic investigations. Accessible only to humans.
-- **Audit Vault** (`.g8e/data/g8e.db`): Encrypted append-only event log (`events`), session history (`sessions`), and file mutation metadata (`file_mutation_log`).
-- **Ledger** (`.g8e/data/ledger/`): Multi-Ledger Architecture. A global bootstrap root plus per-session isolated git repositories at `sessions/<operator_session_id>/`. Each session ledger is initialized lazily on first file mutation for that session. Files are mirrored into the session ledger with a two-phase commit (pre/post snapshots).
+- **Audit Vault** (`.g8e/data/g8e.db`): Encrypted append-only event log (`events`), operator session history (`sessions`), and file mutation metadata (`file_mutation_log`).
+- **Ledger** (`.g8e/data/ledger/`): Multi-Ledger Architecture. A global bootstrap root plus per-operator-session isolated git repositories at `sessions/<operator_session_id>/`. Each operator session ledger is initialized lazily on first file mutation for that operator session. Files are mirrored into the operator session ledger with a two-phase commit (pre/post snapshots).
 
 ---
 
@@ -65,7 +65,7 @@ This document explains the unified storage architecture for the g8e platform. It
 │  │  (JSON documents)    │      │  (JSON documents)                │ │
 │  │                      │      │                                  │ │
 │  │  KVCacheClient       │      │  KVCacheClient                   │ │
-│  │  (Cache + Pub/Sub)    │      │  (Cache + Session)               │ │
+│  │  (Cache + Pub/Sub)    │      │  (Cache + Web Session)           │ │
 │  │                      │      │                                  │ │
 │  │  BlobClient          │      │  OperatorBlobClient              │ │
 │  │  (Attachments)        │      │  (Binary data)                   │ │

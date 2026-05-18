@@ -87,7 +87,7 @@ async def fail_auditor(
 ) -> NoReturn:
     """Emit an auditor failure event and raise TribunalAuditorFailedError."""
     await emitter.emit(
-        EventType.TRIBUNAL_SESSION_AUDITOR_FAILED,
+        EventType.AI_TRIBUNAL_SESSION_AUDITOR_FAILED,
         TribunalAuditorFailedPayload(
             request=request,
             reason=reason,
@@ -292,7 +292,7 @@ async def run_auditor(
     correlation_id = getattr(emitter, "correlation_id", None)
 
     await emitter.emit(
-        EventType.TRIBUNAL_VOTING_AUDIT_STARTED,
+        EventType.AI_TRIBUNAL_VOTING_AUDIT_STARTED,
         TribunalAuditorStartedPayload(candidate_command=target_cmd),
         correlation_id=correlation_id,
     )
@@ -323,7 +323,7 @@ async def run_auditor(
                 total_duration_ms = (time.time() - auditor_start_time) * 1000
                 logger.info("[TRIBUNAL-AUDITOR] Completed with status=ok total_duration_ms=%.2f", total_duration_ms)
                 await emitter.emit(
-                    EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
+                    EventType.AI_TRIBUNAL_VOTING_AUDIT_COMPLETED,
                     TribunalAuditorCompletedPayload(passed=True, reason=AuditorReason.OK),
                     correlation_id=correlation_id,
                 )
@@ -342,7 +342,7 @@ async def run_auditor(
                 total_duration_ms = (time.time() - auditor_start_time) * 1000
                 logger.info("[TRIBUNAL-AUDITOR] Completed with status=swap total_duration_ms=%.2f", total_duration_ms)
                 await emitter.emit(
-                    EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
+                    EventType.AI_TRIBUNAL_VOTING_AUDIT_COMPLETED,
                     TribunalAuditorCompletedPayload(
                         passed=True,
                         reason=AuditorReason.SWAPPED_TO_DISSENTER,
@@ -377,7 +377,7 @@ async def run_auditor(
                 total_duration_ms = (time.time() - auditor_start_time) * 1000
                 logger.info("[TRIBUNAL-AUDITOR] Completed with status=revised total_duration_ms=%.2f", total_duration_ms)
                 await emitter.emit(
-                    EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
+                    EventType.AI_TRIBUNAL_VOTING_AUDIT_COMPLETED,
                     TribunalAuditorCompletedPayload(passed=False, revision=revised_final, reason=reason),
                     correlation_id=correlation_id,
                 )

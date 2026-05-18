@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 def build() -> types.ToolDeclaration:
     return types.ToolDeclaration(
         name=OperatorToolName.STREAM_OPERATOR,
-        description=load_prompt(PromptFile.TOOL_STREAM_OPERATOR),
+        description=load_prompt(PromptFile.TOOLS_STREAM_OPERATOR),
         parameters=schema_from_model(StreamOperatorArgs),
     )
 

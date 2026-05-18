@@ -165,7 +165,7 @@ async def test_run_chat_exception_handler_publishes_iteration_failed():
 
     # Verify ITERATION_FAILED was published
     events = svc.event_service.published
-    failed_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_FAILED]
+    failed_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.AI_LLM_CHAT_ITERATION_FAILED]
 
     assert len(failed_events) == 1
     from app.models.events import ChatErrorPayload

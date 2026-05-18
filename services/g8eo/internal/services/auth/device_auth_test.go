@@ -84,7 +84,7 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 		// Regression: before the fix, client's DeviceRegistrationResponse model
 		// did not include `success`, so every operator reported
 		// "registration failed with status 200" despite the server having
-		// created a valid session. The operator must require `success: true`
+		// created a valid operator session. The operator must require `success: true`
 		// in the envelope, matching every other client response.
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")

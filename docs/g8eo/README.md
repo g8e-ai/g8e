@@ -19,7 +19,7 @@ A single `g8eo` binary runs in one of two primary roles:
 
 - **Protocol Enforcement**: Verifies L1/L2/L3 governance before any execution.
 - **Warden Execution**: A defensive on-host execution boundary that captures results into the LFAA ledger.
-- **Local-First Audit**: Every mutation is anchored to a session-scoped, git-backed ledger on the host.
+- **Local-First Audit**: Every mutation is anchored to an operator session-scoped, git-backed ledger on the host.
 - **Outbound-only Connectivity**: Satellites require no inbound ports; all traffic is over secure mTLS WebSockets.
 
 For the protocol contract this implementation enforces, see [**g8e Protocol**](../protocol/README.md).

@@ -12,9 +12,12 @@
 # limitations under the License.
 
 import logging
+from typing import TYPE_CHECKING
 from fastapi import Request
 
 from app.constants import (
+    HTTP_AUTHORIZATION_HEADER,
+    HTTP_BEARER_PREFIX,
     PROXY_ORGANIZATION_ID_HEADER,
     PROXY_USER_EMAIL_HEADER,
     PROXY_USER_ID_HEADER,
@@ -25,6 +28,9 @@ from app.constants import (
 from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser
 from app.models.settings import G8eePlatformSettings
+
+if TYPE_CHECKING:
+    from app.services.operator.operator_session_service import OperatorSessionService
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +61,16 @@ def is_infrastructure_health_check_ip(ip: str) -> bool:
     return False
 
 
-async def authenticate_proxy_or_internal(request: Request, settings: G8eePlatformSettings) -> AuthenticatedUser:
-    """Authenticate the user via proxy headers."""
+async def authenticate_proxy_or_internal(
+    request: Request,
+    settings: G8eePlatformSettings,
+    operator_session_service: "OperatorSessionService | None" = None,
+) -> AuthenticatedUser:
+    """Authenticate via proxy headers (browser) or Bearer operator session (CLI/mTLS)."""
     proxy_user_id = request.headers.get(PROXY_USER_ID_HEADER)
     proxy_user_email = request.headers.get(PROXY_USER_EMAIL_HEADER)
     proxy_org_id = request.headers.get(PROXY_ORGANIZATION_ID_HEADER)
-    
+
     if proxy_user_id and proxy_user_email:
         logger.info(
             "[g8ee] Authenticated via proxy headers",
@@ -77,5 +87,23 @@ async def authenticate_proxy_or_internal(request: Request, settings: G8eePlatfor
             organization_id=proxy_org_id,
             auth_method=AuthMethod.PROXY,
         )
+
+    auth_header = request.headers.get(HTTP_AUTHORIZATION_HEADER, "")
+    if auth_header.startswith(HTTP_BEARER_PREFIX) and operator_session_service is not None:
+        bearer_token = auth_header[len(HTTP_BEARER_PREFIX):]
+        session = await operator_session_service.validate_operator_session(bearer_token)
+        if session and session.user_id:
+            cli_session_id = request.headers.get(G8eHeaders.CLI_SESSION_ID)
+            logger.info(
+                "[g8ee] Authenticated via operator session Bearer token",
+                extra={"user_id": session.user_id, "operator_session_id": bearer_token[:8]},
+            )
+            return AuthenticatedUser(
+                uid=session.user_id,
+                user_id=session.user_id,
+                operator_session_id=bearer_token,
+                cli_session_id=cli_session_id,
+                auth_method=AuthMethod.OPERATOR_SESSION,
+            )
 
     raise AuthenticationError("Authentication required", component=ComponentName.G8EE)

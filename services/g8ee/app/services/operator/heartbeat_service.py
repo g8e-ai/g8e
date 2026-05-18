@@ -15,7 +15,7 @@ import json
 import logging
 
 from app.clients.pubsub_client import PubSubClient
-from app.errors import ConfigurationError
+from app.errors import ConfigurationError, ValidationError
 from app.constants.events import EventType
 from app.constants.channels import OperatorChannel
 from app.models.events import BackgroundEvent, SessionEvent

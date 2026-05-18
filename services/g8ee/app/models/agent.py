@@ -28,6 +28,7 @@ from app.constants import (
     OperatorType,
     AgentMode,
     ReasoningAgent,
+    WorkflowType,
 )
 from app.models.base import G8eBaseModel
 from app.models.grounding import GroundingMetadata
@@ -165,7 +166,7 @@ class AgentInputs(G8eBaseModel):
     g8e_context: G8eHttpContext
     web_session_id: str | None = None
     task_id: str | None = None
-    agent_mode: AgentMode
+    agent_mode: AgentMode | WorkflowType
     active_agent: ReasoningAgent | None = None
     request_settings: G8eeUserSettings
 

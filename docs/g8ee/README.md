@@ -165,7 +165,7 @@ g8ee maintains 5 core data clients, each with exactly one handler service:
 | Client | Handler Service | Responsibility |
 |--------|-----------------|----------------|
 | `DBClient` | `DBService` | Authoritative document persistence (SQLite `documents` via operator) |
-| `KVCacheClient` | `KVService` | High-frequency state and session data (SQLite `kv_store` via operator) |
+| `KVCacheClient` | `KVService` | High-frequency state and web session data (SQLite `kv_store` via operator) |
 | `PubSubClient` | `PubSubService` | Event-driven messaging and UAP command dispatch |
 | `BlobClient` | `BlobService` | Binary data storage and retrieval (SQLite `blobs` via operator) |
 | `InternalHttpClient` | `HTTPService` | External API communication (via `ServiceFactory`) |
@@ -791,7 +791,7 @@ LFAA extends sovereign mode to make the **Operator the system of record** for al
 
 Key LFAA components on the Operator:
 - **Audit Vault** — Local SQLite database (`{workdir}/.g8e/data/g8e.db`) storing all events: user messages, command executions, file mutations, and AI responses. Sensitive fields encrypted at rest.
-- **Ledger** — Multi-Ledger Architecture: per-session isolated git repositories at `{workdir}/.g8e/data/ledger/sessions/<operator_session_id>/` providing cryptographic version history for every file the AI has modified. Each session owns an isolated git repo initialized lazily on first mutation.
+- **Ledger** — Multi-Ledger Architecture: per-operator-session isolated git repositories at `{workdir}/.g8e/data/ledger/sessions/<operator_session_id>/` providing cryptographic version history for every file the AI has modified. Each operator session owns an isolated git repo initialized lazily on first mutation.
 
 For complete schema DDL, exact table/column definitions, vault encryption details (AES-256-GCM envelope encryption, KEK derivation, DEK wrapping), and data flow specifics, see [g8eo Storage](../g8eo/storage.md#g8eo--operator-storage).
 

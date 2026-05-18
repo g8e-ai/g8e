@@ -171,7 +171,7 @@ class OperatorCommandValidator:
 
         if self.session_service:
             try:
-                await self.session_service.validate_session(
+                await self.session_service.validate_operator_session(
                     session_token=session_token,
                     operator_id=operator_id,
                     system_info=system_info

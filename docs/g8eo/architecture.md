@@ -150,7 +150,7 @@ The g8e Protocol enforces strict separation between disjoint session types to pr
 
 When local storage is enabled (`-s`), the Operator maintains a **Local-First Audit Architecture** in the `.g8e` directory:
 
-- **Audit Vault (`g8e.db`)**: An append-only, tamper-evident ledger. Every UAP transaction result is recorded with its associated proof. The vault is **fail-closed** for writes; it rejects events with missing or unknown session IDs.
+- **Audit Vault (`g8e.db`)**: An append-only, tamper-evident ledger. Every UAP transaction result is recorded with its associated proof. The vault is **fail-closed** for writes; it rejects events with missing or unknown operator_session_id.
 - **Encryption**: Sensitive data is encrypted at rest using the DEK retrieved from the Encryption Vault.
 - **File Ledger**: A git-backed versioning system tracks exact file mutations, allowing for cryptographic verification and point-in-time restoration.
 

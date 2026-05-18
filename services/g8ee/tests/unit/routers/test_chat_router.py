@@ -174,7 +174,7 @@ class TestGetLatestChatSessionForCase:
             user_id=user_id,
         )
         investigation.conversation_history = [
-            create_conversation_message(sender=EventType.EVENT_SOURCE_USER_CHAT, content="Hello")
+            create_conversation_message(sender=EventType.SOURCE_USER_CHAT, content="Hello")
         ]
         mock_investigation_service.investigation_data_service.get_case_investigations = AsyncMock(return_value=[investigation])
 
@@ -183,13 +183,11 @@ class TestGetLatestChatSessionForCase:
             request=mock_request,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,
-            user_info=build_authenticated_user(
-                uid=user_id,
+            g8e_context=G8eHttpContext(
                 user_id=user_id,
-                email="user@example.com",
-                organization_id="org-789",
                 web_session_id="session-123",
-                auth_method=AuthMethod.TEST
+                source_component=ComponentName.CLIENT,
+                organization_id="org-789",
             ),
         )
 
@@ -241,9 +239,9 @@ class TestGetLatestChatSessionForCase:
         mock_case_service.get_case = AsyncMock(return_value=case)
 
         inv_old = create_investigation_data(investigation_id="inv-old", case_id="case-789", user_id=user_id)
-        inv_old.conversation_history = [create_conversation_message(sender=EventType.EVENT_SOURCE_USER_CHAT, content="Old")]
+        inv_old.conversation_history = [create_conversation_message(sender=EventType.SOURCE_USER_CHAT, content="Old")]
         inv_new = create_investigation_data(investigation_id="inv-new", case_id="case-789", user_id=user_id)
-        inv_new.conversation_history = [create_conversation_message(sender=EventType.EVENT_SOURCE_USER_CHAT, content="New")]
+        inv_new.conversation_history = [create_conversation_message(sender=EventType.SOURCE_USER_CHAT, content="New")]
         mock_investigation_service.investigation_data_service.get_case_investigations = AsyncMock(
             return_value=[inv_old, inv_new]
         )

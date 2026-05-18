@@ -68,7 +68,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
 		OperatorId:        "operator-1",
-		OperatorSessionId: "session-1",
+		OperatorSessionId: "operator-session-1",
 		ActionType:        string(constants.ActionTypeEvalAnswer),
 		TargetResource:    "localhost",
 		Payload:           payloadBytes,

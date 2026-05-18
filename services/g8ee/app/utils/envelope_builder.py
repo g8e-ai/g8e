@@ -286,8 +286,8 @@ def decode_and_validate_uap_heartbeat(
     Raises:
         ValidationError: If decoding or validation fails
     """
-    if not isinstance(data, (str, bytes)):
-        raise ValidationError("Heartbeat must be a UAP envelope (string or bytes)", component="g8ee")
+    if not isinstance(data, (str, bytes, dict)):
+        raise ValidationError("Heartbeat must be a UAP envelope (string, bytes, or dict)", component="g8ee")
 
     try:
         envelope_dict = decode_g8eo_result_envelope(data)

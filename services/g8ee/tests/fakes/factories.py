@@ -57,6 +57,8 @@ from app.models.operators import (
     HeartbeatUserDetails,
     OperatorDocument,
 )
+from app.models.pubsub_messages import G8eoResultEnvelope, G8eoResultPayload
+from app.constants import EventType
 from app.utils.timestamp import now
 
 # ---------------------------------------------------------------------------
@@ -503,4 +505,23 @@ def create_investigation_memory(
         response_style=response_style,
         problem_solving_approach=problem_solving_approach,
         interaction_style=interaction_style,
+    )
+
+
+
+
+def build_g8eo_result_envelope(
+    event_type: EventType,
+    payload: G8eoResultPayload,
+    operator_id: str = "op-1",
+    operator_session_id: str = "sess-1",
+    **kwargs
+) -> G8eoResultEnvelope:
+    """Create a valid G8eoResultEnvelope for tests."""
+    return G8eoResultEnvelope(
+        event_type=event_type,
+        operator_id=operator_id,
+        operator_session_id=operator_session_id,
+        payload=payload,
+        **kwargs
     )

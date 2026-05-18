@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.FETCH_FILE_DIFF,
-        description=load_prompt(PromptFile.TOOL_FETCH_FILE_DIFF),
+        description=load_prompt(PromptFile.TOOLS_FETCH_FILE_DIFF),
         parameters=schema_from_model(FetchFileDiffArgs),
     )
     return declaration

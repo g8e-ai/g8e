@@ -139,27 +139,30 @@ async def test_internal_chat_missing_investigation(request_context, g8e_context,
     mock_platform_settings = MagicMock()
     mock_user_settings = MagicMock()
     mock_chat_pipeline = MagicMock()
+    mock_chat_pipeline.run_chat = AsyncMock()
     mock_chat_task_manager = MagicMock()
+    mock_chat_task_manager.track = AsyncMock()
     mock_case_service = MagicMock()
     mock_investigation_service = MagicMock()
     mock_attachment_service = MagicMock()
     mock_event_service = MagicMock()
 
-    response = await internal_chat(
-        request=request,
-        platform_settings=mock_platform_settings,
-        user_settings=mock_user_settings,
-        chat_pipeline=mock_chat_pipeline,
-        chat_task_manager=mock_chat_task_manager,
-        case_service=mock_case_service,
-        investigation_service=mock_investigation_service,
-        attachment_service=mock_attachment_service,
-        event_service=mock_event_service,
-        g8e_context=g8e_context,
-    )
+    with task_tracker.patch_create_task("app.routers.internal_router"):
+        response = await internal_chat(
+            request=request,
+            platform_settings=mock_platform_settings,
+            user_settings=mock_user_settings,
+            chat_pipeline=mock_chat_pipeline,
+            chat_task_manager=mock_chat_task_manager,
+            case_service=mock_case_service,
+            investigation_service=mock_investigation_service,
+            attachment_service=mock_attachment_service,
+            event_service=mock_event_service,
+            g8e_context=g8e_context,
+        )
 
-    assert response.success is False
-    assert response.investigation_id == ""
+    assert response.success is True
+    assert response.investigation_id != ""
 
 @pytest.mark.asyncio
 async def test_stop_ai_processing(request_context, g8e_context):
@@ -173,7 +176,8 @@ async def test_stop_ai_processing(request_context, g8e_context):
     response = await stop_ai_processing(
         request=request,
         chat_task_manager=mock_task_manager,
-        chat_pipeline=mock_pipeline
+        chat_pipeline=mock_pipeline,
+        g8e_context=g8e_context
     )
 
     assert response.success is True
@@ -263,8 +267,9 @@ async def test_operator_approval_respond(request_context, g8e_context):
     assert response.approval_id == "app-123"
     assert response.approved is True
     mock_approval_service.handle_approval_response.assert_called_once_with(request)
-    assert request.operator_session_id == "opsess-1"
-    assert request.operator_id == "op-1"
+    assert len(request.context.bound_operators) == 1
+    assert request.context.bound_operators[0].operator_session_id == "opsess-1"
+    assert request.context.bound_operators[0].operator_id == "op-1"
 
 @pytest.mark.asyncio
 async def test_execute_direct_command(request_context, g8e_context):

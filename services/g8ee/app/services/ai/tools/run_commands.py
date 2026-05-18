@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.RUN_COMMANDS,
-        description=load_prompt(PromptFile.TOOL_RUN_COMMANDS),
+        description=load_prompt(PromptFile.TOOLS_RUN_COMMANDS),
         parameters=schema_from_model(
             SageOperatorRequest,
             required_override=["request"],

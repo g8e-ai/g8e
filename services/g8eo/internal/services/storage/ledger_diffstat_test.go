@@ -30,7 +30,7 @@ func TestLedgerService_GetDiffStat_EmptyHashesReturnsEmpty(t *testing.T) {
 	lms, avs, _ := setupTestLedger(t)
 	defer avs.Close()
 
-	result := lms.GetDiffStat("", "", "session")
+	result := lms.GetDiffStat("", "", "operator-session")
 	assert.Empty(t, result)
 }
 
@@ -91,6 +91,6 @@ func TestLedgerService_GetDiffStat_InvalidHashesReturnsEmpty(t *testing.T) {
 func TestLedgerService_GetDiffStat_GitDisabledReturnsEmpty(t *testing.T) {
 	lms := NewLedgerService(nil, nil, nil)
 
-	stat := lms.GetDiffStat("abc123", "def456", "session")
+	stat := lms.GetDiffStat("abc123", "def456", "operator-session")
 	assert.Empty(t, stat)
 }

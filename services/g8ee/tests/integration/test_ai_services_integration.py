@@ -84,7 +84,7 @@ class TestMemoryGenerationServiceIntegration:
         conversation_history = [
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.EVENT_SOURCE_USER_CHAT,
+                sender=EventType.SOURCE_USER_CHAT,
                 content="I'm having trouble with my high-performance compute cluster in the Zurich data center. The nodes are named 'Alpine-Alpha' through 'Alpine-Zeta'. One specific node, 'Alpine-Delta', has a bright Magenta status LED blinking.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -92,7 +92,7 @@ class TestMemoryGenerationServiceIntegration:
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.EVENT_SOURCE_AI_ASSISTANT,
+                sender=EventType.SOURCE_AI_ASSISTANT,
                 content="I see. A Magenta status LED on the Alpine series usually indicates a thermal throttle on the secondary NVMe drive. I'll check the temperature sensors for Alpine-Delta.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -100,7 +100,7 @@ class TestMemoryGenerationServiceIntegration:
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.EVENT_SOURCE_USER_CHAT,
+                sender=EventType.SOURCE_USER_CHAT,
                 content="The data center technician mentioned that the ambient temperature in Zurich is quite high today. We might need to increase the fan speed to 80% for all Alpine nodes.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -108,7 +108,7 @@ class TestMemoryGenerationServiceIntegration:
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.EVENT_SOURCE_AI_ASSISTANT,
+                sender=EventType.SOURCE_AI_ASSISTANT,
                 content="Understood. I'll prepare a script to adjust fan speeds across the Zurich cluster. We'll monitor Alpine-Delta specifically for the Magenta LED to clear.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -194,7 +194,7 @@ class TestMemoryGenerationServiceIntegration:
         conversation_history = [
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.EVENT_SOURCE_USER_CHAT,
+                sender=EventType.SOURCE_USER_CHAT,
                 content="The Turquoise sensor in Tokyo is fixed, but now the 'Midnight-Blue' fan controller in our Reykjavik facility is reporting an 'Amber-Alert' status code. Can you pull the RPM logs for the Midnight-Blue unit?",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -202,7 +202,7 @@ class TestMemoryGenerationServiceIntegration:
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.EVENT_SOURCE_AI_ASSISTANT,
+                sender=EventType.SOURCE_AI_ASSISTANT,
                 content="I'll pull the RPM logs for the Midnight-Blue controller in Reykjavik. We'll check if the Amber-Alert corresponds to a bearing failure or just a sensor glitch.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,

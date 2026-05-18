@@ -34,6 +34,7 @@ from app.services.operator.port_service import OperatorPortService
 from tests.fakes.factories import (
     build_enriched_context,
     build_g8e_http_context,
+    build_g8eo_result_envelope,
 )
 from tests.fakes.fake_event_service import FakeEventService
 from tests.fakes.fake_execution_service import FakeExecutionService
@@ -114,7 +115,7 @@ def _make_success_envelope(
     is_open: bool = True,
     latency_ms: float = 12.5,
 ) -> G8eoResultEnvelope:
-    return G8eoResultEnvelope(
+    return build_g8eo_result_envelope(
         event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED,
         operator_id="op-1",
         operator_session_id="session-1",
@@ -129,7 +130,7 @@ def _make_success_envelope(
     )
 
 def _make_failed_envelope(error: str = "Connection refused", execution_id: str = "test-exec-id") -> G8eoResultEnvelope:
-    return G8eoResultEnvelope(
+    return build_g8eo_result_envelope(
         event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
         operator_id="op-1",
         operator_session_id="session-1",
@@ -281,7 +282,7 @@ class TestOperatorResolution:
             _make_args(), investigation, _make_context(),
         )
         assert result.success is False
-        assert result.error_type == CommandErrorType.OPERATOR_RESOLUTION_ERROR
+        assert result.error_type == CommandErrorType.G8E_RESOLUTION_ERROR
         assert "No operators" in result.error
 
     @pytest.mark.asyncio
@@ -294,7 +295,7 @@ class TestOperatorResolution:
             _make_args(target_operators=["bad"]), investigation, _make_context(),
         )
         assert result.success is False
-        assert result.error_type == CommandErrorType.OPERATOR_RESOLUTION_ERROR
+        assert result.error_type == CommandErrorType.G8E_RESOLUTION_ERROR
 
     @pytest.mark.asyncio
     async def test_operator_session_missing_returns_error(self):
@@ -410,7 +411,7 @@ class TestG8eoResultHandling:
         service, _, execution = _make_service()
         investigation = _make_investigation()
 
-        execution.envelope = G8eoResultEnvelope(
+        execution.envelope = build_g8eo_result_envelope(
             event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
             operator_id="op-1",
             operator_session_id="session-1",
@@ -440,7 +441,7 @@ class TestG8eoResultHandling:
         service, _, execution = _make_service()
         investigation = _make_investigation()
 
-        execution.envelope = G8eoResultEnvelope(
+        execution.envelope = build_g8eo_result_envelope(
             event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED,
             operator_id="op-1",
             operator_session_id="session-1",
@@ -485,7 +486,7 @@ class TestExceptionHandling:
             _make_args(), _make_investigation(), _make_context(),
         )
         assert result.success is False
-        assert result.error_type == CommandErrorType.OPERATOR_RESOLUTION_ERROR
+        assert result.error_type == CommandErrorType.G8E_RESOLUTION_ERROR
         assert "bad target" in result.error
 
     @pytest.mark.asyncio
@@ -497,7 +498,7 @@ class TestExceptionHandling:
             _make_args(), _make_investigation(), _make_context(),
         )
         assert result.success is False
-        assert result.error_type == CommandErrorType.OPERATOR_RESOLUTION_ERROR
+        assert result.error_type == CommandErrorType.G8E_RESOLUTION_ERROR
 
     @pytest.mark.asyncio
     async def test_invalid_protocol_returns_execution_error(self):

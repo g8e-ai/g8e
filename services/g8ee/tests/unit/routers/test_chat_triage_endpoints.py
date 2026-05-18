@@ -72,7 +72,7 @@ class TestTriageEndpoints:
             investigation_service=mock_investigation_service,
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
-            settings_service=MagicMock(),
+            settings_service=AsyncMock(),
             g8e_context=g8e_context
         )
 
@@ -121,7 +121,7 @@ class TestTriageEndpoints:
             investigation_service=mock_investigation_service,
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
-            settings_service=MagicMock(),
+            settings_service=AsyncMock(),
             g8e_context=g8e_context
         )
 

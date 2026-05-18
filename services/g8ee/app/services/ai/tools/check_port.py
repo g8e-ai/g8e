@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.CHECK_PORT,
-        description=load_prompt(PromptFile.TOOL_CHECK_PORT),
+        description=load_prompt(PromptFile.TOOLS_CHECK_PORT),
         parameters=schema_from_model(CheckPortArgs, required_override=["port"]),
     )
     return declaration

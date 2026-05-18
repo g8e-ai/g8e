@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 def build() -> types.ToolDeclaration:
     return types.ToolDeclaration(
         name=OperatorToolName.SSH_INVENTORY,
-        description=load_prompt(PromptFile.TOOL_SSH_INVENTORY),
+        description=load_prompt(PromptFile.TOOLS_SSH_INVENTORY),
         parameters=schema_from_model(SshInventoryArgs),
     )
 

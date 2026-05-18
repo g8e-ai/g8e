@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.FILE_CREATE,
-        description=load_prompt(PromptFile.TOOL_FILE_CREATE),
+        description=load_prompt(PromptFile.TOOLS_FILE_CREATE),
         parameters=schema_from_model(FileCreateArgs),
     )
     return declaration

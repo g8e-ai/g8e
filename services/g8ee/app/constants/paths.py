@@ -21,7 +21,7 @@ from app.utils.path import resolve_project_root
 # The bridge to protocol paths.
 # In container, this is always /app/protocol/constants/paths.json
 # On host, respect G8E_PROTOCOL_DIR environment variable
-_PROTOCOL_DIR = os.environ.get(EnvVar.PROTOCOL_DIR)
+_PROTOCOL_DIR = os.environ.get(EnvVar.PROTOCOL_DIR) or None
 if _PROTOCOL_DIR is None:
     # If not provided, try to resolve from project root
     try:

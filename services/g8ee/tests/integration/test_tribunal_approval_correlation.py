@@ -103,10 +103,10 @@ class TestTribunalApprovalCorrelation:
 
         for event in tribunal_events:
             # Skip failure events that might not have it if they occur very early (though here they shouldn't)
-            if event.event_type in (EventType.TRIBUNAL_SESSION_STARTED,
-                                 EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
-                                 EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED,
-                                 EventType.TRIBUNAL_SESSION_COMPLETED):
+            if event.event_type in (EventType.AI_TRIBUNAL_SESSION_STARTED,
+                                 EventType.AI_TRIBUNAL_VOTING_PASS_COMPLETED,
+                                 EventType.AI_TRIBUNAL_VOTING_CONSENSUS_REACHED,
+                                 EventType.AI_TRIBUNAL_SESSION_COMPLETED):
                 assert event.payload.correlation_id == correlation_id, f"Event {event.event_type} missing correlation_id"
                 assert event.web_session_id == inputs.web_session_id
 
@@ -159,7 +159,7 @@ class TestTribunalApprovalCorrelation:
 
         # Verify web_session_id is present in Tribunal events
         published = event_svc._published_events
-        tribunal_events = [e for e in published if e.event_type == EventType.TRIBUNAL_SESSION_STARTED]
+        tribunal_events = [e for e in published if e.event_type == EventType.AI_TRIBUNAL_SESSION_STARTED]
         assert len(tribunal_events) == 1
         assert tribunal_events[0].web_session_id == inputs.web_session_id
 

@@ -43,7 +43,7 @@ A chronological record of all actions performed within the g8e platform. Include
 
 ## Audit Vault
 
-An embedded SQLite database (`./.g8e/data/g8e.db`) that stores all session history, command executions, and file mutations locally on the Operator. Part of the Local-First Audit Architecture (LFAA). Contains tables for `sessions`, `events`, and `file_mutation_log`.
+An embedded SQLite database (`./.g8e/data/g8e.db`) that stores all operator session history, command executions, and file mutations locally on the Operator. Part of the Local-First Audit Architecture (LFAA). Contains tables for `sessions`, `events`, and `file_mutation_log`.
 
 ---
 
@@ -79,7 +79,7 @@ The initial setup process for g8e, where the platform discovers the Internal Aut
 
 ## Case ID
 
-A unique identifier for each investigation (chat session). Used to track conversation history, operator context, and state across sessions. Enables users to resume previous conversations and maintain continuity of operations.
+A unique identifier for each investigation (web session). Used to track conversation history, operator context, and state across web sessions. Enables users to resume previous conversations and maintain continuity of operations.
 
 ---
 
@@ -175,7 +175,7 @@ The platform name. g8e is an open-source, air-gapped capable AI governance platf
 
 ## 
 
-The Node.js/Express web frontend component. Handles user authentication (passkey/FIDO2/WebAuthn), session management, the chat interface, Operator Panel, and SSE streaming to browsers. Routes messages between users and g8ee.
+The Node.js/Express web frontend component. Handles user authentication (passkey/FIDO2/WebAuthn), web session management, the chat interface, Operator Panel, and SSE streaming to browsers. Routes messages between users and g8ee.
 
 ---
 
@@ -277,13 +277,13 @@ A safety mechanism in g8ee that detects `<interrogation>` blocks in LLM response
 
 ## Investigation
 
-A chat session or conversation between a user and the AI control plane. Investigations contain message history, operator context, and state. Each investigation has a unique `case_id` and can be resumed across sessions.
+A web session or conversation between a user and the AI control plane. Investigations contain message history, operator context, and state. Each investigation has a unique `case_id` and can be resumed across web sessions.
 
 ---
 
 ## Investigation Management
 
-The process of creating, tracking, and resuming chat sessions (investigations) with proper context preservation, operator binding, and state management across browser sessions.
+The process of creating, tracking, and resuming web sessions (investigations) with proper context preservation, operator binding, and state management across browser sessions.
 
 ---
 
@@ -319,11 +319,11 @@ A security principle where entities receive only the minimum permissions necessa
 
 ## Ledger
 
-The file-mutation audit layer of the LFAA. The Operator implements a **Multi-Ledger Architecture**: each operator session receives its own isolated git repository initialized on first use at `.g8e/data/ledger/sessions/<operator_session_id>/`. A global ledger at `.g8e/data/ledger/` acts as the bootstrap root, but all runtime file-mutation history is written into the session-scoped sub-repository.
+The file-mutation audit layer of the LFAA. The Operator implements a **Multi-Ledger Architecture**: each operator session receives its own isolated git repository initialized on first use at `.g8e/data/ledger/sessions/<operator_session_id>/`. A global ledger at `.g8e/data/ledger/` acts as the bootstrap root, but all runtime file-mutation history is written into the operator session-scoped sub-repository.
 
 Every file mutation follows a two-phase commit: the Ledger snapshots the file's state before the mutation (`LedgerHashBefore`), the Operator executes, then the Ledger snapshots the result (`LedgerHashAfter`). Each phase produces a git commit with a timestamped message referencing the operator session ID. The resulting git hash pair provides a cryptographically verifiable diff, enabling time-travel, rollback, and cross-session forensic comparison.
 
-Session ledgers are created lazily and protected by a double-checked lock so concurrent sessions never interfere. The Ledger is disabled gracefully when git is unavailable (`--no-git`); the Audit Vault continues operating.
+Operator session ledgers are created lazily and protected by a double-checked lock so concurrent operator sessions never interfere. The Ledger is disabled gracefully when git is unavailable (`--no-git`); the Audit Vault continues operating.
 
 See also: **Audit Vault**, **Local-First Audit Architecture (LFAA)**, **Time-Travel**.
 

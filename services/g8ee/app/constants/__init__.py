@@ -327,6 +327,7 @@ from app.constants.status import (
     OperatorHistoryEventType,
     Platform,
     Priority,
+    WorkflowType,
     RiskLevel,
     RiskThreshold,
     SessionEndReason,
@@ -643,5 +644,6 @@ __all__ = [
     "UserRole",
     "UserStatus",
     "VaultMode",
+    "WorkflowType",
     "VersionStability",
 ]

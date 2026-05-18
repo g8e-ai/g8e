@@ -41,7 +41,7 @@ async def test_chat_message_creates_hash_chain(investigation_data_service):
     investigation = await investigation_data_service.create_investigation(request)
 
     # Add multiple chat messages
-    metadata1 = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
+    metadata1 = ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER)
     await investigation_data_service.add_chat_message(
         investigation_id=investigation.id,
         sender="user.chat",
@@ -49,7 +49,7 @@ async def test_chat_message_creates_hash_chain(investigation_data_service):
         metadata=metadata1,
     )
 
-    metadata2 = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_AI)
+    metadata2 = ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI)
     await investigation_data_service.add_chat_message(
         investigation_id=investigation.id,
         sender="ai.primary",
@@ -57,7 +57,7 @@ async def test_chat_message_creates_hash_chain(investigation_data_service):
         metadata=metadata2,
     )
 
-    metadata3 = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
+    metadata3 = ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER)
     await investigation_data_service.add_chat_message(
         investigation_id=investigation.id,
         sender="user.chat",
@@ -90,7 +90,7 @@ async def test_history_entry_creates_hash_chain(investigation_data_service):
     details1 = ConversationMessageMetadata()
     await investigation_data_service.add_history_entry(
         investigation_id=investigation.id,
-        event_type=EventType.INVESTIGATION_CREATED,
+        event_type=EventType.APP_INVESTIGATION_CREATED,
         actor=ComponentName.G8EE,
         summary="First entry",
         details=details1,
@@ -99,7 +99,7 @@ async def test_history_entry_creates_hash_chain(investigation_data_service):
     details2 = ConversationMessageMetadata()
     await investigation_data_service.add_history_entry(
         investigation_id=investigation.id,
-        event_type=EventType.INVESTIGATION_STATUS_UPDATED_OPEN,
+        event_type=EventType.APP_INVESTIGATION_STATUS_UPDATED_OPEN,
         actor=ComponentName.G8EE,
         summary="Second entry",
         details=details2,
@@ -108,7 +108,7 @@ async def test_history_entry_creates_hash_chain(investigation_data_service):
     details3 = ConversationMessageMetadata()
     await investigation_data_service.add_history_entry(
         investigation_id=investigation.id,
-        event_type=EventType.INVESTIGATION_STATUS_UPDATED_CLOSED,
+        event_type=EventType.APP_INVESTIGATION_STATUS_UPDATED_CLOSED,
         actor=ComponentName.G8EE,
         summary="Third entry",
         details=details3,
@@ -137,7 +137,7 @@ async def test_concurrent_appends_produce_valid_chain(investigation_data_service
 
     # Add messages sequentially (the service should serialize these)
     for i in range(5):
-        metadata = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
+        metadata = ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER)
         await investigation_data_service.add_chat_message(
             investigation_id=investigation.id,
             sender="user.chat",
@@ -167,7 +167,7 @@ async def test_first_entry_uses_genesis_hash(investigation_data_service):
     investigation = await investigation_data_service.create_investigation(request)
 
     # Add first message
-    metadata = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
+    metadata = ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER)
     await investigation_data_service.add_chat_message(
         investigation_id=investigation.id,
         sender="user.chat",

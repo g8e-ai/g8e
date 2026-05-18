@@ -91,6 +91,9 @@ var EnvVar = struct {
 	TestTmpDir EnvVarKey
 	TestOperatorPubSubURL EnvVarKey
 	StrictConstantsLint EnvVarKey
+	RuntimeDir EnvVarKey
+	SSHConfigPath EnvVarKey
+	ProjectRoot EnvVarKey
 }{
 	LLMMaxTokens: "G8E_LLM_MAX_TOKENS",
 	LLMCommandGenEnabled: "G8E_LLM_COMMAND_GEN_ENABLED",
@@ -162,4 +165,7 @@ var EnvVar = struct {
 	TestTmpDir: "G8E_TEST_TMP_DIR",
 	TestOperatorPubSubURL: "G8E_TEST_OPERATOR_PUBSUB_URL",
 	StrictConstantsLint: "G8E_STRICT_CONSTANTS_LINT",
+	RuntimeDir: "G8E_RUNTIME_DIR",
+	SSHConfigPath: "G8E_SSH_CONFIG_PATH",
+	ProjectRoot: "G8E_PROJECT_ROOT",
 }

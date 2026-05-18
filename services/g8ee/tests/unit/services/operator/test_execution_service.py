@@ -24,7 +24,7 @@ from app.models.command_request_payloads import CommandRequestPayload
 from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatSystemIdentity
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.services.operator.execution_service import OperatorExecutionService
-from tests.fakes.factories import build_g8e_http_context
+from tests.fakes.factories import build_g8e_http_context, build_g8eo_result_envelope
 
 pytestmark = [pytest.mark.unit]
 
@@ -326,7 +326,7 @@ class TestOperatorExecutionServiceDispatch:
         future = asyncio.Future()
         mock_pubsub.register_future.return_value = future
         from app.models.pubsub_messages import ExecutionStatusPayload
-        envelope = G8eoResultEnvelope(
+        envelope = build_g8eo_result_envelope(
             operator_id="op-1",
             operator_session_id="sess-1",
             event_type=EventType.OPERATOR_COMMAND_COMPLETED,
@@ -424,7 +424,7 @@ class TestOperatorExecutionServiceDirectCommand:
     async def test_wait_and_broadcast_payload_mismatch(self, execution_service, mock_event_service):
         future = asyncio.Future()
         from app.models.pubsub_messages import ExecutionStatusPayload
-        envelope = G8eoResultEnvelope(
+        envelope = build_g8eo_result_envelope(
             operator_id="op-1",
             operator_session_id="sess-1",
             event_type=EventType.OPERATOR_COMMAND_COMPLETED,

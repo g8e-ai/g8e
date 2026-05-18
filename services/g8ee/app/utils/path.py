@@ -2,31 +2,46 @@ import logging
 import os
 from pathlib import Path
 
-from app.constants.env_vars import EnvVar
-
 logger = logging.getLogger(__name__)
 
 def resolve_project_root() -> Path:
     """
     Resolves the project root directory.
+    This is the canonical root detection heuristic - all languages must match this logic.
     Priority:
     1. G8E_PROJECT_ROOT environment variable
-    2. Fallback: walks up from current working directory
+    2. Walk up from current directory looking for marker: services/ directory AND g8e file
+    3. If in services/g8eo, walk up 2 levels to root
+    4. If in services/g8ee, walk up 2 levels to root
+    5. Fallback to current directory
+
+    Note: This function must NOT import from app.constants to avoid circular dependencies.
     """
-    env_root = os.environ.get(EnvVar.PROJECT_ROOT)
+    env_root = os.environ.get("G8E_PROJECT_ROOT")
     if env_root:
         return Path(env_root).resolve()
 
-    # Current structure for g8ee is: <root>/services/g8ee
     cwd = Path.cwd()
 
-    # Check if we are in services/g8ee or a subdirectory
+    # Try to find root by looking for the marker: services/ directory AND g8e file
     for parent in [cwd] + list(cwd.parents):
-        if parent.name == "g8ee" and parent.parent.name == "components":
-            return parent.parent.parent.resolve()
+        if (parent / "services").exists() and (parent / "g8e").exists():
+            return parent.resolve()
 
-    # Generic fallback
-    return (cwd / ".." / "..").resolve()
+    # If in services/g8eo, walk up 2 levels to root
+    if "services/g8eo" in str(cwd):
+        for parent in [cwd] + list(cwd.parents):
+            if parent.name == "g8eo" and parent.parent.name == "services":
+                return parent.parent.parent.resolve()
+
+    # If in services/g8ee, walk up 2 levels to root
+    if "services/g8ee" in str(cwd):
+        for parent in [cwd] + list(cwd.parents):
+            if parent.name == "g8ee" and parent.parent.name == "services":
+                return parent.parent.parent.resolve()
+
+    # Fallback to current directory
+    return cwd.resolve()
 
 def resolve_config_path(filename: str) -> Path:
     """

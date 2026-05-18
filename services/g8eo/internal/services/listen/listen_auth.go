@@ -310,7 +310,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				cert := r.TLS.PeerCertificates[0]
 
 				// We need the UserID for the CLI session ID verification.
-				// For now we trust the mTLS certificate if it matches the session ID.
+				// For now we trust the mTLS certificate if it matches the CLI session ID.
 				// In a real flow, we would look up the CLI session to get the UserID.
 				// Since we don't have a CLISession lookup here yet, we use a looser check
 				// or assume we need to add CLISession lookup.
@@ -383,47 +383,47 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *ListenDBService) htt
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("g8e_session")
 		if err != nil || cookie == nil {
-			s.jsonError(w, http.StatusUnauthorized, "session cookie required")
+			s.jsonError(w, http.StatusUnauthorized, "web session cookie required")
 			return
 		}
 
 		sessionID := cookie.Value
 		if sessionID == "" {
-			s.jsonError(w, http.StatusUnauthorized, "invalid session cookie")
+			s.jsonError(w, http.StatusUnauthorized, "invalid web session cookie")
 			return
 		}
 
 		// Validate web session
 		doc, err := db.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), sessionID)
 		if err != nil {
-			s.jsonError(w, http.StatusUnauthorized, "session validation failed")
+			s.jsonError(w, http.StatusUnauthorized, "web session validation failed")
 			return
 		}
 		if doc == nil {
-			s.jsonError(w, http.StatusUnauthorized, "session not found")
+			s.jsonError(w, http.StatusUnauthorized, "web session not found")
 			return
 		}
 
 		// Check expiry
-		var session models.WebSession
+		var webSession models.WebSession
 		data, err := json.Marshal(doc.Data)
 		if err != nil {
-			s.jsonError(w, http.StatusUnauthorized, "session parse failed")
+			s.jsonError(w, http.StatusUnauthorized, "web session parse failed")
 			return
 		}
-		if err := json.Unmarshal(data, &session); err != nil {
-			s.jsonError(w, http.StatusUnauthorized, "session parse failed")
+		if err := json.Unmarshal(data, &webSession); err != nil {
+			s.jsonError(w, http.StatusUnauthorized, "web session parse failed")
 			return
 		}
 
-		if time.Now().UnixMilli() > session.ExpiresAtUnixMs {
-			s.jsonError(w, http.StatusUnauthorized, "session expired")
+		if time.Now().UnixMilli() > webSession.ExpiresAtUnixMs {
+			s.jsonError(w, http.StatusUnauthorized, "web session expired")
 			return
 		}
 
 		// Check if the user is active (plan §4.6)
 		if s.userSvc != nil {
-			user, err := s.userSvc.GetByID(session.UserID)
+			user, err := s.userSvc.GetByID(webSession.UserID)
 			if err != nil {
 				s.jsonError(w, http.StatusUnauthorized, "user validation failed")
 				return
@@ -435,7 +435,7 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *ListenDBService) htt
 		}
 
 		// Stamp context with user_id
-		ctx := context.WithValue(r.Context(), "user_id", session.UserID)
+		ctx := context.WithValue(r.Context(), "user_id", webSession.UserID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

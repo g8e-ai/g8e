@@ -163,7 +163,7 @@ async def _run_generation_pass(
         )
 
         await emitter.emit(
-            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
+            EventType.AI_TRIBUNAL_VOTING_PASS_COMPLETED,
             TribunalPassCompletedPayload(
                 pass_index=pass_index,
                 member=member,
@@ -264,7 +264,7 @@ async def _run_generation_stage(
                 num_passes, pass_errors,
             )
             await emitter.emit(
-                EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
+                EventType.AI_TRIBUNAL_SESSION_SYSTEM_ERROR,
                 TribunalSessionSystemErrorPayload(
                     request=request,
                     pass_errors=pass_errors,
@@ -274,7 +274,7 @@ async def _run_generation_stage(
 
         logger.error("[TRIBUNAL] All generation passes failed for non-system reasons; halting execution")
         await emitter.emit(
-            EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
+            EventType.AI_TRIBUNAL_SESSION_GENERATION_FAILED,
             TribunalSessionGenerationFailedPayload(
                 request=request,
                 pass_errors=pass_errors,

@@ -352,7 +352,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         """Record an approval lifecycle event in the operator activity log."""
         return await self.add_operator_activity(
             operator_id=operator_id,
-            sender=EventType.EVENT_SOURCE_SYSTEM,
+            sender=EventType.SOURCE_SYSTEM,
             content=f"{event_type.value} ({metadata.approval_id})",
             metadata=metadata,
         )

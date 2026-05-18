@@ -97,6 +97,7 @@ class OperatorAuthService:
         device_link_token: str | None,
         system_fingerprint: str | None,
         request_context: dict[str, Any] | None,
+        operator_session_id: str | None = None,
     ) -> dict[str, Any]:
         """Bootstrap an operator after device-link consumption.
 
@@ -197,7 +198,7 @@ class OperatorAuthService:
             logger.error("[OPERATOR-AUTH] Operator %s has no api_key on slot - slot creation bug", operator_id)
             return {"success": False, "error": "Operator slot missing api_key - configuration error"}
 
-        # 4. Create session
+        # 4. Create operator session
         user_data = await self._cache.get_document_with_cache(DB_COLLECTION_USERS, user_id)
         session_data = {
             "user_id": user_id,
@@ -207,12 +208,14 @@ class OperatorAuthService:
             "operator_id": operator_id,
             "operator_status": operator.status,
         }
-        session = await self._session_service.create_operator_session(session_data, request_context)
+        operator_session = await self._session_service.create_operator_session(
+            operator_session_id, session_data, request_context
+        )
 
         # 5. Claim slot
         claim_success = await self._lifecycle_service.claim_operator_slot(
             operator_id=operator_id,
-            operator_session_id=session.id,
+            operator_session_id=operator_session.id,
             bound_web_session_id=operator.bound_web_session_id,
             operator_type=operator_type,
         )
@@ -233,17 +236,17 @@ class OperatorAuthService:
         # 8. Return response
         return {
             "success": True,
-            "operator_session_id": session.id,
+            "operator_session_id": operator_session.id,
             "operator_id": operator_id,
             "user_id": user_id,
             "api_key": api_key,
             "config": DEFAULT_OPERATOR_CONFIG,
             "operator_cert": certs["cert"],
             "operator_cert_key": certs["key"],
-            "session": {
-                "id": session.id,
-                "expires_at": session.absolute_expires_at,
-                "created_at": session.created_at,
+            "operator_session": {
+                "id": operator_session.id,
+                "expires_at": operator_session.absolute_expires_at,
+                "created_at": operator_session.created_at,
             },
         }
 
@@ -288,7 +291,7 @@ class OperatorAuthService:
         # 3. Resolve api_key (already validated from bearer token)
         # api_key is the validated bearer token itself
 
-        # 4. Create session
+        # 4. Create operator session
         user_data = await self._cache.get_document_with_cache(DB_COLLECTION_USERS, user_id)
         session_data = {
             "user_id": user_id,
@@ -298,12 +301,14 @@ class OperatorAuthService:
             "operator_id": operator_id,
             "operator_status": operator.status,
         }
-        session = await self._session_service.create_operator_session(session_data, request_context)
+        operator_session = await self._session_service.create_operator_session(
+            body["operator_session_id"], session_data, request_context
+        )
 
         # 5. Claim slot
         claim_success = await self._lifecycle_service.claim_operator_slot(
             operator_id=operator_id,
-            operator_session_id=session.id,
+            operator_session_id=operator_session.id,
             bound_web_session_id=operator.bound_web_session_id,
             operator_type=operator.operator_type,
         )
@@ -320,16 +325,16 @@ class OperatorAuthService:
         # 7. Return response
         return {
             "success": True,
-            "operator_session_id": session.id,
+            "operator_session_id": operator_session.id,
             "operator_id": operator_id,
             "user_id": user_id,
             "api_key": api_key,
             "config": DEFAULT_OPERATOR_CONFIG,
             "operator_cert": certs["cert"],
             "operator_cert_key": certs["key"],
-            "session": {
-                "id": session.id,
-                "expires_at": session.absolute_expires_at,
-                "created_at": session.created_at,
+            "operator_session": {
+                "id": operator_session.id,
+                "expires_at": operator_session.absolute_expires_at,
+                "created_at": operator_session.created_at,
             },
         }

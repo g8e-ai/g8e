@@ -374,7 +374,7 @@ class TestCaseDataService:
         mock_cache.query_documents.return_value = [
             {
                 "timestamp": "2026-05-06T10:33:31Z",
-                "event_type": EventType.CASE_UPDATED,
+                "event_type": EventType.APP_CASE_UPDATED,
                 "source_component": ComponentName.G8EE,
                 "summary": "Case updated",
                 "details": {}
@@ -383,7 +383,7 @@ class TestCaseDataService:
 
         result = await service.get_case_history(query)
         assert len(result) == 1
-        assert result[0].event_type == EventType.CASE_UPDATED
+        assert result[0].event_type == EventType.APP_CASE_UPDATED
         mock_cache.query_documents.assert_called_once()
 
     async def test_get_case_history_filters(self, service, mock_cache):
@@ -393,7 +393,7 @@ class TestCaseDataService:
             case_id="case-123",
             start_time="2026-01-01T00:00:00Z",
             end_time="2026-01-02T00:00:00Z",
-            event_type=EventType.CASE_UPDATED,
+            event_type=EventType.APP_CASE_UPDATED,
             limit=5
         )
         mock_cache.query_documents.return_value = []

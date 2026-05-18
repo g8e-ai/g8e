@@ -144,7 +144,7 @@
   },
 
   "audit_session_metadata": {
-    "_description": "WebSession metadata embedded in fetch_history_tool_result. Typed model for the session object returned by fetch_session_history. Canonical wire shape: wire/result_payloads.json fetch_history_result.session.",
+    "_description": "WebSession metadata embedded in fetch_history_tool_result. Typed model for the web session object returned by fetch_session_history. Canonical wire shape: wire/result_payloads.json fetch_history_result.session.",
     "_authority": "g8ee",
     "_consumers": ["g8ee (tool_results.py, pending_command.py)"],
     "fields": {
@@ -251,7 +251,7 @@
       "diff_stat": { "type": "string", "required": true, "description": "Git-style diff stat summary" },
       "diff_content": { "type": "string", "required": false, "description": "Full diff content. May be absent when not requested." },
       "diff_size": { "type": "integer", "required": true, "description": "Size of diff content in bytes" },
-      "web_session_id": { "type": "string", "required": true, "description": "Audit session that produced this mutation" }
+      "web_session_id": { "type": "string", "required": true, "description": "Audit web session that produced this mutation" }
     }
   },
 
@@ -269,7 +269,7 @@
   },
 
   "fetch_history_tool_result": {
-    "_description": "Result returned by the fetch_session_history tool call. Contains audit session history from the operator local vault. Extends operation_error_base.",
+    "_description": "Result returned by the fetch_session_history tool call. Contains audit web session history from the operator local vault. Extends operation_error_base.",
     "_authority": "g8ee",
     "_consumers": ["g8ee (agent.py, tool_executor.py)"],
     "_tool_names": ["fetch_session_history"],

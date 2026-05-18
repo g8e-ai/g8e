@@ -19,9 +19,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import EventType, ExecutionStatus, PubSubChannel
+from app.models.pubsub_messages import G8eoResultEnvelope, ExecutionResultsPayload
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from tests.fakes.builder import build_command_service
+from tests.fakes.factories import build_g8eo_result_envelope
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
@@ -215,7 +217,10 @@ class TestDispatchResultsMessage:
                 "intent_data": {
                     "payload_type": "execution_result",
                     "execution_id": "exec-1",
-                    "status": "completed"
+                    "status": "completed",
+                    "stdout": "",
+                    "stderr": "",
+                    "return_code": 0
                 }
             }
 
@@ -225,10 +230,11 @@ class TestDispatchResultsMessage:
 
             mock_handle.assert_called_once()
             call_args = mock_handle.call_args[0]
-            assert call_args[0] == "op-1"
-            assert call_args[1] == "sess-1"
-            assert call_args[2]["event_type"] == EventType.OPERATOR_COMMAND_RESULT
-            assert call_args[2]["payload"]["execution_id"] == "exec-1"
+            assert isinstance(call_args[0], G8eoResultEnvelope)
+            assert call_args[0].operator_id == "op-1"
+            assert call_args[0].operator_session_id == "sess-1"
+            assert call_args[0].event_type == EventType.OPERATOR_COMMAND_RESULT
+            assert call_args[0].payload.execution_id == "exec-1"
 
     async def test_rejects_invalid_protobuf_json(self, command_service):
         """Test rejects invalid JSON payload."""
@@ -262,7 +268,11 @@ class TestDispatchResultsMessage:
             "operator_session_id": "sess-1",
             "intent_data": {
                 "payload_type": "execution_result",
-                "execution_id": "exec-1"
+                "execution_id": "exec-1",
+                "status": "completed",
+                "stdout": "",
+                "stderr": "",
+                "return_code": 0
             }
         }
         data = json.dumps(envelope_data).encode("utf-8")
@@ -286,109 +296,137 @@ class TestHandlePubSubResultMessage:
 
     async def test_routes_to_result_handler(self, command_service):
         """Test dispatches message and completes registered future."""
-        data = {
-            "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
-            "case_id": "case-123",
-            "investigation_id": "inv-456",
-            "payload": {
-                "payload_type": "execution_result",
-                "execution_id": "exec-789",
-                "status": ExecutionStatus.COMPLETED
-            },
-        }
+        envelope = build_g8eo_result_envelope(
+            event_type=EventType.OPERATOR_COMMAND_COMPLETED,
+            operator_id="op-123",
+            operator_session_id="session-456",
+            case_id="case-123",
+            investigation_id="inv-456",
+            payload=ExecutionResultsPayload(
+                payload_type="execution_result",
+                execution_id="exec-789",
+                status=ExecutionStatus.COMPLETED,
+                stdout="",
+                stderr="",
+                return_code=0
+            ),
+        )
 
         future = command_service._pubsub_service.register_future("exec-789")  # noqa: SLF001
 
-        await command_service._pubsub_service._handle_pubsub_result_message("op-123", "session-456", data)  # noqa: SLF001
+        await command_service._pubsub_service._handle_pubsub_result_message(envelope)  # noqa: SLF001
 
         assert future.done()
-        envelope = future.result()
-        assert envelope.payload.execution_id == "exec-789"
+        result_envelope = future.result()
+        assert result_envelope.payload.execution_id == "exec-789"
 
-    async def test_ignores_missing_event_type(self, command_service):
-        """Test ignores messages without event_type."""
+    async def test_ignores_unregistered_execution_id(self, command_service):
+        """Test ignores messages for execution_ids with no registered future."""
         future = command_service._pubsub_service.register_future("exec-missing")  # noqa: SLF001
 
-        await command_service._pubsub_service._handle_pubsub_result_message(  # noqa: SLF001
-            "op-123", "session-456", {"payload": {"payload_type": "execution_result", "execution_id": "exec-missing"}}
+        envelope = build_g8eo_result_envelope(
+            operator_id="op-123",
+            operator_session_id="session-456",
+            event_type=EventType.OPERATOR_COMMAND_COMPLETED,
+            payload=ExecutionResultsPayload(
+                payload_type="execution_result",
+                execution_id="exec-different-id",  # Different ID than the registered future
+                status=ExecutionStatus.COMPLETED,
+                stdout="",
+                stderr="",
+                return_code=0
+            ),
         )
+
+        await command_service._pubsub_service._handle_pubsub_result_message(envelope)  # noqa: SLF001
 
         assert not future.done()
 
     async def test_extracts_ids_from_payload(self, command_service):
         """Test extracts IDs from payload when not at top level."""
-        data = {
-            "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
-            "payload": {
-                "payload_type": "execution_result",
-                "execution_id": "exec-001",
-                "status": ExecutionStatus.COMPLETED,
-                "case_id": "case-from-payload",
-                "investigation_id": "inv-from-payload",
-            },
-        }
+        envelope = build_g8eo_result_envelope(
+            event_type=EventType.OPERATOR_COMMAND_COMPLETED,
+            operator_id="op-123",
+            operator_session_id="session-456",
+            case_id="case-from-payload",
+            investigation_id="inv-from-payload",
+            payload=ExecutionResultsPayload(
+                payload_type="execution_result",
+                execution_id="exec-001",
+                status=ExecutionStatus.COMPLETED,
+                stdout="",
+                stderr="",
+                return_code=0
+            ),
+        )
 
         future = command_service._pubsub_service.register_future("exec-001")  # noqa: SLF001
 
-        await command_service._pubsub_service._handle_pubsub_result_message("op-123", "session-456", data)  # noqa: SLF001
+        await command_service._pubsub_service._handle_pubsub_result_message(envelope)  # noqa: SLF001
 
         assert future.done()
-        envelope = future.result()
-        assert envelope.case_id == "case-from-payload"
-        assert envelope.investigation_id == "inv-from-payload"
+        result_envelope = future.result()
+        assert result_envelope.case_id == "case-from-payload"
+        assert result_envelope.investigation_id == "inv-from-payload"
 
     async def test_extracts_ids_from_top_level(self, command_service):
         """Test prefers IDs from top level over payload."""
-        data = {
-            "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
-            "case_id": "case-top",
-            "investigation_id": "inv-top",
-            "task_id": "task-top",
-            "payload": {
-                "payload_type": "execution_result",
-                "execution_id": "exec-002",
-                "status": ExecutionStatus.COMPLETED
-            },
-        }
+        envelope = build_g8eo_result_envelope(
+            event_type=EventType.OPERATOR_COMMAND_COMPLETED,
+            operator_id="op-123",
+            operator_session_id="session-456",
+            case_id="case-top",
+            investigation_id="inv-top",
+            task_id="task-top",
+            payload=ExecutionResultsPayload(
+                payload_type="execution_result",
+                execution_id="exec-002",
+                status=ExecutionStatus.COMPLETED,
+                stdout="",
+                stderr="",
+                return_code=0
+            ),
+        )
 
         future = command_service._pubsub_service.register_future("exec-002")  # noqa: SLF001
 
-        await command_service._pubsub_service._handle_pubsub_result_message("op-123", "session-456", data)  # noqa: SLF001
+        await command_service._pubsub_service._handle_pubsub_result_message(envelope)  # noqa: SLF001
 
         assert future.done()
-        envelope = future.result()
-        assert envelope.case_id == "case-top"
-        assert envelope.investigation_id == "inv-top"
-        assert envelope.task_id == "task-top"
+        result_envelope = future.result()
+        assert result_envelope.case_id == "case-top"
+        assert result_envelope.investigation_id == "inv-top"
+        assert result_envelope.task_id == "task-top"
 
     async def test_sets_operator_ids_from_channel(self, command_service):
         """Test operator_id and operator_session_id come from the channel name."""
-        future = command_service._pubsub_service.register_future("exec-003")  # noqa: SLF001
-
-        await command_service._pubsub_service._handle_pubsub_result_message(  # noqa: SLF001
-            "my-operator", "my-session",
-            {
-                "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
-                "payload": {
-                    "payload_type": "execution_result",
-                    "execution_id": "exec-003",
-                    "status": ExecutionStatus.COMPLETED
-                }
-            }
+        envelope = build_g8eo_result_envelope(
+            event_type=EventType.OPERATOR_COMMAND_COMPLETED,
+            operator_id="my-operator",
+            operator_session_id="my-session",
+            payload=ExecutionResultsPayload(
+                payload_type="execution_result",
+                execution_id="exec-003",
+                status=ExecutionStatus.COMPLETED,
+                stdout="",
+                stderr="",
+                return_code=0
+            ),
         )
 
+        future = command_service._pubsub_service.register_future("exec-003")  # noqa: SLF001
+
+        await command_service._pubsub_service._handle_pubsub_result_message(envelope)  # noqa: SLF001
+
         assert future.done()
-        envelope = future.result()
-        assert envelope.operator_id == "my-operator"
-        assert envelope.operator_session_id == "my-session"
+        result_envelope = future.result()
+        assert result_envelope.operator_id == "my-operator"
+        assert result_envelope.operator_session_id == "my-session"
 
     async def test_handles_exception_gracefully(self, command_service):
         """Test does not raise on processing errors."""
         # Using invalid data to trigger parsing error
-        await command_service._pubsub_service._handle_pubsub_result_message(  # noqa: SLF001
-            "op-123", "session-456",
-            {"event_type": EventType.OPERATOR_COMMAND_COMPLETED, "payload": "not-a-dict"}
-        )
+        await command_service._pubsub_service._handle_pubsub_result_message(None)  # noqa: SLF001
         # Should not raise exception
 
 

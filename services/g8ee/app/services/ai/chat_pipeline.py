@@ -739,7 +739,7 @@ class ChatPipelineService:
             try:
                 await self.event_service.publish_investigation_event(
                     investigation_id=investigation_id,
-                    event_type=EventType.LLM_CHAT_ITERATION_FAILED,
+                    event_type=EventType.AI_LLM_CHAT_ITERATION_FAILED,
                     payload=ChatErrorPayload(error=str(e)),
                     web_session_id=g8e_context.web_session_id,
                     cli_session_id=g8e_context.cli_session_id,

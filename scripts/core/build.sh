@@ -302,8 +302,8 @@ _start_g8ee() {
         cd "$PROJECT_ROOT/services/g8ee"
         export G8E_PKI_DIR="$OPERATOR_LISTEN_PKI_DIR"
         export G8E_SECRETS_DIR="$OPERATOR_LISTEN_SECRETS_DIR"
-        export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol"
-        export G8E_SHARED_DIR="$PROJECT_ROOT/protocol"
+        export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol/python"
+        export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
         export G8E_INTERNAL_HTTP_URL="https://localhost:${OPERATOR_LISTEN_HTTP_PORT}"
         export G8E_INTERNAL_PUBSUB_URL="wss://localhost:${OPERATOR_LISTEN_WSS_PORT}"
 

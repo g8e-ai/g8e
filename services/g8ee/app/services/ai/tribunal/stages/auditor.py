@@ -132,7 +132,7 @@ class TribunalAuditor:
 
         correlation_id = getattr(self.emitter, "correlation_id", None)
         await self.emitter.emit(
-            EventType.TRIBUNAL_VOTING_AUDIT_STARTED,
+            EventType.AI_TRIBUNAL_VOTING_AUDIT_STARTED,
             TribunalAuditorStartedPayload(candidate_command=target_cmd),
             correlation_id=correlation_id,
         )
@@ -166,7 +166,7 @@ class TribunalAuditor:
                     total_duration_ms = (time.time() - auditor_start_time) * 1000
                     logger.info("[TRIBUNAL-AUDITOR] Completed with status=ok total_duration_ms=%.2f", total_duration_ms)
                     await self.emitter.emit(
-                        EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
+                        EventType.AI_TRIBUNAL_VOTING_AUDIT_COMPLETED,
                         TribunalAuditorCompletedPayload(passed=True, reason=AuditorReason.OK),
                         correlation_id=correlation_id,
                     )
@@ -185,7 +185,7 @@ class TribunalAuditor:
                     total_duration_ms = (time.time() - auditor_start_time) * 1000
                     logger.info("[TRIBUNAL-AUDITOR] Completed with status=swap total_duration_ms=%.2f", total_duration_ms)
                     await self.emitter.emit(
-                        EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
+                        EventType.AI_TRIBUNAL_VOTING_AUDIT_COMPLETED,
                         TribunalAuditorCompletedPayload(
                             passed=True,
                             reason=AuditorReason.SWAPPED_TO_DISSENTER,
@@ -211,7 +211,7 @@ class TribunalAuditor:
                     total_duration_ms = (time.time() - auditor_start_time) * 1000
                     logger.info("[TRIBUNAL-AUDITOR] Completed with status=revised total_duration_ms=%.2f", total_duration_ms)
                     await self.emitter.emit(
-                        EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
+                        EventType.AI_TRIBUNAL_VOTING_AUDIT_COMPLETED,
                         TribunalAuditorCompletedPayload(passed=False, revision=revised, reason=reason),
                         correlation_id=correlation_id,
                     )
@@ -250,7 +250,7 @@ class TribunalAuditor:
                 commitment_id = commitment.id
                 logger.info("[TRIBUNAL-AUDITOR] Reputation commitment created: id=%s merkle_root=%s", commitment.id, commitment.merkle_root[:16])
                 await self.emitter.emit(
-                    EventType.REPUTATION_COMMITMENT_CREATED,
+                    EventType.AI_REPUTATION_COMMITMENT_CREATED,
                     ReputationCommitmentCreatedPayload(
                         commitment_id=commitment.id,
                         tribunal_command_id=commitment.tribunal_command_id,
@@ -269,7 +269,7 @@ class TribunalAuditor:
                     exc_info=True,
                 )
                 await self.emitter.emit(
-                    EventType.REPUTATION_COMMITMENT_FAILED,
+                    EventType.AI_REPUTATION_COMMITMENT_FAILED,
                     ReputationCommitmentFailedPayload(
                         tribunal_command_id=correlation_id,
                         investigation_id=investigation_id,

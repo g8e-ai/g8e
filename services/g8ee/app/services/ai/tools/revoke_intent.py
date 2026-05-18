@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.REVOKE_INTENT,
-        description=load_prompt(PromptFile.TOOL_REVOKE_INTENT),
+        description=load_prompt(PromptFile.TOOLS_REVOKE_INTENT),
         parameters=schema_from_model(RevokeIntentArgs),
     )
     return declaration

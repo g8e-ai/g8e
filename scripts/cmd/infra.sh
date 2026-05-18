@@ -152,9 +152,9 @@ print(json.dumps({
         _banner "logout"
         if _credentials_exist; then
             _clear_credentials
-            echo "[g8e] Session cleared from $G8E_CREDENTIALS_FILE"
+            echo "[g8e] Operator session cleared from $G8E_CREDENTIALS_FILE"
         else
-            echo "[g8e] No active session found"
+            echo "[g8e] No active operator session found"
         fi
         exit 0 ;;
 

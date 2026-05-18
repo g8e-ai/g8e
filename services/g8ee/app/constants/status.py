@@ -168,6 +168,7 @@ class WorkflowType(StrEnum):
     """Generated from protocol/constants/status.json - workflow.type"""
     G8E_BOUND = "g8e.bound"
     G8E_NOT_BOUND = "g8e.not.bound"
+    G8E_CLOUD_BOUND = "g8e.cloud.bound"
 
 class RiskLevel(StrEnum):
     """Generated from protocol/constants/status.json - risk.level"""
@@ -553,6 +554,8 @@ class SessionEndReason(StrEnum):
     SESSION_REGENERATION = "session_regeneration"
     INVALIDATE_ALL = "invalidate_all"
     USER_DELETED = "user_deleted"
+    TIMEOUT_ABSOLUTE = "timeout_absolute"
+    TIMEOUT_IDLE = "timeout_idle"
 
 class SessionSuspiciousReason(StrEnum):
     """Generated from protocol/constants/status.json - session.suspicious.reason"""

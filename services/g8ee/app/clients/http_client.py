@@ -323,7 +323,7 @@ class HTTPClient:
 
         request_headers = self.default_headers.copy()
         if self.auth_token:
-            request_headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX} {self.auth_token}"
+            request_headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX}{self.auth_token}"
         if self.api_key:
             request_headers[HTTP_API_KEY_HEADER] = self.api_key
 

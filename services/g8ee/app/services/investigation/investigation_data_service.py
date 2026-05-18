@@ -83,7 +83,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
         # Initial creation record is data-layer appropriate
         investigation.add_history_entry(
-            event_type=EventType.INVESTIGATION_CREATED,
+            event_type=EventType.APP_INVESTIGATION_CREATED,
             actor=ComponentName.G8EE,
             summary=f"Investigation created for case {request.case_id}",
         )

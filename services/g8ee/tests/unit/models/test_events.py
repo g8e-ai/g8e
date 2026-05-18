@@ -51,7 +51,7 @@ class TestSessionEventWireStructure:
 
     def test_wire_structure_top_level_keys(self):
         se = SessionEvent(
-            event_type=EventType.LLM_CHAT_MESSAGE_SENT,
+            event_type=EventType.AI_LLM_CHAT_MESSAGE_SENT,
             payload=_SimplePayload(message="test"),
             web_session_id="web-session-123",
             user_id="user-456",
@@ -65,7 +65,7 @@ class TestSessionEventWireStructure:
 
     def test_wire_structure_with_optional_ids(self):
         se = SessionEvent(
-            event_type=EventType.CASE_CREATED,
+            event_type=EventType.APP_CASE_CREATED,
             payload=_PayloadWithId(id="case-123", name="Test Case"),
             web_session_id="web-session-123",
             user_id="user-456",
@@ -99,7 +99,7 @@ class TestBackgroundEventWireStructure:
 
     def test_wire_structure_with_optional_ids(self):
         be = BackgroundEvent(
-            event_type=EventType.CASE_ESCALATED,
+            event_type=EventType.APP_CASE_ESCALATED,
             payload=_PayloadWithId(id="case-123", name="Escalated"),
             user_id="user-456",
             investigation_id="inv-101",

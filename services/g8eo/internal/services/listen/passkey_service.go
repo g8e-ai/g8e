@@ -273,29 +273,29 @@ func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bo
 	return true, len(newCreds), nil
 }
 
-// CreateSession creates a web session after successful authentication.
-func (s *PasskeyService) CreateSession(userID string) (*models.WebSession, error) {
+// CreateWebSession creates a web session after successful authentication.
+func (s *PasskeyService) CreateWebSession(userID string) (*models.WebSession, error) {
 	webSessionID := uuid.New().String()
 	now := time.Now()
 
-	session := &models.WebSession{
+	webSession := &models.WebSession{
 		ID:              webSessionID,
 		UserID:          userID,
 		CreatedAtUnixMs: now.UnixMilli(),
 		ExpiresAtUnixMs: now.Add(webSessionTTL).UnixMilli(),
 	}
 
-	data, err := json.Marshal(session)
+	data, err := json.Marshal(webSession)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal session: %w", err)
+		return nil, fmt.Errorf("failed to marshal web session: %w", err)
 	}
 	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, data); err != nil {
-		s.logger.Error("Failed to create session", "error", err, "userID", userID)
-		return nil, fmt.Errorf("failed to create session: %w", err)
+		s.logger.Error("Failed to create web session", "error", err, "userID", userID)
+		return nil, fmt.Errorf("failed to create web session: %w", err)
 	}
 
-	s.logger.Info("Session created", "userID", userID, "webSessionID", webSessionID[:8])
-	return session, nil
+	s.logger.Info("Web session created", "userID", userID, "webSessionID", webSessionID[:8])
+	return webSession, nil
 }
 
 // VerifyL3Proof verifies a WebAuthn assertion against a registered passkey.

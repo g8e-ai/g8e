@@ -34,7 +34,7 @@ class TestTribunalEmitter:
 
         with pytest.raises(RuntimeError, match="broker down"):
             await emitter.emit(
-                EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
+                EventType.AI_TRIBUNAL_SESSION_GENERATION_FAILED,
                 TribunalSessionGenerationFailedPayload(request="test", pass_errors=["error"]),
             )
 
@@ -46,7 +46,7 @@ class TestTribunalEmitter:
         emitter = TribunalEmitter(event_service=mock_event_service, g8e_context=mock_g8e_context)
 
         await emitter.emit(
-            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
+            EventType.AI_TRIBUNAL_VOTING_PASS_COMPLETED,
             TribunalPassCompletedPayload(
                 pass_index=0, member=TribunalMember.AXIOM, candidate="ls", success=True
             ),

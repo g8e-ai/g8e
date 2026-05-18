@@ -108,7 +108,7 @@ class OperatorPortService:
             return PortCheckToolResult(
                 success=False,
                 error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
-                error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
+                error_type=CommandErrorType.G8E_RESOLUTION_ERROR,
             )
 
         operator_id = resolved_operator.id

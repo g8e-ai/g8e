@@ -440,7 +440,7 @@ class TestExecuteCommandTargetSystems:
         result = await service.execute_command(args, g8e_context, investigation, request_settings)
 
         # Must not fall into OPERATOR_RESOLUTION_ERROR just because target_operator is empty.
-        assert result.error_type != CommandErrorType.OPERATOR_RESOLUTION_ERROR
+        assert result.error_type != CommandErrorType.G8E_RESOLUTION_ERROR
         assert result.batch_execution is True
         assert result.operators_used == 2
 

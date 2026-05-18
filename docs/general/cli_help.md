@@ -65,7 +65,7 @@ A user request moves through the **3-Layer Governance Bedrock**:
 ## Operational Modes
 
 ### Operator Bound Mode
-When at least one g8eo operator is connected and bound to the session:
+When at least one g8eo operator is connected and bound to the web session:
 - Full tool suite: command execution, file operations, web search.
 - Human-in-the-loop: All state-changing operations require explicit approval.
 - Multi-operator support: AI selects targets per command; batch operations fan out with unified approval.
@@ -103,11 +103,11 @@ When no operator is connected:
 ## Command Reference
 
 ### chat
-- `[prompt]`: Start an interactive chat session with the AI Engine. Supports optional initial prompt.
+- `[prompt]`: Start an interactive web session with the AI Engine. Supports optional initial prompt.
 
 ### identity
-- `login`: Authenticate and save session to `~/.g8e/credentials`
-- `logout`: Clear local session and credentials
+- `login`: Authenticate and save operator session to `~/.g8e/credentials`
+- `logout`: Clear local operator session and credentials
 
 ### vars
 - `list`, `ls`: List all g8e environment variables and their current values

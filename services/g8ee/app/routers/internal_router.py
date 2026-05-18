@@ -313,7 +313,7 @@ async def internal_chat(
         try:
             await event_service.publish(
                 SessionEvent(
-                    event_type=EventType.CASE_CREATED,
+                    event_type=EventType.APP_CASE_CREATED,
                     payload=CaseCreatedPayload(title=case.title),
                     web_session_id=g8e_context.web_session_id,
                     user_id=g8e_context.user_id,
@@ -1465,6 +1465,7 @@ async def register_device_link_operator(
             "ip": http_request.client.host if http_request and http_request.client else None,
             "user_agent": http_request.headers.get("user-agent") if http_request else None,
         },
+        operator_session_id=request.operator_session_id,
     )
     if result.get("success"):
         return OperatorDeviceLinkRegisterResponse(**result)
@@ -1481,7 +1482,7 @@ async def validate_operator_session(
     Validate an operator session.
     """
     try:
-        session = await session_service.validate_session(request.operator_session_id)
+        session = await session_service.validate_operator_session(request.operator_session_id)
         if session:
             return OperatorSessionValidateResponse(
                 success=True,
@@ -1506,15 +1507,15 @@ async def refresh_operator_session(
     Refresh an operator session.
     """
     try:
-        success = await session_service.refresh_session(request.operator_session_id)
+        success = await session_service.refresh_operator_session(request.operator_session_id)
         if success:
-            session = await session_service.validate_session(request.operator_session_id)
+            operator_session = await session_service.validate_operator_session(request.operator_session_id)
             return OperatorSessionRefreshResponse(
                 success=True,
-                operator_id=session.operator_id if session else None,
-                session={
+                operator_id=operator_session.operator_id if operator_session else None,
+                operator_session={
                     "id": request.operator_session_id,
-                    "expires_at": session.absolute_expires_at if session else None,
+                    "expires_at": operator_session.absolute_expires_at if operator_session else None,
                 }
             )
         return OperatorSessionRefreshResponse(success=False, error="Session not found or expired")

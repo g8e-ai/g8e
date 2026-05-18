@@ -280,7 +280,7 @@ class CaseDataService:
         web_session_id: str,
         payload: CaseEventPayload,
         user_id: str,
-        event_type: EventType = EventType.CASE_UPDATED
+        event_type: EventType = EventType.APP_CASE_UPDATED
     ) -> None:
         """
         Publish SSE event when case data changes.

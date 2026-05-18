@@ -4,10 +4,10 @@
 # This script initializes local variables from G8E_ENV_* environment keys,
 # avoiding the need for indirect shell expansion like ${!G8E_ENV_...}.
 
-# Ensure we have the project root
+# Ensure we have the project root using the canonical heuristic
 if [[ -z "${G8E_PROJECT_ROOT:-}" ]]; then
-    # Fallback if not already set (though path_utils.sh usually handles this)
-    G8E_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    source "$SCRIPT_DIR/scripts/core/path_utils.sh"
+    G8E_PROJECT_ROOT="$(resolve_g8e_root)"
 fi
 
 # Configuration directory

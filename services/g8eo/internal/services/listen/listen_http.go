@@ -55,6 +55,11 @@ type HTTPHandler struct {
 	apiKey            *ApiKeyService
 	isReady           func() bool
 	isGovernanceReady func() bool
+	// envProc is the synchronous fail-closed substrate mutation gate. It is
+	// nil until SetEnvelopeProcessor is called by the boot sequence after
+	// the in-process command service has initialized the verifier and
+	// Warden. While nil, /api/governance/envelope returns 503.
+	envProc EnvelopeProcessor
 }
 
 func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, isReady func() bool, isGovernanceReady func() bool) *HTTPHandler {
@@ -115,6 +120,9 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/operators/target", h.handleSetTargetContext)
 	mux.HandleFunc("/api/governance/signers", h.handleTrustedSigners)
 	mux.HandleFunc("/api/governance/signers/", h.handleTrustedSignerByID)
+	// Canonical synchronous fail-closed mutation entry. BYO clients submit
+	// UAP JSON envelopes here to receive a signed ActionReceipt.
+	mux.HandleFunc("/api/governance/envelope", h.handleGovernanceEnvelope)
 	mux.HandleFunc("/api/audit/receipts", h.handleAuditReceipts)
 	mux.HandleFunc("/api/audit/receipts/export", h.handleAuditReceiptsExport)
 
@@ -165,7 +173,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc("/.well-known/g8e/pki/hub-bundle.pem", h.handlePKIHubBundle)
 	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.handlePKIFingerprint)
 
-	// Browser-facing data routes (require session cookie)
+	// Browser-facing data routes (require web session cookie)
 	authedMux := http.NewServeMux()
 	authedMux.HandleFunc("/api/user/me", h.handleUserMe)
 	authedMux.HandleFunc("/api/auth/web-session", h.handleWebSession)
@@ -2108,9 +2116,9 @@ func (h *HTTPHandler) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	session, err := h.passkey.CreateSession(userID)
+	webSession, err := h.passkey.CreateWebSession(userID)
 	if err != nil {
-		h.logger.Error("Failed to create session after auth", "error", err, "userID", userID)
+		h.logger.Error("Failed to create web session after auth", "error", err, "userID", userID)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
 			"success": false,
 			"error":   "authentication succeeded but session creation failed",
@@ -2122,9 +2130,9 @@ func (h *HTTPHandler) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Req
 		"success":    true,
 		"user_id":    userID,
 		"credential": cred,
-		"session": map[string]interface{}{
-			"id":                 session.ID,
-			"expires_at_unix_ms": session.ExpiresAtUnixMs,
+		"web_session": map[string]interface{}{
+			"id":                 webSession.ID,
+			"expires_at_unix_ms": webSession.ExpiresAtUnixMs,
 		},
 	})
 }
@@ -2277,7 +2285,7 @@ func (h *HTTPHandler) handleAuthLoginChallenge(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// handleAuthLoginVerify verifies an auth assertion and sets a session cookie.
+// handleAuthLoginVerify verifies an auth assertion and sets a web session cookie.
 func (h *HTTPHandler) handleAuthLoginVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -2305,35 +2313,35 @@ func (h *HTTPHandler) handleAuthLoginVerify(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	session, err := h.passkey.CreateSession(req.UserID)
+	webSession, err := h.passkey.CreateWebSession(req.UserID)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, "failed to create session")
+		jsonError(w, http.StatusInternalServerError, "failed to create web session")
 		return
 	}
 
 	// Set HttpOnly Secure SameSite=Lax cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "g8e_session",
-		Value:    session.ID,
+		Value:    webSession.ID,
 		Path:     "/",
-		Expires:  time.Unix(session.ExpiresAtUnixMs/1000, 0),
+		Expires:  time.Unix(webSession.ExpiresAtUnixMs/1000, 0),
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"user_id": req.UserID,
-		"session": session,
+		"success":     true,
+		"user_id":     req.UserID,
+		"web_session": webSession,
 	})
 }
 
-// handleAuthLogout clears the session cookie and deletes the session.
+// handleAuthLogout clears the web session cookie and deletes the web session.
 func (h *HTTPHandler) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("g8e_session")
 	if err == nil {
-		// Best effort delete session from DB
+		// Best effort delete web session from DB
 		_, _ = h.db.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value)
 	}
 
@@ -2448,28 +2456,28 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Issue a session cookie for passkey registration
-	session, err := h.passkey.CreateSession(user.ID)
+	// Issue a web session cookie for passkey registration
+	webSession, err := h.passkey.CreateWebSession(user.ID)
 	if err != nil {
-		h.logger.Error("Failed to create session for bootstrap user", "error", err, "user_id", user.ID)
-		jsonError(w, http.StatusInternalServerError, "user created but session failed")
+		h.logger.Error("Failed to create web session for bootstrap user", "error", err, "user_id", user.ID)
+		jsonError(w, http.StatusInternalServerError, "user created but web session failed")
 		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "g8e_session",
-		Value:    session.ID,
+		Value:    webSession.ID,
 		Path:     "/",
-		Expires:  time.Unix(session.ExpiresAtUnixMs/1000, 0),
+		Expires:  time.Unix(webSession.ExpiresAtUnixMs/1000, 0),
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 
 	response := map[string]interface{}{
-		"success": true,
-		"user":    user,
-		"session": session,
+		"success":     true,
+		"user":        user,
+		"web_session": webSession,
 	}
 
 	// If CSR is requested and loopback, sign and return cert (plan §4.2)

@@ -157,7 +157,7 @@ class TestDecodeG8eoResultEnvelope:
         """EXECUTE_STATUS_UPDATE decodes correctly."""
         envelope_data = {
             "id": "test-id",
-            "event_type": EventType.OPERATOR_COMMAND_STATUS_UPDATED,
+            "event_type": EventType.OPERATOR_COMMAND_STATUS_UPDATED_RUNNING,
             "operator_id": "op-1",
             "action_type": "EXECUTE_STATUS_UPDATE",
             "intent_data": {
@@ -209,7 +209,7 @@ class TestDecodeG8eoResultEnvelope:
         """FS_LIST_RESULT decodes correctly."""
         envelope_data = {
             "id": "test-id",
-            "event_type": EventType.OPERATOR_FS_LIST_COMPLETED,
+            "event_type": EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED,
             "operator_id": "op-1",
             "action_type": "FS_LIST_RESULT",
             "intent_data": {

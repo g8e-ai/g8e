@@ -92,7 +92,7 @@ async def test_uap_envelope_flow_status_update(pubsub_service):
     # Build status update Protobuf GovernanceEnvelope
     envelope_data = {
         "id": "msg-status-1",
-        "event_type": EventType.OPERATOR_COMMAND_STATUS_UPDATED,
+        "event_type": EventType.OPERATOR_COMMAND_STATUS_UPDATED_RUNNING,
         "action_type": "EXECUTE_STATUS_UPDATE",
         "operator_id": operator_id,
         "operator_session_id": operator_session_id,
@@ -113,7 +113,7 @@ async def test_uap_envelope_flow_status_update(pubsub_service):
     assert future.done()
     result_envelope = future.result()
 
-    assert result_envelope.event_type == EventType.OPERATOR_COMMAND_STATUS_UPDATED
+    assert result_envelope.event_type == EventType.OPERATOR_COMMAND_STATUS_UPDATED_RUNNING
 
     payload = result_envelope.payload
     assert payload.payload_type == "execution_status"

@@ -26,6 +26,7 @@ from app.constants import (
     ComponentName,
     G8eHeaders,
     InternalApiPaths,
+    PROXY_USER_ID_HEADER,
 )
 from app.errors import (
     AuthenticationError,
@@ -397,12 +398,13 @@ async def get_g8ee_current_active_user(request: Request) -> AuthenticatedUser:
     return user
 
 
-async def require_proxy_auth(
+async def require_authenticated_user(
     request: Request,
     settings: G8eePlatformSettings = Depends(get_g8ee_platform_settings),
-    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service)
+    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
+    operator_session_service: OperatorSessionService = Depends(get_g8ee_operator_session_service),
 ) -> AuthenticatedUser:
-    user = await authenticate_proxy_or_internal(request, settings)
+    user = await authenticate_proxy_or_internal(request, settings, operator_session_service)
 
     # [PIVOT] Validate session bindings for CLI sessions (Plan §4.6)
     # If a CLI session ID is provided, it must be bound to the authenticated
@@ -425,11 +427,11 @@ async def require_proxy_auth(
 
 async def require_authenticated_context(
     request: Request,
-    user: AuthenticatedUser = Depends(require_proxy_auth)
+    user: AuthenticatedUser = Depends(require_authenticated_user)
 ) -> G8eHttpContext:
     """Unified authentication and context validation dependency.
     
-    1. Authenticates user via proxy headers/mTLS (using require_proxy_auth).
+    1. Authenticates user via proxy headers, operator session Bearer, or web session cookie (using require_authenticated_user).
     2. Extracts RequestContext from the request body.
     3. Validates that the body context matches the authenticated user.
     4. Returns a validated G8eHttpContext.
@@ -515,6 +517,6 @@ __all__ = [
     "get_g8eeweb_search_provider",
     "health_check_dependencies",
     "is_infrastructure_health_check_ip",
-    "require_proxy_auth",
+    "require_authenticated_user",
     "require_authenticated_context",
 ]

@@ -621,6 +621,11 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 		os.Exit(constants.ExitCodeFromError(err))
 	}
 
+	// Wire the synchronous fail-closed mutation gate into the listen HTTP
+	// surface. Once set, BYO clients can POST UAP envelopes to
+	// /api/governance/envelope and receive a signed ActionReceipt.
+	svc.SetEnvelopeProcessor(cmdSvc)
+
 	go func() {
 		if err := svc.Start(ctx); err != nil {
 			logger.Error("Listen service failed", "error", err)

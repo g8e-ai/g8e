@@ -72,7 +72,7 @@ class SessionAuthListener:
                 return
 
             try:
-                session = await self.session_service.validate_session(operator_session_id)
+                session = await self.session_service.validate_operator_session(operator_session_id)
                 if not session or not session.is_active:
                     await self.pubsub_client.publish(response_channel, {
                         "success": False,

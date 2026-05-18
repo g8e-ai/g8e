@@ -27,12 +27,12 @@
       "user_id": {
         "type": "string",
         "required": false,
-        "description": "User who created the case. Injected server-side by client from authenticated session."
+        "description": "User who created the case. Injected server-side by client from authenticated web session."
       },
       "user_email": {
         "type": "string",
         "required": false,
-        "description": "Email of the user who created the case. Injected by client from session."
+        "description": "Email of the user who created the case. Injected by client from web session."
       }
     },
 
@@ -158,7 +158,7 @@
   },
 
   "case_create_request": {
-    "_description": "Request body for POST /api/cases (client → g8ee). Fields marked server-injected are populated by client from the authenticated session before forwarding to G8EE.",
+    "_description": "Request body for POST /api/cases (client → g8ee). Fields marked server-injected are populated by client from the authenticated web session before forwarding to G8EE.",
 
     "client_provided": {
       "initial_message": {

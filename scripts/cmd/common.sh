@@ -3,8 +3,11 @@
 # Common helpers and environment for g8e CLI commands.
 # This file is intended to be sourced by specific command scripts.
 
+# Use canonical root detection heuristic
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-export G8E_PROJECT_ROOT="$SCRIPT_DIR"
+source "$SCRIPT_DIR/scripts/core/path_utils.sh"
+G8E_PROJECT_ROOT="$(resolve_g8e_root)"
+export G8E_PROJECT_ROOT
 source "$SCRIPT_DIR/scripts/cmd/headers.sh"
 source "$SCRIPT_DIR/scripts/cmd/env_vars.sh"
 source "$SCRIPT_DIR/scripts/cmd/paths.sh"
@@ -325,7 +328,7 @@ _load_credentials() {
     if [[ -f "$G8E_CREDENTIALS_FILE" ]]; then
         source "$G8E_CREDENTIALS_FILE"
         if [[ -n "$OPERATOR_SESSION_ID" ]]; then
-            # Credentials loaded, session available
+            # Credentials loaded, operator session available
             :
         fi
         return 0

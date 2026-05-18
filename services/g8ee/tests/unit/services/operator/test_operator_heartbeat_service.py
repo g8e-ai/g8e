@@ -209,6 +209,17 @@ class TestRegisterDeregisterSession:
         assert service.active_sessions == set()
 
 
+def _make_envelope(payload_dict: dict) -> dict:
+    return {
+        "id": "msg-1",
+        "event_type": EventType.OPERATOR_HEARTBEAT_SENT,
+        "operator_id": payload_dict.get("operator_id"),
+        "operator_session_id": payload_dict.get("operator_session_id"),
+        "timestamp": payload_dict.get("timestamp"),
+        "intent_data": payload_dict
+    }
+
+
 class TestOnHeartbeatMessage:
     """_on_heartbeat_message — channel routing, data parsing, session auto-register, exception guard."""
 
@@ -220,7 +231,7 @@ class TestOnHeartbeatMessage:
 
     async def test_on_heartbeat_message_parses_dict_data_and_calls_process(self, service):
         payload = _make_payload()
-        data = payload.model_dump()
+        data = _make_envelope(payload.model_dump(mode="json"))
 
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)) as mock_proc:
             await service.on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
@@ -231,7 +242,8 @@ class TestOnHeartbeatMessage:
         assert call_args.args[1] == "op-session-111"
 
     async def test_on_heartbeat_message_parses_json_string_data(self, service):
-        data = json.dumps(_make_payload().model_dump(mode="json"))
+        payload = _make_payload()
+        data = json.dumps(_make_envelope(payload.model_dump(mode="json")))
 
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)) as mock_proc:
             await service.on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
@@ -243,7 +255,8 @@ class TestOnHeartbeatMessage:
         The handler must record the (operator, session) pair so subsequent
         bookkeeping (e.g. liveness queries) sees it as active.
         """
-        data = _make_payload().model_dump()
+        payload = _make_payload(operator_id="op-new", operator_session_id="op-session-new")
+        data = _make_envelope(payload.model_dump(mode="json"))
 
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)):
             await service.on_heartbeat_message(PubSubChannel.heartbeat("op-new", "op-session-new"), data)
@@ -252,7 +265,8 @@ class TestOnHeartbeatMessage:
 
     async def test_on_pattern_heartbeat_message_dispatches_by_channel(self, service):
         channel = PubSubChannel.heartbeat("op-333", "op-session-444")
-        data = _make_payload(operator_id="op-333", operator_session_id="op-session-444").model_dump()
+        payload = _make_payload(operator_id="op-333", operator_session_id="op-session-444")
+        data = _make_envelope(payload.model_dump(mode="json"))
 
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)) as mock_proc:
             await service.on_pattern_heartbeat_message("heartbeat:*", channel, data)
@@ -261,8 +275,10 @@ class TestOnHeartbeatMessage:
         assert ("op-333", "op-session-444") in service.active_sessions
 
     async def test_on_heartbeat_message_swallows_exceptions_silently(self, service):
+        payload = _make_payload()
+        data = _make_envelope(payload.model_dump(mode="json"))
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(side_effect=RuntimeError("boom"))):
-            await service.on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), _make_payload().model_dump())
+            await service.on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
 
 
 class TestHeartbeatSnapshotServiceIdentity:

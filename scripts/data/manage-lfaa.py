@@ -276,7 +276,7 @@ class LFAAManager:
         ).fetchall()
 
         print(f'\n{"=" * 70}')
-        print(f'SESSION: {row["id"]}')
+        print(f'OPERATOR_SESSION: {row["id"]}')
         print(f'{"=" * 70}')
         print(f'  Title:         {row["title"] or "(no title)"}')
         print(f'  Created:       {row["created_at"]}')
@@ -408,7 +408,7 @@ class LFAAManager:
 
         label_parts = []
         if operator_session_id:
-            label_parts.append(f'session={operator_session_id[:16]}...')
+            label_parts.append(f'operator_session={operator_session_id[:16]}...')
         if filepath:
             label_parts.append(f'path~={filepath}')
         label = f' [{", ".join(label_parts)}]' if label_parts else ''
@@ -678,7 +678,7 @@ class LFAAManager:
         tampered_color = GREEN
         print(f"  Tampered Envelopes: {tampered_color}{row['tampered_attempts']:,} ({row['percent']}%){RESET}")
 
-        print(f'\n  {BOLD}SESSION THROUGHPUT{RESET}')
+        print(f'\n  {BOLD}OPERATOR SESSION THROUGHPUT{RESET}')
         print(f'  {DIM}{"─" * IW}──{RESET}')
         rows = self.conn.execute("""
             SELECT operator_session_id, type, COUNT(*) AS count
@@ -738,12 +738,12 @@ class LFAAManager:
 
     def export_session(self, operator_session_id: str, output_path: str | None,
                        fmt: str = 'json') -> None:
-        session = self.conn.execute(
+        operatorSession = self.conn.execute(
             'SELECT id, title, created_at, user_identity FROM sessions WHERE id = ?',
             (operator_session_id,)
         ).fetchone()
-        if not session:
-            print(f'\nSession not found: {operator_session_id}')
+        if not operatorSession:
+            print(f'\nOperator session not found: {operator_session_id}')
             return
 
         rows = self.conn.execute(
@@ -783,7 +783,7 @@ class LFAAManager:
 
         payload = {
             'exported_at': datetime.utcnow().isoformat() + 'Z',
-            'session': dict(session),
+            'operator_session': dict(operatorSession),
             'total_events': len(events),
             'events': events,
         }
@@ -843,8 +843,8 @@ Examples:
     sp = subparsers.add_parser('sessions', help='List all sessions')
     sp.add_argument('--limit', type=int, default=50, help='Max sessions to show (default: 50)')
 
-    # session
-    sp = subparsers.add_parser('session', help='Get details for a single session')
+    # operator-session
+    sp = subparsers.add_parser('operator-session', help='Get details for a single operator session')
     sp.add_argument('--operator-session-id', type=str, required=True, help='OperatorSession ID')
 
     # events

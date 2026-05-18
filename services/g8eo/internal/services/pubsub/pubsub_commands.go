@@ -474,6 +474,61 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 	rs.handleUAPEnvelope((*uap.UAPEnvelope)(envelope))
 }
 
+// ProcessEnvelope is the public, synchronous entry point for fail-closed
+// substrate transaction processing. It is used by the listen-mode HTTP surface
+// (POST /api/governance/envelope) to verify a UAP JSON envelope and execute it
+// through the Warden, returning the signed ActionReceipt or a verification
+// error.
+//
+// The receipt is returned even on execution failure (status=FAILED) so callers
+// receive cryptographic evidence of the attempt. A nil receipt is only
+// returned when verification fails before execution begins, in which case the
+// returned error wraps the corresponding governance.ErrXxx sentinel.
+func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
+	if len(payload) == 0 {
+		return nil, errors.New("empty payload")
+	}
+	if len(payload) > MaxPayloadSize {
+		return nil, fmt.Errorf("payload exceeds %d byte limit", MaxPayloadSize)
+	}
+
+	envelope := &uap.UAPEnvelope{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, (*commonv1.GovernanceEnvelope)(envelope)); err != nil {
+		return nil, fmt.Errorf("invalid UAP JSON envelope: %w", err)
+	}
+
+	if rs.transactionVerifier == nil {
+		return nil, errors.New("transaction verifier not configured")
+	}
+	verified, err := rs.transactionVerifier.VerifyEnvelope(envelope)
+	if err != nil {
+		rs.logBlockedTransaction(envelope, err)
+		return nil, err
+	}
+
+	if rs.warden == nil {
+		return nil, errors.New("warden not configured")
+	}
+
+	eventType := constants.MapActionTypeToEventType(verified.ActionType)
+	cmdMsg := PubSubCommandMessage{
+		ID:                envelope.Id,
+		EventType:         constants.EventType(eventType),
+		CaseID:            envelope.CaseId,
+		TaskID:            &envelope.TaskId,
+		InvestigationID:   envelope.InvestigationId,
+		WebSessionID:      envelope.WebSessionId,
+		CLISessionID:      envelope.CliSessionId,
+		OperatorSessionID: envelope.OperatorSessionId,
+		OperatorID:        &envelope.OperatorId,
+		Payload:           envelope.Payload,
+		Timestamp:         envelope.Timestamp.AsTime(),
+	}
+
+	receipt, execErr := rs.warden.Execute(ctx, verified, cmdMsg)
+	return receipt, execErr
+}
+
 // handleUAPEnvelope processes a UAPEnvelope using the TransactionVerifier, Tribunal and Warden services.
 func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 	var verified *governance.VerifiedTransaction

@@ -226,6 +226,7 @@ type WorkflowType string
 const (
 	WorkflowTypeG8eBound WorkflowType = "g8e.bound"
 	WorkflowTypeG8eNotBound WorkflowType = "g8e.not.bound"
+	WorkflowTypeG8eCloudBound WorkflowType = "g8e.cloud.bound"
 )
 
 // RiskLevel is a typed string for risk level.
@@ -746,6 +747,8 @@ const (
 	SessionEndReasonSessionRegeneration SessionEndReason = "session_regeneration"
 	SessionEndReasonInvalidateAll SessionEndReason = "invalidate_all"
 	SessionEndReasonUserDeleted SessionEndReason = "user_deleted"
+	SessionEndReasonTimeoutAbsolute SessionEndReason = "timeout_absolute"
+	SessionEndReasonTimeoutIdle SessionEndReason = "timeout_idle"
 )
 
 // SessionSuspiciousReason is a typed string for session suspicious reason.
@@ -1039,6 +1042,7 @@ var Status = struct {
 	WorkflowType struct {
 		G8eBound WorkflowType
 		G8eNotBound WorkflowType
+		G8eCloudBound WorkflowType
 	}
 	RiskLevel struct {
 		Low RiskLevel
@@ -1379,6 +1383,8 @@ var Status = struct {
 		SessionRegeneration SessionEndReason
 		InvalidateAll SessionEndReason
 		UserDeleted SessionEndReason
+		TimeoutAbsolute SessionEndReason
+		TimeoutIdle SessionEndReason
 	}
 	SessionSuspiciousReason struct {
 		ExcessiveIPChanges SessionSuspiciousReason
@@ -1727,9 +1733,11 @@ var Status = struct {
 	WorkflowType: struct {
 		G8eBound WorkflowType
 		G8eNotBound WorkflowType
+		G8eCloudBound WorkflowType
 	}{
 		G8eBound: WorkflowTypeG8eBound,
 		G8eNotBound: WorkflowTypeG8eNotBound,
+		G8eCloudBound: WorkflowTypeG8eCloudBound,
 	},
 	RiskLevel: struct {
 		Low RiskLevel
@@ -2359,12 +2367,16 @@ var Status = struct {
 		SessionRegeneration SessionEndReason
 		InvalidateAll SessionEndReason
 		UserDeleted SessionEndReason
+		TimeoutAbsolute SessionEndReason
+		TimeoutIdle SessionEndReason
 	}{
 		UserLogout: SessionEndReasonUserLogout,
 		IntegrityFailure: SessionEndReasonIntegrityFailure,
 		SessionRegeneration: SessionEndReasonSessionRegeneration,
 		InvalidateAll: SessionEndReasonInvalidateAll,
 		UserDeleted: SessionEndReasonUserDeleted,
+		TimeoutAbsolute: SessionEndReasonTimeoutAbsolute,
+		TimeoutIdle: SessionEndReasonTimeoutIdle,
 	},
 	SessionSuspiciousReason: struct {
 		ExcessiveIPChanges SessionSuspiciousReason

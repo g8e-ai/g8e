@@ -753,9 +753,9 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 
 // completeRegistration performs the common registration logic after operator slot is resolved.
 func (s *RegistrationService) completeRegistration(operator *models.OperatorDocumentGo, linkData *models.DeviceLinkData, req models.OperatorRegistrationRequest, sanitizedFingerprint string) (*models.OperatorRegistrationResponse, error) {
-	// Create session
+	// Create operator session
 	operatorSessionID := uuid.NewString()
-	session := &models.SessionSummary{
+	operatorSessionSummary := &models.SessionSummary{
 		OperatorSessionID: operatorSessionID,
 		CreatedAt:         time.Now().UTC(),
 		ExpiresAt:         time.Now().UTC().Add(24 * time.Hour),
@@ -847,16 +847,16 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	}
 
 	return &models.OperatorRegistrationResponse{
-		Success:           true,
-		OperatorID:        operator.ID,
-		OperatorSessionID: operatorSessionID,
-		CLISessionID:      cliSessionID,
-		OperatorCert:      finalCertPEM,
-		OperatorCertChain: finalChainPEM,
-		CLICert:           cliCertPEM,
-		CLICertChain:      cliCertChainPEM,
-		HubTrustBundle:    string(hubBundle),
-		Session:           session,
+		Success:                true,
+		OperatorID:             operator.ID,
+		OperatorSessionID:      operatorSessionID,
+		CLISessionID:           cliSessionID,
+		OperatorCert:           finalCertPEM,
+		OperatorCertChain:      finalChainPEM,
+		CLICert:                cliCertPEM,
+		CLICertChain:           cliCertChainPEM,
+		HubTrustBundle:         string(hubBundle),
+		OperatorSessionSummary: operatorSessionSummary,
 	}, nil
 }
 
@@ -1147,7 +1147,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 	return res, nil
 }
 
-// SetTargetContext sets the active target operator for a session.
+// SetTargetContext sets the active target operator for a web session.
 func (s *RegistrationService) SetTargetContext(req models.SetTargetContextRequest) (*models.SetTargetContextResponse, error) {
 	if req.WebSessionID == "" {
 		return nil, fmt.Errorf("web_session_id is required")
@@ -1156,8 +1156,8 @@ func (s *RegistrationService) SetTargetContext(req models.SetTargetContextReques
 		return nil, fmt.Errorf("user_id is required")
 	}
 
-	// For now, "target context" is just making sure the operator is bound to the session.
-	// In the future, this might set a specific "active" flag in the session state.
+	// For now, "target context" is just making sure the operator is bound to the operator session.
+	// In the future, this might set a specific "active" flag in the operator session state.
 
 	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID)
 	if err != nil {
