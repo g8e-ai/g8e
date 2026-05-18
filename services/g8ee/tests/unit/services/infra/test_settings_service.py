@@ -82,8 +82,12 @@ class TestSettingsService:
         user_id = "user_456"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
+        platform_doc = PlatformSettingsDocument(
+            settings=G8eePlatformSettings()
+        ).model_dump()
+
         cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
-            None if document_id == user_doc_id else {}
+            None if document_id == user_doc_id else platform_doc
         )
 
         service = SettingsService(cache_aside_service=cache_mock)
@@ -94,10 +98,15 @@ class TestSettingsService:
         assert settings.llm.primary_model is None
         assert settings.llm.primary_api_key is None
 
-        cache_mock.get_document_with_cache.assert_called_once_with(
+        cache_mock.get_document_with_cache.assert_any_call(
             collection=DB_COLLECTION_SETTINGS,
             document_id=user_doc_id
         )
+        cache_mock.get_document_with_cache.assert_any_call(
+            collection=DB_COLLECTION_SETTINGS,
+            document_id=PLATFORM_SETTINGS_DOC
+        )
+        assert cache_mock.get_document_with_cache.call_count == 2
 
     async def test_llm_settings_no_overrides(self):
         """Test that llm_max_tokens is None if not provided in user settings."""

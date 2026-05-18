@@ -37,6 +37,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const governanceEnvelopeRedirectError = "submit via POST /api/governance/envelope"
+
 func readBody(r *http.Request) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(r.Body, 50*1024*1024))
 }
@@ -213,6 +215,32 @@ func pathTraversalGuard(next http.Handler) http.Handler {
 func containsTraversal(path string) bool {
 	for _, seg := range strings.Split(path, "/") {
 		if seg == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+func isDirectDBMutationAllowed(collection string) bool {
+	switch constants.CollectionName(collection) {
+	case constants.CollectionSettings,
+		constants.CollectionUsers,
+		constants.CollectionOperators,
+		constants.CollectionOperatorSessions,
+		constants.CollectionBoundSessions,
+		constants.CollectionPasskeyChallenges,
+		constants.CollectionRevokedCertificates,
+		constants.CollectionTrustedSigners,
+		constants.CollectionConsoleAudit:
+		return true
+	default:
+		return false
+	}
+}
+
+func isMutationPubSubChannelAllowed(channel string) bool {
+	for _, prefix := range []string{"heartbeat:", "results:", "sse:", "ws_session:", "internal:"} {
+		if strings.HasPrefix(channel, prefix) {
 			return true
 		}
 	}
@@ -904,6 +932,10 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodPut:
+		if !isDirectDBMutationAllowed(collection) {
+			jsonError(w, http.StatusConflict, governanceEnvelopeRedirectError)
+			return
+		}
 		body, err := readBody(r)
 		if err != nil {
 			jsonError(w, http.StatusBadRequest, "invalid JSON body")
@@ -924,6 +956,10 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.ListenMode.StatusOK})
 
 	case http.MethodPatch:
+		if !isDirectDBMutationAllowed(collection) {
+			jsonError(w, http.StatusConflict, governanceEnvelopeRedirectError)
+			return
+		}
 		body, err := readBody(r)
 		if err != nil {
 			jsonError(w, http.StatusBadRequest, "invalid JSON body")
@@ -949,6 +985,10 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodDelete:
+		if !isDirectDBMutationAllowed(collection) {
+			jsonError(w, http.StatusConflict, governanceEnvelopeRedirectError)
+			return
+		}
 		deleted, err := h.db.DocDelete(collection, id)
 		if err != nil {
 			jsonError(w, http.StatusInternalServerError, err.Error())
@@ -1894,6 +1934,10 @@ func (h *HTTPHandler) handlePubSubPublish(w http.ResponseWriter, r *http.Request
 	}
 	if req.Channel == "" {
 		jsonError(w, http.StatusBadRequest, "channel required")
+		return
+	}
+	if !isMutationPubSubChannelAllowed(req.Channel) {
+		jsonError(w, http.StatusConflict, governanceEnvelopeRedirectError)
 		return
 	}
 

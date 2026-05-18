@@ -421,7 +421,7 @@ async def orchestrate_tool_execution(
                     )
 
                     if outcome.slash_tier:
-                        slash_event = getattr(EventType, f"REPUTATION_SLASH_TIER{outcome.slash_tier.value}")
+                        slash_event = getattr(EventType, f"AI_REPUTATION_SLASH_TIER{outcome.slash_tier.value}")
                         await event_service.publish_reputation_event(
                             slash_event,
                             payload,

@@ -337,12 +337,12 @@ func TestHandleDB(t *testing.T) {
 
 	t.Run("PUT and GET", func(t *testing.T) {
 		data := map[string]string{"name": "alice"}
-		reqPut := httptest.NewRequest(http.MethodPut, "/db/users/u1", bytes.NewReader(mustDocJSON(t, data)))
+		reqPut := httptest.NewRequest(http.MethodPut, "/db/settings/u1", bytes.NewReader(mustDocJSON(t, data)))
 		rrPut := httptest.NewRecorder()
 		h.handleDB(rrPut, reqPut)
 		assert.Equal(t, http.StatusOK, rrPut.Code)
 
-		reqGet := httptest.NewRequest(http.MethodGet, "/db/users/u1", nil)
+		reqGet := httptest.NewRequest(http.MethodGet, "/db/settings/u1", nil)
 		rrGet := httptest.NewRecorder()
 		h.handleDB(rrGet, reqGet)
 		assert.Equal(t, http.StatusOK, rrGet.Code)
@@ -355,12 +355,12 @@ func TestHandleDB(t *testing.T) {
 
 	t.Run("PATCH", func(t *testing.T) {
 		patch := map[string]string{"role": "admin"}
-		reqPatch := httptest.NewRequest(http.MethodPatch, "/db/users/u1", bytes.NewReader(mustDocJSON(t, patch)))
+		reqPatch := httptest.NewRequest(http.MethodPatch, "/db/settings/u1", bytes.NewReader(mustDocJSON(t, patch)))
 		rrPatch := httptest.NewRecorder()
 		h.handleDB(rrPatch, reqPatch)
 		assert.Equal(t, http.StatusOK, rrPatch.Code)
 
-		reqGet := httptest.NewRequest(http.MethodGet, "/db/users/u1", nil)
+		reqGet := httptest.NewRequest(http.MethodGet, "/db/settings/u1", nil)
 		rrGet := httptest.NewRecorder()
 		h.handleDB(rrGet, reqGet)
 		var doc map[string]interface{}
@@ -370,12 +370,12 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("DELETE", func(t *testing.T) {
-		reqDel := httptest.NewRequest(http.MethodDelete, "/db/users/u1", nil)
+		reqDel := httptest.NewRequest(http.MethodDelete, "/db/settings/u1", nil)
 		rrDel := httptest.NewRecorder()
 		h.handleDB(rrDel, reqDel)
 		assert.Equal(t, http.StatusOK, rrDel.Code)
 
-		reqGet := httptest.NewRequest(http.MethodGet, "/db/users/u1", nil)
+		reqGet := httptest.NewRequest(http.MethodGet, "/db/settings/u1", nil)
 		rrGet := httptest.NewRecorder()
 		h.handleDB(rrGet, reqGet)
 		assert.Equal(t, http.StatusNotFound, rrGet.Code)
@@ -401,7 +401,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPut, "/db/users/u1", strings.NewReader("{invalid-json}"))
+		req := httptest.NewRequest(http.MethodPut, "/db/settings/u1", strings.NewReader("{invalid-json}"))
 		rr := httptest.NewRecorder()
 		h.handleDB(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
@@ -409,14 +409,14 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("PATCH not found", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPatch, "/db/users/nonexistent", bytes.NewReader(mustDocJSON(t, map[string]string{"foo": "bar"})))
+		req := httptest.NewRequest(http.MethodPatch, "/db/settings/nonexistent", bytes.NewReader(mustDocJSON(t, map[string]string{"foo": "bar"})))
 		rr := httptest.NewRecorder()
 		h.handleDB(rr, req)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
 
 	t.Run("DELETE not found", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/db/users/nonexistent", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/db/settings/nonexistent", nil)
 		rr := httptest.NewRecorder()
 		h.handleDB(rr, req)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
@@ -427,6 +427,25 @@ func TestHandleDB(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleDB(rr, req)
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Non-bootstrap mutations redirect to governance envelope", func(t *testing.T) {
+		tests := []struct {
+			method string
+			body   []byte
+		}{
+			{method: http.MethodPut, body: mustDocJSON(t, map[string]string{"name": "alice"})},
+			{method: http.MethodPatch, body: mustDocJSON(t, map[string]string{"role": "admin"})},
+			{method: http.MethodDelete},
+		}
+
+		for _, tt := range tests {
+			req := httptest.NewRequest(tt.method, "/db/items/i1", bytes.NewReader(tt.body))
+			rr := httptest.NewRecorder()
+			h.handleDB(rr, req)
+			assert.Equal(t, http.StatusConflict, rr.Code, "method=%s", tt.method)
+			assert.JSONEq(t, `{"error":"submit via POST /api/governance/envelope"}`, rr.Body.String())
+		}
 	})
 
 	t.Run("Query validation", func(t *testing.T) {
@@ -909,7 +928,7 @@ func TestHandlePubSubPublish(t *testing.T) {
 
 	t.Run("Publish valid", func(t *testing.T) {
 		pubReq := models.PubSubPublishRequest{
-			Channel: "test-chan",
+			Channel: constants.ResultsChannel("op-1", "session-1"),
 			Data:    mustDocJSON(t, map[string]string{"foo": "bar"}),
 		}
 		body, _ := json.Marshal(pubReq)
@@ -932,6 +951,21 @@ func TestHandlePubSubPublish(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handlePubSubPublish(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("Reject mutation channels", func(t *testing.T) {
+		for _, channel := range []string{constants.CmdChannel("op-1", "session-1"), "auditor:op-1:session-1"} {
+			pubReq := models.PubSubPublishRequest{
+				Channel: channel,
+				Data:    mustDocJSON(t, map[string]string{"foo": "bar"}),
+			}
+			body, _ := json.Marshal(pubReq)
+			req := httptest.NewRequest(http.MethodPost, "/pubsub/publish", bytes.NewReader(body))
+			rr := httptest.NewRecorder()
+			h.handlePubSubPublish(rr, req)
+			assert.Equal(t, http.StatusConflict, rr.Code, "channel=%s", channel)
+			assert.JSONEq(t, `{"error":"submit via POST /api/governance/envelope"}`, rr.Body.String())
+		}
 	})
 }
 

@@ -31,9 +31,20 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	pubsubv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/pubsubv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/listen"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/pubsub"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
+	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 )
+
+type acceptingL3Verifier struct{}
+
+func (acceptingL3Verifier) VerifyL3Proof(_ string, _ string, _ *commonv1.L3Proof) (bool, error) {
+	return true, nil
+}
 
 func TestBYOClientParity_EndToEnd(t *testing.T) {
 	dataDir := t.TempDir()
@@ -45,6 +56,29 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 
 	ls, err := listen.NewListenService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
+
+	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
+	fileSvc := execution.NewFileEditService(cfg, testutil.NewTestLogger())
+	govDeps := ls.GetGovernanceDeps()
+	wardenPriv, wardenKeyID, err := ls.GetSecretManager().GetWardenKey()
+	require.NoError(t, err)
+	cmdSvc, err := pubsub.NewPubSubCommandService(pubsub.CommandServiceConfig{
+		Config:            cfg,
+		Logger:            testutil.NewTestLogger(),
+		Execution:         execSvc,
+		FileEdit:          fileSvc,
+		PubSubClient:      pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
+		Sentinel:          sentinel.NewSentinel(services.ProductionSentinelConfig(), testutil.NewTestLogger()),
+		ReplayStore:       govDeps.ReplayStore,
+		StateRootProvider: govDeps.StateRootProvider,
+		TransactionAudit:  govDeps.TransactionAudit,
+		SignerStore:       govDeps.SignerStore,
+		L3Verifier:        acceptingL3Verifier{},
+		WardenSigningKey:  wardenPriv,
+		WardenKeyID:       wardenKeyID,
+	})
+	require.NoError(t, err)
+	ls.SetEnvelopeProcessor(cmdSvc)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -169,6 +203,17 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		},
 	}
 
+	signerName := "test-signer"
+	signerPub, signerPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
+		ID:        signerName,
+		PublicKey: hex.EncodeToString(signerPub),
+		AddedAt:   time.Now().UTC(),
+		Enabled:   true,
+	})
+	require.NoError(t, err)
+
 	// 3. Fetch current state root
 	resp, err = mtlsClient.Get(mtlsURL + "/health")
 	require.NoError(t, err)
@@ -191,14 +236,13 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 
 	nonce := "nonce-1"
 	envelope := &commonv1.GovernanceEnvelope{
-		Id:                "msg-1",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
 		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
 		OperatorId:        regResp.OperatorID,
 		OperatorSessionId: regResp.OperatorSessionID,
 		EventType:         string(constants.Event.Operator.Command.Requested),
-		ActionType:        "EXECUTE_BASH",
+		ActionType:        string(constants.ActionTypeExecuteBash),
 		Payload:           cmdPayload,
 		StateMerkleRoot:   stateRoot,
 		Nonce:             nonce,
@@ -206,28 +250,11 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	}
 
 	// 5. Attach L2 proof (Tribunal)
-	// We'll use a trusted signer key.
-	// For this test, we'll manually add a trusted signer to the PKI dir.
-	signerName := "test-signer"
-	signerPub, signerPriv, _ := ed25519.GenerateKey(rand.Reader)
-	err = os.MkdirAll(filepath.Join(pkiDir, "trusted_signers"), 0755)
+	transactionHash, err := uap.GenerateMessageID(envelope)
 	require.NoError(t, err)
-	err = os.WriteFile(filepath.Join(pkiDir, "trusted_signers", signerName+".pub"), []byte(hex.EncodeToString(signerPub)), 0644)
-	require.NoError(t, err)
-
-	// Re-load trusted signers in the running Operator?
-	// The test ListenService was already started. We might need a way to reload or just use the DB if it's there.
-	// Actually, PubSubCommandService loads them at startup. But we are testing the LISTEN surface.
-	// Wait, the requirement says "Submit transaction through the public Operator surface".
-	// The Operator listen mode handles /pubsub/publish and /ws/pubsub.
-	// The ACTUAL verification happens in PubSubCommandService which is NOT part of ListenService.
-	// In the real platform, an Operator in --listen mode relays to an Operator in --execute mode.
-	// For this parity test, we want to prove the BYO client can interact with the Operator Listen surface.
-
-	// Sign the message ID + decision
-	msgID := "msg-1" // In reality, would be generated hash
-	decision := true
-	sigPayload := fmt.Sprintf("%s|%v", msgID, decision)
+	envelope.Id = transactionHash
+	envelope.TransactionHash = transactionHash
+	sigPayload := fmt.Sprintf("%s|%v", transactionHash, true)
 	signature := ed25519.Sign(signerPriv, []byte(sigPayload))
 
 	envelope.Governance = &commonv1.GovernanceMetadata{
@@ -251,9 +278,6 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	}
 
 	// 7. Submit transaction through the public Operator surface
-	// We'll use the WebSocket for real-time results, or just POST to /pubsub/publish for the command.
-	// Let's use WebSocket to receive the accept/reject and receipt.
-
 	dialer := websocket.Dialer{
 		TLSClientConfig: &tls.Config{
 			RootCAs:      rootPool,
@@ -285,18 +309,10 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, constants.PubSubEventSubscribed, ackEvent.Type)
 
-	// Submit the envelope via /pubsub/publish
-	// Canonical JSON wire format: envelope is protojson-encoded directly, not binary protobuf bytes
+	// Submit the envelope via the canonical governed mutation entry.
 	dataJSON, err := protojson.Marshal(envelope)
 	require.NoError(t, err)
-
-	pubReq := models.PubSubPublishRequest{
-		Channel: constants.CmdChannel(regResp.OperatorID, regResp.OperatorSessionID),
-		Data:    dataJSON,
-	}
-	pubBody, _ := json.Marshal(pubReq)
-
-	httpReq, err := http.NewRequest(http.MethodPost, mtlsURL+"/pubsub/publish", bytes.NewReader(pubBody))
+	httpReq, err := http.NewRequest(http.MethodPost, mtlsURL+"/api/governance/envelope", bytes.NewReader(dataJSON))
 	require.NoError(t, err)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set(constants.HeaderAuthorization, "Bearer "+regResp.OperatorSessionID)
@@ -306,7 +322,15 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	// 8. Receive accept/reject decision & 9. Receive signed receipt
+	var receipt operatorv1.ActionReceipt
+	err = json.NewDecoder(resp.Body).Decode(&receipt)
+	require.NoError(t, err)
+	require.Equal(t, envelope.Id, receipt.TransactionId)
+	require.Equal(t, envelope.TransactionHash, receipt.TransactionHash)
+	require.NotEmpty(t, receipt.SignerKeyId)
+	require.NotEmpty(t, receipt.Signature)
+
+	// 8. Receive result fan-out on the non-mutation results channel
 	// Simulation: As an "Executor", we'll pick up the message and publish a result
 	executorResult := &operatorv1.CommandResult{
 		ExecutionId: "exec-1",
@@ -363,10 +387,5 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "res-1", receivedEnv.Id)
 
-	// Note: Audit query validation is deferred to Step 3 (Warden execution boundary).
-	// Step 1 validates the canonical JSON wire format for envelope submission and receipt.
-	// The test successfully demonstrates:
-	// 1. Envelope submitted as canonical JSON (protojson)
-	// 2. Envelope received as canonical JSON (protojson)
-	// 3. Binary protobuf bytes are rejected (enforced by handleCommandPayload)
+	require.Equal(t, envelope.Id, receipt.TransactionId)
 }

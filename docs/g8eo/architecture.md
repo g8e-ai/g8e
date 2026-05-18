@@ -5,7 +5,7 @@ parent: Architecture
 
 # g8e Operator
 
-Last Updated: 2026-05-13
+Last Updated: 2026-05-18
 Version: v0.3.0
 
 The **Operator** is a role defined by the g8e Protocol: a host-side implementation that receives signed transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a local ledger. It is the data plane, execution engine, and persistence layer for the platform.
@@ -85,11 +85,19 @@ Listen Mode exposes four distinct ports for different protocol surfaces:
 |---|---|---|---|
 | **Bootstrap / Trust Portal** | `9002` (HTTP) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
 | **Public browser / BYO** | `9003` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery. |
-| **mTLS API** | `9000` | mTLS + SPIFFE URI SAN | `/db/*` (Document Store), `/kv/*` (KV with TTL), `/blob/*`, `/pubsub/publish`, `/api/operators/*`, `/api/device-links/*`, `/api/pki/{sign-csr,revoke,revocation-bundle}`, `/api/auth/passkey/*`. |
+| **mTLS API** | `9000` | mTLS + SPIFFE URI SAN | `/api/governance/envelope`, `/db/*` (read/query plus bootstrap writes only), `/kv/*` (KV with TTL), `/blob/*`, `/pubsub/publish` (non-mutation fan-out only), `/api/operators/*`, `/api/device-links/*`, `/api/pki/{sign-csr,revoke,revocation-bundle}`, `/api/auth/passkey/*`. |
 | **Pub/Sub** | `9001` (mTLS WSS) | mTLS + SPIFFE URI SAN | `/ws/pubsub` real-time fan-out to Satellites and clients. |
 
 - **mTLS Ports (WSS, mTLS API)**: Require valid operator certificates with URI SAN binding to operator session IDs. Used for substrate operations and command dispatch.
 - **Public Ports (Bootstrap, Public)**: The **Public Port (9003)** is a plain TLS endpoint for browser-based flows. The **Bootstrap Port (9002)** is a plain HTTP endpoint used to download the initial trust bundle and bootstrap enrollment. These are the sovereign entry points for new operators and BYO clients.
+
+#### Substrate Mutation Entry
+
+`POST /api/governance/envelope` is the only customer-facing mutation API on the reference Operator. Clients submit canonical JSON (protojson) `GovernanceEnvelope` transactions and receive a signed `ActionReceipt` after the envelope passes transaction hash, expiry, nonce/replay, state-root, L2 signer, L3 proof, and L1 typed-payload validation.
+
+Direct `/db/` mutations are restricted to bootstrap and Operator-owned collections required to initialize governance and persist Warden/audit records. Mutations to non-bootstrap collections return `409 Conflict` with `{"error":"submit via POST /api/governance/envelope"}`. `/db/` reads and `_query` remain available because they do not mutate state.
+
+`/pubsub/publish` remains available for non-mutation fan-out (`heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*`). Mutation channels such as `cmd:*` and `auditor:*` return the same `409 Conflict` redirect so callers cannot bypass the governed execution boundary.
 
 ### 2. Standard Mode (Target)
 The default mode for execution on target hosts. The reference Operator initiates an outbound connection and waits for protocol-governed UAP JSON envelopes.

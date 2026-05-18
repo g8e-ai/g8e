@@ -186,16 +186,18 @@ class SettingsService:
         )
 
         if not user_doc_dict:
-            # No persisted user settings — return an empty default so the
-            # request-scoped LLM overrides supplied by BYO/CLI clients can
-            # populate validation. validate_llm_config still fails closed
-            # when neither the user doc nor the request supplies a complete
-            # provider+credential set.
             self._logger.info(
                 "No user settings document for user %s; using empty defaults so request overrides can complete validation",
                 user_id,
             )
-            return G8eeUserSettings(llm=LLMSettings())
+            platform_settings = await self.get_platform_settings()
+            return G8eeUserSettings(
+                llm=LLMSettings(),
+                search=platform_settings.search,
+                eval_judge=platform_settings.eval_judge,
+                command_validation=platform_settings.command_validation,
+                batch_execution=platform_settings.batch_execution,
+            )
 
         user_doc = UserSettingsDocument.model_validate(user_doc_dict)
         data = user_doc.settings
