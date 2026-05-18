@@ -34,6 +34,7 @@ so new_pubsub_ws_session does not wire SSL — the caller resolves it via
 resolve_pubsub_ssl_context(ssl_settings) and passes it to ws_connect().
 """
 
+import os
 import ssl
 import aiohttp
 
@@ -52,6 +53,9 @@ def _resolve_ssl_context(
             try:
                 import logging
                 logger = logging.getLogger(__name__)
+                if not os.path.exists(path):
+                    logger.warning("[SSL] CA cert path does not exist: %s", path)
+                    continue
                 logger.info("[SSL] Probing CA cert path: %s", path)
                 with open(path):
                     pass

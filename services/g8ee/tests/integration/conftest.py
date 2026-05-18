@@ -185,8 +185,32 @@ async def all_services(cache_aside_service, test_settings):
     Injects a real WebSearchProvider if search settings are configured,
     ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
+    import socket
+    import os
     from app.llm.factory import get_search_settings
     from app.services.ai.grounding.web_search_provider import WebSearchProvider
+    from app.constants.paths import PATHS
+    from app.clients.db_client import DBClient
+    from app.services.infra.settings_service import SettingsService
+
+    # Check if CA certificate exists
+    ca_cert_path = PATHS["infra"]["ca_cert_path"]
+    if not os.path.exists(ca_cert_path):
+        pytest.skip(f"CA certificate not found at {ca_cert_path}")
+
+    # Check if operator is online AND SSL is working
+    try:
+        settings_service = SettingsService()
+        bootstrap_settings = settings_service.get_local_settings()
+        db_client = DBClient(
+            ca_cert_path=bootstrap_settings.ca_cert_path,
+            client_cert_path=bootstrap_settings.client_cert_path,
+            client_key_path=bootstrap_settings.client_key_path,
+        )
+        await db_client.connect()
+        await db_client.close()
+    except Exception as e:
+        pytest.skip(f"Operator SSL connection failed: {e}")
 
     # Check if web search settings are configured
     web_search_provider = None

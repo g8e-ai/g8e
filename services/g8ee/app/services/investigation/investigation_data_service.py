@@ -91,7 +91,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         await self.cache.create_document(
             collection=self.collection,
             document_id=investigation.id,
-            data=investigation.model_dump(),
+            data=investigation.model_dump(mode="json"),
         )
         logger.info("Created investigation %s for case %s", investigation.id, request.case_id)
         return investigation

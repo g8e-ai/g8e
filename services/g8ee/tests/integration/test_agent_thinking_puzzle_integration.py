@@ -131,6 +131,8 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         web_session_id,
         case_id,
         user_id,
+        *,
+        cli_session_id=None,
     ):
         # Construct a mock event object with the structure the test expects
         from collections import namedtuple

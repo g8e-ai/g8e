@@ -15,7 +15,7 @@
 Integration tests: AI Services Real LLM Calls
 
 These tests exercise AI services with real LLM providers to verify end-to-end functionality.
-All tests use real services and infrastructure - no mocks allowed per testing guidelines.
+Tests use real g8ee services and LLM providers with an in-memory operator cache fake for app document setup.
 
 Segment 1: Memory Generation Service
 Segment 2: Title Generation Service
@@ -28,6 +28,7 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+import pytest_asyncio
 
 from app.constants import (
     AgentMode,
@@ -51,6 +52,37 @@ from tests.fakes.factories import (
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.slow]
+
+
+@pytest.fixture(scope="function")
+def cache_aside_service(fake_cache_aside_service):
+    return fake_cache_aside_service
+
+
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def all_services(cache_aside_service, test_settings):
+    from unittest.mock import MagicMock
+
+    from app.services.service_factory import ServiceFactory
+
+    services = ServiceFactory.create_all_services(
+        test_settings,
+        cache_aside_service,
+        db_service=MagicMock(),
+        kv_service=MagicMock(),
+        blob_service=MagicMock(),
+    )
+    yield services
+    await ServiceFactory.stop_services(services)
+
+
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def cleanup(cache_aside_service):
+    from tests.integration.cleanup import IntegrationCleanupTracker
+
+    tracker = IntegrationCleanupTracker(cache_aside_service)
+    yield tracker
+    await tracker.cleanup()
 
 
 # ---------------------------------------------------------------------------

@@ -32,6 +32,27 @@ if _PROTOCOL_DIR is None:
 _CONTAINER_PROTOCOL_CONSTANTS_DIR = _PROTOCOL_DIR + "/constants"
 _PATH_FILE = _CONTAINER_PROTOCOL_CONSTANTS_DIR + "/paths.json"
 
+def _resolve_host_path(raw_path: str | None, default: Path) -> Path:
+    path = Path(raw_path) if raw_path else default
+    if not path.is_absolute():
+        path = Path(_PROTOCOL_DIR).parent / path
+    return path.expanduser().resolve()
+
+def _host_runtime_paths() -> tuple[Path, Path]:
+    runtime_dir = _resolve_host_path(
+        os.environ.get(EnvVar.RUNTIME_DIR),
+        Path(_PROTOCOL_DIR).parent / ".g8e",
+    )
+    pki_dir = _resolve_host_path(
+        os.environ.get(EnvVar.PKIDir),
+        runtime_dir / "pki",
+    )
+    secrets_dir = _resolve_host_path(
+        os.environ.get(EnvVar.SECRETS_DIR),
+        runtime_dir / "secrets",
+    )
+    return pki_dir, secrets_dir
+
 def _load_paths() -> dict:
     try:
         with Path(_PATH_FILE).open() as f:
@@ -41,9 +62,9 @@ def _load_paths() -> dict:
         # On host, default to .g8e/pki (Operator listen mode PKI directory)
         # In container, default to /pki for backwards compatibility
         if _PROTOCOL_DIR != "/app/protocol":
-            default_runtime_dir = os.environ.get(EnvVar.RUNTIME_DIR, str(Path(_PROTOCOL_DIR).parent / ".g8e"))
-            default_pki_dir = os.environ.get(EnvVar.PKIDir, str(Path(default_runtime_dir) / "pki"))
-            default_secrets_dir = os.environ.get(EnvVar.SECRETS_DIR, str(Path(default_runtime_dir) / "secrets"))
+            pki_path, secrets_path = _host_runtime_paths()
+            default_pki_dir = str(pki_path)
+            default_secrets_dir = str(secrets_path)
         else:
             default_pki_dir = os.environ.get(EnvVar.PKIDir, "/pki")
             default_secrets_dir = os.environ.get(EnvVar.SECRETS_DIR, "/secrets")
@@ -75,13 +96,11 @@ def _load_paths() -> dict:
         paths["infra"]["protocol_constants_dir"] = _PROTOCOL_DIR + "/constants"
         paths["infra"]["protocol_models_dir"] = _PROTOCOL_DIR + "/models"
         # Override PKI/secrets paths to use host runtime directory when running on host
-        host_runtime_dir = os.environ.get(EnvVar.RUNTIME_DIR, str(Path(_PROTOCOL_DIR).parent / ".g8e"))
-        host_pki_dir = os.environ.get(EnvVar.PKIDir, str(Path(host_runtime_dir) / "pki"))
-        host_secrets_dir = os.environ.get(EnvVar.SECRETS_DIR, str(Path(host_runtime_dir) / "secrets"))
-        paths["infra"]["pki_dir"] = host_pki_dir
-        paths["infra"]["secrets_dir"] = host_secrets_dir
-        paths["infra"]["ca_cert_path"] = str(Path(host_pki_dir) / "trust" / "hub-bundle.pem")
-        paths["infra"]["app_cert_dir"] = str(Path(host_pki_dir) / "issued" / "apps")
+        pki_path, secrets_path = _host_runtime_paths()
+        paths["infra"]["pki_dir"] = str(pki_path)
+        paths["infra"]["secrets_dir"] = str(secrets_path)
+        paths["infra"]["ca_cert_path"] = str(pki_path / "trust" / "hub-bundle.pem")
+        paths["infra"]["app_cert_dir"] = str(pki_path / "issued" / "apps")
 
     return paths
 

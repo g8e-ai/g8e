@@ -43,7 +43,7 @@ Real code under test:
     CacheAsideService (app/services/cache/cache_aside.py)
     extract_system_context, extract_all_operators_context
 
-All tests use real operator and cache services — no mocks allowed per testing guidelines.
+All tests use real g8ee services backed by an in-memory operator cache fake.
 """
 
 import asyncio
@@ -52,6 +52,7 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+import pytest_asyncio
 
 from app.constants import (
     CloudSubtype,
@@ -92,6 +93,37 @@ from tests.fakes.factories import (
 )
 
 pytestmark = [pytest.mark.integration]
+
+
+@pytest.fixture(scope="function")
+def cache_aside_service(fake_cache_aside_service):
+    return fake_cache_aside_service
+
+
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def all_services(cache_aside_service, test_settings):
+    from unittest.mock import MagicMock
+
+    from app.services.service_factory import ServiceFactory
+
+    services = ServiceFactory.create_all_services(
+        test_settings,
+        cache_aside_service,
+        db_service=MagicMock(),
+        kv_service=MagicMock(),
+        blob_service=MagicMock(),
+    )
+    yield services
+    await ServiceFactory.stop_services(services)
+
+
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def cleanup(cache_aside_service):
+    from tests.integration.cleanup import IntegrationCleanupTracker
+
+    tracker = IntegrationCleanupTracker(cache_aside_service)
+    yield tracker
+    await tracker.cleanup()
 
 
 
