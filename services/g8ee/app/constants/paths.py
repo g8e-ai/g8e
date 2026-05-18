@@ -14,12 +14,14 @@
 import json
 import os
 from pathlib import Path
+
+from app.constants.env_vars import EnvVar
 from app.utils.path import resolve_project_root
 
 # The bridge to protocol paths.
 # In container, this is always /app/protocol/constants/paths.json
 # On host, respect G8E_PROTOCOL_DIR environment variable
-_PROTOCOL_DIR = os.environ.get("G8E_PROTOCOL_DIR")
+_PROTOCOL_DIR = os.environ.get(EnvVar.PROTOCOL_DIR)
 if _PROTOCOL_DIR is None:
     # If not provided, try to resolve from project root
     try:
@@ -39,20 +41,20 @@ def _load_paths() -> dict:
         # On host, default to .g8e/pki (Operator listen mode PKI directory)
         # In container, default to /pki for backwards compatibility
         if _PROTOCOL_DIR != "/app/protocol":
-            default_runtime_dir = os.environ.get("G8E_RUNTIME_DIR", str(Path(_PROTOCOL_DIR).parent / ".g8e"))
-            default_pki_dir = os.environ.get("G8E_PKI_DIR", str(Path(default_runtime_dir) / "pki"))
-            default_secrets_dir = os.environ.get("G8E_SECRETS_DIR", str(Path(default_runtime_dir) / "secrets"))
+            default_runtime_dir = os.environ.get(EnvVar.RUNTIME_DIR, str(Path(_PROTOCOL_DIR).parent / ".g8e"))
+            default_pki_dir = os.environ.get(EnvVar.PKIDir, str(Path(default_runtime_dir) / "pki"))
+            default_secrets_dir = os.environ.get(EnvVar.SECRETS_DIR, str(Path(default_runtime_dir) / "secrets"))
         else:
-            default_pki_dir = os.environ.get("G8E_PKI_DIR", "/pki")
-            default_secrets_dir = os.environ.get("G8E_SECRETS_DIR", "/secrets")
+            default_pki_dir = os.environ.get(EnvVar.PKIDir, "/pki")
+            default_secrets_dir = os.environ.get(EnvVar.SECRETS_DIR, "/secrets")
         app_cert_dir = str(Path(default_pki_dir) / "issued" / "apps")
         paths = {
             "infra": {
                 "db_path": "/data/g8e.db",
                 "ca_cert_path": str(Path(default_pki_dir) / "trust" / "hub-bundle.pem"),
                 "app_cert_dir": app_cert_dir,
-                "pki_dir": os.environ.get("G8E_PKI_DIR", default_pki_dir),
-                "secrets_dir": os.environ.get("G8E_SECRETS_DIR", default_secrets_dir),
+                "pki_dir": os.environ.get(EnvVar.PKIDir, default_pki_dir),
+                "secrets_dir": os.environ.get(EnvVar.SECRETS_DIR, default_secrets_dir),
                 "docs_dir": "/docs",
                 "protocol_dir": _PROTOCOL_DIR,
                 "protocol_constants_dir": _PROTOCOL_DIR + "/constants",
@@ -73,9 +75,9 @@ def _load_paths() -> dict:
         paths["infra"]["protocol_constants_dir"] = _PROTOCOL_DIR + "/constants"
         paths["infra"]["protocol_models_dir"] = _PROTOCOL_DIR + "/models"
         # Override PKI/secrets paths to use host runtime directory when running on host
-        host_runtime_dir = os.environ.get("G8E_RUNTIME_DIR", str(Path(_PROTOCOL_DIR).parent / ".g8e"))
-        host_pki_dir = os.environ.get("G8E_PKI_DIR", str(Path(host_runtime_dir) / "pki"))
-        host_secrets_dir = os.environ.get("G8E_SECRETS_DIR", str(Path(host_runtime_dir) / "secrets"))
+        host_runtime_dir = os.environ.get(EnvVar.RUNTIME_DIR, str(Path(_PROTOCOL_DIR).parent / ".g8e"))
+        host_pki_dir = os.environ.get(EnvVar.PKIDir, str(Path(host_runtime_dir) / "pki"))
+        host_secrets_dir = os.environ.get(EnvVar.SECRETS_DIR, str(Path(host_runtime_dir) / "secrets"))
         paths["infra"]["pki_dir"] = host_pki_dir
         paths["infra"]["secrets_dir"] = host_secrets_dir
         paths["infra"]["ca_cert_path"] = str(Path(host_pki_dir) / "trust" / "hub-bundle.pem")

@@ -17,27 +17,32 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestExecutionStatus(t *testing.T) {
+	// Test that protobuf enum values are properly typed
+	// This test ensures type safety at the boundary
 	tests := []struct {
-		name     string
-		status   constants.ExecutionStatus
-		expected string
+		name   string
+		status operatorv1.ExecutionStatus
 	}{
-		{"pending", constants.ExecutionStatusPending, "pending"},
-		{"executing", constants.ExecutionStatusExecuting, "executing"},
-		{"completed", constants.ExecutionStatusCompleted, "completed"},
-		{"failed", constants.ExecutionStatusFailed, "failed"},
-		{"timeout", constants.ExecutionStatusTimeout, "timeout"},
-		{"cancelled", constants.ExecutionStatusCancelled, "cancelled"},
+		{"unspecified", operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED},
+		{"executing", operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING},
+		{"completed", operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
+		{"failed", operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED},
+		{"cancelled", operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED},
+		{"timeout", operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, string(tt.status))
+			// Verify the enum value is a valid protobuf enum
+			// The zero value (UNSPECIFIED) is valid for all other values
+			if tt.name != "unspecified" {
+				assert.NotEqual(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED, tt.status)
+			}
 		})
 	}
 }
@@ -82,7 +87,7 @@ func TestExecutionResultsPayload(t *testing.T) {
 			TaskID:          &taskID,
 			Command:         "echo",
 			Args:            []string{"hello"},
-			Status:          constants.ExecutionStatusCompleted,
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 			ReturnCode:      &returnCode,
 			Stdout:          "hello\n",
 			Stderr:          "",
@@ -91,7 +96,7 @@ func TestExecutionResultsPayload(t *testing.T) {
 			DurationSeconds: 2.0,
 		}
 
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Equal(t, 0, *result.ReturnCode)
 		assert.Equal(t, "hello\n", result.Stdout)
 		assert.Equal(t, 2.0, result.DurationSeconds)

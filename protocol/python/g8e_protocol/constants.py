@@ -67,6 +67,7 @@ HEADERS = _load_protocol_json("headers.json")
 DOCUMENT_IDS = _load_protocol_json("document_ids.json")
 PLATFORM = _load_protocol_json("platform.json")
 AGENTS = _load_protocol_json("agents.json")
+ERRORS = _load_protocol_json("errors.json")
 
 from enum import StrEnum
 
@@ -76,6 +77,46 @@ class ComponentName(StrEnum):
     G8EE = "g8ee"
     G8EO = "g8eo"
     OPERATOR = "g8eo" # Alias
+
+
+# Error enums - generated from protocol/constants/errors.json
+def _create_enum_from_json(enum_name: str, json_data: dict[str, Any]) -> StrEnum:
+    """Create a StrEnum class from JSON data."""
+    enum_dict = json_data.get(enum_name, {})
+    return StrEnum(enum_name, enum_dict)
+
+
+def _flatten_nested_dict(nested: dict[str, Any], prefix: str = "", separator: str = ".") -> dict[str, str]:
+    """Flatten a nested dictionary into dot-separated keys."""
+    result = {}
+    for key, value in nested.items():
+        new_key = f"{prefix}{separator}{key}" if prefix else key
+        if isinstance(value, dict):
+            result.update(_flatten_nested_dict(value, new_key, separator))
+        else:
+            result[new_key] = value
+    return result
+
+
+ErrorCategory = _create_enum_from_json("ErrorCategory", ERRORS)
+ErrorSeverity = _create_enum_from_json("ErrorSeverity", ERRORS)
+ErrorCode = _create_enum_from_json("ErrorCode", ERRORS)
+
+# Prompt enums - generated from protocol/constants/prompts.json
+# AgentMode maps from the JSON keys
+_agent_mode_data = PROMPTS.get("agent.mode", {})
+AgentMode = StrEnum("AgentMode", {k.upper().replace(".", "_"): k for k in _agent_mode_data.keys()})
+
+# PromptSection maps from the JSON keys
+_prompt_section_data = PROMPTS.get("prompt.section", {})
+PromptSection = StrEnum("PromptSection", {k.upper().replace(".", "_"): k for k in _prompt_section_data.keys()})
+
+# PromptFile needs to be flattened from nested structure
+_prompt_file_nested = PROMPTS.get("prompt.file", {})
+_prompt_file_flat = _flatten_nested_dict(_prompt_file_nested, separator="_")
+# Convert keys to uppercase enum names matching g8ee conventions
+# Replace dots with underscores in keys to avoid invalid enum names
+PromptFile = StrEnum("PromptFile", {k.upper().replace(".", "_"): v for k, v in _prompt_file_flat.items()})
 
 # HTTP headers - loaded from JSON (protocol/constants/headers.json)
 # Use HEADERS dict directly or access via these convenience constants

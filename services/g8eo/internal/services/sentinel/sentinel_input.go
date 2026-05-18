@@ -16,6 +16,8 @@ package sentinel
 import (
 	"regexp"
 	"strings"
+
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 )
 
 // InputThreatDetector extends ThreatDetector with block recommendation
@@ -812,10 +814,10 @@ func (s *Sentinel) AnalyzeCommand(command string) *CommandAnalysisResult {
 }
 
 // AnalyzeFileEdit analyzes a file operation before it happens.
-func (s *Sentinel) AnalyzeFileEdit(filePath string, operation string, content string) *FileEditAnalysisResult {
+func (s *Sentinel) AnalyzeFileEdit(filePath string, operation constants.FileOperation, content string) *FileEditAnalysisResult {
 	result := &FileEditAnalysisResult{
 		FilePath:             s.ScrubText(filePath),
-		Operation:            operation,
+		Operation:            string(operation),
 		Safe:                 true,
 		ThreatLevel:          ThreatLevelNone,
 		RiskScore:            0,
@@ -846,7 +848,7 @@ func (s *Sentinel) AnalyzeFileEdit(filePath string, operation string, content st
 		signals = append(signals, contentSignals...)
 	}
 
-	pathSignals := s.analyzeFilePath(filePath, operation)
+	pathSignals := s.analyzeFilePath(filePath, string(operation))
 	signals = append(signals, pathSignals...)
 
 	result.ThreatSignals = signals
@@ -871,7 +873,7 @@ func (s *Sentinel) AnalyzeFileEdit(filePath string, operation string, content st
 			"threat_count", len(signals),
 			"safe", result.Safe,
 			"file_path_scrubbed", result.FilePath,
-			"operation", operation,
+			"operation", string(operation),
 			"is_critical", result.IsCriticalSystemFile)
 	}
 

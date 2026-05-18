@@ -62,23 +62,6 @@ func setExecutionIDOnPayload(payload proto.Message, executionID string) {
 	}
 }
 
-func protoExecutionStatus(status constants.ExecutionStatus) operatorv1.ExecutionStatus {
-	switch status {
-	case constants.ExecutionStatusExecuting:
-		return operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING
-	case constants.ExecutionStatusCompleted:
-		return operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
-	case constants.ExecutionStatusFailed:
-		return operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-	case constants.ExecutionStatusCancelled:
-		return operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED
-	case constants.ExecutionStatusTimeout:
-		return operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT
-	default:
-		return operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED
-	}
-}
-
 // publishLFAATypedResponseTo builds a UAPEnvelope from a typed payload and publishes it to the
 // results channel. Used by services that hold a PubSubClient directly.
 func publishLFAATypedResponseTo(
@@ -129,7 +112,7 @@ func publishLFAAErrorTo(
 	// Use CommandResult as a generic error container
 	payload := &operatorv1.CommandResult{
 		ExecutionId: executionID,
-		Status:      protoExecutionStatus(constants.ExecutionStatusFailed),
+		Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 		Error:       errorMsg,
 	}
 

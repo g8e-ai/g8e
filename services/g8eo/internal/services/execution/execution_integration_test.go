@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,7 +51,7 @@ func TestExecutionService_Integration(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "hello from operator")
 
 	})
@@ -89,7 +89,7 @@ func TestExecutionService_Integration(t *testing.T) {
 		// Verify all results
 		count := 0
 		for result := range results {
-			assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+			assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 			count++
 		}
 		assert.Equal(t, numCommands, count)
@@ -112,7 +112,7 @@ func TestExecutionService_Integration(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "Line 1")
 		assert.Contains(t, result.Stdout, "Line 2")
 
@@ -140,7 +140,7 @@ func TestExecutionService_Integration(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, tmpDir)
 		assert.Contains(t, result.Stdout, "custom_value_123")
 
@@ -162,7 +162,7 @@ func TestExecutionService_Integration(t *testing.T) {
 
 		result1, err := svc.ExecuteCommand(context.Background(), step1Req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result1.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result1.Status)
 
 		// Step 2: Append to file
 		step2Req := &models.ExecutionRequestPayload{
@@ -177,7 +177,7 @@ func TestExecutionService_Integration(t *testing.T) {
 
 		result2, err := svc.ExecuteCommand(context.Background(), step2Req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result2.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result2.Status)
 
 		// Step 3: Read and verify
 		step3Req := &models.ExecutionRequestPayload{
@@ -192,7 +192,7 @@ func TestExecutionService_Integration(t *testing.T) {
 
 		result3, err := svc.ExecuteCommand(context.Background(), step3Req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result3.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result3.Status)
 		assert.Contains(t, result3.Stdout, "Initial content")
 		assert.Contains(t, result3.Stdout, "Appended content")
 
@@ -212,7 +212,7 @@ func TestExecutionService_Integration(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusTimeout, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT, result.Status)
 		assert.NotNil(t, result.ErrorMessage)
 
 	})
@@ -232,7 +232,7 @@ func TestExecutionService_Integration(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.NotEmpty(t, result.Stdout)
 		assert.NotNil(t, result.TerminalOutput)
 
@@ -298,7 +298,7 @@ func TestExecutionService_Integration(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "stdout message")
 		assert.Contains(t, result.Stderr, "stderr message")
 
@@ -359,7 +359,7 @@ func TestExecutionService_Integration(t *testing.T) {
 		// Verify all results
 		assert.Len(t, results, numCommands)
 		for _, result := range results {
-			assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+			assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		}
 	})
 }
@@ -397,7 +397,7 @@ exit 0
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "Starting script")
 		assert.Contains(t, result.Stdout, "Middle of script")
 		assert.Contains(t, result.Stdout, "Ending script")
@@ -408,12 +408,12 @@ exit 0
 		testCases := []struct {
 			name           string
 			exitCode       int
-			expectedStatus constants.ExecutionStatus
+			expectedStatus operatorv1.ExecutionStatus
 		}{
-			{"exit 0", 0, constants.ExecutionStatusCompleted},
-			{"exit 1", 1, constants.ExecutionStatusCompleted},
-			{"exit 42", 42, constants.ExecutionStatusCompleted},
-			{"exit 127", 127, constants.ExecutionStatusCompleted},
+			{"exit 0", 0, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
+			{"exit 1", 1, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
+			{"exit 42", 42, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
+			{"exit 127", 127, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
 		}
 
 		for _, tc := range testCases {
@@ -455,7 +455,7 @@ exit 0
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "50")
 
 	})

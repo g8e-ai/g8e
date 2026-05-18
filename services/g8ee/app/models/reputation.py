@@ -34,6 +34,7 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
+from app.constants.status import SlashTier
 
 __all__ = [
     "GENESIS_PREV_ROOT",
@@ -46,22 +47,6 @@ __all__ = [
     "StakeResolution",
     "StakeResolutionPayload",
 ]
-
-
-class SlashTier(IntEnum):
-    """Slash tiers per GDD §6.
-
-    TIER_1: correlated / catastrophic (50-100% stake; destructive outcomes)
-    TIER_2: provable faults (5-20% stake; verifier/auditor objective failures)
-    TIER_3: liveness (0.1-1% stake; missed passes, ignored questions)
-
-    Int values are preserved in the `stake_resolution.slash_tier` column and
-    mirror the literal values in the shared schema enum.
-    """
-
-    TIER_1 = 1
-    TIER_2 = 2
-    TIER_3 = 3
 
 
 # Sentinel `prev_root` used by the genesis commitment in a deployment.

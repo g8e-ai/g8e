@@ -3427,5 +3427,91 @@
       "_go_name": "Tied",
       "_python_name": "TIED"
     }
+  },
+  "reputation.slash_tier": {
+    "_meta": {
+      "_go_name": "SlashTier",
+      "_go_type": "SlashTier",
+      "_python_class": "SlashTier",
+      "_is_int": true
+    },
+    "tier1": {
+      "value": 1,
+      "_go_const": "SlashTier1",
+      "_python_const": "SLASH_TIER_1",
+      "_go_name": "Tier1",
+      "_python_name": "TIER_1"
+    },
+    "tier2": {
+      "value": 2,
+      "_go_const": "SlashTier2",
+      "_python_const": "SLASH_TIER_2",
+      "_go_name": "Tier2",
+      "_python_name": "TIER_2"
+    },
+    "tier3": {
+      "value": 3,
+      "_go_const": "SlashTier3",
+      "_python_const": "SLASH_TIER_3",
+      "_go_name": "Tier3",
+      "_python_name": "TIER_3"
+    }
+  },
+  "tool.scope": {
+    "_meta": {
+      "_go_name": "ToolScope",
+      "_go_type": "ToolScope",
+      "_python_class": "ToolScope"
+    },
+    "universal": {
+      "value": "universal",
+      "_go_const": "ToolScopeUniversal",
+      "_python_const": "TOOL_SCOPE_UNIVERSAL",
+      "_go_name": "Universal",
+      "_python_name": "UNIVERSAL"
+    },
+    "operator_gated": {
+      "value": "operator_gated",
+      "_go_const": "ToolScopeOperatorGated",
+      "_python_const": "TOOL_SCOPE_OPERATOR_GATED",
+      "_go_name": "OperatorGated",
+      "_python_name": "OPERATOR_GATED"
+    }
+  },
+  "scrubber.priority": {
+    "_meta": {
+      "_go_name": "ScrubberPriority",
+      "_go_type": "ScrubberPriority",
+      "_python_class": "ScrubberPriority",
+      "_is_int": true
+    },
+    "exact_credential": {
+      "value": 10,
+      "_go_const": "ScrubberPriorityExactCredential",
+      "_python_const": "SCRUBBER_PRIORITY_EXACT_CREDENTIAL",
+      "_go_name": "ExactCredential",
+      "_python_name": "EXACT_CREDENTIAL"
+    },
+    "url_or_connection": {
+      "value": 20,
+      "_go_const": "ScrubberPriorityUrlOrConnection",
+      "_python_const": "SCRUBBER_PRIORITY_URL_OR_CONNECTION",
+      "_go_name": "UrlOrConnection",
+      "_python_name": "URL_OR_CONNECTION"
+    },
+    "contextual_credential": {
+      "value": 30,
+      "_go_const": "ScrubberPriorityContextualCredential",
+      "_python_const": "SCRUBBER_PRIORITY_CONTEXTUAL_CREDENTIAL",
+      "_go_name": "ContextualCredential",
+      "_python_name": "CONTEXTUAL_CREDENTIAL"
+    },
+    "generic_pii": {
+      "value": 40,
+      "_go_const": "ScrubberPriorityGenericPII",
+      "_python_const": "SCRUBBER_PRIORITY_GENERIC_PII",
+      "_go_name": "GenericPII",
+      "_python_name": "GENERIC_PII"
+    }
   }
 }

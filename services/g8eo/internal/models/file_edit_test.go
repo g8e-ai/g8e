@@ -17,21 +17,22 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestFileEditOperations(t *testing.T) {
 	tests := []struct {
 		name      string
-		operation FileEditOperation
+		operation constants.FileOperation
 		expected  string
 	}{
-		{"read", FileEditOperationRead, "read"},
-		{"write", FileEditOperationWrite, "write"},
-		{"replace", FileEditOperationReplace, "replace"},
-		{"delete", FileEditOperationDelete, "delete"},
-		{"insert", FileEditOperationInsert, "insert"},
-		{"patch", FileEditOperationPatch, "patch"},
+		{"read", constants.FileOperationRead, "read"},
+		{"write", constants.FileOperationWrite, "write"},
+		{"replace", constants.FileOperationReplace, "replace"},
+		{"delete", constants.FileOperationDelete, "delete"},
+		{"insert", constants.FileOperationInsert, "insert"},
+		{"patch", constants.FileOperationPatch, "patch"},
 	}
 
 	for _, tt := range tests {
@@ -50,7 +51,7 @@ func TestFileEditRequest(t *testing.T) {
 			ExecutionID:     "req-123",
 			CaseID:          "case-456",
 			TaskID:          &taskID,
-			Operation:       FileEditOperationWrite,
+			Operation:       constants.FileOperationWrite,
 			FilePath:        "/tmp/test.txt",
 			Content:         &content,
 			RequestedBy:     "user@example.com",
@@ -60,7 +61,7 @@ func TestFileEditRequest(t *testing.T) {
 		}
 
 		assert.Equal(t, "req-123", req.ExecutionID)
-		assert.Equal(t, FileEditOperationWrite, req.Operation)
+		assert.Equal(t, constants.FileOperationWrite, req.Operation)
 		assert.Equal(t, "/tmp/test.txt", req.FilePath)
 		assert.Equal(t, "test content", *req.Content)
 		assert.True(t, req.CreateBackup)
@@ -74,13 +75,13 @@ func TestFileEditRequest(t *testing.T) {
 		req := &FileEditRequest{
 			ExecutionID: "req-123",
 			CaseID:      "case-456",
-			Operation:   FileEditOperationReplace,
+			Operation:   constants.FileOperationReplace,
 			FilePath:    "/tmp/test.txt",
 			OldContent:  &oldContent,
 			NewContent:  &newContent,
 		}
 
-		assert.Equal(t, FileEditOperationReplace, req.Operation)
+		assert.Equal(t, constants.FileOperationReplace, req.Operation)
 		assert.Equal(t, "old", *req.OldContent)
 		assert.Equal(t, "new", *req.NewContent)
 	})
@@ -92,13 +93,13 @@ func TestFileEditRequest(t *testing.T) {
 		req := &FileEditRequest{
 			ExecutionID:    "req-123",
 			CaseID:         "case-456",
-			Operation:      FileEditOperationInsert,
+			Operation:      constants.FileOperationInsert,
 			FilePath:       "/tmp/test.txt",
 			InsertContent:  &insertContent,
 			InsertPosition: &insertPos,
 		}
 
-		assert.Equal(t, FileEditOperationInsert, req.Operation)
+		assert.Equal(t, constants.FileOperationInsert, req.Operation)
 		assert.Equal(t, "inserted text", *req.InsertContent)
 		assert.Equal(t, 10, *req.InsertPosition)
 	})
@@ -110,13 +111,13 @@ func TestFileEditRequest(t *testing.T) {
 		req := &FileEditRequest{
 			ExecutionID: "req-123",
 			CaseID:      "case-456",
-			Operation:   FileEditOperationDelete,
+			Operation:   constants.FileOperationDelete,
 			FilePath:    "/tmp/test.txt",
 			StartLine:   &startLine,
 			EndLine:     &endLine,
 		}
 
-		assert.Equal(t, FileEditOperationDelete, req.Operation)
+		assert.Equal(t, constants.FileOperationDelete, req.Operation)
 		assert.Equal(t, 5, *req.StartLine)
 		assert.Equal(t, 10, *req.EndLine)
 	})
@@ -133,16 +134,16 @@ func TestFileEditResult(t *testing.T) {
 			ExecutionID:  "req-123",
 			CaseID:       "case-456",
 			TaskID:       &taskID,
-			Operation:    FileEditOperationWrite,
+			Operation:    constants.FileOperationWrite,
 			FilePath:     "/tmp/test.txt",
-			Status:       constants.ExecutionStatusCompleted,
+			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 			BackupPath:   &backupPath,
 			BytesWritten: &bytesWritten,
 			LinesChanged: &linesChanged,
 		}
 
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
-		assert.Equal(t, FileEditOperationWrite, result.Operation)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
+		assert.Equal(t, constants.FileOperationWrite, result.Operation)
 		assert.Equal(t, "/tmp/test.txt.bak", *result.BackupPath)
 		assert.Equal(t, int64(100), *result.BytesWritten)
 		assert.Equal(t, 10, *result.LinesChanged)
@@ -155,14 +156,14 @@ func TestFileEditResult(t *testing.T) {
 		result := &FileEditResult{
 			ExecutionID:  "req-123",
 			CaseID:       "case-456",
-			Operation:    FileEditOperationWrite,
+			Operation:    constants.FileOperationWrite,
 			FilePath:     "/tmp/nonexistent.txt",
-			Status:       constants.ExecutionStatusFailed,
+			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			ErrorMessage: &errorMsg,
 			ErrorType:    &errorType,
 		}
 
-		assert.Equal(t, constants.ExecutionStatusFailed, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
 		assert.Equal(t, "file not found", *result.ErrorMessage)
 		assert.Equal(t, "not_found", *result.ErrorType)
 	})

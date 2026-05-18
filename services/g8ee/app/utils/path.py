@@ -2,6 +2,8 @@ import logging
 import os
 from pathlib import Path
 
+from app.constants.env_vars import EnvVar
+
 logger = logging.getLogger(__name__)
 
 def resolve_project_root() -> Path:
@@ -11,7 +13,7 @@ def resolve_project_root() -> Path:
     1. G8E_PROJECT_ROOT environment variable
     2. Fallback: walks up from current working directory
     """
-    env_root = os.environ.get("G8E_PROJECT_ROOT")
+    env_root = os.environ.get(EnvVar.PROJECT_ROOT)
     if env_root:
         return Path(env_root).resolve()
 

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 )
 
 // Document is the internal representation of a stored document.
@@ -138,20 +139,20 @@ type PubSubPublishResponse struct {
 }
 
 type ActionReceiptRecord struct {
-	TransactionID     string                    `json:"transaction_id"`
-	TransactionHash   string                    `json:"transaction_hash"`
-	OperatorID        string                    `json:"operator_id"`
-	OperatorSessionID string                    `json:"operator_session_id"`
-	ActionType        constants.ActionType      `json:"action_type"`
-	TargetResource    string                    `json:"target_resource"`
-	Status            constants.ExecutionStatus `json:"status"`
-	ResultSummary     string                    `json:"result_summary"`
-	StateRootBefore   string                    `json:"state_root_before"`
-	StateRootAfter    string                    `json:"state_root_after"`
-	ExecutedAt        time.Time                 `json:"executed_at"`
-	SignerKeyID       string                    `json:"signer_key_id"`
-	Signature         string                    `json:"signature"`
-	Timestamp         time.Time                 `json:"timestamp"`
+	TransactionID     string                     `json:"transaction_id"`
+	TransactionHash   string                     `json:"transaction_hash"`
+	OperatorID        string                     `json:"operator_id"`
+	OperatorSessionID string                     `json:"operator_session_id"`
+	ActionType        constants.ActionType       `json:"action_type"`
+	TargetResource    string                     `json:"target_resource"`
+	Status            operatorv1.ExecutionStatus `json:"status"`
+	ResultSummary     string                     `json:"result_summary"`
+	StateRootBefore   string                     `json:"state_root_before"`
+	StateRootAfter    string                     `json:"state_root_after"`
+	ExecutedAt        time.Time                  `json:"executed_at"`
+	SignerKeyID       string                     `json:"signer_key_id"`
+	Signature         string                     `json:"signature"`
+	Timestamp         time.Time                  `json:"timestamp"`
 }
 
 // BlobMetaResponse is the typed response for GET /blob/{namespace}/{id}/meta.

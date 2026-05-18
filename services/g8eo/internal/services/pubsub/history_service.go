@@ -21,6 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
@@ -136,7 +137,7 @@ func (hs *HistoryService) publishFetchLogsResultFromRaw(ctx context.Context, msg
 			StdoutSize:   int32(record.StdoutSize),
 			StderrSize:   int32(record.StderrSize),
 			Timestamp:    record.TimestampUTC.Format(time.RFC3339Nano),
-			SentinelMode: string(constants.Status.VaultMode.Raw),
+			SentinelMode: marshaler.Status(constants.Status.VaultMode.Raw),
 		})
 	hs.logger.Info("Fetch logs result transmitted (Raw Vault)",
 		"execution_id", record.ID,
@@ -156,7 +157,7 @@ func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSub
 			StdoutSize:   int32(record.StdoutSize),
 			StderrSize:   int32(record.StderrSize),
 			Timestamp:    record.TimestampUTC.Format(time.RFC3339Nano),
-			SentinelMode: string(constants.Status.VaultMode.Scrubbed),
+			SentinelMode: marshaler.Status(constants.Status.VaultMode.Scrubbed),
 		})
 	hs.logger.Info("Fetch logs result transmitted",
 		"execution_id", record.ID,

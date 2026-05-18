@@ -42,7 +42,7 @@ from enum import StrEnum
 import app.llm.llm_types as types
 from app.constants.prompts import AgentMode
 from app.constants.settings import ToolDisplayCategory
-from app.constants.status import OperatorToolName
+from app.constants.status import OperatorToolName, ToolScope
 from app.models.tool_results import ToolResult
 from app.services.ai.tools import (
     check_port,
@@ -63,12 +63,6 @@ from app.services.ai.tools import (
     ssh_inventory,
     stream_operator,
 )
-
-
-class ToolScope(StrEnum):
-    """Classification that controls the bound-operator auth gate and Tribunal routing."""
-    UNIVERSAL = "universal"
-    OPERATOR_GATED = "operator_gated"
 
 
 _ALL_MODES: frozenset[AgentMode] = frozenset(AgentMode)

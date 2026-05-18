@@ -655,3 +655,21 @@ class TribunalAuditMode(StrEnum):
     MAJORITY = "majority"
     TIED = "tied"
 
+class SlashTier(IntEnum):
+    """Generated from protocol/constants/status.json - reputation.slash_tier"""
+    TIER_1 = 1
+    TIER_2 = 2
+    TIER_3 = 3
+
+class ToolScope(StrEnum):
+    """Generated from protocol/constants/status.json - tool.scope"""
+    UNIVERSAL = "universal"
+    OPERATOR_GATED = "operator_gated"
+
+class ScrubberPriority(IntEnum):
+    """Generated from protocol/constants/status.json - scrubber.priority"""
+    EXACT_CREDENTIAL = 10
+    URL_OR_CONNECTION = 20
+    CONTEXTUAL_CREDENTIAL = 30
+    GENERIC_PII = 40
+

@@ -17,28 +17,17 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
-)
-
-// FileEditOperation represents a single edit operation on a file
-type FileEditOperation string
-
-const (
-	FileEditOperationRead    FileEditOperation = "read"
-	FileEditOperationWrite   FileEditOperation = "write"
-	FileEditOperationReplace FileEditOperation = "replace"
-	FileEditOperationInsert  FileEditOperation = "insert"
-	FileEditOperationDelete  FileEditOperation = "delete"
-	FileEditOperationPatch   FileEditOperation = "patch"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 )
 
 // FileEditRequest represents a request to perform file editing operations
 type FileEditRequest struct {
-	ExecutionID     string            `json:"execution_id"`
-	CaseID          string            `json:"case_id"`
-	TaskID          *string           `json:"task_id,omitempty"`
-	InvestigationID string            `json:"investigation_id"`
-	Operation       FileEditOperation `json:"operation"`
-	FilePath        string            `json:"file_path"`
+	ExecutionID     string                  `json:"execution_id"`
+	CaseID          string                  `json:"case_id"`
+	TaskID          *string                 `json:"task_id,omitempty"`
+	InvestigationID string                  `json:"investigation_id"`
+	Operation       constants.FileOperation `json:"operation"`
+	FilePath        string                  `json:"file_path"`
 
 	ReadOptions *FileReadOptions `json:"read_options,omitempty"`
 	Content     *string          `json:"content,omitempty"`
@@ -71,13 +60,13 @@ type FileReadOptions struct {
 
 // FileEditResult represents the result of a file editing operation
 type FileEditResult struct {
-	ExecutionID     string                    `json:"execution_id"`
-	CaseID          string                    `json:"case_id"`
-	TaskID          *string                   `json:"task_id,omitempty"`
-	InvestigationID string                    `json:"investigation_id"`
-	Operation       FileEditOperation         `json:"operation"`
-	FilePath        string                    `json:"file_path"`
-	Status          constants.ExecutionStatus `json:"status"`
+	ExecutionID     string                     `json:"execution_id"`
+	CaseID          string                     `json:"case_id"`
+	TaskID          *string                    `json:"task_id,omitempty"`
+	InvestigationID string                     `json:"investigation_id"`
+	Operation       constants.FileOperation    `json:"operation"`
+	FilePath        string                     `json:"file_path"`
+	Status          operatorv1.ExecutionStatus `json:"status"`
 
 	Content      *string    `json:"content,omitempty"`
 	BackupPath   *string    `json:"backup_path,omitempty"`

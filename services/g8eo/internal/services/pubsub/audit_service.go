@@ -20,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
@@ -137,7 +138,7 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg PubSubComm
 		OperatorSessionID: as.config.OperatorSessionId,
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
-		ContentText:       string(constants.Status.AiSource.TerminalDirect),
+		ContentText:       marshaler.Status(constants.Status.AiSource.TerminalDirect),
 		CommandRaw:        protoCmd.Command,
 	}
 
@@ -173,7 +174,7 @@ func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg PubS
 		OperatorSessionID:   as.config.OperatorSessionId,
 		Timestamp:           time.Now().UTC(),
 		Type:                constants.Event.Operator.Audit.Command,
-		ContentText:         string(constants.Status.AiSource.TerminalDirect),
+		ContentText:         marshaler.Status(constants.Status.AiSource.TerminalDirect),
 		CommandRaw:          protoResult.Command,
 		CommandExitCode:     system.IntPtr(int(protoResult.ExitCode)),
 		CommandStdout:       protoResult.Output,

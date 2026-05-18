@@ -389,15 +389,6 @@ func TestExtractConstantsFromModels(t *testing.T) {
 		_, err := extractConstantsFromFile(fullPath, "base.go")
 		require.NoError(t, err, "base.go must parse without error")
 	})
-
-	t.Run("file_edit.go operations", func(t *testing.T) {
-		fullPath := filepath.Join(g8eoRoot, "internal/models/file_edit.go")
-		constants, err := extractConstantsFromFile(fullPath, "file_edit.go")
-		require.NoError(t, err)
-		require.NotEmpty(t, constants, "should extract constants from file_edit.go")
-
-		t.Logf("Extracted %d constants from file_edit.go", len(constants))
-	})
 }
 
 func TestEnforcedValuesAfterAllowlist(t *testing.T) {

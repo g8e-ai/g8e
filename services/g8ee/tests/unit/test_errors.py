@@ -282,7 +282,7 @@ class TestGetHttpStatus:
         (ErrorCategory.NETWORK, 500),
         (ErrorCategory.PUBSUB, 500),
         (ErrorCategory.STORAGE, 500),
-        (ErrorCategory.CONFIGURATION, 500),
+        (ErrorCategory.CONFIGURATION, 400),
     ])
     def test_status_mapping(self, category, expected_status):
         error = G8eError("msg", code=ErrorCode.GENERIC_ERROR, category=category)

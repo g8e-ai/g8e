@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/security"
 	system "github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
 )
@@ -261,7 +262,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 				InvestigationID: request.InvestigationID,
 				Command:         request.Command,
 				Args:            request.Args,
-				Status:          constants.ExecutionStatusFailed,
+				Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 				StartTime:       &now,
 				ReturnCode:      system.IntPtr(126), // Command invoked cannot execute
 				Stdout:          "",
@@ -300,7 +301,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		InvestigationID: request.InvestigationID,
 		Command:         request.Command,
 		Args:            request.Args,
-		Status:          constants.ExecutionStatusExecuting,
+		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 		StartTime:       &execCtx.StartTime,
 	}
 
@@ -330,8 +331,8 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	err := es.executeCommandInternal(cmdCtx, execCtx)
 	if err != nil {
 		execCtx.mu.Lock()
-		if result.Status == constants.ExecutionStatusExecuting {
-			result.Status = constants.ExecutionStatusFailed
+		if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING {
+			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 			result.ErrorMessage = system.StringPtr(err.Error())
 			result.ErrorType = system.StringPtr("execution_error")
 			result.ReturnCode = system.IntPtr(es.errorToReturnCode(err))
@@ -522,7 +523,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		execCtx.mu.Lock()
 		result.EndTime = &endTime
 		result.DurationSeconds = duration.Seconds()
-		result.Status = constants.ExecutionStatusFailed
+		result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 		result.ErrorMessage = system.StringPtr(err.Error())
 		result.ErrorType = system.StringPtr("start_error")
 		result.ReturnCode = system.IntPtr(es.errorToReturnCode(err))
@@ -574,7 +575,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			result.Status = constants.ExecutionStatusTimeout
+			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT
 			result.ErrorMessage = system.StringPtr("Command execution timed out")
 			result.ErrorType = system.StringPtr("timeout")
 			result.ReturnCode = system.IntPtr(124)
@@ -594,39 +595,39 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 					strings.Contains(stderrLower, "not executable") ||
 					strings.Contains(stderrLower, "cannot execute")) {
 					// Actual permission denied error from shell
-					result.Status = constants.ExecutionStatusFailed
+					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 					result.ErrorMessage = system.StringPtr("Permission denied: command is not executable")
 					result.ErrorType = system.StringPtr("permission_denied")
 				} else if exitCode == 127 && (strings.Contains(stderrLower, "not found") ||
 					strings.Contains(stderrLower, "no such file") ||
 					strings.Contains(stderrLower, "command not found")) {
 					// Actual command not found error from shell
-					result.Status = constants.ExecutionStatusFailed
+					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 					result.ErrorMessage = system.StringPtr("Command not found")
 					result.ErrorType = system.StringPtr("command_not_found")
 				} else {
 					// All other non-zero exit codes (including deliberate exit 126/127) are normal completion
 					// The command executed and returned an exit code - that's a successful execution
-					result.Status = constants.ExecutionStatusCompleted
+					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 				}
 			} else {
 				// Non-Unix system or wait status unavailable - treat as completed with exit code
-				result.Status = constants.ExecutionStatusCompleted
+				result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 			}
 		} else if strings.Contains(err.Error(), "signal: killed") {
 			// Process was killed (by us on timeout/cancel, or externally)
-			result.Status = constants.ExecutionStatusFailed
+			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 			result.ErrorMessage = system.StringPtr("Command was terminated")
 			result.ErrorType = system.StringPtr("killed")
 			result.ReturnCode = system.IntPtr(137)
 		} else {
-			result.Status = constants.ExecutionStatusFailed
+			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 			result.ErrorMessage = system.StringPtr(err.Error())
 			result.ErrorType = system.StringPtr("execution_error")
 			result.ReturnCode = system.IntPtr(es.errorToReturnCode(err))
 		}
 	} else {
-		result.Status = constants.ExecutionStatusCompleted
+		result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 		returnCode := 0
 		result.ReturnCode = &returnCode
 	}

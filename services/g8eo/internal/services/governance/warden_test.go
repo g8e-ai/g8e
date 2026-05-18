@@ -125,13 +125,13 @@ func TestWardenExecuteHappyPath(t *testing.T) {
 	var initialRecord models.ActionReceiptRecord
 	err = json.Unmarshal(auditStore.calls[0].data, &initialRecord)
 	require.NoError(t, err)
-	require.Equal(t, constants.ExecutionStatusExecuting, initialRecord.Status)
+	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING, initialRecord.Status)
 
 	// Verify final receipt has COMPLETED status
 	var finalRecord models.ActionReceiptRecord
 	err = json.Unmarshal(auditStore.calls[1].data, &finalRecord)
 	require.NoError(t, err)
-	require.Equal(t, constants.ExecutionStatusCompleted, finalRecord.Status)
+	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, finalRecord.Status)
 }
 
 func TestWardenExecuteHandlerError(t *testing.T) {
@@ -183,7 +183,7 @@ func TestWardenExecuteHandlerError(t *testing.T) {
 	var finalRecord models.ActionReceiptRecord
 	err = json.Unmarshal(auditStore.calls[1].data, &finalRecord)
 	require.NoError(t, err)
-	require.Equal(t, constants.ExecutionStatusFailed, finalRecord.Status)
+	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, finalRecord.Status)
 }
 
 func TestWardenExecuteAuditWriteFailInitial(t *testing.T) {

@@ -40,17 +40,11 @@ import logging
 import re
 from enum import IntEnum
 
+from app.constants.status import ScrubberPriority
 from app.models.base import G8eBaseModel
 
 logger = logging.getLogger(__name__)
 
-
-
-class ScrubberPriority(IntEnum):
-    EXACT_CREDENTIAL = 10
-    URL_OR_CONNECTION = 20
-    CONTEXTUAL_CREDENTIAL = 30
-    GENERIC_PII = 40
 
 
 class SentinelConfig(G8eBaseModel):

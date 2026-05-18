@@ -653,7 +653,7 @@ func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, reje
 		OperatorSessionID: env.OperatorSessionId,
 		ActionType:        constants.ActionType(env.ActionType),
 		TargetResource:    env.TargetResource,
-		Status:            "BLOCKED",
+		Status:            operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 		ResultSummary:     fmt.Sprintf("blocked: %v", rejectionReason),
 		StateRootBefore:   "", // Not available for blocked transactions
 		StateRootAfter:    "", // Not available for blocked transactions

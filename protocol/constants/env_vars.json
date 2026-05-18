@@ -411,5 +411,23 @@
     "value": "G8E_STRICT_CONSTANTS_LINT",
     "_go_const": "StrictConstantsLint",
     "_python_const": "STRICT_CONSTANTS_LINT"
+  },
+  "G8E_RUNTIME_DIR": {
+    "value": "G8E_RUNTIME_DIR",
+    "config_key": "runtime.runtime_dir",
+    "_go_const": "RuntimeDir",
+    "_python_const": "RUNTIME_DIR"
+  },
+  "G8E_SSH_CONFIG_PATH": {
+    "value": "G8E_SSH_CONFIG_PATH",
+    "config_key": "ssh.config_path",
+    "_go_const": "SSHConfigPath",
+    "_python_const": "SSH_CONFIG_PATH"
+  },
+  "G8E_PROJECT_ROOT": {
+    "value": "G8E_PROJECT_ROOT",
+    "config_key": "runtime.project_root",
+    "_go_const": "ProjectRoot",
+    "_python_const": "PROJECT_ROOT"
   }
 }

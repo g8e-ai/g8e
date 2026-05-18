@@ -156,7 +156,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		if cs.results != nil {
 			protoResult := &operatorv1.CommandResult{
 				ExecutionId: verdict.blockedResult.ExecutionID,
-				Status:      protoExecutionStatus(verdict.blockedResult.Status),
+				Status:      verdict.blockedResult.Status,
 				Error:       *verdict.blockedResult.ErrorMessage,
 				Stderr:      verdict.blockedResult.Stderr,
 				ReturnCode:  int32(*verdict.blockedResult.ReturnCode),
@@ -192,7 +192,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 			InvestigationID: execReq.InvestigationID,
 			Command:         execReq.Command,
 			Args:            execReq.Args,
-			Status:          constants.ExecutionStatusFailed,
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			ErrorMessage:    system.StringPtr(execErr.Error()),
 			ErrorType:       system.StringPtr("execution_error"),
 		}
@@ -201,7 +201,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 			ExecutionID:  execReq.ExecutionID,
 			CaseID:       execReq.CaseID,
 			TaskID:       execReq.TaskID,
-			Status:       constants.ExecutionStatusFailed,
+			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			ErrorMessage: system.StringPtr("execution returned no result"),
 			ErrorType:    system.StringPtr("execution_error"),
 		}
@@ -275,7 +275,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 	if cs.results != nil {
 		protoResult := &operatorv1.CommandResult{
 			ExecutionId:          result.ExecutionID,
-			Status:               protoExecutionStatus(result.Status),
+			Status:               result.Status,
 			Stdout:               result.Stdout,
 			Stderr:               result.Stderr,
 			ExecutionTimeSeconds: float32(result.DurationSeconds),
@@ -326,7 +326,7 @@ func (cs *CommandService) runSentinelGuard(execReq *models.ExecutionRequestPaylo
 					InvestigationID: execReq.InvestigationID,
 					Command:         execReq.Command,
 					Args:            execReq.Args,
-					Status:          constants.ExecutionStatusFailed,
+					Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 					ReturnCode:      system.IntPtr(126),
 					Stderr:          fmt.Sprintf("SENTINEL BLOCKED: Unauthorized intent requested: %s", execReq.Intent),
 					ErrorMessage:    system.StringPtr(fmt.Sprintf("Command blocked by sentinel.Sentinel: Unauthorized intent: %s", execReq.Intent)),
@@ -363,7 +363,7 @@ func (cs *CommandService) runSentinelGuard(execReq *models.ExecutionRequestPaylo
 				InvestigationID: execReq.InvestigationID,
 				Command:         execReq.Command,
 				Args:            execReq.Args,
-				Status:          constants.ExecutionStatusFailed,
+				Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 				ReturnCode:      system.IntPtr(126),
 				Stderr:          fmt.Sprintf("SENTINEL BLOCKED: %s", analysis.BlockReason),
 				ErrorMessage:    system.StringPtr(fmt.Sprintf("Command blocked by sentinel.Sentinel: %s", analysis.BlockReason)),
@@ -420,7 +420,7 @@ func (cs *CommandService) runStatusTicker(
 				statusUpdate := &operatorv1.ExecutionStatusUpdate{
 					ExecutionId:    execReq.ExecutionID,
 					Command:        command,
-					Status:         protoExecutionStatus(constants.ExecutionStatusExecuting),
+					Status:         operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 					ProcessAlive:   true,
 					ElapsedSeconds: float32(elapsed),
 					Message:        fmt.Sprintf("Command still executing (%.0fs elapsed)", elapsed),
@@ -473,7 +473,7 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 		result = &models.ExecutionResultsPayload{
 			ExecutionID:  executionID,
 			CaseID:       msg.CaseID,
-			Status:       constants.ExecutionStatusFailed,
+			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			StartTime:    &now,
 			ErrorMessage: system.StringPtr(fmt.Sprintf("Cancel failed: %v", err)),
 			ErrorType:    system.StringPtr("cancel_failed"),
@@ -483,7 +483,7 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 		result = &models.ExecutionResultsPayload{
 			ExecutionID:  executionID,
 			CaseID:       msg.CaseID,
-			Status:       constants.ExecutionStatusCancelled,
+			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED,
 			StartTime:    &now,
 			ErrorMessage: system.StringPtr("Command cancelled by user"),
 			ErrorType:    system.StringPtr("user_cancelled"),
@@ -493,7 +493,7 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 	if cs.results != nil {
 		protoResult := &operatorv1.CommandResult{
 			ExecutionId: executionID,
-			Status:      protoExecutionStatus(result.Status),
+			Status:      result.Status,
 		}
 		if result.ErrorMessage != nil {
 			protoResult.Error = *result.ErrorMessage

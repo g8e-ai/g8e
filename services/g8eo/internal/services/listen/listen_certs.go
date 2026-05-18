@@ -528,17 +528,18 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 
 	// Set URI SAN for workload identity
 	wid := protocol.NewWorkloadIdentity()
-	var uriSAN string
-	if leafType == "operator" {
-		uriSAN = wid.OperatorSPIFFEID(organizationID, operatorID, sessionID)
-	} else if leafType == "cli" {
-		uriSAN = wid.CLISPIFFEID(userID, sessionID)
-	} else if leafType == "app" {
-		uriSAN = wid.AppSPIFFEID(operatorID)
+	var uriURL *url.URL
+	switch leafType {
+	case "operator":
+		uriURL, _ = wid.OperatorSPIFFEURL(organizationID, operatorID, sessionID)
+	case "cli":
+		uriURL, _ = wid.CLISPIFFEURL(userID, sessionID)
+	case "app":
+		uriURL, _ = wid.AppSPIFFEURL(operatorID)
 	}
-	if uriSAN != "" {
-		parsed, _ := url.Parse(uriSAN)
-		template.URIs = []*url.URL{parsed}
+
+	if uriURL != nil {
+		template.URIs = []*url.URL{uriURL}
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.operatorCert, csr.PublicKey, pki.operatorKey)
@@ -808,9 +809,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 
 	// Add URI SAN for workload identity
 	wid := protocol.NewWorkloadIdentity()
-	uriSANs := []string{
-		wid.HubSPIFFEID(),
-	}
+	hubURL, _ := wid.HubSPIFFEURL()
 
 	now := time.Now().UTC()
 	template := &x509.Certificate{
@@ -826,7 +825,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		DNSNames:              dnsNames,
 		IPAddresses:           ipAddresses,
-		URIs:                  parseURIs(uriSANs),
+		URIs:                  []*url.URL{hubURL},
 		BasicConstraintsValid: true,
 	}
 
@@ -859,15 +858,6 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	}
 
 	return nil
-}
-
-func parseURIs(uris []string) []*url.URL {
-	result := make([]*url.URL, len(uris))
-	for i, u := range uris {
-		parsed, _ := url.Parse(u)
-		result[i] = parsed
-	}
-	return result
 }
 
 func randomSerial() (*big.Int, error) {

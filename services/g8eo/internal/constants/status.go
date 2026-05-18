@@ -879,6 +879,33 @@ const (
 	TribunalAuditModeTied TribunalAuditMode = "tied"
 )
 
+// SlashTier is a typed string for reputation slash_tier.
+type SlashTier string
+
+const (
+	SlashTier1 SlashTier = "1"
+	SlashTier2 SlashTier = "2"
+	SlashTier3 SlashTier = "3"
+)
+
+// ToolScope is a typed string for tool scope.
+type ToolScope string
+
+const (
+	ToolScopeUniversal ToolScope = "universal"
+	ToolScopeOperatorGated ToolScope = "operator_gated"
+)
+
+// ScrubberPriority is a typed string for scrubber priority.
+type ScrubberPriority string
+
+const (
+	ScrubberPriorityExactCredential ScrubberPriority = "10"
+	ScrubberPriorityUrlOrConnection ScrubberPriority = "20"
+	ScrubberPriorityContextualCredential ScrubberPriority = "30"
+	ScrubberPriorityGenericPII ScrubberPriority = "40"
+)
+
 // Status groups all status constants for easy access.
 var Status = struct {
 	UserRole struct {
@@ -1443,6 +1470,21 @@ var Status = struct {
 		Unanimous TribunalAuditMode
 		Majority TribunalAuditMode
 		Tied TribunalAuditMode
+	}
+	SlashTier struct {
+		Tier1 SlashTier
+		Tier2 SlashTier
+		Tier3 SlashTier
+	}
+	ToolScope struct {
+		Universal ToolScope
+		OperatorGated ToolScope
+	}
+	ScrubberPriority struct {
+		ExactCredential ScrubberPriority
+		UrlOrConnection ScrubberPriority
+		ContextualCredential ScrubberPriority
+		GenericPII ScrubberPriority
 	}
 }{
 	UserRole: struct {
@@ -2495,5 +2537,32 @@ var Status = struct {
 		Unanimous: TribunalAuditModeUnanimous,
 		Majority: TribunalAuditModeMajority,
 		Tied: TribunalAuditModeTied,
+	},
+	SlashTier: struct {
+		Tier1 SlashTier
+		Tier2 SlashTier
+		Tier3 SlashTier
+	}{
+		Tier1: SlashTier1,
+		Tier2: SlashTier2,
+		Tier3: SlashTier3,
+	},
+	ToolScope: struct {
+		Universal ToolScope
+		OperatorGated ToolScope
+	}{
+		Universal: ToolScopeUniversal,
+		OperatorGated: ToolScopeOperatorGated,
+	},
+	ScrubberPriority: struct {
+		ExactCredential ScrubberPriority
+		UrlOrConnection ScrubberPriority
+		ContextualCredential ScrubberPriority
+		GenericPII ScrubberPriority
+	}{
+		ExactCredential: ScrubberPriorityExactCredential,
+		UrlOrConnection: ScrubberPriorityUrlOrConnection,
+		ContextualCredential: ScrubberPriorityContextualCredential,
+		GenericPII: ScrubberPriorityGenericPII,
 	},
 }

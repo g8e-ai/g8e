@@ -30,6 +30,7 @@ import logging
 import os
 from pathlib import Path
 
+from app.constants.env_vars import EnvVar
 from app.errors import ConfigurationError
 from app.utils.security import validate_safe_path
 from app.models.ssh_inventory import SshHost, SshInventory
@@ -316,5 +317,5 @@ def default_ssh_inventory_service() -> SshInventoryService:
     The path is overridable via the ``G8E_SSH_CONFIG_PATH`` env var so tests
     can point the service at a fixture without mocking.
     """
-    path = os.environ.get("G8E_SSH_CONFIG_PATH", "/etc/g8e/ssh_config")
+    path = os.environ.get(EnvVar.SSH_CONFIG_PATH, "/etc/g8e/ssh_config")
     return SshInventoryService(ssh_config_path=path)

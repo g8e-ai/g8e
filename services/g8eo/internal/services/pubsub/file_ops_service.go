@@ -93,7 +93,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 		if editReq.Content != nil {
 			content = *editReq.Content
 		}
-		analysis := fs.sentinel.AnalyzeFileEdit(editReq.FilePath, string(editReq.Operation), content)
+		analysis := fs.sentinel.AnalyzeFileEdit(editReq.FilePath, editReq.Operation, content)
 
 		if !analysis.Safe {
 			fs.logger.Error("SENTINEL BLOCKED: File operation failed pre-execution threat analysis",
@@ -112,7 +112,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 				InvestigationID: editReq.InvestigationID,
 				Operation:       editReq.Operation,
 				FilePath:        editReq.FilePath,
-				Status:          constants.ExecutionStatusFailed,
+				Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 				ErrorMessage:    system.StringPtr(fmt.Sprintf("File operation blocked by sentinel.Sentinel: %s", analysis.BlockReason)),
 				ErrorType:       system.StringPtr("sentinel_blocked"),
 			}
@@ -135,7 +135,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 			if fs.results != nil {
 				protoResult := &operatorv1.FileEditResult{
 					ExecutionId:  editReq.ExecutionID,
-					Status:       protoExecutionStatus(constants.ExecutionStatusFailed),
+					Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 					FilePath:     editReq.FilePath,
 					Operation:    string(editReq.Operation),
 					ErrorMessage: fmt.Sprintf("File operation blocked by sentinel.Sentinel: %s", analysis.BlockReason),
@@ -167,7 +167,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 			InvestigationID: editReq.InvestigationID,
 			Operation:       editReq.Operation,
 			FilePath:        editReq.FilePath,
-			Status:          constants.ExecutionStatusFailed,
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			ErrorMessage:    system.StringPtr(err.Error()),
 			ErrorType:       system.StringPtr("execution_error"),
 		}
@@ -180,7 +180,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 			InvestigationID: editReq.InvestigationID,
 			Operation:       editReq.Operation,
 			FilePath:        editReq.FilePath,
-			Status:          constants.ExecutionStatusFailed,
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			ErrorMessage:    system.StringPtr("file edit returned no result"),
 			ErrorType:       system.StringPtr("execution_error"),
 		}
@@ -189,7 +189,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 	commandStr := fmt.Sprintf("file_%s: %s", operation, filePath)
 
 	var exitCode *int
-	if result.Status == constants.ExecutionStatusCompleted {
+	if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
 		zero := 0
 		exitCode = &zero
 	} else {
@@ -238,7 +238,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 			ExecutionDurationMs: int64(result.DurationSeconds * 1000),
 		}
 
-		if result.Status == constants.ExecutionStatusCompleted {
+		if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
 			zero := 0
 			event.CommandExitCode = &zero
 		} else {
@@ -258,7 +258,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 				"file_path", filePath,
 				"operation", operation)
 
-			if fs.ledger != nil && result.Status == constants.ExecutionStatusCompleted {
+			if fs.ledger != nil && result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
 				var mutationOp storage.FileMutationOperation
 				switch operation {
 				case "write":
@@ -300,7 +300,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 	if fs.results != nil {
 		protoResult := &operatorv1.FileEditResult{
 			ExecutionId:     result.ExecutionID,
-			Status:          protoExecutionStatus(result.Status),
+			Status:          result.Status,
 			FilePath:        result.FilePath,
 			Operation:       string(result.Operation),
 			DurationSeconds: float32(result.DurationSeconds),
@@ -324,7 +324,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 			protoResult.Content = *result.Content
 			protoResult.StdoutSize = int32(len(*result.Content))
 		}
-		if result.ErrorMessage != nil && result.Status == constants.ExecutionStatusFailed {
+		if result.ErrorMessage != nil && result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED {
 			protoResult.StderrSize = int32(len(*result.ErrorMessage))
 		}
 
@@ -368,7 +368,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg PubSubCom
 			TaskID:          fsListReq.TaskID,
 			InvestigationID: fsListReq.InvestigationID,
 			Path:            fsListReq.Path,
-			Status:          constants.ExecutionStatusFailed,
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			ErrorMessage:    system.StringPtr(err.Error()),
 			ErrorType:       system.StringPtr("execution_error"),
 		}
@@ -378,7 +378,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg PubSubCom
 		commandStr := fmt.Sprintf("fs_list: %s", path)
 
 		var exitCode *int
-		if result.Status == constants.ExecutionStatusCompleted {
+		if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
 			zero := 0
 			exitCode = &zero
 		} else {
@@ -425,7 +425,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg PubSubCom
 	if fs.results != nil {
 		protoResult := &operatorv1.FsListResult{
 			ExecutionId:     result.ExecutionID,
-			Status:          protoExecutionStatus(result.Status),
+			Status:          result.Status,
 			Path:            result.Path,
 			Truncated:       result.Truncated,
 			TotalCount:      int32(result.TotalCount),
@@ -492,7 +492,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCom
 			InvestigationID: fsGrepReq.InvestigationID,
 			Path:            fsGrepReq.Path,
 			Pattern:         fsGrepReq.Pattern,
-			Status:          constants.ExecutionStatusFailed,
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			ErrorMessage:    system.StringPtr(err.Error()),
 			ErrorType:       system.StringPtr("execution_error"),
 		}
@@ -502,7 +502,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCom
 		commandStr := fmt.Sprintf("fs_grep: %s (pattern: %s)", path, protoGrep.Pattern)
 
 		var exitCode *int
-		if result.Status == constants.ExecutionStatusCompleted {
+		if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
 			zero := 0
 			exitCode = &zero
 		} else {
@@ -549,7 +549,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCom
 	if fs.results != nil {
 		protoResult := &operatorv1.FsGrepResult{
 			ExecutionId:     result.ExecutionID,
-			Status:          protoExecutionStatus(result.Status),
+			Status:          result.Status,
 			Path:            result.Path,
 			TotalMatches:    int32(result.TotalMatches),
 			Truncated:       result.Truncated,
@@ -619,7 +619,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 		payload := &operatorv1.FsReadResult{
 			ExecutionId:     requestID,
 			Path:            protoRead.Path,
-			Status:          protoExecutionStatus(constants.ExecutionStatusFailed),
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			SizeBytes:       0,
 			Truncated:       false,
 			DurationSeconds: float32(duration),
@@ -637,7 +637,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 		payload := &operatorv1.FsReadResult{
 			ExecutionId:     requestID,
 			Path:            protoRead.Path,
-			Status:          protoExecutionStatus(constants.ExecutionStatusFailed),
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			SizeBytes:       0,
 			Truncated:       false,
 			DurationSeconds: float32(duration),
@@ -661,7 +661,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 		payload := &operatorv1.FsReadResult{
 			ExecutionId:     requestID,
 			Path:            protoRead.Path,
-			Status:          protoExecutionStatus(constants.ExecutionStatusFailed),
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			SizeBytes:       0,
 			Truncated:       false,
 			DurationSeconds: float32(duration),
@@ -682,7 +682,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 	payload := &operatorv1.FsReadResult{
 		ExecutionId:     requestID,
 		Path:            protoRead.Path,
-		Status:          protoExecutionStatus(constants.ExecutionStatusCompleted),
+		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		Content:         content,
 		SizeBytes:       int64(len(data)),
 		Truncated:       truncated,
@@ -727,7 +727,7 @@ func payloadToFileEditRequest(msg PubSubCommandMessage) (*models.FileEditRequest
 		CaseID:          msg.CaseID,
 		TaskID:          msg.TaskID,
 		InvestigationID: msg.InvestigationID,
-		Operation:       models.FileEditOperation(p.Operation),
+		Operation:       constants.FileOperation(p.Operation),
 		FilePath:        p.FilePath,
 		RequestedBy:     "g8e-system",
 		Justification:   justification,
