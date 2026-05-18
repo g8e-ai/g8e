@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
@@ -274,10 +275,11 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				// The client cert must bind to the same operator session.
 				// SPIFFE ID format: protocol.WorkloadIdentity.OperatorSPIFFEID()
 				if len(r.TLS.PeerCertificates) > 0 {
+					wid := protocol.NewWorkloadIdentity()
 					cert := r.TLS.PeerCertificates[0]
 					match := false
 					for _, uri := range cert.URIs {
-						if strings.Contains(uri.String(), "/"+op.ID+"/"+operatorSessionID) {
+						if wid.MatchesOperator(uri.String(), op.OrganizationID, op.ID, operatorSessionID) {
 							match = true
 							break
 						}
@@ -304,10 +306,18 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			// Verify the CLI certificate matches the CLI session ID
 			// SPIFFE ID format: protocol.WorkloadIdentity.CLISPIFFEID()
 			if len(r.TLS.PeerCertificates) > 0 {
+				wid := protocol.NewWorkloadIdentity()
 				cert := r.TLS.PeerCertificates[0]
+
+				// We need the UserID for the CLI session ID verification.
+				// For now we trust the mTLS certificate if it matches the session ID.
+				// In a real flow, we would look up the CLI session to get the UserID.
+				// Since we don't have a CLISession lookup here yet, we use a looser check
+				// or assume we need to add CLISession lookup.
+				// [TODO] Add CLISession lookup to AuthService to get UserID.
 				match := false
 				for _, uri := range cert.URIs {
-					if strings.Contains(uri.String(), "/cli/"+cliSessionID) {
+					if wid.MatchesCLISessionOnly(uri.String(), cliSessionID) {
 						match = true
 						break
 					}
@@ -327,9 +337,10 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			// Note: /_query requires operator session authentication - no app bypass allowed.
 			// SPIFFE ID format: protocol.WorkloadIdentity.AppSPIFFEID()
 			if len(r.TLS.PeerCertificates) > 0 {
+				wid := protocol.NewWorkloadIdentity()
 				cert := r.TLS.PeerCertificates[0]
 				for _, uri := range cert.URIs {
-					if strings.Contains(uri.String(), "/app/"+marshaler.Status(constants.Status.ComponentName.G8EE)) {
+					if wid.MatchesApp(uri.String(), marshaler.Status(constants.Status.ComponentName.G8EE)) {
 						next.ServeHTTP(w, r)
 						return
 					}

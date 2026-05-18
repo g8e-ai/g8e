@@ -16,6 +16,7 @@ package protocol
 import (
 	"fmt"
 	"net/url"
+	"strings"
 )
 
 const (
@@ -73,4 +74,32 @@ func (w *WorkloadIdentity) HubSPIFFEID() string {
 // HubSPIFFEURL generates the SPIFFE URL for the hub workload.
 func (w *WorkloadIdentity) HubSPIFFEURL() (*url.URL, error) {
 	return url.Parse(w.HubSPIFFEID())
+}
+
+// MatchesOperator checks if a SPIFFE ID matches an operator identity.
+func (w *WorkloadIdentity) MatchesOperator(spiffeID, organizationID, operatorID, sessionID string) bool {
+	return spiffeID == w.OperatorSPIFFEID(organizationID, operatorID, sessionID)
+}
+
+// MatchesCLI checks if a SPIFFE ID matches a CLI identity.
+func (w *WorkloadIdentity) MatchesCLI(spiffeID, userID, sessionID string) bool {
+	return spiffeID == w.CLISPIFFEID(userID, sessionID)
+}
+
+// MatchesCLISessionOnly checks if a SPIFFE ID matches a CLI identity with the given session ID,
+// regardless of the user ID. This is useful for initial routing/verification before user context is loaded.
+func (w *WorkloadIdentity) MatchesCLISessionOnly(spiffeID, sessionID string) bool {
+	prefix := fmt.Sprintf("spiffe://%s/cli/", TrustDomain)
+	suffix := "/" + sessionID
+	return strings.HasPrefix(spiffeID, prefix) && strings.HasSuffix(spiffeID, suffix)
+}
+
+// MatchesApp checks if a SPIFFE ID matches an application identity.
+func (w *WorkloadIdentity) MatchesApp(spiffeID, operatorID string) bool {
+	return spiffeID == w.AppSPIFFEID(operatorID)
+}
+
+// MatchesHub checks if a SPIFFE ID matches the hub identity.
+func (w *WorkloadIdentity) MatchesHub(spiffeID string) bool {
+	return spiffeID == w.HubSPIFFEID()
 }
