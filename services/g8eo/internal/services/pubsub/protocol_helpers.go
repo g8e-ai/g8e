@@ -28,7 +28,6 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/mappings"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 )
@@ -95,7 +94,7 @@ func mapProtoToPayloadType(msg proto.Message) string {
 // It preserves the original command's MessageID for correlation.
 func BuildUniversalResultEnvelope(
 	cfg *config.Config,
-	eventType string,
+	eventType constants.EventType,
 	payload proto.Message,
 	originalMessageID string,
 	senderID string,
@@ -140,8 +139,8 @@ func BuildUniversalResultEnvelope(
 		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
 		OperatorId:        senderID,
 		OperatorSessionId: cfg.OperatorSessionId,
-		EventType:         eventType,
-		ActionType:        mappings.MapEventTypeToResultActionType(eventType),
+		EventType:         string(eventType),
+		ActionType:        constants.MapEventTypeToResultActionType(eventType),
 		Payload:           payloadBytes,
 		IntentData:        intentDataStruct,
 		CaseId:            caseID,
@@ -208,7 +207,7 @@ func validateL1Governance(msg proto.Message) []string {
 const MaxPayloadSize = 5 * 1024 * 1024
 
 // unmarshalPayload converts the raw bytes into a typed proto.Message for the given event type.
-func unmarshalPayload(eventType string, payload []byte) (proto.Message, error) {
+func unmarshalPayload(eventType constants.EventType, payload []byte) (proto.Message, error) {
 	if len(payload) > MaxPayloadSize {
 		return nil, fmt.Errorf("payload exceeds maximum size limit (%d bytes)", MaxPayloadSize)
 	}

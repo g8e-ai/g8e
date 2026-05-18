@@ -18,6 +18,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -145,14 +147,14 @@ func TestTestLogWriter_Write_MultiLine(t *testing.T) {
 
 func TestGetTestOperatorDirectURL_DefaultScheme(t *testing.T) {
 	// Ensure env var is not set so the default branch is exercised.
-	t.Setenv("G8E_OPERATOR_PUBSUB_URL", "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), "")
 	url := GetTestOperatorDirectURL()
 	assert.True(t, strings.HasPrefix(url, "wss://"), "default URL must use wss:// scheme, got: %s", url)
 	assert.NotEmpty(t, url)
 }
 
 func TestGetTestOperatorDirectURL_EnvVarOverride(t *testing.T) {
-	t.Setenv("G8E_OPERATOR_PUBSUB_URL", "wss://custom-host:1234")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), "wss://custom-host:1234")
 	url := GetTestOperatorDirectURL()
 	assert.Equal(t, "wss://custom-host:1234", url)
 }

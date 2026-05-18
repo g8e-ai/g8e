@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
@@ -44,7 +45,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		&mockStateRootProvider{root: "test-state-root-v1"},
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key-id": pubKey}},
 		nil, // L3 verifier not needed for EVAL_ANSWER (non-mutation)
-		[]string{"EVAL_ANSWER"},
+		[]constants.ActionType{constants.ActionTypeEvalAnswer},
 	)
 
 	// Create an EVAL_ANSWER payload
@@ -68,7 +69,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
-		ActionType:        "EVAL_ANSWER",
+		ActionType:        string(constants.ActionTypeEvalAnswer),
 		TargetResource:    "localhost",
 		Payload:           payloadBytes,
 		StateMerkleRoot:   "test-state-root-v1",
@@ -97,7 +98,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		t.Fatalf("VerifyEnvelope failed: %v", err)
 	}
 
-	if verified.ActionType != "EVAL_ANSWER" {
+	if verified.ActionType != constants.ActionTypeEvalAnswer {
 		t.Errorf("Expected action type EVAL_ANSWER, got %s", verified.ActionType)
 	}
 
@@ -130,7 +131,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		SignerStore:       &SimpleSignerStore{Signers: map[string]ed25519.PublicKey{keyID: pubKey}},
 		StateRootProvider: &mockStateRootProvider{root: "test-state-root-v1"},
 		ExecutionHandler: &mockExecutionHandler{
-			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType string, cmdMsg interface{}) (string, error) {
+			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
 				return payload.Answer, nil
 			},
 		},
@@ -165,16 +166,16 @@ func TestEvalAnswerVerification(t *testing.T) {
 func TestEvalAnswerIsNotMutation(t *testing.T) {
 	verifier := &TransactionVerifier{}
 
-	if verifier.isMutation("EVAL_ANSWER") {
+	if verifier.isMutation(constants.ActionTypeEvalAnswer) {
 		t.Error("EVAL_ANSWER should not be treated as a mutation")
 	}
 
 	// Verify that actual mutations are still detected
-	if !verifier.isMutation("EXECUTE_BASH") {
+	if !verifier.isMutation(constants.ActionTypeExecuteBash) {
 		t.Error("EXECUTE_BASH should be treated as a mutation")
 	}
 
-	if !verifier.isMutation("FILE_EDIT") {
+	if !verifier.isMutation(constants.ActionTypeFileEdit) {
 		t.Error("FILE_EDIT should be treated as a mutation")
 	}
 }

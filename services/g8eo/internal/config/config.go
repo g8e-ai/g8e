@@ -277,7 +277,7 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 	}
 
 	return &Config{
-		ComponentName: "g8eo-listen",
+		ComponentName: constants.Status.ComponentName.G8EOListen,
 		PKIDir:        pkiDir,     // Also set top-level for services that use Config.PKIDir
 		SecretsDir:    secretsDir, // Also set top-level for services that use Config.SecretsDir
 		Listen: ListenConfig{

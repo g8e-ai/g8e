@@ -111,11 +111,11 @@ type OperatorRegistrationRequest struct {
 //
 // OperatorSessionID and CLISessionID are strictly disjoint session types:
 //   - operator_session_id authenticates the host agent and is bound to the
-//     mTLS certificate URI SAN (spiffe://g8e.local/operator/...).
+//     mTLS certificate URI SAN (see protocol.WorkloadIdentity.OperatorSPIFFEID).
 //   - cli_session_id is the routing namespace the BYO/CLI client uses to
 //     receive SessionEvents (SSE) and embed in outbound request bodies.
 //     The CLI has its own distinct mTLS certificate with SPIFFE ID
-//     spiffe://g8e.local/cli/<user_id>/<cli_session_id>.
+//     spiffe://g8e.local/cli/<user_id>/<cli_session_id> (see protocol.WorkloadIdentity.CLISPIFFEID).
 //
 // Conflating the two would let an operator session drain another client's
 // event stream — the substrate refuses to do so.

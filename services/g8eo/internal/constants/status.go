@@ -166,6 +166,7 @@ type ComponentName string
 const (
 	ComponentNameG8EE ComponentName = "g8ee"
 	ComponentNameG8EO ComponentName = "g8eo"
+	ComponentNameG8EOListen ComponentName = "g8eo-listen"
 	ComponentNameClient ComponentName = "client"
 )
 
@@ -975,6 +976,7 @@ var Status = struct {
 	ComponentName struct {
 		G8EE ComponentName
 		G8EO ComponentName
+		G8EOListen ComponentName
 		CLIENT ComponentName
 	}
 	ComponentStatus struct {
@@ -1617,10 +1619,12 @@ var Status = struct {
 	ComponentName: struct {
 		G8EE ComponentName
 		G8EO ComponentName
+		G8EOListen ComponentName
 		CLIENT ComponentName
 	}{
 		G8EE: ComponentNameG8EE,
 		G8EO: ComponentNameG8EO,
+		G8EOListen: ComponentNameG8EOListen,
 		CLIENT: ComponentNameClient,
 	},
 	ComponentStatus: struct {

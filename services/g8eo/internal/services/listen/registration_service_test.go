@@ -108,7 +108,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 		assert.Equal(t, userID, docFieldString(t, doc, "user_id"))
-		assert.Equal(t, constants.Status.OperatorStatus.Active, docFieldString(t, doc, "status"))
+		assert.Equal(t, string(constants.Status.OperatorStatus.Active), docFieldString(t, doc, "status"))
 	})
 
 	t.Run("Success - Single-operator link", func(t *testing.T) {
@@ -156,7 +156,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 
 		// Verify status update
 		doc, _ := db.DocGet("operators", opID)
-		assert.Equal(t, constants.Status.OperatorStatus.Active, docFieldString(t, doc, "status"))
+		assert.Equal(t, string(constants.Status.OperatorStatus.Active), docFieldString(t, doc, "status"))
 	})
 
 	t.Run("Failure - Link not found", func(t *testing.T) {
@@ -679,7 +679,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		// Verify status updated
 		doc, err := db.DocGet("operators", opID)
 		require.NoError(t, err)
-		assert.Equal(t, constants.Status.OperatorStatus.Terminated, docFieldString(t, doc, "status"))
+		assert.Equal(t, string(constants.Status.OperatorStatus.Terminated), docFieldString(t, doc, "status"))
 		assert.Equal(t, "test termination", docFieldString(t, doc, "termination_reason"))
 	})
 
@@ -693,7 +693,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		require.NoError(t, err)
 
 		doc, _ := db.DocGet("operators", opID)
-		assert.Equal(t, constants.Status.OperatorStatus.Terminated, docFieldString(t, doc, "status"))
+		assert.Equal(t, string(constants.Status.OperatorStatus.Terminated), docFieldString(t, doc, "status"))
 	})
 
 	t.Run("Failure - Wrong user", func(t *testing.T) {

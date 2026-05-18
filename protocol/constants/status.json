@@ -583,6 +583,13 @@
       "_go_name": "G8EO",
       "_python_name": "G8EO"
     },
+    "g8eo-listen": {
+      "value": "g8eo-listen",
+      "_go_const": "ComponentNameG8EOListen",
+      "_python_const": "COMPONENT_NAME_G8EO_LISTEN",
+      "_go_name": "G8EOListen",
+      "_python_name": "G8EO_LISTEN"
+    },
     "client": {
       "value": "client",
       "_go_const": "ComponentNameClient",

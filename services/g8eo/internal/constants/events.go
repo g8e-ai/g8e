@@ -16,294 +16,648 @@
 
 package constants
 
-const EventAppCaseCreated = "g8e.v1.app.case.created"
-const EventAppCaseUpdated = "g8e.v1.app.case.updated"
-const EventAppCaseAssigned = "g8e.v1.app.case.assigned"
-const EventAppCaseEscalated = "g8e.v1.app.case.escalated"
-const EventAppCaseResolved = "g8e.v1.app.case.resolved"
-const EventAppCaseClosed = "g8e.v1.app.case.closed"
-const EventAppCaseSelected = "g8e.v1.app.case.selected"
-const EventAppCaseCleared = "g8e.v1.app.case.cleared"
-const EventAppCaseSwitched = "g8e.v1.app.case.switched"
-const EventAppCaseCreationRequested = "g8e.v1.app.case.creation.requested"
-const EventAppCaseUpdateRequested = "g8e.v1.app.case.update.requested"
-const EventAppTaskCreated = "g8e.v1.app.task.created"
-const EventAppTaskUpdated = "g8e.v1.app.task.updated"
-const EventAppTaskAssigned = "g8e.v1.app.task.assigned"
-const EventAppTaskStarted = "g8e.v1.app.task.started"
-const EventAppTaskCompleted = "g8e.v1.app.task.completed"
-const EventAppTaskFailed = "g8e.v1.app.task.failed"
-const EventAppInvestigationCreated = "g8e.v1.app.investigation.created"
-const EventAppInvestigationUpdated = "g8e.v1.app.investigation.updated"
-const EventAppInvestigationLoaded = "g8e.v1.app.investigation.loaded"
-const EventAppInvestigationRequested = "g8e.v1.app.investigation.requested"
-const EventAppInvestigationStarted = "g8e.v1.app.investigation.started"
-const EventAppInvestigationClosed = "g8e.v1.app.investigation.closed"
-const EventAppInvestigationEscalated = "g8e.v1.app.investigation.escalated"
-const EventAppInvestigationListRequested = "g8e.v1.app.investigation.list.requested"
-const EventAppInvestigationListReceived = "g8e.v1.app.investigation.list.received"
-const EventAppInvestigationListCompleted = "g8e.v1.app.investigation.list.completed"
-const EventAppInvestigationListFailed = "g8e.v1.app.investigation.list.failed"
-const EventAppInvestigationStatusUpdatedOpen = "g8e.v1.app.investigation.status.updated.open"
-const EventAppInvestigationStatusUpdatedClosed = "g8e.v1.app.investigation.status.updated.closed"
-const EventAppInvestigationStatusUpdatedEscalated = "g8e.v1.app.investigation.status.updated.escalated"
-const EventAppInvestigationStatusUpdatedResolved = "g8e.v1.app.investigation.status.updated.resolved"
-const EventAppInvestigationChatMessageUser = "g8e.v1.app.investigation.chat.message.user"
-const EventAppInvestigationChatMessageAi = "g8e.v1.app.investigation.chat.message.ai"
-const EventAppInvestigationChatMessageSystem = "g8e.v1.app.investigation.chat.message.system"
-const EventOperatorSlotInitializationFailed = "g8e.v1.operator.slot.initialization.failed"
-const EventOperatorEvalAnswerRequested = "g8e.v1.operator.eval.answer.requested"
-const EventOperatorHeartbeatSent = "g8e.v1.operator.heartbeat.sent"
-const EventOperatorHeartbeatRequested = "g8e.v1.operator.heartbeat.requested"
-const EventOperatorHeartbeatReceived = "g8e.v1.operator.heartbeat.received"
-const EventOperatorHeartbeatMissed = "g8e.v1.operator.heartbeat.missed"
-const EventOperatorShutdownRequested = "g8e.v1.operator.shutdown.requested"
-const EventOperatorShutdownAcknowledged = "g8e.v1.operator.shutdown.acknowledged"
-const EventOperatorPanelListUpdated = "g8e.v1.operator.panel.list.updated"
-const EventOperatorContextChanged = "g8e.v1.operator.context.changed"
-const EventOperatorStatusUpdatedActive = "g8e.v1.operator.status.updated.active"
-const EventOperatorStatusUpdatedAvailable = "g8e.v1.operator.status.updated.available"
-const EventOperatorStatusUpdatedUnavailable = "g8e.v1.operator.status.updated.unavailable"
-const EventOperatorStatusUpdatedBound = "g8e.v1.operator.status.updated.bound"
-const EventOperatorStatusUpdatedOffline = "g8e.v1.operator.status.updated.offline"
-const EventOperatorStatusUpdatedStale = "g8e.v1.operator.status.updated.stale"
-const EventOperatorStatusUpdatedStopped = "g8e.v1.operator.status.updated.stopped"
-const EventOperatorStatusUpdatedTerminated = "g8e.v1.operator.status.updated.terminated"
-const EventOperatorApiKeyRefreshed = "g8e.v1.operator.api.key.refreshed"
-const EventOperatorDeviceRegistered = "g8e.v1.operator.device.registered"
-const EventOperatorCommandRequested = "g8e.v1.operator.command.requested"
-const EventOperatorCommandStarted = "g8e.v1.operator.command.started"
-const EventOperatorCommandCompleted = "g8e.v1.operator.command.completed"
-const EventOperatorCommandFailed = "g8e.v1.operator.command.failed"
-const EventOperatorCommandCancelled = "g8e.v1.operator.command.cancelled"
-const EventOperatorCommandExecution = "g8e.v1.operator.command.execution"
-const EventOperatorCommandResult = "g8e.v1.operator.command.result"
-const EventOperatorCommandOutputReceived = "g8e.v1.operator.command.output.received"
-const EventOperatorCommandStatusUpdatedQueued = "g8e.v1.operator.command.status.updated.queued"
-const EventOperatorCommandStatusUpdatedRunning = "g8e.v1.operator.command.status.updated.running"
-const EventOperatorCommandStatusUpdatedCompleted = "g8e.v1.operator.command.status.updated.completed"
-const EventOperatorCommandStatusUpdatedFailed = "g8e.v1.operator.command.status.updated.failed"
-const EventOperatorCommandStatusUpdatedCancelled = "g8e.v1.operator.command.status.updated.cancelled"
-const EventOperatorCommandCancelRequested = "g8e.v1.operator.command.cancel.requested"
-const EventOperatorCommandCancelAcknowledged = "g8e.v1.operator.command.cancel.acknowledged"
-const EventOperatorCommandCancelFailed = "g8e.v1.operator.command.cancel.failed"
-const EventOperatorCommandApprovalRequested = "g8e.v1.operator.command.approval.requested"
-const EventOperatorCommandApprovalGranted = "g8e.v1.operator.command.approval.granted"
-const EventOperatorCommandApprovalRejected = "g8e.v1.operator.command.approval.rejected"
-const EventOperatorCommandApprovalPreparing = "g8e.v1.operator.command.approval.preparing"
-const EventOperatorStreamApprovalRequested = "g8e.v1.operator.stream.approval.requested"
-const EventOperatorStreamApprovalGranted = "g8e.v1.operator.stream.approval.granted"
-const EventOperatorStreamApprovalRejected = "g8e.v1.operator.stream.approval.rejected"
-const EventOperatorFileEditRequested = "g8e.v1.operator.file.edit.requested"
-const EventOperatorFileEditStarted = "g8e.v1.operator.file.edit.started"
-const EventOperatorFileEditCompleted = "g8e.v1.operator.file.edit.completed"
-const EventOperatorFileEditFailed = "g8e.v1.operator.file.edit.failed"
-const EventOperatorFileEditTimeout = "g8e.v1.operator.file.edit.timeout"
-const EventOperatorFileEditApprovalRequested = "g8e.v1.operator.file.edit.approval.requested"
-const EventOperatorFileEditApprovalGranted = "g8e.v1.operator.file.edit.approval.granted"
-const EventOperatorFileEditApprovalRejected = "g8e.v1.operator.file.edit.approval.rejected"
-const EventOperatorFileEditApprovalFeedback = "g8e.v1.operator.file.edit.approval.feedback"
-const EventOperatorFileHistoryFetchStarted = "g8e.v1.operator.file.history.fetch.started"
-const EventOperatorFileHistoryFetchRequested = "g8e.v1.operator.file.history.fetch.requested"
-const EventOperatorFileHistoryFetchReceived = "g8e.v1.operator.file.history.fetch.received"
-const EventOperatorFileHistoryFetchCompleted = "g8e.v1.operator.file.history.fetch.completed"
-const EventOperatorFileHistoryFetchFailed = "g8e.v1.operator.file.history.fetch.failed"
-const EventOperatorFileDiffFetchStarted = "g8e.v1.operator.file.diff.fetch.started"
-const EventOperatorFileDiffFetchRequested = "g8e.v1.operator.file.diff.fetch.requested"
-const EventOperatorFileDiffFetchReceived = "g8e.v1.operator.file.diff.fetch.received"
-const EventOperatorFileDiffFetchCompleted = "g8e.v1.operator.file.diff.fetch.completed"
-const EventOperatorFileDiffFetchFailed = "g8e.v1.operator.file.diff.fetch.failed"
-const EventOperatorFileRestoreRequested = "g8e.v1.operator.file.restore.requested"
-const EventOperatorFileRestoreReceived = "g8e.v1.operator.file.restore.received"
-const EventOperatorFileRestoreCompleted = "g8e.v1.operator.file.restore.completed"
-const EventOperatorFileRestoreFailed = "g8e.v1.operator.file.restore.failed"
-const EventOperatorFilesystemListStarted = "g8e.v1.operator.filesystem.list.started"
-const EventOperatorFilesystemListRequested = "g8e.v1.operator.filesystem.list.requested"
-const EventOperatorFilesystemListReceived = "g8e.v1.operator.filesystem.list.received"
-const EventOperatorFilesystemListCompleted = "g8e.v1.operator.filesystem.list.completed"
-const EventOperatorFilesystemListFailed = "g8e.v1.operator.filesystem.list.failed"
-const EventOperatorFilesystemReadStarted = "g8e.v1.operator.filesystem.read.started"
-const EventOperatorFilesystemReadRequested = "g8e.v1.operator.filesystem.read.requested"
-const EventOperatorFilesystemReadReceived = "g8e.v1.operator.filesystem.read.received"
-const EventOperatorFilesystemReadCompleted = "g8e.v1.operator.filesystem.read.completed"
-const EventOperatorFilesystemReadFailed = "g8e.v1.operator.filesystem.read.failed"
-const EventOperatorFilesystemGrepStarted = "g8e.v1.operator.filesystem.grep.started"
-const EventOperatorFilesystemGrepRequested = "g8e.v1.operator.filesystem.grep.requested"
-const EventOperatorFilesystemGrepReceived = "g8e.v1.operator.filesystem.grep.received"
-const EventOperatorFilesystemGrepCompleted = "g8e.v1.operator.filesystem.grep.completed"
-const EventOperatorFilesystemGrepFailed = "g8e.v1.operator.filesystem.grep.failed"
-const EventOperatorLogsFetchRequested = "g8e.v1.operator.logs.fetch.requested"
-const EventOperatorLogsFetchReceived = "g8e.v1.operator.logs.fetch.received"
-const EventOperatorLogsFetchCompleted = "g8e.v1.operator.logs.fetch.completed"
-const EventOperatorLogsFetchFailed = "g8e.v1.operator.logs.fetch.failed"
-const EventOperatorHistoryFetchRequested = "g8e.v1.operator.history.fetch.requested"
-const EventOperatorHistoryFetchReceived = "g8e.v1.operator.history.fetch.received"
-const EventOperatorHistoryFetchCompleted = "g8e.v1.operator.history.fetch.completed"
-const EventOperatorHistoryFetchFailed = "g8e.v1.operator.history.fetch.failed"
-const EventOperatorIntentRequested = "g8e.v1.operator.intent.requested"
-const EventOperatorIntentGranted = "g8e.v1.operator.intent.granted"
-const EventOperatorIntentDenied = "g8e.v1.operator.intent.denied"
-const EventOperatorIntentRevoked = "g8e.v1.operator.intent.revoked"
-const EventOperatorIntentRevokeRequested = "g8e.v1.operator.intent.revoke.requested"
-const EventOperatorIntentApprovalRequested = "g8e.v1.operator.intent.approval.requested"
-const EventOperatorIntentApprovalGranted = "g8e.v1.operator.intent.approval.granted"
-const EventOperatorIntentApprovalRejected = "g8e.v1.operator.intent.approval.rejected"
-const EventOperatorNetworkPingRequested = "g8e.v1.operator.network.ping.requested"
-const EventOperatorNetworkPingReceived = "g8e.v1.operator.network.ping.received"
-const EventOperatorNetworkPingCompleted = "g8e.v1.operator.network.ping.completed"
-const EventOperatorNetworkPingFailed = "g8e.v1.operator.network.ping.failed"
-const EventOperatorNetworkPortCheckRequested = "g8e.v1.operator.network.port.check.requested"
-const EventOperatorNetworkPortCheckStarted = "g8e.v1.operator.network.port.check.started"
-const EventOperatorNetworkPortCheckReceived = "g8e.v1.operator.network.port.check.received"
-const EventOperatorNetworkPortCheckCompleted = "g8e.v1.operator.network.port.check.completed"
-const EventOperatorNetworkPortCheckFailed = "g8e.v1.operator.network.port.check.failed"
-const EventOperatorAuditUserRecorded = "g8e.v1.operator.audit.user.recorded"
-const EventOperatorAuditAiRecorded = "g8e.v1.operator.audit.ai.recorded"
-const EventOperatorAuditCommandRecorded = "g8e.v1.operator.audit.command.recorded"
-const EventOperatorAuditDirectCommandRecorded = "g8e.v1.operator.audit.direct.command.recorded"
-const EventOperatorAuditDirectCommandResultRecorded = "g8e.v1.operator.audit.direct.command.result.recorded"
-const EventOperatorBootstrapRequested = "g8e.v1.operator.bootstrap.requested"
-const EventOperatorBootstrapReceived = "g8e.v1.operator.bootstrap.received"
-const EventOperatorBootstrapCompleted = "g8e.v1.operator.bootstrap.completed"
-const EventOperatorBootstrapFailed = "g8e.v1.operator.bootstrap.failed"
-const EventOperatorBootstrapConfigReceived = "g8e.v1.operator.bootstrap.config.received"
-const EventOperatorBound = "g8e.v1.operator.bound"
-const EventOperatorUnbound = "g8e.v1.operator.unbound"
-const EventOperatorTerminalThinkingAppend = "g8e.v1.operator.terminal.thinking.append"
-const EventOperatorTerminalThinkingComplete = "g8e.v1.operator.terminal.thinking.complete"
-const EventOperatorTerminalApprovalDenied = "g8e.v1.operator.terminal.approval.denied"
-const EventOperatorTerminalAuthStateChanged = "g8e.v1.operator.terminal.auth.state.changed"
-const EventAiAgentContinueApprovalRequested = "g8e.v1.ai.agent.continue.approval.requested"
-const EventAiAgentContinueApprovalGranted = "g8e.v1.ai.agent.continue.approval.granted"
-const EventAiAgentContinueApprovalRejected = "g8e.v1.ai.agent.continue.approval.rejected"
-const EventAiAgentConflictDetected = "g8e.v1.ai.agent.conflict.detected"
-const EventAiAgentConflictResolved = "g8e.v1.ai.agent.conflict.resolved"
-const EventAiTriageClarificationQuestions = "g8e.v1.ai.triage.clarification.questions"
-const EventAiTriageClarificationAnswered = "g8e.v1.ai.triage.clarification.answered"
-const EventAiTriageClarificationSkipped = "g8e.v1.ai.triage.clarification.skipped"
-const EventAiTriageClarificationTimeout = "g8e.v1.ai.triage.clarification.timeout"
-const EventAiTribunalSessionStarted = "g8e.v1.ai.tribunal.session.started"
-const EventAiTribunalSessionCompleted = "g8e.v1.ai.tribunal.session.completed"
-const EventAiTribunalSessionDisabled = "g8e.v1.ai.tribunal.session.disabled"
-const EventAiTribunalSessionModelNotConfigured = "g8e.v1.ai.tribunal.session.model.not_configured"
-const EventAiTribunalSessionProviderUnavailable = "g8e.v1.ai.tribunal.session.provider.unavailable"
-const EventAiTribunalSessionSystemError = "g8e.v1.ai.tribunal.session.system.error"
-const EventAiTribunalSessionGenerationFailed = "g8e.v1.ai.tribunal.session.generation.failed"
-const EventAiTribunalSessionAuditorFailed = "g8e.v1.ai.tribunal.session.auditor.failed"
-const EventAiTribunalSessionVerifierFailed = "g8e.v1.ai.tribunal.session.verifier.failed"
-const EventAiTribunalSessionWardenBlocked = "g8e.v1.ai.tribunal.session.warden_blocked"
-const EventAiTribunalVotingStarted = "g8e.v1.ai.tribunal.voting.started"
-const EventAiTribunalVotingFailed = "g8e.v1.ai.tribunal.voting.failed"
-const EventAiTribunalVotingPassCompleted = "g8e.v1.ai.tribunal.voting.pass.completed"
-const EventAiTribunalVotingPassFailed = "g8e.v1.ai.tribunal.voting.pass.failed"
-const EventAiTribunalVotingConsensusReached = "g8e.v1.ai.tribunal.voting.consensus.reached"
-const EventAiTribunalVotingConsensusNotReached = "g8e.v1.ai.tribunal.voting.consensus.not_reached"
-const EventAiTribunalVotingConsensusFailed = "g8e.v1.ai.tribunal.voting.consensus.failed"
-const EventAiTribunalVotingWardenStarted = "g8e.v1.ai.tribunal.voting.warden.started"
-const EventAiTribunalVotingWardenCompleted = "g8e.v1.ai.tribunal.voting.warden.completed"
-const EventAiTribunalVotingWardenFailed = "g8e.v1.ai.tribunal.voting.warden.failed"
-const EventAiTribunalVotingAuditStarted = "g8e.v1.ai.tribunal.voting.audit.started"
-const EventAiTribunalVotingAuditCompleted = "g8e.v1.ai.tribunal.voting.audit.completed"
-const EventAiTribunalVotingAuditFailed = "g8e.v1.ai.tribunal.voting.audit.failed"
-const EventAiTribunalVotingDissentRecorded = "g8e.v1.ai.tribunal.voting.dissent.recorded"
-const EventAiTribunalVotingRoundStarted = "g8e.v1.ai.tribunal.voting.round.started"
-const EventAiTribunalVotingRoundCompleted = "g8e.v1.ai.tribunal.voting.round.completed"
-const EventAiTribunalVotingRound2Started = "g8e.v1.ai.tribunal.voting.round_2.started"
-const EventAiTribunalVotingRound2PassCompleted = "g8e.v1.ai.tribunal.voting.round_2.pass.completed"
-const EventAiTribunalVotingRound2ConsensusReached = "g8e.v1.ai.tribunal.voting.round_2.consensus.reached"
-const EventAiTribunalVotingRound2ConsensusFailed = "g8e.v1.ai.tribunal.voting.round_2.consensus.failed"
-const EventAiReputationCommitmentCreated = "g8e.v1.ai.reputation.commitment.created"
-const EventAiReputationCommitmentVerified = "g8e.v1.ai.reputation.commitment.verified"
-const EventAiReputationCommitmentFailed = "g8e.v1.ai.reputation.commitment.failed"
-const EventAiReputationStateUpdated = "g8e.v1.ai.reputation.state.updated"
-const EventAiReputationSlashTier1 = "g8e.v1.ai.reputation.slash.tier1"
-const EventAiReputationSlashTier2 = "g8e.v1.ai.reputation.slash.tier2"
-const EventAiReputationSlashTier3 = "g8e.v1.ai.reputation.slash.tier3"
-const EventAiLlmConfigRequested = "g8e.v1.ai.llm.config.requested"
-const EventAiLlmConfigReceived = "g8e.v1.ai.llm.config.received"
-const EventAiLlmConfigFailed = "g8e.v1.ai.llm.config.failed"
-const EventAiLlmLifecycleRequested = "g8e.v1.ai.llm.lifecycle.requested"
-const EventAiLlmLifecycleStarted = "g8e.v1.ai.llm.lifecycle.started"
-const EventAiLlmLifecycleCompleted = "g8e.v1.ai.llm.lifecycle.completed"
-const EventAiLlmLifecycleFailed = "g8e.v1.ai.llm.lifecycle.failed"
-const EventAiLlmLifecycleStopped = "g8e.v1.ai.llm.lifecycle.stopped"
-const EventAiLlmLifecycleErrorOccurred = "g8e.v1.ai.llm.lifecycle.error.occurred"
-const EventAiLlmToolG8eWebSearchRequested = "g8e.v1.ai.llm.tool.g8e.web.search.requested"
-const EventAiLlmToolG8eWebSearchReceived = "g8e.v1.ai.llm.tool.g8e.web.search.received"
-const EventAiLlmToolG8eWebSearchCompleted = "g8e.v1.ai.llm.tool.g8e.web.search.completed"
-const EventAiLlmToolG8eWebSearchFailed = "g8e.v1.ai.llm.tool.g8e.web.search.failed"
-const EventAiLlmToolG8eInvestigationQueryRequested = "g8e.v1.ai.llm.tool.g8e.investigation.query.requested"
-const EventAiLlmToolG8eInvestigationQueryReceived = "g8e.v1.ai.llm.tool.g8e.investigation.query.received"
-const EventAiLlmToolG8eInvestigationQueryCompleted = "g8e.v1.ai.llm.tool.g8e.investigation.query.completed"
-const EventAiLlmToolG8eInvestigationQueryFailed = "g8e.v1.ai.llm.tool.g8e.investigation.query.failed"
-const EventAiLlmToolG8eCommandConstraintsRequested = "g8e.v1.ai.llm.tool.g8e.command.constraints.requested"
-const EventAiLlmToolG8eCommandConstraintsReceived = "g8e.v1.ai.llm.tool.g8e.command.constraints.received"
-const EventAiLlmToolG8eCommandConstraintsCompleted = "g8e.v1.ai.llm.tool.g8e.command.constraints.completed"
-const EventAiLlmToolG8eCommandConstraintsFailed = "g8e.v1.ai.llm.tool.g8e.command.constraints.failed"
-const EventAiLlmChatSubmitted = "g8e.v1.ai.llm.chat.submitted"
-const EventAiLlmChatStopShow = "g8e.v1.ai.llm.chat.stop.show"
-const EventAiLlmChatStopHide = "g8e.v1.ai.llm.chat.stop.hide"
-const EventAiLlmChatFilterEvent = "g8e.v1.ai.llm.chat.filter.event"
-const EventAiLlmChatMessageSent = "g8e.v1.ai.llm.chat.message.sent"
-const EventAiLlmChatMessageReplayed = "g8e.v1.ai.llm.chat.message.replayed"
-const EventAiLlmChatMessageProcessingFailed = "g8e.v1.ai.llm.chat.message.processing.failed"
-const EventAiLlmChatMessageDeadLettered = "g8e.v1.ai.llm.chat.message.dead.lettered"
-const EventAiLlmChatIterationStarted = "g8e.v1.ai.llm.chat.iteration.started"
-const EventAiLlmChatIterationCompleted = "g8e.v1.ai.llm.chat.iteration.completed"
-const EventAiLlmChatIterationFailed = "g8e.v1.ai.llm.chat.iteration.failed"
-const EventAiLlmChatIterationStopped = "g8e.v1.ai.llm.chat.iteration.stopped"
-const EventAiLlmChatIterationRetry = "g8e.v1.ai.llm.chat.iteration.retry"
-const EventAiLlmChatIterationThinkingStarted = "g8e.v1.ai.llm.chat.iteration.thinking.started"
-const EventAiLlmChatIterationThinkingUpdate = "g8e.v1.ai.llm.chat.iteration.thinking.update"
-const EventAiLlmChatIterationThinkingEnd = "g8e.v1.ai.llm.chat.iteration.thinking.end"
-const EventAiLlmChatIterationCitationsReceived = "g8e.v1.ai.llm.chat.iteration.citations.received"
-const EventAiLlmChatIterationTextReceived = "g8e.v1.ai.llm.chat.iteration.text.received"
-const EventAiLlmChatIterationTextChunkReceived = "g8e.v1.ai.llm.chat.iteration.text.chunk.received"
-const EventAiLlmChatIterationTextCompleted = "g8e.v1.ai.llm.chat.iteration.text.completed"
-const EventAiLlmChatIterationTextTruncated = "g8e.v1.ai.llm.chat.iteration.text.truncated"
-const EventAiLlmChatIterationStreamStarted = "g8e.v1.ai.llm.chat.iteration.stream.started"
-const EventAiLlmChatIterationStreamDeltaReceived = "g8e.v1.ai.llm.chat.iteration.stream.delta.received"
-const EventAiLlmChatIterationStreamCompleted = "g8e.v1.ai.llm.chat.iteration.stream.completed"
-const EventAiLlmChatIterationStreamFailed = "g8e.v1.ai.llm.chat.iteration.stream.failed"
-const EventPlatformUsageUpdated = "g8e.v1.platform.usage.updated"
-const EventPlatformNotification = "g8e.v1.platform.notification"
-const EventPlatformAuthLoginRequested = "g8e.v1.platform.auth.login.requested"
-const EventPlatformAuthLoginSucceeded = "g8e.v1.platform.auth.login.succeeded"
-const EventPlatformAuthLoginFailed = "g8e.v1.platform.auth.login.failed"
-const EventPlatformAuthLogoutRequested = "g8e.v1.platform.auth.logout.requested"
-const EventPlatformAuthLogoutSucceeded = "g8e.v1.platform.auth.logout.succeeded"
-const EventPlatformAuthLogoutFailed = "g8e.v1.platform.auth.logout.failed"
-const EventPlatformAuthSessionValidationRequested = "g8e.v1.platform.auth.session.validation.requested"
-const EventPlatformAuthSessionValidationSucceeded = "g8e.v1.platform.auth.session.validation.succeeded"
-const EventPlatformAuthSessionValidationFailed = "g8e.v1.platform.auth.session.validation.failed"
-const EventPlatformAuthSessionExpired = "g8e.v1.platform.auth.session.expired"
-const EventPlatformAuthUserAuthenticated = "g8e.v1.platform.auth.user.authenticated"
-const EventPlatformAuthUserUnauthenticated = "g8e.v1.platform.auth.user.unauthenticated"
-const EventPlatformAuthComponentInitializedAuthstate = "g8e.v1.platform.auth.component.initialized.authstate"
-const EventPlatformAuthComponentInitializedChat = "g8e.v1.platform.auth.component.initialized.chat"
-const EventPlatformAuthComponentInitializedOperator = "g8e.v1.platform.auth.component.initialized.operator"
-const EventPlatformAuthInfo = "g8e.v1.platform.auth.info"
-const EventPlatformSseKeepaliveSent = "g8e.v1.platform.sse.keepalive.sent"
-const EventPlatformSseConnectionEstablished = "g8e.v1.platform.sse.connection.established"
-const EventPlatformSseConnectionOpened = "g8e.v1.platform.sse.connection.opened"
-const EventPlatformSseConnectionClosed = "g8e.v1.platform.sse.connection.closed"
-const EventPlatformSseConnectionFailed = "g8e.v1.platform.sse.connection.failed"
-const EventPlatformSseConnectionError = "g8e.v1.platform.sse.connection.error"
-const EventPlatformTerminalOpened = "g8e.v1.platform.terminal.opened"
-const EventPlatformTerminalMinimized = "g8e.v1.platform.terminal.minimized"
-const EventPlatformTerminalMaximized = "g8e.v1.platform.terminal.maximized"
-const EventPlatformTerminalClosed = "g8e.v1.platform.terminal.closed"
-const EventPlatformSentinelModeChanged = "g8e.v1.platform.sentinel.mode.changed"
-const EventPlatformExternalServiceConfigured = "g8e.v1.platform.external.service.configured"
-const EventPlatformTelemetryHealthReported = "g8e.v1.platform.telemetry.health.reported"
-const EventPlatformTelemetryPerformanceRecorded = "g8e.v1.platform.telemetry.performance.recorded"
-const EventPlatformTelemetryErrorLogged = "g8e.v1.platform.telemetry.error.logged"
-const EventPlatformTelemetryAuditLogged = "g8e.v1.platform.telemetry.audit.logged"
-const EventPlatformConsoleLogEntryReceived = "g8e.v1.platform.console.log.entry.received"
-const EventPlatformConsoleLogConnectedConfirmed = "g8e.v1.platform.console.log.connected.confirmed"
-const EventSourceUserChat = "g8e.v1.source.user.chat"
-const EventSourceUserTerminal = "g8e.v1.source.user.terminal"
-const EventSourceAiPrimary = "g8e.v1.source.ai.primary"
-const EventSourceAiAssistant = "g8e.v1.source.ai.assistant"
-const EventSourceAiTriage = "g8e.v1.source.ai.triage"
-const EventSourceSystem = "g8e.v1.source.system"
+// EventType is a typed string for event types.
+type EventType string
+
+const EventAppCaseCreated EventType = "g8e.v1.app.case.created"
+const EventAppCaseUpdated EventType = "g8e.v1.app.case.updated"
+const EventAppCaseAssigned EventType = "g8e.v1.app.case.assigned"
+const EventAppCaseEscalated EventType = "g8e.v1.app.case.escalated"
+const EventAppCaseResolved EventType = "g8e.v1.app.case.resolved"
+const EventAppCaseClosed EventType = "g8e.v1.app.case.closed"
+const EventAppCaseSelected EventType = "g8e.v1.app.case.selected"
+const EventAppCaseCleared EventType = "g8e.v1.app.case.cleared"
+const EventAppCaseSwitched EventType = "g8e.v1.app.case.switched"
+const EventAppCaseCreationRequested EventType = "g8e.v1.app.case.creation.requested"
+const EventAppCaseUpdateRequested EventType = "g8e.v1.app.case.update.requested"
+const EventAppTaskCreated EventType = "g8e.v1.app.task.created"
+const EventAppTaskUpdated EventType = "g8e.v1.app.task.updated"
+const EventAppTaskAssigned EventType = "g8e.v1.app.task.assigned"
+const EventAppTaskStarted EventType = "g8e.v1.app.task.started"
+const EventAppTaskCompleted EventType = "g8e.v1.app.task.completed"
+const EventAppTaskFailed EventType = "g8e.v1.app.task.failed"
+const EventAppInvestigationCreated EventType = "g8e.v1.app.investigation.created"
+const EventAppInvestigationUpdated EventType = "g8e.v1.app.investigation.updated"
+const EventAppInvestigationLoaded EventType = "g8e.v1.app.investigation.loaded"
+const EventAppInvestigationRequested EventType = "g8e.v1.app.investigation.requested"
+const EventAppInvestigationStarted EventType = "g8e.v1.app.investigation.started"
+const EventAppInvestigationClosed EventType = "g8e.v1.app.investigation.closed"
+const EventAppInvestigationEscalated EventType = "g8e.v1.app.investigation.escalated"
+const EventAppInvestigationListRequested EventType = "g8e.v1.app.investigation.list.requested"
+const EventAppInvestigationListReceived EventType = "g8e.v1.app.investigation.list.received"
+const EventAppInvestigationListCompleted EventType = "g8e.v1.app.investigation.list.completed"
+const EventAppInvestigationListFailed EventType = "g8e.v1.app.investigation.list.failed"
+const EventAppInvestigationStatusUpdatedOpen EventType = "g8e.v1.app.investigation.status.updated.open"
+const EventAppInvestigationStatusUpdatedClosed EventType = "g8e.v1.app.investigation.status.updated.closed"
+const EventAppInvestigationStatusUpdatedEscalated EventType = "g8e.v1.app.investigation.status.updated.escalated"
+const EventAppInvestigationStatusUpdatedResolved EventType = "g8e.v1.app.investigation.status.updated.resolved"
+const EventAppInvestigationChatMessageUser EventType = "g8e.v1.app.investigation.chat.message.user"
+const EventAppInvestigationChatMessageAi EventType = "g8e.v1.app.investigation.chat.message.ai"
+const EventAppInvestigationChatMessageSystem EventType = "g8e.v1.app.investigation.chat.message.system"
+const EventOperatorSlotInitializationFailed EventType = "g8e.v1.operator.slot.initialization.failed"
+const EventOperatorEvalAnswerRequested EventType = "g8e.v1.operator.eval.answer.requested"
+const EventOperatorHeartbeatSent EventType = "g8e.v1.operator.heartbeat.sent"
+const EventOperatorHeartbeatRequested EventType = "g8e.v1.operator.heartbeat.requested"
+const EventOperatorHeartbeatReceived EventType = "g8e.v1.operator.heartbeat.received"
+const EventOperatorHeartbeatMissed EventType = "g8e.v1.operator.heartbeat.missed"
+const EventOperatorShutdownRequested EventType = "g8e.v1.operator.shutdown.requested"
+const EventOperatorShutdownAcknowledged EventType = "g8e.v1.operator.shutdown.acknowledged"
+const EventOperatorPanelListUpdated EventType = "g8e.v1.operator.panel.list.updated"
+const EventOperatorContextChanged EventType = "g8e.v1.operator.context.changed"
+const EventOperatorStatusUpdatedActive EventType = "g8e.v1.operator.status.updated.active"
+const EventOperatorStatusUpdatedAvailable EventType = "g8e.v1.operator.status.updated.available"
+const EventOperatorStatusUpdatedUnavailable EventType = "g8e.v1.operator.status.updated.unavailable"
+const EventOperatorStatusUpdatedBound EventType = "g8e.v1.operator.status.updated.bound"
+const EventOperatorStatusUpdatedOffline EventType = "g8e.v1.operator.status.updated.offline"
+const EventOperatorStatusUpdatedStale EventType = "g8e.v1.operator.status.updated.stale"
+const EventOperatorStatusUpdatedStopped EventType = "g8e.v1.operator.status.updated.stopped"
+const EventOperatorStatusUpdatedTerminated EventType = "g8e.v1.operator.status.updated.terminated"
+const EventOperatorApiKeyRefreshed EventType = "g8e.v1.operator.api.key.refreshed"
+const EventOperatorDeviceRegistered EventType = "g8e.v1.operator.device.registered"
+const EventOperatorCommandRequested EventType = "g8e.v1.operator.command.requested"
+const EventOperatorCommandStarted EventType = "g8e.v1.operator.command.started"
+const EventOperatorCommandCompleted EventType = "g8e.v1.operator.command.completed"
+const EventOperatorCommandFailed EventType = "g8e.v1.operator.command.failed"
+const EventOperatorCommandCancelled EventType = "g8e.v1.operator.command.cancelled"
+const EventOperatorCommandExecution EventType = "g8e.v1.operator.command.execution"
+const EventOperatorCommandResult EventType = "g8e.v1.operator.command.result"
+const EventOperatorCommandOutputReceived EventType = "g8e.v1.operator.command.output.received"
+const EventOperatorCommandStatusUpdatedQueued EventType = "g8e.v1.operator.command.status.updated.queued"
+const EventOperatorCommandStatusUpdatedRunning EventType = "g8e.v1.operator.command.status.updated.running"
+const EventOperatorCommandStatusUpdatedCompleted EventType = "g8e.v1.operator.command.status.updated.completed"
+const EventOperatorCommandStatusUpdatedFailed EventType = "g8e.v1.operator.command.status.updated.failed"
+const EventOperatorCommandStatusUpdatedCancelled EventType = "g8e.v1.operator.command.status.updated.cancelled"
+const EventOperatorCommandCancelRequested EventType = "g8e.v1.operator.command.cancel.requested"
+const EventOperatorCommandCancelAcknowledged EventType = "g8e.v1.operator.command.cancel.acknowledged"
+const EventOperatorCommandCancelFailed EventType = "g8e.v1.operator.command.cancel.failed"
+const EventOperatorCommandApprovalRequested EventType = "g8e.v1.operator.command.approval.requested"
+const EventOperatorCommandApprovalGranted EventType = "g8e.v1.operator.command.approval.granted"
+const EventOperatorCommandApprovalRejected EventType = "g8e.v1.operator.command.approval.rejected"
+const EventOperatorCommandApprovalPreparing EventType = "g8e.v1.operator.command.approval.preparing"
+const EventOperatorStreamApprovalRequested EventType = "g8e.v1.operator.stream.approval.requested"
+const EventOperatorStreamApprovalGranted EventType = "g8e.v1.operator.stream.approval.granted"
+const EventOperatorStreamApprovalRejected EventType = "g8e.v1.operator.stream.approval.rejected"
+const EventOperatorFileEditRequested EventType = "g8e.v1.operator.file.edit.requested"
+const EventOperatorFileEditStarted EventType = "g8e.v1.operator.file.edit.started"
+const EventOperatorFileEditCompleted EventType = "g8e.v1.operator.file.edit.completed"
+const EventOperatorFileEditFailed EventType = "g8e.v1.operator.file.edit.failed"
+const EventOperatorFileEditTimeout EventType = "g8e.v1.operator.file.edit.timeout"
+const EventOperatorFileEditApprovalRequested EventType = "g8e.v1.operator.file.edit.approval.requested"
+const EventOperatorFileEditApprovalGranted EventType = "g8e.v1.operator.file.edit.approval.granted"
+const EventOperatorFileEditApprovalRejected EventType = "g8e.v1.operator.file.edit.approval.rejected"
+const EventOperatorFileEditApprovalFeedback EventType = "g8e.v1.operator.file.edit.approval.feedback"
+const EventOperatorFileHistoryFetchStarted EventType = "g8e.v1.operator.file.history.fetch.started"
+const EventOperatorFileHistoryFetchRequested EventType = "g8e.v1.operator.file.history.fetch.requested"
+const EventOperatorFileHistoryFetchReceived EventType = "g8e.v1.operator.file.history.fetch.received"
+const EventOperatorFileHistoryFetchCompleted EventType = "g8e.v1.operator.file.history.fetch.completed"
+const EventOperatorFileHistoryFetchFailed EventType = "g8e.v1.operator.file.history.fetch.failed"
+const EventOperatorFileDiffFetchStarted EventType = "g8e.v1.operator.file.diff.fetch.started"
+const EventOperatorFileDiffFetchRequested EventType = "g8e.v1.operator.file.diff.fetch.requested"
+const EventOperatorFileDiffFetchReceived EventType = "g8e.v1.operator.file.diff.fetch.received"
+const EventOperatorFileDiffFetchCompleted EventType = "g8e.v1.operator.file.diff.fetch.completed"
+const EventOperatorFileDiffFetchFailed EventType = "g8e.v1.operator.file.diff.fetch.failed"
+const EventOperatorFileRestoreRequested EventType = "g8e.v1.operator.file.restore.requested"
+const EventOperatorFileRestoreReceived EventType = "g8e.v1.operator.file.restore.received"
+const EventOperatorFileRestoreCompleted EventType = "g8e.v1.operator.file.restore.completed"
+const EventOperatorFileRestoreFailed EventType = "g8e.v1.operator.file.restore.failed"
+const EventOperatorFilesystemListStarted EventType = "g8e.v1.operator.filesystem.list.started"
+const EventOperatorFilesystemListRequested EventType = "g8e.v1.operator.filesystem.list.requested"
+const EventOperatorFilesystemListReceived EventType = "g8e.v1.operator.filesystem.list.received"
+const EventOperatorFilesystemListCompleted EventType = "g8e.v1.operator.filesystem.list.completed"
+const EventOperatorFilesystemListFailed EventType = "g8e.v1.operator.filesystem.list.failed"
+const EventOperatorFilesystemReadStarted EventType = "g8e.v1.operator.filesystem.read.started"
+const EventOperatorFilesystemReadRequested EventType = "g8e.v1.operator.filesystem.read.requested"
+const EventOperatorFilesystemReadReceived EventType = "g8e.v1.operator.filesystem.read.received"
+const EventOperatorFilesystemReadCompleted EventType = "g8e.v1.operator.filesystem.read.completed"
+const EventOperatorFilesystemReadFailed EventType = "g8e.v1.operator.filesystem.read.failed"
+const EventOperatorFilesystemGrepStarted EventType = "g8e.v1.operator.filesystem.grep.started"
+const EventOperatorFilesystemGrepRequested EventType = "g8e.v1.operator.filesystem.grep.requested"
+const EventOperatorFilesystemGrepReceived EventType = "g8e.v1.operator.filesystem.grep.received"
+const EventOperatorFilesystemGrepCompleted EventType = "g8e.v1.operator.filesystem.grep.completed"
+const EventOperatorFilesystemGrepFailed EventType = "g8e.v1.operator.filesystem.grep.failed"
+const EventOperatorLogsFetchRequested EventType = "g8e.v1.operator.logs.fetch.requested"
+const EventOperatorLogsFetchReceived EventType = "g8e.v1.operator.logs.fetch.received"
+const EventOperatorLogsFetchCompleted EventType = "g8e.v1.operator.logs.fetch.completed"
+const EventOperatorLogsFetchFailed EventType = "g8e.v1.operator.logs.fetch.failed"
+const EventOperatorHistoryFetchRequested EventType = "g8e.v1.operator.history.fetch.requested"
+const EventOperatorHistoryFetchReceived EventType = "g8e.v1.operator.history.fetch.received"
+const EventOperatorHistoryFetchCompleted EventType = "g8e.v1.operator.history.fetch.completed"
+const EventOperatorHistoryFetchFailed EventType = "g8e.v1.operator.history.fetch.failed"
+const EventOperatorIntentRequested EventType = "g8e.v1.operator.intent.requested"
+const EventOperatorIntentGranted EventType = "g8e.v1.operator.intent.granted"
+const EventOperatorIntentDenied EventType = "g8e.v1.operator.intent.denied"
+const EventOperatorIntentRevoked EventType = "g8e.v1.operator.intent.revoked"
+const EventOperatorIntentRevokeRequested EventType = "g8e.v1.operator.intent.revoke.requested"
+const EventOperatorIntentApprovalRequested EventType = "g8e.v1.operator.intent.approval.requested"
+const EventOperatorIntentApprovalGranted EventType = "g8e.v1.operator.intent.approval.granted"
+const EventOperatorIntentApprovalRejected EventType = "g8e.v1.operator.intent.approval.rejected"
+const EventOperatorNetworkPingRequested EventType = "g8e.v1.operator.network.ping.requested"
+const EventOperatorNetworkPingReceived EventType = "g8e.v1.operator.network.ping.received"
+const EventOperatorNetworkPingCompleted EventType = "g8e.v1.operator.network.ping.completed"
+const EventOperatorNetworkPingFailed EventType = "g8e.v1.operator.network.ping.failed"
+const EventOperatorNetworkPortCheckRequested EventType = "g8e.v1.operator.network.port.check.requested"
+const EventOperatorNetworkPortCheckStarted EventType = "g8e.v1.operator.network.port.check.started"
+const EventOperatorNetworkPortCheckReceived EventType = "g8e.v1.operator.network.port.check.received"
+const EventOperatorNetworkPortCheckCompleted EventType = "g8e.v1.operator.network.port.check.completed"
+const EventOperatorNetworkPortCheckFailed EventType = "g8e.v1.operator.network.port.check.failed"
+const EventOperatorAuditUserRecorded EventType = "g8e.v1.operator.audit.user.recorded"
+const EventOperatorAuditAiRecorded EventType = "g8e.v1.operator.audit.ai.recorded"
+const EventOperatorAuditCommandRecorded EventType = "g8e.v1.operator.audit.command.recorded"
+const EventOperatorAuditDirectCommandRecorded EventType = "g8e.v1.operator.audit.direct.command.recorded"
+const EventOperatorAuditDirectCommandResultRecorded EventType = "g8e.v1.operator.audit.direct.command.result.recorded"
+const EventOperatorBootstrapRequested EventType = "g8e.v1.operator.bootstrap.requested"
+const EventOperatorBootstrapReceived EventType = "g8e.v1.operator.bootstrap.received"
+const EventOperatorBootstrapCompleted EventType = "g8e.v1.operator.bootstrap.completed"
+const EventOperatorBootstrapFailed EventType = "g8e.v1.operator.bootstrap.failed"
+const EventOperatorBootstrapConfigReceived EventType = "g8e.v1.operator.bootstrap.config.received"
+const EventOperatorBound EventType = "g8e.v1.operator.bound"
+const EventOperatorUnbound EventType = "g8e.v1.operator.unbound"
+const EventOperatorTerminalThinkingAppend EventType = "g8e.v1.operator.terminal.thinking.append"
+const EventOperatorTerminalThinkingComplete EventType = "g8e.v1.operator.terminal.thinking.complete"
+const EventOperatorTerminalApprovalDenied EventType = "g8e.v1.operator.terminal.approval.denied"
+const EventOperatorTerminalAuthStateChanged EventType = "g8e.v1.operator.terminal.auth.state.changed"
+const EventAiAgentContinueApprovalRequested EventType = "g8e.v1.ai.agent.continue.approval.requested"
+const EventAiAgentContinueApprovalGranted EventType = "g8e.v1.ai.agent.continue.approval.granted"
+const EventAiAgentContinueApprovalRejected EventType = "g8e.v1.ai.agent.continue.approval.rejected"
+const EventAiAgentConflictDetected EventType = "g8e.v1.ai.agent.conflict.detected"
+const EventAiAgentConflictResolved EventType = "g8e.v1.ai.agent.conflict.resolved"
+const EventAiTriageClarificationQuestions EventType = "g8e.v1.ai.triage.clarification.questions"
+const EventAiTriageClarificationAnswered EventType = "g8e.v1.ai.triage.clarification.answered"
+const EventAiTriageClarificationSkipped EventType = "g8e.v1.ai.triage.clarification.skipped"
+const EventAiTriageClarificationTimeout EventType = "g8e.v1.ai.triage.clarification.timeout"
+const EventAiTribunalSessionStarted EventType = "g8e.v1.ai.tribunal.session.started"
+const EventAiTribunalSessionCompleted EventType = "g8e.v1.ai.tribunal.session.completed"
+const EventAiTribunalSessionDisabled EventType = "g8e.v1.ai.tribunal.session.disabled"
+const EventAiTribunalSessionModelNotConfigured EventType = "g8e.v1.ai.tribunal.session.model.not_configured"
+const EventAiTribunalSessionProviderUnavailable EventType = "g8e.v1.ai.tribunal.session.provider.unavailable"
+const EventAiTribunalSessionSystemError EventType = "g8e.v1.ai.tribunal.session.system.error"
+const EventAiTribunalSessionGenerationFailed EventType = "g8e.v1.ai.tribunal.session.generation.failed"
+const EventAiTribunalSessionAuditorFailed EventType = "g8e.v1.ai.tribunal.session.auditor.failed"
+const EventAiTribunalSessionVerifierFailed EventType = "g8e.v1.ai.tribunal.session.verifier.failed"
+const EventAiTribunalSessionWardenBlocked EventType = "g8e.v1.ai.tribunal.session.warden_blocked"
+const EventAiTribunalVotingStarted EventType = "g8e.v1.ai.tribunal.voting.started"
+const EventAiTribunalVotingFailed EventType = "g8e.v1.ai.tribunal.voting.failed"
+const EventAiTribunalVotingPassCompleted EventType = "g8e.v1.ai.tribunal.voting.pass.completed"
+const EventAiTribunalVotingPassFailed EventType = "g8e.v1.ai.tribunal.voting.pass.failed"
+const EventAiTribunalVotingConsensusReached EventType = "g8e.v1.ai.tribunal.voting.consensus.reached"
+const EventAiTribunalVotingConsensusNotReached EventType = "g8e.v1.ai.tribunal.voting.consensus.not_reached"
+const EventAiTribunalVotingConsensusFailed EventType = "g8e.v1.ai.tribunal.voting.consensus.failed"
+const EventAiTribunalVotingWardenStarted EventType = "g8e.v1.ai.tribunal.voting.warden.started"
+const EventAiTribunalVotingWardenCompleted EventType = "g8e.v1.ai.tribunal.voting.warden.completed"
+const EventAiTribunalVotingWardenFailed EventType = "g8e.v1.ai.tribunal.voting.warden.failed"
+const EventAiTribunalVotingAuditStarted EventType = "g8e.v1.ai.tribunal.voting.audit.started"
+const EventAiTribunalVotingAuditCompleted EventType = "g8e.v1.ai.tribunal.voting.audit.completed"
+const EventAiTribunalVotingAuditFailed EventType = "g8e.v1.ai.tribunal.voting.audit.failed"
+const EventAiTribunalVotingDissentRecorded EventType = "g8e.v1.ai.tribunal.voting.dissent.recorded"
+const EventAiTribunalVotingRoundStarted EventType = "g8e.v1.ai.tribunal.voting.round.started"
+const EventAiTribunalVotingRoundCompleted EventType = "g8e.v1.ai.tribunal.voting.round.completed"
+const EventAiTribunalVotingRound2Started EventType = "g8e.v1.ai.tribunal.voting.round_2.started"
+const EventAiTribunalVotingRound2PassCompleted EventType = "g8e.v1.ai.tribunal.voting.round_2.pass.completed"
+const EventAiTribunalVotingRound2ConsensusReached EventType = "g8e.v1.ai.tribunal.voting.round_2.consensus.reached"
+const EventAiTribunalVotingRound2ConsensusFailed EventType = "g8e.v1.ai.tribunal.voting.round_2.consensus.failed"
+const EventAiReputationCommitmentCreated EventType = "g8e.v1.ai.reputation.commitment.created"
+const EventAiReputationCommitmentVerified EventType = "g8e.v1.ai.reputation.commitment.verified"
+const EventAiReputationCommitmentFailed EventType = "g8e.v1.ai.reputation.commitment.failed"
+const EventAiReputationStateUpdated EventType = "g8e.v1.ai.reputation.state.updated"
+const EventAiReputationSlashTier1 EventType = "g8e.v1.ai.reputation.slash.tier1"
+const EventAiReputationSlashTier2 EventType = "g8e.v1.ai.reputation.slash.tier2"
+const EventAiReputationSlashTier3 EventType = "g8e.v1.ai.reputation.slash.tier3"
+const EventAiLlmConfigRequested EventType = "g8e.v1.ai.llm.config.requested"
+const EventAiLlmConfigReceived EventType = "g8e.v1.ai.llm.config.received"
+const EventAiLlmConfigFailed EventType = "g8e.v1.ai.llm.config.failed"
+const EventAiLlmLifecycleRequested EventType = "g8e.v1.ai.llm.lifecycle.requested"
+const EventAiLlmLifecycleStarted EventType = "g8e.v1.ai.llm.lifecycle.started"
+const EventAiLlmLifecycleCompleted EventType = "g8e.v1.ai.llm.lifecycle.completed"
+const EventAiLlmLifecycleFailed EventType = "g8e.v1.ai.llm.lifecycle.failed"
+const EventAiLlmLifecycleStopped EventType = "g8e.v1.ai.llm.lifecycle.stopped"
+const EventAiLlmLifecycleErrorOccurred EventType = "g8e.v1.ai.llm.lifecycle.error.occurred"
+const EventAiLlmToolG8eWebSearchRequested EventType = "g8e.v1.ai.llm.tool.g8e.web.search.requested"
+const EventAiLlmToolG8eWebSearchReceived EventType = "g8e.v1.ai.llm.tool.g8e.web.search.received"
+const EventAiLlmToolG8eWebSearchCompleted EventType = "g8e.v1.ai.llm.tool.g8e.web.search.completed"
+const EventAiLlmToolG8eWebSearchFailed EventType = "g8e.v1.ai.llm.tool.g8e.web.search.failed"
+const EventAiLlmToolG8eInvestigationQueryRequested EventType = "g8e.v1.ai.llm.tool.g8e.investigation.query.requested"
+const EventAiLlmToolG8eInvestigationQueryReceived EventType = "g8e.v1.ai.llm.tool.g8e.investigation.query.received"
+const EventAiLlmToolG8eInvestigationQueryCompleted EventType = "g8e.v1.ai.llm.tool.g8e.investigation.query.completed"
+const EventAiLlmToolG8eInvestigationQueryFailed EventType = "g8e.v1.ai.llm.tool.g8e.investigation.query.failed"
+const EventAiLlmToolG8eCommandConstraintsRequested EventType = "g8e.v1.ai.llm.tool.g8e.command.constraints.requested"
+const EventAiLlmToolG8eCommandConstraintsReceived EventType = "g8e.v1.ai.llm.tool.g8e.command.constraints.received"
+const EventAiLlmToolG8eCommandConstraintsCompleted EventType = "g8e.v1.ai.llm.tool.g8e.command.constraints.completed"
+const EventAiLlmToolG8eCommandConstraintsFailed EventType = "g8e.v1.ai.llm.tool.g8e.command.constraints.failed"
+const EventAiLlmChatSubmitted EventType = "g8e.v1.ai.llm.chat.submitted"
+const EventAiLlmChatStopShow EventType = "g8e.v1.ai.llm.chat.stop.show"
+const EventAiLlmChatStopHide EventType = "g8e.v1.ai.llm.chat.stop.hide"
+const EventAiLlmChatFilterEvent EventType = "g8e.v1.ai.llm.chat.filter.event"
+const EventAiLlmChatMessageSent EventType = "g8e.v1.ai.llm.chat.message.sent"
+const EventAiLlmChatMessageReplayed EventType = "g8e.v1.ai.llm.chat.message.replayed"
+const EventAiLlmChatMessageProcessingFailed EventType = "g8e.v1.ai.llm.chat.message.processing.failed"
+const EventAiLlmChatMessageDeadLettered EventType = "g8e.v1.ai.llm.chat.message.dead.lettered"
+const EventAiLlmChatIterationStarted EventType = "g8e.v1.ai.llm.chat.iteration.started"
+const EventAiLlmChatIterationCompleted EventType = "g8e.v1.ai.llm.chat.iteration.completed"
+const EventAiLlmChatIterationFailed EventType = "g8e.v1.ai.llm.chat.iteration.failed"
+const EventAiLlmChatIterationStopped EventType = "g8e.v1.ai.llm.chat.iteration.stopped"
+const EventAiLlmChatIterationRetry EventType = "g8e.v1.ai.llm.chat.iteration.retry"
+const EventAiLlmChatIterationThinkingStarted EventType = "g8e.v1.ai.llm.chat.iteration.thinking.started"
+const EventAiLlmChatIterationThinkingUpdate EventType = "g8e.v1.ai.llm.chat.iteration.thinking.update"
+const EventAiLlmChatIterationThinkingEnd EventType = "g8e.v1.ai.llm.chat.iteration.thinking.end"
+const EventAiLlmChatIterationCitationsReceived EventType = "g8e.v1.ai.llm.chat.iteration.citations.received"
+const EventAiLlmChatIterationTextReceived EventType = "g8e.v1.ai.llm.chat.iteration.text.received"
+const EventAiLlmChatIterationTextChunkReceived EventType = "g8e.v1.ai.llm.chat.iteration.text.chunk.received"
+const EventAiLlmChatIterationTextCompleted EventType = "g8e.v1.ai.llm.chat.iteration.text.completed"
+const EventAiLlmChatIterationTextTruncated EventType = "g8e.v1.ai.llm.chat.iteration.text.truncated"
+const EventAiLlmChatIterationStreamStarted EventType = "g8e.v1.ai.llm.chat.iteration.stream.started"
+const EventAiLlmChatIterationStreamDeltaReceived EventType = "g8e.v1.ai.llm.chat.iteration.stream.delta.received"
+const EventAiLlmChatIterationStreamCompleted EventType = "g8e.v1.ai.llm.chat.iteration.stream.completed"
+const EventAiLlmChatIterationStreamFailed EventType = "g8e.v1.ai.llm.chat.iteration.stream.failed"
+const EventPlatformUsageUpdated EventType = "g8e.v1.platform.usage.updated"
+const EventPlatformNotification EventType = "g8e.v1.platform.notification"
+const EventPlatformAuthLoginRequested EventType = "g8e.v1.platform.auth.login.requested"
+const EventPlatformAuthLoginSucceeded EventType = "g8e.v1.platform.auth.login.succeeded"
+const EventPlatformAuthLoginFailed EventType = "g8e.v1.platform.auth.login.failed"
+const EventPlatformAuthLogoutRequested EventType = "g8e.v1.platform.auth.logout.requested"
+const EventPlatformAuthLogoutSucceeded EventType = "g8e.v1.platform.auth.logout.succeeded"
+const EventPlatformAuthLogoutFailed EventType = "g8e.v1.platform.auth.logout.failed"
+const EventPlatformAuthSessionValidationRequested EventType = "g8e.v1.platform.auth.session.validation.requested"
+const EventPlatformAuthSessionValidationSucceeded EventType = "g8e.v1.platform.auth.session.validation.succeeded"
+const EventPlatformAuthSessionValidationFailed EventType = "g8e.v1.platform.auth.session.validation.failed"
+const EventPlatformAuthSessionExpired EventType = "g8e.v1.platform.auth.session.expired"
+const EventPlatformAuthUserAuthenticated EventType = "g8e.v1.platform.auth.user.authenticated"
+const EventPlatformAuthUserUnauthenticated EventType = "g8e.v1.platform.auth.user.unauthenticated"
+const EventPlatformAuthComponentInitializedAuthstate EventType = "g8e.v1.platform.auth.component.initialized.authstate"
+const EventPlatformAuthComponentInitializedChat EventType = "g8e.v1.platform.auth.component.initialized.chat"
+const EventPlatformAuthComponentInitializedOperator EventType = "g8e.v1.platform.auth.component.initialized.operator"
+const EventPlatformAuthInfo EventType = "g8e.v1.platform.auth.info"
+const EventPlatformSseKeepaliveSent EventType = "g8e.v1.platform.sse.keepalive.sent"
+const EventPlatformSseConnectionEstablished EventType = "g8e.v1.platform.sse.connection.established"
+const EventPlatformSseConnectionOpened EventType = "g8e.v1.platform.sse.connection.opened"
+const EventPlatformSseConnectionClosed EventType = "g8e.v1.platform.sse.connection.closed"
+const EventPlatformSseConnectionFailed EventType = "g8e.v1.platform.sse.connection.failed"
+const EventPlatformSseConnectionError EventType = "g8e.v1.platform.sse.connection.error"
+const EventPlatformTerminalOpened EventType = "g8e.v1.platform.terminal.opened"
+const EventPlatformTerminalMinimized EventType = "g8e.v1.platform.terminal.minimized"
+const EventPlatformTerminalMaximized EventType = "g8e.v1.platform.terminal.maximized"
+const EventPlatformTerminalClosed EventType = "g8e.v1.platform.terminal.closed"
+const EventPlatformSentinelModeChanged EventType = "g8e.v1.platform.sentinel.mode.changed"
+const EventPlatformExternalServiceConfigured EventType = "g8e.v1.platform.external.service.configured"
+const EventPlatformTelemetryHealthReported EventType = "g8e.v1.platform.telemetry.health.reported"
+const EventPlatformTelemetryPerformanceRecorded EventType = "g8e.v1.platform.telemetry.performance.recorded"
+const EventPlatformTelemetryErrorLogged EventType = "g8e.v1.platform.telemetry.error.logged"
+const EventPlatformTelemetryAuditLogged EventType = "g8e.v1.platform.telemetry.audit.logged"
+const EventPlatformConsoleLogEntryReceived EventType = "g8e.v1.platform.console.log.entry.received"
+const EventPlatformConsoleLogConnectedConfirmed EventType = "g8e.v1.platform.console.log.connected.confirmed"
+const EventSourceUserChat EventType = "g8e.v1.source.user.chat"
+const EventSourceUserTerminal EventType = "g8e.v1.source.user.terminal"
+const EventSourceAiPrimary EventType = "g8e.v1.source.ai.primary"
+const EventSourceAiAssistant EventType = "g8e.v1.source.ai.assistant"
+const EventSourceAiTriage EventType = "g8e.v1.source.ai.triage"
+const EventSourceSystem EventType = "g8e.v1.source.system"
+
+// Event.Operator provides hierarchical access to operator event constants
+type _EventOperatorAudit struct {
+	AIMsg EventType
+	Command EventType
+	DirectCmd EventType
+	DirectCmdResult EventType
+	UserMsg EventType
+}
+type _EventOperatorBootstrap struct {
+	Completed EventType
+	Failed EventType
+	Received EventType
+	Requested EventType
+}
+type _EventOperatorCommand struct {
+	ApprovalGranted EventType
+	ApprovalPreparing EventType
+	ApprovalRejected EventType
+	ApprovalRequested EventType
+	CancelAcknowledged EventType
+	CancelFailed EventType
+	CancelRequested EventType
+	Cancelled EventType
+	Completed EventType
+	Execution EventType
+	Failed EventType
+	OutputReceived EventType
+	Requested EventType
+	Result EventType
+	Started EventType
+	StatusUpdated _EventOperatorCommandStatusUpdated
+}
+type _EventOperatorCommandStatusUpdated struct {
+	Cancelled EventType
+	Completed EventType
+	Failed EventType
+	Queued EventType
+	Running EventType
+}
+type _EventOperatorEval struct {
+	AnswerRequested EventType
+}
+type _EventOperatorFetchFileDiff struct {
+	Completed EventType
+	Failed EventType
+	Received EventType
+	Requested EventType
+	Started EventType
+}
+type _EventOperatorFetchFileHistory struct {
+	Completed EventType
+	Failed EventType
+	Received EventType
+	Requested EventType
+	Started EventType
+}
+type _EventOperatorFetchHistory struct {
+	Completed EventType
+	Failed EventType
+	Received EventType
+	Requested EventType
+}
+type _EventOperatorFetchLogs struct {
+	Completed EventType
+	Failed EventType
+	Received EventType
+	Requested EventType
+}
+type _EventOperatorFileEdit struct {
+	ApprovalFeedback EventType
+	ApprovalGranted EventType
+	ApprovalRejected EventType
+	ApprovalRequested EventType
+	Completed EventType
+	Failed EventType
+	Requested EventType
+	Started EventType
+	Timeout EventType
+}
+type _EventOperatorFsGrep struct {
+	Completed EventType
+	Failed EventType
+	Received EventType
+	Requested EventType
+	Started EventType
+}
+type _EventOperatorFsList struct {
+	Completed EventType
+	Failed EventType
+	Received EventType
+	Requested EventType
+	Started EventType
+}
+type _EventOperatorFsRead struct {
+	Completed EventType
+	Failed EventType
+	Received EventType
+	Requested EventType
+	Started EventType
+}
+type _EventOperatorIntent struct {
+	ApprovalGranted EventType
+	ApprovalRejected EventType
+	ApprovalRequested EventType
+	Denied EventType
+	Granted EventType
+	Requested EventType
+	RevokeRequested EventType
+	Revoked EventType
+}
+type _EventOperatorNetworkPing struct {
+	Completed EventType
+	Failed EventType
+	Received EventType
+	Requested EventType
+}
+type _EventOperatorPortCheck struct {
+	Completed EventType
+	Failed EventType
+	Received EventType
+	Requested EventType
+	Started EventType
+}
+type _EventOperatorRestoreFile struct {
+	Completed EventType
+	Failed EventType
+	Received EventType
+	Requested EventType
+}
+type _EventOperatorStatusUpdated struct {
+	Active EventType
+	Available EventType
+	Bound EventType
+	Offline EventType
+	Stale EventType
+	Stopped EventType
+	Terminated EventType
+	Unavailable EventType
+}
+type _EventOperatorStreamApproval struct {
+	Granted EventType
+	Rejected EventType
+	Requested EventType
+}
+
+type _EventOperator struct {
+	APIKeyRefreshed EventType
+	Audit _EventOperatorAudit
+	Bootstrap _EventOperatorBootstrap
+	BootstrapConfigReceived EventType
+	Bound EventType
+	Command _EventOperatorCommand
+	ContextChanged EventType
+	DeviceRegistered EventType
+	Eval _EventOperatorEval
+	FetchFileDiff _EventOperatorFetchFileDiff
+	FetchFileHistory _EventOperatorFetchFileHistory
+	FetchHistory _EventOperatorFetchHistory
+	FetchLogs _EventOperatorFetchLogs
+	FileEdit _EventOperatorFileEdit
+	FsGrep _EventOperatorFsGrep
+	FsList _EventOperatorFsList
+	FsRead _EventOperatorFsRead
+	Heartbeat EventType
+	HeartbeatMissed EventType
+	HeartbeatReceived EventType
+	HeartbeatRequested EventType
+	Intent _EventOperatorIntent
+	NetworkPing _EventOperatorNetworkPing
+	PanelListUpdated EventType
+	PortCheck _EventOperatorPortCheck
+	RestoreFile _EventOperatorRestoreFile
+	ShutdownAcknowledged EventType
+	ShutdownRequested EventType
+	SlotInitializationFailed EventType
+	StatusUpdated _EventOperatorStatusUpdated
+	StreamApproval _EventOperatorStreamApproval
+	TerminalApprovalDenied EventType
+	TerminalAuthStateChanged EventType
+	TerminalThinkingAppend EventType
+	TerminalThinkingComplete EventType
+	Unbound EventType
+}
+
+var Event = struct {
+	Operator _EventOperator
+}{
+	Operator: _EventOperator{
+		APIKeyRefreshed: EventOperatorApiKeyRefreshed,
+		Audit: _EventOperatorAudit{
+			AIMsg: EventOperatorAuditAiRecorded,
+			Command: EventOperatorAuditCommandRecorded,
+			DirectCmd: EventOperatorAuditDirectCommandRecorded,
+			DirectCmdResult: EventOperatorAuditDirectCommandResultRecorded,
+			UserMsg: EventOperatorAuditUserRecorded,
+		},
+		Bootstrap: _EventOperatorBootstrap{
+			Completed: EventOperatorBootstrapCompleted,
+			Failed: EventOperatorBootstrapFailed,
+			Received: EventOperatorBootstrapReceived,
+			Requested: EventOperatorBootstrapRequested,
+		},
+		BootstrapConfigReceived: EventOperatorBootstrapConfigReceived,
+		Bound: EventOperatorBound,
+		Command: _EventOperatorCommand{
+			ApprovalGranted: EventOperatorCommandApprovalGranted,
+			ApprovalPreparing: EventOperatorCommandApprovalPreparing,
+			ApprovalRejected: EventOperatorCommandApprovalRejected,
+			ApprovalRequested: EventOperatorCommandApprovalRequested,
+			CancelAcknowledged: EventOperatorCommandCancelAcknowledged,
+			CancelFailed: EventOperatorCommandCancelFailed,
+			CancelRequested: EventOperatorCommandCancelRequested,
+			Cancelled: EventOperatorCommandCancelled,
+			Completed: EventOperatorCommandCompleted,
+			Execution: EventOperatorCommandExecution,
+			Failed: EventOperatorCommandFailed,
+			OutputReceived: EventOperatorCommandOutputReceived,
+			Requested: EventOperatorCommandRequested,
+			Result: EventOperatorCommandResult,
+			Started: EventOperatorCommandStarted,
+			StatusUpdated: _EventOperatorCommandStatusUpdated{
+				Cancelled: EventOperatorCommandStatusUpdatedCancelled,
+				Completed: EventOperatorCommandStatusUpdatedCompleted,
+				Failed: EventOperatorCommandStatusUpdatedFailed,
+				Queued: EventOperatorCommandStatusUpdatedQueued,
+				Running: EventOperatorCommandStatusUpdatedRunning,
+			},
+		},
+		ContextChanged: EventOperatorContextChanged,
+		DeviceRegistered: EventOperatorDeviceRegistered,
+		Eval: _EventOperatorEval{
+			AnswerRequested: EventOperatorEvalAnswerRequested,
+		},
+		FetchFileDiff: _EventOperatorFetchFileDiff{
+			Completed: EventOperatorFileDiffFetchCompleted,
+			Failed: EventOperatorFileDiffFetchFailed,
+			Received: EventOperatorFileDiffFetchReceived,
+			Requested: EventOperatorFileDiffFetchRequested,
+			Started: EventOperatorFileDiffFetchStarted,
+		},
+		FetchFileHistory: _EventOperatorFetchFileHistory{
+			Completed: EventOperatorFileHistoryFetchCompleted,
+			Failed: EventOperatorFileHistoryFetchFailed,
+			Received: EventOperatorFileHistoryFetchReceived,
+			Requested: EventOperatorFileHistoryFetchRequested,
+			Started: EventOperatorFileHistoryFetchStarted,
+		},
+		FetchHistory: _EventOperatorFetchHistory{
+			Completed: EventOperatorHistoryFetchCompleted,
+			Failed: EventOperatorHistoryFetchFailed,
+			Received: EventOperatorHistoryFetchReceived,
+			Requested: EventOperatorHistoryFetchRequested,
+		},
+		FetchLogs: _EventOperatorFetchLogs{
+			Completed: EventOperatorLogsFetchCompleted,
+			Failed: EventOperatorLogsFetchFailed,
+			Received: EventOperatorLogsFetchReceived,
+			Requested: EventOperatorLogsFetchRequested,
+		},
+		FileEdit: _EventOperatorFileEdit{
+			ApprovalFeedback: EventOperatorFileEditApprovalFeedback,
+			ApprovalGranted: EventOperatorFileEditApprovalGranted,
+			ApprovalRejected: EventOperatorFileEditApprovalRejected,
+			ApprovalRequested: EventOperatorFileEditApprovalRequested,
+			Completed: EventOperatorFileEditCompleted,
+			Failed: EventOperatorFileEditFailed,
+			Requested: EventOperatorFileEditRequested,
+			Started: EventOperatorFileEditStarted,
+			Timeout: EventOperatorFileEditTimeout,
+		},
+		FsGrep: _EventOperatorFsGrep{
+			Completed: EventOperatorFilesystemGrepCompleted,
+			Failed: EventOperatorFilesystemGrepFailed,
+			Received: EventOperatorFilesystemGrepReceived,
+			Requested: EventOperatorFilesystemGrepRequested,
+			Started: EventOperatorFilesystemGrepStarted,
+		},
+		FsList: _EventOperatorFsList{
+			Completed: EventOperatorFilesystemListCompleted,
+			Failed: EventOperatorFilesystemListFailed,
+			Received: EventOperatorFilesystemListReceived,
+			Requested: EventOperatorFilesystemListRequested,
+			Started: EventOperatorFilesystemListStarted,
+		},
+		FsRead: _EventOperatorFsRead{
+			Completed: EventOperatorFilesystemReadCompleted,
+			Failed: EventOperatorFilesystemReadFailed,
+			Received: EventOperatorFilesystemReadReceived,
+			Requested: EventOperatorFilesystemReadRequested,
+			Started: EventOperatorFilesystemReadStarted,
+		},
+		Heartbeat: EventOperatorHeartbeatSent,
+		HeartbeatMissed: EventOperatorHeartbeatMissed,
+		HeartbeatReceived: EventOperatorHeartbeatReceived,
+		HeartbeatRequested: EventOperatorHeartbeatRequested,
+		Intent: _EventOperatorIntent{
+			ApprovalGranted: EventOperatorIntentApprovalGranted,
+			ApprovalRejected: EventOperatorIntentApprovalRejected,
+			ApprovalRequested: EventOperatorIntentApprovalRequested,
+			Denied: EventOperatorIntentDenied,
+			Granted: EventOperatorIntentGranted,
+			Requested: EventOperatorIntentRequested,
+			RevokeRequested: EventOperatorIntentRevokeRequested,
+			Revoked: EventOperatorIntentRevoked,
+		},
+		NetworkPing: _EventOperatorNetworkPing{
+			Completed: EventOperatorNetworkPingCompleted,
+			Failed: EventOperatorNetworkPingFailed,
+			Received: EventOperatorNetworkPingReceived,
+			Requested: EventOperatorNetworkPingRequested,
+		},
+		PanelListUpdated: EventOperatorPanelListUpdated,
+		PortCheck: _EventOperatorPortCheck{
+			Completed: EventOperatorNetworkPortCheckCompleted,
+			Failed: EventOperatorNetworkPortCheckFailed,
+			Received: EventOperatorNetworkPortCheckReceived,
+			Requested: EventOperatorNetworkPortCheckRequested,
+			Started: EventOperatorNetworkPortCheckStarted,
+		},
+		RestoreFile: _EventOperatorRestoreFile{
+			Completed: EventOperatorFileRestoreCompleted,
+			Failed: EventOperatorFileRestoreFailed,
+			Received: EventOperatorFileRestoreReceived,
+			Requested: EventOperatorFileRestoreRequested,
+		},
+		ShutdownAcknowledged: EventOperatorShutdownAcknowledged,
+		ShutdownRequested: EventOperatorShutdownRequested,
+		SlotInitializationFailed: EventOperatorSlotInitializationFailed,
+		StatusUpdated: _EventOperatorStatusUpdated{
+			Active: EventOperatorStatusUpdatedActive,
+			Available: EventOperatorStatusUpdatedAvailable,
+			Bound: EventOperatorStatusUpdatedBound,
+			Offline: EventOperatorStatusUpdatedOffline,
+			Stale: EventOperatorStatusUpdatedStale,
+			Stopped: EventOperatorStatusUpdatedStopped,
+			Terminated: EventOperatorStatusUpdatedTerminated,
+			Unavailable: EventOperatorStatusUpdatedUnavailable,
+		},
+		StreamApproval: _EventOperatorStreamApproval{
+			Granted: EventOperatorStreamApprovalGranted,
+			Rejected: EventOperatorStreamApprovalRejected,
+			Requested: EventOperatorStreamApprovalRequested,
+		},
+		TerminalApprovalDenied: EventOperatorTerminalApprovalDenied,
+		TerminalAuthStateChanged: EventOperatorTerminalAuthStateChanged,
+		TerminalThinkingAppend: EventOperatorTerminalThinkingAppend,
+		TerminalThinkingComplete: EventOperatorTerminalThinkingComplete,
+		Unbound: EventOperatorUnbound,
+	},
+}

@@ -18,8 +18,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -124,7 +125,7 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*operatorv1.Fe
 			auditEvent.CommandExitCode = int32(*event.CommandExitCode)
 		}
 
-		if event.Type == EventTypeFileMutation {
+		if event.Type == constants.Event.Operator.FileEdit.Completed {
 			mutations, err := hh.auditVault.GetFileMutations(event.ID)
 			if err != nil {
 				hh.logger.Warn("Failed to get file mutations", "event_id", event.ID, "error", err)

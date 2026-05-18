@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -263,17 +264,17 @@ func TestSentinel_DetermineStatus(t *testing.T) {
 
 	tests := []struct {
 		exitCode int
-		expected string
+		expected constants.SentinelStatus
 	}{
-		{0, "success"},
-		{1, "failure"},
-		{2, "misuse"},
-		{126, "not_executable"},
-		{127, "not_found"},
-		{130, "interrupted"},
-		{137, "killed"},
-		{143, "terminated"},
-		{139, "signal_11"}, // SIGSEGV
+		{0, constants.SentinelStatusSuccess},
+		{1, constants.SentinelStatusFailure},
+		{2, constants.SentinelStatusMisuse},
+		{126, constants.SentinelStatusNotExecutable},
+		{127, constants.SentinelStatusNotFound},
+		{130, constants.SentinelStatusInterrupted},
+		{137, constants.SentinelStatusKilled},
+		{143, constants.SentinelStatusTerminated},
+		{139, constants.SentinelStatus("signal_11")}, // SIGSEGV
 	}
 
 	for _, tt := range tests {
@@ -328,7 +329,7 @@ func TestSentinel_ScrubCommandResult(t *testing.T) {
 
 		scrubbed := sentinel.ScrubCommandResult(result)
 
-		assert.Equal(t, "success", scrubbed.Status)
+		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
 		assert.Equal(t, 0, scrubbed.ExitCode)
 		assert.Equal(t, int64(150), scrubbed.DurationMs)
 		assert.Greater(t, scrubbed.OutputLines, 0)
@@ -348,7 +349,7 @@ func TestSentinel_ScrubCommandResult(t *testing.T) {
 
 		scrubbed := sentinel.ScrubCommandResult(result)
 
-		assert.Equal(t, "failure", scrubbed.Status)
+		assert.Equal(t, constants.SentinelStatusFailure, scrubbed.Status)
 		assert.Equal(t, 1, scrubbed.ExitCode)
 		assert.Equal(t, "permission_denied", scrubbed.ErrorType)
 	})
@@ -364,7 +365,7 @@ func TestSentinel_ScrubCommandResult(t *testing.T) {
 
 		scrubbed := sentinel.ScrubCommandResult(result)
 
-		assert.Equal(t, "success", scrubbed.Status)
+		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
 		assert.NotEmpty(t, scrubbed.Warnings)
 		assert.Contains(t, scrubbed.Warnings, "deprecation_warning")
 		assert.Contains(t, scrubbed.Warnings, "security_warning")
@@ -538,7 +539,7 @@ func TestSentinel_ScrubForCloudAI(t *testing.T) {
 
 	scrubbed := sentinel.ScrubForCloudAI(result)
 
-	assert.Equal(t, "success", scrubbed.Status)
+	assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
 	assert.Equal(t, 0, scrubbed.ExitCode)
 	assert.NotContains(t, scrubbed.Summary, "admin@corp.com")
 	assert.NotContains(t, scrubbed.Summary, "bcrypt")
@@ -2262,7 +2263,7 @@ func TestSentinel_ScrubCommandResult_Disabled(t *testing.T) {
 	}
 
 	scrubbed := sentinel.ScrubCommandResult(result)
-	assert.Equal(t, "success", scrubbed.Status)
+	assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
 	assert.Equal(t, 0, scrubbed.ExitCode)
 	assert.Contains(t, scrubbed.Summary, "Scrubbing disabled")
 	assert.Equal(t, ThreatLevelNone, scrubbed.ThreatLevel)
@@ -2334,21 +2335,21 @@ func TestSentinel_DetermineStatus_AdditionalCodes(t *testing.T) {
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("exit code 128 is invalid_exit", func(t *testing.T) {
-		assert.Equal(t, "invalid_exit", sentinel.determineStatus(128))
+		assert.Equal(t, constants.SentinelStatusInvalidExit, sentinel.determineStatus(128))
 	})
 
 	t.Run("signal-based exit codes above 128", func(t *testing.T) {
 		// SIGABRT = 134 (128 + 6)
-		assert.Equal(t, "signal_6", sentinel.determineStatus(134))
+		assert.Equal(t, constants.SentinelStatus("signal_6"), sentinel.determineStatus(134))
 		// SIGFPE = 136 (128 + 8)
-		assert.Equal(t, "signal_8", sentinel.determineStatus(136))
+		assert.Equal(t, constants.SentinelStatus("signal_8"), sentinel.determineStatus(136))
 	})
 
 	t.Run("normal error codes", func(t *testing.T) {
-		// Codes not in the switch fall through to "error"
-		assert.Equal(t, "error", sentinel.determineStatus(3))
-		assert.Equal(t, "error", sentinel.determineStatus(42))
-		assert.Equal(t, "error", sentinel.determineStatus(125))
+		// Codes not in the switch fall through to error
+		assert.Equal(t, constants.SentinelStatusError, sentinel.determineStatus(3))
+		assert.Equal(t, constants.SentinelStatusError, sentinel.determineStatus(42))
+		assert.Equal(t, constants.SentinelStatusError, sentinel.determineStatus(125))
 	})
 }
 

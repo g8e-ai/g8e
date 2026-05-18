@@ -253,7 +253,8 @@ func (rr *PubSubResultsService) publishUniversal(ctx context.Context, env *commo
 // publishResultEnvelopeUniversal builds a GovernanceEnvelope for result publishing.
 func (rr *PubSubResultsService) publishResultEnvelopeUniversal(
 	ctx context.Context,
-	eventType, caseID string,
+	eventType constants.EventType,
+	caseID string,
 	taskID *string,
 	investigationID string,
 	originalMsg PubSubCommandMessage,

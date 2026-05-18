@@ -569,7 +569,7 @@ func TestExecutionService_CollectEnvironmentInfo(t *testing.T) {
 	info := svc.collectEnvironmentInfo()
 
 	assert.NotNil(t, info)
-	assert.Equal(t, "g8eo", info.ComponentName)
+	assert.Equal(t, constants.Status.ComponentName.G8EO, info.ComponentName)
 	assert.Equal(t, "test-project", info.ProjectID)
 }
 

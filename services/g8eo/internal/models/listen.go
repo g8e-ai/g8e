@@ -142,7 +142,7 @@ type ActionReceiptRecord struct {
 	TransactionHash   string                    `json:"transaction_hash"`
 	OperatorID        string                    `json:"operator_id"`
 	OperatorSessionID string                    `json:"operator_session_id"`
-	ActionType        string                    `json:"action_type"`
+	ActionType        constants.ActionType      `json:"action_type"`
 	TargetResource    string                    `json:"target_resource"`
 	Status            constants.ExecutionStatus `json:"status"`
 	ResultSummary     string                    `json:"result_summary"`

@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -292,8 +293,9 @@ func TestPKIAuthority_URISAN(t *testing.T) {
 		// Verify URI SANs exist
 		assert.NotEmpty(t, serviceCert.URIs)
 
-		// Verify SPIFFE workload identity
-		expectedURI := "spiffe://g8e.local/hub/operator-listen"
+		// Verify SPIFFE workload identity using protocol helper
+		wid := protocol.NewWorkloadIdentity()
+		expectedURI := wid.HubSPIFFEID()
 		found := false
 		for _, uri := range serviceCert.URIs {
 			if uri.String() == expectedURI {

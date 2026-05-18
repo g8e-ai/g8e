@@ -106,7 +106,7 @@ if %errorlevel% EQU 0 (
 echo Restart your browser and go to https://%HOST%/
 pause
 `
-	return executeTemplate(constants.Status.Platform.Windows, tmpl, map[string]interface{}{
+	return executeTemplate(string(constants.Status.Platform.Windows), tmpl, map[string]interface{}{
 		"Host": host,
 		"URL":  url,
 		"Port": port,

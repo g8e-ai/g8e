@@ -113,7 +113,7 @@ func (w testLogWriter) Write(p []byte) (int, error) {
 // proxies /ws/pubsub to operator internally. operator is not directly accessible from outside
 // the docker network. Must not include a path — callers append /ws/pubsub as needed.
 func GetTestOperatorDirectURL() string {
-	if u := os.Getenv(marshaler.EnvVar(constants.EnvVar.InternalPubSubURL)); u != "" {
+	if u := os.Getenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL)); u != "" {
 		return u
 	}
 	return "wss://" + constants.DefaultEndpoint + ":443"

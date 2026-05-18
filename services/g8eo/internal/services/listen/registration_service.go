@@ -455,13 +455,13 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return fmt.Errorf("operator does not belong to user")
 	}
 
-	if op.Status == marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated) {
+	if op.Status == constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated)) {
 		return nil // Already terminated
 	}
 
 	// Update operator to terminated status
 	update := map[string]interface{}{
-		"status":     marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated),
+		"status":     constants.Status.OperatorStatus.Terminated,
 		"updated_at": time.Now().UTC(),
 	}
 	if reason != "" {
@@ -650,7 +650,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 	if operator == nil {
 		filters = []models.DocFilter{
 			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", linkData.UserID))},
-			{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", marshaler.OperatorStatus(constants.Status.OperatorStatus.Offline)))},
+			{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.Status.OperatorStatus.Offline))},
 		}
 		docs, err = s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 		if err == nil && len(docs) > 0 {
@@ -763,7 +763,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 
 	// Update operator document
 	update := map[string]interface{}{
-		"status":              marshaler.OperatorStatus(constants.Status.OperatorStatus.Active),
+		"status":              constants.Status.OperatorStatus.Active,
 		"operator_session_id": operatorSessionID,
 		"system_fingerprint":  sanitizedFingerprint,
 		"claimed":             true,
@@ -892,9 +892,9 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 		ID:             id,
 		UserID:         userID,
 		OrganizationID: orgID,
-		Component:      marshaler.Status(constants.Status.ComponentName.G8EO),
+		Component:      constants.ComponentName(marshaler.Status(constants.Status.ComponentName.G8EO)),
 		Name:           fmt.Sprintf("operator-%d", slotNumber),
-		Status:         marshaler.OperatorStatus(constants.Status.OperatorStatus.Offline),
+		Status:         constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Offline)),
 		SlotNumber:     slotNumber,
 		IsSlot:         true,
 		OperatorType:   constants.Status.OperatorType.System,
@@ -996,7 +996,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				OperatorIDs:        []string{opID},
 				BoundAt:            time.Now().UTC(),
 				LastUpdatedAt:      time.Now().UTC(),
-				Status:             marshaler.OperatorStatus(constants.Status.OperatorStatus.Active),
+				Status:             constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Active)),
 			}
 			body, _ := json.Marshal(newDoc)
 			s.db.DocSet(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
@@ -1016,7 +1016,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				bDoc.OperatorIDs = append(bDoc.OperatorIDs, opID)
 				bDoc.OperatorSessionIDs = append(bDoc.OperatorSessionIDs, op.OperatorSessionID)
 				bDoc.LastUpdatedAt = time.Now().UTC()
-				bDoc.Status = marshaler.OperatorStatus(constants.Status.OperatorStatus.Active)
+				bDoc.Status = constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Active))
 				body, _ := json.Marshal(bDoc)
 				s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
 			}
@@ -1122,7 +1122,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 			bDoc.OperatorSessionIDs = newSessIDs
 			bDoc.LastUpdatedAt = time.Now().UTC()
 			if len(newOpIDs) == 0 {
-				bDoc.Status = marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated)
+				bDoc.Status = constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated))
 			}
 			body, _ := json.Marshal(bDoc)
 			s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)

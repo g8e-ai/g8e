@@ -36,6 +36,7 @@ type ExecutionRequestPayload struct {
 	Priority          int               `json:"priority,omitempty"`
 	Tags              map[string]string `json:"tags,omitempty"`
 	Justification     string            `json:"justification,omitempty"`
+	Intent            string            `json:"intent,omitempty"`
 	SentinelMode      string            `json:"sentinel_mode,omitempty"`
 }
 

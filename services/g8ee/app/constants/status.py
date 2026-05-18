@@ -126,6 +126,7 @@ class ComponentName(StrEnum):
     """Generated from protocol/constants/status.json - component.name"""
     G8EE = "g8ee"
     G8EO = "g8eo"
+    G8EO_LISTEN = "g8eo-listen"
     CLIENT = "client"
 
 class ComponentStatus(StrEnum):

@@ -272,11 +272,11 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			if err == nil {
 				// [PIVOT] Verify URI SAN identity (Phase 6)
 				// The client cert must bind to the same operator session.
+				// SPIFFE ID format: protocol.WorkloadIdentity.OperatorSPIFFEID()
 				if len(r.TLS.PeerCertificates) > 0 {
 					cert := r.TLS.PeerCertificates[0]
 					match := false
 					for _, uri := range cert.URIs {
-						// spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
 						if strings.Contains(uri.String(), "/"+op.ID+"/"+operatorSessionID) {
 							match = true
 							break
@@ -302,11 +302,11 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		} else if cliSessionID != "" {
 			// CLI authentication via CLI session ID and CLI certificate
 			// Verify the CLI certificate matches the CLI session ID
+			// SPIFFE ID format: protocol.WorkloadIdentity.CLISPIFFEID()
 			if len(r.TLS.PeerCertificates) > 0 {
 				cert := r.TLS.PeerCertificates[0]
 				match := false
 				for _, uri := range cert.URIs {
-					// spiffe://g8e.local/cli/<user_id>/<cli_session_id>
 					if strings.Contains(uri.String(), "/cli/"+cliSessionID) {
 						match = true
 						break
@@ -325,10 +325,10 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			// [PIVOT] System/App Authentication via URI SAN (Phase 6)
 			// If no session ID is provided, we check if the certificate belongs to a trusted system app.
 			// Note: /_query requires operator session authentication - no app bypass allowed.
+			// SPIFFE ID format: protocol.WorkloadIdentity.AppSPIFFEID()
 			if len(r.TLS.PeerCertificates) > 0 {
 				cert := r.TLS.PeerCertificates[0]
 				for _, uri := range cert.URIs {
-					// Reference apps use spiffe://g8e.local/app/<app_id>
 					if strings.Contains(uri.String(), "/app/"+marshaler.Status(constants.Status.ComponentName.G8EE)) {
 						next.ServeHTTP(w, r)
 						return

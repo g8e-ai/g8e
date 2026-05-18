@@ -35,7 +35,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/mappings"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
@@ -261,14 +261,14 @@ type chaosExecutionHandler struct {
 	mutationCount atomic.Int64
 }
 
-func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, eventType string, cmdMsg interface{}) (string, error) {
+func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
 	msg, ok := cmdMsg.(pubsub.PubSubCommandMessage)
 	if !ok {
 		return "", nil
 	}
 
 	// Simulate ledger activity for file mutations
-	if eventType == "g8e.v1.operator.file.edit.requested" && c.ledger != nil {
+	if eventType == constants.Event.Operator.FileEdit.Requested && c.ledger != nil {
 		req := &operatorv1.FileEditRequested{}
 		if err := proto.Unmarshal(msg.Payload, req); err == nil {
 			slog.Info("Chaos simulating file mutation in ledger", "file", req.FilePath)
@@ -405,10 +405,10 @@ func main() {
 	stateRootProvider := &dynamicStateRoot{root: initialStateRoot}
 	l3Verifier := &chaosL3Verifier{}
 
-	knownActionTypes := []string{
-		"EXECUTE_BASH", "FILE_EDIT", "RESTORE_FILE", "SHUTDOWN",
-		"FS_LIST", "FS_READ", "FS_GREP", "PORT_CHECK", "FETCH_LOGS",
-		"EVAL_ANSWER",
+	knownActionTypes := []constants.ActionType{
+		constants.ActionTypeExecuteBash, constants.ActionTypeFileEdit, constants.ActionTypeRestoreFile, constants.ActionTypeShutdown,
+		constants.ActionTypeFsList, constants.ActionTypeFsRead, constants.ActionTypeFsGrep, constants.ActionTypePortCheck, constants.ActionTypeFetchLogs,
+		constants.ActionTypeEvalAnswer,
 	}
 
 	// Initialize Ledger
@@ -606,7 +606,7 @@ func fireOne(
 
 	cmdMsg := pubsub.PubSubCommandMessage{
 		ID:                env.Id,
-		EventType:         mappings.MapActionTypeToEventType(env.ActionType),
+		EventType:         constants.MapActionTypeToEventType(constants.ActionType(env.ActionType)),
 		OperatorSessionID: env.OperatorSessionId,
 		Payload:           env.Payload,
 		Timestamp:         env.Timestamp.AsTime(),
@@ -616,7 +616,7 @@ func fireOne(
 	// so we use a custom execution flow that still hits the handler but batches the audit log.
 
 	// Execute through the handler
-	eventType := mappings.MapActionTypeToEventType(env.ActionType)
+	eventType := constants.MapActionTypeToEventType(constants.ActionType(env.ActionType))
 	_, err := warden.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, cmdMsg)
 
 	if err != nil {
@@ -656,7 +656,7 @@ func (b *batchEventWriter) recordRejection(id int, cat category, env *uap.UAPEnv
 	event := &storage.Event{
 		OperatorSessionID: env.OperatorSessionId,
 		Timestamp:         time.Now(),
-		Type:              storage.EventType(reason),
+		Type:              constants.EventType(reason),
 		ContentText:       fmt.Sprintf("[chaos-id:%d] %s: %s", id, categoryName(cat), verErr.Error()),
 		CommandRaw:        env.ActionType + " / " + env.TargetResource,
 	}
@@ -732,7 +732,7 @@ func recordRejection(
 	event := &storage.Event{
 		OperatorSessionID: "chaos-session-001",
 		Timestamp:         time.Now(),
-		Type:              storage.EventType(reason),
+		Type:              constants.EventType(reason),
 		ContentText:       fmt.Sprintf("[chaos-id:%d] %s: %s", id, categoryName(cat), verErr.Error()),
 		CommandRaw:        env.ActionType + " / " + env.TargetResource,
 	}

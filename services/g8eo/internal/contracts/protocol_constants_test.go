@@ -56,69 +56,69 @@ func loadProtocolFile(t *testing.T, filename string) []byte {
 // ---------------------------------------------------------------------------
 
 type protocolCommandOutputEvents struct {
-	Received string `json:"received"`
+	Received protocolLeaf `json:"received"`
 }
 
 type protocolCommandCancelEvents struct {
-	Requested    string `json:"requested"`
-	Acknowledged string `json:"acknowledged"`
-	Failed       string `json:"failed"`
+	Requested    protocolLeaf `json:"requested"`
+	Acknowledged protocolLeaf `json:"acknowledged"`
+	Failed       protocolLeaf `json:"failed"`
 }
 
 type protocolCommandApprovalEvents struct {
-	Requested string `json:"requested"`
-	Granted   string `json:"granted"`
-	Rejected  string `json:"rejected"`
+	Requested protocolLeaf `json:"requested"`
+	Granted   protocolLeaf `json:"granted"`
+	Rejected  protocolLeaf `json:"rejected"`
 }
 
 type protocolOperatorCommandEvents struct {
-	Requested string                        `json:"requested"`
-	Started   string                        `json:"started"`
-	Completed string                        `json:"completed"`
-	Failed    string                        `json:"failed"`
-	Cancelled string                        `json:"cancelled"`
+	Requested protocolLeaf                  `json:"requested"`
+	Started   protocolLeaf                  `json:"started"`
+	Completed protocolLeaf                  `json:"completed"`
+	Failed    protocolLeaf                  `json:"failed"`
+	Cancelled protocolLeaf                  `json:"cancelled"`
 	Output    protocolCommandOutputEvents   `json:"output"`
 	Cancel    protocolCommandCancelEvents   `json:"cancel"`
 	Approval  protocolCommandApprovalEvents `json:"approval"`
 }
 
 type protocolFileEditApprovalEvents struct {
-	Requested string `json:"requested"`
-	Granted   string `json:"granted"`
-	Rejected  string `json:"rejected"`
+	Requested protocolLeaf `json:"requested"`
+	Granted   protocolLeaf `json:"granted"`
+	Rejected  protocolLeaf `json:"rejected"`
 }
 
 type protocolOperatorFileEditEvents struct {
-	Requested string                         `json:"requested"`
-	Started   string                         `json:"started"`
-	Completed string                         `json:"completed"`
-	Failed    string                         `json:"failed"`
+	Requested protocolLeaf                   `json:"requested"`
+	Started   protocolLeaf                   `json:"started"`
+	Completed protocolLeaf                   `json:"completed"`
+	Failed    protocolLeaf                   `json:"failed"`
 	Approval  protocolFileEditApprovalEvents `json:"approval"`
 }
 
 type protocolIntentApprovalEvents struct {
-	Requested string `json:"requested"`
-	Granted   string `json:"granted"`
-	Rejected  string `json:"rejected"`
+	Requested protocolLeaf `json:"requested"`
+	Granted   protocolLeaf `json:"granted"`
+	Rejected  protocolLeaf `json:"rejected"`
 }
 
 type protocolOperatorIntentEvents struct {
-	Granted  string                       `json:"granted"`
-	Denied   string                       `json:"denied"`
-	Revoked  string                       `json:"revoked"`
+	Granted  protocolLeaf                 `json:"granted"`
+	Denied   protocolLeaf                 `json:"denied"`
+	Revoked  protocolLeaf                 `json:"revoked"`
 	Approval protocolIntentApprovalEvents `json:"approval"`
 }
 
 type protocolFetchLeaf struct {
-	Requested string `json:"requested"`
-	Completed string `json:"completed"`
-	Failed    string `json:"failed"`
+	Requested protocolLeaf `json:"requested"`
+	Completed protocolLeaf `json:"completed"`
+	Failed    protocolLeaf `json:"failed"`
 }
 
 type protocolOperatorNetworkPortCheck struct {
-	Requested string `json:"requested"`
-	Completed string `json:"completed"`
-	Failed    string `json:"failed"`
+	Requested protocolLeaf `json:"requested"`
+	Completed protocolLeaf `json:"completed"`
+	Failed    protocolLeaf `json:"failed"`
 }
 
 type protocolOperatorNetworkPort struct {
@@ -143,22 +143,22 @@ type protocolOperatorFileDiff struct {
 }
 
 type protocolOperatorFileRestore struct {
-	Requested string `json:"requested"`
-	Completed string `json:"completed"`
-	Failed    string `json:"failed"`
+	Requested protocolLeaf `json:"requested"`
+	Completed protocolLeaf `json:"completed"`
+	Failed    protocolLeaf `json:"failed"`
 }
 
 type protocolOperatorFileEditApproval struct {
-	Requested string `json:"requested"`
-	Granted   string `json:"granted"`
-	Rejected  string `json:"rejected"`
+	Requested protocolLeaf `json:"requested"`
+	Granted   protocolLeaf `json:"granted"`
+	Rejected  protocolLeaf `json:"rejected"`
 }
 
 type protocolOperatorFileEdit struct {
-	Requested string                           `json:"requested"`
-	Started   string                           `json:"started"`
-	Completed string                           `json:"completed"`
-	Failed    string                           `json:"failed"`
+	Requested protocolLeaf                     `json:"requested"`
+	Started   protocolLeaf                     `json:"started"`
+	Completed protocolLeaf                     `json:"completed"`
+	Failed    protocolLeaf                     `json:"failed"`
 	Approval  protocolOperatorFileEditApproval `json:"approval"`
 }
 
@@ -170,19 +170,19 @@ type protocolOperatorFileEvents struct {
 }
 
 type protocolOperatorAuditUserRecorded struct {
-	Recorded string `json:"recorded"`
+	Recorded protocolLeaf `json:"recorded"`
 }
 
 type protocolOperatorAuditAIRecorded struct {
-	Recorded string `json:"recorded"`
+	Recorded protocolLeaf `json:"recorded"`
 }
 
 type protocolOperatorAuditDirectCommandResult struct {
-	Recorded string `json:"recorded"`
+	Recorded protocolLeaf `json:"recorded"`
 }
 
 type protocolOperatorAuditDirectCommandEvents struct {
-	Recorded string                                   `json:"recorded"`
+	Recorded protocolLeaf                             `json:"recorded"`
 	Result   protocolOperatorAuditDirectCommandResult `json:"result"`
 }
 
@@ -197,19 +197,19 @@ type protocolOperatorAuditEvents struct {
 }
 
 type protocolOperatorHeartbeat struct {
-	Sent      string `json:"sent"`
-	Requested string `json:"requested"`
-	Received  string `json:"received"`
-	Missed    string `json:"missed"`
+	Sent      protocolLeaf `json:"sent"`
+	Requested protocolLeaf `json:"requested"`
+	Received  protocolLeaf `json:"received"`
+	Missed    protocolLeaf `json:"missed"`
 }
 
 type protocolOperatorShutdown struct {
-	Requested    string `json:"requested"`
-	Acknowledged string `json:"acknowledged"`
+	Requested    protocolLeaf `json:"requested"`
+	Acknowledged protocolLeaf `json:"acknowledged"`
 }
 
 type protocolOperatorAPIKey struct {
-	Refreshed string `json:"refreshed"`
+	Refreshed protocolLeaf `json:"refreshed"`
 }
 
 type protocolOperatorAPI struct {
@@ -225,105 +225,113 @@ type protocolOperatorHistory struct {
 }
 
 type protocolOperatorEvents struct {
-	Heartbeat  protocolOperatorHeartbeat     `json:"heartbeat"`
-	Shutdown   protocolOperatorShutdown      `json:"shutdown"`
-	API        protocolOperatorAPI           `json:"api"`
-	Command    protocolOperatorCommandEvents `json:"command"`
-	Intent     protocolOperatorIntentEvents  `json:"intent"`
-	Filesystem protocolOperatorFilesystem    `json:"filesystem"`
-	Logs       protocolOperatorLogs          `json:"logs"`
-	History    protocolOperatorHistory       `json:"history"`
-	File       protocolOperatorFileEvents    `json:"file"`
-	Network    protocolOperatorNetwork       `json:"network"`
-	Audit      protocolOperatorAuditEvents   `json:"audit"`
+	Heartbeat  protocolOperatorHeartbeat     `json:"operator.heartbeat"`
+	Shutdown   protocolOperatorShutdown      `json:"operator.shutdown"`
+	API        protocolOperatorAPI           `json:"operator.api"`
+	Command    protocolOperatorCommandEvents `json:"operator.command"`
+	Intent     protocolOperatorIntentEvents  `json:"operator.intent"`
+	Filesystem protocolOperatorFilesystem    `json:"operator.filesystem"`
+	Logs       protocolOperatorLogs          `json:"operator.logs"`
+	History    protocolOperatorHistory       `json:"operator.history"`
+	File       protocolOperatorFileEvents    `json:"operator.file"`
+	Network    protocolOperatorNetwork       `json:"operator.network"`
+	Audit      protocolOperatorAuditEvents   `json:"operator.audit"`
 }
 
 type protocolEventsJSON struct {
-	Operator protocolOperatorEvents `json:"operator"`
+	Events map[string]protocolLeaf `json:"events"`
 }
 
 // ---------------------------------------------------------------------------
 // Typed structs mirroring protocol/constants/status.json
 // ---------------------------------------------------------------------------
 
+type protocolLeaf struct {
+	Value       string `json:"value"`
+	GoConst     string `json:"_go_const"`
+	PythonConst string `json:"_python_const"`
+	GoName      string `json:"_go_name"`
+	PythonName  string `json:"_python_name"`
+}
+
 type protocolOperatorStatusValues struct {
-	Available   string `json:"available"`
-	Unavailable string `json:"unavailable"`
-	Offline     string `json:"offline"`
-	Bound       string `json:"bound"`
-	Stale       string `json:"stale"`
-	Active      string `json:"active"`
-	Stopped     string `json:"stopped"`
-	Terminated  string `json:"terminated"`
+	Available   protocolLeaf `json:"available"`
+	Unavailable protocolLeaf `json:"unavailable"`
+	Offline     protocolLeaf `json:"offline"`
+	Bound       protocolLeaf `json:"bound"`
+	Stale       protocolLeaf `json:"stale"`
+	Active      protocolLeaf `json:"active"`
+	Stopped     protocolLeaf `json:"stopped"`
+	Terminated  protocolLeaf `json:"terminated"`
 }
 
 type protocolOperatorTypeValues struct {
-	System string `json:"system"`
-	Cloud  string `json:"cloud"`
+	System protocolLeaf `json:"system"`
+	Cloud  protocolLeaf `json:"cloud"`
 }
 
 type protocolCloudSubtypeValues struct {
-	AWS   string `json:"aws"`
-	GCP   string `json:"gcp"`
-	Azure string `json:"azure"`
+	AWS   protocolLeaf `json:"aws"`
+	GCP   protocolLeaf `json:"gcp"`
+	Azure protocolLeaf `json:"azure"`
 }
 
 type protocolVaultModeValues struct {
-	Raw      string `json:"raw"`
-	Scrubbed string `json:"scrubbed"`
+	Raw      protocolLeaf `json:"raw"`
+	Scrubbed protocolLeaf `json:"scrubbed"`
 }
 
 type protocolVersionStabilityValues struct {
-	Stable string `json:"stable"`
-	Beta   string `json:"beta"`
-	Dev    string `json:"dev"`
+	Stable protocolLeaf `json:"stable"`
+	Beta   protocolLeaf `json:"beta"`
+	Dev    protocolLeaf `json:"dev"`
 }
 
 type protocolComponentNameValues struct {
-	G8EE   string `json:"g8ee"`
-	G8EO   string `json:"g8eo"`
-	CLIENT string `json:"client"`
+	G8EE   protocolLeaf `json:"g8ee"`
+	G8EO   protocolLeaf `json:"g8eo"`
+	CLIENT protocolLeaf `json:"client"`
 }
 
 type protocolPlatformValues struct {
-	Linux   string `json:"linux"`
-	Windows string `json:"windows"`
-	Darwin  string `json:"darwin"`
+	Linux   protocolLeaf `json:"linux"`
+	Windows protocolLeaf `json:"windows"`
+	Darwin  protocolLeaf `json:"darwin"`
 }
 
 type protocolAISourceValues struct {
-	Tool             string `json:"tool.call"`
-	TerminalAnchored string `json:"terminal.anchored"`
-	TerminalDirect   string `json:"terminal.direct"`
+	Tool             protocolLeaf `json:"tool.call"`
+	TerminalAnchored protocolLeaf `json:"terminal.anchored"`
+	TerminalDirect   protocolLeaf `json:"terminal.direct"`
 }
 
 type protocolAITaskIDValues struct {
-	Command          string `json:"command"`
-	DirectCommand    string `json:"direct.command"`
-	FileEdit         string `json:"file.edit"`
-	FsList           string `json:"fs.list"`
-	FsRead           string `json:"fs.read"`
-	PortCheck        string `json:"port.check"`
-	FetchLogs        string `json:"fetch.logs"`
-	FetchHistory     string `json:"fetch.history"`
-	FetchFileHistory string `json:"fetch.file.history"`
-	RestoreFile      string `json:"restore.file"`
-	FetchFileDiff    string `json:"fetch.file.diff"`
+	Command          protocolLeaf `json:"command"`
+	DirectCommand    protocolLeaf `json:"direct.command"`
+	FileEdit         protocolLeaf `json:"file.edit"`
+	FsList           protocolLeaf `json:"fs.list"`
+	FsRead           protocolLeaf `json:"fs.read"`
+	PortCheck        protocolLeaf `json:"port.check"`
+	FetchLogs        protocolLeaf `json:"fetch.logs"`
+	FetchHistory     protocolLeaf `json:"fetch.history"`
+	FetchFileHistory protocolLeaf `json:"fetch.file.history"`
+	RestoreFile      protocolLeaf `json:"restore.file"`
+	FetchFileDiff    protocolLeaf `json:"fetch.file.diff"`
 }
 
 type protocolHeartbeatTypeValues struct {
-	Automatic string `json:"automatic"`
-	Bootstrap string `json:"bootstrap"`
-	Requested string `json:"requested"`
+	Automatic protocolLeaf `json:"automatic"`
+	Bootstrap protocolLeaf `json:"bootstrap"`
+	Requested protocolLeaf `json:"requested"`
 }
 
 type protocolExecutionStatusValues struct {
-	Pending   string `json:"pending"`
-	Executing string `json:"executing"`
-	Completed string `json:"completed"`
-	Failed    string `json:"failed"`
-	Timeout   string `json:"timeout"`
-	Cancelled string `json:"cancelled"`
+	Pending   protocolLeaf `json:"pending"`
+	Executing protocolLeaf `json:"executing"`
+	Completed protocolLeaf `json:"completed"`
+	Failed    protocolLeaf `json:"failed"`
+	Timeout   protocolLeaf `json:"timeout"`
+	Cancelled protocolLeaf `json:"cancelled"`
 }
 
 type protocolStatusJSON struct {
@@ -345,9 +353,9 @@ type protocolStatusJSON struct {
 // ---------------------------------------------------------------------------
 
 type protocolChannelPrefixes struct {
-	Cmd       string `json:"cmd"`
-	Results   string `json:"results"`
-	Heartbeat string `json:"heartbeat"`
+	Cmd       protocolLeaf `json:"cmd"`
+	Results   protocolLeaf `json:"results"`
+	Heartbeat protocolLeaf `json:"heartbeat"`
 }
 
 type protocolPubSubChannels struct {
@@ -363,26 +371,26 @@ type protocolChannelsJSON struct {
 // ---------------------------------------------------------------------------
 
 type protocolPubSubWireActions struct {
-	Subscribe   string `json:"subscribe"`
-	PSubscribe  string `json:"psubscribe"`
-	Unsubscribe string `json:"unsubscribe"`
-	Publish     string `json:"publish"`
+	Subscribe   protocolLeaf `json:"subscribe"`
+	PSubscribe  protocolLeaf `json:"psubscribe"`
+	Unsubscribe protocolLeaf `json:"unsubscribe"`
+	Publish     protocolLeaf `json:"publish"`
 }
 
 type protocolPubSubWireEventTypes struct {
-	Message    string `json:"message"`
-	PMessage   string `json:"pmessage"`
-	Subscribed string `json:"subscribed"`
+	Message    protocolLeaf `json:"message"`
+	PMessage   protocolLeaf `json:"pmessage"`
+	Subscribed protocolLeaf `json:"subscribed"`
 }
 
 type protocolPubSubWireFields struct {
-	Action  string `json:"action"`
-	Channel string `json:"channel"`
-	Data    string `json:"data"`
-	Message string `json:"message"`
-	Pattern string `json:"pattern"`
-	Type    string `json:"type"`
-	Sender  string `json:"sender"`
+	Action  protocolLeaf `json:"action"`
+	Channel protocolLeaf `json:"channel"`
+	Data    protocolLeaf `json:"data"`
+	Message protocolLeaf `json:"message"`
+	Pattern protocolLeaf `json:"pattern"`
+	Type    protocolLeaf `json:"type"`
+	Sender  protocolLeaf `json:"sender"`
 }
 
 type protocolPubSubWire struct {
@@ -400,16 +408,16 @@ type protocolPubSubJSON struct {
 // ---------------------------------------------------------------------------
 
 type protocolHeadersJSON struct {
-	OperatorSessionID  string `json:"x-g8e.operator-session-id"`
-	DeviceToken        string `json:"x-g8e.device-token"`
-	Authorization      string `json:"http.authorization"`
-	UserAgent          string `json:"http.user-agent"`
-	ContentType        string `json:"http.content-type"`
-	ContentDisposition string `json:"http.content-disposition"`
-	ContentLength      string `json:"http.content-length"`
-	XForwardedProto    string `json:"http.x-forwarded-proto"`
-	XForwardedHost     string `json:"http.x-forwarded-host"`
-	XRequestTimestamp  string `json:"http.x-request-timestamp"`
+	OperatorSessionID  protocolLeaf `json:"x-g8e.operator-session-id"`
+	DeviceToken        protocolLeaf `json:"x-g8e.device-token"`
+	Authorization      protocolLeaf `json:"http.authorization"`
+	UserAgent          protocolLeaf `json:"http.user-agent"`
+	ContentType        protocolLeaf `json:"http.content-type"`
+	ContentDisposition protocolLeaf `json:"http.content-disposition"`
+	ContentLength      protocolLeaf `json:"http.content-length"`
+	XForwardedProto    protocolLeaf `json:"http.x-forwarded-proto"`
+	XForwardedHost     protocolLeaf `json:"http.x-forwarded-host"`
+	XRequestTimestamp  protocolLeaf `json:"http.x-request-timestamp"`
 }
 
 // ---------------------------------------------------------------------------
@@ -417,7 +425,7 @@ type protocolHeadersJSON struct {
 // ---------------------------------------------------------------------------
 
 type protocolCollectionsJSON struct {
-	Collections map[string]string `json:"collections"`
+	Collections map[string]protocolLeaf `json:"collections"`
 }
 
 // ---------------------------------------------------------------------------
@@ -487,98 +495,100 @@ func loadEnvVarsJSON(t *testing.T) protocolEnvVarsJSON {
 
 func TestProtocolEventsMatchGoConstants(t *testing.T) {
 	ev := loadEventsJSON(t)
-	op := ev.Operator
+	events := ev.Events
 
 	t.Run("operator.heartbeat", func(t *testing.T) {
-		assert.Equal(t, op.Heartbeat.Sent, constants.Event.Operator.Heartbeat)
-		assert.Equal(t, op.Heartbeat.Requested, constants.Event.Operator.HeartbeatRequested)
+		assert.Equal(t, events["operator.heartbeat.sent"].Value, string(constants.Event.Operator.Heartbeat))
+		assert.Equal(t, events["operator.heartbeat.requested"].Value, string(constants.Event.Operator.HeartbeatRequested))
 	})
 
 	t.Run("operator.shutdown", func(t *testing.T) {
-		assert.Equal(t, op.Shutdown.Requested, constants.Event.Operator.ShutdownRequested)
-		assert.Equal(t, op.Shutdown.Acknowledged, constants.Event.Operator.ShutdownAcknowledged)
+		assert.Equal(t, events["operator.shutdown.requested"].Value, string(constants.Event.Operator.ShutdownRequested))
+		assert.Equal(t, events["operator.shutdown.acknowledged"].Value, string(constants.Event.Operator.ShutdownAcknowledged))
 	})
 
 	t.Run("operator.api.key", func(t *testing.T) {
-		assert.Equal(t, op.API.Key.Refreshed, constants.Event.Operator.APIKeyRefreshed)
+		assert.Equal(t, events["operator.api.key.refreshed"].Value, string(constants.Event.Operator.APIKeyRefreshed))
 	})
 
 	t.Run("operator.command", func(t *testing.T) {
-		assert.Equal(t, op.Command.Requested, constants.Event.Operator.Command.Requested)
-		assert.Equal(t, op.Command.Completed, constants.Event.Operator.Command.Completed)
-		assert.Equal(t, op.Command.Failed, constants.Event.Operator.Command.Failed)
-		assert.Equal(t, op.Command.Cancelled, constants.Event.Operator.Command.Cancelled)
-		assert.Equal(t, op.Command.Cancel.Requested, constants.Event.Operator.Command.CancelRequested)
-		assert.Equal(t, op.Command.Approval.Requested, constants.Event.Operator.Command.ApprovalRequested)
+		assert.Equal(t, events["operator.command.requested"].Value, string(constants.Event.Operator.Command.Requested))
+		assert.Equal(t, events["operator.command.started"].Value, string(constants.Event.Operator.Command.Started))
+		assert.Equal(t, events["operator.command.completed"].Value, string(constants.Event.Operator.Command.Completed))
+		assert.Equal(t, events["operator.command.failed"].Value, string(constants.Event.Operator.Command.Failed))
+		assert.Equal(t, events["operator.command.cancelled"].Value, string(constants.Event.Operator.Command.Cancelled))
+		assert.Equal(t, events["operator.command.cancel.requested"].Value, string(constants.Event.Operator.Command.CancelRequested))
+		assert.Equal(t, events["operator.command.approval.requested"].Value, string(constants.Event.Operator.Command.ApprovalRequested))
 	})
 
 	t.Run("operator.file.edit", func(t *testing.T) {
-		assert.Equal(t, op.File.Edit.Requested, constants.Event.Operator.FileEdit.Requested)
-		assert.Equal(t, op.File.Edit.Completed, constants.Event.Operator.FileEdit.Completed)
-		assert.Equal(t, op.File.Edit.Failed, constants.Event.Operator.FileEdit.Failed)
-		assert.Equal(t, op.File.Edit.Approval.Requested, constants.Event.Operator.FileEdit.ApprovalRequested)
+		assert.Equal(t, events["operator.file.edit.requested"].Value, string(constants.Event.Operator.FileEdit.Requested))
+		assert.Equal(t, events["operator.file.edit.started"].Value, string(constants.Event.Operator.FileEdit.Started))
+		assert.Equal(t, events["operator.file.edit.completed"].Value, string(constants.Event.Operator.FileEdit.Completed))
+		assert.Equal(t, events["operator.file.edit.failed"].Value, string(constants.Event.Operator.FileEdit.Failed))
+		assert.Equal(t, events["operator.file.edit.approval.requested"].Value, string(constants.Event.Operator.FileEdit.ApprovalRequested))
 	})
 
 	t.Run("operator.intent", func(t *testing.T) {
-		assert.Equal(t, op.Intent.Approval.Requested, constants.Event.Operator.Intent.ApprovalRequested)
-		assert.Equal(t, op.Intent.Granted, constants.Event.Operator.Intent.Granted)
-		assert.Equal(t, op.Intent.Denied, constants.Event.Operator.Intent.Denied)
-		assert.Equal(t, op.Intent.Revoked, constants.Event.Operator.Intent.Revoked)
+		assert.Equal(t, events["operator.intent.approval.requested"].Value, string(constants.Event.Operator.Intent.ApprovalRequested))
+		assert.Equal(t, events["operator.intent.granted"].Value, string(constants.Event.Operator.Intent.Granted))
+		assert.Equal(t, events["operator.intent.denied"].Value, string(constants.Event.Operator.Intent.Denied))
+		assert.Equal(t, events["operator.intent.revoked"].Value, string(constants.Event.Operator.Intent.Revoked))
 	})
 
 	t.Run("operator.network.port.check", func(t *testing.T) {
-		assert.Equal(t, op.Network.Port.Check.Requested, constants.Event.Operator.PortCheck.Requested)
-		assert.Equal(t, op.Network.Port.Check.Completed, constants.Event.Operator.PortCheck.Completed)
-		assert.Equal(t, op.Network.Port.Check.Failed, constants.Event.Operator.PortCheck.Failed)
+		assert.Equal(t, events["operator.network.port.check.requested"].Value, string(constants.Event.Operator.PortCheck.Requested))
+		assert.Equal(t, events["operator.network.port.check.completed"].Value, string(constants.Event.Operator.PortCheck.Completed))
+		assert.Equal(t, events["operator.network.port.check.failed"].Value, string(constants.Event.Operator.PortCheck.Failed))
 	})
 
 	t.Run("operator.filesystem.list", func(t *testing.T) {
-		assert.Equal(t, op.Filesystem.List.Requested, constants.Event.Operator.FsList.Requested)
-		assert.Equal(t, op.Filesystem.List.Completed, constants.Event.Operator.FsList.Completed)
-		assert.Equal(t, op.Filesystem.List.Failed, constants.Event.Operator.FsList.Failed)
+		assert.Equal(t, events["operator.filesystem.list.requested"].Value, string(constants.Event.Operator.FsList.Requested))
+		assert.Equal(t, events["operator.filesystem.list.completed"].Value, string(constants.Event.Operator.FsList.Completed))
+		assert.Equal(t, events["operator.filesystem.list.failed"].Value, string(constants.Event.Operator.FsList.Failed))
 	})
 
 	t.Run("operator.filesystem.read", func(t *testing.T) {
-		assert.Equal(t, op.Filesystem.Read.Requested, constants.Event.Operator.FsRead.Requested)
-		assert.Equal(t, op.Filesystem.Read.Completed, constants.Event.Operator.FsRead.Completed)
-		assert.Equal(t, op.Filesystem.Read.Failed, constants.Event.Operator.FsRead.Failed)
+		assert.Equal(t, events["operator.filesystem.read.requested"].Value, string(constants.Event.Operator.FsRead.Requested))
+		assert.Equal(t, events["operator.filesystem.read.completed"].Value, string(constants.Event.Operator.FsRead.Completed))
+		assert.Equal(t, events["operator.filesystem.read.failed"].Value, string(constants.Event.Operator.FsRead.Failed))
 	})
 
 	t.Run("operator.logs.fetch", func(t *testing.T) {
-		assert.Equal(t, op.Logs.Fetch.Requested, constants.Event.Operator.FetchLogs.Requested)
-		assert.Equal(t, op.Logs.Fetch.Completed, constants.Event.Operator.FetchLogs.Completed)
-		assert.Equal(t, op.Logs.Fetch.Failed, constants.Event.Operator.FetchLogs.Failed)
+		assert.Equal(t, events["operator.logs.fetch.requested"].Value, string(constants.Event.Operator.FetchLogs.Requested))
+		assert.Equal(t, events["operator.logs.fetch.completed"].Value, string(constants.Event.Operator.FetchLogs.Completed))
+		assert.Equal(t, events["operator.logs.fetch.failed"].Value, string(constants.Event.Operator.FetchLogs.Failed))
 	})
 
 	t.Run("operator.history.fetch", func(t *testing.T) {
-		assert.Equal(t, op.History.Fetch.Requested, constants.Event.Operator.FetchHistory.Requested)
-		assert.Equal(t, op.History.Fetch.Completed, constants.Event.Operator.FetchHistory.Completed)
-		assert.Equal(t, op.History.Fetch.Failed, constants.Event.Operator.FetchHistory.Failed)
+		assert.Equal(t, events["operator.history.fetch.requested"].Value, string(constants.Event.Operator.FetchHistory.Requested))
+		assert.Equal(t, events["operator.history.fetch.completed"].Value, string(constants.Event.Operator.FetchHistory.Completed))
+		assert.Equal(t, events["operator.history.fetch.failed"].Value, string(constants.Event.Operator.FetchHistory.Failed))
 	})
 
 	t.Run("operator.file.history.fetch", func(t *testing.T) {
-		assert.Equal(t, op.File.History.Fetch.Requested, constants.Event.Operator.FetchFileHistory.Requested)
-		assert.Equal(t, op.File.History.Fetch.Completed, constants.Event.Operator.FetchFileHistory.Completed)
-		assert.Equal(t, op.File.History.Fetch.Failed, constants.Event.Operator.FetchFileHistory.Failed)
+		assert.Equal(t, events["operator.file.history.fetch.requested"].Value, string(constants.Event.Operator.FetchFileHistory.Requested))
+		assert.Equal(t, events["operator.file.history.fetch.completed"].Value, string(constants.Event.Operator.FetchFileHistory.Completed))
+		assert.Equal(t, events["operator.file.history.fetch.failed"].Value, string(constants.Event.Operator.FetchFileHistory.Failed))
 	})
 
 	t.Run("operator.file.restore", func(t *testing.T) {
-		assert.Equal(t, op.File.Restore.Requested, constants.Event.Operator.RestoreFile.Requested)
-		assert.Equal(t, op.File.Restore.Completed, constants.Event.Operator.RestoreFile.Completed)
-		assert.Equal(t, op.File.Restore.Failed, constants.Event.Operator.RestoreFile.Failed)
+		assert.Equal(t, events["operator.file.restore.requested"].Value, string(constants.Event.Operator.RestoreFile.Requested))
+		assert.Equal(t, events["operator.file.restore.completed"].Value, string(constants.Event.Operator.RestoreFile.Completed))
+		assert.Equal(t, events["operator.file.restore.failed"].Value, string(constants.Event.Operator.RestoreFile.Failed))
 	})
 
 	t.Run("operator.file.diff.fetch", func(t *testing.T) {
-		assert.Equal(t, op.File.Diff.Fetch.Requested, constants.Event.Operator.FetchFileDiff.Requested)
-		assert.Equal(t, op.File.Diff.Fetch.Completed, constants.Event.Operator.FetchFileDiff.Completed)
-		assert.Equal(t, op.File.Diff.Fetch.Failed, constants.Event.Operator.FetchFileDiff.Failed)
+		assert.Equal(t, events["operator.file.diff.fetch.requested"].Value, string(constants.Event.Operator.FetchFileDiff.Requested))
+		assert.Equal(t, events["operator.file.diff.fetch.completed"].Value, string(constants.Event.Operator.FetchFileDiff.Completed))
+		assert.Equal(t, events["operator.file.diff.fetch.failed"].Value, string(constants.Event.Operator.FetchFileDiff.Failed))
 	})
 
 	t.Run("operator.audit", func(t *testing.T) {
-		assert.Equal(t, op.Audit.User.Recorded, constants.Event.Operator.Audit.UserMsg)
-		assert.Equal(t, op.Audit.AI.Recorded, constants.Event.Operator.Audit.AIMsg)
-		assert.Equal(t, op.Audit.Direct.Command.Recorded, constants.Event.Operator.Audit.DirectCmd)
-		assert.Equal(t, op.Audit.Direct.Command.Result.Recorded, constants.Event.Operator.Audit.DirectCmdResult)
+		assert.Equal(t, events["operator.audit.user.recorded"].Value, string(constants.Event.Operator.Audit.UserMsg))
+		assert.Equal(t, events["operator.audit.ai.recorded"].Value, string(constants.Event.Operator.Audit.AIMsg))
+		assert.Equal(t, events["operator.audit.direct.command.recorded"].Value, string(constants.Event.Operator.Audit.DirectCmd))
+		assert.Equal(t, events["operator.audit.direct.command.result.recorded"].Value, string(constants.Event.Operator.Audit.DirectCmdResult))
 	})
 }
 
@@ -590,68 +600,67 @@ func TestProtocolStatusMatchesGoConstants(t *testing.T) {
 	st := loadStatusJSON(t)
 
 	t.Run("operator.status", func(t *testing.T) {
-		assert.Equal(t, st.OperatorStatus.Available, constants.Status.OperatorStatus.Available)
-		assert.Equal(t, st.OperatorStatus.Unavailable, constants.Status.OperatorStatus.Unavailable)
-		assert.Equal(t, st.OperatorStatus.Offline, constants.Status.OperatorStatus.Offline)
-		assert.Equal(t, st.OperatorStatus.Bound, constants.Status.OperatorStatus.Bound)
-		assert.Equal(t, st.OperatorStatus.Stale, constants.Status.OperatorStatus.Stale)
-		assert.Equal(t, st.OperatorStatus.Active, constants.Status.OperatorStatus.Active)
-		assert.Equal(t, st.OperatorStatus.Stopped, constants.Status.OperatorStatus.Stopped)
-		assert.Equal(t, st.OperatorStatus.Terminated, constants.Status.OperatorStatus.Terminated)
+		assert.Equal(t, st.OperatorStatus.Available.Value, string(constants.Status.OperatorStatus.Available))
+		assert.Equal(t, st.OperatorStatus.Unavailable.Value, string(constants.Status.OperatorStatus.Unavailable))
+		assert.Equal(t, st.OperatorStatus.Offline.Value, string(constants.Status.OperatorStatus.Offline))
+		assert.Equal(t, st.OperatorStatus.Bound.Value, string(constants.Status.OperatorStatus.Bound))
+		assert.Equal(t, st.OperatorStatus.Stale.Value, string(constants.Status.OperatorStatus.Stale))
+		assert.Equal(t, st.OperatorStatus.Active.Value, string(constants.Status.OperatorStatus.Active))
+		assert.Equal(t, st.OperatorStatus.Stopped.Value, string(constants.Status.OperatorStatus.Stopped))
+		assert.Equal(t, st.OperatorStatus.Terminated.Value, string(constants.Status.OperatorStatus.Terminated))
 	})
 
 	t.Run("operator.type", func(t *testing.T) {
-		assert.Equal(t, st.OperatorType.System, constants.Status.OperatorType.System)
-		assert.Equal(t, st.OperatorType.Cloud, constants.Status.OperatorType.Cloud)
+		assert.Equal(t, st.OperatorType.System.Value, string(constants.Status.OperatorType.System))
+		assert.Equal(t, st.OperatorType.Cloud.Value, string(constants.Status.OperatorType.Cloud))
 	})
 
 	t.Run("cloud.subtype", func(t *testing.T) {
-		assert.Equal(t, st.CloudSubtype.AWS, constants.Status.CloudSubtype.AWS)
-		assert.Equal(t, st.CloudSubtype.GCP, constants.Status.CloudSubtype.GCP)
-		assert.Equal(t, st.CloudSubtype.Azure, constants.Status.CloudSubtype.Azure)
+		assert.Equal(t, st.CloudSubtype.AWS.Value, string(constants.Status.CloudSubtype.AWS))
+		assert.Equal(t, st.CloudSubtype.GCP.Value, string(constants.Status.CloudSubtype.GCP))
+		assert.Equal(t, st.CloudSubtype.Azure.Value, string(constants.Status.CloudSubtype.Azure))
 	})
 
 	t.Run("vault.mode", func(t *testing.T) {
-		assert.Equal(t, st.VaultMode.Raw, constants.Status.VaultMode.Raw)
-		assert.Equal(t, st.VaultMode.Scrubbed, constants.Status.VaultMode.Scrubbed)
+		assert.Equal(t, st.VaultMode.Raw.Value, string(constants.Status.VaultMode.Raw))
+		assert.Equal(t, st.VaultMode.Scrubbed.Value, string(constants.Status.VaultMode.Scrubbed))
 	})
 
 	t.Run("version.stability", func(t *testing.T) {
-		assert.Equal(t, st.VersionStability.Stable, constants.Status.VersionStability.Stable)
-		assert.Equal(t, st.VersionStability.Beta, constants.Status.VersionStability.Beta)
-		assert.Equal(t, st.VersionStability.Dev, constants.Status.VersionStability.Dev)
+		assert.Equal(t, st.VersionStability.Stable.Value, string(constants.Status.VersionStability.Stable))
+		assert.Equal(t, st.VersionStability.Beta.Value, string(constants.Status.VersionStability.Beta))
+		assert.Equal(t, st.VersionStability.Dev.Value, string(constants.Status.VersionStability.Dev))
 	})
 
 	t.Run("component.name", func(t *testing.T) {
-		assert.Equal(t, st.ComponentName.G8EE, constants.Status.ComponentName.G8EE)
-		assert.Equal(t, st.ComponentName.G8EO, constants.Status.ComponentName.G8EO)
-		assert.Equal(t, st.ComponentName.CLIENT, constants.Status.ComponentName.Client)
+		assert.Equal(t, st.ComponentName.G8EE.Value, string(constants.Status.ComponentName.G8EE))
+		assert.Equal(t, st.ComponentName.G8EO.Value, string(constants.Status.ComponentName.G8EO))
 	})
 
 	t.Run("platform", func(t *testing.T) {
-		assert.Equal(t, st.Platform.Linux, constants.Status.Platform.Linux)
-		assert.Equal(t, st.Platform.Windows, constants.Status.Platform.Windows)
-		assert.Equal(t, st.Platform.Darwin, constants.Status.Platform.Darwin)
+		assert.Equal(t, st.Platform.Linux.Value, string(constants.Status.Platform.Linux))
+		assert.Equal(t, st.Platform.Windows.Value, string(constants.Status.Platform.Windows))
+		assert.Equal(t, st.Platform.Darwin.Value, string(constants.Status.Platform.Darwin))
 	})
 
 	t.Run("ai.source", func(t *testing.T) {
-		assert.Equal(t, st.AISource.Tool, constants.Status.AiSource.ToolCall)
-		assert.Equal(t, st.AISource.TerminalAnchored, constants.Status.AiSource.TerminalAnchored)
-		assert.Equal(t, st.AISource.TerminalDirect, constants.Status.AiSource.TerminalDirect)
+		assert.Equal(t, st.AISource.Tool.Value, string(constants.Status.AiSource.ToolCall))
+		assert.Equal(t, st.AISource.TerminalAnchored.Value, string(constants.Status.AiSource.TerminalAnchored))
+		assert.Equal(t, st.AISource.TerminalDirect.Value, string(constants.Status.AiSource.TerminalDirect))
 	})
 
 	t.Run("ai.task.id", func(t *testing.T) {
-		assert.Equal(t, st.AITaskID.Command, constants.Status.AiTaskID.Command)
-		assert.Equal(t, st.AITaskID.DirectCommand, constants.Status.AiTaskID.DirectCommand)
-		assert.Equal(t, st.AITaskID.FileEdit, constants.Status.AiTaskID.FileEdit)
-		assert.Equal(t, st.AITaskID.FsList, constants.Status.AiTaskID.FsList)
-		assert.Equal(t, st.AITaskID.FsRead, constants.Status.AiTaskID.FsRead)
-		assert.Equal(t, st.AITaskID.PortCheck, constants.Status.AiTaskID.PortCheck)
-		assert.Equal(t, st.AITaskID.FetchLogs, constants.Status.AiTaskID.FetchLogs)
-		assert.Equal(t, st.AITaskID.FetchHistory, constants.Status.AiTaskID.FetchHistory)
-		assert.Equal(t, st.AITaskID.FetchFileHistory, constants.Status.AiTaskID.FetchFileHistory)
-		assert.Equal(t, st.AITaskID.RestoreFile, constants.Status.AiTaskID.RestoreFile)
-		assert.Equal(t, st.AITaskID.FetchFileDiff, constants.Status.AiTaskID.FetchFileDiff)
+		assert.Equal(t, st.AITaskID.Command.Value, string(constants.Status.AITaskId.Command))
+		assert.Equal(t, st.AITaskID.DirectCommand.Value, string(constants.Status.AITaskId.DirectCommand))
+		assert.Equal(t, st.AITaskID.FileEdit.Value, string(constants.Status.AITaskId.FileEdit))
+		assert.Equal(t, st.AITaskID.FsList.Value, string(constants.Status.AITaskId.FsList))
+		assert.Equal(t, st.AITaskID.FsRead.Value, string(constants.Status.AITaskId.FsRead))
+		assert.Equal(t, st.AITaskID.PortCheck.Value, string(constants.Status.AITaskId.PortCheck))
+		assert.Equal(t, st.AITaskID.FetchLogs.Value, string(constants.Status.AITaskId.FetchLogs))
+		assert.Equal(t, st.AITaskID.FetchHistory.Value, string(constants.Status.AITaskId.FetchHistory))
+		assert.Equal(t, st.AITaskID.FetchFileHistory.Value, string(constants.Status.AITaskId.FetchFileHistory))
+		assert.Equal(t, st.AITaskID.RestoreFile.Value, string(constants.Status.AITaskId.RestoreFile))
+		assert.Equal(t, st.AITaskID.FetchFileDiff.Value, string(constants.Status.AITaskId.FetchFileDiff))
 	})
 }
 
@@ -663,9 +672,9 @@ func TestProtocolChannelsMatchGoConstants(t *testing.T) {
 	ch := loadChannelsJSON(t)
 
 	t.Run("channel prefixes used by CmdChannel/ResultsChannel/HeartbeatChannel", func(t *testing.T) {
-		assert.Equal(t, "cmd", ch.PubSub.Prefixes.Cmd)
-		assert.Equal(t, "results", ch.PubSub.Prefixes.Results)
-		assert.Equal(t, "heartbeat", ch.PubSub.Prefixes.Heartbeat)
+		assert.Equal(t, "cmd", ch.PubSub.Prefixes.Cmd.Value)
+		assert.Equal(t, "results", ch.PubSub.Prefixes.Results.Value)
+		assert.Equal(t, "heartbeat", ch.PubSub.Prefixes.Heartbeat.Value)
 
 		assert.Equal(t, constants.CmdChannel("op1", "s1"), "cmd:op1:s1")
 		assert.Equal(t, constants.ResultsChannel("op1", "s1"), "results:op1:s1")
@@ -680,9 +689,9 @@ func TestProtocolChannelsMatchGoConstants(t *testing.T) {
 func TestProtocolHeartbeatTypeMatchesGoConstants(t *testing.T) {
 	st := loadStatusJSON(t)
 
-	assert.Equal(t, st.HeartbeatType.Automatic, marshaler.Status(constants.HeartbeatTypeAutomatic))
-	assert.Equal(t, st.HeartbeatType.Bootstrap, marshaler.Status(constants.HeartbeatTypeBootstrap))
-	assert.Equal(t, st.HeartbeatType.Requested, marshaler.Status(constants.HeartbeatTypeRequested))
+	assert.Equal(t, st.HeartbeatType.Automatic.Value, marshaler.Status(constants.HeartbeatTypeAutomatic))
+	assert.Equal(t, st.HeartbeatType.Bootstrap.Value, marshaler.Status(constants.HeartbeatTypeBootstrap))
+	assert.Equal(t, st.HeartbeatType.Requested.Value, marshaler.Status(constants.HeartbeatTypeRequested))
 }
 
 // =============================================================================
@@ -693,15 +702,15 @@ func TestProtocolHeadersMatchGoConstants(t *testing.T) {
 	h := loadHeadersJSON(t)
 
 	t.Run("standard http headers", func(t *testing.T) {
-		assert.Equal(t, h.Authorization, constants.HeaderAuthorization)
-		assert.Equal(t, h.UserAgent, constants.HeaderUserAgent)
-		assert.Equal(t, h.ContentType, constants.HeaderContentType)
-		assert.Equal(t, h.ContentDisposition, constants.HeaderContentDisposition)
-		assert.Equal(t, h.ContentLength, constants.HeaderContentLength)
-		assert.Equal(t, h.XForwardedProto, constants.HeaderXForwardedProto)
-		assert.Equal(t, h.XForwardedHost, constants.HeaderXForwardedHost)
-		assert.Equal(t, h.XRequestTimestamp, constants.HeaderXRequestTimestamp)
-		assert.Equal(t, h.DeviceToken, constants.HeaderDeviceToken)
+		assert.Equal(t, h.Authorization.Value, string(constants.HeaderAuthorization))
+		assert.Equal(t, h.UserAgent.Value, string(constants.HeaderUserAgent))
+		assert.Equal(t, h.ContentType.Value, string(constants.HeaderContentType))
+		assert.Equal(t, h.ContentDisposition.Value, string(constants.HeaderContentDisposition))
+		assert.Equal(t, h.ContentLength.Value, string(constants.HeaderContentLength))
+		assert.Equal(t, h.XForwardedProto.Value, string(constants.HeaderXForwardedProto))
+		assert.Equal(t, h.XForwardedHost.Value, string(constants.HeaderXForwardedHost))
+		assert.Equal(t, h.XRequestTimestamp.Value, string(constants.HeaderXRequestTimestamp))
+		assert.Equal(t, h.DeviceToken.Value, string(constants.HeaderDeviceToken))
 	})
 }
 
@@ -713,16 +722,16 @@ func TestProtocolPubSubWireMatchesGoConstants(t *testing.T) {
 	ps := loadPubSubJSON(t)
 
 	t.Run("wire.actions", func(t *testing.T) {
-		assert.Equal(t, ps.Wire.Actions.Subscribe, constants.PubSubActionSubscribe)
-		assert.Equal(t, ps.Wire.Actions.PSubscribe, constants.PubSubActionPSubscribe)
-		assert.Equal(t, ps.Wire.Actions.Unsubscribe, constants.PubSubActionUnsubscribe)
-		assert.Equal(t, ps.Wire.Actions.Publish, constants.PubSubActionPublish)
+		assert.Equal(t, ps.Wire.Actions.Subscribe.Value, string(constants.PubSubActionSubscribe))
+		assert.Equal(t, ps.Wire.Actions.PSubscribe.Value, string(constants.PubSubActionPSubscribe))
+		assert.Equal(t, ps.Wire.Actions.Unsubscribe.Value, string(constants.PubSubActionUnsubscribe))
+		assert.Equal(t, ps.Wire.Actions.Publish.Value, string(constants.PubSubActionPublish))
 	})
 
 	t.Run("wire.event_types", func(t *testing.T) {
-		assert.Equal(t, ps.Wire.EventTypes.Message, constants.PubSubEventMessage)
-		assert.Equal(t, ps.Wire.EventTypes.PMessage, constants.PubSubEventPMessage)
-		assert.Equal(t, ps.Wire.EventTypes.Subscribed, constants.PubSubEventSubscribed)
+		assert.Equal(t, ps.Wire.EventTypes.Message.Value, string(constants.PubSubEventMessage))
+		assert.Equal(t, ps.Wire.EventTypes.PMessage.Value, string(constants.PubSubEventPMessage))
+		assert.Equal(t, ps.Wire.EventTypes.Subscribed.Value, string(constants.PubSubEventSubscribed))
 	})
 }
 
@@ -733,12 +742,12 @@ func TestProtocolPubSubWireMatchesGoConstants(t *testing.T) {
 func TestProtocolExecutionStatusMatchesGoConstants(t *testing.T) {
 	st := loadStatusJSON(t)
 
-	assert.Equal(t, st.ExecutionStatus.Pending, marshaler.Status(constants.ExecutionStatusPending))
-	assert.Equal(t, st.ExecutionStatus.Executing, marshaler.Status(constants.ExecutionStatusExecuting))
-	assert.Equal(t, st.ExecutionStatus.Completed, marshaler.Status(constants.ExecutionStatusCompleted))
-	assert.Equal(t, st.ExecutionStatus.Failed, marshaler.Status(constants.ExecutionStatusFailed))
-	assert.Equal(t, st.ExecutionStatus.Timeout, marshaler.Status(constants.ExecutionStatusTimeout))
-	assert.Equal(t, st.ExecutionStatus.Cancelled, marshaler.Status(constants.ExecutionStatusCancelled))
+	assert.Equal(t, st.ExecutionStatus.Pending.Value, marshaler.Status(constants.ExecutionStatusPending))
+	assert.Equal(t, st.ExecutionStatus.Executing.Value, marshaler.Status(constants.ExecutionStatusExecuting))
+	assert.Equal(t, st.ExecutionStatus.Completed.Value, marshaler.Status(constants.ExecutionStatusCompleted))
+	assert.Equal(t, st.ExecutionStatus.Failed.Value, marshaler.Status(constants.ExecutionStatusFailed))
+	assert.Equal(t, st.ExecutionStatus.Timeout.Value, marshaler.Status(constants.ExecutionStatusTimeout))
+	assert.Equal(t, st.ExecutionStatus.Cancelled.Value, marshaler.Status(constants.ExecutionStatusCancelled))
 }
 
 // =============================================================================
@@ -750,7 +759,8 @@ func TestProtocolCollectionsMatchGoConstants(t *testing.T) {
 
 	t.Run("collection names", func(t *testing.T) {
 		// Verify that all collections in JSON have corresponding Go constants
-		for key, value := range c.Collections {
+		for key, leaf := range c.Collections {
+			value := leaf.Value
 			// Convert key to Go constant name format (CollectionUsers, CollectionWebSessions, etc.)
 			constName := "Collection" + toPascalCase(key)
 			// This is a basic check - in a full implementation we'd use reflection

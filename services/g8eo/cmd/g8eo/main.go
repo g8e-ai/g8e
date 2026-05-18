@@ -48,7 +48,7 @@ import (
 
 // Version information (set via ldflags during build)
 var (
-	version  = constants.Status.VersionStability.Dev
+	version  = string(constants.Status.VersionStability.Dev)
 	buildID  = "unknown"
 	platform = "unknown"
 )
@@ -122,7 +122,7 @@ func main() {
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
 	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory operator was launched from)")
-	flag.BoolVar(&cloudMode, constants.Status.OperatorType.Cloud, true, "Cloud mode")
+	flag.BoolVar(&cloudMode, "cloud", true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
 	flag.BoolVar(&localStorage, "local-storage", true, "Enable local storage (stores data in current directory)")
 	flag.StringVar(&logLevel, "log", "info", "Log level")
@@ -343,7 +343,7 @@ func main() {
 		os.Exit(constants.ExitConfigError)
 	}
 
-	cfg.Version = version
+	cfg.Version = string(version)
 
 	// Apply remaining bootstrap config from device-link registration if available
 	if deviceAuthResult != nil && deviceAuthResult.Config != nil {
@@ -553,7 +553,7 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 		logger.Error("Failed to load listen configuration", "error", err)
 		os.Exit(constants.ExitConfigError)
 	}
-	cfg.Version = version
+	cfg.Version = string(version)
 
 	svc, err := listen.NewListenService(cfg, logger)
 	if err != nil {

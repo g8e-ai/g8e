@@ -25,7 +25,6 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/mappings"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
@@ -40,18 +39,18 @@ import (
 
 // PubSubCommandMessage is the inbound wire message received from operator pub/sub.
 type PubSubCommandMessage struct {
-	ID                string          `json:"id"`
-	EventType         string          `json:"event_type"`
-	CaseID            string          `json:"case_id"`
-	TaskID            *string         `json:"task_id"`
-	InvestigationID   string          `json:"investigation_id"`
-	WebSessionID      string          `json:"web_session_id"`
-	CLISessionID      string          `json:"cli_session_id"`
-	OperatorSessionID string          `json:"operator_session_id"`
-	OperatorID        *string         `json:"operator_id"`
-	Payload           json.RawMessage `json:"payload"`
-	DecodedPayload    proto.Message   `json:"-"`
-	Timestamp         time.Time       `json:"timestamp"`
+	ID                string              `json:"id"`
+	EventType         constants.EventType `json:"event_type"`
+	CaseID            string              `json:"case_id"`
+	TaskID            *string             `json:"task_id"`
+	InvestigationID   string              `json:"investigation_id"`
+	WebSessionID      string              `json:"web_session_id"`
+	CLISessionID      string              `json:"cli_session_id"`
+	OperatorSessionID string              `json:"operator_session_id"`
+	OperatorID        *string             `json:"operator_id"`
+	Payload           json.RawMessage     `json:"payload"`
+	DecodedPayload    proto.Message       `json:"-"`
+	Timestamp         time.Time           `json:"timestamp"`
 }
 
 // PubSubCommandService manages the operator pub/sub connection and dispatches inbound
@@ -71,7 +70,7 @@ type PubSubCommandService struct {
 
 	ShutdownChan chan string
 
-	handlers map[string]func(context.Context, PubSubCommandMessage)
+	handlers map[constants.EventType]func(context.Context, PubSubCommandMessage)
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -221,7 +220,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 	}
 
 	// Initialize TransactionVerifier for strict pre-dispatch verification
-	knownActionTypes := []string{
+	knownActionTypes := []constants.ActionType{
 		constants.ActionTypeExecuteBash,
 		constants.ActionTypeFileEdit,
 		constants.ActionTypeRestoreFile,
@@ -249,7 +248,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 }
 
 func (rs *PubSubCommandService) buildHandlers() {
-	rs.handlers = map[string]func(context.Context, PubSubCommandMessage){
+	rs.handlers = map[constants.EventType]func(context.Context, PubSubCommandMessage){
 		constants.Event.Operator.HeartbeatRequested:         rs.heartbeat.HandleRequest,
 		constants.Event.Operator.Command.Requested:          rs.commands.HandleExecutionRequest,
 		constants.Event.Operator.Command.CancelRequested:    rs.commands.HandleCancelRequest,
@@ -500,7 +499,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 
 	// Convert UAPEnvelope to PubSubCommandMessage for execution through Warden
 	// Map UAP action types back to protobuf event types for handler dispatch
-	eventType := mappings.MapActionTypeToEventType(env.ActionType)
+	eventType := constants.MapActionTypeToEventType(verified.ActionType)
 
 	payload := env.Payload
 	if len(payload) == 0 {
@@ -510,7 +509,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 
 	cmdMsg := PubSubCommandMessage{
 		ID:                env.Id,
-		EventType:         eventType,
+		EventType:         constants.EventType(eventType),
 		CaseID:            env.CaseId,
 		TaskID:            &env.TaskId,
 		InvestigationID:   env.InvestigationId,
@@ -552,11 +551,11 @@ func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
 
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler.
 // This is called by Warden to execute verified transactions, making Warden the execution boundary.
-func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) (string, error) {
+func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
 	handler, ok := rs.handlers[eventType]
 	if !ok {
-		rs.logger.Error("No handler registered for event type", "event_type", eventType)
-		return "", fmt.Errorf("no handler for event type: %s", eventType)
+		rs.logger.Error("No handler registered for event type", "event_type", string(eventType))
+		return "", fmt.Errorf("no handler for event type: %s", string(eventType))
 	}
 
 	// Type assert to PubSubCommandMessage
@@ -652,7 +651,7 @@ func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, reje
 		TransactionHash:   env.TransactionHash,
 		OperatorID:        env.OperatorId,
 		OperatorSessionID: env.OperatorSessionId,
-		ActionType:        env.ActionType,
+		ActionType:        constants.ActionType(env.ActionType),
 		TargetResource:    env.TargetResource,
 		Status:            "BLOCKED",
 		ResultSummary:     fmt.Sprintf("blocked: %v", rejectionReason),

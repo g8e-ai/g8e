@@ -25,11 +25,11 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	execution "github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	system "github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -71,7 +71,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 	filePath := protoEdit.FilePath
 	operation := protoEdit.Operation
 
-	vaultMode := protoEdit.SentinelMode
+	vaultMode := constants.VaultMode(protoEdit.SentinelMode)
 	if vaultMode == "" {
 		vaultMode = constants.Status.VaultMode.Raw
 	}
@@ -122,7 +122,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 				if _, err := fs.auditVault.RecordEvent(&storage.Event{
 					OperatorSessionID: fs.config.OperatorSessionId,
 					Timestamp:         time.Now().UTC(),
-					Type:              storage.EventTypeFileMutation,
+					Type:              constants.Event.Operator.FileEdit.Completed,
 					ContentText:       fmt.Sprintf("SENTINEL BLOCKED FILE OP: %s on %s - %s (threat_level=%s, risk_score=%d)", editReq.Operation, analysis.FilePath, analysis.BlockReason, analysis.ThreatLevel, analysis.RiskScore),
 					CommandRaw:        fmt.Sprintf("file_%s: %s", editReq.Operation, analysis.FilePath),
 					CommandExitCode:   &exitCode,
@@ -232,7 +232,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 		event := &storage.Event{
 			OperatorSessionID:   fs.config.OperatorSessionId,
 			Timestamp:           time.Now().UTC(),
-			Type:                storage.EventTypeFileMutation,
+			Type:                constants.Event.Operator.FileEdit.Completed,
 			ContentText:         fmt.Sprintf("File %s: %s", operation, filePath),
 			CommandRaw:          fmt.Sprintf("file_%s %s", operation, filePath),
 			ExecutionDurationMs: int64(result.DurationSeconds * 1000),
@@ -347,7 +347,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg PubSubCom
 		path = "."
 	}
 
-	vaultMode := protoList.SentinelMode
+	vaultMode := constants.VaultMode(protoList.SentinelMode)
 	if vaultMode == "" {
 		vaultMode = constants.Status.VaultMode.Raw
 	}
@@ -470,7 +470,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCom
 		path = "."
 	}
 
-	vaultMode := protoGrep.SentinelMode
+	vaultMode := constants.VaultMode(protoGrep.SentinelMode)
 	if vaultMode == "" {
 		vaultMode = constants.Status.VaultMode.Raw
 	}
@@ -600,7 +600,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 		maxSize = 102400
 	}
 
-	vaultMode := protoRead.SentinelMode
+	vaultMode := constants.VaultMode(protoRead.SentinelMode)
 	if vaultMode == "" {
 		vaultMode = constants.Status.VaultMode.Raw
 	}
@@ -691,11 +691,11 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 	fs.publishLFAATypedResponse(ctx, msg, constants.Event.Operator.FsRead.Completed, payload)
 }
 
-func (fs *FileOpsService) publishLFAATypedResponse(ctx context.Context, msg PubSubCommandMessage, eventType string, payload proto.Message) {
+func (fs *FileOpsService) publishLFAATypedResponse(ctx context.Context, msg PubSubCommandMessage, eventType constants.EventType, payload proto.Message) {
 	publishLFAATypedResponseTo(ctx, fs.client, fs.config, fs.logger, msg, eventType, payload)
 }
 
-func (fs *FileOpsService) publishLFAAError(ctx context.Context, msg PubSubCommandMessage, eventType, errorMsg string) {
+func (fs *FileOpsService) publishLFAAError(ctx context.Context, msg PubSubCommandMessage, eventType constants.EventType, errorMsg string) {
 	publishLFAAErrorTo(ctx, fs.client, fs.config, fs.logger, msg, eventType, errorMsg)
 }
 

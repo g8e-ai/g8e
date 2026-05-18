@@ -34,6 +34,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 )
@@ -48,8 +49,6 @@ const (
 	hubCommonName       = "g8e Hub Intermediate CA"
 	operatorCommonName  = "g8e Operator Intermediate CA"
 	bootstrapCommonName = "g8e Bootstrap Intermediate CA"
-
-	trustDomain = "g8e.local"
 )
 
 // PKIAuthority manages the full PKI hierarchy for the Operator.
@@ -364,7 +363,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 
 	// Trust domain metadata
 	trustDomainData := map[string]string{
-		"trust_domain": trustDomain,
+		"trust_domain": protocol.TrustDomain,
 	}
 	trustDomainJSON, _ := json.MarshalIndent(trustDomainData, "", "  ")
 	if err := os.WriteFile(filepath.Join(pki.pkiDir, "trust", "trust-domain.json"), trustDomainJSON, 0644); err != nil {
@@ -422,7 +421,7 @@ func (pki *PKIAuthority) GenerateRevocationBundle() (bundleJSON string, signatur
 	bundle := map[string]interface{}{
 		"revoked_serials": revoked,
 		"generated_at":    time.Now().UTC(),
-		"trust_domain":    trustDomain,
+		"trust_domain":    protocol.TrustDomain,
 	}
 
 	bundleBytes, err := json.Marshal(bundle)
@@ -528,13 +527,14 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 	}
 
 	// Set URI SAN for workload identity
+	wid := protocol.NewWorkloadIdentity()
 	var uriSAN string
 	if leafType == "operator" {
-		uriSAN = fmt.Sprintf("spiffe://%s/operator/%s/%s/%s", trustDomain, organizationID, operatorID, sessionID)
+		uriSAN = wid.OperatorSPIFFEID(organizationID, operatorID, sessionID)
 	} else if leafType == "cli" {
-		uriSAN = fmt.Sprintf("spiffe://%s/cli/%s/%s", trustDomain, userID, sessionID)
+		uriSAN = wid.CLISPIFFEID(userID, sessionID)
 	} else if leafType == "app" {
-		uriSAN = fmt.Sprintf("spiffe://%s/app/%s", trustDomain, operatorID)
+		uriSAN = wid.AppSPIFFEID(operatorID)
 	}
 	if uriSAN != "" {
 		parsed, _ := url.Parse(uriSAN)
@@ -720,7 +720,7 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 }
 
 func (pki *PKIAuthority) ensureAppCerts() error {
-	apps := []string{constants.Status.ComponentName.G8EE}
+	apps := []string{marshaler.Status(constants.Status.ComponentName.G8EE)}
 	for _, app := range apps {
 		keyPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".key")
 		certPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".crt")
@@ -751,6 +751,8 @@ func (pki *PKIAuthority) generateAppCert(app, keyPath, certPath string) error {
 
 	serial, _ := randomSerial()
 	now := time.Now().UTC()
+	wid := protocol.NewWorkloadIdentity()
+	appURI, _ := wid.AppSPIFFEURL(app)
 	template := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
@@ -763,9 +765,7 @@ func (pki *PKIAuthority) generateAppCert(app, keyPath, certPath string) error {
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		DNSNames:    []string{"localhost", "g8e.local", app},
 		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
-		URIs: []*url.URL{
-			{Scheme: "spiffe", Host: trustDomain, Path: "/app/" + app},
-		},
+		URIs:        []*url.URL{appURI},
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.hubCert, &priv.PublicKey, pki.hubKey)
@@ -803,12 +803,13 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 		return err
 	}
 
-	dnsNames := []string{"localhost", "g8e.local", "operator", constants.Status.ComponentName.G8EE}
+	dnsNames := []string{"localhost", "g8e.local", "operator", marshaler.Status(constants.Status.ComponentName.G8EE)}
 	ipAddresses := append([]net.IP{net.ParseIP("127.0.0.1")}, extraIPs...)
 
 	// Add URI SAN for workload identity
+	wid := protocol.NewWorkloadIdentity()
 	uriSANs := []string{
-		fmt.Sprintf("spiffe://%s/hub/operator-listen", trustDomain),
+		wid.HubSPIFFEID(),
 	}
 
 	now := time.Now().UTC()

@@ -3,6 +3,7 @@
     "protocol": "g8e",
     "version": 1,
     "prefix": "g8e.v1",
+    "_go_type": "EventType",
     "rule": "Wire value = {prefix}.{dot-joined path from domain key to leaf}. Every leaf is a past-tense action or state.",
     "naming": "Each entry MUST specify 'value', '_go_const', and '_python_const' fields. No fallback or auto-generation is supported."
   },
@@ -185,642 +186,764 @@
     "operator.slot.initialization.failed": {
       "value": "g8e.v1.operator.slot.initialization.failed",
       "_go_const": "OperatorSlotInitializationFailed",
-      "_python_const": "OPERATOR_SLOT_INITIALIZATION_FAILED"
+      "_python_const": "OPERATOR_SLOT_INITIALIZATION_FAILED",
+      "_go_alias": "SlotInitializationFailed"
     },
     "operator.eval.answer.requested": {
       "value": "g8e.v1.operator.eval.answer.requested",
       "_go_const": "OperatorEvalAnswerRequested",
       "_python_const": "OPERATOR_EVAL_ANSWER_REQUESTED",
-      "_uap_action": "EVAL_ANSWER"
+      "_uap_action": "EVAL_ANSWER",
+      "_go_alias": "Eval.AnswerRequested"
     },
     "operator.heartbeat.sent": {
       "value": "g8e.v1.operator.heartbeat.sent",
       "_go_const": "OperatorHeartbeatSent",
       "_python_const": "OPERATOR_HEARTBEAT_SENT",
-      "_uap_result_action": "HEARTBEAT_RESULT"
+      "_uap_result_action": "HEARTBEAT_RESULT",
+      "_go_alias": "Heartbeat"
     },
     "operator.heartbeat.requested": {
       "value": "g8e.v1.operator.heartbeat.requested",
       "_go_const": "OperatorHeartbeatRequested",
       "_python_const": "OPERATOR_HEARTBEAT_REQUESTED",
-      "_uap_action": "HEARTBEAT"
+      "_uap_action": "HEARTBEAT",
+      "_go_alias": "HeartbeatRequested"
     },
     "operator.heartbeat.received": {
       "value": "g8e.v1.operator.heartbeat.received",
       "_go_const": "OperatorHeartbeatReceived",
-      "_python_const": "OPERATOR_HEARTBEAT_RECEIVED"
+      "_python_const": "OPERATOR_HEARTBEAT_RECEIVED",
+      "_go_alias": "HeartbeatReceived"
     },
     "operator.heartbeat.missed": {
       "value": "g8e.v1.operator.heartbeat.missed",
       "_go_const": "OperatorHeartbeatMissed",
-      "_python_const": "OPERATOR_HEARTBEAT_MISSED"
+      "_python_const": "OPERATOR_HEARTBEAT_MISSED",
+      "_go_alias": "HeartbeatMissed"
     },
     "operator.shutdown.requested": {
       "value": "g8e.v1.operator.shutdown.requested",
       "_go_const": "OperatorShutdownRequested",
       "_python_const": "OPERATOR_SHUTDOWN_REQUESTED",
-      "_uap_action": "SHUTDOWN"
+      "_uap_action": "SHUTDOWN",
+      "_go_alias": "ShutdownRequested"
     },
     "operator.shutdown.acknowledged": {
       "value": "g8e.v1.operator.shutdown.acknowledged",
       "_go_const": "OperatorShutdownAcknowledged",
-      "_python_const": "OPERATOR_SHUTDOWN_ACKNOWLEDGED"
+      "_python_const": "OPERATOR_SHUTDOWN_ACKNOWLEDGED",
+      "_go_alias": "ShutdownAcknowledged"
     },
     "operator.panel.list.updated": {
       "value": "g8e.v1.operator.panel.list.updated",
       "_go_const": "OperatorPanelListUpdated",
-      "_python_const": "OPERATOR_PANEL_LIST_UPDATED"
+      "_python_const": "OPERATOR_PANEL_LIST_UPDATED",
+      "_go_alias": "PanelListUpdated"
     },
     "operator.context.changed": {
       "value": "g8e.v1.operator.context.changed",
       "_go_const": "OperatorContextChanged",
-      "_python_const": "OPERATOR_CONTEXT_CHANGED"
+      "_python_const": "OPERATOR_CONTEXT_CHANGED",
+      "_go_alias": "ContextChanged"
     },
     "operator.status.updated.active": {
       "value": "g8e.v1.operator.status.updated.active",
       "_go_const": "OperatorStatusUpdatedActive",
-      "_python_const": "OPERATOR_STATUS_UPDATED_ACTIVE"
+      "_python_const": "OPERATOR_STATUS_UPDATED_ACTIVE",
+      "_go_alias": "StatusUpdated.Active"
     },
     "operator.status.updated.available": {
       "value": "g8e.v1.operator.status.updated.available",
       "_go_const": "OperatorStatusUpdatedAvailable",
-      "_python_const": "OPERATOR_STATUS_UPDATED_AVAILABLE"
+      "_python_const": "OPERATOR_STATUS_UPDATED_AVAILABLE",
+      "_go_alias": "StatusUpdated.Available"
     },
     "operator.status.updated.unavailable": {
       "value": "g8e.v1.operator.status.updated.unavailable",
       "_go_const": "OperatorStatusUpdatedUnavailable",
-      "_python_const": "OPERATOR_STATUS_UPDATED_UNAVAILABLE"
+      "_python_const": "OPERATOR_STATUS_UPDATED_UNAVAILABLE",
+      "_go_alias": "StatusUpdated.Unavailable"
     },
     "operator.status.updated.bound": {
       "value": "g8e.v1.operator.status.updated.bound",
       "_go_const": "OperatorStatusUpdatedBound",
-      "_python_const": "OPERATOR_STATUS_UPDATED_BOUND"
+      "_python_const": "OPERATOR_STATUS_UPDATED_BOUND",
+      "_go_alias": "StatusUpdated.Bound"
     },
     "operator.status.updated.offline": {
       "value": "g8e.v1.operator.status.updated.offline",
       "_go_const": "OperatorStatusUpdatedOffline",
-      "_python_const": "OPERATOR_STATUS_UPDATED_OFFLINE"
+      "_python_const": "OPERATOR_STATUS_UPDATED_OFFLINE",
+      "_go_alias": "StatusUpdated.Offline"
     },
     "operator.status.updated.stale": {
       "value": "g8e.v1.operator.status.updated.stale",
       "_go_const": "OperatorStatusUpdatedStale",
-      "_python_const": "OPERATOR_STATUS_UPDATED_STALE"
+      "_python_const": "OPERATOR_STATUS_UPDATED_STALE",
+      "_go_alias": "StatusUpdated.Stale"
     },
     "operator.status.updated.stopped": {
       "value": "g8e.v1.operator.status.updated.stopped",
       "_go_const": "OperatorStatusUpdatedStopped",
-      "_python_const": "OPERATOR_STATUS_UPDATED_STOPPED"
+      "_python_const": "OPERATOR_STATUS_UPDATED_STOPPED",
+      "_go_alias": "StatusUpdated.Stopped"
     },
     "operator.status.updated.terminated": {
       "value": "g8e.v1.operator.status.updated.terminated",
       "_go_const": "OperatorStatusUpdatedTerminated",
-      "_python_const": "OPERATOR_STATUS_UPDATED_TERMINATED"
+      "_python_const": "OPERATOR_STATUS_UPDATED_TERMINATED",
+      "_go_alias": "StatusUpdated.Terminated"
     },
     "operator.api.key.refreshed": {
       "value": "g8e.v1.operator.api.key.refreshed",
       "_go_const": "OperatorApiKeyRefreshed",
-      "_python_const": "OPERATOR_API_KEY_REFRESHED"
+      "_python_const": "OPERATOR_API_KEY_REFRESHED",
+      "_go_alias": "APIKeyRefreshed"
     },
     "operator.device.registered": {
       "value": "g8e.v1.operator.device.registered",
       "_go_const": "OperatorDeviceRegistered",
-      "_python_const": "OPERATOR_DEVICE_REGISTERED"
+      "_python_const": "OPERATOR_DEVICE_REGISTERED",
+      "_go_alias": "DeviceRegistered"
     },
     "operator.command.requested": {
       "value": "g8e.v1.operator.command.requested",
       "_go_const": "OperatorCommandRequested",
       "_python_const": "OPERATOR_COMMAND_REQUESTED",
-      "_uap_action": "EXECUTE_BASH"
+      "_uap_action": "EXECUTE_BASH",
+      "_go_alias": "Command.Requested"
     },
     "operator.command.started": {
       "value": "g8e.v1.operator.command.started",
       "_go_const": "OperatorCommandStarted",
-      "_python_const": "OPERATOR_COMMAND_STARTED"
+      "_python_const": "OPERATOR_COMMAND_STARTED",
+      "_go_alias": "Command.Started"
     },
     "operator.command.completed": {
       "value": "g8e.v1.operator.command.completed",
       "_go_const": "OperatorCommandCompleted",
       "_python_const": "OPERATOR_COMMAND_COMPLETED",
-      "_uap_result_action": "EXECUTE_BASH_RESULT"
+      "_uap_result_action": "EXECUTE_BASH_RESULT",
+      "_go_alias": "Command.Completed"
     },
     "operator.command.failed": {
       "value": "g8e.v1.operator.command.failed",
       "_go_const": "OperatorCommandFailed",
       "_python_const": "OPERATOR_COMMAND_FAILED",
-      "_uap_result_action": "EXECUTE_BASH_RESULT"
+      "_uap_result_action": "EXECUTE_BASH_RESULT",
+      "_go_alias": "Command.Failed"
     },
     "operator.command.cancelled": {
       "value": "g8e.v1.operator.command.cancelled",
       "_go_const": "OperatorCommandCancelled",
       "_python_const": "OPERATOR_COMMAND_CANCELLED",
-      "_uap_result_action": "EXECUTE_BASH_CANCELLED"
+      "_uap_result_action": "EXECUTE_BASH_CANCELLED",
+      "_go_alias": "Command.Cancelled"
     },
     "operator.command.execution": {
       "value": "g8e.v1.operator.command.execution",
       "_go_const": "OperatorCommandExecution",
-      "_python_const": "OPERATOR_COMMAND_EXECUTION"
+      "_python_const": "OPERATOR_COMMAND_EXECUTION",
+      "_go_alias": "Command.Execution"
     },
     "operator.command.result": {
       "value": "g8e.v1.operator.command.result",
       "_go_const": "OperatorCommandResult",
-      "_python_const": "OPERATOR_COMMAND_RESULT"
+      "_python_const": "OPERATOR_COMMAND_RESULT",
+      "_go_alias": "Command.Result"
     },
     "operator.command.output.received": {
       "value": "g8e.v1.operator.command.output.received",
       "_go_const": "OperatorCommandOutputReceived",
-      "_python_const": "OPERATOR_COMMAND_OUTPUT_RECEIVED"
+      "_python_const": "OPERATOR_COMMAND_OUTPUT_RECEIVED",
+      "_go_alias": "Command.OutputReceived"
     },
     "operator.command.status.updated.queued": {
       "value": "g8e.v1.operator.command.status.updated.queued",
       "_go_const": "OperatorCommandStatusUpdatedQueued",
       "_python_const": "OPERATOR_COMMAND_STATUS_UPDATED_QUEUED",
-      "_uap_result_action": "EXECUTE_STATUS_UPDATE"
+      "_uap_result_action": "EXECUTE_STATUS_UPDATE",
+      "_go_alias": "Command.StatusUpdated.Queued"
     },
     "operator.command.status.updated.running": {
       "value": "g8e.v1.operator.command.status.updated.running",
       "_go_const": "OperatorCommandStatusUpdatedRunning",
       "_python_const": "OPERATOR_COMMAND_STATUS_UPDATED_RUNNING",
-      "_uap_result_action": "EXECUTE_STATUS_UPDATE"
+      "_uap_result_action": "EXECUTE_STATUS_UPDATE",
+      "_go_alias": "Command.StatusUpdated.Running"
     },
     "operator.command.status.updated.completed": {
       "value": "g8e.v1.operator.command.status.updated.completed",
       "_go_const": "OperatorCommandStatusUpdatedCompleted",
       "_python_const": "OPERATOR_COMMAND_STATUS_UPDATED_COMPLETED",
-      "_uap_result_action": "EXECUTE_STATUS_UPDATE"
+      "_uap_result_action": "EXECUTE_STATUS_UPDATE",
+      "_go_alias": "Command.StatusUpdated.Completed"
     },
     "operator.command.status.updated.failed": {
       "value": "g8e.v1.operator.command.status.updated.failed",
       "_go_const": "OperatorCommandStatusUpdatedFailed",
       "_python_const": "OPERATOR_COMMAND_STATUS_UPDATED_FAILED",
-      "_uap_result_action": "EXECUTE_STATUS_UPDATE"
+      "_uap_result_action": "EXECUTE_STATUS_UPDATE",
+      "_go_alias": "Command.StatusUpdated.Failed"
     },
     "operator.command.status.updated.cancelled": {
       "value": "g8e.v1.operator.command.status.updated.cancelled",
       "_go_const": "OperatorCommandStatusUpdatedCancelled",
       "_python_const": "OPERATOR_COMMAND_STATUS_UPDATED_CANCELLED",
-      "_uap_result_action": "EXECUTE_STATUS_UPDATE"
+      "_uap_result_action": "EXECUTE_STATUS_UPDATE",
+      "_go_alias": "Command.StatusUpdated.Cancelled"
     },
     "operator.command.cancel.requested": {
       "value": "g8e.v1.operator.command.cancel.requested",
       "_go_const": "OperatorCommandCancelRequested",
-      "_python_const": "OPERATOR_COMMAND_CANCEL_REQUESTED"
+      "_python_const": "OPERATOR_COMMAND_CANCEL_REQUESTED",
+      "_go_alias": "Command.CancelRequested"
     },
     "operator.command.cancel.acknowledged": {
       "value": "g8e.v1.operator.command.cancel.acknowledged",
       "_go_const": "OperatorCommandCancelAcknowledged",
-      "_python_const": "OPERATOR_COMMAND_CANCEL_ACKNOWLEDGED"
+      "_python_const": "OPERATOR_COMMAND_CANCEL_ACKNOWLEDGED",
+      "_go_alias": "Command.CancelAcknowledged"
     },
     "operator.command.cancel.failed": {
       "value": "g8e.v1.operator.command.cancel.failed",
       "_go_const": "OperatorCommandCancelFailed",
-      "_python_const": "OPERATOR_COMMAND_CANCEL_FAILED"
+      "_python_const": "OPERATOR_COMMAND_CANCEL_FAILED",
+      "_go_alias": "Command.CancelFailed"
     },
     "operator.command.approval.requested": {
       "value": "g8e.v1.operator.command.approval.requested",
       "_go_const": "OperatorCommandApprovalRequested",
-      "_python_const": "OPERATOR_COMMAND_APPROVAL_REQUESTED"
+      "_python_const": "OPERATOR_COMMAND_APPROVAL_REQUESTED",
+      "_go_alias": "Command.ApprovalRequested"
     },
     "operator.command.approval.granted": {
       "value": "g8e.v1.operator.command.approval.granted",
       "_go_const": "OperatorCommandApprovalGranted",
-      "_python_const": "OPERATOR_COMMAND_APPROVAL_GRANTED"
+      "_python_const": "OPERATOR_COMMAND_APPROVAL_GRANTED",
+      "_go_alias": "Command.ApprovalGranted"
     },
     "operator.command.approval.rejected": {
       "value": "g8e.v1.operator.command.approval.rejected",
       "_go_const": "OperatorCommandApprovalRejected",
-      "_python_const": "OPERATOR_COMMAND_APPROVAL_REJECTED"
+      "_python_const": "OPERATOR_COMMAND_APPROVAL_REJECTED",
+      "_go_alias": "Command.ApprovalRejected"
     },
     "operator.command.approval.preparing": {
       "value": "g8e.v1.operator.command.approval.preparing",
       "_go_const": "OperatorCommandApprovalPreparing",
-      "_python_const": "OPERATOR_COMMAND_APPROVAL_PREPARING"
+      "_python_const": "OPERATOR_COMMAND_APPROVAL_PREPARING",
+      "_go_alias": "Command.ApprovalPreparing"
     },
     "operator.stream.approval.requested": {
       "value": "g8e.v1.operator.stream.approval.requested",
       "_go_const": "OperatorStreamApprovalRequested",
-      "_python_const": "OPERATOR_STREAM_APPROVAL_REQUESTED"
+      "_python_const": "OPERATOR_STREAM_APPROVAL_REQUESTED",
+      "_go_alias": "StreamApproval.Requested"
     },
     "operator.stream.approval.granted": {
       "value": "g8e.v1.operator.stream.approval.granted",
       "_go_const": "OperatorStreamApprovalGranted",
-      "_python_const": "OPERATOR_STREAM_APPROVAL_GRANTED"
+      "_python_const": "OPERATOR_STREAM_APPROVAL_GRANTED",
+      "_go_alias": "StreamApproval.Granted"
     },
     "operator.stream.approval.rejected": {
       "value": "g8e.v1.operator.stream.approval.rejected",
       "_go_const": "OperatorStreamApprovalRejected",
-      "_python_const": "OPERATOR_STREAM_APPROVAL_REJECTED"
+      "_python_const": "OPERATOR_STREAM_APPROVAL_REJECTED",
+      "_go_alias": "StreamApproval.Rejected"
     },
     "operator.file.edit.requested": {
       "value": "g8e.v1.operator.file.edit.requested",
       "_go_const": "OperatorFileEditRequested",
       "_python_const": "OPERATOR_FILE_EDIT_REQUESTED",
-      "_uap_action": "FILE_EDIT"
+      "_uap_action": "FILE_EDIT",
+      "_go_alias": "FileEdit.Requested"
     },
     "operator.file.edit.started": {
       "value": "g8e.v1.operator.file.edit.started",
       "_go_const": "OperatorFileEditStarted",
-      "_python_const": "OPERATOR_FILE_EDIT_STARTED"
+      "_python_const": "OPERATOR_FILE_EDIT_STARTED",
+      "_go_alias": "FileEdit.Started"
     },
     "operator.file.edit.completed": {
       "value": "g8e.v1.operator.file.edit.completed",
       "_go_const": "OperatorFileEditCompleted",
       "_python_const": "OPERATOR_FILE_EDIT_COMPLETED",
-      "_uap_result_action": "FILE_EDIT_RESULT"
+      "_uap_result_action": "FILE_EDIT_RESULT",
+      "_go_alias": "FileEdit.Completed"
     },
     "operator.file.edit.failed": {
       "value": "g8e.v1.operator.file.edit.failed",
       "_go_const": "OperatorFileEditFailed",
       "_python_const": "OPERATOR_FILE_EDIT_FAILED",
-      "_uap_result_action": "FILE_EDIT_RESULT"
+      "_uap_result_action": "FILE_EDIT_RESULT",
+      "_go_alias": "FileEdit.Failed"
     },
     "operator.file.edit.timeout": {
       "value": "g8e.v1.operator.file.edit.timeout",
       "_go_const": "OperatorFileEditTimeout",
-      "_python_const": "OPERATOR_FILE_EDIT_TIMEOUT"
+      "_python_const": "OPERATOR_FILE_EDIT_TIMEOUT",
+      "_go_alias": "FileEdit.Timeout"
     },
     "operator.file.edit.approval.requested": {
       "value": "g8e.v1.operator.file.edit.approval.requested",
       "_go_const": "OperatorFileEditApprovalRequested",
-      "_python_const": "OPERATOR_FILE_EDIT_APPROVAL_REQUESTED"
+      "_python_const": "OPERATOR_FILE_EDIT_APPROVAL_REQUESTED",
+      "_go_alias": "FileEdit.ApprovalRequested"
     },
     "operator.file.edit.approval.granted": {
       "value": "g8e.v1.operator.file.edit.approval.granted",
       "_go_const": "OperatorFileEditApprovalGranted",
-      "_python_const": "OPERATOR_FILE_EDIT_APPROVAL_GRANTED"
+      "_python_const": "OPERATOR_FILE_EDIT_APPROVAL_GRANTED",
+      "_go_alias": "FileEdit.ApprovalGranted"
     },
     "operator.file.edit.approval.rejected": {
       "value": "g8e.v1.operator.file.edit.approval.rejected",
       "_go_const": "OperatorFileEditApprovalRejected",
-      "_python_const": "OPERATOR_FILE_EDIT_APPROVAL_REJECTED"
+      "_python_const": "OPERATOR_FILE_EDIT_APPROVAL_REJECTED",
+      "_go_alias": "FileEdit.ApprovalRejected"
     },
     "operator.file.edit.approval.feedback": {
       "value": "g8e.v1.operator.file.edit.approval.feedback",
       "_go_const": "OperatorFileEditApprovalFeedback",
-      "_python_const": "OPERATOR_FILE_EDIT_APPROVAL_FEEDBACK"
+      "_python_const": "OPERATOR_FILE_EDIT_APPROVAL_FEEDBACK",
+      "_go_alias": "FileEdit.ApprovalFeedback"
     },
     "operator.file.history.fetch.started": {
       "value": "g8e.v1.operator.file.history.fetch.started",
       "_go_const": "OperatorFileHistoryFetchStarted",
-      "_python_const": "OPERATOR_FILE_HISTORY_FETCH_STARTED"
+      "_python_const": "OPERATOR_FILE_HISTORY_FETCH_STARTED",
+      "_go_alias": "FetchFileHistory.Started"
     },
     "operator.file.history.fetch.requested": {
       "value": "g8e.v1.operator.file.history.fetch.requested",
       "_go_const": "OperatorFileHistoryFetchRequested",
       "_python_const": "OPERATOR_FILE_HISTORY_FETCH_REQUESTED",
-      "_uap_action": "FETCH_FILE_HISTORY"
+      "_uap_action": "FETCH_FILE_HISTORY",
+      "_go_alias": "FetchFileHistory.Requested"
     },
     "operator.file.history.fetch.received": {
       "value": "g8e.v1.operator.file.history.fetch.received",
       "_go_const": "OperatorFileHistoryFetchReceived",
-      "_python_const": "OPERATOR_FILE_HISTORY_FETCH_RECEIVED"
+      "_python_const": "OPERATOR_FILE_HISTORY_FETCH_RECEIVED",
+      "_go_alias": "FetchFileHistory.Received"
     },
     "operator.file.history.fetch.completed": {
       "value": "g8e.v1.operator.file.history.fetch.completed",
       "_go_const": "OperatorFileHistoryFetchCompleted",
-      "_python_const": "OPERATOR_FILE_HISTORY_FETCH_COMPLETED"
+      "_python_const": "OPERATOR_FILE_HISTORY_FETCH_COMPLETED",
+      "_go_alias": "FetchFileHistory.Completed"
     },
     "operator.file.history.fetch.failed": {
       "value": "g8e.v1.operator.file.history.fetch.failed",
       "_go_const": "OperatorFileHistoryFetchFailed",
-      "_python_const": "OPERATOR_FILE_HISTORY_FETCH_FAILED"
+      "_python_const": "OPERATOR_FILE_HISTORY_FETCH_FAILED",
+      "_go_alias": "FetchFileHistory.Failed"
     },
     "operator.file.diff.fetch.started": {
       "value": "g8e.v1.operator.file.diff.fetch.started",
       "_go_const": "OperatorFileDiffFetchStarted",
-      "_python_const": "OPERATOR_FILE_DIFF_FETCH_STARTED"
+      "_python_const": "OPERATOR_FILE_DIFF_FETCH_STARTED",
+      "_go_alias": "FetchFileDiff.Started"
     },
     "operator.file.diff.fetch.requested": {
       "value": "g8e.v1.operator.file.diff.fetch.requested",
       "_go_const": "OperatorFileDiffFetchRequested",
-      "_python_const": "OPERATOR_FILE_DIFF_FETCH_REQUESTED"
+      "_python_const": "OPERATOR_FILE_DIFF_FETCH_REQUESTED",
+      "_go_alias": "FetchFileDiff.Requested"
     },
     "operator.file.diff.fetch.received": {
       "value": "g8e.v1.operator.file.diff.fetch.received",
       "_go_const": "OperatorFileDiffFetchReceived",
-      "_python_const": "OPERATOR_FILE_DIFF_FETCH_RECEIVED"
+      "_python_const": "OPERATOR_FILE_DIFF_FETCH_RECEIVED",
+      "_go_alias": "FetchFileDiff.Received"
     },
     "operator.file.diff.fetch.completed": {
       "value": "g8e.v1.operator.file.diff.fetch.completed",
       "_go_const": "OperatorFileDiffFetchCompleted",
-      "_python_const": "OPERATOR_FILE_DIFF_FETCH_COMPLETED"
+      "_python_const": "OPERATOR_FILE_DIFF_FETCH_COMPLETED",
+      "_go_alias": "FetchFileDiff.Completed"
     },
     "operator.file.diff.fetch.failed": {
       "value": "g8e.v1.operator.file.diff.fetch.failed",
       "_go_const": "OperatorFileDiffFetchFailed",
-      "_python_const": "OPERATOR_FILE_DIFF_FETCH_FAILED"
+      "_python_const": "OPERATOR_FILE_DIFF_FETCH_FAILED",
+      "_go_alias": "FetchFileDiff.Failed"
     },
     "operator.file.restore.requested": {
       "value": "g8e.v1.operator.file.restore.requested",
       "_go_const": "OperatorFileRestoreRequested",
       "_python_const": "OPERATOR_FILE_RESTORE_REQUESTED",
-      "_uap_action": "RESTORE_FILE"
+      "_uap_action": "RESTORE_FILE",
+      "_go_alias": "RestoreFile.Requested"
     },
     "operator.file.restore.received": {
       "value": "g8e.v1.operator.file.restore.received",
       "_go_const": "OperatorFileRestoreReceived",
-      "_python_const": "OPERATOR_FILE_RESTORE_RECEIVED"
+      "_python_const": "OPERATOR_FILE_RESTORE_RECEIVED",
+      "_go_alias": "RestoreFile.Received"
     },
     "operator.file.restore.completed": {
       "value": "g8e.v1.operator.file.restore.completed",
       "_go_const": "OperatorFileRestoreCompleted",
-      "_python_const": "OPERATOR_FILE_RESTORE_COMPLETED"
+      "_python_const": "OPERATOR_FILE_RESTORE_COMPLETED",
+      "_go_alias": "RestoreFile.Completed"
     },
     "operator.file.restore.failed": {
       "value": "g8e.v1.operator.file.restore.failed",
       "_go_const": "OperatorFileRestoreFailed",
-      "_python_const": "OPERATOR_FILE_RESTORE_FAILED"
+      "_python_const": "OPERATOR_FILE_RESTORE_FAILED",
+      "_go_alias": "RestoreFile.Failed"
     },
     "operator.filesystem.list.started": {
       "value": "g8e.v1.operator.filesystem.list.started",
       "_go_const": "OperatorFilesystemListStarted",
-      "_python_const": "OPERATOR_FILESYSTEM_LIST_STARTED"
+      "_python_const": "OPERATOR_FILESYSTEM_LIST_STARTED",
+      "_go_alias": "FsList.Started"
     },
     "operator.filesystem.list.requested": {
       "value": "g8e.v1.operator.filesystem.list.requested",
       "_go_const": "OperatorFilesystemListRequested",
       "_python_const": "OPERATOR_FILESYSTEM_LIST_REQUESTED",
-      "_uap_action": "FS_LIST"
+      "_uap_action": "FS_LIST",
+      "_go_alias": "FsList.Requested"
     },
     "operator.filesystem.list.received": {
       "value": "g8e.v1.operator.filesystem.list.received",
       "_go_const": "OperatorFilesystemListReceived",
-      "_python_const": "OPERATOR_FILESYSTEM_LIST_RECEIVED"
+      "_python_const": "OPERATOR_FILESYSTEM_LIST_RECEIVED",
+      "_go_alias": "FsList.Received"
     },
     "operator.filesystem.list.completed": {
       "value": "g8e.v1.operator.filesystem.list.completed",
       "_go_const": "OperatorFilesystemListCompleted",
       "_python_const": "OPERATOR_FILESYSTEM_LIST_COMPLETED",
-      "_uap_result_action": "FS_LIST_RESULT"
+      "_uap_result_action": "FS_LIST_RESULT",
+      "_go_alias": "FsList.Completed"
     },
     "operator.filesystem.list.failed": {
       "value": "g8e.v1.operator.filesystem.list.failed",
       "_go_const": "OperatorFilesystemListFailed",
       "_python_const": "OPERATOR_FILESYSTEM_LIST_FAILED",
-      "_uap_result_action": "FS_LIST_RESULT"
+      "_uap_result_action": "FS_LIST_RESULT",
+      "_go_alias": "FsList.Failed"
     },
     "operator.filesystem.read.started": {
       "value": "g8e.v1.operator.filesystem.read.started",
       "_go_const": "OperatorFilesystemReadStarted",
-      "_python_const": "OPERATOR_FILESYSTEM_READ_STARTED"
+      "_python_const": "OPERATOR_FILESYSTEM_READ_STARTED",
+      "_go_alias": "FsRead.Started"
     },
     "operator.filesystem.read.requested": {
       "value": "g8e.v1.operator.filesystem.read.requested",
       "_go_const": "OperatorFilesystemReadRequested",
       "_python_const": "OPERATOR_FILESYSTEM_READ_REQUESTED",
-      "_uap_action": "FS_READ"
+      "_uap_action": "FS_READ",
+      "_go_alias": "FsRead.Requested"
     },
     "operator.filesystem.read.received": {
       "value": "g8e.v1.operator.filesystem.read.received",
       "_go_const": "OperatorFilesystemReadReceived",
-      "_python_const": "OPERATOR_FILESYSTEM_READ_RECEIVED"
+      "_python_const": "OPERATOR_FILESYSTEM_READ_RECEIVED",
+      "_go_alias": "FsRead.Received"
     },
     "operator.filesystem.read.completed": {
       "value": "g8e.v1.operator.filesystem.read.completed",
       "_go_const": "OperatorFilesystemReadCompleted",
-      "_python_const": "OPERATOR_FILESYSTEM_READ_COMPLETED"
+      "_python_const": "OPERATOR_FILESYSTEM_READ_COMPLETED",
+      "_go_alias": "FsRead.Completed"
     },
     "operator.filesystem.read.failed": {
       "value": "g8e.v1.operator.filesystem.read.failed",
       "_go_const": "OperatorFilesystemReadFailed",
-      "_python_const": "OPERATOR_FILESYSTEM_READ_FAILED"
+      "_python_const": "OPERATOR_FILESYSTEM_READ_FAILED",
+      "_go_alias": "FsRead.Failed"
     },
     "operator.filesystem.grep.started": {
       "value": "g8e.v1.operator.filesystem.grep.started",
       "_go_const": "OperatorFilesystemGrepStarted",
-      "_python_const": "OPERATOR_FILESYSTEM_GREP_STARTED"
+      "_python_const": "OPERATOR_FILESYSTEM_GREP_STARTED",
+      "_go_alias": "FsGrep.Started"
     },
     "operator.filesystem.grep.requested": {
       "value": "g8e.v1.operator.filesystem.grep.requested",
       "_go_const": "OperatorFilesystemGrepRequested",
       "_python_const": "OPERATOR_FILESYSTEM_GREP_REQUESTED",
-      "_uap_action": "FS_GREP"
+      "_uap_action": "FS_GREP",
+      "_go_alias": "FsGrep.Requested"
     },
     "operator.filesystem.grep.received": {
       "value": "g8e.v1.operator.filesystem.grep.received",
       "_go_const": "OperatorFilesystemGrepReceived",
-      "_python_const": "OPERATOR_FILESYSTEM_GREP_RECEIVED"
+      "_python_const": "OPERATOR_FILESYSTEM_GREP_RECEIVED",
+      "_go_alias": "FsGrep.Received"
     },
     "operator.filesystem.grep.completed": {
       "value": "g8e.v1.operator.filesystem.grep.completed",
       "_go_const": "OperatorFilesystemGrepCompleted",
       "_python_const": "OPERATOR_FILESYSTEM_GREP_COMPLETED",
-      "_uap_result_action": "FS_GREP_RESULT"
+      "_uap_result_action": "FS_GREP_RESULT",
+      "_go_alias": "FsGrep.Completed"
     },
     "operator.filesystem.grep.failed": {
       "value": "g8e.v1.operator.filesystem.grep.failed",
       "_go_const": "OperatorFilesystemGrepFailed",
       "_python_const": "OPERATOR_FILESYSTEM_GREP_FAILED",
-      "_uap_result_action": "FS_GREP_RESULT"
+      "_uap_result_action": "FS_GREP_RESULT",
+      "_go_alias": "FsGrep.Failed"
     },
     "operator.logs.fetch.requested": {
       "value": "g8e.v1.operator.logs.fetch.requested",
       "_go_const": "OperatorLogsFetchRequested",
       "_python_const": "OPERATOR_LOGS_FETCH_REQUESTED",
-      "_uap_action": "FETCH_LOGS"
+      "_uap_action": "FETCH_LOGS",
+      "_go_alias": "FetchLogs.Requested"
     },
     "operator.logs.fetch.received": {
       "value": "g8e.v1.operator.logs.fetch.received",
       "_go_const": "OperatorLogsFetchReceived",
-      "_python_const": "OPERATOR_LOGS_FETCH_RECEIVED"
+      "_python_const": "OPERATOR_LOGS_FETCH_RECEIVED",
+      "_go_alias": "FetchLogs.Received"
     },
     "operator.logs.fetch.completed": {
       "value": "g8e.v1.operator.logs.fetch.completed",
       "_go_const": "OperatorLogsFetchCompleted",
-      "_python_const": "OPERATOR_LOGS_FETCH_COMPLETED"
+      "_python_const": "OPERATOR_LOGS_FETCH_COMPLETED",
+      "_go_alias": "FetchLogs.Completed"
     },
     "operator.logs.fetch.failed": {
       "value": "g8e.v1.operator.logs.fetch.failed",
       "_go_const": "OperatorLogsFetchFailed",
-      "_python_const": "OPERATOR_LOGS_FETCH_FAILED"
+      "_python_const": "OPERATOR_LOGS_FETCH_FAILED",
+      "_go_alias": "FetchLogs.Failed"
     },
     "operator.history.fetch.requested": {
       "value": "g8e.v1.operator.history.fetch.requested",
       "_go_const": "OperatorHistoryFetchRequested",
       "_python_const": "OPERATOR_HISTORY_FETCH_REQUESTED",
-      "_uap_action": "FETCH_HISTORY"
+      "_uap_action": "FETCH_HISTORY",
+      "_go_alias": "FetchHistory.Requested"
     },
     "operator.history.fetch.received": {
       "value": "g8e.v1.operator.history.fetch.received",
       "_go_const": "OperatorHistoryFetchReceived",
-      "_python_const": "OPERATOR_HISTORY_FETCH_RECEIVED"
+      "_python_const": "OPERATOR_HISTORY_FETCH_RECEIVED",
+      "_go_alias": "FetchHistory.Received"
     },
     "operator.history.fetch.completed": {
       "value": "g8e.v1.operator.history.fetch.completed",
       "_go_const": "OperatorHistoryFetchCompleted",
-      "_python_const": "OPERATOR_HISTORY_FETCH_COMPLETED"
+      "_python_const": "OPERATOR_HISTORY_FETCH_COMPLETED",
+      "_go_alias": "FetchHistory.Completed"
     },
     "operator.history.fetch.failed": {
       "value": "g8e.v1.operator.history.fetch.failed",
       "_go_const": "OperatorHistoryFetchFailed",
-      "_python_const": "OPERATOR_HISTORY_FETCH_FAILED"
+      "_python_const": "OPERATOR_HISTORY_FETCH_FAILED",
+      "_go_alias": "FetchHistory.Failed"
     },
     "operator.intent.requested": {
       "value": "g8e.v1.operator.intent.requested",
       "_go_const": "OperatorIntentRequested",
       "_python_const": "OPERATOR_INTENT_REQUESTED",
-      "_uap_action": "GRANT_INTENT"
+      "_uap_action": "GRANT_INTENT",
+      "_go_alias": "Intent.Requested"
     },
     "operator.intent.granted": {
       "value": "g8e.v1.operator.intent.granted",
       "_go_const": "OperatorIntentGranted",
-      "_python_const": "OPERATOR_INTENT_GRANTED"
+      "_python_const": "OPERATOR_INTENT_GRANTED",
+      "_go_alias": "Intent.Granted"
     },
     "operator.intent.denied": {
       "value": "g8e.v1.operator.intent.denied",
       "_go_const": "OperatorIntentDenied",
-      "_python_const": "OPERATOR_INTENT_DENIED"
+      "_python_const": "OPERATOR_INTENT_DENIED",
+      "_go_alias": "Intent.Denied"
     },
     "operator.intent.revoked": {
       "value": "g8e.v1.operator.intent.revoked",
       "_go_const": "OperatorIntentRevoked",
-      "_python_const": "OPERATOR_INTENT_REVOKED"
+      "_python_const": "OPERATOR_INTENT_REVOKED",
+      "_go_alias": "Intent.Revoked"
     },
     "operator.intent.revoke.requested": {
       "value": "g8e.v1.operator.intent.revoke.requested",
       "_go_const": "OperatorIntentRevokeRequested",
       "_python_const": "OPERATOR_INTENT_REVOKE_REQUESTED",
-      "_uap_action": "REVOKE_INTENT"
+      "_uap_action": "REVOKE_INTENT",
+      "_go_alias": "Intent.RevokeRequested"
     },
     "operator.intent.approval.requested": {
       "value": "g8e.v1.operator.intent.approval.requested",
       "_go_const": "OperatorIntentApprovalRequested",
-      "_python_const": "OPERATOR_INTENT_APPROVAL_REQUESTED"
+      "_python_const": "OPERATOR_INTENT_APPROVAL_REQUESTED",
+      "_go_alias": "Intent.ApprovalRequested"
     },
     "operator.intent.approval.granted": {
       "value": "g8e.v1.operator.intent.approval.granted",
       "_go_const": "OperatorIntentApprovalGranted",
-      "_python_const": "OPERATOR_INTENT_APPROVAL_GRANTED"
+      "_python_const": "OPERATOR_INTENT_APPROVAL_GRANTED",
+      "_go_alias": "Intent.ApprovalGranted"
     },
     "operator.intent.approval.rejected": {
       "value": "g8e.v1.operator.intent.approval.rejected",
       "_go_const": "OperatorIntentApprovalRejected",
-      "_python_const": "OPERATOR_INTENT_APPROVAL_REJECTED"
+      "_python_const": "OPERATOR_INTENT_APPROVAL_REJECTED",
+      "_go_alias": "Intent.ApprovalRejected"
     },
     "operator.network.ping.requested": {
       "value": "g8e.v1.operator.network.ping.requested",
       "_go_const": "OperatorNetworkPingRequested",
-      "_python_const": "OPERATOR_NETWORK_PING_REQUESTED"
+      "_python_const": "OPERATOR_NETWORK_PING_REQUESTED",
+      "_go_alias": "NetworkPing.Requested"
     },
     "operator.network.ping.received": {
       "value": "g8e.v1.operator.network.ping.received",
       "_go_const": "OperatorNetworkPingReceived",
-      "_python_const": "OPERATOR_NETWORK_PING_RECEIVED"
+      "_python_const": "OPERATOR_NETWORK_PING_RECEIVED",
+      "_go_alias": "NetworkPing.Received"
     },
     "operator.network.ping.completed": {
       "value": "g8e.v1.operator.network.ping.completed",
       "_go_const": "OperatorNetworkPingCompleted",
-      "_python_const": "OPERATOR_NETWORK_PING_COMPLETED"
+      "_python_const": "OPERATOR_NETWORK_PING_COMPLETED",
+      "_go_alias": "NetworkPing.Completed"
     },
     "operator.network.ping.failed": {
       "value": "g8e.v1.operator.network.ping.failed",
       "_go_const": "OperatorNetworkPingFailed",
-      "_python_const": "OPERATOR_NETWORK_PING_FAILED"
+      "_python_const": "OPERATOR_NETWORK_PING_FAILED",
+      "_go_alias": "NetworkPing.Failed"
     },
     "operator.network.port.check.requested": {
       "value": "g8e.v1.operator.network.port.check.requested",
       "_go_const": "OperatorNetworkPortCheckRequested",
       "_python_const": "OPERATOR_NETWORK_PORT_CHECK_REQUESTED",
-      "_uap_action": "PORT_CHECK"
+      "_uap_action": "PORT_CHECK",
+      "_go_alias": "PortCheck.Requested"
     },
     "operator.network.port.check.started": {
       "value": "g8e.v1.operator.network.port.check.started",
       "_go_const": "OperatorNetworkPortCheckStarted",
-      "_python_const": "OPERATOR_NETWORK_PORT_CHECK_STARTED"
+      "_python_const": "OPERATOR_NETWORK_PORT_CHECK_STARTED",
+      "_go_alias": "PortCheck.Started"
     },
     "operator.network.port.check.received": {
       "value": "g8e.v1.operator.network.port.check.received",
       "_go_const": "OperatorNetworkPortCheckReceived",
-      "_python_const": "OPERATOR_NETWORK_PORT_CHECK_RECEIVED"
+      "_python_const": "OPERATOR_NETWORK_PORT_CHECK_RECEIVED",
+      "_go_alias": "PortCheck.Received"
     },
     "operator.network.port.check.completed": {
       "value": "g8e.v1.operator.network.port.check.completed",
       "_go_const": "OperatorNetworkPortCheckCompleted",
-      "_python_const": "OPERATOR_NETWORK_PORT_CHECK_COMPLETED"
+      "_python_const": "OPERATOR_NETWORK_PORT_CHECK_COMPLETED",
+      "_go_alias": "PortCheck.Completed"
     },
     "operator.network.port.check.failed": {
       "value": "g8e.v1.operator.network.port.check.failed",
       "_go_const": "OperatorNetworkPortCheckFailed",
-      "_python_const": "OPERATOR_NETWORK_PORT_CHECK_FAILED"
+      "_python_const": "OPERATOR_NETWORK_PORT_CHECK_FAILED",
+      "_go_alias": "PortCheck.Failed"
     },
     "operator.audit.user.recorded": {
       "value": "g8e.v1.operator.audit.user.recorded",
       "_go_const": "OperatorAuditUserRecorded",
-      "_python_const": "OPERATOR_AUDIT_USER_RECORDED"
+      "_python_const": "OPERATOR_AUDIT_USER_RECORDED",
+      "_go_alias": "Audit.UserMsg"
     },
     "operator.audit.ai.recorded": {
       "value": "g8e.v1.operator.audit.ai.recorded",
       "_go_const": "OperatorAuditAiRecorded",
-      "_python_const": "OPERATOR_AUDIT_AI_RECORDED"
+      "_python_const": "OPERATOR_AUDIT_AI_RECORDED",
+      "_go_alias": "Audit.AIMsg"
     },
     "operator.audit.command.recorded": {
       "value": "g8e.v1.operator.audit.command.recorded",
       "_go_const": "OperatorAuditCommandRecorded",
-      "_python_const": "OPERATOR_AUDIT_COMMAND_RECORDED"
+      "_python_const": "OPERATOR_AUDIT_COMMAND_RECORDED",
+      "_go_alias": "Audit.Command"
     },
     "operator.audit.direct.command.recorded": {
       "value": "g8e.v1.operator.audit.direct.command.recorded",
       "_go_const": "OperatorAuditDirectCommandRecorded",
-      "_python_const": "OPERATOR_AUDIT_DIRECT_COMMAND_RECORDED"
+      "_python_const": "OPERATOR_AUDIT_DIRECT_COMMAND_RECORDED",
+      "_go_alias": "Audit.DirectCmd"
     },
     "operator.audit.direct.command.result.recorded": {
       "value": "g8e.v1.operator.audit.direct.command.result.recorded",
       "_go_const": "OperatorAuditDirectCommandResultRecorded",
-      "_python_const": "OPERATOR_AUDIT_DIRECT_COMMAND_RESULT_RECORDED"
+      "_python_const": "OPERATOR_AUDIT_DIRECT_COMMAND_RESULT_RECORDED",
+      "_go_alias": "Audit.DirectCmdResult"
     },
     "operator.bootstrap.requested": {
       "value": "g8e.v1.operator.bootstrap.requested",
       "_go_const": "OperatorBootstrapRequested",
-      "_python_const": "OPERATOR_BOOTSTRAP_REQUESTED"
+      "_python_const": "OPERATOR_BOOTSTRAP_REQUESTED",
+      "_go_alias": "Bootstrap.Requested"
     },
     "operator.bootstrap.received": {
       "value": "g8e.v1.operator.bootstrap.received",
       "_go_const": "OperatorBootstrapReceived",
-      "_python_const": "OPERATOR_BOOTSTRAP_RECEIVED"
+      "_python_const": "OPERATOR_BOOTSTRAP_RECEIVED",
+      "_go_alias": "Bootstrap.Received"
     },
     "operator.bootstrap.completed": {
       "value": "g8e.v1.operator.bootstrap.completed",
       "_go_const": "OperatorBootstrapCompleted",
-      "_python_const": "OPERATOR_BOOTSTRAP_COMPLETED"
+      "_python_const": "OPERATOR_BOOTSTRAP_COMPLETED",
+      "_go_alias": "Bootstrap.Completed"
     },
     "operator.bootstrap.failed": {
       "value": "g8e.v1.operator.bootstrap.failed",
       "_go_const": "OperatorBootstrapFailed",
-      "_python_const": "OPERATOR_BOOTSTRAP_FAILED"
+      "_python_const": "OPERATOR_BOOTSTRAP_FAILED",
+      "_go_alias": "Bootstrap.Failed"
     },
     "operator.bootstrap.config.received": {
       "value": "g8e.v1.operator.bootstrap.config.received",
       "_go_const": "OperatorBootstrapConfigReceived",
-      "_python_const": "OPERATOR_BOOTSTRAP_CONFIG_RECEIVED"
+      "_python_const": "OPERATOR_BOOTSTRAP_CONFIG_RECEIVED",
+      "_go_alias": "BootstrapConfigReceived"
     },
     "operator.bound": {
       "value": "g8e.v1.operator.bound",
       "_go_const": "OperatorBound",
-      "_python_const": "OPERATOR_BOUND"
+      "_python_const": "OPERATOR_BOUND",
+      "_go_alias": "Bound"
     },
     "operator.unbound": {
       "value": "g8e.v1.operator.unbound",
       "_go_const": "OperatorUnbound",
-      "_python_const": "OPERATOR_UNBOUND"
+      "_python_const": "OPERATOR_UNBOUND",
+      "_go_alias": "Unbound"
     },
     "operator.terminal.thinking.append": {
       "value": "g8e.v1.operator.terminal.thinking.append",
       "_go_const": "OperatorTerminalThinkingAppend",
-      "_python_const": "OPERATOR_TERMINAL_THINKING_APPEND"
+      "_python_const": "OPERATOR_TERMINAL_THINKING_APPEND",
+      "_go_alias": "TerminalThinkingAppend"
     },
     "operator.terminal.thinking.complete": {
       "value": "g8e.v1.operator.terminal.thinking.complete",
       "_go_const": "OperatorTerminalThinkingComplete",
-      "_python_const": "OPERATOR_TERMINAL_THINKING_COMPLETE"
+      "_python_const": "OPERATOR_TERMINAL_THINKING_COMPLETE",
+      "_go_alias": "TerminalThinkingComplete"
     },
     "operator.terminal.approval.denied": {
       "value": "g8e.v1.operator.terminal.approval.denied",
       "_go_const": "OperatorTerminalApprovalDenied",
-      "_python_const": "OPERATOR_TERMINAL_APPROVAL_DENIED"
+      "_python_const": "OPERATOR_TERMINAL_APPROVAL_DENIED",
+      "_go_alias": "TerminalApprovalDenied"
     },
     "operator.terminal.auth.state.changed": {
       "value": "g8e.v1.operator.terminal.auth.state.changed",
       "_go_const": "OperatorTerminalAuthStateChanged",
-      "_python_const": "OPERATOR_TERMINAL_AUTH_STATE_CHANGED"
+      "_python_const": "OPERATOR_TERMINAL_AUTH_STATE_CHANGED",
+      "_go_alias": "TerminalAuthStateChanged"
     },
     "ai.agent.continue.approval.requested": {
       "value": "g8e.v1.ai.agent.continue.approval.requested",

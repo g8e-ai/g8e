@@ -87,6 +87,10 @@ var EnvVar = struct {
 	OperatorID EnvVarKey
 	UserID EnvVarKey
 	CLISessionID EnvVarKey
+	ProtocolDir EnvVarKey
+	TestTmpDir EnvVarKey
+	TestOperatorPubSubURL EnvVarKey
+	StrictConstantsLint EnvVarKey
 }{
 	LLMMaxTokens: "G8E_LLM_MAX_TOKENS",
 	LLMCommandGenEnabled: "G8E_LLM_COMMAND_GEN_ENABLED",
@@ -154,4 +158,8 @@ var EnvVar = struct {
 	OperatorID: "G8E_OPERATOR_ID",
 	UserID: "G8E_USER_ID",
 	CLISessionID: "G8E_CLI_SESSION_ID",
+	ProtocolDir: "G8E_PROTOCOL_DIR",
+	TestTmpDir: "G8E_TEST_TMP_DIR",
+	TestOperatorPubSubURL: "G8E_TEST_OPERATOR_PUBSUB_URL",
+	StrictConstantsLint: "G8E_STRICT_CONSTANTS_LINT",
 }

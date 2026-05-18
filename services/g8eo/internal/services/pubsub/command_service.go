@@ -22,12 +22,12 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	execution "github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
 	vault "github.com/g8e-ai/g8e/services/g8eo/internal/services/vault"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -131,7 +131,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		justification = "No justification provided"
 	}
 
-	vaultMode := protoCmd.SentinelMode
+	vaultMode := constants.VaultMode(protoCmd.SentinelMode)
 	if vaultMode == "" {
 		vaultMode = constants.Status.VaultMode.Raw
 	}
@@ -254,7 +254,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		event := &storage.Event{
 			OperatorSessionID:   cs.config.OperatorSessionId,
 			Timestamp:           time.Now().UTC(),
-			Type:                storage.EventTypeCmdExec,
+			Type:                constants.Event.Operator.Audit.Command,
 			ContentText:         justification,
 			CommandRaw:          command,
 			CommandExitCode:     result.ReturnCode,
@@ -310,6 +310,41 @@ func (cs *CommandService) runSentinelGuard(execReq *models.ExecutionRequestPaylo
 	fullCommand := cs.execution.BuildCommandString(execReq.Command, execReq.Args)
 	analysis := cs.sentinel.AnalyzeCommand(fullCommand)
 
+	if execReq.Intent != "" {
+		if !cs.sentinel.ValidateIntent(constants.CloudIntent(execReq.Intent)) {
+			cs.logger.Error("SENTINEL BLOCKED: Unauthorized intent requested",
+				"intent", execReq.Intent,
+				"execution_id", execReq.ExecutionID)
+
+			exitCode := 126
+			return sentinelVerdict{
+				blocked: true,
+				blockedResult: &models.ExecutionResultsPayload{
+					ExecutionID:     execReq.ExecutionID,
+					CaseID:          execReq.CaseID,
+					TaskID:          execReq.TaskID,
+					InvestigationID: execReq.InvestigationID,
+					Command:         execReq.Command,
+					Args:            execReq.Args,
+					Status:          constants.ExecutionStatusFailed,
+					ReturnCode:      system.IntPtr(126),
+					Stderr:          fmt.Sprintf("SENTINEL BLOCKED: Unauthorized intent requested: %s", execReq.Intent),
+					ErrorMessage:    system.StringPtr(fmt.Sprintf("Command blocked by sentinel.Sentinel: Unauthorized intent: %s", execReq.Intent)),
+					ErrorType:       system.StringPtr("sentinel_blocked"),
+				},
+				blockedEvent: &storage.Event{
+					OperatorSessionID: cs.config.OperatorSessionId,
+					Timestamp:         time.Now().UTC(),
+					Type:              constants.Event.Operator.Audit.Command,
+					ContentText:       fmt.Sprintf("SENTINEL BLOCKED: Unauthorized intent requested: %s", execReq.Intent),
+					CommandRaw:        fullCommand,
+					CommandExitCode:   &exitCode,
+					CommandStderr:     fmt.Sprintf("Blocked by sentinel.Sentinel: Unauthorized intent requested: %s", execReq.Intent),
+				},
+			}
+		}
+	}
+
 	if !analysis.Safe {
 		cs.logger.Error("SENTINEL BLOCKED: Command failed pre-execution threat analysis",
 			"threat_level", analysis.ThreatLevel,
@@ -337,7 +372,7 @@ func (cs *CommandService) runSentinelGuard(execReq *models.ExecutionRequestPaylo
 			blockedEvent: &storage.Event{
 				OperatorSessionID: cs.config.OperatorSessionId,
 				Timestamp:         time.Now().UTC(),
-				Type:              storage.EventTypeCmdExec,
+				Type:              constants.Event.Operator.Audit.Command,
 				ContentText:       fmt.Sprintf("SENTINEL BLOCKED: %s (threat_level=%s, risk_score=%d)", analysis.BlockReason, analysis.ThreatLevel, analysis.RiskScore),
 				CommandRaw:        analysis.Command,
 				CommandExitCode:   &exitCode,
@@ -502,6 +537,7 @@ func payloadToExecutionRequest(msg PubSubCommandMessage) (*models.ExecutionReque
 		TimeoutSeconds:  timeoutSeconds,
 		RequestedBy:     "g8e-system",
 		Justification:   protoCmd.Justification,
+		Intent:          protoCmd.Intent,
 		SentinelMode:    protoCmd.SentinelMode,
 	}, nil
 }

@@ -391,5 +391,25 @@
     "value": "G8E_CLI_SESSION_ID",
     "_go_const": "CLISessionID",
     "_python_const": "CLI_SESSION_ID"
+  },
+  "G8E_PROTOCOL_DIR": {
+    "value": "G8E_PROTOCOL_DIR",
+    "_go_const": "ProtocolDir",
+    "_python_const": "PROTOCOL_DIR"
+  },
+  "G8E_TEST_TMP_DIR": {
+    "value": "G8E_TEST_TMP_DIR",
+    "_go_const": "TestTmpDir",
+    "_python_const": "TEST_TMP_DIR"
+  },
+  "G8E_TEST_OPERATOR_PUBSUB_URL": {
+    "value": "G8E_TEST_OPERATOR_PUBSUB_URL",
+    "_go_const": "TestOperatorPubSubURL",
+    "_python_const": "TEST_OPERATOR_PUBSUB_URL"
+  },
+  "G8E_STRICT_CONSTANTS_LINT": {
+    "value": "G8E_STRICT_CONSTANTS_LINT",
+    "_go_const": "StrictConstantsLint",
+    "_python_const": "STRICT_CONSTANTS_LINT"
   }
 }

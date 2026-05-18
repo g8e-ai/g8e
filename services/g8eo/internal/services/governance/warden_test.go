@@ -77,13 +77,13 @@ func TestWardenExecuteHappyPath(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-session",
-		ActionType:        constants.ActionTypeExecuteBash,
+		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
 
 	vt := &VerifiedTransaction{
 		Envelope:   envelope,
-		ActionType: envelope.ActionType,
+		ActionType: constants.ActionTypeExecuteBash,
 	}
 
 	// Execute
@@ -146,13 +146,13 @@ func TestWardenExecuteHandlerError(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-session",
-		ActionType:        constants.ActionTypeExecuteBash,
+		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
 
 	vt := &VerifiedTransaction{
 		Envelope:   envelope,
-		ActionType: envelope.ActionType,
+		ActionType: constants.ActionTypeExecuteBash,
 	}
 
 	// Execute
@@ -205,13 +205,13 @@ func TestWardenExecuteAuditWriteFailInitial(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-session",
-		ActionType:        constants.ActionTypeExecuteBash,
+		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
 
 	vt := &VerifiedTransaction{
 		Envelope:   envelope,
-		ActionType: envelope.ActionType,
+		ActionType: constants.ActionTypeExecuteBash,
 	}
 
 	// Execute - should fail before handler is invoked
@@ -238,13 +238,13 @@ func TestWardenExecuteReceiptPersistFail(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-session",
-		ActionType:        constants.ActionTypeExecuteBash,
+		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
 
 	vt := &VerifiedTransaction{
 		Envelope:   envelope,
-		ActionType: envelope.ActionType,
+		ActionType: constants.ActionTypeExecuteBash,
 	}
 
 	// Execute - should fail before handler is invoked
@@ -263,13 +263,13 @@ func TestWardenExecuteMissingSigningKey(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-session",
-		ActionType:        constants.ActionTypeExecuteBash,
+		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
 
 	vt := &VerifiedTransaction{
 		Envelope:   envelope,
-		ActionType: envelope.ActionType,
+		ActionType: constants.ActionTypeExecuteBash,
 	}
 
 	// Execute - should fail immediately
@@ -288,13 +288,13 @@ func TestWardenExecuteMissingExecutionHandler(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-session",
-		ActionType:        constants.ActionTypeExecuteBash,
+		ActionType:        string(constants.ActionTypeExecuteBash),
 		TargetResource:    "localhost",
 	}
 
 	vt := &VerifiedTransaction{
 		Envelope:   envelope,
-		ActionType: envelope.ActionType,
+		ActionType: constants.ActionTypeExecuteBash,
 	}
 
 	// Execute - should fail immediately

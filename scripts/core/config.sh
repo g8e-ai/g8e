@@ -40,6 +40,7 @@ export G8E_ENV_G8EE_URL="${G8E_ENV_G8EE_URL:-G8EE_URL}"
 export G8E_ENV_INTERNAL_HTTP_URL="${G8E_ENV_INTERNAL_HTTP_URL:-G8E_INTERNAL_HTTP_URL}"
 export G8E_ENV_PKIDir="${G8E_ENV_PKIDir:-G8E_PKI_DIR}"
 export G8E_ENV_SECRETS_DIR="${G8E_ENV_SECRETS_DIR:-G8E_SECRETS_DIR}"
+export G8E_ENV_PROTOCOL_DIR="${G8E_ENV_PROTOCOL_DIR:-G8E_PROTOCOL_DIR}"
 
 # Initialize structured configuration variables
 # These variables should be used instead of indirect expansion.

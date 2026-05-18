@@ -40,7 +40,8 @@ func (t *Tribunal) EvaluatePayload(env *uap.UAPEnvelope) error {
 		cmdData = string(jsonBytes)
 
 		// If this is an intent request, extract and validate the specific intent
-		if env.ActionType == string(constants.ActionTypeGrantIntent) || env.ActionType == string(constants.ActionTypeRevokeIntent) {
+		actionType := constants.ActionType(env.ActionType)
+		if actionType == constants.ActionTypeGrantIntent || actionType == constants.ActionTypeRevokeIntent {
 			if v, ok := env.IntentData.Fields["intent"]; ok {
 				intent = constants.CloudIntent(v.GetStringValue())
 			}

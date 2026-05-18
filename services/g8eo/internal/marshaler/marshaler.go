@@ -70,7 +70,12 @@ func ExecutionStatus(s constants.ExecutionStatus) string {
 	return string(s)
 }
 
+// ActionType converts ActionType to string.
+func ActionType(a constants.ActionType) string {
+	return string(a)
+}
+
 // Event converts event-type constants to string for pub/sub and logging.
-func Event(e string) string {
-	return e
+func Event(e constants.EventType) string {
+	return string(e)
 }

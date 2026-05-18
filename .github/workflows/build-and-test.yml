@@ -77,6 +77,25 @@ jobs:
         if: always()
         run: ./g8e platform stop
 
+  constants-lint:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: services/g8eo/go.mod
+          cache-dependency-path: services/g8eo/go.sum
+
+      - name: Run Constants Lint
+        run: go test -v -run TestNoRawStringLiteralsWhereConstantsExist ./internal/contracts
+        working-directory: services/g8eo
+        env:
+          G8E_STRICT_CONSTANTS_LINT: "1"
+
   apps-g8ee:
     runs-on: ubuntu-latest
     timeout-minutes: 45

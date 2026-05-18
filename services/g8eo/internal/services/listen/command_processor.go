@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 )
 
@@ -58,10 +59,17 @@ func (cp *CommandProcessor) Start(ctx context.Context) error {
 	}
 
 	// Initialize TransactionVerifier with all required dependencies
-	knownActionTypes := []string{
-		"EXECUTE_BASH", "FILE_EDIT", "RESTORE_FILE", "SHUTDOWN",
-		"FS_LIST", "FS_READ", "FS_GREP", "PORT_CHECK", "FETCH_LOGS",
-		"EVAL_ANSWER",
+	knownActionTypes := []constants.ActionType{
+		constants.ActionTypeExecuteBash,
+		constants.ActionTypeFileEdit,
+		constants.ActionTypeRestoreFile,
+		constants.ActionTypeShutdown,
+		constants.ActionTypeFsList,
+		constants.ActionTypeFsRead,
+		constants.ActionTypeFsGrep,
+		constants.ActionTypePortCheck,
+		constants.ActionTypeFetchLogs,
+		constants.ActionTypeEvalAnswer,
 	}
 
 	// The governance interfaces from GovernanceDeps need to be converted to the expected interface types.

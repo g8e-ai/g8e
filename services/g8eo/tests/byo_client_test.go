@@ -197,7 +197,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
 		OperatorId:        regResp.OperatorID,
 		OperatorSessionId: regResp.OperatorSessionID,
-		EventType:         constants.Event.Operator.Command.Requested,
+		EventType:         string(constants.Event.Operator.Command.Requested),
 		ActionType:        "EXECUTE_BASH",
 		Payload:           cmdPayload,
 		StateMerkleRoot:   stateRoot,

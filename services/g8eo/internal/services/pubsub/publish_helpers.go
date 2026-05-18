@@ -87,7 +87,7 @@ func publishLFAATypedResponseTo(
 	cfg *config.Config,
 	logger *slog.Logger,
 	msg PubSubCommandMessage,
-	eventType string,
+	eventType constants.EventType,
 	payload proto.Message,
 ) {
 	executionID := executionIDFromMessage(msg)
@@ -121,7 +121,8 @@ func publishLFAAErrorTo(
 	cfg *config.Config,
 	logger *slog.Logger,
 	msg PubSubCommandMessage,
-	eventType, errorMsg string,
+	eventType constants.EventType,
+	errorMsg string,
 ) {
 	executionID := executionIDFromMessage(msg)
 

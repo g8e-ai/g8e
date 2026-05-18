@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -14,10 +15,10 @@ import (
 type mockExecutionHandler struct {
 	executed                       bool
 	err                            error
-	ExecuteVerifiedTransactionFunc func(ctx context.Context, eventType string, cmdMsg interface{}) (string, error)
+	ExecuteVerifiedTransactionFunc func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error)
 }
 
-func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) (string, error) {
+func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
 	m.executed = true
 	if m.ExecuteVerifiedTransactionFunc != nil {
 		return m.ExecuteVerifiedTransactionFunc(ctx, eventType, cmdMsg)
@@ -47,7 +48,7 @@ func TestGovernanceFlow(t *testing.T) {
 		ProtocolVersion: "1.0",
 		OperatorId:      "agent-1",
 		Timestamp:       timestamppb.Now(),
-		ActionType:      "FETCH_LOGS",
+		ActionType:      string(constants.ActionTypeFetchLogs),
 		TargetResource:  "localhost",
 		Payload:         []byte("fetch logs"),
 	}
@@ -79,7 +80,7 @@ func TestGovernanceFlow(t *testing.T) {
 
 	vt := &VerifiedTransaction{
 		Envelope:   env,
-		ActionType: env.ActionType,
+		ActionType: constants.ActionTypeFetchLogs,
 	}
 
 	// 3. Warden Execution
@@ -113,13 +114,11 @@ func TestGovernanceFailClosed(t *testing.T) {
 		}
 	})
 
-	t.Run("MissingPrivateKey_Panic", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Errorf("Expected panic when PrivateKey is nil during SignDecision")
-			}
-		}()
+	t.Run("MissingPrivateKey_Error", func(t *testing.T) {
 		tribunal := &Tribunal{NodeID: nodeID, PrivateKey: nil}
-		tribunal.SignDecision("test-id", true)
+		_, err := tribunal.SignDecision("test-id", true)
+		if err == nil {
+			t.Errorf("Expected error when PrivateKey is nil during SignDecision")
+		}
 	})
 }

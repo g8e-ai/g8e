@@ -46,7 +46,7 @@ PROTOCOL_PYTHON_DIR = REPO_ROOT / "protocol" / "python" / "g8e_protocol"
 # The `// Source:` line lives inside the generated banner so that import blocks
 # can follow `package` immediately, matching idiomatic Go file layout. Use
 # `go_header()` to render a complete file header, optionally including imports.
-GO_HEADER_PRELUDE = """// Copyright (c) 2026 Lateralus Labs, LLC.
+GO_HEADER = """// Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -64,6 +64,7 @@ GO_HEADER_PRELUDE = """// Copyright (c) 2026 Lateralus Labs, LLC.
 
 package {package}
 """
+GO_HEADER_PRELUDE = GO_HEADER
 
 
 def go_header(filename: str, package: str, imports: list[str] | None = None) -> str:
@@ -830,72 +831,138 @@ def write_python_file(filename: str, content: str):
     print(f"Generated {output_path}")
 
 
-def generate_go_proto_mappings() -> str:
-    """Generate Go proto mapping functions from status.json."""
-    data = load_json("status.json")
+def generate_go_mappings() -> str:
+    """Generate all Go mapping functions (protocol and action) into the constants package."""
+    status_data = load_json("status.json")
+    events_data = load_json("events.json")
     
-    # Filter sections with _proto_type in _meta
+    lines = [go_header(
+        "status.json + events.json",
+        "constants",
+        imports=[
+            'operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"',
+        ],
+    ), "\n"]
+
+    # --- Action Mappings (from events.json) ---
+    events = events_data.get("events", {})
+    request_mappings = []
+    result_mappings = []
+    
+    for key, entry in events.items():
+        if not isinstance(entry, dict): continue
+        go_alias = entry.get("_go_alias")
+        if not go_alias: continue
+        uap_action = entry.get("_uap_action")
+        if uap_action:
+            request_mappings.append((go_alias, uap_action))
+        if "_uap_result_action" in entry:
+            result_mappings.append((go_alias, entry["_uap_result_action"]))
+
+    if request_mappings:
+        lines.append("// Boundary typing invariant:\n")
+        lines.append("//\n")
+        lines.append("// These mapping helpers operate on raw `string` because both endpoints of\n")
+        lines.append("// the translation are protobuf-generated `string` fields (UAPEnvelope.ActionType,\n")
+        lines.append("// UniversalEnvelope.EventType, etc.) that cannot be retyped without forking\n")
+        lines.append("// protoc output. ActionType constants are used on the authoring side;\n")
+        lines.append("// membership at the verification gate is enforced by the TransactionVerifier.\n")
+        lines.append("\n")
+        lines.append("// MapEventTypeToActionType maps protobuf event types to UAP action types.\n")
+        lines.append("func MapEventTypeToActionType(eventType EventType) ActionType {\n")
+        lines.append("\tswitch eventType {\n")
+        for go_alias, uap_action in request_mappings:
+            action_const_name = "".join(p.capitalize() for p in uap_action.split("_"))
+            lines.append(f"\tcase Event.Operator.{go_alias}:\n")
+            lines.append(f"\t\treturn ActionType{action_const_name}\n")
+        lines.append("\tdefault:\n")
+        lines.append("\t\treturn ActionType(eventType)\n")
+        lines.append("\t}\n")
+        lines.append("}\n\n")
+
+        lines.append("// MapActionTypeToEventType maps UAP action types back to protobuf event types.\n")
+        lines.append("func MapActionTypeToEventType(actionType ActionType) EventType {\n")
+        lines.append("\tswitch actionType {\n")
+        for go_alias, uap_action in request_mappings:
+            action_const_name = "".join(p.capitalize() for p in uap_action.split("_"))
+            lines.append(f"\tcase ActionType{action_const_name}:\n")
+            lines.append(f"\t\treturn Event.Operator.{go_alias}\n")
+        lines.append("\tdefault:\n")
+        lines.append("\t\treturn EventType(actionType)\n")
+        lines.append("\t}\n")
+        lines.append("}\n\n")
+
+        lines.append("// MapEventTypeToResultActionType maps protobuf event types to UAP result action types.\n")
+        lines.append("func MapEventTypeToResultActionType(eventType EventType) string {\n")
+        lines.append("\tswitch eventType {\n")
+        handled_result_events = {}
+        for go_alias, uap_result in result_mappings:
+            if uap_result not in handled_result_events:
+                handled_result_events[uap_result] = []
+            handled_result_events[uap_result].append(go_alias)
+
+        for uap_result, go_aliases in handled_result_events.items():
+            for i, go_alias in enumerate(go_aliases):
+                prefix = "\tcase " if i == 0 else "\t\t"
+                lines.append(f"{prefix}Event.Operator.{go_alias}")
+                if i < len(go_aliases) - 1:
+                    lines.append(",\n")
+                else:
+                    lines.append(":\n")
+            if uap_result.endswith("_RESULT") or uap_result.endswith("_CANCELLED"):
+                base_action = uap_result.replace("_RESULT", "").replace("_CANCELLED", "")
+                action_const_name = "".join(p.capitalize() for p in base_action.split("_"))
+                suffix = "_RESULT" if uap_result.endswith("_RESULT") else "_CANCELLED"
+                lines.append(f'\t\treturn string(ActionType{action_const_name}) + "{suffix}"\n')
+            else:
+                lines.append(f'\t\treturn "{uap_result}"\n')
+        lines.append("\tdefault:\n")
+        lines.append("\t\treturn string(eventType) + \"_RESULT\"\n")
+        lines.append("\t}\n")
+        lines.append("}\n\n")
+
+    # --- Proto Mappings (from status.json) ---
     sections = {}
-    for k, v in data.items():
+    for k, v in status_data.items():
         if k.startswith("_"): continue
         meta = v.get("_meta", {})
         if "_proto_type" in meta:
             sections[k] = v
-            
-    if not sections:
-        return ""
-        
-    lines = [go_header(
-        "status.json",
-        "mappings",
-        imports=[
-            '"github.com/g8e-ai/g8e/services/g8eo/internal/constants"',
-            'operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"',
-        ],
-    ), "\n"]
-    
+
     for key, values in sections.items():
         meta = values["_meta"]
         proto_type = meta["_proto_type"]
-        
-        # Determine internal type name
         go_type = meta.get("_go_type")
         if go_type is None:
             if key == "execution.status": go_type = "ExecutionStatus"
-            else: go_type = json_key_to_go_const(key)
-            
+            else:
+                print(f"Error: Status section '{key}' missing required '_go_type' field in _meta", file=sys.stderr)
+                sys.exit(1)
         func_name = f"ProtoTo{go_type}"
-        
         lines.append(f"// {func_name} maps protobuf {proto_type} enum to internal {go_type} constants.\n")
-        lines.append(f"func {func_name}(status operatorv1.{proto_type}) constants.{go_type} {{\n")
+        lines.append(f"func {func_name}(status operatorv1.{proto_type}) {go_type} {{\n")
         lines.append("\tswitch status {\n")
-        
         default_val = None
         for val_key, entry in values.items():
             if val_key.startswith("_"): continue
             proto_enum = entry.get("_proto_enum")
             if not proto_enum: continue
-            
             const_name = entry.get("_go_const")
             if const_name is None:
-                const_name = go_type + json_key_to_go_const(val_key)
-                
+                print(f"Error: Status entry '{key}.{val_key}' missing required '_go_const' field", file=sys.stderr)
+                sys.exit(1)
             lines.append(f"\tcase operatorv1.{proto_type}_{proto_enum}:\n")
-            lines.append(f"\t\treturn constants.{const_name}\n")
-            
+            lines.append(f"\t\treturn {const_name}\n")
             if "unspecified" in proto_enum.lower() or "pending" in val_key.lower():
-                default_val = f"constants.{const_name}"
-                
+                default_val = const_name
         lines.append("\tdefault:\n")
         if default_val:
             lines.append(f"\t\treturn {default_val}\n")
         else:
-            # Fallback to the first case or a generic zero value if needed
-            lines.append(f"\t\treturn constants.{go_type}Pending\n")
-            
+            lines.append(f"\t\treturn {go_type}Pending\n")
         lines.append("\t}\n")
         lines.append("}\n\n")
-        
+
     return "".join(lines)
 
 
@@ -987,16 +1054,16 @@ def generate_go_action_mappings() -> str:
     for key, entry in events.items():
         if not isinstance(entry, dict): continue
         
-        go_const = entry.get("_go_const")
-        if not go_const: continue
+        go_alias = entry.get("_go_alias")
+        if not go_alias: continue
         
         uap_action = entry.get("_uap_action")
         if uap_action:
-            request_mappings.append((go_const, uap_action))
+            request_mappings.append((go_alias, uap_action))
         
         # Result mappings (e.g. _RESULT, _CANCELLED)
         if "_uap_result_action" in entry:
-            result_mappings.append((go_const, entry["_uap_result_action"]))
+            result_mappings.append((go_alias, entry["_uap_result_action"]))
         
     if not request_mappings:
         return ""
@@ -1006,54 +1073,70 @@ def generate_go_action_mappings() -> str:
         "mappings",
         imports=['"github.com/g8e-ai/g8e/services/g8eo/internal/constants"'],
     ), "\n"]
-    
+
+    lines.append("// Boundary typing invariant:\n")
+    lines.append("//\n")
+    lines.append("// These mapping helpers operate on raw `string` because both endpoints of\n")
+    lines.append("// the translation are protobuf-generated `string` fields (UAPEnvelope.ActionType,\n")
+    lines.append("// UniversalEnvelope.EventType, etc.) that cannot be retyped without forking\n")
+    lines.append("// protoc output. The closed-set type `constants.ActionType` is used on the\n")
+    lines.append("// authoring side (Go code constructing envelopes from literals); membership\n")
+    lines.append("// at the verification gate is enforced by the TransactionVerifier, not the type\n")
+    lines.append("// system. MapEventTypeToResultActionType deliberately produces open-set\n")
+    lines.append("// strings (e.g. \"EXECUTE_BASH_RESULT\") that are not members of\n")
+    lines.append("// constants.ActionType, which is another reason this seam stays `string`.\n")
+    lines.append("\n")
     lines.append("// MapEventTypeToActionType maps protobuf event types to UAP action types.\n")
     lines.append("// Generated from events.json _uap_action metadata.\n")
-    lines.append("func MapEventTypeToActionType(eventType string) string {\n")
-    lines.append("\tswitch eventType {\n")
+    lines.append("func MapEventTypeToActionType(eventType string) constants.ActionType {\n")
+    lines.append("\tswitch constants.EventType(eventType) {\n")
     
-    for go_const, uap_action in request_mappings:
+    for go_alias, uap_action in request_mappings:
         action_const_name = "".join(p.capitalize() for p in uap_action.split("_"))
-        lines.append(f"\tcase constants.Event{go_const}:\n")
-        lines.append(f"\t\treturn string(constants.ActionType{action_const_name})\n")
+        # Convert hierarchical alias to Go struct field access (e.g., "Eval.AnswerRequested" -> ".Eval.AnswerRequested")
+        hierarchical_ref = "." + go_alias
+        lines.append(f"\tcase constants.Event.Operator{hierarchical_ref}:\n")
+        lines.append(f"\t\treturn constants.ActionType{action_const_name}\n")
         
     lines.append("\tdefault:\n")
-    lines.append("\t\treturn eventType\n")
+    lines.append("\t\treturn constants.ActionType(eventType)\n")
     lines.append("\t}\n")
     lines.append("}\n\n")
 
     lines.append("// MapActionTypeToEventType maps UAP action types back to protobuf event types.\n")
     lines.append("// Generated from events.json _uap_action metadata.\n")
-    lines.append("func MapActionTypeToEventType(actionType string) string {\n")
+    lines.append("func MapActionTypeToEventType(actionType constants.ActionType) string {\n")
     lines.append("\tswitch actionType {\n")
     
-    for go_const, uap_action in request_mappings:
+    for go_alias, uap_action in request_mappings:
         action_const_name = "".join(p.capitalize() for p in uap_action.split("_"))
-        lines.append(f"\tcase string(constants.ActionType{action_const_name}):\n")
-        lines.append(f"\t\treturn constants.Event{go_const}\n")
+        hierarchical_ref = "." + go_alias
+        lines.append(f"\tcase constants.ActionType{action_const_name}:\n")
+        lines.append(f"\t\treturn string(constants.Event.Operator{hierarchical_ref})\n")
         
     lines.append("\tdefault:\n")
-    lines.append("\t\treturn actionType\n")
+    lines.append("\t\treturn string(actionType)\n")
     lines.append("\t}\n")
     lines.append("}\n\n")
 
     lines.append("// MapEventTypeToResultActionType maps protobuf event types to UAP result action types.\n")
     lines.append("// Generated from events.json _uap_result_action metadata.\n")
     lines.append("func MapEventTypeToResultActionType(eventType string) string {\n")
-    lines.append("\tswitch eventType {\n")
+    lines.append("\tswitch constants.EventType(eventType) {\n")
     
     # Track which event constants we've handled to handle multi-case results (Completed/Failed)
-    handled_result_events = {} # uap_result -> [go_consts]
-    for go_const, uap_result in result_mappings:
+    handled_result_events = {} # uap_result -> [go_aliases]
+    for go_alias, uap_result in result_mappings:
         if uap_result not in handled_result_events:
             handled_result_events[uap_result] = []
-        handled_result_events[uap_result].append(go_const)
+        handled_result_events[uap_result].append(go_alias)
 
-    for uap_result, go_consts in handled_result_events.items():
-        for i, go_const in enumerate(go_consts):
+    for uap_result, go_aliases in handled_result_events.items():
+        for i, go_alias in enumerate(go_aliases):
             prefix = "\tcase " if i == 0 else "\t\t"
-            lines.append(f"{prefix}constants.Event{go_const}")
-            if i < len(go_consts) - 1:
+            hierarchical_ref = "." + go_alias
+            lines.append(f"{prefix}constants.Event.Operator{hierarchical_ref}")
+            if i < len(go_aliases) - 1:
                 lines.append(",\n")
             else:
                 lines.append(":\n")
@@ -1067,7 +1150,7 @@ def generate_go_action_mappings() -> str:
             lines.append(f'\t\treturn "{uap_result}"\n')
             
     lines.append("\tdefault:\n")
-    lines.append("\t\treturn eventType + \"_RESULT\"\n")
+    lines.append("\t\treturn string(eventType) + \"_RESULT\"\n")
     lines.append("\t}\n")
     lines.append("}\n")
     
@@ -1079,7 +1162,16 @@ def generate_go_events() -> str:
     data = load_json("events.json")
     lines = [go_header("events.json", "constants"), "\n"]
     
+    # Get type name from _meta if present
+    meta = data.get("_meta", {})
+    type_name = meta.get("_go_type")
+    if type_name:
+        lines.append(f"// {type_name} is a typed string for event types.\n")
+        lines.append(f"type {type_name} string\n\n")
+
     events = data.get("events", {})
+    operator_aliases = {}  # alias -> const_name mapping for operator events
+    
     for key, entry in events.items():
         if key.startswith("_"):
             continue
@@ -1094,8 +1186,112 @@ def generate_go_events() -> str:
             print(f"Error: Event entry '{key}' missing required 'value' or '_go_const' field", file=sys.stderr)
             sys.exit(1)
             
-        lines.append(f'const Event{const_name} = "{value}"\n')
-            
+        if type_name:
+            lines.append(f'const Event{const_name} {type_name} = "{value}"\n')
+        else:
+            lines.append(f'const Event{const_name} = "{value}"\n')
+        
+        # Collect operator event aliases
+        if key.startswith("operator."):
+            alias = entry.get("_go_alias")
+            if alias:
+                if alias in operator_aliases:
+                    print(f"Error: Duplicate _go_alias '{alias}' for event '{key}' (already used by another event)", file=sys.stderr)
+                    sys.exit(1)
+                operator_aliases[alias] = const_name
+    
+    # Generate hierarchical Event.Operator var
+    if operator_aliases:
+        lines.append("\n// Event.Operator provides hierarchical access to operator event constants\n")
+        
+        # Build a tree structure from dotted aliases, storing const_name at leaves
+        tree = {}
+        for alias, const_name in operator_aliases.items():
+            parts = alias.split(".")
+            current = tree
+            for i, part in enumerate(parts):
+                if i == len(parts) - 1:
+                    # Leaf node - store const_name
+                    if part in current:
+                        if current[part] is not None and isinstance(current[part], dict):
+                            print(f"Error: Alias conflict: '{alias}' leaf '{part}' conflicts with existing group", file=sys.stderr)
+                            sys.exit(1)
+                        elif current[part] is not None and not isinstance(current[part], dict):
+                            print(f"Error: Duplicate alias leaf '{part}' in '{alias}'", file=sys.stderr)
+                            sys.exit(1)
+                    current[part] = const_name  # Store const_name at leaf
+                else:
+                    # Group node
+                    if part not in current:
+                        current[part] = {}
+                    elif not isinstance(current[part], dict):
+                        print(f"Error: Alias conflict: '{alias}' group '{part}' conflicts with existing leaf", file=sys.stderr)
+                        sys.exit(1)
+                    current = current[part]
+        
+        # Generate named types for each nested level
+        def generate_named_types(node, prefix, indent):
+            type_defs = []
+            for name, child in sorted(node.items()):
+                if isinstance(child, str):
+                    # Leaf - no type needed
+                    pass
+                else:
+                    # Group - generate a named type for this level
+                    type_name = f"_{prefix}{name}"
+                    type_defs.append(f"type {type_name} struct {{\n")
+                    type_defs.append(generate_type_def(child, f"{prefix}{name}", indent + "\t"))
+                    type_defs.append("}\n")
+                    type_defs.extend(generate_named_types(child, f"{prefix}{name}", indent))
+            return "".join(type_defs)
+        
+        def generate_type_def(node, prefix, indent):
+            fields = []
+            for name, child in sorted(node.items()):
+                if isinstance(child, str):
+                    # Leaf field - use named type if available, fallback to string
+                    field_type = type_name if type_name else "string"
+                    fields.append(f'{indent}{name} {field_type}\n')
+                else:
+                    # Group field - use named type
+                    group_type_name = f"_{prefix}{name}"
+                    fields.append(f'{indent}{name} {group_type_name}\n')
+            return "".join(fields)
+        
+        # Generate all named types first
+        lines.append(generate_named_types(tree, "EventOperator", ""))
+        
+        # Generate the main Operator type
+        lines.append("\ntype _EventOperator struct {\n")
+        lines.append(generate_type_def(tree, "EventOperator", "\t"))
+        lines.append("}\n")
+        
+        # Generate the Event variable
+        lines.append("\nvar Event = struct {\n")
+        lines.append("\tOperator _EventOperator\n")
+        lines.append("}{\n")
+        
+        # Generate initialization with named types
+        def generate_init(node, prefix, indent):
+            init = []
+            for name, child in sorted(node.items()):
+                if isinstance(child, str):
+                    # Leaf field - reference the flat constant
+                    const_name = child
+                    init.append(f'{indent}{name}: Event{const_name},\n')
+                else:
+                    # Group field - use named type
+                    type_name = f"_{prefix}{name}"
+                    init.append(f'{indent}{name}: {type_name}{{\n')
+                    init.append(generate_init(child, f"{prefix}{name}", indent + "\t"))
+                    init.append(f'{indent}}},\n')
+            return "".join(init)
+        
+        lines.append("\tOperator: _EventOperator{\n")
+        lines.append(generate_init(tree, "EventOperator", "\t\t"))
+        lines.append("\t},\n")
+        lines.append("}\n")
+    
     return "".join(lines)
 
 
@@ -1131,15 +1327,10 @@ def generate_go():
     content = generate_go_intents()
     write_go_file("intents.go", content)
     
-    # Generate proto_mappings.go
-    content = generate_go_proto_mappings()
+    # Generate mappings.go
+    content = generate_go_mappings()
     if content:
-        write_go_mappings_file("proto_mappings.go", content)
-    
-    # Generate action_mappings.go
-    content = generate_go_action_mappings()
-    if content:
-        write_go_mappings_file("action_mappings.go", content)
+        write_go_file("mappings.go", content)
 
     print("Go constants generation complete.")
 

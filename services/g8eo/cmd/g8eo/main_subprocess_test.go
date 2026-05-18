@@ -88,7 +88,7 @@ func TestHandleRekeyVault_VaultNotInitialized_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestHandleRekeyVault_VaultNotInitialized_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_REKEY_NOT_INIT=1",
-		"G8E_TEST_TMPDIR="+dir,
+		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
 	)
 	err := cmd.Run()
 
@@ -122,7 +122,7 @@ func TestHandleRekeyVault_Success_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestHandleRekeyVault_Success_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_REKEY_SUCCESS=1",
-		"G8E_TEST_TMPDIR="+dir,
+		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
 	)
 	err = cmd.Run()
 	assert.NoError(t, err, "successful rekey must exit with ExitSuccess (0)")
@@ -149,7 +149,7 @@ func TestHandleVerifyVault_NotInitialized_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestHandleVerifyVault_NotInitialized_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_VERIFY_NOT_INIT=1",
-		"G8E_TEST_TMPDIR="+dir,
+		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
 	)
 	err := cmd.Run()
 	assert.NoError(t, err, "verify on non-initialized vault must exit 0 (ExitSuccess)")
@@ -180,7 +180,7 @@ func TestHandleVerifyVault_ValidKey_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestHandleVerifyVault_ValidKey_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_VERIFY_VALID=1",
-		"G8E_TEST_TMPDIR="+dir,
+		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
 	)
 	err = cmd.Run()
 	assert.NoError(t, err, "verify with correct key must exit 0 (ExitSuccess)")
@@ -211,7 +211,7 @@ func TestHandleVerifyVault_WrongKey_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestHandleVerifyVault_WrongKey_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_VERIFY_WRONG=1",
-		"G8E_TEST_TMPDIR="+dir,
+		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
 	)
 	err = cmd.Run()
 
@@ -245,7 +245,7 @@ func TestHandleVerifyVault_MissingAPIKey_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestHandleVerifyVault_MissingAPIKey_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_VERIFY_NO_KEY=1",
-		"G8E_TEST_TMPDIR="+dir,
+		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
 		"G8E_OPERATOR_API_KEY=",
 	)
 	err = cmd.Run()
@@ -276,7 +276,7 @@ func TestHandleResetVault_NotInitialized_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestHandleResetVault_NotInitialized_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_RESET_NOT_INIT=1",
-		"G8E_TEST_TMPDIR="+dir,
+		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
 	)
 	err := cmd.Run()
 	assert.NoError(t, err, "reset on uninitialized vault must exit 0 (ExitSuccess)")
@@ -308,7 +308,7 @@ func TestHandleResetVault_WrongConfirmation_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestHandleResetVault_WrongConfirmation_Subprocess", "-test.timeout=15s")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_RESET_WRONG_CONFIRM=1",
-		"G8E_TEST_TMPDIR="+dir,
+		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
 	)
 	// Provide wrong confirmation word via stdin so fmt.Fscan reads it and returns
 	cmd.Stdin = nopCloser("NOPE\n")
@@ -331,7 +331,7 @@ func TestHandleVaultCommand_BadLogLevel_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestHandleVaultCommand_BadLogLevel_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_VAULTCMD_BAD_LOG=1",
-		"G8E_TEST_TMPDIR="+dir,
+		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
 	)
 	err := cmd.Run()
 
@@ -355,7 +355,7 @@ func TestHandleVaultCommand_VerifyVault_NotInitialized_Subprocess(t *testing.T) 
 	cmd := exec.Command(os.Args[0], "-test.run=TestHandleVaultCommand_VerifyVault_NotInitialized_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_VAULTCMD_VERIFY=1",
-		"G8E_TEST_TMPDIR="+dir,
+		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
 		"G8E_OPERATOR_API_KEY=",
 	)
 	err := cmd.Run()
@@ -377,7 +377,7 @@ func TestHandleVaultCommand_ResetVault_NotInitialized_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestHandleVaultCommand_ResetVault_NotInitialized_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_VAULTCMD_RESET=1",
-		"G8E_TEST_TMPDIR="+dir,
+		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
 	)
 	err := cmd.Run()
 	assert.NoError(t, err, "reset on uninitialized vault must exit 0")
@@ -398,7 +398,7 @@ func TestRunListenMode_BadLogLevel_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestRunListenMode_BadLogLevel_Subprocess")
 	cmd.Env = append(os.Environ(),
 		"G8E_TEST_LISTEN_BAD_LOG=1",
-		"G8E_TEST_TMPDIR="+dir,
+		marshaler.EnvVar(constants.EnvVar.TestTmpDir)+"="+dir,
 	)
 	err := cmd.Run()
 
@@ -464,7 +464,7 @@ func nopCloser(s string) *stringReader { return &stringReader{s: s} }
 
 // ---------------------------------------------------------------------------
 // Vault header save helper — uses a known relative path so the subprocess
-// can find it via G8E_TEST_TMPDIR.
+// can find it via G8E_TEST_TMP_DIR.
 // ---------------------------------------------------------------------------
 
 func initVaultInDir(t *testing.T, dir, apiKey string) {

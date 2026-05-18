@@ -50,6 +50,7 @@ type ExecutionService struct {
 	activeExecutions map[string]*ExecutionContext
 	executionsMutex  sync.RWMutex
 	semaphore        chan struct{} // Concurrency control
+	wg               sync.WaitGroup
 }
 
 func (es *ExecutionService) BuildCommandString(command string, args []string) string {
@@ -234,6 +235,9 @@ func isCloudCLICommand(command string, args []string) (bool, string) {
 
 // ExecuteCommand executes a command with security controls and resource limits
 func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.ExecutionRequestPayload) (*models.ExecutionResultsPayload, error) {
+	es.wg.Add(1)
+	defer es.wg.Done()
+
 	es.logger.Info("Executing command",
 		"execution_id", request.ExecutionID,
 		"case_id", request.CaseID,
@@ -776,12 +780,12 @@ func (es *ExecutionService) finalizeResult(result *models.ExecutionResultsPayloa
 	}
 }
 
-// Stop cancels all active executions and releases resources
+// Stop cancels all active executions and releases resources.
+// It blocks until all active executions have completed their cleanup.
 func (es *ExecutionService) Stop() {
 	es.executionsMutex.Lock()
-	defer es.executionsMutex.Unlock()
-
 	if len(es.activeExecutions) == 0 {
+		es.executionsMutex.Unlock()
 		return
 	}
 
@@ -803,9 +807,10 @@ func (es *ExecutionService) Stop() {
 		}
 		execCtx.mu.Unlock()
 	}
+	es.executionsMutex.Unlock()
 
-	// Clear the map
-	es.activeExecutions = make(map[string]*ExecutionContext)
+	// Wait for all goroutines to finish their cleanup (removing themselves from activeExecutions and releasing semaphore)
+	es.wg.Wait()
 }
 
 // GetActiveExecutions returns the currently active executions

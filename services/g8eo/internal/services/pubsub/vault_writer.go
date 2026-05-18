@@ -67,7 +67,7 @@ type executionWriteParams struct {
 	caseID          string
 	taskID          string
 	investigationID string
-	vaultMode       string
+	vaultMode       constants.VaultMode
 }
 
 // WriteExecution persists a command execution result to the dual vault.

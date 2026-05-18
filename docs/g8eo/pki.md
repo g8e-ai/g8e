@@ -25,24 +25,24 @@ The Operator manages a structured hierarchy in `.g8e/pki` to ensure isolation be
 
 ## Identity Schemes
 
-Client identities follow the SPIFFE URI scheme, encoded in the certificate's URI SAN:
+Client identities follow the SPIFFE URI scheme, encoded in the certificate's URI SAN. These are generated using the `protocol.WorkloadIdentity` helper to ensure format consistency across all components:
 
-| Role | URI SAN Pattern |
-|---|---|
-| **Operator (Satellite)** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` |
-| **CLI (BYO Client)** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` |
-| **Application (Agent)** | `spiffe://g8e.local/app/<operator_id>` |
-| **Hub (Operator Listen)** | `spiffe://g8e.local/hub/operator-listen` |
+| Role | Helper Function | URI SAN Pattern |
+|---|---|---|
+| **Operator (Satellite)** | `OperatorSPIFFEID(organizationID, operatorID, sessionID)` | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` |
+| **CLI (BYO Client)** | `CLISPIFFEID(userID, sessionID)` | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` |
+| **Application (Agent)** | `AppSPIFFEID(operatorID)` | `spiffe://g8e.local/app/<operator_id>` |
+| **Hub (Operator Listen)** | `HubSPIFFEID()` | `spiffe://g8e.local/hub/operator-listen` |
 
 ### CLI vs Operator Identity Separation
 
-The CLI is a logically separate principal from the operator agent and has its own distinct SPIFFE identity:
+The CLI is a logically separate principal from the operator agent and has its own distinct SPIFFE identity. These are generated using `protocol.WorkloadIdentity`:
 
 - **Operator certificates** authenticate the host agent and are bound to `operator_session_id`. The operator agent represents the sovereign host that executes mutations.
-  - SPIFFE ID: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`
+  - Helper: `OperatorSPIFFEID(organizationID, operatorID, sessionID)`
   - Path: `~/.g8e/operator.crt`, `~/.g8e/operator.key`
 - **CLI certificates** authenticate BYO/CLI clients and are bound to `cli_session_id`. The CLI is a client tool that issues commands and receives SSE events.
-  - SPIFFE ID: `spiffe://g8e.local/cli/<user_id>/<cli_session_id>`
+  - Helper: `CLISPIFFEID(userID, sessionID)`
   - Path: `~/.g8e/cli.crt`, `~/.g8e/cli.key`
 
 This separation ensures that:

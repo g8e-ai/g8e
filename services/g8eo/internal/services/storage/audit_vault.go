@@ -65,16 +65,6 @@ func DefaultAuditVaultConfig() *AuditVaultConfig {
 	}
 }
 
-// EventType represents the type of event in the audit log
-type EventType string
-
-const (
-	EventTypeUserMsg      EventType = "USER_MSG"
-	EventTypeAIMsg        EventType = "AI_MSG"
-	EventTypeCmdExec      EventType = "CMD_EXEC"
-	EventTypeFileMutation EventType = "FILE_MUTATION"
-)
-
 var (
 	ErrAuditEventNil       = errors.New("AUDIT_EVENT_INVALID: event required")
 	ErrAuditSessionMissing = errors.New("AUDIT_SESSION_MISSING: operator_session_id required")
@@ -103,7 +93,7 @@ type Event struct {
 	ID                  int64
 	OperatorSessionID   string
 	Timestamp           time.Time
-	Type                EventType
+	Type                constants.EventType
 	ContentText         string
 	CommandRaw          string
 	CommandExitCode     *int
@@ -565,7 +555,7 @@ func (avs *AuditVaultService) RecordEvents(events []*Event) error {
 		_, err = stmt.Exec(
 			event.OperatorSessionID,
 			sqliteutil.FormatTimestamp(event.Timestamp),
-			string(event.Type),
+			event.Type,
 			contentTextBytes,
 			event.CommandRaw,
 			event.CommandExitCode,
@@ -647,7 +637,7 @@ func (avs *AuditVaultService) RecordEvent(event *Event) (int64, error) {
 	result, err := tx.Exec(query,
 		event.OperatorSessionID,
 		sqliteutil.FormatTimestamp(event.Timestamp),
-		string(event.Type),
+		event.Type,
 		contentTextBytes,
 		event.CommandRaw,
 		event.CommandExitCode,

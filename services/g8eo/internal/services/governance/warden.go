@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/mappings"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
@@ -28,7 +27,7 @@ type L3Verifier interface {
 // ExecutionHandler is the interface for executing verified transactions.
 // This avoids import cycles between governance and pubsub packages.
 type ExecutionHandler interface {
-	ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) (string, error)
+	ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error)
 }
 
 type TransactionAuditStore interface {
@@ -83,7 +82,7 @@ func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg in
 	}
 
 	// Map action type to event type for handler lookup
-	eventType := mappings.MapActionTypeToEventType(vt.ActionType)
+	eventType := constants.MapActionTypeToEventType(vt.ActionType)
 
 	w.Logger.Info("Warden preparing to execute transaction",
 		"message_id", vt.Envelope.Id,
@@ -211,9 +210,9 @@ func (w *Warden) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) e
 		TransactionHash:   r.TransactionHash,
 		OperatorID:        env.OperatorId,
 		OperatorSessionID: env.OperatorSessionId,
-		ActionType:        env.ActionType,
+		ActionType:        constants.ActionType(env.ActionType),
 		TargetResource:    env.TargetResource,
-		Status:            mappings.ProtoToExecutionStatus(r.Status),
+		Status:            constants.ProtoToExecutionStatus(r.Status),
 		ResultSummary:     r.ResultSummary,
 		StateRootBefore:   r.StateRootBefore,
 		StateRootAfter:    r.StateRootAfter,
@@ -246,9 +245,9 @@ func (w *Warden) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionRe
 		TransactionHash:   r.TransactionHash,
 		OperatorID:        env.OperatorId,
 		OperatorSessionID: env.OperatorSessionId,
-		ActionType:        env.ActionType,
+		ActionType:        constants.ActionType(env.ActionType),
 		TargetResource:    env.TargetResource,
-		Status:            mappings.ProtoToExecutionStatus(r.Status),
+		Status:            constants.ProtoToExecutionStatus(r.Status),
 		ResultSummary:     r.ResultSummary,
 		StateRootBefore:   r.StateRootBefore,
 		StateRootAfter:    r.StateRootAfter,

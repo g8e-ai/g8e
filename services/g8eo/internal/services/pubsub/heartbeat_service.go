@@ -78,7 +78,7 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 		HeartbeatType:     heartbeatType,
 		SystemIdentity: models.HeartbeatSystemIdentity{
 			Hostname:     system.GetHostname(),
-			OS:           system.GetOSName(),
+			OS:           constants.Platform(system.GetOSName()),
 			Architecture: system.GetArchitecture(),
 			PWD:          pwd,
 			CurrentUser:  system.GetCurrentUser(),
@@ -120,7 +120,7 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 			LedgerMirrorEnabled: hs.config.GitAvailable && !hs.config.NoGit,
 		},
 		FingerprintDetails: &models.HeartbeatFingerprintDetails{
-			OS:           runtime.GOOS,
+			OS:           constants.Platform(runtime.GOOS),
 			Architecture: runtime.GOARCH,
 			CPUCount:     runtime.NumCPU(),
 			MachineID:    hs.config.SystemFingerprint,
@@ -156,13 +156,13 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 		OperatorSessionId: h.OperatorSessionID,
 		Timestamp:         h.Timestamp,
 		Status:            string(h.HeartbeatType),
-		EventType:         h.EventType,
-		SourceComponent:   h.SourceComponent,
+		EventType:         string(h.EventType),
+		SourceComponent:   string(h.SourceComponent),
 		CaseId:            h.CaseID,
 		InvestigationId:   h.InvestigationID,
 		SystemIdentity: &operatorv1.SystemIdentity{
 			Hostname:     h.SystemIdentity.Hostname,
-			Os:           h.SystemIdentity.OS,
+			Os:           string(h.SystemIdentity.OS),
 			Architecture: h.SystemIdentity.Architecture,
 			Pwd:          h.SystemIdentity.PWD,
 			CurrentUser:  h.SystemIdentity.CurrentUser,
@@ -176,7 +176,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 		},
 		VersionInfo: &operatorv1.VersionInfo{
 			OperatorVersion: h.VersionInfo.OperatorVersion,
-			Status:          h.VersionInfo.Status,
+			Status:          string(h.VersionInfo.Status),
 		},
 		UptimeInfo: &operatorv1.UptimeInfo{
 			Uptime:        h.UptimeInfo.Uptime,
@@ -238,7 +238,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 
 	if h.FingerprintDetails != nil {
 		p.FingerprintDetails = &operatorv1.FingerprintDetails{
-			Os:           h.FingerprintDetails.OS,
+			Os:           string(h.FingerprintDetails.OS),
 			Architecture: h.FingerprintDetails.Architecture,
 			CpuCount:     int32(h.FingerprintDetails.CPUCount),
 			MachineId:    h.FingerprintDetails.MachineID,

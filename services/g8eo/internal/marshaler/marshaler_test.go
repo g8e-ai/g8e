@@ -87,7 +87,7 @@ func TestExecutionStatus(t *testing.T) {
 func TestEvent(t *testing.T) {
 	tests := []struct {
 		name string
-		e    string
+		e    constants.EventType
 		want string
 	}{
 		{"command_requested", constants.Event.Operator.Command.Requested, "g8e.v1.operator.command.requested"},

@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
@@ -106,7 +107,7 @@ func (s *SimpleStateRootProvider) GetCurrentStateRoot() (string, error) {
 // VerifiedTransaction represents a fully verified transaction ready for execution.
 type VerifiedTransaction struct {
 	Envelope       *uap.UAPEnvelope
-	ActionType     string
+	ActionType     constants.ActionType
 	Payload        []byte
 	DecodedPayload proto.Message
 	StateRoot      string
@@ -121,7 +122,7 @@ type TransactionVerifier struct {
 	stateRootProvider StateRootProvider
 	signerStore       SignerStore
 	l3Verifier        L3Verifier
-	knownActionTypes  map[string]struct{}
+	knownActionTypes  map[constants.ActionType]struct{}
 }
 
 // NewTransactionVerifier creates a new transaction verifier.
@@ -131,9 +132,9 @@ func NewTransactionVerifier(
 	stateRootProvider StateRootProvider,
 	signerStore SignerStore,
 	l3Verifier L3Verifier,
-	knownActionTypes []string,
+	knownActionTypes []constants.ActionType,
 ) *TransactionVerifier {
-	knownActions := make(map[string]struct{})
+	knownActions := make(map[constants.ActionType]struct{})
 	for _, action := range knownActionTypes {
 		knownActions[action] = struct{}{}
 	}
@@ -156,14 +157,15 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 	if envelope.Id == "" {
 		return nil, ErrTransactionIDMissing
 	}
-	if _, ok := tv.knownActionTypes[envelope.ActionType]; !ok {
+	actionType := constants.ActionType(envelope.ActionType)
+	if _, ok := tv.knownActionTypes[actionType]; !ok {
 		tv.logger.Error("Unknown action type", "action_type", envelope.ActionType)
 		return nil, ErrUnknownActionType
 	}
 	if len(envelope.Payload) == 0 {
 		return nil, ErrPayloadMissing
 	}
-	decodedPayload, err := tv.decodePayloadForAction(envelope.ActionType, envelope.Payload)
+	decodedPayload, err := tv.decodePayloadForAction(actionType, envelope.Payload)
 	if err != nil {
 		tv.logger.Error("Failed to decode typed payload", "action_type", envelope.ActionType, "error", err)
 		return nil, ErrPayloadDecodeFailed
@@ -265,7 +267,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		return nil, ErrL2SignatureInvalid
 	}
 
-	if tv.isMutation(envelope.ActionType) {
+	if tv.isMutation(actionType) {
 		if envelope.Governance == nil || envelope.Governance.L3 == nil || envelope.Governance.L3.Proof == nil {
 			return nil, ErrL3ProofMissing
 		}
@@ -286,7 +288,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 	// 9. Return verified transaction
 	verified := &VerifiedTransaction{
 		Envelope:       envelope,
-		ActionType:     envelope.ActionType,
+		ActionType:     actionType,
 		Payload:        envelope.Payload,
 		DecodedPayload: decodedPayload,
 		StateRoot:      envelope.StateMerkleRoot,
@@ -297,32 +299,32 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 	return verified, nil
 }
 
-func (tv *TransactionVerifier) decodePayloadForAction(actionType string, payload []byte) (proto.Message, error) {
+func (tv *TransactionVerifier) decodePayloadForAction(actionType constants.ActionType, payload []byte) (proto.Message, error) {
 	var msg proto.Message
 	switch actionType {
-	case "EXECUTE_BASH":
+	case constants.ActionTypeExecuteBash:
 		msg = &operatorv1.CommandRequested{}
-	case "FILE_EDIT":
+	case constants.ActionTypeFileEdit:
 		msg = &operatorv1.FileEditRequested{}
-	case "RESTORE_FILE":
+	case constants.ActionTypeRestoreFile:
 		msg = &operatorv1.RestoreFileRequested{}
-	case "SHUTDOWN":
+	case constants.ActionTypeShutdown:
 		msg = &operatorv1.ShutdownRequested{}
-	case "FS_LIST":
+	case constants.ActionTypeFsList:
 		msg = &operatorv1.FsListRequested{}
-	case "FS_READ":
+	case constants.ActionTypeFsRead:
 		msg = &operatorv1.FsReadRequested{}
-	case "FS_GREP":
+	case constants.ActionTypeFsGrep:
 		msg = &operatorv1.FsGrepRequested{}
-	case "PORT_CHECK":
+	case constants.ActionTypePortCheck:
 		msg = &operatorv1.CheckPortRequested{}
-	case "FETCH_LOGS":
+	case constants.ActionTypeFetchLogs:
 		msg = &operatorv1.FetchLogsRequested{}
-	case "FETCH_HISTORY":
+	case constants.ActionTypeFetchHistory:
 		msg = &operatorv1.FetchHistoryRequested{}
-	case "FETCH_FILE_HISTORY":
+	case constants.ActionTypeFetchFileHistory:
 		msg = &operatorv1.FetchFileHistoryRequested{}
-	case "EVAL_ANSWER":
+	case constants.ActionTypeEvalAnswer:
 		msg = &operatorv1.EvalAnswerRequested{}
 	default:
 		return nil, ErrUnknownActionType
@@ -386,11 +388,11 @@ func (tv *TransactionVerifier) verifyL2Signature(pubKey ed25519.PublicKey, signa
 }
 
 // isMutation returns true if the action type modifies system state.
-func (tv *TransactionVerifier) isMutation(actionType string) bool {
+func (tv *TransactionVerifier) isMutation(actionType constants.ActionType) bool {
 	switch actionType {
-	case "EXECUTE_BASH", "FILE_EDIT", "RESTORE_FILE", "SHUTDOWN":
+	case constants.ActionTypeExecuteBash, constants.ActionTypeFileEdit, constants.ActionTypeRestoreFile, constants.ActionTypeShutdown:
 		return true
-	case "EVAL_ANSWER":
+	case constants.ActionTypeEvalAnswer:
 		return false
 	default:
 		return false

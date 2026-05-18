@@ -70,7 +70,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		receivedMsg := requireLastPublishedUniversal(t, db)
 		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
 
-		assert.Equal(t, constants.Event.Operator.Command.Completed, env.EventType)
+		assert.Equal(t, string(constants.Event.Operator.Command.Completed), env.EventType)
 		assert.Equal(t, "EXECUTE_BASH_RESULT", env.ActionType)
 		assert.Equal(t, "case-456", env.CaseId)
 		assert.Equal(t, "msg-123", env.Id)
@@ -113,7 +113,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 
 		receivedMsg := requireLastPublishedUniversal(t, db)
 		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
-		assert.Equal(t, constants.Event.Operator.FileEdit.Completed, env.EventType)
+		assert.Equal(t, string(constants.Event.Operator.FileEdit.Completed), env.EventType)
 	})
 }
 

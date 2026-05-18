@@ -26,13 +26,13 @@ const (
 )
 
 type HeartbeatSystemIdentity struct {
-	Hostname     string `json:"hostname"`
-	OS           string `json:"os"`
-	Architecture string `json:"architecture"`
-	PWD          string `json:"pwd"`
-	CurrentUser  string `json:"current_user"`
-	CPUCount     int    `json:"cpu_count"`
-	MemoryMB     int    `json:"memory_mb"`
+	Hostname     string             `json:"hostname"`
+	OS           constants.Platform `json:"os"`
+	Architecture string             `json:"architecture"`
+	PWD          string             `json:"pwd"`
+	CurrentUser  string             `json:"current_user"`
+	CPUCount     int                `json:"cpu_count"`
+	MemoryMB     int                `json:"memory_mb"`
 }
 
 type HeartbeatNetworkInterface struct {
@@ -116,21 +116,21 @@ type HeartbeatEnvironment struct {
 }
 
 type HeartbeatFingerprintDetails struct {
-	OS           string `json:"os"`
-	Architecture string `json:"architecture"`
-	CPUCount     int    `json:"cpu_count"`
-	MachineID    string `json:"machine_id,omitempty"`
+	OS           constants.Platform `json:"os"`
+	Architecture string             `json:"architecture"`
+	CPUCount     int                `json:"cpu_count"`
+	MachineID    string             `json:"machine_id,omitempty"`
 }
 
 type Heartbeat struct {
-	EventType         string        `json:"event_type"`
-	SourceComponent   string        `json:"source_component"`
-	OperatorID        string        `json:"operator_id"`
-	OperatorSessionID string        `json:"operator_session_id"`
-	CaseID            string        `json:"case_id"`
-	InvestigationID   string        `json:"investigation_id"`
-	Timestamp         string        `json:"timestamp"`
-	HeartbeatType     HeartbeatType `json:"heartbeat_type"`
+	EventType         constants.EventType     `json:"event_type"`
+	SourceComponent   constants.ComponentName `json:"source_component"`
+	OperatorID        string                  `json:"operator_id"`
+	OperatorSessionID string                  `json:"operator_session_id"`
+	CaseID            string                  `json:"case_id"`
+	InvestigationID   string                  `json:"investigation_id"`
+	Timestamp         string                  `json:"timestamp"`
+	HeartbeatType     HeartbeatType           `json:"heartbeat_type"`
 
 	SystemIdentity HeartbeatSystemIdentity `json:"system_identity"`
 	NetworkInfo    HeartbeatNetworkInfo    `json:"network_info"`

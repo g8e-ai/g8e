@@ -65,7 +65,7 @@ func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg PubSubComman
 	event := &storage.Event{
 		OperatorSessionID: as.config.OperatorSessionId,
 		Timestamp:         time.Now().UTC(),
-		Type:              storage.EventTypeUserMsg,
+		Type:              constants.Event.Operator.Audit.UserMsg,
 		ContentText:       content,
 	}
 
@@ -101,7 +101,7 @@ func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg PubSubCommandM
 	event := &storage.Event{
 		OperatorSessionID: as.config.OperatorSessionId,
 		Timestamp:         time.Now().UTC(),
-		Type:              storage.EventTypeAIMsg,
+		Type:              constants.Event.Operator.Audit.AIMsg,
 		ContentText:       content,
 	}
 
@@ -136,8 +136,8 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg PubSubComm
 	event := &storage.Event{
 		OperatorSessionID: as.config.OperatorSessionId,
 		Timestamp:         time.Now().UTC(),
-		Type:              storage.EventTypeCmdExec,
-		ContentText:       constants.Status.AiSource.TerminalDirect,
+		Type:              constants.Event.Operator.Audit.Command,
+		ContentText:       string(constants.Status.AiSource.TerminalDirect),
 		CommandRaw:        protoCmd.Command,
 	}
 
@@ -172,8 +172,8 @@ func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg PubS
 	event := &storage.Event{
 		OperatorSessionID:   as.config.OperatorSessionId,
 		Timestamp:           time.Now().UTC(),
-		Type:                storage.EventTypeCmdExec,
-		ContentText:         constants.Status.AiSource.TerminalDirect,
+		Type:                constants.Event.Operator.Audit.Command,
+		ContentText:         string(constants.Status.AiSource.TerminalDirect),
 		CommandRaw:          protoResult.Command,
 		CommandExitCode:     system.IntPtr(int(protoResult.ExitCode)),
 		CommandStdout:       protoResult.Output,
