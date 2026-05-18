@@ -154,10 +154,10 @@ class AttachmentType(StrEnum):
     """
     def __str__(self) -> str:
         return self.value
-    PDF   = _STATUS["attachment.type"]["pdf"]
-    IMAGE = _STATUS["attachment.type"]["image"]
-    TEXT  = _STATUS["attachment.type"]["text"]
-    OTHER = _STATUS["attachment.type"]["other"]
+    PDF   = _STATUS["attachment.type"]["pdf"]["value"]
+    IMAGE = _STATUS["attachment.type"]["image"]["value"]
+    TEXT  = _STATUS["attachment.type"]["text"]["value"]
+    OTHER = _STATUS["attachment.type"]["other"]["value"]
 
 
 class GroundingSource(StrEnum):
@@ -328,11 +328,11 @@ class ApprovalErrorType(StrEnum):
     """
     def __str__(self) -> str:
         return self.value
-    APPROVAL_PUBLISH_FAILURE    = _STATUS["approval.error.type"]["approval.publish.failure"]
-    APPROVAL_EXCEPTION          = _STATUS["approval.error.type"]["approval.exception"]
-    APPROVAL_TIMEOUT            = _STATUS["approval.error.type"]["approval.timeout"]
-    INVALID_INTENT              = _STATUS["approval.error.type"]["invalid.intent"]
-    INTENT_APPROVAL_EXCEPTION   = _STATUS["approval.error.type"]["intent.approval.exception"]
+    APPROVAL_PUBLISH_FAILURE    = _STATUS["approval.error.type"]["approval.publish.failure"]["value"]
+    APPROVAL_EXCEPTION          = _STATUS["approval.error.type"]["approval.exception"]["value"]
+    APPROVAL_TIMEOUT            = _STATUS["approval.error.type"]["approval.timeout"]["value"]
+    INVALID_INTENT              = _STATUS["approval.error.type"]["invalid.intent"]["value"]
+    INTENT_APPROVAL_EXCEPTION   = _STATUS["approval.error.type"]["intent.approval.exception"]["value"]
 
 
 # OpenAI models
@@ -367,7 +367,7 @@ OLLAMA_LLAMA_3_2_3B            = "llama3.2:3b"
 OLLAMA_QWEN3_5_2B              = "qwen3.5:2b"
 
 # llama.cpp models
-LLAMACPP_GEMMA4_E2B           = _STATUS["llm.models"]["llamacpp"]["gemma4.e2b"]
+LLAMACPP_GEMMA4_E2B           = _STATUS["llm.models"]["llamacpp.gemma4.e2b"]["value"]
 
 
 # Provider default models
@@ -384,6 +384,10 @@ OLLAMA_DEFAULT_ENDPOINT         = "http://localhost:11434"
 ANTHROPIC_DEFAULT_ENDPOINT     = "https://api.anthropic.com"
 GEMINI_DEFAULT_ENDPOINT         = ""  # Gemini uses different discovery mechanism
 LLAMACPP_DEFAULT_ENDPOINT       = "http://localhost:11444"
+
+
+# Ollama host normalization defaults
+OLLAMA_DEFAULT_PROTOCOL         = "http://"
 
 
 DEFAULT_FINISH_REASON           = "STOP"

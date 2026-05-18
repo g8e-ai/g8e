@@ -25,21 +25,21 @@ import (
 // DeviceLinkData represents a device link for operator enrollment.
 // Authority: services/client/models/auth_models.js::DeviceLinkData
 type DeviceLinkData struct {
-	Token          string            `json:"token"`
-	UserID         string            `json:"user_id"`
-	OrganizationID string            `json:"organization_id,omitempty"`
-	OperatorID     string            `json:"operator_id,omitempty"`
-	WebSessionID   string            `json:"web_session_id,omitempty"`
-	Name           string            `json:"name,omitempty"`
-	MaxUses        int               `json:"max_uses"`
-	Uses           int               `json:"uses"`
-	Status         string            `json:"status"`
-	CreatedAt      time.Time         `json:"created_at"`
-	ExpiresAt      time.Time         `json:"expires_at"`
-	UsedAt         *time.Time        `json:"used_at,omitempty"`
-	RevokedAt      *time.Time        `json:"revoked_at,omitempty"`
-	DeviceInfo     *DeviceLinkInfo   `json:"device_info,omitempty"`
-	Claims         []DeviceLinkClaim `json:"claims,omitempty"`
+	Token          string                     `json:"token"`
+	UserID         string                     `json:"user_id"`
+	OrganizationID string                     `json:"organization_id,omitempty"`
+	OperatorID     string                     `json:"operator_id,omitempty"`
+	WebSessionID   string                     `json:"web_session_id,omitempty"`
+	Name           string                     `json:"name,omitempty"`
+	MaxUses        int                        `json:"max_uses"`
+	Uses           int                        `json:"uses"`
+	Status         constants.DeviceLinkStatus `json:"status"`
+	CreatedAt      time.Time                  `json:"created_at"`
+	ExpiresAt      time.Time                  `json:"expires_at"`
+	UsedAt         *time.Time                 `json:"used_at,omitempty"`
+	RevokedAt      *time.Time                 `json:"revoked_at,omitempty"`
+	DeviceInfo     *DeviceLinkInfo            `json:"device_info,omitempty"`
+	Claims         []DeviceLinkClaim          `json:"claims,omitempty"`
 }
 
 type CreateDeviceLinkRequest struct {
@@ -64,13 +64,13 @@ type DeviceLinkResponse struct {
 }
 
 type DeviceLinkListItem struct {
-	Token     string    `json:"token"`
-	Name      string    `json:"name,omitempty"`
-	MaxUses   int       `json:"max_uses"`
-	Uses      int       `json:"uses"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Token     string                     `json:"token"`
+	Name      string                     `json:"name,omitempty"`
+	MaxUses   int                        `json:"max_uses"`
+	Uses      int                        `json:"uses"`
+	Status    constants.DeviceLinkStatus `json:"status"`
+	CreatedAt time.Time                  `json:"created_at"`
+	ExpiresAt time.Time                  `json:"expires_at"`
 }
 
 type DeviceLinkListResponse struct {
@@ -144,31 +144,31 @@ type SessionSummary struct {
 // OperatorDocumentGo is a Go representation of the canonical OperatorDocument.
 // Authority: protocol/models/operator_document.json
 type OperatorDocumentGo struct {
-	ID                   string          `json:"id"`
-	UserID               string          `json:"user_id"`
-	OrganizationID       string          `json:"organization_id,omitempty"`
-	Component            string          `json:"component"`
-	Name                 string          `json:"name,omitempty"`
-	Status               string          `json:"status"`
-	OperatorSessionID    string          `json:"operator_session_id,omitempty"`
-	BoundWebSessionID    string          `json:"bound_web_session_id,omitempty"`
-	APIKey               string          `json:"api_key,omitempty"`
-	OperatorAPIKey       string          `json:"operator_api_key,omitempty"`
-	OperatorCert         string          `json:"operator_cert,omitempty"`
-	OperatorCertSerial   string          `json:"operator_cert_serial,omitempty"`
-	SlotNumber           int             `json:"slot_number,omitempty"`
-	IsSlot               bool            `json:"is_slot"`
-	Claimed              bool            `json:"claimed"`
-	OperatorType         string          `json:"operator_type,omitempty"`
-	CloudSubtype         string          `json:"cloud_subtype,omitempty"`
-	SystemFingerprint    string          `json:"system_fingerprint,omitempty"`
-	CreatedAt            time.Time       `json:"created_at"`
-	UpdatedAt            time.Time       `json:"updated_at"`
-	StartedAt            *time.Time      `json:"started_at,omitempty"`
-	ClaimedAt            *time.Time      `json:"claimed_at,omitempty"`
-	LatestHeartbeat      json.RawMessage `json:"latest_heartbeat_snapshot,omitempty"`
-	RuntimeConfig        *RuntimeConfig  `json:"runtime_config,omitempty"`
-	ConsumedByOperatorID string          `json:"consumed_by_operator_id,omitempty"`
+	ID                   string                   `json:"id"`
+	UserID               string                   `json:"user_id"`
+	OrganizationID       string                   `json:"organization_id,omitempty"`
+	Component            constants.ComponentName  `json:"component"`
+	Name                 string                   `json:"name,omitempty"`
+	Status               constants.OperatorStatus `json:"status"`
+	OperatorSessionID    string                   `json:"operator_session_id,omitempty"`
+	BoundWebSessionID    string                   `json:"bound_web_session_id,omitempty"`
+	APIKey               string                   `json:"api_key,omitempty"`
+	OperatorAPIKey       string                   `json:"operator_api_key,omitempty"`
+	OperatorCert         string                   `json:"operator_cert,omitempty"`
+	OperatorCertSerial   string                   `json:"operator_cert_serial,omitempty"`
+	SlotNumber           int                      `json:"slot_number,omitempty"`
+	IsSlot               bool                     `json:"is_slot"`
+	Claimed              bool                     `json:"claimed"`
+	OperatorType         constants.OperatorType   `json:"operator_type,omitempty"`
+	CloudSubtype         constants.CloudSubtype   `json:"cloud_subtype,omitempty"`
+	SystemFingerprint    string                   `json:"system_fingerprint,omitempty"`
+	CreatedAt            time.Time                `json:"created_at"`
+	UpdatedAt            time.Time                `json:"updated_at"`
+	StartedAt            *time.Time               `json:"started_at,omitempty"`
+	ClaimedAt            *time.Time               `json:"claimed_at,omitempty"`
+	LatestHeartbeat      json.RawMessage          `json:"latest_heartbeat_snapshot,omitempty"`
+	RuntimeConfig        *RuntimeConfig           `json:"runtime_config,omitempty"`
+	ConsumedByOperatorID string                   `json:"consumed_by_operator_id,omitempty"`
 }
 
 // MarshalJSON implements json.Marshaler with default enum values.
@@ -266,14 +266,14 @@ type SetTargetContextResponse struct {
 // BoundSessionsDocumentGo represents the persisted record of the bidirectional binding
 // between a web session and one or more operator sessions.
 type BoundSessionsDocumentGo struct {
-	ID                 string    `json:"id"`
-	WebSessionID       string    `json:"web_session_id"`
-	UserID             string    `json:"user_id"`
-	OperatorSessionIDs []string  `json:"operator_session_ids"`
-	OperatorIDs        []string  `json:"operator_ids"`
-	BoundAt            time.Time `json:"bound_at"`
-	LastUpdatedAt      time.Time `json:"last_updated_at"`
-	Status             string    `json:"status"`
+	ID                 string                   `json:"id"`
+	WebSessionID       string                   `json:"web_session_id"`
+	UserID             string                   `json:"user_id"`
+	OperatorSessionIDs []string                 `json:"operator_session_ids"`
+	OperatorIDs        []string                 `json:"operator_ids"`
+	BoundAt            time.Time                `json:"bound_at"`
+	LastUpdatedAt      time.Time                `json:"last_updated_at"`
+	Status             constants.OperatorStatus `json:"status"`
 }
 
 // ============================================================================
@@ -352,19 +352,6 @@ type CLISession struct {
 	ExpiresAt         time.Time `json:"expires_at"`
 }
 
-// UserStatus controls whether a user is permitted to authenticate.
-//
-// Disabled users keep their record so audit trails and historical references
-// remain resolvable, but every authentication chokepoint (mTLS + web session)
-// MUST refuse to act on their behalf. Status changes are append-only events
-// recorded in the auth admin audit log.
-type UserStatus string
-
-const (
-	UserStatusActive   UserStatus = "active"
-	UserStatusDisabled UserStatus = "disabled"
-)
-
 // User represents a platform user with passkey credentials.
 //
 // IsBootstrap identifies the ephemeral local-superadmin identity created by
@@ -379,8 +366,8 @@ type User struct {
 	PasskeyCredentials []PasskeyCredential `json:"passkey_credentials,omitempty"`
 	Provider           string              `json:"provider,omitempty"`
 
-	Status      UserStatus `json:"status,omitempty"`
-	IsBootstrap bool       `json:"is_bootstrap,omitempty"`
+	Status      constants.UserStatus `json:"status,omitempty"`
+	IsBootstrap bool                 `json:"is_bootstrap,omitempty"`
 }
 
 // IsActive reports whether the user is permitted to authenticate. Treats the
@@ -390,7 +377,7 @@ func (u *User) IsActive() bool {
 	if u == nil {
 		return false
 	}
-	return u.Status == "" || u.Status == UserStatusActive
+	return u.Status == "" || u.Status == constants.UserStatusActive
 }
 
 // AdminAuditEntry is a single row in the `auth_admin_audit` collection.

@@ -31,6 +31,11 @@ class ResourceCreationRequest(G8eBaseModel):
     case_title: str | None = Field(default=None, description="Optional case title override")
 
 
+class SettingsGetRequest(G8eBaseModel):
+    """Request model for GET /settings/user."""
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
+
+
 class ChatMessageRequest(G8eBaseModel):
     """Request model for chat messages.
 
@@ -39,7 +44,6 @@ class ChatMessageRequest(G8eBaseModel):
     The request body carries user-controlled content plus context.
 
     To create a new case+investigation, set resource_creation.create_case to True.
-    This replaces the legacy X-G8E-New-Case header and NEW_CASE_ID sentinel.
     """
     context: RequestContext = Field(..., description="Request context with session/case/investigation identity")
     message: str = Field(..., description="Chat message content")

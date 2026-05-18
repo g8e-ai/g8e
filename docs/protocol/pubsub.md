@@ -20,7 +20,7 @@ Every action in the g8e ecosystem is a **Transaction** wrapped in a `GovernanceE
 
 ### 1. Intent & Packaging
 A client (Engine or BYO) packages an intent (e.g., `EXECUTE_BASH`) into a `GovernanceEnvelope`. 
-- **Wire Format**: Canonical JSON (`protojson`) is the **mandatory** wire format for all client-facing surfaces. Binary protobuf and legacy formats are explicitly rejected.
+- **Wire Format**: Canonical JSON (`protojson`) is the **mandatory** wire format for all client-facing surfaces. Binary protobuf and any other encoding are explicitly rejected.
 - **Identity**: Every envelope must include a valid `operator_id` and `operator_session_id`.
 
 ### 2. Dispatch

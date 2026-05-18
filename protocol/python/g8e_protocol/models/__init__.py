@@ -15,6 +15,7 @@ from .base import G8eBaseModel, UTCDatetime, Field, ConfigDict
 from .context import RequestContext, BoundOperator
 from .internal_api import (
     ResourceCreationRequest,
+    SettingsGetRequest,
     ChatMessageRequest,
     ChatStartedResponse,
 )
@@ -43,6 +44,7 @@ __all__ = [
     "RequestContext",
     "BoundOperator",
     "ResourceCreationRequest",
+    "SettingsGetRequest",
     "ChatMessageRequest",
     "ChatStartedResponse",
     "G8eeUserSettings",

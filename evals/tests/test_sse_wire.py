@@ -10,6 +10,10 @@ If the publisher renames `event`, `event.type`, `event.data`, or moves
 these tests fail loudly — preventing silent bench drift.
 """
 
+import os
+from unittest.mock import patch
+import importlib
+
 from g8e_evals.sut.g8ee_chat import (
     _extract_investigation_id,
     _extract_text_chunk,
@@ -91,8 +95,8 @@ def test_parse_tolerates_extra_unknown_fields():
 
 def test_extract_text_chunk_uses_typed_envelope():
     assert _extract_text_chunk(SESSION_WIRE_FIXTURE) == "hello world"
-    # Top-level `data` (legacy ad-hoc shape) must NOT be recognized: the
-    # canonical wire shape always nests data under `event`.
+    # Top-level `data` (ad-hoc shape) must NOT be recognized: the canonical
+    # wire shape always nests data under `event`.
     assert _extract_text_chunk({"data": {"content": "stray"}}) == ""
 
 
@@ -102,3 +106,21 @@ def test_extract_investigation_id_only_reads_event_data():
     # produced by SessionEventWire and must not be honoured.
     assert _extract_investigation_id({"investigation_id": "stray"}) == ""
     assert _extract_investigation_id("not a dict") == ""
+
+
+def test_strict_mode_forbids_extra_fields():
+    # Set strict mode and reload the wire module to pick it up
+    with patch.dict(os.environ, {"G8E_STRICT_SSE": "true"}):
+        import g8e_evals.sut.wire as wire
+        importlib.reload(wire)
+        
+        try:
+            # This should fail in strict mode because of 'future_field'
+            payload = {**SESSION_WIRE_FIXTURE, "future_field": 1}
+            wire.SSEWireEnvelope.parse(payload)
+            assert False, "Should have raised ValidationError"
+        except wire.ValidationError:
+            pass
+        finally:
+            # Clean up: reload again without the env var
+            importlib.reload(wire)

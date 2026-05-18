@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 )
 
@@ -59,7 +60,7 @@ func (s *ApiKeyService) IssueDownloadKey(userID, orgID string) (string, error) {
 		"id":              docID,
 		"user_id":         userID,
 		"organization_id": orgID,
-		"status":          string(constants.Status.OperatorStatus.Active),
+		"status":          marshaler.OperatorStatus(constants.Status.OperatorStatus.Active),
 		"created_at":      now,
 		"last_used_at":    0,
 	}
@@ -69,7 +70,7 @@ func (s *ApiKeyService) IssueDownloadKey(userID, orgID string) (string, error) {
 		return "", err
 	}
 
-	if err := s.db.DocSet(string(constants.CollectionAPIKeys), docID, data); err != nil {
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionAPIKeys), docID, data); err != nil {
 		return "", fmt.Errorf("failed to store API key: %w", err)
 	}
 
@@ -78,7 +79,7 @@ func (s *ApiKeyService) IssueDownloadKey(userID, orgID string) (string, error) {
 		"g8e_key": rawKey,
 	}
 	userUpdateBytes, _ := json.Marshal(userUpdates)
-	_, _ = s.db.DocUpdate(string(constants.CollectionUsers), userID, userUpdateBytes)
+	_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, userUpdateBytes)
 
 	s.logger.Info("[API-KEY-SERVICE] Issued download key", "user_id", userID, "key_prefix", rawKey[:10])
 	return rawKey, nil
@@ -91,7 +92,7 @@ func (s *ApiKeyService) ValidateKey(rawKey string) (*models.Document, error) {
 	}
 
 	docID := s.makeDocID(rawKey)
-	doc, err := s.db.DocGet(string(constants.CollectionAPIKeys), docID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionAPIKeys), docID)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +108,7 @@ func (s *ApiKeyService) ValidateKey(rawKey string) (*models.Document, error) {
 		json.Unmarshal(statusVal, &status)
 	}
 
-	if status == constants.Status.OperatorStatus.Terminated {
+	if status == marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated) {
 		return nil, fmt.Errorf("key is terminated")
 	}
 
@@ -116,7 +117,7 @@ func (s *ApiKeyService) ValidateKey(rawKey string) (*models.Document, error) {
 		"last_used_at": time.Now().UnixMilli(),
 	}
 	updateBytes, _ := json.Marshal(updates)
-	_, _ = s.db.DocUpdate(string(constants.CollectionAPIKeys), docID, updateBytes)
+	_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionAPIKeys), docID, updateBytes)
 
 	return doc, nil
 }
@@ -124,7 +125,7 @@ func (s *ApiKeyService) ValidateKey(rawKey string) (*models.Document, error) {
 // RevokeKey revokes an API key.
 func (s *ApiKeyService) RevokeKey(rawKey string) error {
 	docID := s.makeDocID(rawKey)
-	_, err := s.db.DocDelete(string(constants.CollectionAPIKeys), docID)
+	_, err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionAPIKeys), docID)
 	return err
 }
 

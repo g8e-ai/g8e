@@ -20,9 +20,9 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -137,7 +137,7 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg PubSubComm
 		OperatorSessionID: as.config.OperatorSessionId,
 		Timestamp:         time.Now().UTC(),
 		Type:              storage.EventTypeCmdExec,
-		ContentText:       constants.Status.AISource.TerminalDirect,
+		ContentText:       constants.Status.AiSource.TerminalDirect,
 		CommandRaw:        protoCmd.Command,
 	}
 
@@ -173,7 +173,7 @@ func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg PubS
 		OperatorSessionID:   as.config.OperatorSessionId,
 		Timestamp:           time.Now().UTC(),
 		Type:                storage.EventTypeCmdExec,
-		ContentText:         constants.Status.AISource.TerminalDirect,
+		ContentText:         constants.Status.AiSource.TerminalDirect,
 		CommandRaw:          protoResult.Command,
 		CommandExitCode:     system.IntPtr(int(protoResult.ExitCode)),
 		CommandStdout:       protoResult.Output,

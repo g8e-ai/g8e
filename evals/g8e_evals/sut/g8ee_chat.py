@@ -41,11 +41,14 @@ from httpx_sse import aconnect_sse
 
 from g8e_protocol.models import (
     ChatMessageRequest,
+    ChatStartedResponse,
     G8eeUserSettings,
     ResourceCreationRequest,
     RequestContext,
+    SettingsGetRequest,
 )
 from g8e_evals.harness import BindingType, Response, SUTConfig, Task
+from g8e_evals.models import ActionReceipt
 from g8e_evals.sut.wire import SSEWireEnvelope
 from g8e_evals.transport import AuthContext, AuthenticationError
 
@@ -131,10 +134,13 @@ class G8eeChatSUT:
         """Fetch current user settings from g8ee for pre-flight validation."""
         async with self._client() as client:
             try:
-                resp = await client.get(
-                    f"{self.env.g8ee_url}/api/internal/settings/user",
-                    params={"user_id": self.env.user_id},
+                request = SettingsGetRequest(
+                    context=self.env.to_request_context()
+                )
+                resp = await client.post(
+                    f"{self.env.g8ee_url}/api/internal/settings/user/get",
                     headers=self._g8ee_headers(),
+                    content=request.model_dump_json(),
                 )
                 resp.raise_for_status()
                 return G8eeUserSettings.model_validate(resp.json())
@@ -185,17 +191,17 @@ class G8eeChatSUT:
                 )
 
             try:
-                started = resp.json()
-            except json.JSONDecodeError:
+                started = ChatStartedResponse.model_validate(resp.json())
+            except (json.JSONDecodeError, ValueError) as e:
                 return Response(
                     answer="",
                     model=self.model_provider,
                     binding=BindingType.UNBOUND,
-                    unbound_reason=f"g8ee chat returned non-JSON body: {resp.text[:400]}",
+                    unbound_reason=f"g8ee chat returned invalid body: {e}",
                 )
 
-            case_id = started.get("case_id") or ""
-            investigation_id = started.get("investigation_id") or ""
+            case_id = started.case_id
+            investigation_id = started.investigation_id
 
             # 3. Drain the per-session SSE buffer until terminal or idle.
             answer_text, trail, terminal_event = await self._drain_events(
@@ -222,7 +228,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 transaction_id=substrate_tx_id,
-                receipt=receipt.model_dump(),
+                receipt=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"chat terminated with {terminal_event}",
             )
@@ -233,7 +239,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 transaction_id=substrate_tx_id,
-                receipt=receipt.model_dump(),
+                receipt=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"idle timeout after {self.idle_timeout_s}s without terminal event",
             )
@@ -243,7 +249,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 transaction_id=substrate_tx_id,
-                receipt=receipt.model_dump(),
+                receipt=receipt,
                 binding=BindingType.RECEIPT_BOUND,
             )
 
@@ -251,7 +257,7 @@ class G8eeChatSUT:
             answer=answer_text,
             model=self.model_provider,
             transaction_id=None,
-            receipt=receipt.model_dump(),
+            receipt=receipt,
             binding=BindingType.UNBOUND,
             unbound_reason="answer-only turn (no Warden-signed ActionReceipt emitted)",
         )
@@ -438,7 +444,7 @@ def _extract_substrate_transaction_id(trail: list[AgentTrailEvent]) -> str | Non
         envelope = SSEWireEnvelope.parse(evt.payload)
         if envelope is None:
             continue
-        tx_id = envelope.field_in_data("transaction_hash")
-        if isinstance(tx_id, str) and tx_id:
+        tx_id = envelope.transaction_hash()
+        if tx_id:
             return tx_id
     return None

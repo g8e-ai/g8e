@@ -31,6 +31,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	"github.com/google/uuid"
@@ -231,7 +232,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, err := h.db.DocGet(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings))
+	doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 	if err != nil {
 		h.logger.Error("Health check failed to query platform_settings", "error", err)
 		jsonError(w, http.StatusServiceUnavailable, "platform_settings not ready")
@@ -488,7 +489,7 @@ func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Re
 func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		doc, err := h.db.DocGet(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings))
+		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 		if err != nil {
 			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -506,9 +507,9 @@ func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		var err2 error
 		if r.Method == http.MethodPut {
-			err2 = h.db.DocSet(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings), json.RawMessage(body))
+			err2 = h.db.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		} else {
-			_, err2 = h.db.DocUpdate(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings), json.RawMessage(body))
+			_, err2 = h.db.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		}
 		if err2 != nil {
 			jsonError(w, http.StatusInternalServerError, err2.Error())
@@ -1113,7 +1114,7 @@ func (h *HTTPHandler) handleTrustedSignerByID(w http.ResponseWriter, r *http.Req
 			return
 		}
 		// Return metadata rather than raw bytes
-		doc, _ := h.db.DocGet(string(constants.CollectionTrustedSigners), id)
+		doc, _ := h.db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
 		jsonResponse(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodDelete:
@@ -1282,7 +1283,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	switch {
 	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
 		// Verify operator_session_id is bound to this cli_session_id.
-		doc, err := h.db.DocGet(string(constants.CollectionCLISessions), route.CLISessionID)
+		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil {
 			h.logger.Error("Failed to fetch CLI session", "error", err, "cli_session_id", route.CLISessionID)
 			jsonError(w, http.StatusInternalServerError, "failed to verify cli session")
@@ -1362,7 +1363,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	var channel string
 	switch {
 	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
-		doc, err := h.db.DocGet(string(constants.CollectionCLISessions), route.CLISessionID)
+		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil || doc == nil {
 			jsonError(w, http.StatusForbidden, "not authorized for this cli session")
 			return
@@ -2333,7 +2334,7 @@ func (h *HTTPHandler) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("g8e_session")
 	if err == nil {
 		// Best effort delete session from DB
-		_, _ = h.db.DocDelete(string(constants.CollectionWebSessions), cookie.Value)
+		_, _ = h.db.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value)
 	}
 
 	// Clear cookie
@@ -2423,8 +2424,9 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		user = bootstrapUser
 		h.logger.Info("[BOOTSTRAP] Rotating existing bootstrap user", "user_id", user.ID, "email", user.Email)
 	} else {
-		// No bootstrap user exists - create one
-		// But first check if ANY users exist (legacy safety check)
+		// No bootstrap user exists - create one.
+		// Defense-in-depth: refuse if any user already exists, so bootstrap can
+		// only run on a genuinely empty system.
 		hasUsers, err := h.userSvc.HasAnyUsers()
 		if err != nil {
 			h.logger.Error("Failed to check for existing users during bootstrap", "error", err)
@@ -2529,7 +2531,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, http.StatusInternalServerError, "failed to create operator")
 			return
 		}
-		if err := h.db.DocSet(string(constants.CollectionOperators), operatorID, opBytes); err != nil {
+		if err := h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 			h.logger.Error("Failed to persist operator document", "error", err)
 			jsonError(w, http.StatusInternalServerError, "failed to create operator")
 			return
@@ -2561,7 +2563,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 			ExpiresAt:         time.Now().UTC().Add(24 * time.Hour), // Match operator session expiry
 		}
 		cliSessionBytes, _ := json.Marshal(cliSession)
-		if err := h.db.DocSet(string(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
+		if err := h.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
 			h.logger.Error("Failed to persist CLI session during bootstrap", "error", err)
 			jsonError(w, http.StatusInternalServerError, "failed to bind CLI session")
 			return

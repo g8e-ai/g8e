@@ -29,33 +29,33 @@ def _load(filename: str) -> dict[str, object]:
 _COLLECTIONS: dict[str, object] = _load("collections.json")
 _DOCUMENT_IDS: dict[str, object] = _load("document_ids.json")
 
-_c: dict[str, str] = _COLLECTIONS["collections"]
-_d: dict[str, str] = _DOCUMENT_IDS["document_ids"]
-_s: dict[str, str] = _DOCUMENT_IDS["sentinel_id"]
+_c: dict[str, dict] = _COLLECTIONS["collections"]
+_d: dict[str, dict] = _DOCUMENT_IDS["document_ids"]
+_s: dict[str, dict] = _DOCUMENT_IDS["sentinel_id"]
 
-DB_COLLECTION_SETTINGS          = _c["settings"] # one 'settings' collection for both 'platform_settings' and user-specific settings documents
-DB_COLLECTION_USERS             = _c["users"]
-DB_COLLECTION_WEB_SESSIONS      = _c["web_sessions"]
-DB_COLLECTION_OPERATOR_SESSIONS = _c["operator_sessions"]
-DB_COLLECTION_API_KEYS          = _c["api_keys"]
-DB_COLLECTION_CLI_SESSIONS      = _c["cli_sessions"]
-DB_COLLECTION_ORGANIZATIONS     = _c["organizations"]
-DB_COLLECTION_OPERATORS         = _c["operators"]
-DB_COLLECTION_OPERATOR_USAGE    = _c["operator_usage"]
-DB_COLLECTION_CASES             = _c["cases"]
-DB_COLLECTION_INVESTIGATIONS    = _c["investigations"]
-DB_COLLECTION_TASKS             = _c["tasks"]
-DB_COLLECTION_MEMORIES          = _c["memories"]
-DB_COLLECTION_REVOKED_CERTS      = _c.get("revoked_certificates", "revoked_certificates")
-DB_COLLECTION_TRIBUNAL_COMMANDS = _c["tribunal_commands"]
-DB_COLLECTION_AGENT_ACTIVITY_METADATA = _c["agent_activity_metadata"]
-DB_COLLECTION_REPUTATION_STATE        = _c["reputation_state"]
-DB_COLLECTION_REPUTATION_COMMITMENTS  = _c["reputation_commitments"]
-DB_COLLECTION_STAKE_RESOLUTIONS       = _c["stake_resolutions"]
+DB_COLLECTION_SETTINGS          = _c["settings"]["value"] # one 'settings' collection for both 'platform_settings' and user-specific settings documents
+DB_COLLECTION_USERS             = _c["users"]["value"]
+DB_COLLECTION_WEB_SESSIONS      = _c["web_sessions"]["value"]
+DB_COLLECTION_OPERATOR_SESSIONS = _c["operator_sessions"]["value"]
+DB_COLLECTION_API_KEYS          = _c["api_keys"]["value"]
+DB_COLLECTION_CLI_SESSIONS      = _c["cli_sessions"]["value"]
+DB_COLLECTION_ORGANIZATIONS     = _c["organizations"]["value"]
+DB_COLLECTION_OPERATORS         = _c["operators"]["value"]
+DB_COLLECTION_OPERATOR_USAGE    = _c["operator_usage"]["value"]
+DB_COLLECTION_CASES             = _c["cases"]["value"]
+DB_COLLECTION_INVESTIGATIONS    = _c["investigations"]["value"]
+DB_COLLECTION_TASKS             = _c["tasks"]["value"]
+DB_COLLECTION_MEMORIES          = _c["memories"]["value"]
+DB_COLLECTION_REVOKED_CERTS      = _c["revoked_certificates"]["value"] if "revoked_certificates" in _c else "revoked_certificates"
+DB_COLLECTION_TRIBUNAL_COMMANDS = _c["tribunal_commands"]["value"]
+DB_COLLECTION_AGENT_ACTIVITY_METADATA = _c["agent_activity_metadata"]["value"]
+DB_COLLECTION_REPUTATION_STATE        = _c["reputation_state"]["value"]
+DB_COLLECTION_REPUTATION_COMMITMENTS  = _c["reputation_commitments"]["value"]
+DB_COLLECTION_STAKE_RESOLUTIONS       = _c["stake_resolutions"]["value"]
 
 # Document IDs for settings collection
-PLATFORM_SETTINGS_DOC = _d["platform_settings"]
-USER_SETTINGS_DOC_PREFIX = _d["user_settings_prefix"]
+PLATFORM_SETTINGS_DOC = _d["platform_settings"]["value"]
+USER_SETTINGS_DOC_PREFIX = _d["user_settings_prefix"]["value"]
 
 # Sentinel ID values
-SENTINEL_ID_UNKNOWN = _s["unknown"]
+SENTINEL_ID_UNKNOWN = _s["unknown"]["value"]

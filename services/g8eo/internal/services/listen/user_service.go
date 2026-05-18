@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 )
 
@@ -94,7 +95,7 @@ func (s *UserService) createUser(email, name string, isBootstrap bool) (*models.
 		Name:               userName,
 		PasskeyCredentials: []models.PasskeyCredential{},
 		Provider:           "passkey",
-		Status:             models.UserStatusActive,
+		Status:             constants.UserStatusActive,
 		IsBootstrap:        isBootstrap,
 	}
 
@@ -103,7 +104,7 @@ func (s *UserService) createUser(email, name string, isBootstrap bool) (*models.
 		return nil, fmt.Errorf("failed to marshal user: %w", err)
 	}
 
-	if err := s.db.DocSet(string(constants.CollectionUsers), userID, data); err != nil {
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, data); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
@@ -126,7 +127,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 	if existing == nil {
 		return fmt.Errorf("user not found: %s", userID)
 	}
-	if existing.Status == models.UserStatusDisabled {
+	if existing.Status == constants.UserStatusDisabled {
 		// Already disabled — idempotent no-op, but still record an audit row
 		// so the caller's intent is visible if they retried.
 		return s.appendAdminAudit(models.AdminAuditEntry{
@@ -143,7 +144,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 	}
 
 	if _, err := s.UpdateUser(userID, map[string]interface{}{
-		"status": string(models.UserStatusDisabled),
+		"status": marshaler.Status(constants.UserStatusDisabled),
 	}); err != nil {
 		return fmt.Errorf("failed to disable user %s: %w", userID, err)
 	}
@@ -175,7 +176,7 @@ func (s *UserService) FindBootstrapUser() (*models.User, error) {
 	filters := []models.DocFilter{
 		{Field: "is_bootstrap", Op: "==", Value: json.RawMessage("true")},
 	}
-	docs, err := s.db.DocQuery(string(constants.CollectionUsers), filters, "", 2)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), filters, "", 2)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +200,7 @@ func (s *UserService) appendAdminAudit(entry models.AdminAuditEntry) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal admin audit entry: %w", err)
 	}
-	return s.db.DocSet(string(constants.CollectionAuthAdminAudit), entry.ID, data)
+	return s.db.DocSet(marshaler.CollectionName(constants.CollectionAuthAdminAudit), entry.ID, data)
 }
 
 // FindByEmail finds a user by email address.
@@ -213,7 +214,7 @@ func (s *UserService) FindByEmail(email string) (*models.User, error) {
 		{Field: "email", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitizedEmail))},
 	}
 
-	docs, err := s.db.DocQuery(string(constants.CollectionUsers), filters, "", 1)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), filters, "", 1)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +227,7 @@ func (s *UserService) FindByEmail(email string) (*models.User, error) {
 
 // GetByID retrieves a user by ID.
 func (s *UserService) GetByID(userID string) (*models.User, error) {
-	doc, err := s.db.DocGet(string(constants.CollectionUsers), userID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +256,7 @@ func (s *UserService) UpdateUser(userID string, updates map[string]interface{}) 
 		return nil, fmt.Errorf("failed to marshal updates: %w", err)
 	}
 
-	_, err = s.db.DocUpdate(string(constants.CollectionUsers), userID, updateBytes)
+	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
@@ -265,7 +266,7 @@ func (s *UserService) UpdateUser(userID string, updates map[string]interface{}) 
 
 // HasAnyUsers checks whether any users exist in the system.
 func (s *UserService) HasAnyUsers() (bool, error) {
-	docs, err := s.db.DocQuery(string(constants.CollectionUsers), []models.DocFilter{}, "", 1)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 1)
 	if err != nil {
 		return false, err
 	}
@@ -274,7 +275,7 @@ func (s *UserService) HasAnyUsers() (bool, error) {
 
 // DeleteUser removes a user by ID.
 func (s *UserService) DeleteUser(userID string) error {
-	deleted, err := s.db.DocDelete(string(constants.CollectionUsers), userID)
+	deleted, err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionUsers), userID)
 	if err != nil {
 		return err
 	}

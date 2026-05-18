@@ -5,12 +5,16 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 export G8E_PROJECT_ROOT="$SCRIPT_DIR"
+source "$SCRIPT_DIR/scripts/cmd/headers.sh"
+source "$SCRIPT_DIR/scripts/cmd/env_vars.sh"
+source "$SCRIPT_DIR/scripts/cmd/paths.sh"
+source "$SCRIPT_DIR/scripts/core/config.sh"
 
 # Host-native runtime layout
 G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$SCRIPT_DIR/.g8e}"
-G8E_PKI_DIR_HOST="${G8E_PKI_DIR:-$G8E_RUNTIME_DIR/pki}"
-G8E_SECRETS_DIR_HOST="${G8E_SECRETS_DIR:-$G8E_RUNTIME_DIR/secrets}"
-OPERATOR_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"
+G8E_PKI_DIR_HOST="${G8E_PKI_DIR:-$SCRIPT_DIR/$G8E_PATH_PKI_DIR}"
+G8E_SECRETS_DIR_HOST="${G8E_SECRETS_DIR:-$SCRIPT_DIR/$G8E_PATH_SECRETS_DIR}"
+OPERATOR_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:$G8E_PORT_OPERATOR_HTTP}"
 _OPERATOR_PID_FILE="$G8E_RUNTIME_DIR/pids/operator-listen.pid"
 _G8EE_PID_FILE="$G8E_RUNTIME_DIR/pids/g8ee.pid"
 
@@ -64,7 +68,7 @@ _generate_workload_csrs() {
 _operator_bootstrap() {
     local email="${G8E_BOOTSTRAP_EMAIL:-superadmin@g8e.local}"
     local name="${G8E_BOOTSTRAP_NAME:-Superadmin}"
-    local public_port="${OPERATOR_LISTEN_PUBLIC_PORT:-9003}"
+    local public_port="${OPERATOR_LISTEN_PUBLIC_PORT:-$G8E_PORT_OPERATOR_PUBLIC}"
     local public_url="https://localhost:$public_port"
     local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
 
@@ -111,7 +115,7 @@ _operator_bootstrap() {
     # Perform bootstrap over loopback
     local resp
     resp=$(curl -sS --cacert "$trust_bundle" \
-        -X POST -H "Content-Type: application/json" \
+        -X POST -H "${G8E_HEADER_CONTENT_TYPE}: application/json" \
         -d "$bootstrap_body" \
         "$public_url/api/auth/bootstrap")
 
@@ -225,19 +229,19 @@ _operator_curl() {
         fi
     fi
 
-    if [[ -n "$OPERATOR_SESSION_ID" ]]; then
-        args+=(-H "Authorization: Bearer $OPERATOR_SESSION_ID")
+    if [[ -n "$G8E_OPERATOR_SESSION_ID" ]]; then
+        args+=(-H "${G8E_HEADER_AUTHORIZATION}: Bearer $G8E_OPERATOR_SESSION_ID")
         # Also send as a cookie for web-authenticated routes
-        args+=(--cookie "g8e_session=$OPERATOR_SESSION_ID")
+        args+=(--cookie "g8e_session=$G8E_OPERATOR_SESSION_ID")
     fi
 
-    args+=(-H "Content-Type: application/json")
+    args+=(-H "${G8E_HEADER_CONTENT_TYPE}: application/json")
     [[ -n "$body" ]] && args+=(-d "$body")
     curl "${args[@]}" "$OPERATOR_HTTP_URL$path"
 }
 
 _g8ee_url() {
-    printf '%s' "${G8EE_URL:-https://localhost:8443}"
+    printf '%s' "${G8E_G8EE_URL:-https://localhost:$G8E_PORT_G8EE_HTTP}"
 }
 
 # Build curl args for an mTLS-authenticated request to either Operator or g8ee.
@@ -276,34 +280,18 @@ _build_protocol_curl_args() {
 _append_g8e_auth_headers() {
     local _outvar="$1"
     eval "local __auth_args=(\"\${${_outvar}[@]}\")"
-    __auth_args+=(-H "Content-Type: application/json")
-    if [[ -n "${OPERATOR_SESSION_ID:-}" ]]; then
+    __auth_args+=(-H "${G8E_HEADER_CONTENT_TYPE}: application/json")
+    if [[ -n "${G8E_OPERATOR_SESSION_ID:-}" ]]; then
         # Substrate uses Authorization: Bearer <token>.
-        __auth_args+=(-H "Authorization: Bearer $OPERATOR_SESSION_ID")
-        __auth_args+=(--cookie "g8e_session=$OPERATOR_SESSION_ID")
+        __auth_args+=(-H "${G8E_HEADER_AUTHORIZATION}: Bearer $G8E_OPERATOR_SESSION_ID")
+        __auth_args+=(--cookie "g8e_session=$G8E_OPERATOR_SESSION_ID")
     fi
-    if [[ -n "${CLI_SESSION_ID:-}" ]]; then
-        __auth_args+=(-H "X-G8E-CLI-Session-ID: $CLI_SESSION_ID")
+    if [[ -n "${G8E_CLI_SESSION_ID:-}" ]]; then
+        __auth_args+=(-H "${G8E_HEADER_X_SESSION_ID}: $G8E_CLI_SESSION_ID")
     fi
     eval "$_outvar=(\"\${__auth_args[@]}\")"
 }
 
-# DEPRECATED: Append legacy X-G8E-* context headers.
-# This remains strictly for backward compatibility with unmigrated routes.
-# NEVER use this for new routes; use body-embedded RequestContext instead.
-# Usage: _append_legacy_g8e_context_headers <array_name>
-_append_legacy_g8e_context_headers() {
-    local _outvar="$1"
-    eval "local __args_internal=(\"\${${_outvar}[@]}\")"
-    _append_g8e_auth_headers __args_internal
-    __args_internal+=(-H "X-G8E-Source-Component: ${G8E_SOURCE_COMPONENT:-client}")
-    [[ -n "${USER_ID:-}" ]]              && __args_internal+=(-H "X-G8E-User-ID: $USER_ID")
-    [[ -n "${G8E_CASE_ID:-}" ]]          && __args_internal+=(-H "X-G8E-Case-ID: $G8E_CASE_ID")
-    [[ -n "${G8E_INVESTIGATION_ID:-}" ]] && __args_internal+=(-H "X-G8E-Investigation-ID: $G8E_INVESTIGATION_ID")
-    [[ -n "${G8E_BOUND_OPERATORS:-}" ]]  && __args_internal+=(-H "X-G8E-Bound-Operators: $G8E_BOUND_OPERATORS")
-    [[ -n "${G8E_TASK_ID:-}" ]]          && __args_internal+=(-H "X-G8E-Task-ID: $G8E_TASK_ID")
-    eval "$_outvar=(\"\${__args_internal[@]}\")"
-}
 
 # POST/GET to g8ee using mTLS + g8e auth headers.
 # Usage: _g8ee_curl <method> <path> [body]
@@ -322,7 +310,7 @@ _run_host_script() {
     export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
     export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
     export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
-    [[ -n "${OPERATOR_SESSION_ID:-}" ]] && export OPERATOR_SESSION_ID
+    [[ -n "${G8E_OPERATOR_SESSION_ID:-}" ]] && export G8E_OPERATOR_SESSION_ID
     exec "$@"
 }
 
@@ -354,10 +342,10 @@ _save_credentials() {
     # Ensure directory has restricted permissions
     chmod 700 "$G8E_CREDENTIALS_DIR"
     cat > "$G8E_CREDENTIALS_FILE" <<EOF
-export OPERATOR_SESSION_ID="$operator_session_id"
-export CLI_SESSION_ID="$cli_session_id"
-export USER_ID="$user_id"
-export OPERATOR_ID="$operator_id"
+export $G8E_ENV_OPERATOR_SESSION_ID="$operator_session_id"
+export $G8E_ENV_CLI_SESSION_ID="$cli_session_id"
+export $G8E_ENV_USER_ID="$user_id"
+export $G8E_ENV_OPERATOR_ID="$operator_id"
 export G8E_AUTH_TIMESTAMP="$(date +%s)"
 export G8E_CLI_CERT="$G8E_CLI_CERT_FILE"
 export G8E_CLI_KEY="$G8E_CLI_KEY_FILE"
@@ -373,7 +361,7 @@ _clear_credentials() {
         rm -f "$G8E_CREDENTIALS_FILE"
     fi
     rm -f "$G8E_CLI_CERT_FILE" "$G8E_CLI_KEY_FILE" "$G8E_OPERATOR_CERT_FILE" "$G8E_OPERATOR_KEY_FILE"
-    unset OPERATOR_SESSION_ID CLI_SESSION_ID USER_ID OPERATOR_ID G8E_AUTH_TIMESTAMP G8E_CLI_CERT G8E_CLI_KEY G8E_OPERATOR_CERT G8E_OPERATOR_KEY
+    unset $G8E_ENV_OPERATOR_SESSION_ID $G8E_ENV_CLI_SESSION_ID $G8E_ENV_USER_ID $G8E_ENV_OPERATOR_ID G8E_AUTH_TIMESTAMP G8E_CLI_CERT G8E_CLI_KEY G8E_OPERATOR_CERT G8E_OPERATOR_KEY
 }
 
 _check_g8e_error() {
@@ -438,7 +426,7 @@ _ensure_authenticated() {
             _clear_credentials
             exit 1
         fi
-        export OPERATOR_SESSION_ID USER_ID OPERATOR_ID G8E_CLI_CERT G8E_CLI_KEY G8E_OPERATOR_CERT G8E_OPERATOR_KEY
+        export $G8E_ENV_OPERATOR_SESSION_ID $G8E_ENV_USER_ID $G8E_ENV_OPERATOR_ID G8E_CLI_CERT G8E_CLI_KEY G8E_OPERATOR_CERT G8E_OPERATOR_KEY
         return 0
     fi
     echo "[g8e] Not authenticated. Run: ./g8e login" >&2

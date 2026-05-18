@@ -32,9 +32,10 @@ from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, Triage
 from app.dependencies import (
     get_g8ee_case_data_service,
     get_g8ee_investigation_service,
-    require_proxy_auth,
+    require_authenticated_context,
     get_g8ee_chat_pipeline,
     get_g8ee_chat_task_manager,
+    get_g8ee_settings_service,
     get_g8ee_user_settings,
 )
 from app.services.investigation.investigation_service import InvestigationService
@@ -42,6 +43,7 @@ from app.services.investigation.investigation_data_service import InvestigationD
 from app.services.data.case_data_service import CaseDataService
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import BackgroundTaskManager
+from app.services.infra.settings_service import SettingsService
 from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
 
@@ -59,14 +61,14 @@ async def answer_triage_question(
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
-    user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
-    user_info: AuthenticatedUser = Depends(require_proxy_auth)
+    settings_service: SettingsService = Depends(get_g8ee_settings_service),
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ) -> dict[str, bool]:
     """
     Receive user answer to a triage clarifying question and store in ledger.
     """
-    g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
-    g8e_context.validate_against_user(user_info)
+    # Fetch user settings manually using user_id from context to eliminate header dependency
+    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
     
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
@@ -78,7 +80,7 @@ async def answer_triage_question(
 
     investigation_id = request.context.investigation_id
     investigation = await investigation_service.get_investigation(investigation_id)
-    if not investigation or investigation.user_id != user_info.uid:
+    if not investigation or investigation.user_id != g8e_context.user_id:
         raise ResourceNotFoundError("Investigation not found", resource_id=investigation_id, resource_type="investigation", component="g8ee")
 
     # Store answer as user.chat message with structured metadata
@@ -121,14 +123,14 @@ async def skip_triage_questions(
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
-    user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
-    user_info: AuthenticatedUser = Depends(require_proxy_auth)
+    settings_service: SettingsService = Depends(get_g8ee_settings_service),
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ) -> dict[str, bool]:
     """
     Record that user skipped the triage clarifying questions.
     """
-    g8e_context = G8eHttpContext.from_request_context(request.context, is_exempt_path=False)
-    g8e_context.validate_against_user(user_info)
+    # Fetch user settings manually using user_id from context to eliminate header dependency
+    user_settings = await settings_service.get_user_settings(g8e_context.user_id)
     
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
@@ -140,7 +142,7 @@ async def skip_triage_questions(
 
     investigation_id = request.context.investigation_id
     investigation = await investigation_service.get_investigation(investigation_id)
-    if not investigation or investigation.user_id != user_info.uid:
+    if not investigation or investigation.user_id != g8e_context.user_id:
         raise ResourceNotFoundError("Investigation not found", resource_id=investigation_id, resource_type="investigation", component="g8ee")
 
     skip_text = "Skipped clarifying questions"
@@ -178,14 +180,14 @@ async def skip_triage_questions(
 async def timeout_triage_questions(
     request: TriageTimeoutRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
-    user_info: AuthenticatedUser = Depends(require_proxy_auth)
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ) -> dict[str, bool]:
     """
     Record that triage clarifying questions timed out.
     """
-    investigation_id = request.context.investigation_id
+    investigation_id = g8e_context.investigation_id
     investigation = await investigation_service.get_investigation(investigation_id)
-    if not investigation or investigation.user_id != user_info.uid:
+    if not investigation or investigation.user_id != g8e_context.user_id:
         raise ResourceNotFoundError("Investigation not found", resource_id=investigation_id, resource_type="investigation", component="g8ee")
 
     await investigation_service.investigation_data_service.add_chat_message(
@@ -204,7 +206,7 @@ async def get_chat_session(
     web_session_id: str,
     request: Request,
     investigation_service: InvestigationDataService = Depends(get_g8ee_investigation_service),
-    user_info: AuthenticatedUser = Depends(require_proxy_auth)
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ) -> ChatSessionResponse:
     """
     Get chat session information.
@@ -217,7 +219,7 @@ async def get_chat_session(
     Returns:
         Chat session information including associated case context
     """
-    authenticated_user_id = user_info.uid
+    authenticated_user_id = g8e_context.user_id
 
     investigation = await investigation_service.investigation_data_service.get_investigation(web_session_id)
     if investigation:
@@ -242,7 +244,7 @@ async def get_latest_chat_session_for_case(
     request: Request,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
     investigation_service: InvestigationDataService = Depends(get_g8ee_investigation_service),
-    user_info: AuthenticatedUser = Depends(require_proxy_auth)
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ) -> LatestChatSessionResponse:
     """
     Get the most recent chat session for a case, including conversation history.
@@ -255,7 +257,7 @@ async def get_latest_chat_session_for_case(
     Returns:
         Latest chat session data with conversation history, or null if no session exists
     """
-    authenticated_user_id = user_info.uid
+    authenticated_user_id = g8e_context.user_id
 
     raw_case = await case_service.get_case(case_id)
     if raw_case is None:

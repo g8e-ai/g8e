@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
@@ -777,7 +778,7 @@ func TestRegistrationService_Binding(t *testing.T) {
 		assert.Contains(t, sids, opSessID)
 
 		// Verify durability document
-		doc, err := db.DocGet(string(constants.CollectionBoundSessions), sessionID)
+		doc, err := db.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), sessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 		assert.Equal(t, sessionID, docFieldString(t, doc, "web_session_id"))

@@ -9,7 +9,7 @@ import click
 from rich.console import Console
 
 from g8e_evals.harness import RowResult, BindingType, SUTConfig, LLMRoleConfig
-from g8e_evals.sut.g8ee_chat import G8eeChatSUT, AuthenticationError
+from g8e_evals.sut.g8ee_chat import G8eeChatSUT, AuthenticationError, ChatEvaluationReceipt
 from g8e_evals.agent_trail_renderer import TurnRenderer
 from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
 from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
@@ -17,6 +17,7 @@ from g8e_evals.receipts.collector import ReceiptCollector
 from g8e_evals.receipts.verify import verify_receipt_signature
 from g8e_evals.report.aggregate import aggregate_results
 from g8e_evals.report.cli_renderer import render_summary
+from g8e_evals.models import ActionReceipt, ScoreDetails
 
 console = Console()
 
@@ -185,8 +186,16 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
         # Get answer (drives the full g8ee chat pipeline end-to-end).
         response = await sut.get_answer(task)
         current_renderer["r"] = None
+        
+        # Extract terminal_event from receipt (ChatEvaluationReceipt)
+        terminal_event = None
+        if isinstance(response.receipt, ChatEvaluationReceipt):
+            terminal_event = response.receipt.terminal_event
+        elif response.receipt and hasattr(response.receipt, "terminal_event"):
+            terminal_event = response.receipt.terminal_event
+            
         renderer.finish(
-            terminal_event=(response.receipt or {}).get("terminal_event") if response.receipt else None,
+            terminal_event=terminal_event,
             answer_chars=len(response.answer or ""),
         )
         
@@ -197,21 +206,27 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
         if response.binding == BindingType.RECEIPT_BOUND and response.transaction_id:
             on_chain_receipt = await collector.collect_receipt(response.transaction_id)
             if on_chain_receipt:
-                merged = dict(response.receipt or {})
-                merged["substrate_receipt"] = on_chain_receipt
-                response.receipt = merged
-                response.receipt_signature = on_chain_receipt.get("signature")
+                # Store the substrate receipt in the response
+                # We keep the original receipt (ChatEvaluationReceipt) and add substrate data
+                if isinstance(response.receipt, ChatEvaluationReceipt):
+                    # Convert to dict for merging, then back to model
+                    receipt_dict = response.receipt.model_dump()
+                    receipt_dict["substrate_receipt"] = on_chain_receipt.model_dump()
+                    response.receipt = receipt_dict  # Temporarily store as dict
+                else:
+                    response.receipt = {"substrate_receipt": on_chain_receipt.model_dump()}
+                response.receipt_signature = on_chain_receipt.signature
                 if warden_pub:
                     response.receipt_verified = verify_receipt_signature(on_chain_receipt, warden_pub)
         
         # Score
         if suite == "ifeval":
             score = verifier.verify(
-                task.id, 
-                task.prompt, 
-                response.answer, 
-                task.metadata["instruction_id_list"],
-                task.metadata["kwargs"]
+                task.id,
+                task.prompt,
+                response.answer,
+                task.metadata.instruction_id_list,
+                task.metadata.kwargs
             )
             
         res = RowResult(task=task, response=response, score=score)
@@ -227,7 +242,13 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
         elif response.unbound_reason:
             receipt_status = f" [yellow]({response.unbound_reason})[/yellow]"
 
-        event_count = (response.receipt or {}).get("event_count", 0) if response.receipt else 0
+        # Extract event_count from receipt (ChatEvaluationReceipt)
+        event_count = 0
+        if isinstance(response.receipt, ChatEvaluationReceipt):
+            event_count = response.receipt.event_count
+        elif response.receipt and hasattr(response.receipt, "event_count"):
+            event_count = response.receipt.event_count
+
         console.print(
             f"  [dim]{task.id}[/dim] [{status_color}]{'PASS' if score.passed else 'FAIL'}[/{status_color}]"
             f" answer_chars={len(response.answer or '')}"
@@ -244,16 +265,31 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
     report_dir.mkdir(parents=True, exist_ok=True)
     
     def row_to_dict(r: RowResult):
+        # Serialize Pydantic models to dicts
+        receipt_data = None
+        if r.response.receipt:
+            if isinstance(r.response.receipt, (ChatEvaluationReceipt, ActionReceipt)):
+                receipt_data = r.response.receipt.model_dump()
+            else:
+                receipt_data = r.response.receipt  # Already a dict
+
+        details_data = None
+        if r.score.details:
+            if isinstance(r.score.details, ScoreDetails):
+                details_data = r.score.details.model_dump()
+            else:
+                details_data = r.score.details  # Already a dict
+
         return {
             "task_id": r.task.id,
             "prompt": r.task.prompt,
             "answer": r.response.answer,
             "transaction_id": r.response.transaction_id,
-            "receipt": r.response.receipt,
+            "receipt": receipt_data,
             "receipt_signature": r.response.receipt_signature,
             "receipt_verified": r.response.receipt_verified,
             "passed": r.score.passed,
-            "details": r.score.details,
+            "details": details_data,
             "timestamp": r.timestamp.isoformat()
         }
 
@@ -300,7 +336,13 @@ def verify_receipts(report_dir, pki_dir):
                 continue
                 
             total += 1
-            if verify_receipt_signature(receipt, warden_pub):
+            try:
+                receipt_model = ActionReceipt.model_validate(receipt)
+            except Exception:
+                failed += 1
+                console.print(f"  [red]FAILED:[/red] Could not parse receipt for task {data.get('task_id')} (TX: {data.get('transaction_id')})")
+                continue
+            if verify_receipt_signature(receipt_model, warden_pub):
                 verified += 1
             else:
                 failed += 1

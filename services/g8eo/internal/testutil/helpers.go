@@ -28,6 +28,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 )
 
 // configCounter generates monotonically increasing IDs within a single test binary
@@ -112,7 +113,7 @@ func (w testLogWriter) Write(p []byte) (int, error) {
 // proxies /ws/pubsub to operator internally. operator is not directly accessible from outside
 // the docker network. Must not include a path — callers append /ws/pubsub as needed.
 func GetTestOperatorDirectURL() string {
-	if u := os.Getenv(string(constants.EnvVar.OperatorPubSubURL)); u != "" {
+	if u := os.Getenv(marshaler.EnvVar(constants.EnvVar.InternalPubSubURL)); u != "" {
 		return u
 	}
 	return "wss://" + constants.DefaultEndpoint + ":443"

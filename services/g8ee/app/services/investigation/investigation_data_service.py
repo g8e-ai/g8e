@@ -196,7 +196,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
         async with self._history_lock.acquire(investigation_id):
             # Get previous hash from last entry in conversation history.
-            # All entries must have entry_hash - no legacy data support.
+            # All entries must carry an entry_hash; missing hashes are a hard error.
             investigation = await self.get_investigation(investigation_id)
             if not investigation:
                 raise ValueError(f"Investigation {investigation_id} not found")

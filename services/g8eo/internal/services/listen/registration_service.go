@@ -26,6 +26,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 )
 
@@ -38,11 +39,11 @@ const (
 	maxDeviceLinkTTL               = 7 * 24 * time.Hour
 	defaultDeviceLinkMaxUses       = 1
 	maxDeviceLinkMaxUses           = 1000
-	deviceLinkStatusActive         = "active"
-	deviceLinkStatusPending        = "pending"
-	deviceLinkStatusRevoked        = "revoked"
-	deviceLinkStatusExpired        = "expired"
-	deviceLinkStatusExhausted      = "exhausted"
+	deviceLinkStatusActive         = constants.DeviceLinkStatusActive
+	deviceLinkStatusPending        = constants.DeviceLinkStatusPending
+	deviceLinkStatusRevoked        = constants.DeviceLinkStatusRevoked
+	deviceLinkStatusExpired        = constants.DeviceLinkStatusExpired
+	deviceLinkStatusExhausted      = constants.DeviceLinkStatusExhausted
 	lockTTL                        = 10 * time.Second
 	lockMaxRetries                 = 30
 	lockRetryDelay                 = 50 * time.Millisecond
@@ -227,7 +228,7 @@ func (s *RegistrationService) releaseLock(lockKey, lockValue string) error {
 func (s *RegistrationService) CreateDeviceLink(req models.CreateDeviceLinkRequest) (*models.DeviceLinkResponse, error) {
 	if req.UserID == "" && req.Email != "" {
 		sanitized := strings.TrimSpace(strings.ToLower(req.Email))
-		docs, err := s.db.DocQuery(string(constants.CollectionUsers), []models.DocFilter{
+		docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{
 			{Field: "email", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitized))},
 		}, "", 1)
 		if err != nil {
@@ -256,7 +257,7 @@ func (s *RegistrationService) CreateDeviceLink(req models.CreateDeviceLinkReques
 		return nil, fmt.Errorf("ttl_seconds must be between %d and %d", int(minDeviceLinkTTL.Seconds()), int(maxDeviceLinkTTL.Seconds()))
 	}
 	if req.OperatorID != "" {
-		doc, err := s.db.DocGet(string(constants.CollectionOperators), req.OperatorID)
+		doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch operator: %w", err)
 		}
@@ -276,7 +277,7 @@ func (s *RegistrationService) CreateDeviceLink(req models.CreateDeviceLinkReques
 		return nil, fmt.Errorf("failed to generate device link token: %w", err)
 	}
 	now := time.Now().UTC()
-	status := deviceLinkStatusActive
+	var status constants.DeviceLinkStatus = deviceLinkStatusActive
 	if req.OperatorID != "" {
 		status = deviceLinkStatusPending
 	}
@@ -325,7 +326,7 @@ func (s *RegistrationService) ListDeviceLinks(userID string) ([]models.DeviceLin
 		if link.UserID != userID {
 			continue
 		}
-		status := link.Status
+		var status constants.DeviceLinkStatus = link.Status
 		if link.ExpiresAt.Before(time.Now()) {
 			status = deviceLinkStatusExpired
 		}
@@ -378,7 +379,7 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.Operato
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 		{Field: "is_slot", Op: "==", Value: json.RawMessage("true")},
 	}
-	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "slot_number", 0)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "slot_number", 0)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +398,7 @@ func (s *RegistrationService) RotateOperatorAPIKey(operatorID, userID string) er
 	if operatorID == "" {
 		return fmt.Errorf("operator_id is required")
 	}
-	doc, err := s.db.DocGet(string(constants.CollectionOperators), operatorID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
 	if err != nil {
 		return err
 	}
@@ -422,7 +423,7 @@ func (s *RegistrationService) RotateOperatorAPIKey(operatorID, userID string) er
 		"updated_at":       time.Now().UTC(),
 	}
 	updateBytes, _ := json.Marshal(update)
-	if _, err := s.db.DocUpdate(string(constants.CollectionOperators), operatorID, updateBytes); err != nil {
+	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
 		return err
 	}
 
@@ -437,7 +438,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return fmt.Errorf("user_id is required")
 	}
 
-	doc, err := s.db.DocGet(string(constants.CollectionOperators), operatorID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch operator: %w", err)
 	}
@@ -454,20 +455,20 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return fmt.Errorf("operator does not belong to user")
 	}
 
-	if op.Status == constants.Status.OperatorStatus.Terminated {
+	if op.Status == marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated) {
 		return nil // Already terminated
 	}
 
 	// Update operator to terminated status
 	update := map[string]interface{}{
-		"status":     constants.Status.OperatorStatus.Terminated,
+		"status":     marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated),
 		"updated_at": time.Now().UTC(),
 	}
 	if reason != "" {
 		update["termination_reason"] = reason
 	}
 	updateBytes, _ := json.Marshal(update)
-	if _, err := s.db.DocUpdate(string(constants.CollectionOperators), operatorID, updateBytes); err != nil {
+	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
 		return fmt.Errorf("failed to update operator status: %w", err)
 	}
 
@@ -534,7 +535,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 		if linkData.OperatorID == "" {
 			return nil, fmt.Errorf("pending link missing operator_id")
 		}
-		doc, err := s.db.DocGet(string(constants.CollectionOperators), linkData.OperatorID)
+		doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), linkData.OperatorID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch operator: %w", err)
 		}
@@ -568,7 +569,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 	for _, claim := range linkData.Claims {
 		if claim.SystemFingerprint == sanitizedFingerprint {
 			// Device already claimed, reuse the same operator
-			doc, err := s.db.DocGet(string(constants.CollectionOperators), claim.OperatorID)
+			doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), claim.OperatorID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch operator: %w", err)
 			}
@@ -597,7 +598,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 				if json.Unmarshal([]byte(freshLinkRaw), &freshLink) == nil {
 					for _, claim := range freshLink.Claims {
 						if claim.SystemFingerprint == sanitizedFingerprint {
-							doc, err := s.db.DocGet(string(constants.CollectionOperators), claim.OperatorID)
+							doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), claim.OperatorID)
 							if err == nil && doc != nil {
 								operator, _ := s.toOperatorDoc(doc)
 								if operator != nil {
@@ -640,7 +641,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", linkData.UserID))},
 		{Field: "system_fingerprint", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitizedFingerprint))},
 	}
-	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err == nil && len(docs) > 0 {
 		operator, _ = s.toOperatorDoc(docs[0])
 	}
@@ -649,9 +650,9 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 	if operator == nil {
 		filters = []models.DocFilter{
 			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", linkData.UserID))},
-			{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.Status.OperatorStatus.Offline))},
+			{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", marshaler.OperatorStatus(constants.Status.OperatorStatus.Offline)))},
 		}
-		docs, err = s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
+		docs, err = s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 		if err == nil && len(docs) > 0 {
 			operator, _ = s.toOperatorDoc(docs[0])
 		}
@@ -762,7 +763,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 
 	// Update operator document
 	update := map[string]interface{}{
-		"status":              constants.Status.OperatorStatus.Active,
+		"status":              marshaler.OperatorStatus(constants.Status.OperatorStatus.Active),
 		"operator_session_id": operatorSessionID,
 		"system_fingerprint":  sanitizedFingerprint,
 		"claimed":             true,
@@ -817,7 +818,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	}
 
 	updateBytes, _ := json.Marshal(update)
-	_, err := s.db.DocUpdate(string(constants.CollectionOperators), operator.ID, updateBytes)
+	_, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update operator status: %w", err)
 	}
@@ -841,7 +842,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		ExpiresAt:         time.Now().UTC().Add(24 * time.Hour), // Match operator session expiry
 	}
 	cliSessionBytes, _ := json.Marshal(cliSession)
-	if err := s.db.DocSet(string(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
 		return nil, fmt.Errorf("failed to persist CLI session: %w", err)
 	}
 
@@ -882,7 +883,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 	filters := []models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 	}
-	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 0)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 0)
 	if err == nil {
 		slotNumber = len(docs) + 1
 	}
@@ -891,9 +892,9 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 		ID:             id,
 		UserID:         userID,
 		OrganizationID: orgID,
-		Component:      constants.Status.ComponentName.G8EO,
+		Component:      marshaler.Status(constants.Status.ComponentName.G8EO),
 		Name:           fmt.Sprintf("operator-%d", slotNumber),
-		Status:         constants.Status.OperatorStatus.Offline,
+		Status:         marshaler.OperatorStatus(constants.Status.OperatorStatus.Offline),
 		SlotNumber:     slotNumber,
 		IsSlot:         true,
 		OperatorType:   constants.Status.OperatorType.System,
@@ -902,7 +903,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 	}
 
 	b, _ := json.Marshal(op)
-	if err := s.db.DocSet(string(constants.CollectionOperators), id, b); err != nil {
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), id, b); err != nil {
 		return nil, err
 	}
 
@@ -926,7 +927,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 	var lastErr error
 
 	for _, opID := range req.OperatorIDs {
-		doc, err := s.db.DocGet(string(constants.CollectionOperators), opID)
+		doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), opID)
 		if err != nil {
 			failed = append(failed, opID)
 			lastErr = err
@@ -985,7 +986,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 
 		// 2. Update durability document
 		docID := req.WebSessionID
-		existingDoc, _ := s.db.DocGet(string(constants.CollectionBoundSessions), docID)
+		existingDoc, _ := s.db.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
 		if existingDoc == nil {
 			newDoc := models.BoundSessionsDocumentGo{
 				ID:                 docID,
@@ -995,10 +996,10 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				OperatorIDs:        []string{opID},
 				BoundAt:            time.Now().UTC(),
 				LastUpdatedAt:      time.Now().UTC(),
-				Status:             constants.Status.OperatorStatus.Active,
+				Status:             marshaler.OperatorStatus(constants.Status.OperatorStatus.Active),
 			}
 			body, _ := json.Marshal(newDoc)
-			s.db.DocSet(string(constants.CollectionBoundSessions), docID, body)
+			s.db.DocSet(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
 		} else {
 			var bDoc models.BoundSessionsDocumentGo
 			b, _ := json.Marshal(existingDoc.ForWire())
@@ -1015,14 +1016,14 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				bDoc.OperatorIDs = append(bDoc.OperatorIDs, opID)
 				bDoc.OperatorSessionIDs = append(bDoc.OperatorSessionIDs, op.OperatorSessionID)
 				bDoc.LastUpdatedAt = time.Now().UTC()
-				bDoc.Status = constants.Status.OperatorStatus.Active
+				bDoc.Status = marshaler.OperatorStatus(constants.Status.OperatorStatus.Active)
 				body, _ := json.Marshal(bDoc)
-				s.db.DocUpdate(string(constants.CollectionBoundSessions), docID, body)
+				s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
 			}
 		}
 
 		// 3. Update operator document itself (for UI)
-		s.db.DocUpdate(string(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.WebSessionID)))
+		s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.WebSessionID)))
 
 		bound = append(bound, opID)
 	}
@@ -1054,7 +1055,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 	var lastErr error
 
 	for _, opID := range req.OperatorIDs {
-		doc, err := s.db.DocGet(string(constants.CollectionOperators), opID)
+		doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), opID)
 		if err != nil {
 			failed = append(failed, opID)
 			lastErr = err
@@ -1103,7 +1104,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 
 		// 2. Update durability document
 		docID := req.WebSessionID
-		existingDoc, _ := s.db.DocGet(string(constants.CollectionBoundSessions), docID)
+		existingDoc, _ := s.db.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
 		if existingDoc != nil {
 			var bDoc models.BoundSessionsDocumentGo
 			b, _ := json.Marshal(existingDoc.ForWire())
@@ -1121,14 +1122,14 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 			bDoc.OperatorSessionIDs = newSessIDs
 			bDoc.LastUpdatedAt = time.Now().UTC()
 			if len(newOpIDs) == 0 {
-				bDoc.Status = "ended"
+				bDoc.Status = marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated)
 			}
 			body, _ := json.Marshal(bDoc)
-			s.db.DocUpdate(string(constants.CollectionBoundSessions), docID, body)
+			s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
 		}
 
 		// 3. Update operator document itself
-		s.db.DocUpdate(string(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`))
+		s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`))
 
 		unbound = append(unbound, opID)
 	}
@@ -1158,7 +1159,7 @@ func (s *RegistrationService) SetTargetContext(req models.SetTargetContextReques
 	// For now, "target context" is just making sure the operator is bound to the session.
 	// In the future, this might set a specific "active" flag in the session state.
 
-	doc, err := s.db.DocGet(string(constants.CollectionOperators), req.OperatorID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID)
 	if err != nil {
 		return nil, err
 	}

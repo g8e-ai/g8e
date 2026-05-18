@@ -88,8 +88,9 @@ func NewBootstrapService(cfg *config.Config, logger *slog.Logger) (*BootstrapSer
 }
 
 // AuthServicesResponse represents the response from Auth Services Operator authentication.
-// Error is json.RawMessage so the decoder tolerates both legacy bare-string
-// errors and the standard client error envelope object {code, message, ...}.
+// Error is json.RawMessage so the decoder accepts both the bare-string and the
+// standard client error envelope object {code, message, ...} forms; both are
+// normalized through httpclient.ExtractErrorMessage.
 type AuthServicesResponse struct {
 	Success           bool             `json:"success"`
 	OperatorSessionId string           `json:"operator_session_id"`

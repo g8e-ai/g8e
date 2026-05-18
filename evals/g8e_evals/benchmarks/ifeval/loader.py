@@ -1,7 +1,9 @@
 import json
 from pathlib import Path
-from typing import Iterable, Dict, Any
+from typing import Iterable
+
 from g8e_evals.harness import Task
+from g8e_evals.models import TaskMetadata
 
 class IFEvalLoader:
     def __init__(self, gold_set_path: Path):
@@ -24,9 +26,9 @@ class IFEvalLoader:
                 yield Task(
                     id=str(data.get("key")),
                     prompt=data.get("prompt"),
-                    metadata={
-                        "benchmark": "ifeval",
-                        "instruction_id_list": data.get("instruction_id_list"),
-                        "kwargs": data.get("kwargs", {})
-                    }
+                    metadata=TaskMetadata(
+                        benchmark="ifeval",
+                        instruction_id_list=data.get("instruction_id_list", []),
+                        kwargs=data.get("kwargs", [])
+                    )
                 )

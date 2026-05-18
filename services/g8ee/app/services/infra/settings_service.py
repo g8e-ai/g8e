@@ -71,11 +71,8 @@ class SettingsService:
 
 
     def get_local_settings(self) -> G8eePlatformSettings:
-        """Load settings using canonical defaults and bootstrap service.
-        
-        This replaces legacy configuration with platform defaults and
-        secure bootstrap service for secrets from operator volume.
-        """
+        """Load settings using canonical defaults plus secrets sourced from the
+        bootstrap service (operator volume)."""
         settings = G8eePlatformSettings(
             host="0.0.0.0",
             port=8443,

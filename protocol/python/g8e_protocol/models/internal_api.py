@@ -20,6 +20,10 @@ class ResourceCreationRequest(G8eBaseModel):
     create_case: bool = Field(default=False)
     case_title: str | None = Field(default=None)
 
+class SettingsGetRequest(G8eBaseModel):
+    """Request model for GET /settings/user."""
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
+
 class ChatMessageRequest(G8eBaseModel):
     """Request model for chat messages."""
     context: RequestContext = Field(...)

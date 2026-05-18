@@ -46,8 +46,11 @@ from app.routers.internal_router import (
     internal_chat,
     operator_approval_respond,
     stop_ai_processing,
+    stop_operator,
     unbind_operators,
     update_case,
+    get_case,
+    get_user_settings,
 )
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from tests.fakes.factories import build_case_model, create_investigation_data
@@ -81,7 +84,7 @@ def request_context():
     )
 
 @pytest.mark.asyncio
-async def test_internal_chat_new_case(request_context, task_tracker):
+async def test_internal_chat_new_case(request_context, g8e_context, task_tracker):
     request = ChatMessageRequest(
         context=request_context,
         message="test message",
@@ -119,6 +122,7 @@ async def test_internal_chat_new_case(request_context, task_tracker):
             investigation_service=mock_investigation_service,
             attachment_service=mock_attachment_service,
             event_service=mock_event_service,
+            g8e_context=g8e_context,
         )
 
     assert response.success is True
@@ -128,7 +132,7 @@ async def test_internal_chat_new_case(request_context, task_tracker):
     mock_investigation_service.create_investigation.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_internal_chat_missing_investigation(request_context, task_tracker):
+async def test_internal_chat_missing_investigation(request_context, g8e_context, task_tracker):
     request_context = request_context.model_copy(update={"investigation_id": ""})
     request = ChatMessageRequest(context=request_context, message="test message", sentinel_mode=True)
 
@@ -151,13 +155,14 @@ async def test_internal_chat_missing_investigation(request_context, task_tracker
         investigation_service=mock_investigation_service,
         attachment_service=mock_attachment_service,
         event_service=mock_event_service,
+        g8e_context=g8e_context,
     )
 
     assert response.success is False
     assert response.investigation_id == ""
 
 @pytest.mark.asyncio
-async def test_stop_ai_processing(request_context):
+async def test_stop_ai_processing(request_context, g8e_context):
     request = StopAIRequest(context=request_context, reason="user cancel")
     # Use spec so an incorrect kwarg name to cancel() raises TypeError in tests,
     # matching production behavior and preventing regressions like the stop-button 500.
@@ -240,7 +245,7 @@ async def test_generate_and_update_title_error():
         mock_case_service.update_case.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_operator_approval_respond(request_context):
+async def test_operator_approval_respond(request_context, g8e_context):
     request_context = request_context.model_copy(update={
         "bound_operators": [BoundOperator(operator_id="op-1", operator_session_id="opsess-1")],
     })
@@ -250,7 +255,8 @@ async def test_operator_approval_respond(request_context):
 
     response = await operator_approval_respond(
         request=request,
-        approval_service=mock_approval_service
+        approval_service=mock_approval_service,
+        g8e_context=g8e_context,
     )
 
     assert response.success is True
@@ -261,7 +267,7 @@ async def test_operator_approval_respond(request_context):
     assert request.operator_id == "op-1"
 
 @pytest.mark.asyncio
-async def test_execute_direct_command(request_context):
+async def test_execute_direct_command(request_context, g8e_context):
     request = DirectCommandRequest(context=request_context, command="ls", execution_id="exec-123")
     mock_command_service = MagicMock()
     mock_command_service.send_command_to_operator = AsyncMock()
@@ -269,7 +275,8 @@ async def test_execute_direct_command(request_context):
 
     response = await execute_direct_command(
         request=request,
-        operator_data_service=mock_command_service
+        operator_data_service=mock_command_service,
+        g8e_context=g8e_context,
     )
 
     assert response.success is True
@@ -277,7 +284,7 @@ async def test_execute_direct_command(request_context):
     mock_command_service.send_direct_exec_audit_event.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_get_case(request_context):
+async def test_get_case(request_context, g8e_context):
     from app.routers.internal_router import get_case
     mock_case_service = MagicMock()
     mock_case = build_case_model(case_id="case-123", user_id="user-123")
@@ -289,6 +296,7 @@ async def test_get_case(request_context):
         case_id="case-123",
         request=request,
         case_service=mock_case_service,
+        g8e_context=g8e_context,
     )
 
     assert response.success is True
@@ -296,7 +304,7 @@ async def test_get_case(request_context):
     mock_case_service.get_case.assert_called_once_with("case-123")
 
 @pytest.mark.asyncio
-async def test_update_case_with_sse(request_context):
+async def test_update_case_with_sse(request_context, g8e_context):
     case_id = "case-123"
     request = CaseUpdateRequest(context=request_context, title="New Title")
     mock_case_service = MagicMock()
@@ -308,6 +316,7 @@ async def test_update_case_with_sse(request_context):
         case_id=case_id,
         request=request,
         case_service=mock_case_service,
+        g8e_context=g8e_context,
     )
 
     assert response.success is True
@@ -317,7 +326,7 @@ async def test_update_case_with_sse(request_context):
     assert call_kwargs["case_id"] == case_id
 
 @pytest.mark.asyncio
-async def test_delete_case_success(request_context):
+async def test_delete_case_success(request_context, g8e_context):
     case_id = "case-123"
     request = CaseDeleteRequest(context=request_context)
     mock_case_service = MagicMock()
@@ -341,12 +350,13 @@ async def test_delete_case_success(request_context):
         case_service=mock_case_service,
         investigation_service=mock_inv_service,
         cache_aside_service=mock_cache,
+        g8e_context=g8e_context,
     )
 
     mock_case_service.delete_case.assert_called_once_with(case_id)
 
 @pytest.mark.asyncio
-async def test_delete_case_not_found_idempotent(request_context):
+async def test_delete_case_not_found_idempotent(request_context, g8e_context):
     case_id = "case-missing"
     request = CaseDeleteRequest(context=request_context)
     mock_case_service = MagicMock()
@@ -363,12 +373,13 @@ async def test_delete_case_not_found_idempotent(request_context):
         case_service=mock_case_service,
         investigation_service=MagicMock(),
         cache_aside_service=MagicMock(),
+        g8e_context=g8e_context,
     )
 
     mock_case_service.delete_case.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_create_operator_slot_success(request_context):
+async def test_create_operator_slot_success(request_context, g8e_context):
     request = OperatorSlotCreationRequest(
         context=request_context,
         slot_number=1,
@@ -388,6 +399,7 @@ async def test_create_operator_slot_success(request_context):
         operator_data_service=mock_operator_data_service,
         settings_service=mock_settings_service,
         api_key_service=mock_api_key_service,
+        g8e_context=g8e_context,
     )
 
     assert response.success is True
@@ -399,7 +411,7 @@ async def test_create_operator_slot_success(request_context):
         f"API key {response.api_key} does not match canonical format g8e_[8hex]_[64hex]"
 
 @pytest.mark.asyncio
-async def test_claim_operator_slot_success(request_context):
+async def test_claim_operator_slot_success(request_context, g8e_context):
     request = OperatorSlotClaimRequest(
         context=request_context,
         operator_id="op-123",
@@ -414,13 +426,14 @@ async def test_claim_operator_slot_success(request_context):
     response = await claim_operator_slot(
         request=request,
         operator_lifecycle_service=mock_operator_lifecycle_service,
+        g8e_context=g8e_context,
     )
 
     assert response.success is True
     mock_operator_lifecycle_service.claim_operator_slot.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_bind_operators_success(request_context):
+async def test_bind_operators_success(request_context, g8e_context):
     request = OperatorBindRequest(
         context=request_context,
         operator_ids=["op-123", "op-456"],
@@ -444,6 +457,7 @@ async def test_bind_operators_success(request_context):
         request=request,
         operator_data_service=mock_operator_data_service,
         event_service=mock_event_service,
+        g8e_context=g8e_context,
     )
 
     assert response.success is True
@@ -452,7 +466,7 @@ async def test_bind_operators_success(request_context):
     assert mock_event_service.publish.call_count == 2
 
 @pytest.mark.asyncio
-async def test_bind_operators_unauthorized(request_context):
+async def test_bind_operators_unauthorized(request_context, g8e_context):
     request = OperatorBindRequest(
         context=request_context,
         operator_ids=["op-123"],
@@ -472,6 +486,7 @@ async def test_bind_operators_unauthorized(request_context):
         request=request,
         operator_data_service=mock_operator_data_service,
         event_service=mock_event_service,
+        g8e_context=g8e_context,
     )
 
     assert response.success is False
@@ -480,7 +495,7 @@ async def test_bind_operators_unauthorized(request_context):
     assert "Unauthorized" in response.errors[0]["error"]
 
 @pytest.mark.asyncio
-async def test_unbind_operators_success(request_context):
+async def test_unbind_operators_success(request_context, g8e_context):
     request = OperatorUnbindRequest(
         context=request_context,
         operator_ids=["op-123", "op-456"],
@@ -504,6 +519,7 @@ async def test_unbind_operators_success(request_context):
         request=request,
         operator_data_service=mock_operator_data_service,
         event_service=mock_event_service,
+        g8e_context=g8e_context,
     )
 
     assert response.success is True
@@ -514,7 +530,7 @@ async def test_unbind_operators_success(request_context):
     assert mock_event_service.publish.call_count == 2
 
 @pytest.mark.asyncio
-async def test_unbind_operators_unauthorized(request_context):
+async def test_unbind_operators_unauthorized(request_context, g8e_context):
     request = OperatorUnbindRequest(
         context=request_context,
         operator_ids=["op-123"],
@@ -534,6 +550,7 @@ async def test_unbind_operators_unauthorized(request_context):
         request=request,
         operator_data_service=mock_operator_data_service,
         event_service=mock_event_service,
+        g8e_context=g8e_context,
     )
 
     assert response.success is False
@@ -544,15 +561,19 @@ async def test_unbind_operators_unauthorized(request_context):
 
 
 @pytest.mark.asyncio
-async def test_get_user_settings():
+async def test_get_user_settings(g8e_context, request_context):
     from app.routers.internal_router import get_user_settings
+    from app.models.internal_api import SettingsGetRequest
     mock_settings_service = MagicMock()
     mock_settings = MagicMock()
     mock_settings_service.get_user_settings = AsyncMock(return_value=mock_settings)
 
+    request_obj = SettingsGetRequest(context=request_context)
+
     response = await get_user_settings(
-        user_id="user-123",
-        settings_service=mock_settings_service
+        request=request_obj,
+        settings_service=mock_settings_service,
+        g8e_context=g8e_context,
     )
 
     assert response == mock_settings
@@ -560,7 +581,7 @@ async def test_get_user_settings():
 
 
 @pytest.mark.asyncio
-async def test_internal_chat_with_llm_overrides(request_context, task_tracker):
+async def test_internal_chat_with_llm_overrides(request_context, g8e_context, task_tracker):
     request = ChatMessageRequest(
         context=request_context,
         message="test message",
@@ -594,6 +615,7 @@ async def test_internal_chat_with_llm_overrides(request_context, task_tracker):
             investigation_service=mock_investigation_service,
             attachment_service=mock_attachment_service,
             event_service=mock_event_service,
+            g8e_context=g8e_context,
         )
 
     # Verify chat_pipeline.run_chat was called with overrides

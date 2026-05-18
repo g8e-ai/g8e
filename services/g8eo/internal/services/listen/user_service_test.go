@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/require"
@@ -41,7 +42,7 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 		require.Equal(t, "bootstrap@g8e.local", user.Email)
 		require.Equal(t, "Bootstrap User", user.Name)
 		require.True(t, user.IsBootstrap)
-		require.Equal(t, models.UserStatusActive, user.Status)
+		require.Equal(t, constants.UserStatusActive, user.Status)
 	})
 
 	t.Run("Success - second bootstrap user fails", func(t *testing.T) {
@@ -74,14 +75,14 @@ func TestUserService_Disable(t *testing.T) {
 		disabledUser, err := userSvc.GetByID(user.ID)
 		require.NoError(t, err)
 		require.NotNil(t, disabledUser)
-		require.Equal(t, models.UserStatusDisabled, disabledUser.Status)
+		require.Equal(t, constants.UserStatusDisabled, disabledUser.Status)
 		require.False(t, disabledUser.IsActive())
 
 		// Verify audit entry was created in the correct collection
 		filters := []models.DocFilter{
 			{Field: "target", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", user.ID))},
 		}
-		results, err := db.DocQuery(string(constants.CollectionAuthAdminAudit), filters, "", 0)
+		results, err := db.DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
 
@@ -151,14 +152,14 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 func TestUser_IsActive(t *testing.T) {
 	t.Run("Active status returns true", func(t *testing.T) {
 		user := &models.User{
-			Status: models.UserStatusActive,
+			Status: constants.UserStatusActive,
 		}
 		require.True(t, user.IsActive())
 	})
 
 	t.Run("Disabled status returns false", func(t *testing.T) {
 		user := &models.User{
-			Status: models.UserStatusDisabled,
+			Status: constants.UserStatusDisabled,
 		}
 		require.False(t, user.IsActive())
 	})

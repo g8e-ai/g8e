@@ -148,7 +148,7 @@ def test_load_auditor_hmac_key_returns_none_when_missing(volume: Path, bootstrap
 
 
 def test_is_available_true_when_only_auditor_hmac_key_present(volume: Path, bootstrap: BootstrapService) -> None:
-    # Reputation-only Phase 2 deployments that boot without legacy auth
-    # secrets must still be reported as bootstrap-available.
+    # Reputation-only Phase 2 deployments that boot with only the auditor
+    # HMAC key (no API key) must still be reported as bootstrap-available.
     (volume / "auditor_hmac_key").write_text("h")
     assert bootstrap.is_available() is True

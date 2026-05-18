@@ -246,7 +246,7 @@ async def test_callback_failure_does_not_abort_stream():
     assert state.response_text == "Post-tool wrap-up."
 
 
-async def test_omitting_callback_preserves_legacy_behavior():
+async def test_omitting_callback_still_completes_stream():
     """The new parameter is optional — passing nothing must not break the flow."""
     inputs, state = make_agent_run_args(
         case_id="case-iter-6",
@@ -269,8 +269,8 @@ async def test_omitting_callback_preserves_legacy_behavior():
         event_service=event_svc,
     )
 
-    # Without the callback the intermediate text is lost (legacy behavior),
-    # but the stream still completes and the final segment is preserved.
+    # Without the callback the intermediate text is not persisted, but the
+    # stream still completes and the final segment is preserved.
     assert state.response_text == "Final segment."
 
 

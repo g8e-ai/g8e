@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -53,16 +54,16 @@ func TestAuthStatusIndependence(t *testing.T) {
 			CreatedAt:         time.Now().UTC(),
 		}
 		opBytes, _ := json.Marshal(op)
-		err = db.DocSet(string(constants.CollectionOperators), opID, opBytes)
+		err = db.DocSet(marshaler.CollectionName(constants.CollectionOperators), opID, opBytes)
 		require.NoError(t, err)
 
 		// Create the linked user
 		user := &models.User{
 			ID:     userID,
-			Status: models.UserStatusActive,
+			Status: constants.UserStatusActive,
 		}
 		userBytes, _ := json.Marshal(user)
-		err = db.DocSet(string(constants.CollectionUsers), userID, userBytes)
+		err = db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
 		require.NoError(t, err)
 
 		// Validate session - should succeed despite OFFLINE status
@@ -88,13 +89,13 @@ func TestAuthStatusIndependence(t *testing.T) {
 			CreatedAt:         time.Now().UTC().Add(-48 * time.Hour), // 48h > 24h TTL
 		}
 		opBytes, _ := json.Marshal(op)
-		err = db.DocSet(string(constants.CollectionOperators), opID, opBytes)
+		err = db.DocSet(marshaler.CollectionName(constants.CollectionOperators), opID, opBytes)
 		require.NoError(t, err)
 
 		// Manually update created_at in the DB to bypass DocSet's auto-timestamping
 		oldTime := time.Now().UTC().Add(-48 * time.Hour)
 		_, err = db.db.Exec("UPDATE documents SET created_at = ? WHERE collection = ? AND id = ?",
-			oldTime.Format(time.RFC3339Nano), string(constants.CollectionOperators), opID)
+			oldTime.Format(time.RFC3339Nano), marshaler.CollectionName(constants.CollectionOperators), opID)
 		require.NoError(t, err)
 
 		// Validate session - should fail
@@ -123,7 +124,7 @@ func TestAuthStatusIndependence(t *testing.T) {
 			CreatedAt:         time.Now().UTC(),
 		}
 		opBytes, _ := json.Marshal(op)
-		err = db.DocSet(string(constants.CollectionOperators), opID, opBytes)
+		err = db.DocSet(marshaler.CollectionName(constants.CollectionOperators), opID, opBytes)
 		require.NoError(t, err)
 
 		// Validate session - should fail
@@ -134,7 +135,7 @@ func TestAuthStatusIndependence(t *testing.T) {
 		ae, ok := err.(*AuthError)
 		require.True(t, ok)
 		assert.Equal(t, "operator identity disabled", ae.Message)
-		assert.Equal(t, string(constants.Status.OperatorStatus.Terminated), ae.Reason)
+		assert.Equal(t, marshaler.Status(constants.Status.OperatorStatus.Terminated), ae.Reason)
 	})
 }
 
@@ -162,7 +163,7 @@ func TestApiKeyStatusIndependence(t *testing.T) {
 			"created_at":      time.Now().UnixMilli(),
 		}
 		keyBytes, _ := json.Marshal(keyDoc)
-		err = db.DocSet(string(constants.CollectionAPIKeys), docID, keyBytes)
+		err = db.DocSet(marshaler.CollectionName(constants.CollectionAPIKeys), docID, keyBytes)
 		require.NoError(t, err)
 
 		// Validate key - should succeed despite STALE status
@@ -185,7 +186,7 @@ func TestApiKeyStatusIndependence(t *testing.T) {
 			"created_at":      time.Now().UnixMilli(),
 		}
 		keyBytes, _ := json.Marshal(keyDoc)
-		err = db.DocSet(string(constants.CollectionAPIKeys), docID, keyBytes)
+		err = db.DocSet(marshaler.CollectionName(constants.CollectionAPIKeys), docID, keyBytes)
 		require.NoError(t, err)
 
 		// Validate key - should fail

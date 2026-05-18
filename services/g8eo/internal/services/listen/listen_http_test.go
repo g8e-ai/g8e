@@ -22,11 +22,13 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -179,7 +181,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
-	t.Run("Uninitialized token - deny legacy bypasses", func(t *testing.T) {
+	t.Run("Uninitialized token - deny unauthenticated access", func(t *testing.T) {
 		h.db.DocDelete("settings", "platform_settings")
 
 		paths := []string{
@@ -200,6 +202,50 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 
 			assert.Contains(t, rr.Body.String(), "mTLS client certificate required", "Path %s should require mTLS", path)
 		}
+	})
+
+	t.Run("Blob endpoint with valid device-link token", func(t *testing.T) {
+		// Create a device-link token
+		token := "dlk_test12345678901234567890"
+		linkData := map[string]interface{}{
+			"token":      token,
+			"user_id":    "test-user",
+			"status":     "active",
+			"created_at": time.Now().UTC().Format(time.RFC3339),
+			"expires_at": time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339),
+		}
+		linkBytes, err := json.Marshal(linkData)
+		require.NoError(t, err)
+		err = h.db.KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
+		require.NoError(t, err)
+
+		// Put a blob in the store
+		err = h.db.BlobPut("operator-binary", "linux-amd64", []byte("test-binary"), "application/octet-stream", 0)
+		require.NoError(t, err)
+
+		// Use the actual router with blob handler
+		router := h.buildRouter()
+		req := httptest.NewRequest(http.MethodGet, "/blob/operator-binary/linux-amd64", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		// Should succeed without mTLS since device-link token is valid
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, []byte("test-binary"), rr.Body.Bytes())
+	})
+
+	t.Run("Blob endpoint with invalid device-link token", func(t *testing.T) {
+		// Use the actual router with blob handler
+		router := h.buildRouter()
+		req := httptest.NewRequest(http.MethodGet, "/blob/operator-binary/linux-amd64", nil)
+		req.Header.Set("Authorization", "Bearer dlk_invalid")
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		// Should require mTLS since token is invalid
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Contains(t, rr.Body.String(), "mTLS client certificate required")
 	})
 }
 
@@ -231,7 +277,7 @@ func TestHandleHealth(t *testing.T) {
 		var resp models.HealthResponse
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.Equal(t, constants.Status.ListenMode.StatusOK, resp.Status)
+		assert.Equal(t, constants.Status.ListenMode.Ok, resp.Status)
 	})
 }
 
@@ -507,7 +553,7 @@ func TestInternalSSEBridge(t *testing.T) {
 			"status":              constants.Status.OperatorStatus.Active,
 		}
 		opBytes, _ := json.Marshal(opDoc)
-		h.db.DocSet(string(constants.CollectionOperators), "op-u2", opBytes)
+		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-u2", opBytes)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?user_id=u-2&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-u2")

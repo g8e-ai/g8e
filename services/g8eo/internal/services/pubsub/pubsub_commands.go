@@ -222,16 +222,16 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 
 	// Initialize TransactionVerifier for strict pre-dispatch verification
 	knownActionTypes := []string{
-		"EXECUTE_BASH",
-		"FILE_EDIT",
-		"RESTORE_FILE",
-		"SHUTDOWN",
-		"FS_LIST",
-		"FS_READ",
-		"FS_GREP",
-		"PORT_CHECK",
-		"FETCH_LOGS",
-		"EVAL_ANSWER",
+		constants.ActionTypeExecuteBash,
+		constants.ActionTypeFileEdit,
+		constants.ActionTypeRestoreFile,
+		constants.ActionTypeShutdown,
+		constants.ActionTypeFsList,
+		constants.ActionTypeFsRead,
+		constants.ActionTypeFsGrep,
+		constants.ActionTypePortCheck,
+		constants.ActionTypeFetchLogs,
+		constants.ActionTypeEvalAnswer,
 	}
 	rs.transactionVerifier = governance.NewTransactionVerifier(
 		c.Logger,

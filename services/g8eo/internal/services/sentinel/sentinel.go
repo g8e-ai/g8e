@@ -285,7 +285,7 @@ type CommandResult struct {
 // ScrubbedResult is the sanitized output safe for transmission to cloud AI
 type ScrubbedResult struct {
 	// Status is the high-level outcome: success, failure, error, timeout
-	Status string `json:"status"`
+	Status constants.SentinelStatus `json:"status"`
 
 	// ExitCode is preserved as it contains no sensitive data
 	ExitCode int `json:"exit_code"`
@@ -1214,31 +1214,31 @@ func (s *Sentinel) extractKey(line string) string {
 }
 
 // determineStatus maps exit code to a status category
-func (s *Sentinel) determineStatus(exitCode int) string {
+func (s *Sentinel) determineStatus(exitCode int) constants.SentinelStatus {
 	switch exitCode {
 	case 0:
-		return "success"
+		return constants.Status.SentinelStatus.Success
 	case 1:
-		return "failure"
+		return constants.Status.SentinelStatus.Failure
 	case 2:
-		return "misuse"
+		return constants.Status.SentinelStatus.Misuse
 	case 126:
-		return "not_executable"
+		return constants.Status.SentinelStatus.NotExecutable
 	case 127:
-		return "not_found"
+		return constants.Status.SentinelStatus.NotFound
 	case 128:
-		return "invalid_exit"
+		return constants.Status.SentinelStatus.InvalidExit
 	case 130:
-		return "interrupted"
+		return constants.Status.SentinelStatus.Interrupted
 	case 137:
-		return "killed"
+		return constants.Status.SentinelStatus.Killed
 	case 143:
-		return constants.Status.OperatorStatus.Terminated
+		return constants.Status.SentinelStatus.Terminated
 	default:
 		if exitCode > 128 {
-			return fmt.Sprintf("signal_%d", exitCode-128)
+			return constants.SentinelStatus(fmt.Sprintf("signal_%d", exitCode-128))
 		}
-		return "error"
+		return constants.Status.SentinelStatus.Error
 	}
 }
 
@@ -1636,6 +1636,73 @@ func (s *Sentinel) ValidateNoLeakage(text string) (bool, []string) {
 	}
 
 	return len(violations) == 0, violations
+}
+
+// ValidateIntent ensures the requested intent is present in the allowlist.
+func (s *Sentinel) ValidateIntent(intent constants.CloudIntent) bool {
+	// A requested intent MUST be one of the authoritative protocol intents.
+	// The g8eo substrate enforces this list to prevent agents from requesting
+	// unmapped or shadow capabilities.
+	switch intent {
+	case constants.IntentEc2Discovery,
+		constants.IntentEc2Management,
+		constants.IntentEc2SnapshotManagement,
+		constants.IntentS3Read,
+		constants.IntentS3Write,
+		constants.IntentS3BucketDiscovery,
+		constants.IntentS3Delete,
+		constants.IntentTerraformState,
+		constants.IntentCloudformationDeployment,
+		constants.IntentCloudwatchLogs,
+		constants.IntentSecretsRead,
+		constants.IntentLambdaDiscovery,
+		constants.IntentLambdaInvoke,
+		constants.IntentRdsDiscovery,
+		constants.IntentRdsManagement,
+		constants.IntentRdsSnapshotManagement,
+		constants.IntentAuroraClusterManagement,
+		constants.IntentAuroraScaling,
+		constants.IntentAuroraCloning,
+		constants.IntentAuroraGlobalDatabase,
+		constants.IntentEcsDiscovery,
+		constants.IntentEcsManagement,
+		constants.IntentEksDiscovery,
+		constants.IntentVpcDiscovery,
+		constants.IntentElbDiscovery,
+		constants.IntentRoute53Discovery,
+		constants.IntentRoute53Management,
+		constants.IntentAutoscalingDiscovery,
+		constants.IntentAutoscalingManagement,
+		constants.IntentCloudwatchMetrics,
+		constants.IntentSnsDiscovery,
+		constants.IntentSnsPublish,
+		constants.IntentSqsDiscovery,
+		constants.IntentSqsManagement,
+		constants.IntentEventbridgeDiscovery,
+		constants.IntentDynamodbDiscovery,
+		constants.IntentDynamodbRead,
+		constants.IntentDynamodbWrite,
+		constants.IntentElasticacheDiscovery,
+		constants.IntentKmsDiscovery,
+		constants.IntentKmsCrypto,
+		constants.IntentIamDiscovery,
+		constants.IntentAcmDiscovery,
+		constants.IntentApigatewayDiscovery,
+		constants.IntentStepfunctionsDiscovery,
+		constants.IntentStepfunctionsExecution,
+		constants.IntentAthenaDiscovery,
+		constants.IntentAthenaQueryExecution,
+		constants.IntentGlueDiscovery,
+		constants.IntentCloudfrontDiscovery,
+		constants.IntentCodedeployDiscovery,
+		constants.IntentCostExplorer:
+		return true
+	default:
+		if s.logger != nil {
+			s.logger.Warn("Unauthorized intent requested", "intent", string(intent))
+		}
+		return false
+	}
 }
 
 // SanitizeForDisplay creates a version suitable for showing to users

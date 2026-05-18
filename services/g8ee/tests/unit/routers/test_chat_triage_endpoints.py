@@ -18,7 +18,7 @@ from fastapi import Request
 
 from app.constants import AuthMethod, MessageSender, ComponentName
 from app.constants.events import EventType
-from app.models.http_context import RequestContext
+from app.models.http_context import RequestContext, G8eHttpContext
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
 from app.routers.chat_router import (
     answer_triage_question,
@@ -48,13 +48,11 @@ class TestTriageEndpoints:
         mock_investigation_service.get_investigation = AsyncMock(return_value=investigation)
         mock_investigation_service.investigation_data_service.add_chat_message = AsyncMock(return_value=True)
 
-        user_info = build_authenticated_user(
-            uid=user_id,
+        g8e_context = G8eHttpContext(
             user_id=user_id,
-            email="user@example.com",
-            organization_id="org-789",
             web_session_id=investigation_id,
-            auth_method=AuthMethod.TEST
+            organization_id="org-789",
+            source_component=ComponentName.CLIENT
         )
         payload = TriageAnswerRequest(
             investigation_id=investigation_id,
@@ -74,8 +72,8 @@ class TestTriageEndpoints:
             investigation_service=mock_investigation_service,
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
-            user_settings=mock_user_settings,
-            user_info=user_info
+            settings_service=MagicMock(),
+            g8e_context=g8e_context
         )
 
         assert result == {"success": True}
@@ -101,13 +99,11 @@ class TestTriageEndpoints:
         mock_investigation_service.get_investigation = AsyncMock(return_value=investigation)
         mock_investigation_service.investigation_data_service.add_chat_message = AsyncMock(return_value=True)
 
-        user_info = build_authenticated_user(
-            uid=user_id,
+        g8e_context = G8eHttpContext(
             user_id=user_id,
-            email="user@example.com",
-            organization_id="org-789",
             web_session_id=investigation_id,
-            auth_method=AuthMethod.TEST
+            organization_id="org-789",
+            source_component=ComponentName.CLIENT
         )
         payload = TriageSkipRequest(
             investigation_id=investigation_id,
@@ -125,8 +121,8 @@ class TestTriageEndpoints:
             investigation_service=mock_investigation_service,
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
-            user_settings=mock_user_settings,
-            user_info=user_info
+            settings_service=MagicMock(),
+            g8e_context=g8e_context
         )
 
         assert result == {"success": True}
@@ -144,13 +140,12 @@ class TestTriageEndpoints:
         mock_investigation_service.get_investigation = AsyncMock(return_value=investigation)
         mock_investigation_service.investigation_data_service.add_chat_message = AsyncMock(return_value=True)
 
-        user_info = build_authenticated_user(
-            uid=user_id,
+        g8e_context = G8eHttpContext(
             user_id=user_id,
-            email="user@example.com",
-            organization_id="org-789",
             web_session_id=investigation_id,
-            auth_method=AuthMethod.TEST
+            organization_id="org-789",
+            source_component=ComponentName.CLIENT,
+            investigation_id=investigation_id
         )
         payload = TriageTimeoutRequest(
             investigation_id=investigation_id,
@@ -164,7 +159,7 @@ class TestTriageEndpoints:
         result = await timeout_triage_questions(
             request=payload,
             investigation_service=mock_investigation_service,
-            user_info=user_info
+            g8e_context=g8e_context
         )
 
         assert result == {"success": True}

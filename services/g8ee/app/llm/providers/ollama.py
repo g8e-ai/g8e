@@ -7,6 +7,7 @@ from ollama import AsyncClient, Message as OllamaMessage
 from app.constants import (
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     LLM_OLLAMA_DEFAULT_NUM_CTX,
+    OLLAMA_DEFAULT_PROTOCOL,
     ThinkingLevel,
 )
 from app.llm.thinking import translate_for_ollama
@@ -152,20 +153,23 @@ def _raise_on_empty_content(
 def _normalize_ollama_host(endpoint: str) -> str:
     """Normalize a user-supplied Ollama host into a base URL.
 
-    Accepts any of:
+    Accepts:
       - "host:port"              -> "http://host:port"
       - "http://host:port"       -> "http://host:port"
-      - "http://host:port/v1"    -> "http://host:port"   (legacy)
-      - "http://host:port/v1/v1" -> "http://host:port"   (legacy double-append)
 
-    The Ollama native API lives at /api/chat, not /v1; any /v1 path suffix is
-    stripped so httpx base_url joining produces the correct URL.
+    The Ollama native API lives at /api/chat. Endpoints containing a `/v1`
+    path segment are rejected with a clear error so misconfigured settings
+    fail fast instead of silently producing the wrong outbound URL.
     """
     cleaned = (endpoint or "").strip().rstrip("/")
-    while cleaned.endswith("/v1"):
-        cleaned = cleaned[:-3].rstrip("/")
+    if "/v1" in cleaned:
+        raise ValueError(
+            f"Invalid Ollama endpoint {endpoint!r}: must not contain '/v1'. "
+            "Ollama uses its native /api/chat surface; configure 'host:port' "
+            "or 'http(s)://host:port' only."
+        )
     if cleaned and not cleaned.startswith(("http://", "https://")):
-        cleaned = "http://" + cleaned
+        cleaned = OLLAMA_DEFAULT_PROTOCOL + cleaned
     return cleaned
 
 

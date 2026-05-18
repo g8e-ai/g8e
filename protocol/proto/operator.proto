@@ -647,6 +647,41 @@ message RestoreFileResult {
   string error = 5;
 }
 
+message GrantIntentRequested {
+  // Canonical intent name (e.g. "s3_read", "ec2_management")
+  string intent_name = 1;
+
+  // Optional target resource scope (e.g. "arn:aws:s3:::my-bucket/*")
+  string target_resource = 2;
+
+  // Unique execution identifier
+  string execution_id = 3;
+
+  // Justification for the grant
+  string justification = 4;
+}
+
+message GrantIntentResult {
+  bool success = 1;
+  string execution_id = 2;
+  string intent_name = 3;
+  string message = 4;
+  string error = 5;
+}
+
+message RevokeIntentRequested {
+  string intent_name = 1;
+  string execution_id = 2;
+  string justification = 3;
+}
+
+message RevokeIntentResult {
+  bool success = 1;
+  string execution_id = 2;
+  string intent_name = 3;
+  string error = 4;
+}
+
 message FileDiffEntry {
   string id = 1;
   string timestamp = 2;

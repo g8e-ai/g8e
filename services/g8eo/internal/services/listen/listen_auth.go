@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 )
 
@@ -76,7 +77,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 		{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", operatorSessionID))},
 	}
 
-	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +103,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	if op.Status == constants.Status.OperatorStatus.Terminated {
 		return nil, &AuthError{
 			Message: "operator identity disabled",
-			Reason:  string(constants.Status.OperatorStatus.Terminated),
+			Reason:  marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated),
 			Status:  http.StatusForbidden,
 		}
 	}
@@ -142,7 +143,7 @@ func (s *AuthService) ValidateAPIKey(apiKey string) (*models.OperatorDocumentGo,
 		{Field: "operator_api_key", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", apiKey))},
 	}
 
-	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +212,35 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			r.URL.Path == "/api/auth/device-link/register" {
 			next.ServeHTTP(w, r)
 			return
+		}
+
+		// Blob endpoint: allow device-link token authentication for bootstrap
+		// Devices use device-link tokens to download the operator binary
+		if strings.HasPrefix(r.URL.Path, "/blob/") {
+			authHeader := r.Header.Get(constants.HeaderAuthorization)
+			if strings.HasPrefix(authHeader, "Bearer ") {
+				token := strings.TrimPrefix(authHeader, "Bearer ")
+				if strings.HasPrefix(token, "dlk_") && len(token) >= 20 {
+					// Validate device-link token exists and is not expired
+					linkKey := "g8e:device-link:" + token
+					raw, found := s.db.KVGet(linkKey)
+					if found {
+						var linkData map[string]interface{}
+						if err := json.Unmarshal([]byte(raw), &linkData); err == nil {
+							if expiresAt, ok := linkData["expires_at"].(string); ok {
+								if expTime, err := time.Parse(time.RFC3339, expiresAt); err == nil {
+									if expTime.After(time.Now()) {
+										// Token is valid, allow access
+										next.ServeHTTP(w, r)
+										return
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			// If device-link token validation fails, fall through to mTLS requirement
 		}
 
 		// [PIVOT] Enforce mTLS for all other routes (Phase 6)
@@ -299,7 +329,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				cert := r.TLS.PeerCertificates[0]
 				for _, uri := range cert.URIs {
 					// Reference apps use spiffe://g8e.local/app/<app_id>
-					if strings.Contains(uri.String(), "/app/"+constants.Status.ComponentName.G8EE) {
+					if strings.Contains(uri.String(), "/app/"+marshaler.Status(constants.Status.ComponentName.G8EE)) {
 						next.ServeHTTP(w, r)
 						return
 					}
@@ -353,7 +383,7 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *ListenDBService) htt
 		}
 
 		// Validate web session
-		doc, err := db.DocGet(string(constants.CollectionWebSessions), sessionID)
+		doc, err := db.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), sessionID)
 		if err != nil {
 			s.jsonError(w, http.StatusUnauthorized, "session validation failed")
 			return

@@ -53,7 +53,7 @@ esac
 
 _ensure_authenticated
 
-if [[ -z "${CLI_SESSION_ID:-}" ]]; then
+if [[ -z "${G8E_CLI_SESSION_ID:-}" ]]; then
     echo "[g8e] CLI_SESSION_ID is missing from credentials — re-run: ./g8e login" >&2
     echo "     (cli_session_id and operator_session_id are strictly disjoint session types;" >&2
     echo "      stale credentials from before the split must be re-issued)" >&2
@@ -297,7 +297,7 @@ case "$SUB" in
         # NEVER use OPERATOR_SESSION_ID here — that authenticates the host
         # agent and conflating the two would let an operator session drain a
         # client's event stream.
-        context_json="{\"cli_session_id\": \"${CLI_SESSION_ID:-}\", \"user_id\": \"${USER_ID:-}\", \"case_id\": \"${CASE_ID:-}\", \"investigation_id\": \"${INVESTIGATION_ID:-}\", \"source_component\": \"client\"}"
+        context_json="{\"cli_session_id\": \"${G8E_CLI_SESSION_ID:-}\", \"user_id\": \"${G8E_USER_ID:-}\", \"case_id\": \"${CASE_ID:-}\", \"investigation_id\": \"${INVESTIGATION_ID:-}\", \"source_component\": \"client\"}"
         
         body_obj=$(jq -n \
             --argjson context "$context_json" \
@@ -347,12 +347,12 @@ case "$SUB" in
         _check_g8e_error "$resp" "chat"
         echo "$resp" | jq . 2>/dev/null || echo "$resp"
 
-        _banner "streaming events for cli session ${CLI_SESSION_ID:0:12}... (Ctrl+C to stop)"
-        _chat_stream_events "$CLI_SESSION_ID" 0 "$TIMEOUT_SECS"
+        _banner "streaming events for cli session ${G8E_CLI_SESSION_ID:0:12}... (Ctrl+C to stop)"
+        _chat_stream_events "${G8E_CLI_SESSION_ID}" 0 "$TIMEOUT_SECS"
         ;;
     tail)
-        _banner "tailing events for cli session ${CLI_SESSION_ID:0:12}... (Ctrl+C to stop)"
-        _chat_stream_events "$CLI_SESSION_ID" "$SINCE_ID" "$TIMEOUT_SECS"
+        _banner "tailing events for cli session ${G8E_CLI_SESSION_ID:0:12}... (Ctrl+C to stop)"
+        _chat_stream_events "${G8E_CLI_SESSION_ID}" "$SINCE_ID" "$TIMEOUT_SECS"
         ;;
     *)
         echo "[chat] unknown subcommand: $SUB" >&2

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -570,7 +571,7 @@ func TestEmitJSON_PerHostEvent(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(line), &got))
 
 	assert.Equal(t, "web-01", got["host"])
-	assert.Equal(t, string(constants.StreamStatusCompleted), got["status"])
+	assert.Equal(t, marshaler.Status(constants.StreamStatusCompleted), got["status"])
 	assert.Equal(t, float64(1024), got["size_bytes"])
 	assert.Equal(t, float64(250), got["elapsed_ms"])
 	assert.NotEmpty(t, got["ts"])
@@ -605,7 +606,7 @@ func TestEmitJSON_SummaryEvent(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(buf.String())), &got))
 
 	assert.Equal(t, true, got["summary"])
-	assert.Equal(t, string(constants.StreamStatusSummary), got["status"])
+	assert.Equal(t, marshaler.Status(constants.StreamStatusSummary), got["status"])
 	assert.Equal(t, float64(10), got["total"])
 	assert.Equal(t, float64(8), got["success"])
 	assert.Equal(t, float64(2), got["failed"])

@@ -87,23 +87,21 @@ class RequestTrace(G8eBaseModel):
     def as_headers(self) -> dict[str, str]:
         """Convert trace info to HTTP headers
         
-        Note: Context fields (case_id, task_id, investigation_id) are now embedded
-        in request bodies via RequestContext, not in headers. This property only
-        returns execution tracking headers.
+        Note: Context fields (case_id, task_id, investigation_id, execution_id) are now 
+        embedded in request bodies via RequestContext, not in headers.
         """
-        headers: dict[str, str] = {}
-        return headers
+        return {}
 
     @classmethod
     def from_headers(cls, headers: dict[str, str], component_id: str) -> "RequestTrace":
         """Create trace info from incoming HTTP headers"""
+        # Execution ID should now be provided in the RequestContext body,
+        # but for tracing existing incoming requests that might still have it
+        # or for generating a new one if missing.
         execution_id = headers.get(EXECUTION_ID_HEADER, f"exec-{uuid.uuid4()}")
         return cls(
             execution_id=execution_id,
             component_id=component_id,
-            case_id=None,
-            task_id=None,
-            investigation_id=None,
             start_time=now(),
         )
 

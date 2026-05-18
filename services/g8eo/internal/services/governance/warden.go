@@ -12,6 +12,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/mappings"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
@@ -212,7 +213,7 @@ func (w *Warden) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) e
 		OperatorSessionID: env.OperatorSessionId,
 		ActionType:        env.ActionType,
 		TargetResource:    env.TargetResource,
-		Status:            r.Status.String(),
+		Status:            mappings.ProtoToExecutionStatus(r.Status),
 		ResultSummary:     r.ResultSummary,
 		StateRootBefore:   r.StateRootBefore,
 		StateRootAfter:    r.StateRootAfter,
@@ -247,7 +248,7 @@ func (w *Warden) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionRe
 		OperatorSessionID: env.OperatorSessionId,
 		ActionType:        env.ActionType,
 		TargetResource:    env.TargetResource,
-		Status:            r.Status.String(),
+		Status:            mappings.ProtoToExecutionStatus(r.Status),
 		ResultSummary:     r.ResultSummary,
 		StateRootBefore:   r.StateRootBefore,
 		StateRootAfter:    r.StateRootAfter,
@@ -265,7 +266,7 @@ func (w *Warden) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionRe
 		return err
 	}
 
-	if err := w.AuditStore.DocSet(string(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
+	if err := w.AuditStore.DocSet(marshaler.CollectionName(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
 		if w.Logger != nil {
 			w.Logger.Error("Failed to record action receipt document", "error", err, "message_id", r.TransactionId)
 		}

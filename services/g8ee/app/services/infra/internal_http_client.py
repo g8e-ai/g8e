@@ -61,7 +61,7 @@ class InternalHttpClient:
             ),
             auth_token="",
             api_key=settings.auth.g8e_api_key or "",
-            headers={G8eHeaders.SOURCE_COMPONENT: ComponentName.G8EE},
+            headers={},
             ca_cert_path=settings.ca_cert_path or "",
             client_cert_path=settings.client_cert_path,
             client_key_path=settings.client_key_path,
@@ -82,11 +82,6 @@ class InternalHttpClient:
     def client(self) -> HTTPClient:
         """Access the underlying HTTP client."""
         return self._http
-
-    def _auth_headers(self) -> dict[str, str]:
-        return {
-            G8eHeaders.SOURCE_COMPONENT: ComponentName.G8EE,
-        }
 
     async def close(self) -> None:
         await self._http.close()
@@ -146,7 +141,6 @@ class InternalHttpClient:
             response = await self._http.post(
                 InternalApiPaths.CLIENT_SSE_PUSH,
                 json_data=wire_model,
-                headers=self._auth_headers(),
             )
         except Exception as e:
             raise NetworkError(
@@ -209,7 +203,6 @@ class InternalHttpClient:
             response = await self._http.post(
                 InternalApiPaths.CLIENT_GRANT_INTENT.format(operator_id=operator_id),
                 json_data=request_payload,
-                headers=self._auth_headers(),
                 context=None,  # Context now in request body
             )
             result = GrantIntentResponse.model_validate(response.json())
@@ -265,7 +258,6 @@ class InternalHttpClient:
             response = await self._http.post(
                 InternalApiPaths.CLIENT_REVOKE_INTENT.format(operator_id=operator_id),
                 json_data=request_payload,
-                headers=self._auth_headers(),
                 context=None,  # Context now in request body
             )
             result = RevokeIntentResponse.model_validate(response.json())
@@ -325,7 +317,6 @@ class InternalHttpClient:
             response = await self._http.post(
                 InternalApiPaths.CLIENT_CREATE_OPERATOR_LINK,
                 json_data=request_payload,
-                headers=self._auth_headers(),
                 context=None,  # Context now in request body
             )
 

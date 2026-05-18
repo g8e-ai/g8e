@@ -64,18 +64,6 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 	}, nil
 }
 
-// publishResultEnvelope is DEPRECATED and now REJECTS legacy envelopes.
-func (rr *PubSubResultsService) publishResultEnvelope(
-	ctx context.Context,
-	eventType, caseID string,
-	taskID *string,
-	investigationID string,
-	originalMsg PubSubCommandMessage,
-	payload proto.Message,
-) error {
-	return fmt.Errorf("publishResultEnvelope(GovernanceEnvelope) is deprecated and no longer supported")
-}
-
 // PublishExecutionResult publishes command execution result via operator pub/sub
 // Stdout/stderr have already been sentinel.Sentinel-scrubbed by pubsub_commands.go before this is called.
 func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {

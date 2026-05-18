@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
@@ -76,7 +77,7 @@ func TestWardenExecuteHappyPath(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-session",
-		ActionType:        "EXECUTE_BASH",
+		ActionType:        constants.ActionTypeExecuteBash,
 		TargetResource:    "localhost",
 	}
 
@@ -116,7 +117,7 @@ func TestWardenExecuteHappyPath(t *testing.T) {
 
 	// Verify both calls were to console_audit collection
 	for _, call := range auditStore.calls {
-		require.Equal(t, string(constants.CollectionConsoleAudit), call.collection)
+		require.Equal(t, marshaler.CollectionName(constants.CollectionConsoleAudit), call.collection)
 		require.Equal(t, envelope.Id, call.id)
 	}
 
@@ -124,13 +125,13 @@ func TestWardenExecuteHappyPath(t *testing.T) {
 	var initialRecord models.ActionReceiptRecord
 	err = json.Unmarshal(auditStore.calls[0].data, &initialRecord)
 	require.NoError(t, err)
-	require.Equal(t, "EXECUTION_STATUS_EXECUTING", initialRecord.Status)
+	require.Equal(t, constants.ExecutionStatusExecuting, initialRecord.Status)
 
 	// Verify final receipt has COMPLETED status
 	var finalRecord models.ActionReceiptRecord
 	err = json.Unmarshal(auditStore.calls[1].data, &finalRecord)
 	require.NoError(t, err)
-	require.Equal(t, "EXECUTION_STATUS_COMPLETED", finalRecord.Status)
+	require.Equal(t, constants.ExecutionStatusCompleted, finalRecord.Status)
 }
 
 func TestWardenExecuteHandlerError(t *testing.T) {
@@ -145,7 +146,7 @@ func TestWardenExecuteHandlerError(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-session",
-		ActionType:        "EXECUTE_BASH",
+		ActionType:        constants.ActionTypeExecuteBash,
 		TargetResource:    "localhost",
 	}
 
@@ -182,7 +183,7 @@ func TestWardenExecuteHandlerError(t *testing.T) {
 	var finalRecord models.ActionReceiptRecord
 	err = json.Unmarshal(auditStore.calls[1].data, &finalRecord)
 	require.NoError(t, err)
-	require.Equal(t, "EXECUTION_STATUS_FAILED", finalRecord.Status)
+	require.Equal(t, constants.ExecutionStatusFailed, finalRecord.Status)
 }
 
 func TestWardenExecuteAuditWriteFailInitial(t *testing.T) {
@@ -204,7 +205,7 @@ func TestWardenExecuteAuditWriteFailInitial(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-session",
-		ActionType:        "EXECUTE_BASH",
+		ActionType:        constants.ActionTypeExecuteBash,
 		TargetResource:    "localhost",
 	}
 
@@ -237,7 +238,7 @@ func TestWardenExecuteReceiptPersistFail(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-session",
-		ActionType:        "EXECUTE_BASH",
+		ActionType:        constants.ActionTypeExecuteBash,
 		TargetResource:    "localhost",
 	}
 
@@ -262,7 +263,7 @@ func TestWardenExecuteMissingSigningKey(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-session",
-		ActionType:        "EXECUTE_BASH",
+		ActionType:        constants.ActionTypeExecuteBash,
 		TargetResource:    "localhost",
 	}
 
@@ -287,7 +288,7 @@ func TestWardenExecuteMissingExecutionHandler(t *testing.T) {
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
 		OperatorSessionId: "test-session",
-		ActionType:        "EXECUTE_BASH",
+		ActionType:        constants.ActionTypeExecuteBash,
 		TargetResource:    "localhost",
 	}
 

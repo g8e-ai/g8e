@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
@@ -524,7 +525,7 @@ func (s *ListenDBService) DocQuery(collection string, filters []models.DocFilter
 // GetTrustedSigner retrieves an L2 signer public key from the database.
 // Implements governance.SignerStore.
 func (s *ListenDBService) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
-	doc, err := s.DocGet(string(constants.CollectionTrustedSigners), keyID)
+	doc, err := s.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get trusted signer %s: %w", keyID, err)
 	}
@@ -576,12 +577,12 @@ func (s *ListenDBService) AddTrustedSigner(signer models.TrustedSigner) error {
 		return err
 	}
 
-	return s.DocSet(string(constants.CollectionTrustedSigners), signer.ID, data)
+	return s.DocSet(marshaler.CollectionName(constants.CollectionTrustedSigners), signer.ID, data)
 }
 
 // ListTrustedSigners returns all trusted L2 signers in the database.
 func (s *ListenDBService) ListTrustedSigners() ([]models.TrustedSigner, error) {
-	docs, err := s.DocQuery(string(constants.CollectionTrustedSigners), nil, "id", 0)
+	docs, err := s.DocQuery(marshaler.CollectionName(constants.CollectionTrustedSigners), nil, "id", 0)
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +606,7 @@ func (s *ListenDBService) ListTrustedSigners() ([]models.TrustedSigner, error) {
 
 // DeleteTrustedSigner removes a trusted L2 signer from the database.
 func (s *ListenDBService) DeleteTrustedSigner(keyID string) (bool, error) {
-	return s.DocDelete(string(constants.CollectionTrustedSigners), keyID)
+	return s.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
 }
 
 // HasTrustedSigners returns true if at least one trusted L2 signer is provisioned in the database.
@@ -613,7 +614,7 @@ func (s *ListenDBService) HasTrustedSigners() (bool, error) {
 	filters := []models.DocFilter{
 		{Field: "enabled", Op: "==", Value: json.RawMessage("true")},
 	}
-	docs, err := s.DocQuery(string(constants.CollectionTrustedSigners), filters, "", 1)
+	docs, err := s.DocQuery(marshaler.CollectionName(constants.CollectionTrustedSigners), filters, "", 1)
 	if err != nil {
 		return false, err
 	}

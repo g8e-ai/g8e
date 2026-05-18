@@ -253,32 +253,20 @@ class TestNewPubsubWsSessionSsl:
 class TestResolvePubsubSslContext:
 
     def test_returns_none_when_no_cert_configured(self):
-        assert resolve_pubsub_ssl_context(pubsub_ca_cert=None) is False
+        assert resolve_pubsub_ssl_context(None) is False
 
     def test_returns_true_when_tls_requested_no_cert(self):
-        assert resolve_pubsub_ssl_context(pubsub_ca_cert=None, use_tls=True) is True
+        assert resolve_pubsub_ssl_context(None, use_tls=True) is True
 
-    def test_pubsub_ca_cert_takes_priority(self, tmp_path):
-        pubsub_cert = tmp_path / "pubsub.pem"
-        ssl_cert = tmp_path / "ssl.pem"
-        pubsub_cert.write_bytes(b"")
-        ssl_cert.write_bytes(b"")
-        with patch("ssl.SSLContext.load_verify_locations"):
-            result = resolve_pubsub_ssl_context(
-                pubsub_ca_cert=str(pubsub_cert),
-                ssl_cert_file=str(ssl_cert),
-            )
-            assert isinstance(result, ssl.SSLContext)
-
-    def test_ssl_cert_file_used_when_no_pubsub_cert(self, tmp_path):
-        cert = tmp_path / "ssl.pem"
+    def test_returns_ssl_context_when_ca_cert_exists(self, tmp_path):
+        cert = tmp_path / "pubsub.pem"
         cert.write_bytes(b"")
         with patch("ssl.SSLContext.load_verify_locations"):
-            result = resolve_pubsub_ssl_context(pubsub_ca_cert=None, ssl_cert_file=str(cert))
+            result = resolve_pubsub_ssl_context(str(cert))
             assert isinstance(result, ssl.SSLContext)
 
     def test_nonexistent_path_returns_none(self):
-        assert resolve_pubsub_ssl_context(pubsub_ca_cert="/nonexistent.pem") is False
+        assert resolve_pubsub_ssl_context("/nonexistent.pem") is False
 
 
 # =============================================================================

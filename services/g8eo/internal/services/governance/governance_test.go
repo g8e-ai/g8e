@@ -68,7 +68,8 @@ func TestGovernanceFlow(t *testing.T) {
 
 	// Ensure status is validated for Warden
 	env.Governance.L1.Validated = true
-	env.Governance.L2.TribunalSignature = tribunal.SignDecision(env.Id, true)
+	sig, _ := tribunal.SignDecision(env.Id, true)
+	env.Governance.L2.TribunalSignature = sig
 
 	handler := &mockExecutionHandler{}
 	warden.ExecutionHandler = handler

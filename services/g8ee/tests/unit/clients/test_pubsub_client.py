@@ -22,7 +22,6 @@ from app.constants import (
     ComponentName,
     PubSubAction,
     PubSubField,
-    PubSubMessageType,
     PubSubWireEventType,
 )
 from tests.fakes.async_helpers import async_iter
@@ -65,9 +64,6 @@ class TestPubSubWireProtocolConstants:
         assert PubSubWireEventType.MESSAGE == "message"
         assert PubSubWireEventType.PMESSAGE == "pmessage"
         assert PubSubWireEventType.SUBSCRIBED == "subscribed"
-
-    def test_backward_compat_alias_is_wire_event_type(self):
-        assert PubSubMessageType is PubSubWireEventType
 
     def test_pubsub_action_has_psubscribe(self):
         assert PubSubAction.PSUBSCRIBE == "psubscribe"

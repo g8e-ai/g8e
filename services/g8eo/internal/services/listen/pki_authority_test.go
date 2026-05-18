@@ -169,10 +169,10 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		err := pki.EnsurePKI(nil)
 		require.NoError(t, err)
 
-		// Verify that ca.crt does NOT exist at the PKI root
-		legacyPath := filepath.Join(pkiDir, "ca.crt")
-		_, err = os.Stat(legacyPath)
-		assert.True(t, os.IsNotExist(err), "legacy ca.crt should not exist at PKI root")
+		// Verify that ca.crt does NOT exist at the PKI root.
+		rootCAPath := filepath.Join(pkiDir, "ca.crt")
+		_, err = os.Stat(rootCAPath)
+		assert.True(t, os.IsNotExist(err), "ca.crt must not exist at PKI root")
 	})
 }
 

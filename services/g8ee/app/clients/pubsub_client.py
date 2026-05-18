@@ -31,12 +31,12 @@ import aiohttp
 
 from app.models.settings import ListenSettings
 from app.utils.aiohttp_session import new_pubsub_ws_session, resolve_pubsub_ssl_context
-from app.utils.envelope_builder import build_universal_envelope_bytes
+from app.utils.envelope_builder import build_uap_envelope_json
 from app.constants import (
     ComponentName,
     EventType,
     PubSubAction,
-    PubSubChannel,
+    OperatorChannel,
     PubSubWireEventType,
 )
 from app.models.pubsub_messages import G8eMessage, HeartbeatRequestPayload
@@ -514,7 +514,7 @@ class PubSubClient:
         operator_session_id: str,
         command_data: G8eMessage
     ) -> int:
-        channel = PubSubChannel.cmd(operator_id, operator_session_id)
+        channel = OperatorChannel.cmd(operator_id, operator_session_id)
 
         logger.info(
             "[PUBSUB-CLIENT] Publishing command for operator %s session %s (event_type: %s)",
@@ -530,16 +530,14 @@ class PubSubClient:
             }
         )
 
-        # Use UAP JSON for all commands (v0.3.0 UAP-First)
         try:
-            payload_bytes = build_universal_envelope_bytes(
+            payload_bytes = build_uap_envelope_json(
                 command_data,
                 auditor_hmac_key=self._auditor_hmac_key or "",
-            )
+            ).encode("utf-8")
             logger.debug("[PUBSUB-CLIENT] Publishing UAP JSON Envelope")
         except Exception as e:
             logger.error("[PUBSUB-CLIENT] Failed to build UAPEnvelope: %s", e)
-            # If the envelope fails, the command fails.
             return 0
 
         result = await self.publish(channel, payload_bytes)
@@ -576,7 +574,7 @@ class PubSubClient:
         callback: Callable[[str, Any], Any],
     ) -> None:
         """Subscribe to the exact results channel for one operator session."""
-        channel = PubSubChannel.results(operator_id, operator_session_id)
+        channel = OperatorChannel.results(operator_id, operator_session_id)
 
         logger.info(
             "[PUBSUB-CLIENT] Subscribing to execution results for operator %s session %s",
@@ -600,7 +598,7 @@ class PubSubClient:
         callback: Callable[[str, Any], Any],
     ) -> None:
         """Unsubscribe from the exact results channel for one operator session."""
-        channel = PubSubChannel.results(operator_id, operator_session_id)
+        channel = OperatorChannel.results(operator_id, operator_session_id)
 
         logger.info(
             "[PUBSUB-CLIENT] Unsubscribing from execution results for operator %s session %s",
@@ -624,7 +622,7 @@ class PubSubClient:
         callback: Callable[[str, Any], Any],
     ) -> None:
         """Subscribe to the exact heartbeat channel for one operator session."""
-        channel = PubSubChannel.heartbeat(operator_id, operator_session_id)
+        channel = OperatorChannel.heartbeat(operator_id, operator_session_id)
 
         logger.info(
             "[PUBSUB-CLIENT] Subscribing to heartbeats for operator %s session %s",
@@ -648,7 +646,7 @@ class PubSubClient:
         callback: Callable[[str, Any], Any],
     ) -> None:
         """Unsubscribe from the exact heartbeat channel for one operator session."""
-        channel = PubSubChannel.heartbeat(operator_id, operator_session_id)
+        channel = OperatorChannel.heartbeat(operator_id, operator_session_id)
 
         logger.info(
             "[PUBSUB-CLIENT] Unsubscribing from heartbeats for operator %s session %s",
@@ -670,7 +668,7 @@ class PubSubClient:
         operator_id: str,
         operator_session_id: str
     ) -> bool:
-        channel = PubSubChannel.cmd(operator_id, operator_session_id)
+        channel = OperatorChannel.cmd(operator_id, operator_session_id)
 
         logger.info(
             "[PUBSUB-CLIENT] Checking if operator %s session %s is online",
@@ -697,16 +695,14 @@ class PubSubClient:
                 payload=HeartbeatRequestPayload(),
             )
 
-            # Use UAP JSON for all pings (v0.3.0 UAP-First)
             try:
-                payload_bytes = build_universal_envelope_bytes(
+                payload_bytes = build_uap_envelope_json(
                     ping,
                     auditor_hmac_key=self._auditor_hmac_key or "",
-                )
+                ).encode("utf-8")
                 logger.debug("[PUBSUB-CLIENT] Publishing UAP JSON Envelope for ping")
             except Exception as e:
                 logger.error("[PUBSUB-CLIENT] Failed to build UAPEnvelope for ping: %s", e)
-                # If the envelope fails, the ping fails.
                 return False
 
             receivers = await self.publish(channel, payload_bytes)

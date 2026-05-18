@@ -1,7 +1,14 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Literal
+from typing import Any, Dict, List, Optional, Literal, Union
+
+from g8e_evals.models import ActionReceipt, ScoreDetails, TaskMetadata
+
+# Forward reference for ChatEvaluationReceipt to avoid circular import
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from g8e_evals.sut.g8ee_chat import ChatEvaluationReceipt
 
 
 class BindingType(str, Enum):
@@ -35,7 +42,7 @@ class SUTConfig:
 class Task:
     id: str
     prompt: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: TaskMetadata = field(default_factory=TaskMetadata)
 
 
 @dataclass
@@ -43,7 +50,8 @@ class Response:
     answer: str
     model: str
     transaction_id: Optional[str] = None
-    receipt: Optional[Dict[str, Any]] = None  # Full receipt object
+    # receipt can be either ChatEvaluationReceipt (from chat SUT) or ActionReceipt (from substrate)
+    receipt: Optional[Union["ChatEvaluationReceipt", ActionReceipt]] = None
     receipt_signature: Optional[str] = None
     receipt_verified: bool = False
     binding: BindingType = BindingType.UNBOUND
@@ -54,7 +62,7 @@ class Response:
 class Score:
     task_id: str
     passed: bool
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: ScoreDetails = field(default_factory=ScoreDetails)
 
 
 @dataclass

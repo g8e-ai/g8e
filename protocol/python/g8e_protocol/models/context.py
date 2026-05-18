@@ -13,7 +13,9 @@
 
 from typing import Any
 from .base import G8eBaseModel, Field, model_validator
-from ..constants import ComponentName
+from ..constants import (
+    ComponentName,
+)
 
 class BoundOperator(G8eBaseModel):
     """Represents a bound operator in the protocol context."""

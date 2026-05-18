@@ -42,7 +42,7 @@ The `ThinkingLevel` enum (defined in `@/home/bob/g8e/services/g8ee/app/constants
 ### The Lifecycle: From Intent to Wire Format
 
 1.  **Agent Declaration**: Primary reasoning agents (like **Sage**) default to `HIGH` reasoning via the `AIGenerationConfigBuilder`.
-2.  **Clamping**: `AIGenerationConfigBuilder` looks up the `LLMModelConfig` and calls `clamp_thinking_level`. If a model has no reasoning support (e.g., legacy or "lite" models), it returns `OFF`.
+2.  **Clamping**: `AIGenerationConfigBuilder` looks up the `LLMModelConfig` and calls `clamp_thinking_level`. If a model has no reasoning support (e.g., non-reasoning or "lite" models), it returns `OFF`.
 3.  **Translation**: Pure functions in `@/home/bob/g8e/services/g8ee/app/llm/thinking.py` translate the level for the provider:
     - **Gemini**: `thinking_config.thinking_level`.
     - **Anthropic**: `thinking.budget_tokens` (mapped via model-specific budgets).

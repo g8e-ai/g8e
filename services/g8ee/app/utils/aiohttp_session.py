@@ -130,26 +130,20 @@ def new_pubsub_ws_session(
 
 def resolve_pubsub_ssl_context(
     ca_cert_path: str | None = None,
+    *,
     use_tls: bool = False,
     certfile: str | None = None,
     keyfile: str | None = None,
-    **kwargs,
 ) -> ssl.SSLContext | bool:
     """Resolve the SSL context for WebSocket pub/sub connections.
 
     Returns True when TLS is requested but no cert is configured.
     """
-    # Prefer explicit ca_cert_path, but handle legacy kwargs from older test suites
-    actual_path = (
-        ca_cert_path
-        or kwargs.get("pubsub_ca_cert")
-        or kwargs.get("ssl_cert_file")
-    )
     return _resolve_ssl_context(
-        (actual_path,),
+        (ca_cert_path,),
         use_tls=use_tls,
         certfile=certfile,
-        keyfile=keyfile
+        keyfile=keyfile,
     )
 
 

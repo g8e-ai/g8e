@@ -17,7 +17,7 @@ import asyncio
 import hashlib
 import logging
 
-from app.constants.channels import PubSubChannel
+from app.constants.channels import PubSubAuthPrefix
 from app.clients.pubsub_client import PubSubClient
 from app.services.operator.operator_session_service import OperatorSessionService
 from app.services.operator.operator_data_service import OperatorDataService
@@ -61,8 +61,8 @@ class SessionAuthListener:
         # authChannel     = `${PubSubChannel.AUTH_PUBLISH_SESSION_PREFIX}${sessionHash}`;
         # responseChannel = `${PubSubChannel.AUTH_RESPONSE_SESSION_PREFIX}${sessionHash}`;
 
-        auth_channel = f"{PubSubChannel.AUTH_PUBLISH_SESSION_PREFIX}{session_hash}"
-        response_channel = f"{PubSubChannel.AUTH_RESPONSE_SESSION_PREFIX}{session_hash}"
+        auth_channel = f"{PubSubAuthPrefix.AUTH_PUBLISH_SESSION_PREFIX}{session_hash}"
+        response_channel = f"{PubSubAuthPrefix.AUTH_RESPONSE_SESSION_PREFIX}{session_hash}"
 
         if auth_channel in self._active_listeners:
             return

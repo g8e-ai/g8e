@@ -108,7 +108,6 @@ class RequestContext(G8eBaseModel):
             system_fingerprint=context.system_fingerprint,
         )
 
-
 class G8eHttpContext(G8eBaseModel):
     """Standard context object for all internal HTTP requests."""
 

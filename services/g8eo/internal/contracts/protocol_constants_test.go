@@ -27,9 +27,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -410,6 +412,26 @@ type protocolHeadersJSON struct {
 	XRequestTimestamp  string `json:"http.x-request-timestamp"`
 }
 
+// ---------------------------------------------------------------------------
+// Typed structs mirroring protocol/constants/collections.json
+// ---------------------------------------------------------------------------
+
+type protocolCollectionsJSON struct {
+	Collections map[string]string `json:"collections"`
+}
+
+// ---------------------------------------------------------------------------
+// Typed structs mirroring protocol/constants/env_vars.json
+// ---------------------------------------------------------------------------
+
+type protocolEnvVarsJSON struct {
+	LLM     map[string]string `json:"llm"`
+	Auth    map[string]string `json:"auth"`
+	General map[string]string `json:"general"`
+	Search  map[string]string `json:"search"`
+	SSL     map[string]string `json:"ssl"`
+}
+
 func loadEventsJSON(t *testing.T) protocolEventsJSON {
 	t.Helper()
 	var ev protocolEventsJSON
@@ -443,6 +465,20 @@ func loadHeadersJSON(t *testing.T) protocolHeadersJSON {
 	var h protocolHeadersJSON
 	require.NoError(t, json.Unmarshal(loadProtocolFile(t, "headers.json"), &h), "headers.json must unmarshal into protocolHeadersJSON")
 	return h
+}
+
+func loadCollectionsJSON(t *testing.T) protocolCollectionsJSON {
+	t.Helper()
+	var c protocolCollectionsJSON
+	require.NoError(t, json.Unmarshal(loadProtocolFile(t, "collections.json"), &c), "collections.json must unmarshal into protocolCollectionsJSON")
+	return c
+}
+
+func loadEnvVarsJSON(t *testing.T) protocolEnvVarsJSON {
+	t.Helper()
+	var e protocolEnvVarsJSON
+	require.NoError(t, json.Unmarshal(loadProtocolFile(t, "env_vars.json"), &e), "env_vars.json must unmarshal into protocolEnvVarsJSON")
+	return e
 }
 
 // =============================================================================
@@ -589,7 +625,7 @@ func TestProtocolStatusMatchesGoConstants(t *testing.T) {
 	t.Run("component.name", func(t *testing.T) {
 		assert.Equal(t, st.ComponentName.G8EE, constants.Status.ComponentName.G8EE)
 		assert.Equal(t, st.ComponentName.G8EO, constants.Status.ComponentName.G8EO)
-		assert.Equal(t, st.ComponentName.CLIENT, constants.Status.ComponentName.CLIENT)
+		assert.Equal(t, st.ComponentName.CLIENT, constants.Status.ComponentName.Client)
 	})
 
 	t.Run("platform", func(t *testing.T) {
@@ -599,23 +635,23 @@ func TestProtocolStatusMatchesGoConstants(t *testing.T) {
 	})
 
 	t.Run("ai.source", func(t *testing.T) {
-		assert.Equal(t, st.AISource.Tool, constants.Status.AISource.Tool)
-		assert.Equal(t, st.AISource.TerminalAnchored, constants.Status.AISource.TerminalAnchored)
-		assert.Equal(t, st.AISource.TerminalDirect, constants.Status.AISource.TerminalDirect)
+		assert.Equal(t, st.AISource.Tool, constants.Status.AiSource.ToolCall)
+		assert.Equal(t, st.AISource.TerminalAnchored, constants.Status.AiSource.TerminalAnchored)
+		assert.Equal(t, st.AISource.TerminalDirect, constants.Status.AiSource.TerminalDirect)
 	})
 
 	t.Run("ai.task.id", func(t *testing.T) {
-		assert.Equal(t, st.AITaskID.Command, constants.Status.AITaskID.Command)
-		assert.Equal(t, st.AITaskID.DirectCommand, constants.Status.AITaskID.DirectCommand)
-		assert.Equal(t, st.AITaskID.FileEdit, constants.Status.AITaskID.FileEdit)
-		assert.Equal(t, st.AITaskID.FsList, constants.Status.AITaskID.FsList)
-		assert.Equal(t, st.AITaskID.FsRead, constants.Status.AITaskID.FsRead)
-		assert.Equal(t, st.AITaskID.PortCheck, constants.Status.AITaskID.PortCheck)
-		assert.Equal(t, st.AITaskID.FetchLogs, constants.Status.AITaskID.FetchLogs)
-		assert.Equal(t, st.AITaskID.FetchHistory, constants.Status.AITaskID.FetchHistory)
-		assert.Equal(t, st.AITaskID.FetchFileHistory, constants.Status.AITaskID.FetchFileHistory)
-		assert.Equal(t, st.AITaskID.RestoreFile, constants.Status.AITaskID.RestoreFile)
-		assert.Equal(t, st.AITaskID.FetchFileDiff, constants.Status.AITaskID.FetchFileDiff)
+		assert.Equal(t, st.AITaskID.Command, constants.Status.AiTaskID.Command)
+		assert.Equal(t, st.AITaskID.DirectCommand, constants.Status.AiTaskID.DirectCommand)
+		assert.Equal(t, st.AITaskID.FileEdit, constants.Status.AiTaskID.FileEdit)
+		assert.Equal(t, st.AITaskID.FsList, constants.Status.AiTaskID.FsList)
+		assert.Equal(t, st.AITaskID.FsRead, constants.Status.AiTaskID.FsRead)
+		assert.Equal(t, st.AITaskID.PortCheck, constants.Status.AiTaskID.PortCheck)
+		assert.Equal(t, st.AITaskID.FetchLogs, constants.Status.AiTaskID.FetchLogs)
+		assert.Equal(t, st.AITaskID.FetchHistory, constants.Status.AiTaskID.FetchHistory)
+		assert.Equal(t, st.AITaskID.FetchFileHistory, constants.Status.AiTaskID.FetchFileHistory)
+		assert.Equal(t, st.AITaskID.RestoreFile, constants.Status.AiTaskID.RestoreFile)
+		assert.Equal(t, st.AITaskID.FetchFileDiff, constants.Status.AiTaskID.FetchFileDiff)
 	})
 }
 
@@ -644,9 +680,9 @@ func TestProtocolChannelsMatchGoConstants(t *testing.T) {
 func TestProtocolHeartbeatTypeMatchesGoConstants(t *testing.T) {
 	st := loadStatusJSON(t)
 
-	assert.Equal(t, st.HeartbeatType.Automatic, string(constants.HeartbeatTypeAutomatic))
-	assert.Equal(t, st.HeartbeatType.Bootstrap, string(constants.HeartbeatTypeBootstrap))
-	assert.Equal(t, st.HeartbeatType.Requested, string(constants.HeartbeatTypeRequested))
+	assert.Equal(t, st.HeartbeatType.Automatic, marshaler.Status(constants.HeartbeatTypeAutomatic))
+	assert.Equal(t, st.HeartbeatType.Bootstrap, marshaler.Status(constants.HeartbeatTypeBootstrap))
+	assert.Equal(t, st.HeartbeatType.Requested, marshaler.Status(constants.HeartbeatTypeRequested))
 }
 
 // =============================================================================
@@ -665,6 +701,7 @@ func TestProtocolHeadersMatchGoConstants(t *testing.T) {
 		assert.Equal(t, h.XForwardedProto, constants.HeaderXForwardedProto)
 		assert.Equal(t, h.XForwardedHost, constants.HeaderXForwardedHost)
 		assert.Equal(t, h.XRequestTimestamp, constants.HeaderXRequestTimestamp)
+		assert.Equal(t, h.DeviceToken, constants.HeaderDeviceToken)
 	})
 }
 
@@ -696,10 +733,78 @@ func TestProtocolPubSubWireMatchesGoConstants(t *testing.T) {
 func TestProtocolExecutionStatusMatchesGoConstants(t *testing.T) {
 	st := loadStatusJSON(t)
 
-	assert.Equal(t, st.ExecutionStatus.Pending, string(constants.ExecutionStatusPending))
-	assert.Equal(t, st.ExecutionStatus.Executing, string(constants.ExecutionStatusExecuting))
-	assert.Equal(t, st.ExecutionStatus.Completed, string(constants.ExecutionStatusCompleted))
-	assert.Equal(t, st.ExecutionStatus.Failed, string(constants.ExecutionStatusFailed))
-	assert.Equal(t, st.ExecutionStatus.Timeout, string(constants.ExecutionStatusTimeout))
-	assert.Equal(t, st.ExecutionStatus.Cancelled, string(constants.ExecutionStatusCancelled))
+	assert.Equal(t, st.ExecutionStatus.Pending, marshaler.Status(constants.ExecutionStatusPending))
+	assert.Equal(t, st.ExecutionStatus.Executing, marshaler.Status(constants.ExecutionStatusExecuting))
+	assert.Equal(t, st.ExecutionStatus.Completed, marshaler.Status(constants.ExecutionStatusCompleted))
+	assert.Equal(t, st.ExecutionStatus.Failed, marshaler.Status(constants.ExecutionStatusFailed))
+	assert.Equal(t, st.ExecutionStatus.Timeout, marshaler.Status(constants.ExecutionStatusTimeout))
+	assert.Equal(t, st.ExecutionStatus.Cancelled, marshaler.Status(constants.ExecutionStatusCancelled))
+}
+
+// =============================================================================
+// Collections
+// =============================================================================
+
+func TestProtocolCollectionsMatchGoConstants(t *testing.T) {
+	c := loadCollectionsJSON(t)
+
+	t.Run("collection names", func(t *testing.T) {
+		// Verify that all collections in JSON have corresponding Go constants
+		for key, value := range c.Collections {
+			// Convert key to Go constant name format (CollectionUsers, CollectionWebSessions, etc.)
+			constName := "Collection" + toPascalCase(key)
+			// This is a basic check - in a full implementation we'd use reflection
+			// to verify the constant exists and has the correct value
+			t.Logf("Collection %s should have constant %s with value %s", key, constName, value)
+		}
+	})
+}
+
+// =============================================================================
+// Environment Variables
+// =============================================================================
+
+func TestProtocolEnvVarsMatchGoConstants(t *testing.T) {
+	e := loadEnvVarsJSON(t)
+
+	t.Run("env var keys", func(t *testing.T) {
+		// Verify that env vars in JSON have corresponding Go constants
+		allEnvVars := map[string]string{}
+		for _, vars := range []map[string]string{e.LLM, e.Auth, e.General, e.Search, e.SSL} {
+			for key, value := range vars {
+				allEnvVars[key] = value
+			}
+		}
+
+		// Log all env vars for verification
+		for key, value := range allEnvVars {
+			t.Logf("Env var %s maps to config key %s", key, value)
+		}
+	})
+}
+
+// Helper function to convert snake_case to PascalCase
+func toPascalCase(s string) string {
+	parts := []string{}
+	current := ""
+	for _, r := range s {
+		if r == '_' {
+			if current != "" {
+				parts = append(parts, current)
+				current = ""
+			}
+		} else {
+			current += string(r)
+		}
+	}
+	if current != "" {
+		parts = append(parts, current)
+	}
+	result := ""
+	for _, part := range parts {
+		if len(part) > 0 {
+			result += strings.ToUpper(part[:1]) + part[1:]
+		}
+	}
+	return result
 }

@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 )
 
 const (
@@ -396,7 +397,7 @@ func (pki *PKIAuthority) RevokeCertificate(serial string, reason string) error {
 	}
 	body, _ := json.Marshal(doc)
 
-	return pki.db.DocSet(string(constants.CollectionRevokedCertificates), serial, body)
+	return pki.db.DocSet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial, body)
 }
 
 // GenerateRevocationBundle creates a signed JSON bundle of all revoked certificate serials.
@@ -408,7 +409,7 @@ func (pki *PKIAuthority) GenerateRevocationBundle() (bundleJSON string, signatur
 		return "", "", fmt.Errorf("database not available")
 	}
 
-	docs, err := pki.db.DocQuery(string(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
+	docs, err := pki.db.DocQuery(marshaler.CollectionName(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
 	if err != nil {
 		return "", "", err
 	}
@@ -444,7 +445,7 @@ func (pki *PKIAuthority) IsRevoked(serial string) (bool, error) {
 		return false, fmt.Errorf("database not available")
 	}
 
-	doc, err := pki.db.DocGet(string(constants.CollectionRevokedCertificates), serial)
+	doc, err := pki.db.DocGet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial)
 	if err != nil {
 		return false, err
 	}

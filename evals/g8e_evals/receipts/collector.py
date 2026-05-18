@@ -3,8 +3,9 @@ import time
 from typing import Any, Dict, Optional
 
 from google.protobuf import json_format
-from g8e_evals.proto.operator_pb2 import ActionReceipt
+from g8e_evals.proto.operator_pb2 import ActionReceipt as ProtoActionReceipt
 from g8e_evals.transport import AuthContext
+from g8e_evals.models import ActionReceipt
 
 
 class ReceiptCollector:
@@ -28,7 +29,7 @@ class ReceiptCollector:
         self.timeout_seconds = timeout_seconds
         self.auth = auth or AuthContext.from_env(operator_url=operator_url)
 
-    async def collect_receipt(self, transaction_id: str) -> Optional[Dict[str, Any]]:
+    async def collect_receipt(self, transaction_id: str) -> Optional[ActionReceipt]:
         """Poll the Operator for an ActionReceipt by transaction_id."""
         start_time = time.time()
         headers = self.auth.auth_headers()
@@ -52,10 +53,11 @@ class ReceiptCollector:
 
                         if raw_receipt:
                             # Parse into proto to validate shape
-                            receipt = ActionReceipt()
-                            json_format.ParseDict(raw_receipt, receipt, ignore_unknown_fields=True)
-                            # Return as dict for consistency with current Response model
-                            return json_format.MessageToDict(receipt)
+                            proto_receipt = ProtoActionReceipt()
+                            json_format.ParseDict(raw_receipt, proto_receipt, ignore_unknown_fields=True)
+                            # Convert to dict then to typed model
+                            receipt_dict = json_format.MessageToDict(proto_receipt)
+                            return ActionReceipt.from_proto_dict(receipt_dict)
 
                     # 404 == not yet committed; any other status falls through
                     # to the retry/backoff path.

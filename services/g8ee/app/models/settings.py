@@ -78,13 +78,11 @@ class AuthSettings(G8eBaseModel):
 class ComponentURLsSettings(G8eBaseModel):
     """Internal and external component URL configuration.
 
-    ``client_url`` historically pointed at the legacy g8ed dashboard on :443.
-    After the Operator/protocol substrate pivot the internal SSE bridge
-    (`/api/internal/sse/push`, `/api/internal/sse/events`) lives on the
-    Operator's mTLS HTTP listener (default :9000), so the default now matches
-    that listener. The CLI / BYO frontends consume events from the same host.
-    Override with the ``G8E_CLIENT_URL`` env var if you front the Operator
-    behind a different ingress.
+    The internal SSE bridge (`/api/internal/sse/push`, `/api/internal/sse/events`)
+    lives on the Operator's mTLS HTTP listener (default :9000), so ``client_url``
+    defaults to that listener. The CLI / BYO frontends consume events from the
+    same host. Override with the ``G8E_CLIENT_URL`` env var if you front the
+    Operator behind a different ingress.
     """
     g8ee_url: str = Field("https://localhost:8443")
     client_url: str = Field("https://localhost:9000")

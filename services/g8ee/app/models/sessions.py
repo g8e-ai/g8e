@@ -53,7 +53,6 @@ class WebSessionDocument(SessionDocument):
     """Web browser session document."""
     session_type: SessionType = Field(default=SessionType.WEB)
     operator_ids: list[str] = Field(default_factory=list, description="Bound operator IDs")
-    operator_id: str | None = Field(default=None, description="Legacy single bound operator ID")
 
 
 class OperatorSessionDocument(SessionDocument):

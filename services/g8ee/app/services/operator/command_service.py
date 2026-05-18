@@ -269,7 +269,7 @@ class OperatorCommandService:
 
         Single-operator runs and multi-operator ("batch") runs share the same pipeline:
         one command validation, one risk analysis, one approval, then N parallel per-operator
-        dispatches correlated by a batch_id. For N==1 the return shape matches legacy behavior.
+        dispatches correlated by a batch_id. For N==1 the return shape matches the single-operator response.
         """
         command = args.command.strip()
         # Sage never writes `command` directly; the Tribunal produces it from
@@ -601,9 +601,9 @@ class OperatorCommandService:
     ) -> CommandExecutionResult:
         """Collapse per-operator results into a single CommandExecutionResult.
 
-        For N==1 we preserve legacy field population (output/stderr/exit_code at top level)
-        so downstream consumers keep working. For N>1 we additionally populate batch fields
-        and a combined output with per-host headers so the agent can reason about divergence.
+        For N==1 we populate the single-operator fields (output/stderr/exit_code at top
+        level). For N>1 we additionally populate batch fields and a combined output with
+        per-host headers so the agent can reason about divergence.
         """
         successful = [r for r in per_operator_results if r.success]
         failed = [r for r in per_operator_results if not r.success]

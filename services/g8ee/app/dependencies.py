@@ -377,10 +377,10 @@ async def get_g8ee_user_settings(
 ) -> G8eeUserSettings:
     """Load per-request G8eeUserSettings following Platform Settings < User Settings.
 
-    Extracts user_id from headers and overlays user-specific settings on top of
+    Extracts user_id from proxy headers and overlays user-specific settings on top of
     the platform settings loaded at startup.
     """
-    user_id = request.headers.get(G8eHeaders.USER_ID)
+    user_id = request.headers.get(PROXY_USER_ID_HEADER)
     if not user_id:
         # We need to return G8eeUserSettings, so we'll get it via the service
         # which will handle the merging logic.
@@ -421,6 +421,57 @@ async def require_proxy_auth(
             raise AuthenticationError("CLI session ownership mismatch", component=ComponentName.G8EE)
 
     return user
+
+
+async def require_authenticated_context(
+    request: Request,
+    user: AuthenticatedUser = Depends(require_proxy_auth)
+) -> G8eHttpContext:
+    """Unified authentication and context validation dependency.
+    
+    1. Authenticates user via proxy headers/mTLS (using require_proxy_auth).
+    2. Extracts RequestContext from the request body.
+    3. Validates that the body context matches the authenticated user.
+    4. Returns a validated G8eHttpContext.
+    """
+    # Try to extract context from request body
+    context_data = None
+    try:
+        # FastAPI's Request.json() handles caching of the body
+        body = await request.json()
+        if isinstance(body, dict):
+            context_data = body.get("context")
+    except Exception:
+        # Body might not be JSON or already consumed (shouldn't happen with FastAPI's cache)
+        pass
+
+    if not context_data:
+        # No context in body, return context derived from authenticated headers
+        return G8eHttpContext(
+            user_id=user.uid,
+            web_session_id=user.web_session_id,
+            cli_session_id=user.cli_session_id,
+            source_component=ComponentName.G8EE,  # Default for internal relay
+        )
+
+    # Context found, validate it against the authenticated user
+    request_context = RequestContext.model_validate(context_data)
+
+    # Check if this is an exempt path (e.g. operator auth relay)
+    is_exempt = request.url.path in [
+        InternalApiPaths.OPERATOR_AUTHENTICATE,
+        InternalApiPaths.OPERATOR_DEVICE_LINKS_REGISTER,
+        InternalApiPaths.OPERATOR_SESSION_VALIDATE,
+        InternalApiPaths.OPERATOR_SESSION_REFRESH,
+        InternalApiPaths.OPERATOR_AUTH_LISTEN,
+        InternalApiPaths.API_KEY_GENERATE,
+        InternalApiPaths.CERTIFICATE_REVOKE,
+    ]
+
+    g8e_context = G8eHttpContext.from_request_context(request_context, is_exempt_path=is_exempt)
+    g8e_context.validate_against_user(user)
+
+    return g8e_context
 
 
 async def health_check_dependencies(request: Request) -> HealthCheckResult:
@@ -465,4 +516,5 @@ __all__ = [
     "health_check_dependencies",
     "is_infrastructure_health_check_ip",
     "require_proxy_auth",
+    "require_authenticated_context",
 ]

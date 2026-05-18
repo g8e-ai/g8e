@@ -38,7 +38,7 @@ case "$TOP" in
         fi
 
         _trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
-        _bootstrap_port="${OPERATOR_LISTEN_PUBLIC_PORT:-9003}"
+        _bootstrap_port="${OPERATOR_LISTEN_PUBLIC_PORT:-$G8E_PORT_OPERATOR_PUBLIC}"
         _bootstrap_url="${G8E_BOOTSTRAP_URL:-https://localhost:$_bootstrap_port}"
 
         if [[ ! -f "$_trust_bundle" ]]; then
@@ -51,7 +51,7 @@ case "$TOP" in
         _fingerprint=$(echo "g8e-cli-$(hostname)-$(whoami)" | sha256sum | awk '{print $1}')
         _dl_body=$(python3 -c "import json,sys; print(json.dumps({'email':sys.argv[1],'name':'cli-'+__import__('socket').gethostname(),'max_uses':2}))" "$_login_email")
         _dl_resp=$( curl -sS --cacert "$_trust_bundle" \
-            -X POST -H "Content-Type: application/json" \
+            -X POST -H "${G8E_HEADER_CONTENT_TYPE}: application/json" \
             -d "$_dl_body" \
             "$_bootstrap_url/api/auth/device-link/request" 2>&1 )
         _dl_token=$(echo "$_dl_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('token',''))" 2>/dev/null)
@@ -85,8 +85,8 @@ print(json.dumps({
     'cli_csr_pem': $(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$_cli_csr_pem"),
 }))")
         _reg_resp=$( curl -sS --cacert "$_trust_bundle" \
-            -X POST -H "Content-Type: application/json" \
-            -H "X-G8E-Device-Token: $_dl_token" \
+            -X POST -H "${G8E_HEADER_CONTENT_TYPE}: application/json" \
+            -H "${G8E_HEADER_DEVICE_TOKEN}: $_dl_token" \
             -d "$_reg_body" \
             "$_bootstrap_url/api/auth/device-link/register" 2>&1 )
 
@@ -234,10 +234,6 @@ print(json.dumps({
             validate)
                 _banner "security validate"
                 _run_host_script bash "$SCRIPT_DIR/scripts/security/validate-platform-security.sh" "${@:3}" ;;
-            certs)
-                echo "[g8e] ERROR: the legacy certificate command has been removed. Certificate management is owned by the Operator PKI subsystem." >&2
-                echo "[g8e] Use './g8e pki' commands for PKI operations." >&2
-                exit 1 ;;
             mtls-test)
                 _banner "security mtls-test"
                 _run_host_script bash "$SCRIPT_DIR/scripts/security/mtls-test.sh" "${@:3}" ;;

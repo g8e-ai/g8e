@@ -87,7 +87,7 @@ func GenerateSystemFingerprint(logger *slog.Logger) (*SystemFingerprint, error) 
 
 // getMachineID retrieves a stable machine identifier based on the OS
 func getMachineID(logger *slog.Logger) (string, error) {
-	switch runtime.GOOS {
+	switch constants.Platform(runtime.GOOS) {
 	case constants.Status.Platform.Linux:
 		return getLinuxMachineID(logger)
 	case constants.Status.Platform.Darwin:

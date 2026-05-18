@@ -2,7 +2,7 @@
 
 The evals harness (``g8e_evals.transport.AuthContext``) and the shell
 helpers in ``scripts/cmd/common.sh`` (``_build_protocol_curl_args`` +
-``_append_legacy_g8e_context_headers``) encode the *same* recipe for reaching
+``_append_g8e_auth_headers``) encode the *same* recipe for reaching
 the running platform:
 
   - mTLS trust bundle (--cacert)
@@ -35,26 +35,26 @@ from g8e_evals.transport import (
     SOURCE_COMPONENT_CLIENT,
     AuthContext,
 )
+from g8e_protocol.models import BoundOperator
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 COMMON_SH = REPO_ROOT / "scripts" / "cmd" / "common.sh"
 
 
-def _shell_curl_argv(env: dict[str, str], use_legacy: bool = False) -> list[str]:
+def _shell_curl_argv(env: dict[str, str]) -> list[str]:
     """Source common.sh, run the header-building helpers, dump argv.
 
     The shell snippet prints each argument on its own line wrapped in
     ``shlex.quote`` form so the Python side can parse it back losslessly
     without any whitespace ambiguity.
     """
-    helper = "_append_legacy_g8e_context_headers" if use_legacy else "_append_g8e_auth_headers"
     script = f"""
 set -euo pipefail
 source "{COMMON_SH}"
 args=()
 _build_protocol_curl_args args
-{helper} args
+_append_g8e_auth_headers args
 for a in "${{args[@]}}"; do
     printf '%s\\n' "$a"
 done
@@ -159,7 +159,7 @@ def _baseline_env(fake_pki: dict[str, Path]) -> dict[str, str]:
     }
 
 
-def _python_view(env: dict[str, str], use_legacy: bool = False) -> dict:
+def _python_view(env: dict[str, str]) -> dict:
     """Render the Python AuthContext into the same shape as the shell parser."""
     # AuthContext.from_env reads from os.environ; swap it in for the call.
     saved = dict(os.environ)
@@ -171,7 +171,7 @@ def _python_view(env: dict[str, str], use_legacy: bool = False) -> dict:
         os.environ.clear()
         os.environ.update(saved)
     
-    headers = ctx.legacy_substrate_headers() if use_legacy else ctx.auth_headers()
+    headers = ctx.auth_headers()
     
     return {
         "headers": dict(headers),
@@ -184,8 +184,8 @@ def _python_view(env: dict[str, str], use_legacy: bool = False) -> dict:
 
 def test_auth_wiring_matches_shell_helpers(fake_pki):
     env = _baseline_env(fake_pki)
-    shell = _parse_curl_argv(_shell_curl_argv(env, use_legacy=False))
-    py = _python_view(env, use_legacy=False)
+    shell = _parse_curl_argv(_shell_curl_argv(env))
+    py = _python_view(env)
 
     # mTLS material parity
     assert shell["cert"] == py["cert"]
@@ -212,39 +212,11 @@ def test_auth_wiring_matches_shell_helpers(fake_pki):
     assert h["Authorization"] == f"Bearer {env['OPERATOR_SESSION_ID']}"
     assert h["X-G8E-CLI-Session-ID"] == env["CLI_SESSION_ID"]
 
-    # Invert the conflation check: ensure no legacy context headers leak into clean auth
+    # Invert the conflation check: business context headers must NOT leak
+    # into the minimal auth header set; that context is body-embedded instead.
     assert "X-G8E-Source-Component" not in h
     assert "X-G8E-User-ID" not in h
     assert h["Authorization"] == f"Bearer {env['OPERATOR_SESSION_ID']}"
-
-
-def test_legacy_context_headers_match_when_set(fake_pki):
-    env = _baseline_env(fake_pki)
-    env.update({
-        "G8E_CASE_ID": "case-xyz",
-        "G8E_INVESTIGATION_ID": "inv-xyz",
-        "G8E_BOUND_OPERATORS": "op-1,op-2",
-        "G8E_TASK_ID": "task-xyz",
-    })
-    shell = _parse_curl_argv(_shell_curl_argv(env, use_legacy=True))
-
-    # The Python SUT currently does not emit these optional headers
-    # itself, but AuthContext supports them via per-request mutation —
-    # so set them on the context and confirm parity with the shell.
-    saved = dict(os.environ)
-    try:
-        os.environ.clear()
-        os.environ.update(env)
-        ctx = AuthContext.from_env()
-    finally:
-        os.environ.clear()
-        os.environ.update(saved)
-    ctx.case_id = env["G8E_CASE_ID"]
-    ctx.investigation_id = env["G8E_INVESTIGATION_ID"]
-    ctx.bound_operators = env["G8E_BOUND_OPERATORS"]
-    ctx.task_id = env["G8E_TASK_ID"]
-
-    assert ctx.legacy_substrate_headers() == shell["headers"]
 
 
 def test_configurable_contexts_match_when_set(fake_pki):
@@ -253,8 +225,7 @@ def test_configurable_contexts_match_when_set(fake_pki):
         "WEB_SESSION_ID": "web-parity-001",
         "G8E_SOURCE_COMPONENT": "g8ee",
     })
-    shell = _parse_curl_argv(_shell_curl_argv(env, use_legacy=True))
-
+    
     saved = dict(os.environ)
     try:
         os.environ.clear()
@@ -264,12 +235,12 @@ def test_configurable_contexts_match_when_set(fake_pki):
         os.environ.clear()
         os.environ.update(saved)
 
-    # 1. Header parity (shell helper should now pick up G8E_SOURCE_COMPONENT)
-    h = ctx.legacy_substrate_headers()
-    assert h["X-G8E-Source-Component"] == "g8ee"
-    assert h["X-G8E-Source-Component"] == shell["headers"]["X-G8E-Source-Component"]
+    # 1. Header parity: business context is body-embedded, never carried as
+    #    component or user headers in the minimal auth header set.
+    h = ctx.auth_headers()
+    assert "X-G8E-Source-Component" not in h
 
     # 2. Body parity (RequestContext)
     rc = ctx.to_request_context()
     assert rc.web_session_id == "web-parity-001"
-    assert rc.source_component == "g8ee"
+    assert rc.source_component == ComponentName.G8EE

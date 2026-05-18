@@ -41,8 +41,8 @@ from app.constants.agents import (
 from app.constants.channels import (
     CHANNEL_SEGMENT_COUNT,
     OperatorChannel,
-    PubSubAction,
     PubSubChannel,
+    PubSubAction,
     PubSubField,
     PubSubMessageType,
     PubSubWireEventType,
@@ -242,6 +242,7 @@ from app.constants.settings import (
     NonceErrorCode,
     OLLAMA_DEFAULT_ENDPOINT,
     OLLAMA_DEFAULT_MODEL,
+    OLLAMA_DEFAULT_PROTOCOL,
     OLLAMA_GEMMA4_26B,
     OLLAMA_GEMMA4_E4B,
     OLLAMA_GEMMA4_E2B,
@@ -335,6 +336,8 @@ from app.constants.status import (
     TaskStatus,
     TribunalAuditMode,
     TribunalAuditStatus,
+    UserRole,
+    UserStatus,
     VaultMode,
     VersionStability,
 )
@@ -488,6 +491,7 @@ __all__ = [
     "NONCE_TTL_SECONDS",
     "OLLAMA_DEFAULT_ENDPOINT",
     "OLLAMA_DEFAULT_MODEL",
+    "OLLAMA_DEFAULT_PROTOCOL",
     "OLLAMA_GEMMA4_26B",
     "OLLAMA_GEMMA4_E2B",
     "OLLAMA_GEMMA4_E2B_G8EA",
@@ -636,6 +640,8 @@ __all__ = [
     "TribunalAuditMode",
     "TribunalAuditStatus",
     "TribunalMember",
+    "UserRole",
+    "UserStatus",
     "VaultMode",
     "VersionStability",
 ]

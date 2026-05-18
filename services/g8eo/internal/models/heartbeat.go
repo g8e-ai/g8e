@@ -55,8 +55,8 @@ type HeartbeatCapabilityFlags struct {
 }
 
 type HeartbeatVersionInfo struct {
-	OperatorVersion string `json:"operator_version"`
-	Status          string `json:"status"`
+	OperatorVersion string                     `json:"operator_version"`
+	Status          constants.VersionStability `json:"status"`
 }
 
 type HeartbeatUptimeInfo struct {

@@ -24,8 +24,8 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -148,7 +148,8 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 	return heartbeat
 }
 
-// buildProtoHeartbeat converts a legacy models.Heartbeat to a v0.2.0 operatorv1.HeartbeatResult.
+// buildProtoHeartbeat converts the in-memory models.Heartbeat into the canonical
+// operatorv1.HeartbeatResult protobuf carried on the pub/sub heartbeat channel.
 func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1.HeartbeatResult {
 	p := &operatorv1.HeartbeatResult{
 		OperatorId:        h.OperatorID,

@@ -28,43 +28,13 @@ import logging
 from pydantic import ValidationError as PydanticValidationError
 
 from app.clients.pubsub_client import PubSubClient
-from app.constants.channels import OperatorChannel, PubSubChannel
+from app.constants.channels import OperatorChannel
 
 from app.errors import ValidationError
-from app.models.pubsub_messages import (
-    G8eoResultEnvelope,
-    G8eoResultPayload,
-    G8eoResultPayloadAdapter,
-    G8eMessage,
-)
-from app.utils.envelope_builder import decode_g8eo_result_envelope
+from app.models.pubsub_messages import G8eoResultEnvelope, G8eMessage
+from app.utils.envelope_builder import decode_and_validate_uap_result
 
 logger = logging.getLogger(__name__)
-
-
-def parse_inbound_g8eo_payload(payload_raw: dict[str, object]) -> G8eoResultPayload:
-    """Parse inbound g8eo payload using discriminator-based union parsing.
-
-    The payload models use a 'payload_type' discriminator field that Pydantic uses
-    to automatically determine the correct model class. This matches the wire
-    deserialization pattern used for outbound payloads.
-
-    Args:
-        payload_raw: The raw payload dict from the pub/sub message
-
-    Returns:
-        A validated G8eoResultPayload instance
-
-    Raises:
-        ValidationError: If the payload_type is invalid or payload validation fails
-    """
-    try:
-        return G8eoResultPayloadAdapter.validate_python(payload_raw)
-    except PydanticValidationError as e:
-        raise ValidationError(
-            f"Invalid g8eo result payload: {e}",
-            component="g8ee",
-        ) from e
 
 
 class OperatorPubSubService:
@@ -143,7 +113,7 @@ class OperatorPubSubService:
             return
         if self.pubsub_client is None:
             raise ValidationError("pubsub_client not initialized — call set_pubsub_client() first", component="g8ee")
-        results_ch = PubSubChannel.results(operator_id, operator_session_id)
+        results_ch = OperatorChannel.results(operator_id, operator_session_id)
         self.pubsub_client.on_channel_message(results_ch, self._dispatch_results_message)
         await self.pubsub_client.subscribe(results_ch)
         self._active_operator_sessions_set.add(key)
@@ -169,7 +139,7 @@ class OperatorPubSubService:
         self._active_operator_sessions_set.discard(key)
         if self.pubsub_client is None:
             return
-        results_ch = PubSubChannel.results(operator_id, operator_session_id)
+        results_ch = OperatorChannel.results(operator_id, operator_session_id)
         self.pubsub_client.off_channel_message(results_ch, self._dispatch_results_message)
         await self.pubsub_client.unsubscribe(results_ch)
         logger.info(
@@ -186,42 +156,24 @@ class OperatorPubSubService:
 
         # Enforce UAP JSON Protocol
         try:
-            raw = decode_g8eo_result_envelope(data)
-            logger.debug("[PUBSUB] Decoded UAP JSON envelope from g8eo")
-        except (ValueError, TypeError) as e:
-            logger.warning("[PUBSUB] Failed to decode UAP envelope: %s", e)
+            envelope = decode_and_validate_uap_result(data, operator_id, operator_session_id)
+            logger.debug("[PUBSUB] Decoded and validated UAP JSON envelope from g8eo")
+        except ValidationError as e:
+            logger.warning("[PUBSUB] Failed to decode/validate UAP envelope: %s", e)
             return
 
-        await self._handle_pubsub_result_message(operator_id, operator_session_id, raw)
+        await self._handle_pubsub_result_message(envelope)
 
     async def _handle_pubsub_result_message(
         self,
-        operator_id: str,
-        operator_session_id: str,
-        raw: dict[str, object],
+        envelope: G8eoResultEnvelope,
     ) -> None:
         try:
-            event_type_raw = raw.get("event_type")
-            if not event_type_raw:
-                logger.warning("[PUBSUB] Received message without event_type; ignoring")
-                return
-            _raw_payload = raw.get("payload")
-            payload_raw: dict[str, object] = _raw_payload if isinstance(_raw_payload, dict) else {}  # type: ignore[reportUnknownVariableType]
-            for id_field in ("case_id", "investigation_id", "task_id"):
-                if not raw.get(id_field) and payload_raw.get(id_field):
-                    raw[id_field] = payload_raw[id_field]
-            payload = parse_inbound_g8eo_payload(payload_raw)
-            envelope = G8eoResultEnvelope.model_validate({
-                **raw,
-                "operator_id": operator_id,
-                "operator_session_id": operator_session_id,
-                "payload": payload,
-            })
             logger.info(
                 "[PUBSUB] Received message from Operator",
-                extra={"operator_id": operator_id, "event_type": envelope.event_type},
+                extra={"operator_id": envelope.operator_id, "event_type": envelope.event_type},
             )
-            execution_id = payload.execution_id if hasattr(payload, "execution_id") else None
+            execution_id = envelope.payload.execution_id if hasattr(envelope.payload, "execution_id") else None
             if execution_id:
                 future = self._pending_futures.get(execution_id)
                 if future and not future.done():

@@ -25,6 +25,17 @@ jobs:
       - name: Generate Proto
         run: make proto
 
+      - name: Verify Constants
+        run: |
+          python3 scripts/data/generate_constants.py --all
+          CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.go$|^\s*M.*\.py$|^\s*M.*\.sh$" || true)
+          if [ -n "$CHANGES" ]; then
+            echo "Error: Generated constant files are out of sync with protocol/constants/*.json"
+            echo "$CHANGES"
+            git diff
+            exit 1
+          fi
+
       - name: Check for drift
         run: |
           # Only check for changes in generated proto files, ignore untracked files

@@ -15,15 +15,27 @@ shape against the protocol definition.
 
 from __future__ import annotations
 
-from typing import Any
+import os
+from typing import Any, Union
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from g8e_protocol.models import (
+    SessionEventWire,
+    BackgroundEventWire,
+    ChatResponseChunkPayload,
+    ChatResponseCompletePayload,
+    ChatTurnCompletePayload,
+)
+
+
+STRICT_MODE = os.environ.get("G8E_STRICT_SSE", "").lower() == "true"
 
 
 class SSEEventBody(BaseModel):
     """Inner `event` object: `{type, data}`."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid" if STRICT_MODE else "ignore")
 
     type: str
     data: dict[str, Any] = Field(default_factory=dict)
@@ -39,7 +51,7 @@ class SSEWireEnvelope(BaseModel):
     discriminate.
     """
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid" if STRICT_MODE else "ignore")
 
     web_session_id: str | None = None
     cli_session_id: str | None = None
@@ -53,19 +65,51 @@ class SSEWireEnvelope(BaseModel):
         the drain loop on a single malformed row."""
         if not isinstance(payload, dict):
             return None
+        
+        # Try to validate against canonical protocol models first to catch drift
+        try:
+            if "web_session_id" in payload or "cli_session_id" in payload:
+                SessionEventWire.model_validate(payload)
+            else:
+                BackgroundEventWire.model_validate(payload)
+        except ValidationError as exc:
+            # In strict mode, we want to know if the protocol models fail
+            if STRICT_MODE:
+                raise exc
+            pass
+
         try:
             return cls.model_validate(payload)
-        except ValidationError:
+        except ValidationError as exc:
+            if STRICT_MODE:
+                raise exc
             return None
 
     def text_chunk(self) -> str:
         """Return the streaming text chunk content, or "" if absent.
 
-        Source of truth: `ChatResponseChunkPayload.content` in
-        `g8e_protocol.models.events`.
+        Source of truth: `ChatResponseChunkPayload.content` or
+        `ChatResponseCompletePayload.content` in `g8e_protocol.models.events`.
         """
         if self.event is None:
             return ""
+        
+        # Use typed payload model if it's a known text event
+        if "text" in self.event.type:
+            if "chunk" in self.event.type:
+                try:
+                    payload = ChatResponseChunkPayload.model_validate(self.event.data)
+                    return payload.content
+                except ValidationError:
+                    pass
+            elif "complete" in self.event.type:
+                try:
+                    payload = ChatResponseCompletePayload.model_validate(self.event.data)
+                    return payload.content
+                except ValidationError:
+                    pass
+
+        # Fallback for events that haven't been fully typed yet in the bench
         content = self.event.data.get("content")
         return content if isinstance(content, str) else ""
 
@@ -81,8 +125,26 @@ class SSEWireEnvelope(BaseModel):
         inv = self.event.data.get("investigation_id")
         return inv if isinstance(inv, str) else ""
 
+    def turn_index(self) -> int | None:
+        """Return the chat turn index if this is a turn complete event."""
+        if self.event is None:
+            return None
+        
+        if "turn.complete" in self.event.type:
+            try:
+                payload = ChatTurnCompletePayload.model_validate(self.event.data)
+                return payload.turn
+            except ValidationError:
+                pass
+        return None
+
     def field_in_data(self, name: str) -> Any:
         """Generic typed accessor for a key inside `event.data`."""
         if self.event is None:
             return None
         return self.event.data.get(name)
+
+    def transaction_hash(self) -> str | None:
+        """Return the substrate transaction hash if present in event.data."""
+        val = self.field_in_data("transaction_hash")
+        return val if isinstance(val, str) else None

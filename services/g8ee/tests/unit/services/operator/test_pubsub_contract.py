@@ -31,7 +31,7 @@ from app.models.pubsub_messages import (
     PortCheckResultPayload,
     RestoreFileSuccessPayload,
 )
-from app.services.operator.pubsub_service import parse_inbound_g8eo_payload
+from app.utils.envelope_builder import parse_inbound_g8eo_payload
 
 pytestmark = [pytest.mark.unit]
 

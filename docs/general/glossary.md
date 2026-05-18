@@ -406,7 +406,7 @@ Compliance with the National Security Agency's Zero Trust Implementation Guideli
 
 ## Ollama (Remote)
 
-The remote LLM inference component. g8e supports any remote Ollama server that provides an API at `/v1`. Used as an LLM backend for g8ee.
+The remote LLM inference component. g8e supports any remote Ollama server reachable via its native `/api/chat` surface. Used as an LLM backend for g8ee.
 
 ---
 

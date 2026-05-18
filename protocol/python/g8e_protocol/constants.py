@@ -52,7 +52,7 @@ def _load_protocol_json(filename: str) -> dict[str, Any]:
     with open(path) as f:
         return json.load(f)
 
-# Exported constants
+# Exported constants - all loaded from JSON (single source of truth)
 EVENTS = _load_protocol_json("events.json")
 STATUS = _load_protocol_json("status.json")
 MSG = _load_protocol_json("senders.json")
@@ -77,47 +77,47 @@ class ComponentName(StrEnum):
     G8EO = "g8eo"
     OPERATOR = "g8eo" # Alias
 
-# Headers from g8ee/app/constants/headers.py
-HTTP_ACCEL_BUFFERING_HEADER = "X-Accel-Buffering"
-HTTP_ACCEPT_HEADER = "Accept"
-HTTP_ACCEPT_LANGUAGE_HEADER = "Accept-Language"
-HTTP_ACCESS_CONTROL_ALLOW_CREDENTIALS = "Access-Control-Allow-Credentials"
-HTTP_ACCESS_CONTROL_ALLOW_ORIGIN = "Access-Control-Allow-Origin"
-HTTP_ACCESS_CONTROL_REQUEST_HEADERS = "Access-Control-Request-Headers"
-HTTP_ACCESS_CONTROL_REQUEST_METHOD = "Access-Control-Request-Method"
-HTTP_API_KEY_HEADER = "X-API-Key"
-HTTP_AUTHORIZATION_HEADER = "Authorization"
+# HTTP headers - loaded from JSON (protocol/constants/headers.json)
+# Use HEADERS dict directly or access via these convenience constants
+HTTP_ACCEL_BUFFERING_HEADER = HEADERS.get("http.x-accel-buffering", "X-Accel-Buffering")
+HTTP_ACCEPT_HEADER = HEADERS.get("http.accept", "Accept")
+HTTP_ACCEPT_LANGUAGE_HEADER = HEADERS.get("http.accept-language", "Accept-Language")
+HTTP_ACCESS_CONTROL_ALLOW_CREDENTIALS = HEADERS.get("http.access-control-allow-creds", "Access-Control-Allow-Credentials")
+HTTP_ACCESS_CONTROL_ALLOW_ORIGIN = HEADERS.get("http.access-control-allow-origin", "Access-Control-Allow-Origin")
+HTTP_ACCESS_CONTROL_REQUEST_HEADERS = HEADERS.get("http.access-control-req-headers", "Access-Control-Request-Headers")
+HTTP_ACCESS_CONTROL_REQUEST_METHOD = HEADERS.get("http.access-control-req-method", "Access-Control-Request-Method")
+HTTP_API_KEY_HEADER = HEADERS.get("http.api-key", "X-API-Key")
+HTTP_AUTHORIZATION_HEADER = HEADERS.get("http.authorization", "Authorization")
 HTTP_BEARER_PREFIX = "Bearer"
-HTTP_CACHE_CONTROL_HEADER = "Cache-Control"
-HTTP_CONTENT_LANGUAGE_HEADER = "Content-Language"
-HTTP_CONTENT_TYPE_HEADER = "Content-Type"
-HTTP_COOKIE_HEADER = "Cookie"
-HTTP_FORWARDED_FOR_HEADER = "X-Forwarded-For"
-HTTP_LAST_EVENT_ID_HEADER = "Last-Event-ID"
-HTTP_PRAGMA_HEADER = "Pragma"
-HTTP_REQUESTED_WITH_HEADER = "X-Requested-With"
-HTTP_SET_COOKIE_HEADER = "Set-Cookie"
-HTTP_USER_AGENT_HEADER = "User-Agent"
-HTTP_G8E_CLIENT_HEADER = "X-G8E-Client"
-HTTP_G8E_OPERATOR_STATUS_HEADER = "X-G8E-Operator-Status"
-HTTP_G8E_SYSTEM_FINGERPRINT_HEADER = "X-G8E-System-Fingerprint"
-HTTP_G8E_SERVICE_HEADER = "X-G8E-Service"
+HTTP_CACHE_CONTROL_HEADER = HEADERS.get("http.cache-control", "Cache-Control")
+HTTP_CONTENT_LANGUAGE_HEADER = HEADERS.get("http.content-language", "Content-Language")
+HTTP_CONTENT_TYPE_HEADER = HEADERS.get("http.content-type", "Content-Type")
+HTTP_COOKIE_HEADER = HEADERS.get("http.cookie", "Cookie")
+HTTP_FORWARDED_FOR_HEADER = HEADERS.get("http.x-forwarded-for", "X-Forwarded-For")
+HTTP_LAST_EVENT_ID_HEADER = HEADERS.get("http.last-event-id", "Last-Event-ID")
+HTTP_PRAGMA_HEADER = HEADERS.get("http.pragma", "Pragma")
+HTTP_REQUESTED_WITH_HEADER = HEADERS.get("http.requested-with", "X-Requested-With")
+HTTP_SET_COOKIE_HEADER = HEADERS.get("http.set-cookie", "Set-Cookie")
+HTTP_USER_AGENT_HEADER = HEADERS.get("http.user-agent", "User-Agent")
+HTTP_DEVICE_TOKEN_HEADER = HEADERS.get("x-g8e.device-token", "X-G8E-Device-Token")
 
-# Session Headers
-WEB_SESSION_ID_HEADER = "X-G8E-Web-Session-ID"
-CLI_SESSION_ID_HEADER = "X-G8E-CLI-Session-ID"
-OPERATOR_ID_HEADER = "X-G8E-Operator-ID"
-OPERATOR_API_KEY_HEADER = "X-G8E-Operator-API-Key"
+# Session Headers - derived from headers.json
+HTTP_WEB_SESSION_ID_HEADER = HEADERS.get("x-g8e.web-session-id", "X-G8E-Web-Session-ID")
+HTTP_CLI_SESSION_ID_HEADER = HEADERS.get("http.x-session-id", "X-G8E-CLI-Session-ID")
+HTTP_OPERATOR_SESSION_ID_HEADER = HEADERS.get("x-g8e.operator-session-id", "X-G8E-Operator-Session-ID")
+HTTP_OPERATOR_ID_HEADER = HEADERS.get("x-g8e.operator-id", "X-G8E-Operator-ID")
+HTTP_OPERATOR_API_KEY_HEADER = HEADERS.get("x-g8e.operator-api-key", "X-G8E-Operator-API-Key")
+HTTP_SYSTEM_FINGERPRINT_HEADER = HEADERS.get("x-g8e.system-fingerprint", "X-G8E-System-Fingerprint")
 
-# Context Headers
-PROXY_ORGANIZATION_ID_HEADER = "X-Proxy-Organization-Id"
-PROXY_USER_EMAIL_HEADER = "X-Proxy-User-Email"
-PROXY_USER_ID_HEADER = "X-Proxy-User-Id"
-CASE_ID_HEADER = "X-G8E-Case-ID"
-USER_ID_HEADER = "X-G8E-User-ID"
-ORGANIZATION_ID_HEADER = "X-G8E-Organization-ID"
-INVESTIGATION_ID_HEADER = "X-G8E-Investigation-ID"
-TASK_ID_HEADER = "X-G8E-Task-ID"
-BOUND_OPERATORS_HEADER = "X-G8E-Bound-Operators"
-EXECUTION_ID_HEADER = "X-G8E-Request-ID"
-COMPONENT_NAME_HEADER = "X-G8E-Source-Component"
+# Context Headers - derived from headers.json
+HTTP_PROXY_ORGANIZATION_ID_HEADER = HEADERS.get("http.x-proxy-organization-id", "X-Proxy-Organization-Id")
+HTTP_PROXY_USER_EMAIL_HEADER = HEADERS.get("http.x-proxy-user-email", "X-Proxy-User-Email")
+HTTP_PROXY_USER_ID_HEADER = HEADERS.get("http.x-proxy-user-id", "X-Proxy-User-Id")
+HTTP_CASE_ID_HEADER = HEADERS.get("x-g8e.case-id", "X-G8E-Case-ID")
+HTTP_USER_ID_HEADER = HEADERS.get("x-g8e.user-id", "X-G8E-User-ID")
+HTTP_ORGANIZATION_ID_HEADER = HEADERS.get("x-g8e.organization-id", "X-G8E-Organization-ID")
+HTTP_INVESTIGATION_ID_HEADER = HEADERS.get("x-g8e.investigation-id", "X-G8E-Investigation-ID")
+HTTP_TASK_ID_HEADER = HEADERS.get("x-g8e.task-id", "X-G8E-Task-ID")
+HTTP_BOUND_OPERATORS_HEADER = HEADERS.get("x-g8e.bound-operators", "X-G8E-Bound-Operators")
+HTTP_EXECUTION_ID_HEADER = HEADERS.get("x-g8e.request-id", "X-G8E-Request-ID")
+HTTP_COMPONENT_NAME_HEADER = HEADERS.get("x-g8e.source-component", "X-G8E-Source-Component")

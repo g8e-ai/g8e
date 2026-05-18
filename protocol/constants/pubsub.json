@@ -1,26 +1,84 @@
 {
   "_comment": "Canonical pub/sub wire protocol constants shared across g8ee (Python), g8eo (Go), and . These values must match the operator broker implementation.",
-
+  "_meta": {
+    "naming": "Each entry MUST specify 'value', '_go_const', and '_python_const' fields. No fallback or auto-generation is supported."
+  },
   "wire": {
     "actions": {
-      "subscribe": "subscribe",
-      "psubscribe": "psubscribe",
-      "unsubscribe": "unsubscribe",
-      "publish": "publish"
+      "subscribe": {
+        "value": "subscribe",
+        "_go_const": "Subscribe",
+        "_python_const": "SUBSCRIBE"
+      },
+      "psubscribe": {
+        "value": "psubscribe",
+        "_go_const": "Psubscribe",
+        "_python_const": "PSUBSCRIBE"
+      },
+      "unsubscribe": {
+        "value": "unsubscribe",
+        "_go_const": "Unsubscribe",
+        "_python_const": "UNSUBSCRIBE"
+      },
+      "publish": {
+        "value": "publish",
+        "_go_const": "Publish",
+        "_python_const": "PUBLISH"
+      }
     },
     "event_types": {
-      "message": "message",
-      "pmessage": "pmessage",
-      "subscribed": "subscribed"
+      "message": {
+        "value": "message",
+        "_go_const": "Message",
+        "_python_const": "MESSAGE"
+      },
+      "pmessage": {
+        "value": "pmessage",
+        "_go_const": "Pmessage",
+        "_python_const": "PMESSAGE"
+      },
+      "subscribed": {
+        "value": "subscribed",
+        "_go_const": "Subscribed",
+        "_python_const": "SUBSCRIBED"
+      }
     },
     "fields": {
-      "action": "action",
-      "channel": "channel",
-      "data": "data",
-      "message": "message",
-      "pattern": "pattern",
-      "type": "type",
-      "sender": "sender"
+      "action": {
+        "value": "action",
+        "_go_const": "Action",
+        "_python_const": "ACTION"
+      },
+      "channel": {
+        "value": "channel",
+        "_go_const": "Channel",
+        "_python_const": "CHANNEL"
+      },
+      "data": {
+        "value": "data",
+        "_go_const": "Data",
+        "_python_const": "DATA"
+      },
+      "message": {
+        "value": "message",
+        "_go_const": "Message",
+        "_python_const": "MESSAGE"
+      },
+      "pattern": {
+        "value": "pattern",
+        "_go_const": "Pattern",
+        "_python_const": "PATTERN"
+      },
+      "type": {
+        "value": "type",
+        "_go_const": "Type",
+        "_python_const": "TYPE"
+      },
+      "sender": {
+        "value": "sender",
+        "_go_const": "Sender",
+        "_python_const": "SENDER"
+      }
     }
   }
 }

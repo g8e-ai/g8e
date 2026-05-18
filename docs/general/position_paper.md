@@ -1,86 +1,86 @@
-# **AI-Powered, Human-Driven Infrastructure**
+**Byzantine Fault Tolerance at the Execution Boundary: Securing Agentic Infrastructure**
 
-Last Updated: 2026-05-12
-Version: v0.2.5
+*Danny Barbour*
+*May 2026*
 
-**A Byzantine Fault Tolerant Architecture for Agentic Automation**
+### Abstract
 
-*Danny Barbour · [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*
+The industry is rapidly converging on standardized data pipes and routing protocols—such as Anthropic’s Model Context Protocol (MCP) and open Agent-to-Agent (A2A) standards—to connect Large Language Models (LLMs) to production environments. However, treating infrastructure mutation as a simple JSON-RPC tool call is operational malpractice. Autonomous systems are inherently vulnerable to auto-regressive collapse, hallucination, and sycophancy. In high-stakes environments, agentic execution is not a prompt engineering challenge; it is a Byzantine Fault Tolerance (BFT) problem.
 
-**Abstract:** We propose a distributed governance architecture for agentic systems built on mutual adversarial assumption. We treat LLM-driven automation as a Byzantine Fault Tolerance (BFT) problem. The substrate is the **g8e Protocol**: a domain-agnostic wire contract in which governance evidence travels with execution intent inside a UAP JSON `GovernanceEnvelope`, binding event names, typed payloads, state roots, and L1/L2/L3 metadata into a single signed transaction. An **Operator** is any host-side implementation that verifies and executes those transactions; **`g8eo`** is the reference Operator implementation in Go. The optional **Application Layer** consists of bundled reference adapters—**Engine** (`g8ee`) and **Dashboard** (``)—or any Bring-Your-Own (BYO) client. This paper focuses on one application of the protocol: AI-powered, human-driven infrastructure management. The AI is structurally prevented from auto-regressive collapse, and the human operator is elevated from a rubber-stamp supervisor to a first-class co-validator whose explicit stake is time.
+This paper outlines a mutual-adversary governance architecture. We propose a strict physical separation between intent generation, communication protocols, and host execution. By forcing all state-changing payloads into a cryptographically signed, state-bound `GovernanceEnvelope`, we ensure that no autonomous system can access reality without structural consensus, host-local verification, and explicit, hardware-bound human authorization.
 
-## **1. The Fallacy of the Single Agent**
+---
 
-The industry's current trajectory for agentic AI — on infrastructure and everywhere else the cost of a wrong action is real — is structurally broken. Every catastrophic AI failure in production shares the same root cause: reliance on a single monolithic agent.
+### 1. The Operational Reality of Agentic AI
 
-A single Large Language Model is a probabilistic text generator fundamentally vulnerable to auto-regressive collapse. Because it generates output sequentially based on its own preceding context, a single hallucination or bad assumption early in the reasoning chain becomes an unassailable axiom for the rest of the generation. The agent will confidently output thousands of tokens mathematically justifying its own mistake. Adding a "self-reflection" step to a single-agent loop typically results in the LLM aggressively defending its initial flawed logic.
+Current agentic architectures optimize for capability and developer velocity. An LLM reasoning loop is given a set of executable tools, context is piped in via protocols like MCP, and the model autonomously invokes functions via JSON-RPC.
 
-Conversely, the **Human-in-the-Loop (HITL)** pattern attempts to retrofit safety by throwing a confirmation dialog in front of every state change. In infrastructure, this rapidly degrades into alert fatigue. Verifying an LLM's proposed bash script—understanding its side effects, checking flags, assessing blast radius—is cognitively expensive. Clicking "Approve" is cheap. The human is nominally in the loop, but the liability is simply legally shifted to a fatigued operator who inevitably rubber-stamps the output.
+In read-only environments, this is highly effective. In state-changing infrastructure, it is a severe anti-pattern.
 
-Trusting a single agent to mutate state is gross negligence. Trusting a fatigued human to catch the agent's subtle errors is operational suicide.
+A single LLM is a non-deterministic probabilistic text generator. If it hallucinates a faulty assumption early in its reasoning chain, it will mathematically justify its own mistake across thousands of subsequent tokens. Retrofitting safety via a Human-in-the-Loop (HITL) confirmation dialog merely shifts liability to a fatigued operator who lacks the context to manually verify the blast radius of a generated script.
 
-## **2. The Reality Portal: Sovereign Execution**
+Furthermore, protocols like MCP and A2A are designed to standardize the *payload* (the context fetch or the tool execution). They do not provide execution governance. If an architecture pipes unstructured JSON-RPC directly into a root shell or a cloud API, it is operating entirely on implicit trust.
 
-SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator**: any host-side implementation that speaks the g8e Protocol. The reference implementation is a single, statically compiled Go binary (`g8eo`) that runs on the managed host.
+### 2. A Mutual-Adversary Architecture
 
-The Operator is the reality portal. It treats all upstream clients as inherently untrusted and actively expects adversarial inputs. Mutation commands use the canonical UAP JSON envelope carrying structured intent_data. Result payloads use typed Protobuf messages from `operator.proto` through a pub/sub transport.
+To safely deploy autonomous agents, we must discard implicit trust. The system must operate on a **mutual-adversary model**, assuming that the AI control plane is compromised by default, that human operators are prone to fatigue, and that the execution environment must fail-closed.
 
-Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level **L1 Technical Bedrock** checks (forbidden patterns, allowlists), and verifies **L2 Consensus** signatures. The reference Operator executes commands in an isolated process group with a closed stdin, protected by 46 discrete MITRE ATT&CK detectors, and uses a Temporal Privilege Function to attach just-in-time IAM scopes based on the parsed intent and drop them post-execution, ensuring zero standing privileges. Any conforming Operator implementation must preserve the same protocol-level verification invariants.
+This architecture isolates the system into four distinct components:
 
-## **3. Execution is a Side-Effect of the Audit Log**
+**I. The Principal (The Intent)**
+The entity requesting the state change. Today, this is a human operator. As systems scale, the Principal will increasingly be an upstream AI agent passing a high-level request down the chain.
 
-Most platforms treat auditability as a JSON log emitted after the fact. In g8e, auditability is the literal nervous system.
+* **The vulnerability:** Principals provide ambiguous, context-blind, or highly dangerous instructions.
+* **The constraint:** The Principal holds the hardware-bound FIDO2 passkey. The system cannot execute a mutation without this cryptographic Proof of Human Presence (PHP) anchoring the final intent.
 
-The protocol requires every accepted mutation and its output to be anchored to a host-local, append-only ledger before being acknowledged. The reference Operator implements this as the **Local-First Audit Architecture (LFAA)**: every intent, Tribunal verdict, risk assessment, and raw command output is anchored to an encrypted, Git-backed SQLite ledger in the host's `.g8e/` directory *before and during* execution. The reference AI Engine and Dashboard are merely stateless relays. If the control plane burns down, your local host-owned ledger remains the mathematically verifiable truth of what happened.
+**II. The Engine (The Orchestrator)**
+The reasoning layer. Instead of a single agent, the Engine utilizes a structurally blind multi-agent ensemble (the Tribunal) operating in a ReAct loop.
 
-### **The Economics of Alignment**
+* **The vulnerability:** Single agents suffer from sycophancy and auto-regressive collapse.
+* **The constraint:** The Engine is strictly stateless regarding the host. It cannot execute anything. It must reach a plurality consensus across ideologically opposed agents (including a calibrated adversary) and attach an Ed25519 signature to its proposed command string before transmitting it.
 
-To a Staff SRE, fast AI is a threat model. If an agent generates a mutation in 800 milliseconds, it means it didn’t check the fleet history and it didn't verify implicit constraints.
+**III. The Protocol (The Wire Contract)**
+The governance boundary. The protocol is not a data pipe; it is an armored transport envelope (`GovernanceEnvelope`).
 
-When you issue a command to g8e, it might take 40 seconds to process. **This is not latency; this is async alignment compute.** The system is trading cheap machine compute to protect your non-fungible human time. During those 40 seconds, the Consensus layer pulls cross-conversation memory across your fleet. If an agent proposes a directory deletion on Host B, the verifier cross-references history.
+* **The vulnerability:** Raw tool calls lack state awareness and cryptographic proof.
+* **The constraint:** The protocol binds the typed payload to a deterministic transaction hash, the L1/L2/L3 signatures, and the `state_merkle_root` of the target host.
 
-You are not babysitting an autonomous bot. You are the final co-validator in a system that has already done the exhausting, cross-contextual research you would have otherwise had to do manually.
+**IV. The Operator (The Reality Portal)**
+The host-side binary. The Operator is the sovereign system of record and the physical execution boundary.
 
-## **4. The BFT Control Plane: Governance**
+* **The vulnerability:** Upstream AI or compromised transit networks injecting malicious payloads.
+* **The constraint:** The Operator distrusts all inbound traffic. It enforces L1 hard-gates (e.g., regex blocking `sudo`), verifies the L2 Tribunal signature, demands the L3 Human signature, and checks the transaction's state root against the host's actual state to prevent the execution of stale context.
 
-Any state-changing intent is forced through a 3-layer governance hierarchy:
+### 3. Payload vs. Envelope: Interoperability with MCP
 
-1.  **L1 Technical Bedrock**: Hard gates (forbidden patterns, allowlists) enforced by code.
-2.  **L2 Consensus**: A consensus panel (bundled in `g8ee` or provided by a BYO client) evaluating intent.
-3.  **L3 Authorization**: Human-in-the-loop co-validation powered by hardware-bound signatures.
+This architecture does not replace context standards like MCP; it secures them.
 
-Operating under the **Information Isolation Principle**, the Tribunal agents are blind to one another. They cannot sycophantically agree, and they cannot be socially engineered. The **Warden**—armed with specialized risk-assessment sub-agents—will catch high-risk candidates and fail the transaction closed.
+MCP is highly effective at standardizing *what* a tool call is. But an MCP server natively executing those calls possesses no structural defense against an AI logic failure.
 
-Because the Tribunal generates in strict parallel, the 5-node consensus resolves in roughly one second. The fractional token overhead is immediately offset by the operational ROI of generating a mathematically ideal, highly composed multi-stage command on the first try. **Nemesis** acts as an endogenous red team, explicitly prompted to craft flawed-but-plausible commands to trick the system, ensuring continuous adversarial pressure.
+In a mutual-adversary architecture, MCP is treated strictly as the **Payload**. The execution substrate wraps that payload inside the **Envelope**.
 
-## **5. The Governance Gateway and Proof of Human Presence**
+When an LLM client issues a standard MCP `call_tool` request, the gateway intercepts the JSON-RPC message, maps the arguments into a base64 Protobuf payload, and seals it within the `GovernanceEnvelope`. The host Operator then forces that envelope through the L1/L2/L3 cryptographic gauntlet. If the cryptography and state-roots validate, the Operator unwraps the MCP payload and allows the native execution. If validation fails, the payload is dropped at the boundary.
 
-The machine handles what is machine-checkable. The human handles what is strictly human-checkable: intent fidelity, contextual stakes, and the acceptance of irreversible real-world consequences.
+This separation of concerns allows engineering teams to leverage open standards for capability discovery while enforcing Byzantine Fault Tolerance at the execution boundary.
 
-This is expressed by the **Co-Validation Identity**:
+### 4. Execution as a Side-Effect of the Audit Log
 
-$$
-\text{Safe}(a) \iff \sigma_{\text{machine}}(a) \land \sigma_{\text{human}}(a)
-$$
+In standard SaaS deployments, auditability is a telemetry stream emitted after the fact. In a zero-trust substrate, execution is a side-effect of the audit log.
 
-Neither signature is sufficient alone. We enforce explicit friction through **Proof of Human Presence (PHP)**. The **Governance Gateway** is the only path to the human, enforced by FIDO2 passkeys or verifiable approval proofs. At the protocol layer, `GovernanceEnvelope.governance.l3` carries the human signature, or an `auto_approved` flag for benign diagnostic commands that have already passed L1 and L2.
+The Operator implements a Local-First Audit Architecture (LFAA). Before a single bit flips on the host, the intent, the consensus proof, and the human signature are anchored to a host-local, AES-256-GCM encrypted SQLite vault. Furthermore, every file mutation utilizes a multi-ledger two-phase commit into an isolated Git repository on the host, generating a cryptographic hash of the pre- and post-execution state.
 
-To ensure seamless onboarding, the Dashboard serves a **Trust Portal** on Port 80, providing the platform CA and automated trust scripts to bootstrap the secure mTLS environment.
+The AI control plane only receives metadata scrubbed of credentials and PII. The authoritative, cryptographic truth of the state change never leaves the host.
 
-## **6. The Receipts: Evals Over Vibes**
+### 5. The Agent Fabric Vision
 
-The AI ecosystem is currently saturated with vibes-based safety claims. We do not use LLM-as-a-judge to pat ourselves on the back.
+We are moving away from monolithic assistants toward an "Agent Fabric"—an interconnected mesh of micro-agents delegating tasks to one another across organizational boundaries.
 
-Because our platform is built on LFAA, we did not have to invent a telemetry pipeline to measure safety. Our evaluation dataset is queried directly from the cryptographic audit ledgers that the Operator natively produces. The metadata in our evals is the exact same metadata generated in your own host's SQLite vault.
+If this fabric relies on implicit trust and naked tool calls, the blast radius of a single failure will cascade unpredictably.
 
-Using a deterministic BenchmarkJudge, we measure exactly how often the Nemesis successfully tricks the Warden, how often the Auditor catches it, and how accurately the Tribunal translates intent into syntax. More importantly, our evals highlight our deadlock rate. When the Tribunal cannot reach a plurality consensus, the circuit breaker trips and the transaction fails closed. We do not claim 100% accuracy. We claim verifiable governance that fails gracefully.
+A mutual-adversary substrate ensures that no matter how deep the AI-to-AI delegation goes, the ultimate interaction with physical reality remains governed. Every action is cryptographically audited on the local host, validated against the immediate state, and definitively rolls up to a human Principal who authorized the overarching intent.
 
-## **7. Closing**
+### 6. Conclusion
 
-Infrastructure has properties consumer AI does not. Mistakes are persistent. Blast radius is real. Compliance regimes require auditability and sovereignty. The same is true of any domain where an autonomous system can change physical, financial, or operational reality.
+Infrastructure engineering requires properties that consumer AI does not. Mistakes are persistent, and the cost of an hallucinated action is real. We cannot bolt safety onto agentic systems after the fact by simply adding a confirmation button to an MCP tool call.
 
-The current generation of agent platforms cannot satisfy these constraints. Co-validation is the necessary correction. We use Byzantine Fault Tolerance to keep the AI honest, a host-local append-only ledger to power fleet memory, a sovereign Operator implementation to keep the state local, and a FIDO2 passkey to keep the human in authority.
-
-If you are building any system that AI agents will operate, build it on a zero-trust governance protocol whose enforcement metadata travels with the command. The g8e Protocol is one such substrate; `g8eo` is a working reference Operator; AI-powered infrastructure management is the first reference application. The ideas are free; the code is public.
-
-*g8e is open-source: [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*
+We must build safety into the substrate. By treating AI execution as a consensus problem, physically separating reasoning from execution, and requiring cryptographic proof of state and intent, we can deploy autonomous systems into high-stakes environments without surrendering operational sovereignty.

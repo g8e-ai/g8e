@@ -218,7 +218,7 @@ Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `A
 **Thought signatures (Gemini 3):** Every tool call Part requires a thought signature or the API returns 400. `GeminiProvider` normalises inbound SDK `thought_signature` bytes to a base64 string (`ThoughtSignature.from_sdk`) and passes it through as-is on outbound requests. Thought and text parts carry signatures when available; signature-only parts are emitted as empty-text parts per the Gemini 3 streaming spec.
 
 **Ollama Provider:** The `OllamaProvider` is a dedicated provider for Ollama endpoints, using the official `ollama` Python SDK's AsyncClient:
-- **Endpoint Handling:** Strips `/v1` suffix if present to match Ollama's native API format
+- **Endpoint Handling:** Rejects endpoints containing `/v1`; only bare `host:port` or `http(s)://host:port` is accepted so the native `/api/chat` surface is always reached
 - **Thinking Support:** Enables `think=true` parameter for primary model calls to support Ollama's thinking feature; extracts `thinking` field from responses and streams it as `thought=True` chunks
 - **TLS Verification:** Uses the Ollama SDK's default TLS verification behavior
 - **Tool Calling:** Converts tool declarations to Ollama's function calling format; falls back to non-streaming when tools are present to avoid hanging
@@ -242,7 +242,7 @@ stream_response
 
 Retry behaviour in `stream_response`: if the provider raises a retryable error and streaming has not yet started (`streaming_started=False`), the entire attempt is retried up to `AGENT_MAX_RETRIES` times with exponential backoff. Once any `TEXT` chunk has been yielded (`streaming_started=True`), errors are surfaced immediately — a partial response is never replayed.
 
-**Tool-loop turn limit:** `_stream_with_tool_loop` caps ReAct iterations at `AGENT_MAX_TOOL_TURNS` (default 25). When the cap is reached, the agent does **not** silently abort — instead it calls `OperatorApprovalService.request_command_approval` through the same approval pipeline that gates operator-bound tools, with a justification explaining the turn limit. On approve, the turn counter resets and the loop continues (so the operator can be asked again at the next 25-turn boundary); on deny, feedback, or timeout, the loop terminates cleanly with `finish_reason=stopped_by_operator`. If no approval service is wired (e.g., isolated test construction), the legacy behaviour of aborting at the cap is preserved.
+**Tool-loop turn limit:** `_stream_with_tool_loop` caps ReAct iterations at `AGENT_MAX_TOOL_TURNS` (default 25). When the cap is reached, the agent does **not** silently abort — instead it calls `OperatorApprovalService.request_command_approval` through the same approval pipeline that gates operator-bound tools, with a justification explaining the turn limit. On approve, the turn counter resets and the loop continues (so the operator can be asked again at the next 25-turn boundary); on deny, feedback, or timeout, the loop terminates cleanly with `finish_reason=stopped_by_operator`. If no approval service is wired (e.g., isolated test construction), the loop aborts cleanly at the cap.
 
 `_process_provider_turn` owns all thinking state transitions for one LLM call. Thinking chunks are emitted as `StreamChunkFromModelType.THINKING` (or `THINKING_UPDATE`/`THINKING_END`) and delivered to  for UI rendering if the model supports it. Text chunks are yielded as `StreamChunkFromModelType.TEXT` immediately.
 
@@ -1048,7 +1048,7 @@ The following sections are read from the `settings` map inside the settings docu
 | `llm.llm_command_gen_enabled` | `true` | Master switch for Tribunal command generation. |
 | `llm.llm_command_gen_auditor` | `true` | Enable the Auditor verification pass in the Tribunal. |
 | `llm.llm_command_gen_passes` | `5` | Number of parallel generation passes (Axiom, Concord, etc.). |
-| `llm.ollama_endpoint` | — | The Ollama API host (`host:port`). Bare `host:port` is preferred; `http://` scheme and legacy `/v1` suffix are tolerated and normalized by the backend. |
+| `llm.ollama_endpoint` | — | The Ollama API host as `host:port` or `http(s)://host:port`. Endpoints containing `/v1` are rejected at startup; the native `/api/chat` surface is always used. |
 | `llm.openai_endpoint` | `https://api.openai.com/v1` | The OpenAI API endpoint |
 | `llm.openai_api_key` | - | OpenAI API key |
 | `llm.anthropic_endpoint` | `https://api.anthropic.com/v1` | The Anthropic API endpoint |

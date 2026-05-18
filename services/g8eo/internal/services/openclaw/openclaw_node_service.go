@@ -32,6 +32,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 )
 
 // ────────────────────────────────────────────────────────────────
@@ -319,7 +320,7 @@ func (s *OpenClawNodeService) handshake(ctx context.Context, conn *websocket.Con
 			},
 			Role:     "node",
 			Scopes:   []string{},
-			Caps:     []string{constants.Status.OperatorType.System},
+			Caps:     []string{marshaler.OperatorType(constants.Status.OperatorType.System)},
 			Commands: []string{"system.run", "system.which"},
 			PathEnv:  s.pathEnv,
 			Auth:     auth,

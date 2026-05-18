@@ -149,7 +149,6 @@ When no operator is connected:
 
 ### security
 - `validate`: Check TLS integrity and volume permissions
-- `certs`: Manage platform CA and certificates (generate, rotate, status, trust)
 - `passkeys`: Manage FIDO2/WebAuthn credentials
 - `mtls-test`: Verify mTLS connectivity
 
@@ -181,7 +180,6 @@ When no operator is connected:
 - `bench --suite <suite> --mode <baseline|receipt>`: Run a benchmark suite against the new harness
 - `verify-receipts <report-dir>`: Re-verify receipt signatures offline
 - `list`: List benchmark suites and bundled gold sets
-- `run|status|deploy|down|logs`: (LEGACY) These commands have been removed in favor of `bench`.
 
 **Receipt mode requires a running Operator and a bound `--operator-session-id`/`--operator-id`. Baseline mode runs the SUT without binding.**
 

@@ -29,6 +29,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/security"
 	system "github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
@@ -182,13 +183,13 @@ func NewExecutionService(cfg *config.Config, logger *slog.Logger) *ExecutionServ
 // cloudCLICommands lists commands that require --cloud flag to execute
 var cloudCLICommands = map[string]bool{
 	// Cloud provider CLIs
-	constants.Status.CloudSubtype.AWS: true,
-	"gcloud":                          true,
-	"az":                              true,
-	"gsutil":                          true,
-	"bq":                              true, // BigQuery CLI (part of gcloud)
-	"cbt":                             true, // Cloud Bigtable CLI
-	"azcopy":                          true, // Azure storage copy tool
+	marshaler.Status(constants.Status.CloudSubtype.AWS): true,
+	"gcloud": true,
+	"az":     true,
+	"gsutil": true,
+	"bq":     true, // BigQuery CLI (part of gcloud)
+	"cbt":    true, // Cloud Bigtable CLI
+	"azcopy": true, // Azure storage copy tool
 	// Infrastructure as Code tools
 	"terraform": true,
 	"kubectl":   true,
@@ -713,7 +714,7 @@ func (es *ExecutionService) errorToReturnCode(err error) int {
 func (es *ExecutionService) collectSystemInfo() *models.ExecutionSystemInfo {
 	info := &models.ExecutionSystemInfo{
 		Hostname:     system.GetHostname(),
-		OS:           runtime.GOOS,
+		OS:           constants.Platform(runtime.GOOS),
 		Architecture: runtime.GOARCH,
 		NumCPU:       runtime.NumCPU(),
 		GoVersion:    runtime.Version(),
@@ -727,7 +728,7 @@ func (es *ExecutionService) collectSystemInfo() *models.ExecutionSystemInfo {
 		"num_cpu", info.NumCPU,
 		"current_user", info.CurrentUser)
 
-	if runtime.GOOS == constants.Status.Platform.Linux {
+	if constants.Platform(runtime.GOOS) == constants.Status.Platform.Linux {
 		es.logger.Info("Linux detected - collecting extended system metrics")
 
 		if loadavg, err := getLoadAverage(); err == nil {

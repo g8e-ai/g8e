@@ -29,16 +29,10 @@ from typing import Optional
 import httpx
 
 from g8e_protocol.constants import (
-    BOUND_OPERATORS_HEADER,
-    CASE_ID_HEADER,
     CLI_SESSION_ID_HEADER,
-    COMPONENT_NAME_HEADER,
+    HTTP_AUTHORIZATION_HEADER,
+    HTTP_BEARER_PREFIX,
     HTTP_CONTENT_TYPE_HEADER,
-    INVESTIGATION_ID_HEADER,
-    OPERATOR_SESSION_ID_HEADER,
-    ORGANIZATION_ID_HEADER,
-    TASK_ID_HEADER,
-    USER_ID_HEADER,
     ComponentName,
 )
 from g8e_protocol.models import RequestContext, BoundOperator
@@ -176,52 +170,32 @@ class AuthContext:
         if self.operator_session_id:
             # Substrate uses Authorization: Bearer <token>.
             headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX} {self.operator_session_id}"
-        if self.cli_session_id:
-            headers[CLI_SESSION_ID_HEADER] = self.cli_session_id
-        return headers
-
-    def legacy_substrate_headers(self) -> dict[str, str]:
-        """Return the legacy ``X-G8E-*`` context header set.
-
-        DEPRECATED: This remains strictly for backward compatibility with g8eo
-        routes that haven't migrated to body-embedded context or URI-SAN identity.
-        NEVER use this for new routes; use ``auth_headers()`` instead.
-        """
-        headers = self.auth_headers()
-        headers[COMPONENT_NAME_HEADER] = self.source_component.value
         
-        if self.user_id:
-            headers[USER_ID_HEADER] = self.user_id
-        if self.organization_id:
-            headers[ORGANIZATION_ID_HEADER] = self.organization_id
-        if self.case_id:
-            headers[CASE_ID_HEADER] = self.case_id
-        if self.investigation_id:
-            headers[INVESTIGATION_ID_HEADER] = self.investigation_id
-        if self.task_id:
-            headers[TASK_ID_HEADER] = self.task_id
-        if self.bound_operators:
-            if isinstance(self.bound_operators, str):
-                headers[BOUND_OPERATORS_HEADER] = self.bound_operators
-            else:
-                headers[BOUND_OPERATORS_HEADER] = ",".join(op.operator_id for op in self.bound_operators)
         return headers
 
-    def to_request_context(self) -> RequestContext:
+    def to_request_context(
+        self,
+        *,
+        case_id: Optional[str] = None,
+        investigation_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+        source_component: Optional[ComponentName] = None,
+        web_session_id: Optional[str] = None,
+    ) -> RequestContext:
         """Return a ``RequestContext`` model for request bodies.
 
         Matches ``app.models.http_context.RequestContext`` in g8ee.
         """
         return RequestContext(
-            web_session_id=self.web_session_id or None,
+            web_session_id=web_session_id or self.web_session_id or None,
             cli_session_id=self.cli_session_id,
             user_id=self.user_id,
             organization_id=self.organization_id,
-            case_id=self.case_id,
-            investigation_id=self.investigation_id,
-            task_id=self.task_id,
+            case_id=case_id or self.case_id,
+            investigation_id=investigation_id or self.investigation_id,
+            task_id=task_id or self.task_id,
             bound_operators=self.bound_operators,
-            source_component=self.source_component,
+            source_component=source_component or self.source_component,
             system_fingerprint=self.system_fingerprint,
         )
 

@@ -114,7 +114,7 @@ func LoadOpenClaw(gatewayURL, token, nodeID, displayName, pathEnv, logLevel stri
 type Config struct {
 	// Basic configuration
 	ProjectID     string
-	ComponentName string
+	ComponentName constants.ComponentName
 	Version       string
 
 	// Authentication

@@ -26,7 +26,7 @@ case "$SUB" in
     -h|--help|"")
         help_file="$SCRIPT_DIR/docs/general/cli_help.md"
         if [[ -f "$help_file" ]]; then
-            awk '/^### evals/,/^## DETAILED HELP/' "$help_file" | head -n -1
+            awk '/^### evals/,/^## Detailed Help/' "$help_file" | head -n -1
         else
             echo "[g8e] Help file not found: $help_file" >&2; exit 1
         fi
@@ -52,29 +52,26 @@ case "$SUB" in
                 exit 1
             }
         fi
-        export OPERATOR_SESSION_ID USER_ID OPERATOR_ID
+        export "$G8E_ENV_OPERATOR_SESSION_ID"="$G8E_OPERATOR_SESSION_ID"
+        export "$G8E_ENV_USER_ID"="$G8E_USER_ID"
+        export "$G8E_ENV_OPERATOR_ID"="$G8E_OPERATOR_ID"
         export G8E_CLI_CERT="${G8E_CLI_CERT:-$G8E_CLI_CERT_FILE}"
         export G8E_CLI_KEY="${G8E_CLI_KEY:-$G8E_CLI_KEY_FILE}"
-        export G8EE_URL="${G8EE_URL:-https://localhost:8443}"
-        export G8E_INTERNAL_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-$OPERATOR_HTTP_URL}"
+        export "$G8E_ENV_G8EE_URL"="${G8E_G8EE_URL:-https://localhost:$G8E_PORT_G8EE_HTTP}"
+        export "$G8E_ENV_INTERNAL_HTTP_URL"="${G8E_INTERNAL_HTTP_URL:-$OPERATOR_HTTP_URL}"
         export G8E_TRUST_BUNDLE="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
         cd "$EVALS_PROJECT_DIR"
-        export G8E_PKI_DIR="${G8E_PKI_DIR:-$G8E_PKI_DIR_HOST}"
-        export G8E_PROTOCOL_DIR="$SCRIPT_DIR/protocol"
+        export "$G8E_ENV_PKIDir"="${G8E_PKI_DIR:-$G8E_PKI_DIR_HOST}"
+        export "$G8E_ENV_PROTOCOL_DIR"="$SCRIPT_DIR/protocol"
         export PYTHONPATH="$EVALS_PYTHONPATH"
         exec "$EVALS_VENV/bin/python" -m g8e_evals.cli run "${REMAINING_ARGS[@]}"
-        ;;
-    run|status|deploy|down|logs)
-        echo "[g8e] ERROR: 'evals $SUB' is legacy and has been removed." >&2
-        echo "[g8e] Use './g8e evals bench' for the new receipt-based evaluation suite." >&2
-        exit 1
         ;;
     verify-receipts)
         _ensure_evals_venv
         _banner "evals verify-receipts"
         cd "$EVALS_PROJECT_DIR"
-        export G8E_PKI_DIR="${G8E_PKI_DIR:-$G8E_PKI_DIR_HOST}"
-        export G8E_PROTOCOL_DIR="$SCRIPT_DIR/protocol"
+        export "$G8E_ENV_PKIDir"="${G8E_PKI_DIR:-$G8E_PKI_DIR_HOST}"
+        export "$G8E_ENV_PROTOCOL_DIR"="$SCRIPT_DIR/protocol"
         export PYTHONPATH="$EVALS_PYTHONPATH"
         exec "$EVALS_VENV/bin/python" -m g8e_evals.cli verify-receipts "${REMAINING_ARGS[@]}"
         ;;

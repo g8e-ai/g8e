@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -106,14 +107,14 @@ func TestBootstrapFlow(t *testing.T) {
 	user, err = h.userSvc.GetByID(bootstrapUserID)
 	require.NoError(t, err)
 	assert.False(t, user.IsActive())
-	assert.Equal(t, models.UserStatusDisabled, user.Status)
+	assert.Equal(t, constants.UserStatusDisabled, user.Status)
 
 	// 8. Verify audit entry was created for bootstrap retirement
 	filters := []models.DocFilter{
 		{Field: "target", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", bootstrapUserID))},
 		{Field: "action", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", models.AdminAuditActionRetireLocalSuperadmin))},
 	}
-	results, err := h.db.DocQuery(string(constants.CollectionAuthAdminAudit), filters, "", 0)
+	results, err := h.db.DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
 	require.NoError(t, err)
 	require.Len(t, results, 1, "Expected exactly one audit entry for bootstrap retirement")
 

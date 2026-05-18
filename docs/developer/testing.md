@@ -4,8 +4,8 @@ title: Testing
 
 # Testing g8e
 
-Last Updated: 2026-05-16
-Version: v0.3.0
+Last Updated: 2026-05-18
+Version: v0.3.1
 
 g8e is designed to be a **testing environment and production environment at the same time**. We do not believe in mocking the world just to get tests to pass. If it doesn't work in the test environment, it won't work in production.
 
@@ -17,6 +17,7 @@ This document outlines the testing architecture, core principles, and how to wri
 - **Real Infrastructure** — All testing occurs against real, live services. A substrate test run begins with `./g8e platform start`, which starts Operator listen mode. App-layer tests require explicit app startup through `./g8e apps start g8ee` or `./g8e platform start --with-apps`.
 - **The "No Mocks" Policy** — We strictly prohibit mocking internal services, database clients, or cross-component communication. Integration tests must use the real wire paths.
 - **mTLS by Default** — Most internal and substrate communication requires mTLS. The test runner automatically handles certificate injection from `.g8e/pki` if you are authenticated (via `./g8e login`).
+- **Body-Embedded Context** — Business and session context must be provided in the request body as a `RequestContext` object. `X-G8E-*` context headers are not supported and are ignored by the substrate.
 - **Real LLM Calls** — AI integration tests use real provider API calls (Gemini, Anthropic, OpenAI, etc.). No HTTP interception is permitted for LLM clients.
 
 ## Test Harness Architecture: Substrate, App Adapters, and Evals

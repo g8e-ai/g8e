@@ -79,14 +79,13 @@ class TestOllamaProviderConstruction:
             )
             mock_ctor.assert_called_once_with(host="http://localhost:11434")
 
-    def test_constructor_strips_v1_suffix(self):
-        mock_client = MagicMock()
-        with patch(PATCH_TARGET, return_value=mock_client) as mock_ctor:
-            provider = OllamaProvider(
+    def test_constructor_rejects_v1_suffix(self):
+        """Ollama endpoints must not contain '/v1'; the native API is /api/chat."""
+        with pytest.raises(ValueError, match="/v1"):
+            OllamaProvider(
                 endpoint="http://localhost:11434/v1",
                 api_key="test-key",
             )
-            mock_ctor.assert_called_once_with(host="http://localhost:11434")
 
     def test_constructor_adds_http_prefix(self):
         mock_client = MagicMock()
@@ -97,15 +96,12 @@ class TestOllamaProviderConstruction:
             )
             mock_ctor.assert_called_once_with(host="http://localhost:11434")
 
-    def test_constructor_strips_double_v1_suffix(self):
-        """Regression: legacy setups double-appended /v1 (setup page + manual entry)."""
-        mock_client = MagicMock()
-        with patch(PATCH_TARGET, return_value=mock_client) as mock_ctor:
+    def test_constructor_rejects_double_v1_suffix(self):
+        with pytest.raises(ValueError, match="/v1"):
             OllamaProvider(
                 endpoint="http://192.168.1.2:11434/v1/v1",
                 api_key="test-key",
             )
-            mock_ctor.assert_called_once_with(host="http://192.168.1.2:11434")
 
     def test_constructor_accepts_bare_ip_port(self):
         mock_client = MagicMock()
