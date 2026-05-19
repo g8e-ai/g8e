@@ -106,7 +106,7 @@ When no operator is connected:
 - `[prompt]`: Start an interactive web session with the AI Engine. Supports optional initial prompt.
 
 ### identity
-- `login`: Authenticate and save operator session to `~/.g8e/credentials`
+- `login --email <email> [--count <n>] [--ttl <seconds>]`: Authenticate and save operator session to `~/.g8e/credentials`. Optional count (default 1) and TTL (default 3600).
 - `logout`: Clear local operator session and credentials
 
 ### vars

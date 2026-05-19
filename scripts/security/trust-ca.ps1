@@ -34,19 +34,25 @@ Write-Host "----------------------------------------------------"
 Write-Host ""
 
 Write-Host "[1/3] Removing any existing g8e CA certificates..."
-$existing = @(Get-ChildItem Cert:\LocalMachine\Root |
-    Where-Object { 
-        $_.Subject -like $CertSubjectPattern -or 
-        $_.FriendlyName -like $CertSubjectPattern -or
-        $_.Issuer -like $CertSubjectPattern
-    })
-
-if ($existing.Count -gt 0) {
-    $existing | ForEach-Object {
-        Write-Host "      Removing: $($_.Subject)"
-        $_ | Remove-Item -Force
+$stores = @("Cert:\LocalMachine\Root", "Cert:\CurrentUser\Root")
+$found = 0
+foreach ($storePath in $stores) {
+    if (Test-Path $storePath) {
+        $certs = Get-ChildItem $storePath | Where-Object { 
+            $_.Subject -like $CertSubjectPattern -or 
+            $_.FriendlyName -like $CertSubjectPattern -or
+            $_.Issuer -like $CertSubjectPattern
+        }
+        foreach ($cert in $certs) {
+            Write-Host "      Removing from $($storePath.Split(':')[-1]): $($cert.Subject)"
+            $cert | Remove-Item -Force
+            $found++
+        }
     }
-    Write-Host "      Removed $($existing.Count) existing certificate(s)."
+}
+
+if ($found -gt 0) {
+    Write-Host "      Removed $found existing certificate(s)."
 } else {
     Write-Host "      None found."
 }

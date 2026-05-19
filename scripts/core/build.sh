@@ -502,6 +502,12 @@ _print_platform_info() {
     echo ""
     if _g8ee_running; then
         echo "  Optional apps:          running (see ./g8e platform status)"
+        echo ""
+        echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  Provisioning & Login"
+        echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  Login:                  ./g8e login --email superadmin@g8e.local"
+        echo "  New Device Link:        ./g8e data device-links create --email superadmin@g8e.local"
     else
         echo "  Optional apps:          not running (use ./g8e apps start to enable)"
     fi

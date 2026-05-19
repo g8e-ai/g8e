@@ -15,25 +15,26 @@ case "$TOP" in
         _banner "login"
         _ensure_operator
 
-        # Parse --email flag
+        # Parse flags
         _login_email=""
-        for _arg in "${@:2}"; do
-            case "$_arg" in
-                --email=*) _login_email="${_arg#--email=}" ;;
-                --email)   : ;; # handled by next iteration
+        _dl_count=1
+        _dl_ttl=3600
+        _args=("${@:2}")
+        i=0
+        while [[ $i -lt ${#_args[@]} ]]; do
+            case "${_args[$i]}" in
+                --email)   ((i++)); _login_email="${_args[$i]}" ;;
+                --email=*) _login_email="${_args[$i]#--email=}" ;;
+                --count)   ((i++)); _dl_count="${_args[$i]}" ;;
+                --count=*) _dl_count="${_args[$i]#--count=}" ;;
+                --ttl)     ((i++)); _dl_ttl="${_args[$i]}" ;;
+                --ttl=*)   _dl_ttl="${_args[$i]#--ttl=}" ;;
             esac
-        done
-        # Handle "--email value" (two-arg form)
-        _prev=""
-        for _arg in "${@:2}"; do
-            if [[ "$_prev" == "--email" ]]; then
-                _login_email="$_arg"
-            fi
-            _prev="$_arg"
+            ((i++))
         done
 
         if [[ -z "$_login_email" ]]; then
-            echo "[g8e] Usage: ./g8e login --email <your@email.com>" >&2
+            echo "[g8e] Usage: ./g8e login --email <email> [--count <count>] [--ttl <ttl_seconds>]" >&2
             exit 1
         fi
 
@@ -49,7 +50,7 @@ case "$TOP" in
         # 1. Request a device-link token via bootstrap port (unauthenticated)
         echo "[g8e] Requesting device-link token..."
         _fingerprint=$(echo "g8e-cli-$(hostname)-$(whoami)" | sha256sum | awk '{print $1}')
-        _dl_body=$(python3 -c "import json,sys; print(json.dumps({'email':sys.argv[1],'name':'cli-'+__import__('socket').gethostname(),'max_uses':2}))" "$_login_email")
+        _dl_body=$(python3 -c "import json,sys; print(json.dumps({'email':sys.argv[1],'name':'cli-'+__import__('socket').gethostname(),'max_uses':int(sys.argv[2]),'ttl_seconds':int(sys.argv[3])}))" "$_login_email" "$_dl_count" "$_dl_ttl")
         _dl_resp=$( curl -sS --cacert "$_trust_bundle" \
             -X POST -H "${G8E_HEADER_CONTENT_TYPE}: application/json" \
             -d "$_dl_body" \
@@ -60,7 +61,7 @@ case "$TOP" in
             echo "[g8e] Failed to create device-link: $_dl_resp" >&2
             exit 1
         fi
-        echo "[g8e] Device-link token obtained"
+        echo "[g8e] Device-link token obtained: $_dl_token (count=$_dl_count, ttl=$_dl_ttl s)"
 
         # 3. Generate ECDSA private keys + CSRs
         echo "[g8e] Generating keys and CSRs..."

@@ -63,10 +63,20 @@ if exist "%temp%\getadmin.vbs" ( del "%temp%\getadmin.vbs" )
 
 set HOST={{.Host}}
 
-echo Removing any existing g8e certificates...
-certutil -delstore Root g8e >nul 2>&1
+echo.
+echo ----------------------------------------------------
+echo   g8e CA Trust Refresh
+echo ----------------------------------------------------
+echo.
 
-echo Downloading g8e CA Certificate...
+echo [1/3] Removing any existing g8e certificates...
+:: Try to delete from both Root and My stores
+certutil -delstore Root g8e >nul 2>&1
+certutil -delstore Root "g8e Root CA" >nul 2>&1
+certutil -delstore My g8e >nul 2>&1
+echo      Done.
+
+echo [2/3] Downloading g8e CA Certificate...
 curl -sSf -L -o "%temp%\g8e-ca.crt" {{.URL}}
 if %errorlevel% NEQ 0 (
     echo.
@@ -86,7 +96,7 @@ if %errorlevel% NEQ 0 (
     exit /B 1
 )
 
-echo Trusting g8e CA Certificate...
+echo [3/3] Trusting g8e CA Certificate...
 certutil -addstore -f "Root" "%temp%\g8e-ca.crt"
 if %errorlevel% NEQ 0 (
     del /f /q "%temp%\g8e-ca.crt" >nul 2>&1
@@ -96,8 +106,12 @@ if %errorlevel% NEQ 0 (
     exit /B 1
 )
 del /f /q "%temp%\g8e-ca.crt" >nul 2>&1
+
 echo.
-echo Certificate trusted.
+echo ----------------------------------------------------
+echo   Success!
+echo ----------------------------------------------------
+echo.
 
 echo %HOST% | findstr /R "^[0-9][0-9]*\\.[0-9][0-9]*\\.[0-9][0-9]*\\.[0-9][0-9]*$" >nul
 if %errorlevel% EQU 0 (
@@ -111,7 +125,8 @@ if %errorlevel% EQU 0 (
     )
 )
 
-echo Restart your browser and go to https://%HOST%/
+echo Restart your browser and navigate to https://%HOST%/
+echo.
 pause
 `
 	return executeTemplate(string(constants.Status.Platform.Windows), tmpl, map[string]interface{}{
@@ -137,17 +152,20 @@ HOST="{{.Host}}"
 URL="{{.URL}}"
 CERT_FILE="/tmp/g8e-ca.crt"
 
+_log() { printf "[g8e] %s\n" "$*"; }
+
 if [ "$(id -u)" -ne 0 ]; then
-    echo "ERROR: This script must run as root."
+    echo "ERROR: This script must run as root (sudo)."
     echo "Usage: curl -fsSL http://${HOST}{{.PortSuffix}}/trust | sudo sh"
     exit 1
 fi
 
-if ! curl -fsSL -o "$CERT_FILE" "$URL"; then
-    echo "ERROR: Failed to download CA certificate from $URL"
-    exit 1
-fi
+_log "----------------------------------------------------"
+_log "  g8e CA Trust Refresh"
+_log "----------------------------------------------------"
+_log ""
 
+_log "[1/3] Removing any existing g8e certificates..."
 _OS="$(uname -s)"
 case "$_OS" in
   Darwin)
@@ -165,15 +183,35 @@ case "$_OS" in
         | sort -u \
         | while IFS= read -r name; do
             [ -z "$name" ] && continue
+            _log "      Removing: $name"
             security delete-certificate -c "$name" "$KEYCHAIN" 2>/dev/null || true
           done
+    ;;
+
+  Linux)
+    # Remove from common locations
+    find /usr/local/share/ca-certificates/ -iname '*g8e*' -exec echo "      Removing: {}" \; -delete 2>/dev/null || true
+    find /etc/pki/ca-trust/source/anchors/ -iname '*g8e*' -exec echo "      Removing: {}" \; -delete 2>/dev/null || true
+    ;;
+esac
+_log "      Done."
+
+_log ""
+_log "[2/3] Fetching CA cert from $URL..."
+if ! curl -fsSL -o "$CERT_FILE" "$URL"; then
+    echo "ERROR: Failed to download CA certificate from $URL"
+    exit 1
+fi
+_log "      Done."
+
+_log ""
+_log "[3/3] Installing CA certificate..."
+case "$_OS" in
+  Darwin)
     security add-trusted-cert -d -r trustRoot -k "$KEYCHAIN" "$CERT_FILE"
     ;;
 
   Linux)
-    find /usr/local/share/ca-certificates/ -iname '*g8e*' -delete 2>/dev/null || true
-    find /etc/pki/ca-trust/source/anchors/ -iname '*g8e*' -delete 2>/dev/null || true
-
     if [ -d /usr/local/share/ca-certificates/ ]; then
         cp "$CERT_FILE" /usr/local/share/ca-certificates/g8e-ca.crt
         update-ca-certificates
@@ -183,13 +221,20 @@ case "$_OS" in
     fi
     ;;
 esac
+_log "      Done."
 
 rm -f "$CERT_FILE"
 if echo "$HOST" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
     RESOLVED_HOST=$(host "$HOST" 2>/dev/null | awk '/pointer/ {print $NF}' | sed 's/\.$//' || echo "")
     [ -n "$RESOLVED_HOST" ] && HOST="$RESOLVED_HOST"
 fi
-echo "g8e CA trusted. Restart your browser and navigate to https://$HOST/"
+
+_log ""
+_log "----------------------------------------------------"
+_log "  Success!"
+_log "----------------------------------------------------"
+_log "Restart your browser and navigate to https://$HOST/"
+_log ""
 `
 	return executeTemplate("universal", tmpl, map[string]interface{}{
 		"Host":       host,
@@ -368,31 +413,69 @@ $url = "{{.URL}}"
 $certFile = Join-Path $env:TEMP "g8e-ca.crt"
 $g8eHost = "{{.Host}}"
 
-# Remove existing certificates quietly
-Get-ChildItem Cert:\LocalMachine\Root | Where-Object { 
-    $_.Subject -like "*g8e*" -or 
-    $_.FriendlyName -like "*g8e*" -or
-    $_.Issuer -like "*g8e*"
-} | ForEach-Object {
-    $_ | Remove-Item -Force -ErrorAction SilentlyContinue
+Write-Host ""
+Write-Host "----------------------------------------------------"
+Write-Host "  g8e CA Trust Refresh"
+Write-Host "----------------------------------------------------"
+Write-Host ""
+
+Write-Host "[1/3] Removing any existing g8e certificates..."
+$stores = @("Cert:\LocalMachine\Root", "Cert:\CurrentUser\Root")
+$found = 0
+foreach ($storePath in $stores) {
+    if (Test-Path $storePath) {
+        $certs = Get-ChildItem $storePath | Where-Object { 
+            $_.Subject -like "*g8e*" -or 
+            $_.FriendlyName -like "*g8e*" -or
+            $_.Issuer -like "*g8e*"
+        }
+        foreach ($cert in $certs) {
+            Write-Host "      Removing from $($storePath.Split(':')[-1]): $($cert.Subject)"
+            $cert | Remove-Item -Force -ErrorAction SilentlyContinue
+            $found++
+        }
+    }
+}
+if ($found -eq 0) {
+    Write-Host "      None found."
+} else {
+    Write-Host "      Removed $found existing certificate(s)."
 }
 
+Write-Host ""
+Write-Host "[2/3] Fetching CA cert from $url..."
 try {
     Invoke-WebRequest -Uri $url -OutFile $certFile -UseBasicParsing
+    Write-Host "      Done."
+} catch {
+    Write-Error "Failed to download CA certificate from $url. Is the platform running?"
+    exit 1
+}
+
+Write-Host ""
+Write-Host "[3/3] Installing CA certificate into LocalMachine\Root..."
+try {
     certutil -addstore -f "Root" $certFile | Out-Null
     Remove-Item $certFile -Force -ErrorAction SilentlyContinue
-    
-    $ipRegex = "^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
-    if ($g8eHost -match $ipRegex) {
-        try {
-            $g8eHost = [System.Net.Dns]::GetHostEntry($g8eHost).HostName
-        } catch {}
-    }
-    Write-Host "g8e CA trusted. Restart your browser and navigate to https://$g8eHost/"
+    Write-Host "      Done."
 } catch {
     Write-Error "Failed to trust g8e CA certificate: $_"
     exit 1
 }
+
+$ipRegex = "^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
+if ($g8eHost -match $ipRegex) {
+    try {
+        $g8eHost = [System.Net.Dns]::GetHostEntry($g8eHost).HostName
+    } catch {}
+}
+
+Write-Host ""
+Write-Host "----------------------------------------------------"
+Write-Host "  Success!"
+Write-Host "----------------------------------------------------"
+Write-Host "Restart your browser and navigate to https://$g8eHost/"
+Write-Host ""
 `
 	return executeTemplate("powershell", tmpl, map[string]interface{}{
 		"URL":  url,
