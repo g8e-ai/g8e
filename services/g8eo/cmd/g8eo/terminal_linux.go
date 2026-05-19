@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -89,7 +90,7 @@ func readObfuscatedInput(r io.Reader, w io.Writer) (string, error) {
 
 		if char == 3 {
 			fmt.Fprintln(w)
-			return "", fmt.Errorf(string(constants.SentinelStatusInterrupted))
+			return "", errors.New(string(constants.SentinelStatusInterrupted))
 		}
 
 		if char == 127 || char == 8 {
