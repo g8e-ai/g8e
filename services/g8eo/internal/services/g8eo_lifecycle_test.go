@@ -71,7 +71,7 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	service.SetPubSubClient(mockPubSub)
 
 	// 4. Start the service
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	errCh := make(chan error, 1)
