@@ -20,6 +20,8 @@ help:
 	@echo "  proto         Generate all Protobuf code (Go and Python)"
 	@echo "  buf-install   Install Buf CLI locally if not found"
 	@echo "  lint-no-bare-session-id  Check for bare session_id regression"
+	@echo "  first-issues  Find good first issues in the codebase"
+	@echo "  clean         Remove build artifacts and runtime state"
 	@echo ""
 	@echo "Services:"
 	@echo "  build-g8eo    Build the Operator service"
@@ -82,6 +84,23 @@ lint-no-bare-session-id:
 		exit 1; \
 	fi
 	@echo "No bare session_id found."
+
+.PHONY: first-issues
+first-issues:
+	@echo "Searching for good first issues (TODO comments)..."
+	@grep -rni 'TODO' . \
+		--exclude-dir={.git,vendor,node_modules,.g8e,.ruff_cache,.venv,dist,build,__pycache__,.local.dev,.github} \
+		--exclude={*.pb.go,*_pb2.py,*_pb2_grpc.py,*.pyc,Makefile} \
+		-I || echo "No TODOs found."
+
+.PHONY: clean
+clean:
+	@echo "Cleaning up build artifacts and runtime state..."
+	@$(MAKE) -C services/g8eo clean
+	@rm -rf .g8e/
+	@find . -name "*.pyc" -delete
+	@find . -name "__pycache__" -type d -exec rm -rf {} +
+	@echo "Clean complete."
 
 # =============================================================================
 # SERVICE DISPATCH
