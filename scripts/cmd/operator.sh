@@ -99,7 +99,17 @@ case "$SUB" in
             _REMOTE_CMD+=" > ./g8e.operator.log 2>&1 &"
             echo "Starting operator on ${_DEPLOY_TARGET}..."
             ssh "${_DEPLOY_TARGET}" "${_REMOTE_CMD}"
-            echo "  Operator started. Logs: ./g8e.operator.log"
+            
+            echo -e "\n\033[1;32mDeployed successfully!\033[0m"
+            echo -e "  Target:      \033[1m${_DEPLOY_TARGET}\033[0m"
+            echo -e "  Binary:      \033[1m${_DEPLOY_DEST}\033[0m"
+            echo -e "  Endpoint:    \033[1m${_DEPLOY_ENDPOINT:-[none]}\033[0m"
+            echo -e "  Logs:        \033[1m./g8e.operator.log\033[0m (remote)"
+
+            echo -e "\n\033[1mNext steps:\033[0m"
+            echo -e "  - Start chatting:         \033[1;34m./g8e chat\033[0m"
+            echo -e "  - Check platform status:  \033[1;34m./g8e platform status\033[0m"
+            echo -e "  - Explore CLI help:       \033[1;34m./g8e --help\033[0m"
         fi
         exit 0 ;;
     stream)
