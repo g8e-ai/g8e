@@ -1069,8 +1069,8 @@ func (h *HTTPHandler) handleAuditReceipts(w http.ResponseWriter, r *http.Request
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":  true,
-		"receipts": receipts,
+		string(constants.AuthAuditResultSuccess): true,
+		"receipts":                               receipts,
 	})
 }
 
@@ -1110,7 +1110,7 @@ func (h *HTTPHandler) handleAuditReceiptsExport(w http.ResponseWriter, r *http.R
 	encoder := json.NewEncoder(w)
 	for _, r := range receipts {
 		if err := encoder.Encode(r); err != nil {
-			h.logger.Error("Failed to encode audit receipt for export", "transaction_id", r.TransactionID, "error", err)
+			h.logger.Error("Failed to encode audit receipt for export", "transaction_id", r.TransactionID, string(constants.ConnectionStateError), err)
 			break
 		}
 	}
@@ -1125,8 +1125,8 @@ func (h *HTTPHandler) handleTrustedSigners(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"success": true,
-			"signers": signers,
+			string(constants.AuthAuditResultSuccess): true,
+			"signers":                                signers,
 		})
 
 	case http.MethodPost:
@@ -1308,8 +1308,8 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]any{
-		"success":   true,
-		"delivered": 1,
+		string(constants.AuthAuditResultSuccess): true,
+		"delivered":                              1,
 	})
 }
 
@@ -1345,7 +1345,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 		// Verify operator_session_id is bound to this cli_session_id.
 		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil {
-			h.logger.Error("Failed to fetch CLI session", "error", err, "cli_session_id", route.CLISessionID)
+			h.logger.Error("Failed to fetch CLI session", string(constants.ConnectionStateError), err, "cli_session_id", route.CLISessionID)
 			jsonError(w, http.StatusInternalServerError, "failed to verify cli session")
 			return
 		}
@@ -1356,7 +1356,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 		var cliSess models.CLISession
 		b, _ := json.Marshal(doc.ForWire())
 		if err := json.Unmarshal(b, &cliSess); err != nil {
-			h.logger.Error("Failed to unmarshal CLI session", "error", err)
+			h.logger.Error("Failed to unmarshal CLI session", string(constants.ConnectionStateError), err)
 			jsonError(w, http.StatusInternalServerError, "failed to verify cli session")
 			return
 		}
@@ -1526,7 +1526,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 				}
 				_ = json.Unmarshal(p.Event, &inner)
 				if inner.Type == "" {
-					inner.Type = "unknown"
+					inner.Type = string(constants.SystemHealthUnknown)
 				}
 
 				fmt.Fprintf(w, "event: %s\ndata: %s\n\n", inner.Type, string(raw))
@@ -2015,8 +2015,8 @@ func (h *HTTPHandler) handlePasskeyRegisterChallenge(w http.ResponseWriter, r *h
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"options": options,
+		string(constants.AuthAuditResultSuccess): true,
+		"options":                                options,
 	})
 }
 
@@ -2067,8 +2067,8 @@ func (h *HTTPHandler) handlePasskeyRegisterVerify(w http.ResponseWriter, r *http
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":    true,
-		"credential": cred,
+		string(constants.AuthAuditResultSuccess): true,
+		"credential":                             cred,
 	})
 }
 
@@ -2120,8 +2120,8 @@ func (h *HTTPHandler) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"options": options,
+		string(constants.AuthAuditResultSuccess): true,
+		"options":                                options,
 	})
 }
 
@@ -2214,8 +2214,8 @@ func (h *HTTPHandler) handlePasskeyCredentials(w http.ResponseWriter, r *http.Re
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":     true,
-		"credentials": creds,
+		string(constants.AuthAuditResultSuccess): true,
+		"credentials":                            creds,
 	})
 }
 
@@ -2246,9 +2246,9 @@ func (h *HTTPHandler) handlePasskeyRevokeCredential(w http.ResponseWriter, r *ht
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":   true,
-		"found":     found,
-		"remaining": remaining,
+		string(constants.AuthAuditResultSuccess): true,
+		"found":                                  found,
+		"remaining":                              remaining,
 	})
 }
 
@@ -2288,8 +2288,8 @@ func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, http.StatusCreated, map[string]interface{}{
-		"success": true,
-		"user":    user,
+		string(constants.AuthAuditResultSuccess): true,
+		string(constants.HistoryActorUser):       user,
 	})
 }
 
@@ -2466,7 +2466,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	// Check for existing bootstrap user (plan §4.2, §9.1 rotation carve-out)
 	bootstrapUser, err := h.userSvc.FindBootstrapUser()
 	if err != nil {
-		h.logger.Error("Failed to check for existing bootstrap user", "error", err)
+		h.logger.Error("Failed to check for existing bootstrap user", string(constants.ConnectionStateError), err)
 		jsonError(w, http.StatusInternalServerError, "bootstrap check failed")
 		return
 	}
@@ -2532,7 +2532,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 
 	response := map[string]interface{}{
 		string(constants.AuthAuditResultSuccess): true,
-		"user":                                   user,
+		string(constants.HistoryActorUser):       user,
 		string(constants.SessionKeyPrefixWeb):    webSession,
 	}
 
@@ -2689,7 +2689,7 @@ func (h *HTTPHandler) handleUserMe(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
 		string(constants.AuthAuditResultSuccess): true,
-		"user":                                   user,
+		string(constants.HistoryActorUser):       user,
 	})
 }
 

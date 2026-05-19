@@ -94,7 +94,7 @@ func (s *UserService) createUser(email, name string, isBootstrap bool) (*models.
 		Email:              sanitizedEmail,
 		Name:               userName,
 		PasskeyCredentials: []models.PasskeyCredential{},
-		Provider:           "passkey",
+		Provider:           string(constants.AuthProviderPasskey),
 		Status:             constants.UserStatusActive,
 		IsBootstrap:        isBootstrap,
 	}

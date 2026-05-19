@@ -193,7 +193,7 @@ func (b *PubSubBroker) RegisterHandler(channel string, handler func(string, []by
 func (b *PubSubBroker) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ws, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
-		b.logger.Warn("WebSocket upgrade failed", "error", err)
+		b.logger.Warn("WebSocket upgrade failed", string(constants.ConnectionStateError), err)
 		return
 	}
 

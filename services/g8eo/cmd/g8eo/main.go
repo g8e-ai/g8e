@@ -460,7 +460,7 @@ func parseLogLevel(level string) (slog.Level, error) {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "info":
 		return slog.LevelInfo, nil
-	case "error":
+	case string(constants.ConnectionStateError):
 		return slog.LevelError, nil
 	case "debug":
 		return slog.LevelDebug, nil
@@ -550,14 +550,14 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 
 	cfg, err := config.LoadListen(wssPort, httpPort, bootstrapPort, publicPort, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName, false)
 	if err != nil {
-		logger.Error("Failed to load listen configuration", "error", err)
+		logger.Error("Failed to load listen configuration", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 	cfg.Version = string(version)
 
 	svc, err := listen.NewListenService(cfg, logger)
 	if err != nil {
-		logger.Error("Failed to create listen service", "error", err)
+		logger.Error("Failed to create listen service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))
 	}
 
@@ -580,14 +580,14 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 
 	wardenPriv, wardenKeyID, err := sm.GetWardenKey()
 	if err != nil {
-		logger.Error("Failed to load Warden signing key - mutations will fail", "error", err)
+		logger.Error("Failed to load Warden signing key - mutations will fail", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 
 	// Export Warden public key for receipt verification by evals harness
 	wardenPub := wardenPriv.Public().(ed25519.PublicKey)
 	if err := exportWardenPublicKey(cfg.PKIDir, wardenPub, wardenKeyID, logger); err != nil {
-		logger.Error("Failed to export Warden public key", "error", err)
+		logger.Error("Failed to export Warden public key", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -617,7 +617,7 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 
 	cmdSvc, err := pubsub.NewPubSubCommandService(psConfig)
 	if err != nil {
-		logger.Error("Failed to initialize in-process command service", "error", err)
+		logger.Error("Failed to initialize in-process command service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))
 	}
 
@@ -794,7 +794,7 @@ func runOpenClawMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 
 	go func() {
 		if err := svc.Start(ctx); err != nil {
-			logger.Error("OpenClaw node service failed", "error", err)
+			logger.Error("OpenClaw node service failed", string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitCodeFromError(err))
 		}
 	}()

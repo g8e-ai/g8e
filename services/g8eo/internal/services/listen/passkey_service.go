@@ -265,7 +265,7 @@ func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bo
 	}
 
 	if err := s.setCredentials(userID, newCreds); err != nil {
-		s.logger.Error("Failed to revoke credential", "error", err, "userID", userID)
+		s.logger.Error("Failed to revoke credential", string(constants.ConnectionStateError), err, "userID", userID)
 		return false, 0, err
 	}
 
@@ -290,7 +290,7 @@ func (s *PasskeyService) CreateWebSession(userID string) (*models.WebSession, er
 		return nil, fmt.Errorf("failed to marshal web session: %w", err)
 	}
 	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, data); err != nil {
-		s.logger.Error("Failed to create web session", "error", err, "userID", userID)
+		s.logger.Error("Failed to create web session", string(constants.ConnectionStateError), err, "userID", userID)
 		return nil, fmt.Errorf("failed to create web session: %w", err)
 	}
 

@@ -236,7 +236,7 @@ _log "----------------------------------------------------"
 _log "Restart your browser and navigate to https://$HOST/"
 _log ""
 `
-	return executeTemplate("universal", tmpl, map[string]interface{}{
+	return executeTemplate(string(constants.ToolScopeUniversal), tmpl, map[string]interface{}{
 		"Host":       host,
 		"URL":        fmt.Sprintf(urlTmpl, host),
 		"PortSuffix": portSuffix,

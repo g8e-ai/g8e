@@ -102,6 +102,9 @@ var allowlistedValues = map[string]bool{
 	"scrubbed": true,
 
 	"listen": true,
+
+	// ApprovalType values - common in logs and other contexts
+	"command": true,
 }
 
 // constantInfo tracks where a constant value is defined

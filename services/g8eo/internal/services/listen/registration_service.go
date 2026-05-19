@@ -684,7 +684,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 	if s.userSvc != nil && linkData.UserID != "" {
 		bootstrapUser, err := s.userSvc.FindBootstrapUser()
 		if err != nil {
-			s.logger.Error("[REGISTRATION] Failed to check for bootstrap user", "error", err)
+			s.logger.Error("[REGISTRATION] Failed to check for bootstrap user", string(constants.ConnectionStateError), err)
 			// Non-fatal - continue with registration
 		} else if bootstrapUser != nil && bootstrapUser.ID != linkData.UserID {
 			// This is a real login by a different user - retire the bootstrap user
@@ -693,7 +693,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 				"new_user_id", linkData.UserID,
 				"operator_id", operator.ID)
 			if err := s.userSvc.Disable(bootstrapUser.ID, "retired_by_real_login", linkData.UserID, operator.ID); err != nil {
-				s.logger.Error("[REGISTRATION] Failed to retire bootstrap user", "error", err)
+				s.logger.Error("[REGISTRATION] Failed to retire bootstrap user", string(constants.ConnectionStateError), err)
 				// Hard failure - no half-state (plan §4.5)
 				s.fingerprintSetRemove(token, sanitizedFingerprint)
 				return nil, fmt.Errorf("registration failed: bootstrap retirement failed: %w", err)
@@ -706,7 +706,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 	lockValue := uuid.NewString()
 	lockAcquired, err := s.acquireLock(lockKey)
 	if err != nil || !lockAcquired {
-		s.logger.Error("[REGISTRATION] Failed to acquire registration lock", "token", token, "error", err)
+		s.logger.Error("[REGISTRATION] Failed to acquire registration lock", "token", token, string(constants.ConnectionStateError), err)
 		return resp, nil // Registration succeeded, but claim update failed - device can retry
 	}
 	defer s.releaseLock(lockKey, lockValue)
@@ -766,8 +766,8 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		"status":              constants.Status.OperatorStatus.Active,
 		"operator_session_id": operatorSessionID,
 		"system_fingerprint":  sanitizedFingerprint,
-		"claimed":             true,
-		"claimed_at":          time.Now().UTC(),
+		string(constants.HistoryEventTypeClaimed): true,
+		"claimed_at": time.Now().UTC(),
 	}
 
 	// Mint a strictly-disjoint cli_session_id alongside the operator session.

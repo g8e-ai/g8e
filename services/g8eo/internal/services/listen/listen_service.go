@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 )
 
@@ -244,7 +245,7 @@ func (ls *ListenService) IsReady() bool {
 func (ls *ListenService) IsGovernanceReady() bool {
 	ready, err := ls.db.HasTrustedSigners()
 	if err != nil {
-		ls.logger.Error("Failed to check if governance is ready", "error", err)
+		ls.logger.Error("Failed to check if governance is ready", string(constants.ConnectionStateError), err)
 		return false
 	}
 	return ready
@@ -364,9 +365,9 @@ func (ls *ListenService) Start(ctx context.Context) error {
 		ls.logger.Info("Starting TLS listener", "server", name, "addr", s.Addr)
 
 		// Use a temporary listener to signal readiness before blocking on Serve
-		ln, err := net.Listen("tcp", s.Addr)
+		ln, err := net.Listen(string(constants.NetworkProtocolTCP), s.Addr)
 		if err != nil {
-			ls.logger.Error("Failed to listen", "server", name, "addr", s.Addr, "error", err)
+			ls.logger.Error("Failed to listen", "server", name, "addr", s.Addr, string(constants.ConnectionStateError), err)
 			errChan <- err
 			return
 		}
@@ -428,16 +429,16 @@ func (ls *ListenService) Stop(ctx context.Context) error {
 	ls.ready = false
 
 	if err := ls.server.Shutdown(ctx); err != nil {
-		ls.logger.Error("HTTP server shutdown error", "error", err)
+		ls.logger.Error("HTTP server shutdown error", string(constants.ConnectionStateError), err)
 	}
 	if err := ls.wssServer.Shutdown(ctx); err != nil {
-		ls.logger.Error("WSS server shutdown error", "error", err)
+		ls.logger.Error("WSS server shutdown error", string(constants.ConnectionStateError), err)
 	}
 	if err := ls.bootstrapServer.Shutdown(ctx); err != nil {
-		ls.logger.Error("Bootstrap server shutdown error", "error", err)
+		ls.logger.Error("Bootstrap server shutdown error", string(constants.ConnectionStateError), err)
 	}
 	if err := ls.publicServer.Shutdown(ctx); err != nil {
-		ls.logger.Error("Public server shutdown error", "error", err)
+		ls.logger.Error("Public server shutdown error", string(constants.ConnectionStateError), err)
 	}
 
 	// Close pub/sub broker (disconnects all WebSocket clients)
@@ -445,7 +446,7 @@ func (ls *ListenService) Stop(ctx context.Context) error {
 
 	// Close database
 	if err := ls.db.Close(); err != nil {
-		ls.logger.Error("Database close error", "error", err)
+		ls.logger.Error("Database close error", string(constants.ConnectionStateError), err)
 	}
 
 	ls.running = false
