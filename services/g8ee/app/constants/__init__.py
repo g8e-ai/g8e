@@ -373,6 +373,7 @@ __all__ = [
     "CACHE_TTL_SHORT",
     "CASE_ID_HEADER",
     "CHANNEL_SEGMENT_COUNT",
+    "CLI_SESSION_ID_HEADER",
     "CLOUD_INTENT_DEPENDENCIES",
     "CLOUD_INTENT_QUESTIONS",
     "CLOUD_INTENT_VERIFICATION_ACTIONS",
@@ -517,7 +518,6 @@ __all__ = [
     "OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS",
     "OPERATOR_ID_HEADER",
     "OPERATOR_UNAVAILABLE_MESSAGE",
-    "CLI_SESSION_ID_HEADER",
     "ORGANIZATION_ID_HEADER",
     "OUTPUT_SECURITY_WARNING_PREFIX",
     "OUTPUT_TRUNCATION_SUFFIX",
@@ -644,6 +644,6 @@ __all__ = [
     "UserRole",
     "UserStatus",
     "VaultMode",
-    "WorkflowType",
     "VersionStability",
+    "WorkflowType",
 ]

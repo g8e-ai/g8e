@@ -139,42 +139,42 @@ class ChatPipelineService:
 
         # Validate credentials for each configured tier
         validation_errors = []
-        
+
         def check_tier(tier_name: str, model: str | None, provider: str | None, api_key: str | None, endpoint: str | None):
             if not model:
                 return
-            
+
             if not provider:
                 validation_errors.append(f"{tier_name.capitalize()} model '{model}' configured but no provider selected.")
                 return
 
             p_val = provider
-            
+
             # Exhaustive provider validation
             if p_val == LLMProvider.OPENAI.value:
                 if not api_key:
                     validation_errors.append(f"{tier_name.capitalize()} provider 'openai' requires an API key.")
                 if not endpoint:
                     validation_errors.append(f"{tier_name.capitalize()} provider 'openai' requires an endpoint URL.")
-            
+
             elif p_val == LLMProvider.ANTHROPIC.value:
                 if not api_key:
                     validation_errors.append(f"{tier_name.capitalize()} provider 'anthropic' requires an API key.")
                 if not endpoint:
                     validation_errors.append(f"{tier_name.capitalize()} provider 'anthropic' requires an endpoint URL.")
-            
+
             elif p_val == LLMProvider.GEMINI.value:
                 if not api_key:
                     validation_errors.append(f"{tier_name.capitalize()} provider 'gemini' requires an API key.")
-            
+
             elif p_val == LLMProvider.OLLAMA.value:
                 if not endpoint:
                     validation_errors.append(f"{tier_name.capitalize()} provider 'ollama' requires an endpoint URL.")
-            
+
             elif p_val == LLMProvider.LLAMACPP.value:
                 if not endpoint:
                     validation_errors.append(f"{tier_name.capitalize()} provider 'llamacpp' requires an endpoint URL.")
-            
+
             else:
                 validation_errors.append(f"Unsupported {tier_name} provider '{p_val}'.")
 
@@ -703,7 +703,14 @@ class ChatPipelineService:
         try:
             logger.info(
                 "[SSE-CHAT] About to call _run_chat_impl: message_len=%d sentinel_mode=%s primary_provider=%s assistant_provider=%s lite_provider=%s primary=%s assistant=%s lite=%s",
-                len(message), sentinel_mode, llm_primary_provider, llm_assistant_provider, llm_lite_provider, llm_primary_model, llm_assistant_model, llm_lite_model
+                len(message),
+                sentinel_mode,
+                llm_primary_provider if llm_primary_provider in [p.value for p in LLMProvider] else "REDACTED",
+                llm_assistant_provider if llm_assistant_provider in [p.value for p in LLMProvider] else "REDACTED",
+                llm_lite_provider if llm_lite_provider in [p.value for p in LLMProvider] else "REDACTED",
+                llm_primary_model,
+                llm_assistant_model,
+                llm_lite_model
             )
             await self._run_chat_impl(
                 message=message,
@@ -840,7 +847,9 @@ class ChatPipelineService:
             llm_primary_endpoint,
         )
         if primary_provider:
-            logger.info("[SSE-CHAT] Applying primary_provider override: %s", primary_provider)
+            # CodeQL: Ensure we only log known provider names to avoid accidental secret leakage if fields are swapped
+            safe_primary = primary_provider if primary_provider in [p.value for p in LLMProvider] else "REDACTED"
+            logger.info("[SSE-CHAT] Applying primary_provider override: %s", safe_primary)
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_provider": LLMProvider(primary_provider)})})
         if primary_api_key:
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_api_key": primary_api_key})})
@@ -856,7 +865,9 @@ class ChatPipelineService:
             llm_assistant_endpoint,
         )
         if assistant_provider:
-            logger.info("[SSE-CHAT] Applying assistant_provider override: %s", assistant_provider)
+            # CodeQL: Ensure we only log known provider names to avoid accidental secret leakage if fields are swapped
+            safe_assistant = assistant_provider if assistant_provider in [p.value for p in LLMProvider] else "REDACTED"
+            logger.info("[SSE-CHAT] Applying assistant_provider override: %s", safe_assistant)
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_provider": LLMProvider(assistant_provider)})})
         if assistant_api_key:
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_api_key": assistant_api_key})})
@@ -872,7 +883,9 @@ class ChatPipelineService:
             llm_lite_endpoint,
         )
         if lite_provider:
-            logger.info("[SSE-CHAT] Applying lite_provider override: %s", lite_provider)
+            # CodeQL: Ensure we only log known provider names to avoid accidental secret leakage if fields are swapped
+            safe_lite = lite_provider if lite_provider in [p.value for p in LLMProvider] else "REDACTED"
+            logger.info("[SSE-CHAT] Applying lite_provider override: %s", safe_lite)
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_provider": LLMProvider(lite_provider)})})
         if lite_api_key:
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_api_key": lite_api_key})})

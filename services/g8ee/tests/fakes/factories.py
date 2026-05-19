@@ -58,7 +58,6 @@ from app.models.operators import (
     OperatorDocument,
 )
 from app.models.pubsub_messages import G8eoResultEnvelope, G8eoResultPayload
-from app.constants import EventType
 from app.utils.timestamp import now
 
 # ---------------------------------------------------------------------------

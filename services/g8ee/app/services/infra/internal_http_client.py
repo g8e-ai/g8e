@@ -20,7 +20,6 @@ from app.constants import (
     DEFAULT_HTTP_CLIENT_TIMEOUT,
     DEFAULT_MAX_RETRIES,
     ComponentName,
-    G8eHeaders,
     InternalApiPaths,
 )
 from app.errors import NetworkError

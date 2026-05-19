@@ -271,7 +271,7 @@ class HTTPClient:
             self._client_key_path = key_path
             # Close existing session to force recreation with new certs
             if self._session and not self._session.closed:
-                # We can't easily await here since this isn't async, 
+                # We can't easily await here since this isn't async,
                 # but setting _session to None is enough to force recreation.
                 # The old session will be eventually GC'd or we can schedule close.
                 self._session = None
@@ -426,7 +426,7 @@ class HTTPClient:
 
         request_kwargs: dict[str, Any] = {}
         json_body = self._serialize_json_payload(json_data)
-        
+
         # Embed RequestContext into the request body if context is provided
         if request_context is not None and json_body is not None:
             if isinstance(json_body, dict):
@@ -435,7 +435,7 @@ class HTTPClient:
                 # If json_body is already a Pydantic model, we can't modify it directly
                 # The caller should include context in their model via the context field
                 pass
-        
+
         if json_body is not None:
             request_kwargs["json"] = json_body
         if params is not None:
@@ -723,12 +723,12 @@ class HTTPClient:
         )
         request_kwargs: dict[str, Any] = {}
         json_body = self._serialize_json_payload(json_data)
-        
+
         # Embed RequestContext into the request body if context is provided
         if request_context is not None and json_body is not None:
             if isinstance(json_body, dict):
                 json_body["context"] = request_context.model_dump(mode="json")
-        
+
         if json_body is not None:
             request_kwargs["json"] = json_body
 

@@ -27,7 +27,6 @@ from app.errors import ResourceNotFoundError
 from app.models import InvestigationModel
 from app.models.chat_api import ChatSessionDetailsResponse, ChatSessionResponse, LatestChatSessionResponse
 from app.models.investigations import ConversationMessageMetadata
-from app.models.auth import AuthenticatedUser
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
 from app.dependencies import (
     get_g8ee_case_data_service,
@@ -36,7 +35,6 @@ from app.dependencies import (
     get_g8ee_chat_pipeline,
     get_g8ee_chat_task_manager,
     get_g8ee_settings_service,
-    get_g8ee_user_settings,
 )
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.investigation.investigation_data_service import InvestigationDataService
@@ -44,7 +42,6 @@ from app.services.data.case_data_service import CaseDataService
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.services.infra.settings_service import SettingsService
-from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
 
 router = APIRouter()
@@ -69,7 +66,7 @@ async def answer_triage_question(
     """
     # Fetch user settings manually using user_id from context to eliminate header dependency
     user_settings = await settings_service.get_user_settings(g8e_context.user_id)
-    
+
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,
@@ -131,7 +128,7 @@ async def skip_triage_questions(
     """
     # Fetch user settings manually using user_id from context to eliminate header dependency
     user_settings = await settings_service.get_user_settings(g8e_context.user_id)
-    
+
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,

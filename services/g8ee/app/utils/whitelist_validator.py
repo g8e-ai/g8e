@@ -61,8 +61,8 @@ class CommandWhitelistValidator:
 
     def load_whitelist(self, whitelist_path: str) -> None:
         """Load whitelist configuration from JSON file."""
-        cfg_file = str(whitelist_path)
-        logger.info("Loading command whitelist from %s", cfg_file)
+        # CodeQL: Avoid logging absolute paths as they can reveal system information
+        logger.info("Loading command whitelist")
         self.whitelist_data = load_json_config(Path(whitelist_path), config_name="whitelist configuration")
 
         enabled = self.whitelist_data.get("enabled", True)

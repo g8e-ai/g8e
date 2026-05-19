@@ -22,7 +22,6 @@ from app.constants import (
     PROXY_USER_ID_HEADER,
     AuthMethod,
     ComponentName,
-    G8eHeaders,
     HealthStatus,
 )
 from app.dependencies import (

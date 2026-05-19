@@ -24,7 +24,6 @@ from app.models.state import G8eeAppState
 from app.services.service_factory import AllServices
 from app.constants import (
     ComponentName,
-    G8eHeaders,
     InternalApiPaths,
     PROXY_USER_ID_HEADER,
 )
@@ -517,6 +516,6 @@ __all__ = [
     "get_g8eeweb_search_provider",
     "health_check_dependencies",
     "is_infrastructure_health_check_ip",
-    "require_authenticated_user",
     "require_authenticated_context",
+    "require_authenticated_user",
 ]

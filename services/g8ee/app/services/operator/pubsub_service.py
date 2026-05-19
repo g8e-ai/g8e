@@ -25,7 +25,6 @@ corresponding Pydantic models for type-safe parsing.
 import asyncio
 import logging
 
-from pydantic import ValidationError as PydanticValidationError
 
 from app.clients.pubsub_client import PubSubClient
 from app.constants.channels import OperatorChannel

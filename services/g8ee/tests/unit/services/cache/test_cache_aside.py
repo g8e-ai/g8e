@@ -536,7 +536,6 @@ class TestCacheAsideService:
         mock_db_client.query_collection.side_effect = None
         mock_db_client.query_collection.return_value = QueryResult(success=True, data=db_results)
 
-        from app.models.cache import FieldFilter
         result = await service.query_collection(
             collection=DB_COLLECTION_USERS,
             field_filters=[],

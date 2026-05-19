@@ -113,7 +113,8 @@ class OpenAIProvider(LLMProvider):
             api_key=api_key or "not-needed",
             max_retries=0,
         )
-        logger.info("OpenAI provider initialized: %s -> %s", endpoint, base_url)
+        # CodeQL: Don't log full URLs as they may contain sensitive info in some setups
+        logger.info("OpenAI provider initialized")
 
     @property
     def service_name(self) -> str:

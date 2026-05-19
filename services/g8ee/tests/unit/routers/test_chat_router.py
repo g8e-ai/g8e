@@ -16,13 +16,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import Request
 
-from app.constants import AuthMethod, ChatSessionStatus, InvestigationStatus, ComponentName
+from app.constants import ChatSessionStatus, InvestigationStatus, ComponentName
 from app.constants.events import EventType
 from app.errors import ResourceNotFoundError
 from app.routers.chat_router import router
 from app.models.http_context import G8eHttpContext
 from tests.fakes.factories import (
-    build_authenticated_user,
     build_case_model,
     create_conversation_message,
     create_investigation_data,

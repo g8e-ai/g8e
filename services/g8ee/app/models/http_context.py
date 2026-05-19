@@ -14,17 +14,13 @@
 import json
 from typing import Any
 
-from fastapi import Request
 
 from app.constants import (
     ComponentName,
     OperatorStatus,
-    G8eHeaders,
-    InternalApiPaths,
 )
 from app.utils.ids import generate_execution_id
 from app.utils.timestamp import now
-from app.logging import get_logger
 
 from .base import Field, G8eBaseModel, UTCDatetime, field_validator, model_validator
 
@@ -200,16 +196,15 @@ class G8eHttpContext(G8eBaseModel):
         if self.source_component == ComponentName.CLIENT:
             if self.web_session_id and self.cli_session_id:
                 raise ValueError("Context cannot have both web_session_id and cli_session_id")
-            
+
             if not self.web_session_id and not self.cli_session_id:
                 raise ValueError("Context must have either web_session_id or cli_session_id for CLIENT source")
 
             if not self.user_id:
                 raise ValueError("user_id is required for CLIENT source")
-        else:
-            # 2. Minimum identity requirement for non-CLIENT sources
-            if not self.web_session_id and not self.cli_session_id and not self.user_id:
-                raise ValueError("web_session_id, cli_session_id or user_id are required")
+        # 2. Minimum identity requirement for non-CLIENT sources
+        elif not self.web_session_id and not self.cli_session_id and not self.user_id:
+            raise ValueError("web_session_id, cli_session_id or user_id are required")
 
         # 3. Operator Session Validation
         if self.bound_operators:

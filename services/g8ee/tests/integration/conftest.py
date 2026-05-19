@@ -185,7 +185,6 @@ async def all_services(cache_aside_service, test_settings):
     Injects a real WebSearchProvider if search settings are configured,
     ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
-    import socket
     import os
     from app.llm.factory import get_search_settings
     from app.services.ai.grounding.web_search_provider import WebSearchProvider

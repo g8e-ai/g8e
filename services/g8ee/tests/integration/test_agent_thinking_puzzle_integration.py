@@ -136,7 +136,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     ):
         # Construct a mock event object with the structure the test expects
         from collections import namedtuple
-        MockEvent = namedtuple('MockEvent', ['event_type', 'payload'])
+        MockEvent = namedtuple("MockEvent", ["event_type", "payload"])
         event = MockEvent(event_type=event_type, payload=payload)
         published_events.append(event)
         # Return success without calling real publish

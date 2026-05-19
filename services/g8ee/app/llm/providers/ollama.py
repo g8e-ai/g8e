@@ -179,7 +179,8 @@ class OllamaProvider(LLMProvider):
 
         host = _normalize_ollama_host(endpoint)
         self._client = AsyncClient(host=host)
-        logger.info("Ollama provider initialized: %s", host)
+        # CodeQL: Don't log full host strings to avoid accidental leakage
+        logger.info("Ollama provider initialized")
 
     async def _close_resources(self):
         """Clean up provider resources."""

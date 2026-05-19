@@ -19,10 +19,10 @@ import pytest
 from app.constants.events import EventType
 from app.constants.status import AITaskId, ComponentName, ExecutionStatus, CommandErrorType
 from app.errors import BusinessLogicError, ValidationError
-from app.models.http_context import RequestContext, G8eHttpContext
+from app.models.http_context import RequestContext
 from app.models.command_request_payloads import CommandRequestPayload
 from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatSystemIdentity
-from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
+from app.models.pubsub_messages import G8eMessage
 from app.services.operator.execution_service import OperatorExecutionService
 from tests.fakes.factories import build_g8e_http_context, build_g8eo_result_envelope
 

@@ -46,7 +46,6 @@ from app.routers.internal_router import (
     internal_chat,
     operator_approval_respond,
     stop_ai_processing,
-    stop_operator,
     unbind_operators,
     update_case,
     get_case,
@@ -290,7 +289,6 @@ async def test_execute_direct_command(request_context, g8e_context):
 
 @pytest.mark.asyncio
 async def test_get_case(request_context, g8e_context):
-    from app.routers.internal_router import get_case
     mock_case_service = MagicMock()
     mock_case = build_case_model(case_id="case-123", user_id="user-123")
     mock_case_service.get_case = AsyncMock(return_value=mock_case)
@@ -567,7 +565,6 @@ async def test_unbind_operators_unauthorized(request_context, g8e_context):
 
 @pytest.mark.asyncio
 async def test_get_user_settings(g8e_context, request_context):
-    from app.routers.internal_router import get_user_settings
     from app.models.internal_api import SettingsGetRequest
     mock_settings_service = MagicMock()
     mock_settings = MagicMock()

@@ -28,7 +28,6 @@ and are kept aligned via the contract test in
 
 from __future__ import annotations
 
-from enum import IntEnum
 
 from typing import Self
 from pydantic import Field, model_validator

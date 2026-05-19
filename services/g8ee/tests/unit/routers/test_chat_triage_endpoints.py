@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import Request
 
-from app.constants import AuthMethod, MessageSender, ComponentName
+from app.constants import MessageSender, ComponentName
 from app.constants.events import EventType
 from app.models.http_context import RequestContext, G8eHttpContext
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
@@ -25,7 +25,7 @@ from app.routers.chat_router import (
     skip_triage_questions,
     timeout_triage_questions,
 )
-from tests.fakes.factories import build_authenticated_user, create_investigation_data
+from tests.fakes.factories import create_investigation_data
 
 pytestmark = [pytest.mark.unit]
 

@@ -111,9 +111,7 @@ from app.models.investigations import (
 InvestigationUpdateRequest.model_rebuild()
 InvestigationQueryRequest.model_rebuild()
 InvestigationGetRequest.model_rebuild()
-from app.models.auth import AuthenticatedUser
 from app.models.events import SessionEvent
-from app.models.http_context import G8eHttpContext
 from app.models.operators import OperatorDocument, OperatorStatusUpdatedPayload
 from app.services.operator.session_auth_listener import SessionAuthListener
 from app.services.operator.operator_data_service import OperatorDataService
@@ -162,7 +160,6 @@ from app.dependencies import (
     get_g8ee_settings_service_write,
     get_g8ee_user_settings,
     require_authenticated_context,
-    require_authenticated_context,
 )
 
 logger = logging.getLogger(__name__)
@@ -187,7 +184,7 @@ async def _generate_and_update_title(
     try:
         case_result = await generate_case_title(message, settings=user_settings)
         ai_title = case_result.generated_title
-        
+
         # Build context for internal update call
         context = RequestContext(
             web_session_id=web_session_id,
@@ -197,7 +194,7 @@ async def _generate_and_update_title(
             investigation_id=investigation_id,
             source_component=ComponentName.G8EE
         )
-        
+
         updated_case = await case_service.update_case(case_id, CaseUpdateRequest(context=context, title=ai_title))
         await investigation_service.update_investigation(
             investigation_id,

@@ -33,4 +33,5 @@ class LlamaCppProvider(OpenAIProvider):
 
     def __init__(self, endpoint: str, api_key: str):
         super().__init__(endpoint=endpoint, api_key=api_key)
-        logger.info("llama.cpp provider initialized: %s", endpoint)
+        # CodeQL: Don't log full endpoint strings to avoid accidental leakage
+        logger.info("llama.cpp provider initialized")

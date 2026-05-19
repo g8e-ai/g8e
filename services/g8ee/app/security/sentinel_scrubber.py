@@ -38,7 +38,6 @@ sensitive data from reaching the cloud AI.
 
 import logging
 import re
-from enum import IntEnum
 
 from app.constants.status import ScrubberPriority
 from app.models.base import G8eBaseModel

@@ -100,16 +100,10 @@ def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool = False, i
 
     if provider_value == LLMProvider.GEMINI.value:
         key_parts.append(api_key or "")
-    elif provider_value == LLMProvider.OPENAI.value:
+    elif provider_value == LLMProvider.OPENAI.value or provider_value == LLMProvider.ANTHROPIC.value:
         key_parts.append(endpoint or "")
         key_parts.append(api_key or "")
-    elif provider_value == LLMProvider.ANTHROPIC.value:
-        key_parts.append(endpoint or "")
-        key_parts.append(api_key or "")
-    elif provider_value == LLMProvider.OLLAMA.value:
-        key_parts.append(_normalize_ollama_host(endpoint or ""))
-        key_parts.append(api_key or "")
-    elif provider_value == LLMProvider.LLAMACPP.value:
+    elif provider_value == LLMProvider.OLLAMA.value or provider_value == LLMProvider.LLAMACPP.value:
         key_parts.append(_normalize_ollama_host(endpoint or ""))
         key_parts.append(api_key or "")
 

@@ -12,7 +12,6 @@
 # limitations under the License.
 
 import json
-import os
 from enum import StrEnum
 from pathlib import Path
 

@@ -12,4 +12,3 @@
 # limitations under the License.
 
 # Error enums sourced from protocol/constants/errors.json (single source of truth)
-from g8e_protocol.constants import ErrorCategory, ErrorCode, ErrorSeverity

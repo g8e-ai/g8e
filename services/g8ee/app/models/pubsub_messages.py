@@ -597,7 +597,7 @@ class G8eMessage(G8eBaseModel):
         if self.source_component == ComponentName.CLIENT:
             if self.web_session_id and self.cli_session_id:
                 raise ValueError("Message cannot have both web_session_id and cli_session_id")
-            
+
             if not self.web_session_id and not self.cli_session_id:
                 raise ValueError("Message must have either web_session_id or cli_session_id for CLIENT source")
 

@@ -61,12 +61,13 @@ class UserSettingsDocument(G8eIdentifiableModel):
 
 class AuthSettings(G8eBaseModel):
     """Authentication and security token configuration."""
-    session_encryption_key: str | None = Field(None)
+    session_encryption_key: str | None = Field(None, repr=False)
     operator_session_id: str | None = Field(None)
-    operator_api_key: str | None = Field(None)
-    g8e_api_key: str | None = Field(None)
+    operator_api_key: str | None = Field(None, repr=False)
+    g8e_api_key: str | None = Field(None, repr=False)
     auditor_hmac_key: str | None = Field(
         None,
+        repr=False,
         description=(
             "HMAC-SHA256 key used by the Tribunal auditor to sign reputation "
             "commitments (GDD §14.4 Artifact B). Generated and rotated by "
@@ -192,7 +193,7 @@ class SearchSettings(G8eBaseModel):
     project_id: str | None = Field(None)
     engine_id: str | None = Field(None)
     location: str = Field("global")
-    api_key: str | None = Field(None)
+    api_key: str | None = Field(None, repr=False)
 
 class DatabaseSettings(G8eBaseModel):
     """SQLite coordination store configuration."""
@@ -265,27 +266,27 @@ class LLMSettings(G8eBaseModel):
     assistant_model: str | None = Field(default=None, alias="llm_assistant_model")
     lite_model: str | None = Field(default=None, alias="llm_lite_model")
 
-    primary_api_key: str | None = Field(default=None)
+    primary_api_key: str | None = Field(default=None, repr=False)
     primary_endpoint: str | None = Field(default=None)
-    assistant_api_key: str | None = Field(default=None)
+    assistant_api_key: str | None = Field(default=None, repr=False)
     assistant_endpoint: str | None = Field(default=None)
-    lite_api_key: str | None = Field(default=None)
+    lite_api_key: str | None = Field(default=None, repr=False)
     lite_endpoint: str | None = Field(default=None)
 
     openai_endpoint: str | None = Field(default=OPENAI_DEFAULT_ENDPOINT)
-    openai_api_key: str | None = Field(default=None)
+    openai_api_key: str | None = Field(default=None, repr=False)
 
     ollama_endpoint: str | None = Field(default=OLLAMA_DEFAULT_ENDPOINT)
-    ollama_api_key: str | None = Field(default=None)
+    ollama_api_key: str | None = Field(default=None, repr=False)
 
-    gemini_api_key: str | None = Field(default=None)
+    gemini_api_key: str | None = Field(default=None, repr=False)
 
     anthropic_endpoint: str | None = Field(default=ANTHROPIC_DEFAULT_ENDPOINT)
-    anthropic_api_key: str | None = Field(default=None)
+    anthropic_api_key: str | None = Field(default=None, repr=False)
     ollama_assistant_model: str | None = Field(default=None)
 
     llamacpp_endpoint: str | None = Field(default=LLAMACPP_DEFAULT_ENDPOINT)
-    llamacpp_api_key: str | None = Field(default=None)
+    llamacpp_api_key: str | None = Field(default=None, repr=False)
     llamacpp_assistant_model: str | None = Field(default=None)
 
     llm_max_tokens: int | None = Field(default=None)

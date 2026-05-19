@@ -28,10 +28,9 @@ import logging
 import json
 from datetime import datetime, timedelta, UTC
 
-from typing import Any, Dict
+from typing import Any
 from pydantic import ValidationError as PydanticValidationError
 
-from app.constants import ExecutionStatus
 from app.constants.proto_mappings import protobuf_execution_status_to_python
 from app.constants.action_type_mappings import map_event_type_to_action_type
 from app.errors import ValidationError
@@ -43,7 +42,7 @@ from app.models.pubsub_messages import (
     G8eoHeartbeatPayload,
 )
 from app.models.uap import UAPEnvelope
-from app.proto import operator_pb2, common_pb2
+from app.proto import common_pb2
 from google.protobuf.json_format import MessageToDict, ParseDict
 
 logger = logging.getLogger(__name__)
@@ -140,7 +139,7 @@ def build_uap_envelope_json(
     return envelope.model_dump_json(exclude_none=True)
 
 
-def decode_uap_envelope(data: bytes | str) -> Dict[str, Any]:
+def decode_uap_envelope(data: bytes | str) -> dict[str, Any]:
     """Decode UAP JSON envelope from g8eo."""
     if isinstance(data, bytes):
         data = data.decode("utf-8")
@@ -156,7 +155,7 @@ def _convert_value(value: Any) -> Any:
     return value
 
 
-def decode_g8eo_result_envelope(envelope_data: bytes | str | Dict[str, Any]) -> Dict[str, Any]:
+def decode_g8eo_result_envelope(envelope_data: bytes | str | dict[str, Any]) -> dict[str, Any]:
     """Decode a g8eo result GovernanceEnvelope (JSON or bytes) and convert to a Pydantic-compatible dict.
 
     Strict protojson unmarshaling: the input must be a valid GovernanceEnvelope.
@@ -256,7 +255,7 @@ def decode_and_validate_uap_result(
             raw[id_field] = payload_raw[id_field]
 
     payload = parse_inbound_g8eo_payload(payload_raw)
-    
+
     try:
         return G8eoResultEnvelope.model_validate({
             **raw,

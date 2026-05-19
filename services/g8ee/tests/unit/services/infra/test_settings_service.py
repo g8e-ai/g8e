@@ -21,7 +21,6 @@ from app.constants.collections import (
     USER_SETTINGS_DOC_PREFIX,
 )
 from app.constants.settings import LLMProvider
-from app.errors import ConfigurationError
 from app.models.settings import (
     G8eePlatformSettings,
     G8eeUserSettings,
