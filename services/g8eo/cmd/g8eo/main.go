@@ -548,7 +548,7 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 
 	logger.Info("g8e Operator - Listen Mode (operator)", "version", version, "build", buildID)
 
-	cfg, err := config.LoadListen(wssPort, httpPort, bootstrapPort, publicPort, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName, false)
+	cfg, err := config.LoadListen(wssPort, httpPort, bootstrapPort, publicPort, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName, "", false)
 	if err != nil {
 		logger.Error("Failed to load listen configuration", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
@@ -625,6 +625,11 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 	// surface. Once set, BYO clients can POST UAP envelopes to
 	// /api/governance/envelope and receive a signed ActionReceipt.
 	svc.SetEnvelopeProcessor(cmdSvc)
+
+	// Set MCP gateway dependencies
+	if mcpSvc := svc.GetHTTPHandler().GetMCPGateway(); mcpSvc != nil {
+		mcpSvc.SetDependencies(cmdSvc, govDeps.StateRootProvider, wardenPriv, wardenKeyID)
+	}
 
 	go func() {
 		if err := svc.Start(ctx); err != nil {

@@ -73,7 +73,7 @@ message FileEditRequested {
 }
 
 message FsListRequested {
-  string path = 1;
+  string path = 1 [(g8e.common.v1.forbidden_patterns) = "/mnt/pnfs/private/.*"];
   string execution_id = 2;
   int32 max_depth = 3;
   int32 max_entries = 4;
@@ -81,7 +81,7 @@ message FsListRequested {
 }
 
 message FsReadRequested {
-  string path = 1;
+  string path = 1 [(g8e.common.v1.forbidden_patterns) = "/mnt/pnfs/private/.*"];
   string execution_id = 2;
   int32 max_size = 3;
   string sentinel_mode = 4;

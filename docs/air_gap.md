@@ -62,7 +62,7 @@ For air-gapped reasoning, g8e integrates a local inference engine within the `g8
 
 ### Vendoring & Dependency Management
 - **Operator (Go):** 100% vendored in `services/g8eo/vendor/`.
-- **Dashboard (Node.js):** Locked via `package-lock.json`; all assets are bundled during the build.
+- **Dashboard:** Locked via its dependency manifest; all assets are bundled during the build.
 - **Engine (Python):** Requirements are frozen. For air-gap builds, use the pre-staged environment or Docker image strategy.
 
 ---

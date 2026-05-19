@@ -68,16 +68,17 @@ type LoadOptions struct {
 // backbone for the entire g8e platform, replacing external databases.
 // No outbound authentication is required - the Operator simply starts and listens.
 type ListenConfig struct {
-	Enabled       bool
-	WSSPort       int    // WSS/TLS port for operator pub/sub connections (default: 443)
-	HTTPPort      int    // TLS/HTTPS port for internal g8ee/client traffic (default: 443)
-	BootstrapPort int    // Plain-TLS port for bootstrap routes (/.well-known/, /api/auth/device-link/register) (default: 80)
-	PublicPort    int    // Plain-TLS port for browser-based auth and setup (default: 443)
-	DataDir       string // Root directory for SQLite database (default: .g8e/data in working directory)
-	PKIDir        string // Directory for TLS certificates (default: .g8e/pki)
-	SecretsDir    string // Directory for platform secrets (default: .g8e/secrets)
-	PasskeyRpID   string // RP ID for passkey operations (default: localhost)
-	PasskeyRpName string // RP Name for passkey operations (default: g8e)
+	Enabled          bool
+	WSSPort          int    // WSS/TLS port for operator pub/sub connections (default: 443)
+	HTTPPort         int    // TLS/HTTPS port for internal g8ee/client traffic (default: 443)
+	BootstrapPort    int    // Plain-TLS port for bootstrap routes (/.well-known/, /api/auth/device-link/register) (default: 80)
+	PublicPort       int    // Plain-TLS port for browser-based auth and setup (default: 443)
+	DataDir          string // Root directory for SQLite database (default: .g8e/data in working directory)
+	PKIDir           string // Directory for TLS certificates (default: .g8e/pki)
+	SecretsDir       string // Directory for platform secrets (default: .g8e/secrets)
+	PasskeyRpID      string // RP ID for passkey operations (default: localhost)
+	PasskeyRpName    string // RP Name for passkey operations (default: g8e)
+	MCPDownstreamURL string // URL of the downstream MCP server to proxy discovery and execution to
 }
 
 // OpenClawConfig holds configuration for --openclaw mode.
@@ -207,8 +208,12 @@ func FindProjectRoot() string {
 // no outbound connections. The Operator simply starts and listens locally.
 // allowTestPortZero should be true only when called from Go tests; when false,
 // port 0 is rejected to prevent dynamic port assignment in production.
-func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir string, passkeyRpID, passkeyRpName string, allowTestPortZero bool) (*Config, error) {
+func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir string, passkeyRpID, passkeyRpName, mcpDownstreamURL string, allowTestPortZero bool) (*Config, error) {
 	projectRoot := FindProjectRoot()
+
+	if mcpDownstreamURL == "" {
+		mcpDownstreamURL = os.Getenv("G8E_MCP_DOWNSTREAM_URL")
+	}
 
 	if dataDir == "" {
 		if projectRoot != "" {
@@ -281,16 +286,17 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 		PKIDir:        pkiDir,     // Also set top-level for services that use Config.PKIDir
 		SecretsDir:    secretsDir, // Also set top-level for services that use Config.SecretsDir
 		Listen: ListenConfig{
-			Enabled:       true,
-			WSSPort:       wssPort,
-			HTTPPort:      httpPort,
-			BootstrapPort: bootstrapPort,
-			PublicPort:    publicPort,
-			DataDir:       dataDir,
-			PKIDir:        pkiDir,
-			SecretsDir:    secretsDir,
-			PasskeyRpID:   passkeyRpID,
-			PasskeyRpName: passkeyRpName,
+			Enabled:          true,
+			WSSPort:          wssPort,
+			HTTPPort:         httpPort,
+			BootstrapPort:    bootstrapPort,
+			PublicPort:       publicPort,
+			DataDir:          dataDir,
+			PKIDir:           pkiDir,
+			SecretsDir:       secretsDir,
+			PasskeyRpID:      passkeyRpID,
+			PasskeyRpName:    passkeyRpName,
+			MCPDownstreamURL: mcpDownstreamURL,
 		},
 	}, nil
 }
