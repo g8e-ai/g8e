@@ -62,8 +62,8 @@ G8EE_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ee.pid"
 G8EE_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ee.log"
 OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-$(jq -r '.ports.operator_http // "9000"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9000")}"
 OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-$(jq -r '.ports.operator_wss // "9001"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9001")}"
-OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(jq -r '.ports.operator_bootstrap // "80"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "80")}"
-OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(jq -r '.ports.operator_public // "443"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "443")}"
+OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(jq -r '.ports.operator_bootstrap // "9002"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9002")}"
+OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(jq -r '.ports.operator_public // "9003"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9003")}"
 OPERATOR_LISTEN_LOG_MAX_BACKUPS=5
 
 DEV_MODE=false
@@ -137,7 +137,7 @@ _wait_optional_app_healthy() {
     esac
 }
 
-# PKI volume is never wiped — preserved across reset, wipe, and rebuild.
+# PKI volume is never wiped - preserved across reset, wipe, and rebuild.
 PKI_VOLUME="$OPERATOR_LISTEN_PKI_DIR"
 SECRETS_VOLUME="$OPERATOR_LISTEN_SECRETS_DIR"
 
@@ -302,11 +302,11 @@ _start_g8ee() {
         cd "$PROJECT_ROOT/services/g8ee"
         export G8E_PKI_DIR="$OPERATOR_LISTEN_PKI_DIR"
         export G8E_SECRETS_DIR="$OPERATOR_LISTEN_SECRETS_DIR"
-        export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol"
-        export G8E_SHARED_DIR="$PROJECT_ROOT/protocol"
+        export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol/python"
+        export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
         export G8E_INTERNAL_HTTP_URL="https://localhost:${OPERATOR_LISTEN_HTTP_PORT}"
         export G8E_INTERNAL_PUBSUB_URL="wss://localhost:${OPERATOR_LISTEN_WSS_PORT}"
-        
+
         local cert_name
         cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "g8ee")
         setsid "$venv_dir/bin/uvicorn" app.main:app --host 0.0.0.0 --port 8443 \
@@ -340,30 +340,11 @@ _start_operator_listen() {
     fi
 
     local bin="$PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.operator"
-    local needs_build=false
+    # Always run make build-local - Go's build caching makes this cheap when nothing changed
+    echo "  Building Operator binary natively..."
+    (cd "$PROJECT_ROOT/services/g8eo" && make build-local)
 
-    if [ ! -f "$bin" ]; then
-        echo "  Operator binary not found at $bin. Building it..."
-        needs_build=true
-    else
-        # Check if source files are newer than the binary
-        local source_files
-        source_files=$(find "$PROJECT_ROOT/services/g8eo" -type f \( -name "*.go" -o -name "Makefile" -o -name "go.mod" -o -name "go.sum" \) -not -path "*/vendor/*" -not -path "*/build/*")
-        for f in $source_files; do
-            if [ "$f" -nt "$bin" ]; then
-                echo "  Operator source changed: $f is newer than binary. Rebuilding..."
-                needs_build=true
-                break
-            fi
-        done
-    fi
-
-    if [ "$needs_build" = true ]; then
-        echo "  Building Operator binary natively..."
-        (cd "$PROJECT_ROOT/services/g8eo" && make build-local)
-    fi
-
-    echo "  Starting Operator listen mode on port $OPERATOR_LISTEN_HTTP_PORT..."
+    echo "  Starting Operator listen mode..."
     mkdir -p "$OPERATOR_LISTEN_DATA_DIR" "$OPERATOR_LISTEN_PKI_DIR" "$OPERATOR_LISTEN_SECRETS_DIR" "$OPERATOR_LISTEN_PID_DIR" "$OPERATOR_LISTEN_LOG_DIR"
 
     _rotate_logs "$OPERATOR_LISTEN_LOG_FILE"
@@ -452,15 +433,16 @@ _wait_operator_listen_healthy() {
 
     # Auto-bootstrap if needed
     source "$PROJECT_ROOT/scripts/cmd/common.sh"
-    _operator_bootstrap || true
+    _operator_bootstrap
 }
 
 _wait_service_healthy() {
     local service_name="$1" url="$2" timeout_s="$3" interval="${4:-1}" log_file="$5"
     local waited=0
+    local trust_bundle="${G8E_TRUST_BUNDLE:-$OPERATOR_LISTEN_PKI_DIR/trust/hub-bundle.pem}"
     echo "  $service_name: waiting for healthy status..."
 
-    until curl -sfk "$url" >/dev/null 2>&1; do
+    until [[ -f "$trust_bundle" ]] && curl -sf --cacert "$trust_bundle" "$url" >/dev/null 2>&1; do
         if (( waited >= timeout_s )); then
             echo -e "  $service_name: \033[0;31mTIMEOUT\033[0m"
             echo "  $service_name did not become healthy within ${timeout_s}s. See $log_file"
@@ -503,7 +485,7 @@ _print_platform_info() {
     echo ""
     echo "  Operator mTLS API:     https://localhost:$OPERATOR_LISTEN_HTTP_PORT"
     echo "  Operator Pub/Sub:       wss://localhost:$OPERATOR_LISTEN_WSS_PORT"
-    echo "  Bootstrap (device-link): https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT"
+    echo "  Bootstrap (device-link): http://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT"
     echo "  Public (browser/BYO):   https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT"
     echo "  Runtime dir:            $G8E_RUNTIME_DIR"
     echo "  Protocol schemas:       protocol/proto"
@@ -511,10 +493,21 @@ _print_platform_info() {
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  Windows Trust (Run in Elevated PowerShell)"
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  iex (iwr https://${HOST_IPS%%,*}:$OPERATOR_LISTEN_BOOTSTRAP_PORT/trust.ps1 -UseBasicParsing).Content"
+    echo "  irm http://${HOST_IPS%%,*}:$OPERATOR_LISTEN_BOOTSTRAP_PORT/trust | iex"
+    echo ""
+    echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  macOS/Linux Trust (Run in Terminal)"
+    echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  curl -fsSL http://${HOST_IPS%%,*}:$OPERATOR_LISTEN_BOOTSTRAP_PORT/trust | sudo sh"
     echo ""
     if _g8ee_running; then
         echo "  Optional apps:          running (see ./g8e platform status)"
+        echo ""
+        echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  Provisioning & Login"
+        echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  Login:                  ./g8e login --email superadmin@g8e.local"
+        echo "  New Device Link:        ./g8e data device-links create --email superadmin@g8e.local"
     else
         echo "  Optional apps:          not running (use ./g8e apps start to enable)"
     fi
@@ -546,7 +539,7 @@ if [[ "$COMMAND" == "status" ]]; then
         bootstrapped="UNKNOWN"
         trust_bundle="$OPERATOR_LISTEN_PKI_DIR/trust/hub-bundle.pem"
         if [[ -f "$trust_bundle" ]]; then
-            status_resp=$(curl -sSk --cacert "$trust_bundle" "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/api/auth/bootstrap/status" 2>/dev/null)
+            status_resp=$(curl -sS --cacert "$trust_bundle" "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/api/auth/bootstrap/status" 2>/dev/null)
             if [[ $(echo "$status_resp" | jq -r '.bootstrapped' 2>/dev/null) == "true" ]]; then
                 bootstrapped="YES"
             else
@@ -599,7 +592,7 @@ if [[ "$COMMAND" == "restart" ]]; then
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 60 1
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 60 1
     for svc in "${RESTART_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
         _wait_optional_app_healthy "$svc"
@@ -620,7 +613,7 @@ fi
 if [[ "$COMMAND" == "reset" ]]; then
     mapfile -t RESET_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
 
-    echo "Wiping Operator listen-mode data and secrets — PKI certs preserved..."
+    echo "Wiping Operator listen-mode data and secrets - PKI certs preserved..."
     _stop_g8ee
     _stop_operator_listen
     
@@ -641,7 +634,7 @@ if [[ "$COMMAND" == "reset" ]]; then
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 300 2
 
     for svc in "${RESET_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -675,7 +668,7 @@ if [[ "$COMMAND" == "wipe" ]]; then
 
     echo "Restarting Operator listen mode..."
     _start_operator_listen
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 120 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 120 2
 
     echo "Clearing app data from Operator listen mode..."
     echo "  Warning: wipe endpoint removed - X-Internal-Auth and /api/internal/* routes deprecated"
@@ -738,7 +731,7 @@ if [[ "$COMMAND" == "up" ]]; then
     fi
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 60 1
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 60 1
     
     for svc in "${UP_COMPONENTS[@]}"; do
         _wait_optional_app_healthy "$svc"
@@ -754,7 +747,7 @@ fi
 
 # ─── setup ───────────────────────────────────────────────────────────────────
 # Full first-time setup, then start the platform.
-# Does NOT wipe data volumes — safe to run on an existing installation.
+# Does NOT wipe data volumes - safe to run on an existing installation.
 # Operator binary builds provide the listen-mode and remote Operator artifacts.
 
 if [[ "$COMMAND" == "setup" ]]; then
@@ -771,7 +764,7 @@ if [[ "$COMMAND" == "setup" ]]; then
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 300 2
 
     for svc in "${SETUP_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -810,7 +803,7 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     fi
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT/health" 300 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 300 2
 
     for svc in "${REBUILD_COMPONENTS[@]}"; do
         _wait_optional_app_healthy "$svc"

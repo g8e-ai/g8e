@@ -93,6 +93,6 @@ class TestOutboundPayloadUnionContract:
         assert not extra_types, (
             f"G8eOutboundPayload contains unexpected types: {[t.__name__ for t in extra_types]}. "
             "If these are legitimate command payloads, add them to the command_payloads set above. "
-            "If they are legacy MCP types (e.g., JSONRPCRequest), remove them from the union in pubsub_messages.py "
-            "since MCP is now a gateway-only concern and should not be in the operator command channel union."
+            "If they are MCP types (e.g., JSONRPCRequest), remove them from the union in pubsub_messages.py "
+            "since MCP is a gateway-only concern and must not appear in the operator command channel union."
         )

@@ -23,7 +23,7 @@ import (
 // This is the ONE place in the application that calls os.Getenv.
 // All other code receives these values via dependency injection.
 type Settings struct {
-	// g8e operator configuration — mirrors protocol/constants/env_vars.json "g8eo" section
+	// g8e operator configuration - mirrors protocol/constants/env_vars.json "g8eo" section
 	OperatorAPIKey    string
 	OperatorEndpoint  string
 	OperatorSessionID string
@@ -52,13 +52,13 @@ type Settings struct {
 }
 
 // readVar is the single call site for os.Getenv within this package.
-// All reads are keyed by typed constants.EnvVarKey values — no raw strings.
+// All reads are keyed by typed constants.EnvVarKey values - no raw strings.
 func readVar(key constants.EnvVarKey) string {
 	return os.Getenv(string(key))
 }
 
 // LoadSettings reads all process-level configuration consumed by g8eo.
-// It is the single authoritative source — no other package may call os.Getenv.
+// It is the single authoritative source - no other package may call os.Getenv.
 func LoadSettings() Settings {
 	user := readVar(constants.EnvVar.User)
 	if user == "" {

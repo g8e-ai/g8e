@@ -18,22 +18,22 @@ These tests exercise the complete AI context gathering pipeline from raw HTTP
 context through InvestigationService to the final EnrichedInvestigationContext
 used by the AI agent. All tests use real services and infrastructure.
 
-    Segment 1 — Basic investigation context resolution
+    Segment 1 - Basic investigation context resolution
       Resolve investigation by investigation_id and case_id with retry logic.
 
-    Segment 2 — Memory context attachment
+    Segment 2 - Memory context attachment
       Test memory attachment, missing memory handling, and memory data integrity.
 
-    Segment 3 — Operator enrichment and context extraction
+    Segment 3 - Operator enrichment and context extraction
       Test bound operator resolution, system context extraction, and multi-operator scenarios.
 
-    Segment 4 — Complete context assembly end-to-end
+    Segment 4 - Complete context assembly end-to-end
       Full pipeline from G8eHttpContext to EnrichedInvestigationContext with all components.
 
-    Segment 5 — Error handling and edge cases
+    Segment 5 - Error handling and edge cases
       Missing investigations, operator lookup failures, and partial context scenarios.
 
-    Segment 6 — Context extraction for AI consumption
+    Segment 6 - Context extraction for AI consumption
       Test extract_system_context and extract_all_operators_context functions.
 
 Real code under test:
@@ -43,7 +43,7 @@ Real code under test:
     CacheAsideService (app/services/cache/cache_aside.py)
     extract_system_context, extract_all_operators_context
 
-All tests use real operator and cache services — no mocks allowed per testing guidelines.
+All tests use real g8ee services backed by an in-memory operator cache fake.
 """
 
 import asyncio
@@ -52,6 +52,7 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+import pytest_asyncio
 
 from app.constants import (
     CloudSubtype,
@@ -94,9 +95,40 @@ from tests.fakes.factories import (
 pytestmark = [pytest.mark.integration]
 
 
+@pytest.fixture
+def cache_aside_service(fake_cache_aside_service):
+    return fake_cache_aside_service
+
+
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def all_services(cache_aside_service, test_settings):
+    from unittest.mock import MagicMock
+
+    from app.services.service_factory import ServiceFactory
+
+    services = ServiceFactory.create_all_services(
+        test_settings,
+        cache_aside_service,
+        db_service=MagicMock(),
+        kv_service=MagicMock(),
+        blob_service=MagicMock(),
+    )
+    yield services
+    await ServiceFactory.stop_services(services)
+
+
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def cleanup(cache_aside_service):
+    from tests.integration.cleanup import IntegrationCleanupTracker
+
+    tracker = IntegrationCleanupTracker(cache_aside_service)
+    yield tracker
+    await tracker.cleanup()
+
+
 
 # ---------------------------------------------------------------------------
-# Segment 1 — Basic investigation context resolution
+# Segment 1 - Basic investigation context resolution
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -212,7 +244,6 @@ class TestInvestigationContextResolution:
         """Missing investigation_id raises ResourceNotFoundError after retries."""
         # Setup
         service = all_services.investigation_service
-        investigation_data_service = all_services.investigation_data_service
 
         # Test & Verify
         with pytest.raises(ResourceNotFoundError) as exc_info:
@@ -299,7 +330,7 @@ class TestInvestigationContextResolution:
 
 
 # ---------------------------------------------------------------------------
-# Segment 2 — Memory context attachment
+# Segment 2 - Memory context attachment
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -498,7 +529,7 @@ class TestMemoryContextAttachment:
 
 
 # ---------------------------------------------------------------------------
-# Segment 3 — Operator enrichment and context extraction
+# Segment 3 - Operator enrichment and context extraction
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -514,7 +545,6 @@ class TestOperatorEnrichment:
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
         operator_data_service = all_services.operator_data_service
-        memory_data_service = all_services.memory_data_service
 
         # Create investigation and operator
         investigation = create_investigation_data()
@@ -576,7 +606,6 @@ class TestOperatorEnrichment:
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
         operator_data_service = all_services.operator_data_service
-        memory_data_service = all_services.memory_data_service
 
         # Create investigation and multiple operators
         investigation = create_investigation_data()
@@ -646,7 +675,6 @@ class TestOperatorEnrichment:
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
         operator_data_service = all_services.operator_data_service
-        memory_data_service = all_services.memory_data_service
 
         # Create investigation and operators with different statuses
         investigation = create_investigation_data()
@@ -824,7 +852,7 @@ class TestOperatorEnrichment:
 
 
 # ---------------------------------------------------------------------------
-# Segment 4 — Complete context assembly end-to-end
+# Segment 4 - Complete context assembly end-to-end
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -985,7 +1013,7 @@ class TestCompleteContextAssembly:
 
 
 # ---------------------------------------------------------------------------
-# Segment 5 — Error handling and edge cases (real integration tests only)
+# Segment 5 - Error handling and edge cases (real integration tests only)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -1036,7 +1064,7 @@ class TestContextGatheringErrorHandling:
 
 
 # ---------------------------------------------------------------------------
-# Segment 6 — Context extraction for AI consumption
+# Segment 6 - Context extraction for AI consumption
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")

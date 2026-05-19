@@ -16,10 +16,13 @@ package models
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 )
 
 // Document is the internal representation of a stored document.
-// Timestamps are native time.Time — convert to wire format via ForWire().
+// Timestamps are native time.Time - convert to wire format via ForWire().
 type Document struct {
 	ID         string
 	Collection string
@@ -92,16 +95,16 @@ type PubSubPublishRequest struct {
 
 // HealthResponse is the typed response for GET /health.
 type HealthResponse struct {
-	Status          string `json:"status"`
-	Mode            string `json:"mode"`
-	Version         string `json:"version"`
-	GovernanceReady bool   `json:"governance_ready"`
-	StateMerkleRoot string `json:"state_merkle_root,omitempty"`
+	Status          constants.ListenMode `json:"status"`
+	Mode            constants.ListenMode `json:"mode"`
+	Version         string               `json:"version"`
+	GovernanceReady bool                 `json:"governance_ready"`
+	StateMerkleRoot string               `json:"state_merkle_root,omitempty"`
 }
 
 // StatusResponse is the typed response for simple ok/error replies.
 type StatusResponse struct {
-	Status string `json:"status"`
+	Status constants.ListenMode `json:"status"`
 }
 
 // KVGetResponse is the typed response for GET /kv/{key}.
@@ -136,20 +139,20 @@ type PubSubPublishResponse struct {
 }
 
 type ActionReceiptRecord struct {
-	TransactionID     string    `json:"transaction_id"`
-	TransactionHash   string    `json:"transaction_hash"`
-	OperatorID        string    `json:"operator_id"`
-	OperatorSessionID string    `json:"operator_session_id"`
-	ActionType        string    `json:"action_type"`
-	TargetResource    string    `json:"target_resource"`
-	Status            string    `json:"status"`
-	ResultSummary     string    `json:"result_summary"`
-	StateRootBefore   string    `json:"state_root_before"`
-	StateRootAfter    string    `json:"state_root_after"`
-	ExecutedAt        time.Time `json:"executed_at"`
-	SignerKeyID       string    `json:"signer_key_id"`
-	Signature         string    `json:"signature"`
-	Timestamp         time.Time `json:"timestamp"`
+	TransactionID     string                     `json:"transaction_id"`
+	TransactionHash   string                     `json:"transaction_hash"`
+	OperatorID        string                     `json:"operator_id"`
+	OperatorSessionID string                     `json:"operator_session_id"`
+	ActionType        constants.ActionType       `json:"action_type"`
+	TargetResource    string                     `json:"target_resource"`
+	Status            operatorv1.ExecutionStatus `json:"status"`
+	ResultSummary     string                     `json:"result_summary"`
+	StateRootBefore   string                     `json:"state_root_before"`
+	StateRootAfter    string                     `json:"state_root_after"`
+	ExecutedAt        time.Time                  `json:"executed_at"`
+	SignerKeyID       string                     `json:"signer_key_id"`
+	Signature         string                     `json:"signature"`
+	Timestamp         time.Time                  `json:"timestamp"`
 }
 
 // BlobMetaResponse is the typed response for GET /blob/{namespace}/{id}/meta.

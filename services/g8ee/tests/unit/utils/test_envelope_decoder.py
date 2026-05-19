@@ -102,6 +102,7 @@ class TestDecodeG8eoResultEnvelope:
             "action_type": "EXECUTE_BASH_RESULT",
             "intent_data": {
                 "execution_id": "test-exec-id",
+                "payload_type": "execution_result",
                 "status": "completed",
                 "stdout": "test output",
                 "return_code": 0
@@ -136,6 +137,7 @@ class TestDecodeG8eoResultEnvelope:
             "action_type": "EXECUTE_BASH_RESULT",
             "intent_data": {
                 "execution_id": "test-exec-id",
+                "payload_type": "execution_result",
                 "status": "failed",
                 "error": "test error",
                 "return_code": 1
@@ -155,11 +157,12 @@ class TestDecodeG8eoResultEnvelope:
         """EXECUTE_STATUS_UPDATE decodes correctly."""
         envelope_data = {
             "id": "test-id",
-            "event_type": EventType.OPERATOR_COMMAND_STATUS_UPDATED,
+            "event_type": EventType.OPERATOR_COMMAND_STATUS_UPDATED_RUNNING,
             "operator_id": "op-1",
             "action_type": "EXECUTE_STATUS_UPDATE",
             "intent_data": {
                 "execution_id": "test-exec-id",
+                "payload_type": "execution_status",
                 "status": "executing",
                 "process_alive": True,
                 "elapsed_seconds": 5.0
@@ -185,6 +188,7 @@ class TestDecodeG8eoResultEnvelope:
             "action_type": "FILE_EDIT_RESULT",
             "intent_data": {
                 "execution_id": "test-exec-id",
+                "payload_type": "file_edit_result",
                 "status": "completed",
                 "file_path": "/test/file.txt",
                 "operation": "write"
@@ -205,11 +209,12 @@ class TestDecodeG8eoResultEnvelope:
         """FS_LIST_RESULT decodes correctly."""
         envelope_data = {
             "id": "test-id",
-            "event_type": EventType.OPERATOR_FS_LIST_COMPLETED,
+            "event_type": EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED,
             "operator_id": "op-1",
             "action_type": "FS_LIST_RESULT",
             "intent_data": {
                 "execution_id": "test-exec-id",
+                "payload_type": "fs_list_result",
                 "status": "completed",
                 "path": "/test",
                 "total_count": 5,
@@ -235,7 +240,7 @@ class TestDecodeG8eoResultEnvelope:
             "event_type": "unknown.event",
             "operator_id": "op-1",
             "action_type": "unknown.action.type",
-            "intent_data": {"test": "data"},
+            "intent_data": {"payload_type": "unknown", "test": "data"},
             "operator_session_id": "sess-1"
         }
 
@@ -252,6 +257,7 @@ class TestDecodeG8eoResultEnvelope:
             "action_type": "EXECUTE_BASH_CANCELLED",
             "intent_data": {
                 "execution_id": "test-exec-id",
+                "payload_type": "cancellation_result",
                 "status": "cancelled"
             },
             "operator_session_id": "sess-1"

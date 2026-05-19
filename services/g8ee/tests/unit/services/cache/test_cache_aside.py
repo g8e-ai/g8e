@@ -34,6 +34,7 @@ from app.models.cache import (
     BatchWriteOperation,
     CacheOperationResult,
     DocumentResult,
+    QueryResult,
 )
 from app.services.cache.cache_aside import CacheAsideService
 from tests.fakes.fake_operator_clients import FakeDBClient, FakeKVClient
@@ -60,10 +61,11 @@ class TestCacheAsideService:
             db=DBService(mock_db_client),
             component_name=ComponentName.G8EE,
             default_ttl=CACHE_TTL_DEFAULT,
+            read_enabled=True,
         )
 
     def test_make_key_format(self, service):
-        key = service._make_key("users", "user-123")
+        key = service.make_key("users", "user-123")
         assert key == KVKey.doc("users", "user-123")
 
     def test_get_ttl_known_collection(self, service):
@@ -95,7 +97,7 @@ class TestCacheAsideService:
         data = {"id": "user-2", "name": "Admin"}
         mock_db_client.get_document.return_value = DocumentResult(success=True, data=None)
 
-        key = service._make_key(DB_COLLECTION_USERS, "user-2")
+        key = service.make_key(DB_COLLECTION_USERS, "user-2")
         mock_kv_cache_client.seed_json(key, {"old": "data"})
 
         await service.create_document(DB_COLLECTION_USERS, "user-2", data)
@@ -136,7 +138,7 @@ class TestCacheAsideService:
         assert result.cache_invalidated is True
 
     async def test_update_document_success_invalidates_cache(self, service, mock_kv_cache_client, mock_db_client):
-        key = service._make_key(DB_COLLECTION_USERS, "user-5")
+        key = service.make_key(DB_COLLECTION_USERS, "user-5")
         mock_kv_cache_client.seed_json(key, {"id": "user-5", "name": "old"})
 
         result = await service.update_document(DB_COLLECTION_USERS, "user-5", {"name": "new"})
@@ -178,8 +180,8 @@ class TestCacheAsideService:
         mock_kv_cache_client.seed_json(query_key, [{"id": "user-5"}])
 
         # Delete document using db client with manual cache invalidation
-        result = await service.db.delete_document(DB_COLLECTION_USERS, "user-5")
-        key = service._make_key(DB_COLLECTION_USERS, "user-5")
+        await service.db.delete_document(DB_COLLECTION_USERS, "user-5")
+        key = service.make_key(DB_COLLECTION_USERS, "user-5")
         await service.kv.delete(key)
         await service.invalidate_query_cache(DB_COLLECTION_USERS)
 
@@ -203,7 +205,7 @@ class TestCacheAsideService:
         )
 
     async def test_delete_document_success_removes_from_cache(self, service, mock_kv_cache_client, mock_db_client):
-        key = service._make_key(DB_COLLECTION_USERS, "user-7")
+        key = service.make_key(DB_COLLECTION_USERS, "user-7")
         mock_kv_cache_client.seed_json(key, {"id": "user-7"})
 
         # Delete document using db client with manual cache invalidation
@@ -221,7 +223,7 @@ class TestCacheAsideService:
         pass
 
     async def test_get_document_cache_hit(self, service, mock_kv_cache_client, mock_db_client):
-        key = service._make_key(DB_COLLECTION_USERS, "user-8")
+        key = service.make_key(DB_COLLECTION_USERS, "user-8")
         cached_data = {"id": "user-8", "name": "Cached"}
         mock_kv_cache_client.seed_json(key, cached_data)
 
@@ -244,7 +246,7 @@ class TestCacheAsideService:
         assert result["name"] == "From DB"
         assert result["id"] == "user-9"
 
-        key = service._make_key(DB_COLLECTION_USERS, "user-9")
+        key = service.make_key(DB_COLLECTION_USERS, "user-9")
         cached = await mock_kv_cache_client.get_json(key)
         assert cached is not None
         assert cached["id"] == "user-9"
@@ -274,7 +276,7 @@ class TestCacheAsideService:
         assert result["created_at"] == "2025-06-01T12:00:00Z"
         assert result["updated_at"] == "2025-06-01T12:00:00Z"
 
-        key = service._make_key(DB_COLLECTION_USERS, "user-dt")
+        key = service.make_key(DB_COLLECTION_USERS, "user-dt")
         cached = await mock_kv_cache_client.get_json(key)
         assert cached is not None
         assert cached["created_at"] == "2025-06-01T12:00:00Z"
@@ -330,7 +332,7 @@ class TestCacheAsideService:
         assert call_kwargs["ex"] == 60
 
     async def test_invalidate_document_removes_key(self, service, mock_kv_cache_client):
-        key = service._make_key(DB_COLLECTION_USERS, "user-13")
+        key = service.make_key(DB_COLLECTION_USERS, "user-13")
         mock_kv_cache_client.seed_json(key, {"id": "user-13"})
 
         result = await service.invalidate_document(DB_COLLECTION_USERS, "user-13")
@@ -376,7 +378,7 @@ class TestCacheAsideService:
 
         # Seed cache to verify invalidation
         for op in operations:
-            key = service._make_key(op.collection, op.document_id)
+            key = service.make_key(op.collection, op.document_id)
             mock_kv_cache_client.seed_json(key, {"old": "data"})
 
         result = await service.batch_create_documents(operations)
@@ -385,7 +387,7 @@ class TestCacheAsideService:
         assert result.count == 2
 
         for op in operations:
-            key = service._make_key(op.collection, op.document_id)
+            key = service.make_key(op.collection, op.document_id)
             cached = await mock_kv_cache_client.get_json(key)
             assert cached is None
 
@@ -446,7 +448,7 @@ class TestCacheAsideService:
         result = await service.cache_document(DB_COLLECTION_USERS, "user-20", data)
 
         assert result is True
-        key = service._make_key(DB_COLLECTION_USERS, "user-20")
+        key = service.make_key(DB_COLLECTION_USERS, "user-20")
         cached = await mock_kv_cache_client.get_json(key)
         assert cached == data
 
@@ -487,7 +489,7 @@ class TestCacheAsideService:
         assert call_counts["query"] == 1
 
     async def test_get_stats_healthy(self, service, mock_kv_cache_client):
-        doc_key = service._make_key(DB_COLLECTION_USERS, "user-stat")
+        doc_key = service.make_key(DB_COLLECTION_USERS, "user-stat")
         mock_kv_cache_client.seed_json(doc_key, {"id": "user-stat"})
 
         stats = await service.get_stats()
@@ -506,3 +508,49 @@ class TestCacheAsideService:
         assert stats.enabled is True
         assert stats.healthy is False
         assert stats.error is not None
+
+    async def test_get_document_skips_cache_when_read_disabled(self, service, mock_kv_cache_client, mock_db_client):
+        service.read_enabled = False
+        key = service.make_key(DB_COLLECTION_USERS, "user-99")
+        cached_data = {"id": "user-99", "name": "Cached"}
+        mock_kv_cache_client.seed_json(key, cached_data)
+
+        db_data = {"id": "user-99", "name": "From DB"}
+        mock_db_client.get_document.side_effect = None
+        mock_db_client.get_document.return_value = DocumentResult(success=True, data=db_data)
+
+        result = await service.get_document_with_cache(DB_COLLECTION_USERS, "user-99")
+
+        assert result == db_data
+        # DB must be called even though cache has data
+        mock_db_client.get_document.assert_called_once()
+
+    async def test_query_collection_skips_cache_when_read_disabled(self, service, mock_kv_cache_client, mock_db_client):
+        service.read_enabled = False
+        query_params = {"filters": []}
+        filter_hash = hashlib.md5(json.dumps(query_params, sort_keys=True).encode()).hexdigest()
+        query_key = KVKey.query(DB_COLLECTION_USERS, filter_hash)
+        mock_kv_cache_client.seed_json(query_key, [{"id": "cached"}])
+
+        db_results = [{"id": "db-1"}, {"id": "db-2"}]
+        mock_db_client.query_collection.side_effect = None
+        mock_db_client.query_collection.return_value = QueryResult(success=True, data=db_results)
+
+        result = await service.query_collection(
+            collection=DB_COLLECTION_USERS,
+            field_filters=[],
+            order_by={},
+            limit=10,
+        )
+
+        assert result.data == db_results
+        mock_db_client.query_collection.assert_called_once()
+
+    async def test_get_stats_reflects_read_enabled(self, service):
+        service.read_enabled = True
+        stats = await service.get_stats()
+        assert stats.read_enabled is True
+
+        service.read_enabled = False
+        stats = await service.get_stats()
+        assert stats.read_enabled is False

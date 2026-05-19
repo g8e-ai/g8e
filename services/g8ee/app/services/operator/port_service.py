@@ -77,7 +77,6 @@ class OperatorPortService:
         logger.info("[PORT_CHECK] Starting port check operation (execution_id=%s)", exec_id)
 
         case_id = g8e_context.case_id
-        user_id = g8e_context.user_id
         web_session_id = g8e_context.web_session_id
 
         host = args.host.strip()
@@ -108,7 +107,7 @@ class OperatorPortService:
             return PortCheckToolResult(
                 success=False,
                 error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
-                error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
+                error_type=CommandErrorType.G8E_RESOLUTION_ERROR,
             )
 
         operator_id = resolved_operator.id
@@ -166,7 +165,7 @@ class OperatorPortService:
                 task_id=AITaskId.PORT_CHECK,
             )
 
-            internal_result, envelope = await self.execution_service.execute(
+            _, envelope = await self.execution_service.execute(
                 g8e_message=command_data,
                 g8e_context=g8e_context,
                 timeout_seconds=OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS,

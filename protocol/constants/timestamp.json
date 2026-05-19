@@ -9,7 +9,7 @@
   "pattern": "YYYY-MM-DDTHH:MM:SS[.nnnnnnnnn]Z",
 
   "_notes": [
-    "Always UTC — no offset notation (+00:00 or -07:00), always the literal Z suffix.",
+    "Always UTC - no offset notation (+00:00 or -07:00), always the literal Z suffix.",
     "Fractional seconds are always included when non-zero; the sub-second part is omitted only when the value is exactly on a whole second.",
     "Consumers MUST accept any valid RFC3339Nano string regardless of sub-second precision (nanoseconds, microseconds, milliseconds, or none).",
     "Producers MUST emit the highest precision available natively (nanoseconds in Go, microseconds in Python, milliseconds in JavaScript).",
@@ -17,8 +17,8 @@
   ],
 
   "consumers": {
-    "g8ee": "app/utils/timestamp.py — now_iso() emits RFC3339Nano (microsecond precision, always present when non-zero)",
-    "g8eo": "services/sqliteutil/timestamp.go — TimestampFormat = time.RFC3339Nano, NowTimestamp() / FormatTimestamp()",
-    "": "utils/timestamp.js — nowISOString() emits RFC3339Nano (millisecond precision via Date)"
+    "g8ee": "app/utils/timestamp.py - now_iso() emits RFC3339Nano (microsecond precision, always present when non-zero)",
+    "g8eo": "services/sqliteutil/timestamp.go - TimestampFormat = time.RFC3339Nano, NowTimestamp() / FormatTimestamp()",
+    "": "utils/timestamp.js - nowISOString() emits RFC3339Nano (millisecond precision via Date)"
   }
 }

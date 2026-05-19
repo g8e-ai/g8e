@@ -22,12 +22,12 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	execution "github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
 	vault "github.com/g8e-ai/g8e/services/g8eo/internal/services/vault"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -115,7 +115,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 	}
 	var protoCmd operatorv1.CommandRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
-		cs.logger.Error("Failed to decode command payload as protobuf CommandRequested", "error", err)
+		cs.logger.Error("Failed to decode command payload as protobuf CommandRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 	if protoCmd.Command == "" {
@@ -131,38 +131,38 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		justification = "No justification provided"
 	}
 
-	vaultMode := protoCmd.SentinelMode
+	vaultMode := constants.VaultMode(protoCmd.SentinelMode)
 	if vaultMode == "" {
 		vaultMode = constants.Status.VaultMode.Raw
 	}
 
 	cs.logger.Info("Command execution requested",
-		"command", command,
+		string(constants.ApprovalTypeCommand), command,
 		"justification", justification,
 		"sentinel_mode", vaultMode)
 
 	execReq, err := payloadToExecutionRequest(msg)
 	if err != nil {
-		cs.logger.Error("Failed to create execution request", "error", err)
+		cs.logger.Error("Failed to create execution request", string(constants.ConnectionStateError), err)
 		return
 	}
 
 	if verdict := cs.runSentinelGuard(execReq); verdict.blocked {
 		if verdict.blockedEvent != nil && cs.auditVault != nil && cs.auditVault.IsEnabled() {
 			if _, err := cs.auditVault.RecordEvent(verdict.blockedEvent); err != nil {
-				cs.logger.Warn("Failed to record sentinel blocked event in audit vault", "error", err)
+				cs.logger.Warn("Failed to record sentinel blocked event in audit vault", string(constants.ConnectionStateError), err)
 			}
 		}
 		if cs.results != nil {
 			protoResult := &operatorv1.CommandResult{
 				ExecutionId: verdict.blockedResult.ExecutionID,
-				Status:      protoExecutionStatus(verdict.blockedResult.Status),
+				Status:      verdict.blockedResult.Status,
 				Error:       *verdict.blockedResult.ErrorMessage,
 				Stderr:      verdict.blockedResult.Stderr,
 				ReturnCode:  int32(*verdict.blockedResult.ReturnCode),
 			}
 			if err := cs.results.PublishExecutionResult(ctx, protoResult, msg); err != nil {
-				cs.logger.Error("Failed to publish blocked result", "error", err)
+				cs.logger.Error("Failed to publish blocked result", string(constants.ConnectionStateError), err)
 			}
 		}
 		return
@@ -192,7 +192,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 			InvestigationID: execReq.InvestigationID,
 			Command:         execReq.Command,
 			Args:            execReq.Args,
-			Status:          constants.ExecutionStatusFailed,
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			ErrorMessage:    system.StringPtr(execErr.Error()),
 			ErrorType:       system.StringPtr("execution_error"),
 		}
@@ -201,13 +201,13 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 			ExecutionID:  execReq.ExecutionID,
 			CaseID:       execReq.CaseID,
 			TaskID:       execReq.TaskID,
-			Status:       constants.ExecutionStatusFailed,
+			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			ErrorMessage: system.StringPtr("execution returned no result"),
 			ErrorType:    system.StringPtr("execution_error"),
 		}
 	} else {
 		cs.logger.Info("Command execution completed",
-			"command", command,
+			string(constants.ApprovalTypeCommand), command,
 			"status", result.Status,
 			"status_updates", statusUpdateCount,
 			"total_elapsed", fmt.Sprintf("%.1fs", time.Since(startTime).Seconds()))
@@ -254,7 +254,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		event := &storage.Event{
 			OperatorSessionID:   cs.config.OperatorSessionId,
 			Timestamp:           time.Now().UTC(),
-			Type:                storage.EventTypeCmdExec,
+			Type:                constants.Event.Operator.Audit.Command,
 			ContentText:         justification,
 			CommandRaw:          command,
 			CommandExitCode:     result.ReturnCode,
@@ -264,7 +264,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		}
 
 		if _, err := cs.auditVault.RecordEvent(event); err != nil {
-			cs.logger.Warn("Failed to record command event in audit vault", "error", err)
+			cs.logger.Warn("Failed to record command event in audit vault", string(constants.ConnectionStateError), err)
 		} else {
 			cs.logger.Info("Scrubbed command event recorded in audit vault (LFAA)",
 				"execution_id", result.ExecutionID,
@@ -275,7 +275,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 	if cs.results != nil {
 		protoResult := &operatorv1.CommandResult{
 			ExecutionId:          result.ExecutionID,
-			Status:               protoExecutionStatus(result.Status),
+			Status:               result.Status,
 			Stdout:               result.Stdout,
 			Stderr:               result.Stderr,
 			ExecutionTimeSeconds: float32(result.DurationSeconds),
@@ -294,13 +294,13 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		}
 
 		if err := cs.results.PublishExecutionResult(ctx, protoResult, msg); err != nil {
-			cs.logger.Error("Failed to publish execution result", "error", err)
+			cs.logger.Error("Failed to publish execution result", string(constants.ConnectionStateError), err)
 		}
 	}
 }
 
 // runSentinelGuard performs pre-execution threat analysis on the command.
-// Returns a sentinelVerdict — if blocked is true the caller must publish the blocked result
+// Returns a sentinelVerdict - if blocked is true the caller must publish the blocked result
 // and audit event, then return without executing the command.
 func (cs *CommandService) runSentinelGuard(execReq *models.ExecutionRequestPayload) sentinelVerdict {
 	if cs.sentinel == nil {
@@ -309,6 +309,41 @@ func (cs *CommandService) runSentinelGuard(execReq *models.ExecutionRequestPaylo
 
 	fullCommand := cs.execution.BuildCommandString(execReq.Command, execReq.Args)
 	analysis := cs.sentinel.AnalyzeCommand(fullCommand)
+
+	if execReq.Intent != "" {
+		if !cs.sentinel.ValidateIntent(constants.CloudIntent(execReq.Intent)) {
+			cs.logger.Error("SENTINEL BLOCKED: Unauthorized intent requested",
+				string(constants.ApprovalTypeIntent), execReq.Intent,
+				"execution_id", execReq.ExecutionID)
+
+			exitCode := 126
+			return sentinelVerdict{
+				blocked: true,
+				blockedResult: &models.ExecutionResultsPayload{
+					ExecutionID:     execReq.ExecutionID,
+					CaseID:          execReq.CaseID,
+					TaskID:          execReq.TaskID,
+					InvestigationID: execReq.InvestigationID,
+					Command:         execReq.Command,
+					Args:            execReq.Args,
+					Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
+					ReturnCode:      system.IntPtr(126),
+					Stderr:          fmt.Sprintf("SENTINEL BLOCKED: Unauthorized intent requested: %s", execReq.Intent),
+					ErrorMessage:    system.StringPtr(fmt.Sprintf("Command blocked by sentinel.Sentinel: Unauthorized intent: %s", execReq.Intent)),
+					ErrorType:       system.StringPtr("sentinel_blocked"),
+				},
+				blockedEvent: &storage.Event{
+					OperatorSessionID: cs.config.OperatorSessionId,
+					Timestamp:         time.Now().UTC(),
+					Type:              constants.Event.Operator.Audit.Command,
+					ContentText:       fmt.Sprintf("SENTINEL BLOCKED: Unauthorized intent requested: %s", execReq.Intent),
+					CommandRaw:        fullCommand,
+					CommandExitCode:   &exitCode,
+					CommandStderr:     fmt.Sprintf("Blocked by sentinel.Sentinel: Unauthorized intent requested: %s", execReq.Intent),
+				},
+			}
+		}
+	}
 
 	if !analysis.Safe {
 		cs.logger.Error("SENTINEL BLOCKED: Command failed pre-execution threat analysis",
@@ -328,7 +363,7 @@ func (cs *CommandService) runSentinelGuard(execReq *models.ExecutionRequestPaylo
 				InvestigationID: execReq.InvestigationID,
 				Command:         execReq.Command,
 				Args:            execReq.Args,
-				Status:          constants.ExecutionStatusFailed,
+				Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 				ReturnCode:      system.IntPtr(126),
 				Stderr:          fmt.Sprintf("SENTINEL BLOCKED: %s", analysis.BlockReason),
 				ErrorMessage:    system.StringPtr(fmt.Sprintf("Command blocked by sentinel.Sentinel: %s", analysis.BlockReason)),
@@ -337,7 +372,7 @@ func (cs *CommandService) runSentinelGuard(execReq *models.ExecutionRequestPaylo
 			blockedEvent: &storage.Event{
 				OperatorSessionID: cs.config.OperatorSessionId,
 				Timestamp:         time.Now().UTC(),
-				Type:              storage.EventTypeCmdExec,
+				Type:              constants.Event.Operator.Audit.Command,
 				ContentText:       fmt.Sprintf("SENTINEL BLOCKED: %s (threat_level=%s, risk_score=%d)", analysis.BlockReason, analysis.ThreatLevel, analysis.RiskScore),
 				CommandRaw:        analysis.Command,
 				CommandExitCode:   &exitCode,
@@ -385,13 +420,13 @@ func (cs *CommandService) runStatusTicker(
 				statusUpdate := &operatorv1.ExecutionStatusUpdate{
 					ExecutionId:    execReq.ExecutionID,
 					Command:        command,
-					Status:         protoExecutionStatus(constants.ExecutionStatusExecuting),
+					Status:         operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 					ProcessAlive:   true,
 					ElapsedSeconds: float32(elapsed),
 					Message:        fmt.Sprintf("Command still executing (%.0fs elapsed)", elapsed),
 				}
 				if err := cs.results.PublishExecutionStatus(ctx, statusUpdate, msg); err != nil {
-					cs.logger.Warn("Failed to publish status update", "error", err)
+					cs.logger.Warn("Failed to publish status update", string(constants.ConnectionStateError), err)
 				} else {
 					cs.logger.Info("Execution status update sent",
 						"execution_id", execReq.ExecutionID,
@@ -415,7 +450,7 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 	}
 	var protoCancel operatorv1.CommandCancelRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCancel); err != nil {
-		cs.logger.Error("Failed to decode cancel payload as protobuf CommandCancelRequested", "error", err)
+		cs.logger.Error("Failed to decode cancel payload as protobuf CommandCancelRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 	if protoCancel.ExecutionId == "" {
@@ -434,11 +469,11 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 	var result *models.ExecutionResultsPayload
 
 	if err != nil {
-		cs.logger.Warn("Failed to cancel execution (may have already completed)", "error", err)
+		cs.logger.Warn("Failed to cancel execution (may have already completed)", string(constants.ConnectionStateError), err)
 		result = &models.ExecutionResultsPayload{
 			ExecutionID:  executionID,
 			CaseID:       msg.CaseID,
-			Status:       constants.ExecutionStatusFailed,
+			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			StartTime:    &now,
 			ErrorMessage: system.StringPtr(fmt.Sprintf("Cancel failed: %v", err)),
 			ErrorType:    system.StringPtr("cancel_failed"),
@@ -448,7 +483,7 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 		result = &models.ExecutionResultsPayload{
 			ExecutionID:  executionID,
 			CaseID:       msg.CaseID,
-			Status:       constants.ExecutionStatusCancelled,
+			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED,
 			StartTime:    &now,
 			ErrorMessage: system.StringPtr("Command cancelled by user"),
 			ErrorType:    system.StringPtr("user_cancelled"),
@@ -458,7 +493,7 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 	if cs.results != nil {
 		protoResult := &operatorv1.CommandResult{
 			ExecutionId: executionID,
-			Status:      protoExecutionStatus(result.Status),
+			Status:      result.Status,
 		}
 		if result.ErrorMessage != nil {
 			protoResult.Error = *result.ErrorMessage
@@ -468,7 +503,7 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 		}
 
 		if err := cs.results.PublishCancellationResult(ctx, protoResult, msg); err != nil {
-			cs.logger.Error("Failed to publish cancellation result", "error", err)
+			cs.logger.Error("Failed to publish cancellation result", string(constants.ConnectionStateError), err)
 		}
 	}
 }
@@ -502,6 +537,7 @@ func payloadToExecutionRequest(msg PubSubCommandMessage) (*models.ExecutionReque
 		TimeoutSeconds:  timeoutSeconds,
 		RequestedBy:     "g8e-system",
 		Justification:   protoCmd.Justification,
+		Intent:          protoCmd.Intent,
 		SentinelMode:    protoCmd.SentinelMode,
 	}, nil
 }

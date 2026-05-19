@@ -31,6 +31,11 @@ class ResourceCreationRequest(G8eBaseModel):
     case_title: str | None = Field(default=None, description="Optional case title override")
 
 
+class SettingsGetRequest(G8eBaseModel):
+    """Request model for GET /settings/user."""
+    context: RequestContext = Field(..., description="Request context with session/user/organization identity")
+
+
 class ChatMessageRequest(G8eBaseModel):
     """Request model for chat messages.
 
@@ -39,7 +44,6 @@ class ChatMessageRequest(G8eBaseModel):
     The request body carries user-controlled content plus context.
 
     To create a new case+investigation, set resource_creation.create_case to True.
-    This replaces the legacy X-G8E-New-Case header and NEW_CASE_ID sentinel.
     """
     context: RequestContext = Field(..., description="Request context with session/case/investigation identity")
     message: str = Field(..., description="Chat message content")
@@ -52,10 +56,16 @@ class ChatMessageRequest(G8eBaseModel):
     llm_primary_model: str | None = Field(default=None, description="Primary LLM model override for complex tasks - null uses server default")
     llm_assistant_model: str | None = Field(default=None, description="Assistant LLM model override for simple tasks - null uses server default")
     llm_lite_model: str | None = Field(default=None, description="Lite LLM model override for quick tasks - null uses server default")
+    llm_primary_api_key: str | None = Field(default=None, description="Primary LLM API key override")
+    llm_primary_endpoint: str | None = Field(default=None, description="Primary LLM endpoint override")
+    llm_assistant_api_key: str | None = Field(default=None, description="Assistant LLM API key override")
+    llm_assistant_endpoint: str | None = Field(default=None, description="Assistant LLM endpoint override")
+    llm_lite_api_key: str | None = Field(default=None, description="Lite LLM API key override")
+    llm_lite_endpoint: str | None = Field(default=None, description="Lite LLM endpoint override")
 
 
 class ChatStartedResponse(G8eBaseModel):
-    """Response for POST /chat — returns the case and investigation IDs created or resolved."""
+    """Response for POST /chat - returns the case and investigation IDs created or resolved."""
     success: bool
     case_id: str
     investigation_id: str
@@ -243,6 +253,7 @@ class InternalOperatorAuthCall(G8eBaseModel):
 
     context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     authorization: str = Field(..., description="The Bearer token (API key) for the operator")
+    operator_session_id: str = Field(..., description="g8eo substrate operator session UUID - used as the g8ee session document ID so the CLI Bearer token resolves directly")
     runtime_config: dict | None = Field(default=None)
 
 
@@ -254,7 +265,7 @@ class OperatorAuthenticateResponse(G8eBaseModel):
     user_id: str | None = None
     api_key: str | None = None
     config: dict | None = None
-    session: dict | None = None
+    operator_session: dict | None = None
     operator_cert: str | None = None
     operator_cert_key: str | None = None
     error: str | None = None
@@ -273,6 +284,7 @@ class OperatorDeviceLinkRegisterRequest(G8eBaseModel):
     operator_id: str | None = Field(default=None, description="Operator ID (optional if creating on-demand)")
     operator_type: str = Field(default="SYSTEM", description="Operator type")
     device_link_token: str | None = Field(default=None, description="Device link token for on-demand slot creation")
+    operator_session_id: str | None = Field(default=None, description="g8eo substrate operator session ID - used as the g8ee session document ID so the CLI Bearer token resolves directly")
 
 
 class OperatorDeviceLinkRegisterResponse(G8eBaseModel):
@@ -284,7 +296,7 @@ class OperatorDeviceLinkRegisterResponse(G8eBaseModel):
     api_key: str | None = None
     operator_cert: str | None = None
     operator_cert_key: str | None = None
-    session: dict | None = None
+    operator_session: dict | None = None
     error: str | None = None
 
 
@@ -312,7 +324,7 @@ class OperatorSessionRefreshResponse(G8eBaseModel):
     """Response model for operator session refresh."""
     success: bool
     operator_id: str | None = None
-    session: dict | None = None
+    operator_session: dict | None = None
     error: str | None = None
 
 
@@ -377,7 +389,7 @@ class OperatorTerminateResponse(G8eBaseModel):
 
 class ApiKeyGenerationRequest(G8eBaseModel):
     """Request model for API key generation.
-    
+
     Authority: g8ee.
     """
     prefix: str = Field(default="g8e_", description="API key prefix")

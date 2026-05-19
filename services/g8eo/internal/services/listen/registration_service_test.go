@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
@@ -65,7 +66,8 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	err = pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	token := "dlk_test_token_12345678901234567890"
 	userID := "user-1"
@@ -106,7 +108,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 		assert.Equal(t, userID, docFieldString(t, doc, "user_id"))
-		assert.Equal(t, constants.Status.OperatorStatus.Active, docFieldString(t, doc, "status"))
+		assert.Equal(t, string(constants.Status.OperatorStatus.Active), docFieldString(t, doc, "status"))
 	})
 
 	t.Run("Success - Single-operator link", func(t *testing.T) {
@@ -118,6 +120,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 			OrganizationID: orgID,
 			Component:      "g8eo",
 			Status:         constants.Status.OperatorStatus.Offline,
+			OperatorType:   constants.Status.OperatorType.System,
 			CreatedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
 		}
@@ -153,7 +156,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 
 		// Verify status update
 		doc, _ := db.DocGet("operators", opID)
-		assert.Equal(t, constants.Status.OperatorStatus.Active, docFieldString(t, doc, "status"))
+		assert.Equal(t, string(constants.Status.OperatorStatus.Active), docFieldString(t, doc, "status"))
 	})
 
 	t.Run("Failure - Link not found", func(t *testing.T) {
@@ -467,7 +470,8 @@ func TestRegistrationService_DeviceLinks(t *testing.T) {
 	defer db.Close()
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	resp, err := reg.CreateDeviceLink(models.CreateDeviceLinkRequest{
 		UserID:         "user-1",
@@ -506,7 +510,8 @@ func TestRegistrationService_CreateDeviceLinkRejectsWrongOperatorOwner(t *testin
 	defer db.Close()
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 	op := &models.OperatorDocumentGo{
 		ID:        "op-1",
 		UserID:    "other-user",
@@ -551,7 +556,8 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 	defer db.Close()
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	userID := "user-1"
 	opID := "op-1"
@@ -602,7 +608,8 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	defer db.Close()
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	userID := "user-1"
 
@@ -647,7 +654,8 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	defer db.Close()
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	userID := "user-1"
 	opID := "op-terminate-1"
@@ -671,7 +679,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		// Verify status updated
 		doc, err := db.DocGet("operators", opID)
 		require.NoError(t, err)
-		assert.Equal(t, constants.Status.OperatorStatus.Terminated, docFieldString(t, doc, "status"))
+		assert.Equal(t, string(constants.Status.OperatorStatus.Terminated), docFieldString(t, doc, "status"))
 		assert.Equal(t, "test termination", docFieldString(t, doc, "termination_reason"))
 	})
 
@@ -685,7 +693,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		require.NoError(t, err)
 
 		doc, _ := db.DocGet("operators", opID)
-		assert.Equal(t, constants.Status.OperatorStatus.Terminated, docFieldString(t, doc, "status"))
+		assert.Equal(t, string(constants.Status.OperatorStatus.Terminated), docFieldString(t, doc, "status"))
 	})
 
 	t.Run("Failure - Wrong user", func(t *testing.T) {
@@ -727,7 +735,8 @@ func TestRegistrationService_Binding(t *testing.T) {
 	defer db.Close()
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	userID := "user-1"
 	sessionID := "sess-1"
@@ -746,9 +755,9 @@ func TestRegistrationService_Binding(t *testing.T) {
 
 	t.Run("BindOperators", func(t *testing.T) {
 		req := models.BindOperatorsRequest{
-			OperatorIDs: []string{opID},
-			UserID:      userID,
-			SessionID:   sessionID,
+			OperatorIDs:  []string{opID},
+			UserID:       userID,
+			WebSessionID: sessionID,
 		}
 		resp, err := reg.BindOperators(req)
 		require.NoError(t, err)
@@ -769,7 +778,7 @@ func TestRegistrationService_Binding(t *testing.T) {
 		assert.Contains(t, sids, opSessID)
 
 		// Verify durability document
-		doc, err := db.DocGet(string(constants.CollectionBoundSessions), sessionID)
+		doc, err := db.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), sessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 		assert.Equal(t, sessionID, docFieldString(t, doc, "web_session_id"))
@@ -781,9 +790,9 @@ func TestRegistrationService_Binding(t *testing.T) {
 
 	t.Run("SetTargetContext", func(t *testing.T) {
 		req := models.SetTargetContextRequest{
-			OperatorID: opID,
-			UserID:     userID,
-			SessionID:  sessionID,
+			OperatorID:   opID,
+			UserID:       userID,
+			WebSessionID: sessionID,
 		}
 		resp, err := reg.SetTargetContext(req)
 		require.NoError(t, err)
@@ -793,9 +802,9 @@ func TestRegistrationService_Binding(t *testing.T) {
 
 	t.Run("UnbindOperators", func(t *testing.T) {
 		req := models.UnbindOperatorsRequest{
-			OperatorIDs: []string{opID},
-			UserID:      userID,
-			SessionID:   sessionID,
+			OperatorIDs:  []string{opID},
+			UserID:       userID,
+			WebSessionID: sessionID,
 		}
 		resp, err := reg.UnbindOperators(req)
 		require.NoError(t, err)

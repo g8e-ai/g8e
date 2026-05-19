@@ -14,14 +14,14 @@
 """
 aiohttp.ClientSession constructors.
 
-Three transport roles exist in g8ee — each has exactly one constructor here.
+Three transport roles exist in g8ee - each has exactly one constructor here.
 No aiohttp.ClientSession(...) calls anywhere else in the codebase.
 
 Roles
 -----
-new_kv_http_session        — KV/REST HTTP to the Operator listen port (kv_cache_client)
-new_pubsub_ws_session      — WebSocket carrier session for pub/sub (pubsub_client)
-new_component_http_session — inter-service HTTP with retry/circuit-breaker (HTTPClient , CacheAsideService)
+new_kv_http_session        - KV/REST HTTP to the Operator listen port (kv_cache_client)
+new_pubsub_ws_session      - WebSocket carrier session for pub/sub (pubsub_client)
+new_component_http_session - inter-service HTTP with retry/circuit-breaker (HTTPClient , CacheAsideService)
 
 SSL
 ---
@@ -30,10 +30,11 @@ resolved from SSLSettings) and returns a loaded SSLContext for the first path
 that exists on disk, or None if no cert is present.
 
 WebSocket SSL is passed directly to ws_connect(), not to the session connector,
-so new_pubsub_ws_session does not wire SSL — the caller resolves it via
+so new_pubsub_ws_session does not wire SSL - the caller resolves it via
 resolve_pubsub_ssl_context(ssl_settings) and passes it to ws_connect().
 """
 
+import os
 import ssl
 import aiohttp
 
@@ -50,25 +51,32 @@ def _resolve_ssl_context(
     for path in ca_cert_paths:
         if path:
             try:
+                import logging
+                logger = logging.getLogger(__name__)
+                if not os.path.exists(path):
+                    logger.warning("[SSL] CA cert path does not exist: %s", path)
+                    continue
+                logger.info("[SSL] Probing CA cert path: %s", path)
                 with open(path):
                     pass
                 ctx = ssl.create_default_context(cafile=path)
                 if certfile and keyfile:
+                    logger.info("[SSL] Loading cert chain: cert=%s, key=%s", certfile, keyfile)
                     try:
                         with open(certfile), open(keyfile):
                             ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
                     except (OSError, ssl.SSLError) as e:
-                        # Log but continue with just CA if client cert loading fails
-                        import logging
-                        logging.getLogger(__name__).warning("Failed to load client cert chain: %s", e)
+                        logger.warning("Failed to load client cert chain: %s", e)
                 return ctx
-            except OSError:
+            except OSError as e:
+                import logging
+                logging.getLogger(__name__).warning("[SSL] Failed to open CA cert path %s: %s", path, e)
                 continue
-    return True if use_tls else False
+    return bool(use_tls)
 
 
 def _url_uses_tls(url: str) -> bool:
-    return url.startswith("https://") or url.startswith("wss://")
+    return url.startswith(("https://", "wss://"))
 
 
 def new_kv_http_session(
@@ -76,7 +84,7 @@ def new_kv_http_session(
     *,
     base_url: str,
     timeout: aiohttp.ClientTimeout,
-    ca_cert_path: str,
+    ca_cert_path: str | None = None,
     headers: dict[str, str],
     client_cert_path: str | None = None,
     client_key_path: str | None = None,
@@ -118,7 +126,7 @@ def new_pubsub_ws_session(
     """Carrier session for the WebSocket pub/sub connection.
 
     Used by PubSubClient.
-    No default headers — WebSocket frames are not HTTP requests.
+    No default headers - WebSocket frames are not HTTP requests.
     SSL is NOT wired into the connector here; pass resolve_pubsub_ssl_context()
     to ws_connect() directly so the scheme check happens at connect time.
     """
@@ -130,26 +138,20 @@ def new_pubsub_ws_session(
 
 def resolve_pubsub_ssl_context(
     ca_cert_path: str | None = None,
+    *,
     use_tls: bool = False,
     certfile: str | None = None,
     keyfile: str | None = None,
-    **kwargs,
 ) -> ssl.SSLContext | bool:
     """Resolve the SSL context for WebSocket pub/sub connections.
 
     Returns True when TLS is requested but no cert is configured.
     """
-    # Prefer explicit ca_cert_path, but handle legacy kwargs from older test suites
-    actual_path = (
-        ca_cert_path
-        or kwargs.get("pubsub_ca_cert")
-        or kwargs.get("ssl_cert_file")
-    )
     return _resolve_ssl_context(
-        (actual_path,),
+        (ca_cert_path,),
         use_tls=use_tls,
         certfile=certfile,
-        keyfile=keyfile
+        keyfile=keyfile,
     )
 
 
@@ -157,14 +159,14 @@ def new_component_http_session(
     existing: aiohttp.ClientSession | None,
     *,
     timeout: aiohttp.ClientTimeout,
-    ca_cert_path: str,
+    ca_cert_path: str | None = None,
     headers: dict[str, str],
     client_cert_path: str | None = None,
     client_key_path: str | None = None,
 ) -> aiohttp.ClientSession:
     """Session for inter-component HTTP (HTTPClient , CacheAsideService).
 
-    Always probes for a CA cert regardless of scheme — internal services
+    Always probes for a CA cert regardless of scheme - internal services
     may sit behind TLS even in dev.  Uses _json_dumps for datetime-aware
     JSON serialization.
     """

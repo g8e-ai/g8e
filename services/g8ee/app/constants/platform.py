@@ -27,5 +27,6 @@ class LogLevel(StrEnum):
 class AuthMethod(StrEnum):
     def __str__(self) -> str:
         return self.value
-    PROXY    = "proxy"
-    TEST     = "test"
+    PROXY            = "proxy"
+    OPERATOR_SESSION = "operator_session"
+    TEST             = "test"

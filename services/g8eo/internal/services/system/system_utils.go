@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 )
 
@@ -62,17 +63,17 @@ func GetConnectivityStatus() []models.HeartbeatNetworkInterface {
 func GetUptime() string {
 	data, err := os.ReadFile("/proc/uptime")
 	if err != nil {
-		return "unknown"
+		return string(constants.SystemHealthUnknown)
 	}
 
 	fields := strings.Fields(string(data))
 	if len(fields) < 1 {
-		return "unknown"
+		return string(constants.SystemHealthUnknown)
 	}
 
 	uptime, err := strconv.ParseFloat(fields[0], 64)
 	if err != nil {
-		return "unknown"
+		return string(constants.SystemHealthUnknown)
 	}
 
 	duration := time.Duration(uptime) * time.Second
@@ -197,10 +198,10 @@ func GetMemoryPercent() float64 {
 
 func GetNetworkLatency() float64 {
 	start := time.Now().UTC()
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:22", 1*time.Second)
+	conn, err := net.DialTimeout(string(constants.NetworkProtocolTCP), "127.0.0.1:22", 1*time.Second)
 	if err != nil {
 		start = time.Now().UTC()
-		conn, err = net.DialTimeout("tcp", "127.0.0.1:80", 1*time.Second)
+		conn, err = net.DialTimeout(string(constants.NetworkProtocolTCP), "127.0.0.1:80", 1*time.Second)
 		if err != nil {
 			return 1.0
 		}
@@ -258,7 +259,7 @@ func GetOSDetails() models.HeartbeatOSDetails {
 func getKernelVersion() string {
 	data, err := os.ReadFile("/proc/version")
 	if err != nil {
-		return "unknown"
+		return string(constants.SystemHealthUnknown)
 	}
 	fields := strings.Fields(string(data))
 	if len(fields) >= 3 {
@@ -278,7 +279,7 @@ func getDistroVersion() string {
 func readOSReleaseField(field string) string {
 	data, err := os.ReadFile("/etc/os-release")
 	if err != nil {
-		return "unknown"
+		return string(constants.SystemHealthUnknown)
 	}
 	lines := strings.Split(string(data), "\n")
 	for _, line := range lines {
@@ -287,7 +288,7 @@ func readOSReleaseField(field string) string {
 			return strings.Trim(value, "\"")
 		}
 	}
-	return "unknown"
+	return string(constants.SystemHealthUnknown)
 }
 
 func GetUserDetails(shell string) models.HeartbeatUserDetails {
@@ -297,7 +298,7 @@ func GetUserDetails(shell string) models.HeartbeatUserDetails {
 	currentUser, err := user.Current()
 	if err != nil {
 		return models.HeartbeatUserDetails{
-			Username: "unknown",
+			Username: string(constants.SystemHealthUnknown),
 			Shell:    shell,
 		}
 	}
@@ -485,7 +486,7 @@ func detectContainerEnvironment() ContainerInfo {
 			if !info.IsContainer {
 				info.IsContainer = true
 				if info.Runtime == "none" {
-					info.Runtime = "unknown"
+					info.Runtime = string(constants.SystemHealthUnknown)
 				}
 			}
 		}
@@ -500,7 +501,7 @@ func detectContainerEnvironment() ContainerInfo {
 		if !info.IsContainer {
 			info.IsContainer = true
 			if info.Runtime == "none" {
-				info.Runtime = "unknown"
+				info.Runtime = string(constants.SystemHealthUnknown)
 			}
 		}
 	}
@@ -527,7 +528,7 @@ func getInitProcessName() string {
 func detectInitSystem() string {
 	initName := getInitProcessName()
 	if initName == "" {
-		return "unknown"
+		return string(constants.SystemHealthUnknown)
 	}
 	return initName
 }
@@ -535,7 +536,7 @@ func detectInitSystem() string {
 func GetHostname() string {
 	hostname, err := os.Hostname()
 	if err != nil {
-		return "unknown"
+		return string(constants.SystemHealthUnknown)
 	}
 	return hostname
 }
@@ -572,7 +573,7 @@ func GetMemoryMB() int {
 func GetCurrentUser() string {
 	currentUser, err := user.Current()
 	if err != nil {
-		return "unknown"
+		return string(constants.SystemHealthUnknown)
 	}
 	return currentUser.Username
 }
@@ -597,7 +598,7 @@ func GetLocalIP(ipResolver string) string {
 	if ipResolver == "" {
 		ipResolver = "8.8.8.8:80"
 	}
-	conn, err := net.Dial("udp", ipResolver)
+	conn, err := net.Dial(string(constants.NetworkProtocolUDP), ipResolver)
 	if err != nil {
 		return "127.0.0.1"
 	}

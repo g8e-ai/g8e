@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-Provider turn processing — thinking state machine, stream chunk parsing,
+Provider turn processing - thinking state machine, stream chunk parsing,
 model parts accumulation, token counting, parts consolidation, finish reason
 normalization, interrogation gate, and retry error classification.
 

@@ -240,7 +240,7 @@ class AnthropicProvider(LLMProvider):
             # must strictly exceed thinking.budget_tokens so the model has
             # headroom for a visible response. When the caller-provided
             # max_tokens is too small for the requested thinking budget, uplift
-            # it rather than silently truncating the budget — clamping the
+            # it rather than silently truncating the budget - clamping the
             # budget down to a tiny value (as the previous min() guard did)
             # leaves the model with effectively zero tokens for a real reply.
             # An explicit reserve is cheaper than a surprising empty response.

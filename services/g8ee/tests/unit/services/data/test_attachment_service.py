@@ -205,7 +205,7 @@ class TestAttachmentServiceFileTypeDetection:
 
 @pytest.mark.asyncio(loop_scope="session")
 class TestAttachmentServiceProcessing:
-    """process_attachments — classification and content extraction."""
+    """process_attachments - classification and content extraction."""
 
     @pytest.fixture
     def service(self, mock_blob_service, mock_settings):

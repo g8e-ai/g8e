@@ -16,23 +16,28 @@ LFAA (Local-First Audit Architecture) Management Script
 
 Query and manage the operator's local audit vault (SQLite) from the CLI.
 The audit vault stores sessions, events (USER_MSG, AI_MSG, CMD_EXEC, FILE_MUTATION),
-and file mutation logs — all written locally by the operator for data sovereignty.
+and file mutation logs - all written locally by the operator for data sovereignty.
 
-DB location: <operator_cwd>/.g8e/data/g8e.db
+DB location: <project-root>/.g8e/data/g8e.db (default when no --db-path, --container, or --volume is specified)
 
 Usage:
+    # Default (project root .g8e/data/g8e.db)
+    python manage-operator.py audit sessions
+    python manage-operator.py audit events --operator-session-id OPERATOR_SESSION_ID
+    python manage-operator.py audit events --operator-session-id OPERATOR_SESSION_ID --type CMD_EXEC
+    python manage-operator.py audit event --id 42
+    python manage-operator.py audit files --operator-session-id OPERATOR_SESSION_ID
+    python manage-operator.py audit stats
+    python manage-operator.py audit summary
+    python manage-operator.py audit export --operator-session-id OPERATOR_SESSION_ID
+
     # Direct path to the DB file
     python manage-operator.py audit --db-path /path/to/g8e.db sessions
-    python manage-operator.py audit --db-path /path/to/g8e.db events --session SESSION_ID
-    python manage-operator.py audit --db-path /path/to/g8e.db events --session SESSION_ID --type CMD_EXEC
-    python manage-operator.py audit --db-path /path/to/g8e.db event --id 42
-    python manage-operator.py audit --db-path /path/to/g8e.db files --session SESSION_ID
-    python manage-operator.py audit --db-path /path/to/g8e.db stats
-    python manage-operator.py audit --db-path /path/to/g8e.db export --session SESSION_ID
+    python manage-operator.py audit --db-path /path/to/g8e.db events --operator-session-id OPERATOR_SESSION_ID
 
     # Auto-discover from a running Docker container (normal-mode operator)
     python manage-operator.py audit --container operator sessions
-    python manage-operator.py audit --container operator events --session SESSION_ID --limit 20
+    python manage-operator.py audit --container operator events --operator-session-id OPERATOR_SESSION_ID --limit 20
     python manage-operator.py audit --container operator stats
 
     # Docker volume
@@ -52,7 +57,7 @@ import tempfile
 from datetime import datetime
 from typing import Any, Dict, List
 
-from _lib import print_banner
+from _lib import print_banner, PROJECT_ROOT
 
 EVENT_TYPES = ['USER_MSG', 'AI_MSG', 'CMD_EXEC', 'FILE_MUTATION']
 
@@ -90,7 +95,8 @@ class LFAAManager:
         elif self._volume:
             self._resolve_from_volume()
         else:
-            raise RuntimeError('No DB source. Use --db-path, --container, or --volume.')
+            # Default to project root .g8e/data/g8e.db
+            self._local_db_path = str(PROJECT_ROOT / '.g8e' / 'data' / 'g8e.db')
 
         if not self._local_db_path or not os.path.exists(self._local_db_path):
             raise RuntimeError(f'Database file not found: {self._local_db_path}')
@@ -112,7 +118,7 @@ class LFAAManager:
             )
             if listen_probe.returncode == 0:
                 raise RuntimeError(
-                    f'Container {self._container!r} is running in listen mode (operator) — '
+                    f'Container {self._container!r} is running in listen mode (operator) - '
                     f'it has no LFAA audit vault.\n'
                     f'LFAA is written by normal-mode operators. '
                     f'Target an operator-test container instead.'
@@ -255,22 +261,22 @@ class LFAAManager:
         print()
         return [dict(r) for r in rows]
 
-    def get_session(self, web_session_id: str) -> Dict | None:
+    def get_session(self, operator_session_id: str) -> Dict | None:
         row = self.conn.execute(
             'SELECT id, title, created_at, user_identity FROM sessions WHERE id = ?',
-            (web_session_id,)
+            (operator_session_id,)
         ).fetchone()
         if not row:
-            print(f'\nSession not found: {web_session_id}')
+            print(f'\nSession not found: {operator_session_id}')
             return None
 
         counts = self.conn.execute(
             'SELECT type, COUNT(*) as cnt FROM events WHERE operator_session_id = ? GROUP BY type',
-            (web_session_id,)
+            (operator_session_id,)
         ).fetchall()
 
         print(f'\n{"=" * 70}')
-        print(f'SESSION: {row["id"]}')
+        print(f'OPERATOR_SESSION: {row["id"]}')
         print(f'{"=" * 70}')
         print(f'  Title:         {row["title"] or "(no title)"}')
         print(f'  Created:       {row["created_at"]}')
@@ -282,13 +288,13 @@ class LFAAManager:
         print(f'{"=" * 70}\n')
         return dict(row)
 
-    def list_events(self, web_session_id: str, limit: int = 50, offset: int = 0,
+    def list_events(self, operator_session_id: str, limit: int = 50, offset: int = 0,
                     event_type: str | None = None) -> List[Dict]:
         if event_type and event_type not in EVENT_TYPES:
             print(f'Invalid event type: {event_type}. Valid: {EVENT_TYPES}')
             return []
 
-        params_filter = [web_session_id]
+        params_filter = [operator_session_id]
         type_clause = ''
         if event_type:
             type_clause = 'AND type = ?'
@@ -309,7 +315,7 @@ class LFAAManager:
         ).fetchone()[0]
 
         type_label = f' [{event_type}]' if event_type else ''
-        print(f'\nEvents for {web_session_id[:20]}...{type_label} ({len(rows)} of {total})')
+        print(f'\nEvents for {operator_session_id[:20]}...{type_label} ({len(rows)} of {total})')
         print('=' * 120)
         if not rows:
             print('  No events found')
@@ -378,13 +384,13 @@ class LFAAManager:
         print(f'{"=" * 80}\n')
         return dict(row)
 
-    def list_file_mutations(self, web_session_id: str | None,
+    def list_file_mutations(self, operator_session_id: str | None,
                             filepath: str | None, limit: int = 50) -> List[Dict]:
         where_clauses = []
         params: List[Any] = []
-        if web_session_id:
+        if operator_session_id:
             where_clauses.append('e.operator_session_id = ?')
-            params.append(web_session_id)
+            params.append(operator_session_id)
         if filepath:
             where_clauses.append('fml.filepath LIKE ?')
             params.append(f'%{filepath}%')
@@ -401,8 +407,8 @@ class LFAAManager:
         ).fetchall()
 
         label_parts = []
-        if web_session_id:
-            label_parts.append(f'session={web_session_id[:16]}...')
+        if operator_session_id:
+            label_parts.append(f'operator_session={operator_session_id[:16]}...')
         if filepath:
             label_parts.append(f'path~={filepath}')
         label = f' [{", ".join(label_parts)}]' if label_parts else ''
@@ -502,11 +508,11 @@ class LFAAManager:
         # Infer categories from command patterns and outcomes
         total = self.conn.execute('SELECT COUNT(*) FROM events').fetchone()[0]
 
-        # SAFE_EXECUTIONS: FS_LIST or FILE_EDIT that resulted in action_receipt
+        # SAFE_EXECUTIONS: FS_LIST that resulted in action_receipt (excluding FILE_EDIT)
         safe_exec = self.conn.execute("""
             SELECT COUNT(*) FROM events
             WHERE type = 'action_receipt'
-              AND (command_raw LIKE 'FS_LIST /%' OR command_raw LIKE 'FILE_EDIT /%')
+              AND command_raw LIKE 'FS_LIST /%'
         """).fetchone()[0]
 
         # FILE_MUTATIONS: FILE_EDIT specifically
@@ -550,6 +556,10 @@ class LFAAManager:
               AND command_raw NOT LIKE 'FILE_EDIT /%'
         """).fetchone()[0]
 
+        l3_rejected = self.conn.execute("""
+            SELECT COUNT(*) FROM events WHERE type = 'L3_REJECTED'
+        """).fetchone()[0]
+
         # ANSI Colors
         BOLD = '\033[1m'
         GREEN = '\033[32m'
@@ -566,7 +576,7 @@ class LFAAManager:
         print(f'  {BOLD}┃ {CYAN}g8e GOVERNANCE REPORT {RESET}{BOLD}{" " * (IW - 23)}┃{RESET}')
         print(f'  {BOLD}┗{"━" * IW}┛{RESET}')
 
-        accounted = safe_exec + forbidden + hash_fail + l2_rejected + expired + rejected + other_receipts
+        accounted = safe_exec + file_mut + forbidden + hash_fail + l2_rejected + l3_rejected + expired + rejected + other_receipts
         verification_status = f"{GREEN}VERIFIED ✓{RESET}" if accounted == total else f"{RED}MISMATCH ✗{RESET}"
         pct_categorized = (accounted / total * 100) if total > 0 else 0
 
@@ -594,9 +604,11 @@ class LFAAManager:
         print_summary_row('FORBIDDEN_PATTERNS', forbidden, 'L1_BLOCKED')
         print_summary_row('HASH_CORRUPTION', hash_fail, 'HASH_FAIL')
 
+        # Governance funnel (always show to prove L2/L3 existence)
+        print_summary_row('L2_REJECTED', l2_rejected, 'L2_REJECTED')
+        print_summary_row('L3_REJECTED', l3_rejected, 'L3_REJECTED')
+
         # Additional rejection categories if present
-        if l2_rejected > 0:
-            print_summary_row('L2_REJECTED', l2_rejected, 'L2_REJECTED')
         if expired > 0:
             print_summary_row('EXPIRED', expired, 'EXPIRED')
         if rejected > 0:
@@ -612,11 +624,15 @@ class LFAAManager:
         print(f'  {DIM}{"─" * IW}──{RESET}')
         rows = self.conn.execute("""
             SELECT
-              command_raw AS command_pattern,
+              CASE 
+                WHEN instr(CAST(content_text AS TEXT), 'violates pattern ') > 0 THEN 
+                  substr(CAST(content_text AS TEXT), instr(CAST(content_text AS TEXT), 'violates pattern ') + 17)
+                ELSE command_raw
+              END AS command_pattern,
               COUNT(*) AS attempts
             FROM events
             WHERE type = 'L1_BLOCKED'
-            GROUP BY command_raw
+            GROUP BY command_pattern
             ORDER BY attempts DESC
             LIMIT 10
         """).fetchall()
@@ -643,7 +659,10 @@ class LFAAManager:
         else:
             for r in rows:
                 action = r['action_type'] or 'UNKNOWN'
-                outcome_color = GREEN if 'receipt' in r['outcome'] or 'EXECUTED' in r['outcome'] else RED
+                # Outcomes like L1_BLOCKED and HASH_FAIL mean the platform successfully protected itself.
+                # Only use RED for truly unexpected/unhandled errors.
+                known_expected = ('action_receipt', 'EXECUTED', 'L1_BLOCKED', 'HASH_FAIL', 'L2_REJECTED', 'EXPIRED', 'REJECTED')
+                outcome_color = GREEN if any(k in r['outcome'] for k in known_expected) else RED
                 print(f"  {action:<20} {outcome_color}{r['outcome']:<15}{RESET} {r['count']:>9,}")
 
         print(f'\n  {BOLD}INTEGRITY VERIFICATION{RESET}')
@@ -655,10 +674,11 @@ class LFAAManager:
             FROM events
             WHERE type = 'HASH_FAIL'
         """).fetchone()
-        tampered_color = RED if row['tampered_attempts'] > 0 else GREEN
+        # Finding tampered envelopes and blocking them is a successful security event (GREEN)
+        tampered_color = GREEN
         print(f"  Tampered Envelopes: {tampered_color}{row['tampered_attempts']:,} ({row['percent']}%){RESET}")
 
-        print(f'\n  {BOLD}SESSION THROUGHPUT{RESET}')
+        print(f'\n  {BOLD}OPERATOR SESSION THROUGHPUT{RESET}')
         print(f'  {DIM}{"─" * IW}──{RESET}')
         rows = self.conn.execute("""
             SELECT operator_session_id, type, COUNT(*) AS count
@@ -716,14 +736,14 @@ class LFAAManager:
             cmd = ['git', '-C', ledger_dir, 'fsck']
             subprocess.run(cmd)
 
-    def export_session(self, web_session_id: str, output_path: str | None,
+    def export_session(self, operator_session_id: str, output_path: str | None,
                        fmt: str = 'json') -> None:
-        session = self.conn.execute(
+        operatorSession = self.conn.execute(
             'SELECT id, title, created_at, user_identity FROM sessions WHERE id = ?',
-            (web_session_id,)
+            (operator_session_id,)
         ).fetchone()
-        if not session:
-            print(f'\nSession not found: {web_session_id}')
+        if not operatorSession:
+            print(f'\nOperator session not found: {operator_session_id}')
             return
 
         rows = self.conn.execute(
@@ -731,7 +751,7 @@ class LFAAManager:
             'command_exit_code, command_stdout, command_stderr, execution_duration_ms, '
             'stored_locally, stdout_truncated, stderr_truncated, encrypted '
             'FROM events WHERE operator_session_id = ? ORDER BY timestamp ASC',
-            (web_session_id,)
+            (operator_session_id,)
         ).fetchall()
 
         events = []
@@ -763,7 +783,7 @@ class LFAAManager:
 
         payload = {
             'exported_at': datetime.utcnow().isoformat() + 'Z',
-            'session': dict(session),
+            'operator_session': dict(operatorSession),
             'total_events': len(events),
             'events': events,
         }
@@ -792,16 +812,16 @@ def build_parser() -> argparse.ArgumentParser:
 Examples:
   # Direct path
   python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db sessions
-  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db events --session SESSION_ID
-  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db events --session SESSION_ID --type CMD_EXEC
+  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db events --operator-session-id OPERATOR_SESSION_ID
+  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db events --operator-session-id OPERATOR_SESSION_ID --type CMD_EXEC
   python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db event --id 42
-  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db files --session SESSION_ID
+  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db files --operator-session-id OPERATOR_SESSION_ID
   python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db stats
-  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db export --session SESSION_ID --out audit.json
+  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db export --operator-session-id OPERATOR_SESSION_ID --out audit.json
 
   # Docker container (normal-mode operator)
   python manage-operator.py audit --container operator sessions
-  python manage-operator.py audit --container operator events --session SESSION_ID --limit 20
+  python manage-operator.py audit --container operator events --operator-session-id OPERATOR_SESSION_ID --limit 20
   python manage-operator.py audit --container operator stats
 
   # Docker volume
@@ -809,9 +829,9 @@ Examples:
         """
     )
 
-    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group = parser.add_mutually_exclusive_group(required=False)
     source_group.add_argument('--db-path', metavar='PATH',
-                              help='Direct path to the g8e.db SQLite file')
+                              help='Direct path to the g8e.db SQLite file (default: <project-root>/.g8e/data/g8e.db)')
     source_group.add_argument('--container', metavar='NAME',
                               help='Docker container name to copy the DB from')
     source_group.add_argument('--volume', metavar='NAME',
@@ -823,26 +843,26 @@ Examples:
     sp = subparsers.add_parser('sessions', help='List all sessions')
     sp.add_argument('--limit', type=int, default=50, help='Max sessions to show (default: 50)')
 
-    # session
-    sp = subparsers.add_parser('session', help='Get details for a single session')
-    sp.add_argument('--id', dest='web_session_id', required=True, help='WebSession ID')
+    # operator-session
+    sp = subparsers.add_parser('operator-session', help='Get details for a single operator session')
+    sp.add_argument('--operator-session-id', type=str, required=True, help='OperatorSession ID')
 
     # events
     sp = subparsers.add_parser('events', help='List events for a session')
-    sp.add_argument('--session', dest='web_session_id', required=True, help='WebSession ID')
-    sp.add_argument('--type', dest='event_type', choices=EVENT_TYPES,
+    sp.add_argument('--operator-session-id', type=str, required=True, help='OperatorSession ID')
+    sp.add_argument('--event-type', type=str, dest='event_type', choices=EVENT_TYPES,
                     help='Filter by event type')
     sp.add_argument('--limit', type=int, default=50, help='Max events to show (default: 50)')
     sp.add_argument('--offset', type=int, default=0, help='Pagination offset (default: 0)')
 
     # event
     sp = subparsers.add_parser('event', help='Get full detail for a single event')
-    sp.add_argument('--id', dest='event_id', type=int, required=True, help='Event ID')
+    sp.add_argument('--event-id', type=int, required=True, help='Event ID')
 
     # files
     sp = subparsers.add_parser('files', help='List file mutations')
-    sp.add_argument('--session', dest='web_session_id', help='Filter by session ID')
-    sp.add_argument('--path', dest='filepath', help='Filter by filepath (substring match)')
+    sp.add_argument('--operator-session-id', type=str, help='Filter by session ID')
+    sp.add_argument('--filepath', type=str, dest='filepath', help='Filter by filepath (substring match)')
     sp.add_argument('--limit', type=int, default=50, help='Max results (default: 50)')
 
     # stats
@@ -860,9 +880,9 @@ Examples:
 
     # export
     sp = subparsers.add_parser('export', help='Export all events for a session to JSON/JSONL')
-    sp.add_argument('--session', dest='web_session_id', required=True, help='WebSession ID')
-    sp.add_argument('--out', dest='output_path', help='Output file path (default: stdout)')
-    sp.add_argument('--format', dest='fmt', choices=['json', 'jsonl'], default='json',
+    sp.add_argument('--operator-session-id', type=str, required=True, help='OperatorSession ID')
+    sp.add_argument('--out', type=str, dest='output_path', help='Output file path (default: stdout)')
+    sp.add_argument('--format', type=str, dest='fmt', choices=['json', 'jsonl'], default='json',
                     help='Output format (default: json)')
 
     return parser
@@ -890,10 +910,10 @@ def run(argv: List[str]) -> int:
         if args.command == 'sessions':
             manager.list_sessions(limit=args.limit)
         elif args.command == 'session':
-            manager.get_session(args.web_session_id)
+            manager.get_session(args.operator_session_id)
         elif args.command == 'events':
             manager.list_events(
-                web_session_id=args.web_session_id,
+                operator_session_id=args.operator_session_id,
                 limit=args.limit,
                 offset=args.offset,
                 event_type=args.event_type,
@@ -902,7 +922,7 @@ def run(argv: List[str]) -> int:
             manager.get_event(args.event_id)
         elif args.command == 'files':
             manager.list_file_mutations(
-                web_session_id=args.web_session_id,
+                operator_session_id=args.operator_session_id,
                 filepath=args.filepath,
                 limit=args.limit,
             )
@@ -914,7 +934,7 @@ def run(argv: List[str]) -> int:
             manager.ledger(args.action, limit=args.limit, pattern=args.pattern, commit=args.commit)
         elif args.command == 'export':
             manager.export_session(
-                web_session_id=args.web_session_id,
+                operator_session_id=args.operator_session_id,
                 output_path=args.output_path,
                 fmt=args.fmt,
             )

@@ -27,6 +27,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 )
@@ -264,7 +265,7 @@ func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bo
 	}
 
 	if err := s.setCredentials(userID, newCreds); err != nil {
-		s.logger.Error("Failed to revoke credential", "error", err, "userID", userID)
+		s.logger.Error("Failed to revoke credential", string(constants.ConnectionStateError), err, "userID", userID)
 		return false, 0, err
 	}
 
@@ -272,29 +273,29 @@ func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bo
 	return true, len(newCreds), nil
 }
 
-// CreateSession creates a web session after successful authentication.
-func (s *PasskeyService) CreateSession(userID string) (*models.WebSession, error) {
-	sessionID := uuid.New().String()
+// CreateWebSession creates a web session after successful authentication.
+func (s *PasskeyService) CreateWebSession(userID string) (*models.WebSession, error) {
+	webSessionID := uuid.New().String()
 	now := time.Now()
 
-	session := &models.WebSession{
-		ID:              sessionID,
+	webSession := &models.WebSession{
+		ID:              webSessionID,
 		UserID:          userID,
 		CreatedAtUnixMs: now.UnixMilli(),
 		ExpiresAtUnixMs: now.Add(webSessionTTL).UnixMilli(),
 	}
 
-	data, err := json.Marshal(session)
+	data, err := json.Marshal(webSession)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal session: %w", err)
+		return nil, fmt.Errorf("failed to marshal web session: %w", err)
 	}
-	if err := s.db.DocSet(string(constants.CollectionWebSessions), sessionID, data); err != nil {
-		s.logger.Error("Failed to create session", "error", err, "userID", userID)
-		return nil, fmt.Errorf("failed to create session: %w", err)
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, data); err != nil {
+		s.logger.Error("Failed to create web session", string(constants.ConnectionStateError), err, "userID", userID)
+		return nil, fmt.Errorf("failed to create web session: %w", err)
 	}
 
-	s.logger.Info("Session created", "userID", userID, "sessionID", sessionID[:8])
-	return session, nil
+	s.logger.Info("Web session created", "userID", userID, "webSessionID", webSessionID[:8])
+	return webSession, nil
 }
 
 // VerifyL3Proof verifies a WebAuthn assertion against a registered passkey.
@@ -378,7 +379,7 @@ func (s *PasskeyService) VerifyL3Proof(userID, transactionHash string, proof *co
 }
 
 func (s *PasskeyService) getUser(userID string) (*models.User, error) {
-	doc, err := s.db.DocGet(string(constants.CollectionUsers), userID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +452,7 @@ func (s *PasskeyService) updateUser(userID string, user *models.User) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal user: %w", err)
 	}
-	_, err = s.db.DocUpdate(string(constants.CollectionUsers), userID, data)
+	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, data)
 	return err
 }
 
@@ -460,11 +461,11 @@ func (s *PasskeyService) storeWebAuthnSession(userID string, session *webauthn.S
 	if err != nil {
 		return err
 	}
-	return s.db.DocSet(string(constants.CollectionPasskeyChallenges), userID, data)
+	return s.db.DocSet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID, data)
 }
 
 func (s *PasskeyService) getWebAuthnSession(userID string) (*webauthn.SessionData, error) {
-	doc, err := s.db.DocGet(string(constants.CollectionPasskeyChallenges), userID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
 	if err != nil {
 		return nil, err
 	}

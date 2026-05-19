@@ -69,17 +69,10 @@ class SettingsService:
         self._bootstrap = bootstrap_service or BootstrapService()
         self._logger = logging.getLogger(__name__)
 
-    def _get_env(self, env_key: str, default: str | None = None) -> str | None:
-        """DEPRECATED: Configuration is now loaded from operator or bootstrap volumes.
-        """
-        return default
 
     def get_local_settings(self) -> G8eePlatformSettings:
-        """Load settings using canonical defaults and bootstrap service.
-        
-        This replaces legacy configuration with platform defaults and
-        secure bootstrap service for secrets from operator volume.
-        """
+        """Load settings using canonical defaults plus secrets sourced from the
+        bootstrap service (operator volume)."""
         settings = G8eePlatformSettings(
             host="0.0.0.0",
             port=8443,
@@ -119,7 +112,7 @@ class SettingsService:
         Model-driven by design: each nested settings model is overlaid as a
         whole object, and the auth merge iterates ``AuthSettings`` fields
         rather than hand-listing them. Adding a new field on any of these
-        nested models therefore flows through automatically — hand-listing
+        nested models therefore flows through automatically - hand-listing
         fields here is the bug class that previously dropped new fields
         (e.g. command_validation auto-approve, auth auditor_hmac_key) on
         the platform-bootstrap path.
@@ -141,7 +134,7 @@ class SettingsService:
         settings.listen = platform_settings.listen
 
         # Auth: bootstrap value wins when present; platform DB fills gaps.
-        # Iterating AuthSettings.model_fields makes this structural — newly
+        # Iterating AuthSettings.model_fields makes this structural - newly
         # added auth tokens (e.g. future signing keys) overlay automatically
         # without revisiting this method.
         for field_name in type(settings.auth).model_fields:
@@ -155,7 +148,7 @@ class SettingsService:
 
     def _build_llm_settings(self, user_settings: G8eeUserSettings) -> LLMSettings:
         """Build LLMSettings from G8eeUserSettings.
-        
+
         LLM provider configuration is user-specific only.
         """
         return user_settings.llm
@@ -193,20 +186,17 @@ class SettingsService:
         )
 
         if not user_doc_dict:
-            # LLM settings are user-specific only. Return empty LLMSettings if user doc missing.
-            # Search settings can fall back to platform defaults.
-            platform_doc_dict = await self._cache_aside.get_document_with_cache(
-                collection=DB_COLLECTION_SETTINGS,
-                document_id=PLATFORM_SETTINGS_DOC,
+            self._logger.info(
+                "No user settings document for user %s; using empty defaults so request overrides can complete validation",
+                user_id,
             )
-            platform_doc = PlatformSettingsDocument.model_validate(platform_doc_dict)
-
+            platform_settings = await self.get_platform_settings()
             return G8eeUserSettings(
                 llm=LLMSettings(),
-                search=self._build_search_settings(platform_doc.settings),
-                eval_judge=platform_doc.settings.eval_judge,
-                command_validation=platform_doc.settings.command_validation,
-                batch_execution=platform_doc.settings.batch_execution,
+                search=platform_settings.search,
+                eval_judge=platform_settings.eval_judge,
+                command_validation=platform_settings.command_validation,
+                batch_execution=platform_settings.batch_execution,
             )
 
         user_doc = UserSettingsDocument.model_validate(user_doc_dict)

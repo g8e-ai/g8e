@@ -192,7 +192,7 @@ class TestLFAAExecutionIdFieldParsing:
         payload_dict = {
             "execution_id": "test-exec-def",
             "operator_session_id": "sess-1",
-            "session": {
+            "operator_session": {
                 "id": "session-1",
                 "title": "Test Session",
                 "user_identity": "test-user",

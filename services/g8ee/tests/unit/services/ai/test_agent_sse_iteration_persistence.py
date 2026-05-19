@@ -164,7 +164,7 @@ async def test_callback_skipped_when_iteration_text_is_whitespace_only():
 
     await deliver_via_sse(
         stream=_stream(
-            # Whitespace-only pre-tool text — must be dropped.
+            # Whitespace-only pre-tool text - must be dropped.
             _text("   \n  "),
             _tool_call(),
             _tool_result(),
@@ -246,8 +246,8 @@ async def test_callback_failure_does_not_abort_stream():
     assert state.response_text == "Post-tool wrap-up."
 
 
-async def test_omitting_callback_preserves_legacy_behavior():
-    """The new parameter is optional — passing nothing must not break the flow."""
+async def test_omitting_callback_still_completes_stream():
+    """The new parameter is optional - passing nothing must not break the flow."""
     inputs, state = make_agent_run_args(
         case_id="case-iter-6",
         investigation_id="inv-iter-6",
@@ -269,17 +269,17 @@ async def test_omitting_callback_preserves_legacy_behavior():
         event_service=event_svc,
     )
 
-    # Without the callback the intermediate text is lost (legacy behavior),
-    # but the stream still completes and the final segment is preserved.
+    # Without the callback the intermediate text is not persisted, but the
+    # stream still completes and the final segment is preserved.
     assert state.response_text == "Final segment."
 
 
 async def test_no_session_flow_populates_response_text_without_sse():
     """No-session flows (web_session_id=None) must process stream to populate state.response_text.
-    
+
     Regression test for a bug where agent produced empty responses because
     stream was consumed without processing chunks when web_session_id was None.
-    
+
     Note: case_id is provided for test factory compatibility but is not used when web_session_id is None.
     """
     inputs, state = make_agent_run_args(

@@ -6,9 +6,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
+	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 )
 
 // Tribunal is the internal consensus engine's evaluator.
@@ -33,13 +34,33 @@ func (t *Tribunal) EvaluatePayload(env *uap.UAPEnvelope) error {
 	// 2. Run Deterministic SRE Rules (e.g., MITRE checks)
 	// For proto-first, we use IntentData or Payload
 	var cmdData string
+	var intent constants.CloudIntent
 	if env.IntentData != nil && len(env.IntentData.Fields) > 0 {
-		jsonBytes, _ := env.IntentData.MarshalJSON()
+		jsonBytes, err := env.IntentData.MarshalJSON()
+		if err != nil {
+			return fmt.Errorf("failed to marshal intent data: %w", err)
+		}
 		cmdData = string(jsonBytes)
+
+		// If this is an intent request, extract and validate the specific intent
+		actionType := constants.ActionType(env.ActionType)
+		if actionType == constants.ActionTypeGrantIntent || actionType == constants.ActionTypeRevokeIntent {
+			if v, ok := env.IntentData.Fields[string(constants.ApprovalTypeIntent)]; ok {
+				intent = constants.CloudIntent(v.GetStringValue())
+			}
+		}
 	} else {
 		cmdData = string(env.Payload)
 	}
+
 	isSafe := t.RunMITREChecks(env.TargetResource, cmdData)
+
+	// L1 Intent Validation: ensure the requested intent is in the allowlist
+	if intent != "" && t.Sentinel != nil {
+		if !t.Sentinel.ValidateIntent(intent) {
+			isSafe = false
+		}
+	}
 
 	// 3. Append Vote
 	// Note: We are using GovernanceMetadata instead of ConsensusState
@@ -52,7 +73,11 @@ func (t *Tribunal) EvaluatePayload(env *uap.UAPEnvelope) error {
 	}
 
 	env.Governance.L2.AgentIds = append(env.Governance.L2.AgentIds, t.NodeID)
-	env.Governance.L2.TribunalSignature = t.SignDecision(env.Id, isSafe)
+	sig, err := t.SignDecision(env.Id, isSafe)
+	if err != nil {
+		return fmt.Errorf("failed to sign decision: %w", err)
+	}
+	env.Governance.L2.TribunalSignature = sig
 
 	if !isSafe {
 		env.Governance.L1.Validated = false
@@ -72,12 +97,12 @@ func (t *Tribunal) RunMITREChecks(resource string, data string) bool {
 }
 
 // SignDecision creates a cryptographic signature of the decision.
-func (t *Tribunal) SignDecision(messageID string, isSafe bool) string {
+func (t *Tribunal) SignDecision(messageID string, isSafe bool) (string, error) {
 	if t.PrivateKey == nil {
-		panic("FATAL: Tribunal PrivateKey is nil. Cannot sign governance votes.")
+		return "", errors.New("Tribunal private key missing - cannot sign governance votes")
 	}
 	// Sign the message ID and the decision
 	payload := fmt.Sprintf("%s|%v", messageID, isSafe)
 	sig := ed25519.Sign(t.PrivateKey, []byte(payload))
-	return hex.EncodeToString(sig)
+	return hex.EncodeToString(sig), nil
 }

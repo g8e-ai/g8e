@@ -38,4 +38,5 @@ const (
 	LeafTypeOperator = "operator"
 	LeafTypeApp      = "app"
 	LeafTypeHub      = "hub"
+	LeafTypeCLI      = "cli"
 )

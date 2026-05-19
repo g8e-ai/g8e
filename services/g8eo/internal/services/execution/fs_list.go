@@ -26,6 +26,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/security"
 )
 
@@ -57,12 +58,12 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 		CaseID:          req.CaseID,
 		TaskID:          req.TaskID,
 		InvestigationID: req.InvestigationID,
-		Status:          constants.ExecutionStatusExecuting,
+		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 		Entries:         []models.FsListEntry{},
 	}
 	result.StartTime = &startTime
 
-	// Resolve path — default to operator's working directory when none is specified
+	// Resolve path - default to operator's working directory when none is specified
 	path := req.Path
 	if path == "" || path == "." {
 		path = s.workDir
@@ -115,7 +116,7 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 	result.Entries = entries
 	result.TotalCount = len(entries)
 	result.Truncated = truncated
-	result.Status = constants.ExecutionStatusCompleted
+	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 
 	endTime := time.Now().UTC()
 	result.EndTime = &endTime
@@ -175,7 +176,7 @@ func (s *FsListService) listDirectory(ctx context.Context, dirPath string, maxDe
 			if fi.IsDir() && currentDepth < maxDepth {
 				subEntries, subTruncated, err := s.listDirectory(ctx, entryPath, maxDepth, maxEntries-len(entries), currentDepth+1)
 				if err != nil {
-					s.logger.Warn("Failed to list subdirectory", "error", err, "path", entryPath)
+					s.logger.Warn("Failed to list subdirectory", string(constants.ConnectionStateError), err, "path", entryPath)
 					continue
 				}
 				entries = append(entries, subEntries...)
@@ -234,7 +235,7 @@ func (s *FsListService) buildEntry(fi os.FileInfo, fullPath string) models.FsLis
 
 // failResult sets error state on result
 func (s *FsListService) failResult(result *models.FsListResult, errorType, errorMsg string) (*models.FsListResult, error) {
-	result.Status = constants.ExecutionStatusFailed
+	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 	result.ErrorType = &errorType
 	result.ErrorMessage = &errorMsg
 	endTime := time.Now().UTC()

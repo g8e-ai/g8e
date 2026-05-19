@@ -1,3 +1,4 @@
+from app.models.pubsub_messages import ExecutionResultsPayload
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,9 +25,10 @@ from app.models.operators import (
     CommandResultBroadcastEvent,
     DirectCommandResult,
 )
+
 from app.services.operator.execution_service import OperatorExecutionService
 from app.services.operator.pubsub_service import OperatorPubSubService
-from tests.fakes.factories import build_bound_operator, build_g8e_http_context
+from tests.fakes.factories import build_bound_operator, build_g8e_http_context, build_g8eo_result_envelope
 from tests.fakes.fake_operator_clients import FakePubSubClient
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
@@ -89,21 +91,20 @@ class TestDirectCommandBroadcasting:
         assert exec_id in pubsub_service._pending_futures
 
         # 2. Simulate inbound result message from operator
-        await pubsub_service._handle_pubsub_result_message(
-            "op-1",
-            "sess-1",
-            {
-                "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
-                "payload": {
-                    "payload_type": "execution_result",
-                    "execution_id": exec_id,
-                    "status": ExecutionStatus.COMPLETED,
-                    "stdout": "file1\nfile2",
-                    "return_code": 0,
-                    "duration_seconds": 1.5,
-                },
-            },
+        envelope = build_g8eo_result_envelope(
+            event_type=EventType.OPERATOR_COMMAND_COMPLETED,
+            operator_id="op-1",
+            operator_session_id="sess-1",
+            payload=ExecutionResultsPayload(
+                payload_type="execution_result",
+                execution_id=exec_id,
+                status=ExecutionStatus.COMPLETED,
+                stdout="file1\nfile2",
+                return_code=0,
+                duration_seconds=1.5,
+            ),
         )
+        await pubsub_service._handle_pubsub_result_message(envelope)
 
         # 3. Wait for the background task to complete and publish the event
         # We need to yield to the event loop multiple times to allow the background task to progress
@@ -158,21 +159,20 @@ class TestDirectCommandBroadcasting:
         await svc.send_command_to_operator(request, g8e_context)
 
         # Simulate failure result
-        await pubsub_service._handle_pubsub_result_message(
-            "op-1",
-            "sess-1",
-            {
-                "event_type": EventType.OPERATOR_COMMAND_FAILED,
-                "payload": {
-                    "payload_type": "execution_result",
-                    "execution_id": exec_id,
-                    "status": ExecutionStatus.FAILED,
-                    "stderr": "command not found",
-                    "return_code": 127,
-                    "error_message": "Execution failed",
-                },
-            },
+        envelope = build_g8eo_result_envelope(
+            event_type=EventType.OPERATOR_COMMAND_FAILED,
+            operator_id="op-1",
+            operator_session_id="sess-1",
+            payload=ExecutionResultsPayload(
+                payload_type="execution_result",
+                execution_id=exec_id,
+                status=ExecutionStatus.FAILED,
+                stderr="command not found",
+                return_code=127,
+                error_message="Execution failed",
+            ),
         )
+        await pubsub_service._handle_pubsub_result_message(envelope)
 
         for _ in range(5):
             await asyncio.sleep(0)

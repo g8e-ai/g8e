@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``file_create_on_operator`` tool — create a new file on the bound operator."""
+"""``file_create_on_operator`` tool - create a new file on the bound operator."""
 
 from __future__ import annotations
 
@@ -38,12 +38,11 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.FILE_CREATE,
-        description=load_prompt(PromptFile.TOOL_FILE_CREATE),
+        description=load_prompt(PromptFile.TOOLS_FILE_CREATE),
         parameters=schema_from_model(FileCreateArgs),
     )
-    return declaration
 
 
 async def handle(

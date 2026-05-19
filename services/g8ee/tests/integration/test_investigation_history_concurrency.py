@@ -88,13 +88,12 @@ async def test_concurrent_chat_appends_preserve_chain_under_load(service, mock_c
             investigation_id=investigation_id,
             sender="user.chat",
             content=f"Concurrent message {i}",
-            metadata=ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
+            metadata=ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER)
         ))
 
     await asyncio.gather(*tasks)
 
     history = protocol_db_state[0].get("conversation_history", [])
-    print(f"Final conversation history length: {len(history)}")
 
     assert len(history) == num_concurrent, f"Expected {num_concurrent} entries, but got {len(history)}. Race condition detected!"
 

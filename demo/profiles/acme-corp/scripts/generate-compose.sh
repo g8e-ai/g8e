@@ -208,7 +208,7 @@ x-edge-device: &edge-device
   labels:
     - "demo.service=acme-edge"
   volumes:
-    - ../../../ssl/ca/ca.crt:/operator/ca.crt:ro
+    - ../../../.g8e/pki/root/root_ca.crt:/operator/ca.crt:ro
   restart: unless-stopped
 
 services:

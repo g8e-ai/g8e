@@ -71,7 +71,7 @@ func TestWaitForMessage_ClosedChannel_ReturnsNil(t *testing.T) {
 	ch := make(chan []byte)
 	close(ch)
 
-	// Closed channel returns nil immediately — WaitForMessage should not fatal
+	// Closed channel returns nil immediately - WaitForMessage should not fatal
 	// but will return nil. We capture the nil return without asserting t.Fatal.
 	got := WaitForMessage(t, ch, time.Second)
 	assert.Nil(t, got)

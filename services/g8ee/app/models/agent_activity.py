@@ -24,7 +24,7 @@ from app.models.tool_results import TokenUsage
 
 class AgentActivityMetadata(G8eIdentifiableModel):
     """Metadata record for a single AI agent chat turn.
-    
+
     Captures comprehensive telemetry for data science analysis including
     model usage, token consumption, tool execution patterns, triage
     classification, and performance metrics.

@@ -24,6 +24,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,7 +44,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID:     "file-write-1",
 			CaseID:          "test-case-1",
-			Operation:       models.FileEditOperationWrite,
+			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
 			Content:         &content,
 			CreateIfMissing: true,
@@ -53,7 +54,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.FileExists(t, testFile)
 
 		// Verify content
@@ -72,7 +73,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID: "file-read-1",
 			CaseID:      "test-case-read",
-			Operation:   models.FileEditOperationRead,
+			Operation:   constants.FileOperationRead,
 			FilePath:    testFile,
 			ReadOptions: &models.FileReadOptions{
 				IncludeStats: includeStats,
@@ -83,7 +84,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.NotNil(t, result.Content)
 		assert.Equal(t, content, *result.Content)
 		assert.NotNil(t, result.FileStats)
@@ -103,7 +104,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID:  "file-backup-1",
 			CaseID:       "test-case-backup",
-			Operation:    models.FileEditOperationWrite,
+			Operation:    constants.FileOperationWrite,
 			FilePath:     testFile,
 			Content:      &newContent,
 			CreateBackup: true,
@@ -113,7 +114,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.NotNil(t, result.BackupPath)
 		assert.FileExists(t, *result.BackupPath)
 
@@ -139,7 +140,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID: "file-replace-1",
 			CaseID:      "test-case-replace",
-			Operation:   models.FileEditOperationReplace,
+			Operation:   constants.FileOperationReplace,
 			FilePath:    testFile,
 			OldContent:  &oldContent,
 			NewContent:  &newContent,
@@ -149,7 +150,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 
 		// Verify replacement
 		fileData, _ := os.ReadFile(testFile)
@@ -171,7 +172,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID:    "file-insert-1",
 			CaseID:         "test-case-insert",
-			Operation:      models.FileEditOperationInsert,
+			Operation:      constants.FileOperationInsert,
 			FilePath:       testFile,
 			InsertContent:  &insertContent,
 			InsertPosition: &insertPos,
@@ -181,7 +182,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 
 		// Verify insertion
 		fileData, _ := os.ReadFile(testFile)
@@ -204,7 +205,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID: "file-delete-1",
 			CaseID:      "test-case-delete",
-			Operation:   models.FileEditOperationDelete,
+			Operation:   constants.FileOperationDelete,
 			FilePath:    testFile,
 			StartLine:   &startLine,
 			EndLine:     &endLine,
@@ -214,7 +215,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 
 		// Verify deletion
 		fileData, _ := os.ReadFile(testFile)
@@ -242,7 +243,7 @@ func TestFileEditService_Integration(t *testing.T) {
 				req := &models.FileEditRequest{
 					ExecutionID:     fmt.Sprintf("concurrent-write-%d", idx),
 					CaseID:          "test-case-concurrent",
-					Operation:       models.FileEditOperationWrite,
+					Operation:       constants.FileOperationWrite,
 					FilePath:        testFile,
 					Content:         &content,
 					CreateIfMissing: true,
@@ -278,7 +279,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID: "file-range-read-1",
 			CaseID:      "test-case-range",
-			Operation:   models.FileEditOperationRead,
+			Operation:   constants.FileOperationRead,
 			FilePath:    testFile,
 			ReadOptions: &models.FileReadOptions{
 				StartLine: &startLine,
@@ -290,7 +291,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.NotNil(t, result.Content)
 		assert.Contains(t, *result.Content, "Line 10")
 		assert.Contains(t, *result.Content, "Line 20")
@@ -313,7 +314,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID:     "file-large-write-1",
 			CaseID:          "test-case-large",
-			Operation:       models.FileEditOperationWrite,
+			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
 			Content:         &content,
 			CreateIfMissing: true,
@@ -323,7 +324,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.FileExists(t, testFile)
 		assert.Greater(t, *result.BytesWritten, int64(50000))
 	})
@@ -338,7 +339,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req1 := &models.FileEditRequest{
 			ExecutionID:     fmt.Sprintf("%s-step1", pipelineID),
 			CaseID:          "test-case-pipeline",
-			Operation:       models.FileEditOperationWrite,
+			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
 			Content:         &content1,
 			CreateIfMissing: true,
@@ -354,7 +355,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req2 := &models.FileEditRequest{
 			ExecutionID: fmt.Sprintf("%s-step2", pipelineID),
 			CaseID:      "test-case-pipeline",
-			Operation:   models.FileEditOperationReplace,
+			Operation:   constants.FileOperationReplace,
 			FilePath:    testFile,
 			OldContent:  &oldContent,
 			NewContent:  &newContent,
@@ -370,7 +371,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req3 := &models.FileEditRequest{
 			ExecutionID:    fmt.Sprintf("%s-step3", pipelineID),
 			CaseID:         "test-case-pipeline",
-			Operation:      models.FileEditOperationInsert,
+			Operation:      constants.FileOperationInsert,
 			FilePath:       testFile,
 			InsertContent:  &insertContent,
 			InsertPosition: &insertPos,
@@ -399,7 +400,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID:     "file-error-1",
 			CaseID:          "test-case-error",
-			Operation:       models.FileEditOperationWrite,
+			Operation:       constants.FileOperationWrite,
 			FilePath:        nonExistent,
 			Content:         &content,
 			CreateIfMissing: false,
@@ -409,7 +410,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusFailed, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
 		assert.NotNil(t, result.ErrorMessage)
 
 	})
@@ -423,7 +424,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID:     "file-special-1",
 			CaseID:          "test-case-special",
-			Operation:       models.FileEditOperationWrite,
+			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
 			Content:         &content,
 			CreateIfMissing: true,
@@ -433,7 +434,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 
 		// Verify special characters preserved
 		fileData, _ := os.ReadFile(testFile)
@@ -466,7 +467,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 			req := &models.FileEditRequest{
 				ExecutionID:  fmt.Sprintf("backup-multi-%d", i),
 				CaseID:       "test-case-multi-backup",
-				Operation:    models.FileEditOperationWrite,
+				Operation:    constants.FileOperationWrite,
 				FilePath:     testFile,
 				Content:      &content,
 				CreateBackup: true,
@@ -500,7 +501,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID: "file-maxlines-1",
 			CaseID:      "test-case-maxlines",
-			Operation:   models.FileEditOperationRead,
+			Operation:   constants.FileOperationRead,
 			FilePath:    testFile,
 			ReadOptions: &models.FileReadOptions{
 				MaxLines: &maxLines,
@@ -511,7 +512,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 
 		readLines := strings.Split(*result.Content, "\n")
 		assert.LessOrEqual(t, len(readLines), maxLines)
@@ -529,7 +530,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID: "file-multi-replace-1",
 			CaseID:      "test-case-multi-replace",
-			Operation:   models.FileEditOperationReplace,
+			Operation:   constants.FileOperationReplace,
 			FilePath:    testFile,
 			OldContent:  &oldContent,
 			NewContent:  &newContent,
@@ -539,7 +540,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 
 		// Verify all occurrences replaced
 		fileData, _ := os.ReadFile(testFile)
@@ -559,7 +560,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 		req := &models.FileEditRequest{
 			ExecutionID: "file-perms-1",
 			CaseID:      "test-case-perms",
-			Operation:   models.FileEditOperationRead,
+			Operation:   constants.FileOperationRead,
 			FilePath:    testFile,
 			ReadOptions: &models.FileReadOptions{
 				IncludeStats: includeStats,

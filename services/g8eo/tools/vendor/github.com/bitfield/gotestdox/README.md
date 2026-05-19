@@ -52,7 +52,7 @@ I read a blog post by Dan North, which says:
 > The word “test” is stripped from both the class name and the method names, and the camel-case method name is converted into regular text. That’s all it does, but its effect is amazing.
 >
 > Developers discovered it could do at least some of their documentation for them, so they started to write test methods that were real sentences.\
-—Dan North, [Introducing BDD](https://dannorth.net/introducing-bdd/)
+ - Dan North, [Introducing BDD](https://dannorth.net/introducing-bdd/)
 
 # How?
 

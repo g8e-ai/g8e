@@ -2,41 +2,47 @@
   "_comment": "Canonical prompt file paths and AI mode constants for g8ee. All values are relative to the prompts_data/ directory. Consumers: g8ee (Python).",
 
   "agent.mode": {
-    "g8e.bound": "operator_bound",
-    "g8e.not.bound": "operator_not_bound",
-    "cloud.operator.bound": "cloud_operator_bound"
+    "operator.bound": "g8e.bound",
+    "operator.not.bound": "g8e.not.bound",
+    "cloud.operator.bound": "g8e.cloud.bound"
   },
 
   "prompt.section": {
     "identity": "identity",
     "safety": "safety",
+    "loyalty": "loyalty",
+    "dissent": "dissent",
     "capabilities": "capabilities",
     "execution": "execution",
     "tools": "tools",
     "docs": "docs",
     "system.context": "system_context",
     "sentinel.mode": "sentinel_mode",
+    "triage.context": "triage_context",
     "investigation.context": "investigation_context",
     "response.constraints": "response_constraints",
-    "learned.context": "learned_context"
+    "learned.context": "learned_context",
+    "agent.persona": "agent_persona"
   },
 
   "prompt.file": {
     "core": {
       "identity": "core/identity.txt",
-      "safety": "core/safety.txt"
+      "safety": "core/safety.txt",
+      "loyalty": "core/loyalty.txt",
+      "dissent": "core/dissent.txt"
     },
     "system": {
       "response.constraints": "system/response_constraints.txt",
       "sentinel.mode": "system/sentinel_mode.txt"
     },
     "modes": {
-      "g8e.bound": {
+      "operator.bound": {
         "capabilities": "modes/operator_bound/capabilities.txt",
         "execution": "modes/operator_bound/execution.txt",
         "tools": "modes/operator_bound/tools.txt"
       },
-      "g8e.not.bound": {
+      "operator.not.bound": {
         "capabilities": "modes/operator_not_bound/capabilities.txt",
         "execution": "modes/operator_not_bound/execution.txt",
         "tools": "modes/operator_not_bound/tools.txt",
@@ -58,10 +64,25 @@
       "g8e.web.search": "tools/g8e_web_search.txt",
       "check.port": "tools/check_port_status.txt",
       "list.files": "tools/list_files_and_directories_with_detailed_metadata.txt",
+      "recursive.grep": "tools/recursive_grep_search.txt",
       "grant.intent": "tools/grant_intent_permission.txt",
       "revoke.intent": "tools/revoke_intent_permission.txt",
       "fetch.file.history": "tools/fetch_file_history.txt",
-      "fetch.file.diff": "tools/fetch_file_diff.txt"
+      "fetch.file.diff": "tools/fetch_file_diff.txt",
+      "query.investigation.context": "tools/query_investigation_context.txt",
+      "get.command.constraints": "tools/get_command_constraints.txt",
+      "ssh.inventory": "tools/list_ssh_inventory.txt",
+      "stream.operator": "tools/stream_operator_to_ssh_fleet.txt"
+    },
+    "tribunal": {
+      "generator": "tribunal/generator.txt",
+      "generator.round.2": "tribunal/generator_round_2.txt",
+      "round.2.axiom": "tribunal/round_2/axiom.txt",
+      "round.2.concord": "tribunal/round_2/concord.txt",
+      "round.2.variance": "tribunal/round_2/variance.txt",
+      "round.2.pragma": "tribunal/round_2/pragma.txt",
+      "round.2.nemesis": "tribunal/round_2/nemesis.txt",
+      "auditor": "tribunal/auditor.txt"
     }
   }
 }

@@ -13,6 +13,10 @@
 
 package models
 
+import (
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+)
+
 // Removing aliases
 
 type TerminalOutput struct {
@@ -28,14 +32,14 @@ type TerminalOutput struct {
 }
 
 type ExecutionSystemInfo struct {
-	Hostname     string      `json:"hostname"`
-	OS           string      `json:"os"`
-	Architecture string      `json:"architecture"`
-	NumCPU       int         `json:"num_cpu"`
-	GoVersion    string      `json:"go_version"`
-	CurrentUser  string      `json:"current_user"`
-	LoadAverage  []float64   `json:"load_average,omitempty"`
-	Memory       *MemoryInfo `json:"memory,omitempty"`
+	Hostname     string             `json:"hostname"`
+	OS           constants.Platform `json:"os"`
+	Architecture string             `json:"architecture"`
+	NumCPU       int                `json:"num_cpu"`
+	GoVersion    string             `json:"go_version"`
+	CurrentUser  string             `json:"current_user"`
+	LoadAverage  []float64          `json:"load_average,omitempty"`
+	Memory       *MemoryInfo        `json:"memory,omitempty"`
 }
 
 type MemoryInfo struct {
@@ -49,7 +53,7 @@ type MemoryInfo struct {
 }
 
 type ExecutionEnvironmentInfo struct {
-	ComponentName string `json:"component_name"`
-	ProjectID     string `json:"project_id"`
-	MaxMemoryMB   int    `json:"max_memory_mb"`
+	ComponentName constants.ComponentName `json:"component_name"`
+	ProjectID     string                  `json:"project_id"`
+	MaxMemoryMB   int                     `json:"max_memory_mb"`
 }

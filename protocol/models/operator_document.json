@@ -1,11 +1,11 @@
 {
-  "_comment": "Canonical OperatorDocument shape. client is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via client HTTP API and operator KV cache. g8eo is the source of runtime data (heartbeats) that client merges into this document. A field mismatch between client and g8ee breaks operator binding, context building, and AI execution.",
+  "_comment": "Canonical OperatorDocument shape. client is the authority - it creates, owns, and stores this document in SQLite. g8ee reads it via client HTTP API and operator KV cache. g8eo is the source of runtime data (heartbeats) that client merges into this document. A field mismatch between client and g8ee breaks operator binding, context building, and AI execution.",
 
   "_comment.field_naming": "FIELD NAMING CONVENTION: The canonical OperatorDocument uses 'id' as the primary key field name (core_identity.id). Wire format models and projections (e.g., operator_status_info, bound_operator_context, operator_slot, heartbeat) use 'operator_id' for clarity in cross-component contexts where the entity type may not be immediately obvious from context. When mapping between OperatorDocument and wire formats: OperatorDocument.core_identity.id ↔ wire_format.operator_id. This naming pattern is intentional and consistent across all operator-related wire formats.",
 
   "_authority": "client (SQLite)",
   "_consumers": ["g8ee (Python OperatorDocument)", "g8eo (identity fields at auth time)"],
-  "_cache_aside": "operator KV — keyed by g8e:doc:operators:{id}. Cache-aside pattern. SQLite is source of truth.",
+  "_cache_aside": "operator KV - keyed by g8e:doc:operators:{id}. Cache-aside pattern. SQLite is source of truth.",
 
   "operator_document": {
     "_description": "Full operator record as stored in client SQLite and returned by GET /api/internal/operators/:id/status and GET /api/operators/status.",
@@ -43,7 +43,7 @@
       "operator_session_id": {
         "type": "string",
         "required": false,
-        "description": "Current active session identifier. Set when g8eo authenticates. Cleared on termination."
+        "description": "Current active operator session identifier. Set when g8eo authenticates. Cleared on termination."
       },
       "web_session_id": {
         "type": "string",
@@ -190,7 +190,7 @@
     },
 
     "investigation_context": {
-      "_description": "Active investigation/case context. Set when the operator is bound to an investigation session.",
+      "_description": "Active investigation/case context. Set when the operator is bound to an investigation web session.",
       "case_id": {
         "type": "string",
         "required": false
@@ -310,13 +310,13 @@
       "session_token": {
         "type": "string",
         "required": false,
-        "description": "Active session token for session-based auth validation. Set by client at bootstrap time."
+        "description": "Active session token for web session-based auth validation. Set by client at bootstrap time."
       },
       "session_expires_at": {
         "type": "string",
         "format": "iso8601",
         "required": false,
-        "description": "WebSession expiration timestamp. Null means no session expiry is enforced."
+        "description": "WebSession expiration timestamp. Null means no web session expiry is enforced."
       }
     }
   }

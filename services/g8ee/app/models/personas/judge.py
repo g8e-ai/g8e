@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class JudgePersona(AgentPersonaModel):
     """Judge: The Performance Evaluator.
-    
+
     Evaluates AI agent performance against gold-standard criteria.
     """
 

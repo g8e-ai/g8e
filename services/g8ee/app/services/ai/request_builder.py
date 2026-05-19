@@ -20,8 +20,8 @@ This service is responsible for:
 - Formatting attachments for LLM provider consumption
 
 Separation of Concerns:
-- AIRequestBuilder: stateful request assembly — tool executor, contents, attachments
-- AIGenerationConfigBuilder: stateless config factory — lite/schema config builders
+- AIRequestBuilder: stateful request assembly - tool executor, contents, attachments
+- AIGenerationConfigBuilder: stateless config factory - lite/schema config builders
 - AIEventPublisher: HOW to publish events to frontend
 - AIResponseAnalyzer: HOW to analyze AI responses
 - AIToolExecutor: HOW to execute AI tool calls

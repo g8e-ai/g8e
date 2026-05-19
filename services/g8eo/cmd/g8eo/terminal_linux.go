@@ -18,12 +18,15 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"syscall"
 	"unsafe"
+
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 )
 
 // promptForAPIKey prompts for an API key with obfuscated (starred) terminal input.
@@ -87,7 +90,7 @@ func readObfuscatedInput(r io.Reader, w io.Writer) (string, error) {
 
 		if char == 3 {
 			fmt.Fprintln(w)
-			return "", fmt.Errorf("interrupted")
+			return "", errors.New(string(constants.SentinelStatusInterrupted))
 		}
 
 		if char == 127 || char == 8 {

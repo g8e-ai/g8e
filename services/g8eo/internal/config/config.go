@@ -54,7 +54,7 @@ type LoadOptions struct {
 	// Logging
 	LogLevel string // Log level passed to --log flag (info, debug, error)
 
-	// System / process context — sourced from Settings at startup
+	// System / process context - sourced from Settings at startup
 	Shell      string // SHELL value
 	Lang       string // LANG value
 	Term       string // TERM value
@@ -66,7 +66,7 @@ type LoadOptions struct {
 // ListenConfig holds configuration for --listen mode.
 // In listen mode, the Operator binary becomes the persistence and messaging
 // backbone for the entire g8e platform, replacing external databases.
-// No outbound authentication is required — the Operator simply starts and listens.
+// No outbound authentication is required - the Operator simply starts and listens.
 type ListenConfig struct {
 	Enabled       bool
 	WSSPort       int    // WSS/TLS port for operator pub/sub connections (default: 443)
@@ -114,7 +114,7 @@ func LoadOpenClaw(gatewayURL, token, nodeID, displayName, pathEnv, logLevel stri
 type Config struct {
 	// Basic configuration
 	ProjectID     string
-	ComponentName string
+	ComponentName constants.ComponentName
 	Version       string
 
 	// Authentication
@@ -138,7 +138,7 @@ type Config struct {
 	TLSServerName string
 
 	// operator connection ports (operator dials these on the remote host)
-	PubSubURL string // WebSocket base URL for operator pub/sub (e.g., wss://192.168.1.10:443) — no path; client appends /ws/pubsub
+	PubSubURL string // WebSocket base URL for operator pub/sub (e.g., wss://192.168.1.10:443) - no path; client appends /ws/pubsub
 	WSSPort   int    // WSS port used to build PubSubURL (default: 443)
 	HTTPPort  int    // HTTPS port for auth/bootstrap requests via operator proxy (default: 443)
 
@@ -160,7 +160,7 @@ type Config struct {
 	PKIDir     string
 	SecretsDir string
 
-	// Local storage configuration. All paths are relative to WorkDir — the directory the operator was launched from.
+	// Local storage configuration. All paths are relative to WorkDir - the directory the operator was launched from.
 	LocalStoreEnabled       bool
 	LocalStoreDBPath        string
 	LocalStoreMaxSizeMB     int64
@@ -171,44 +171,68 @@ type Config struct {
 	GitPath      string // Resolved path to git binary (empty if unavailable)
 	GitAvailable bool   // True if a functional git binary was found
 
-	// System / process context — injected from Settings at startup, never read again
+	// System / process context - injected from Settings at startup, never read again
 	Shell      string // SHELL env var value (e.g. /bin/bash)
 	Lang       string // LANG env var value
 	Term       string // TERM env var value
 	TZ         string // TZ env var value (IANA timezone name)
-	IPService  string // G8E_IP_SERVICE — URL for public IP detection
-	IPResolver string // G8E_IP_RESOLVER — UDP target for local IP detection
+	IPService  string // G8E_IP_SERVICE - URL for public IP detection
+	IPResolver string // G8E_IP_RESOLVER - UDP target for local IP detection
 
 	// Listen mode configuration
 	Listen ListenConfig
 }
 
+// FindProjectRoot locates the g8e project root by searching for the VERSION file.
+func FindProjectRoot() string {
+	curr, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(curr, "VERSION")); err == nil {
+			return curr
+		}
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		curr = parent
+	}
+	return ""
+}
+
 // LoadListen creates configuration for --listen mode.
-// Listen mode skips all operator-mode validation — no API key, no endpoint,
+// Listen mode skips all operator-mode validation - no API key, no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
 // allowTestPortZero should be true only when called from Go tests; when false,
 // port 0 is rejected to prevent dynamic port assignment in production.
 func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir string, passkeyRpID, passkeyRpName string, allowTestPortZero bool) (*Config, error) {
+	projectRoot := FindProjectRoot()
+
 	if dataDir == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine working directory: %w", err)
+		if projectRoot != "" {
+			dataDir = filepath.Join(projectRoot, ".g8e", "data")
+		} else {
+			cwd, _ := os.Getwd()
+			dataDir = filepath.Join(cwd, ".g8e", "data")
 		}
-		dataDir = filepath.Join(cwd, ".g8e", "data")
 	}
 	if pkiDir == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine working directory: %w", err)
+		if projectRoot != "" {
+			pkiDir = filepath.Join(projectRoot, ".g8e", "pki")
+		} else {
+			cwd, _ := os.Getwd()
+			pkiDir = filepath.Join(cwd, ".g8e", "pki")
 		}
-		pkiDir = filepath.Join(cwd, ".g8e", "pki")
 	}
 	if secretsDir == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine working directory: %w", err)
+		if projectRoot != "" {
+			secretsDir = filepath.Join(projectRoot, ".g8e", "secrets")
+		} else {
+			cwd, _ := os.Getwd()
+			secretsDir = filepath.Join(cwd, ".g8e", "secrets")
 		}
-		secretsDir = filepath.Join(cwd, ".g8e", "secrets")
 	}
 
 	// Reject port 0 in production (only allowed for Go tests)
@@ -253,7 +277,7 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 	}
 
 	return &Config{
-		ComponentName: "g8eo-listen",
+		ComponentName: constants.Status.ComponentName.G8EOListen,
 		PKIDir:        pkiDir,     // Also set top-level for services that use Config.PKIDir
 		SecretsDir:    secretsDir, // Also set top-level for services that use Config.SecretsDir
 		Listen: ListenConfig{
@@ -273,13 +297,16 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 
 // Load creates configuration from explicit options passed by main
 func Load(opts LoadOptions) (*Config, error) {
-	// Resolve working directory — default to process cwd when not specified
+	// Resolve working directory - default to project root when not specified
 	workDir := opts.WorkDir
 	if workDir == "" {
-		var err error
-		workDir, err = os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine working directory: %w", err)
+		workDir = FindProjectRoot()
+		if workDir == "" {
+			var err error
+			workDir, err = os.Getwd()
+			if err != nil {
+				return nil, fmt.Errorf("failed to determine working directory: %w", err)
+			}
 		}
 	} else {
 		var err error
@@ -308,7 +335,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		PKIDir:            opts.PKIDir,
 		SecretsDir:        opts.SecretsDir,
 
-		// Derived values — ports default to 443
+		// Derived values - ports default to 443
 		Endpoint:      opts.OperatorEndpoint,
 		PubSubURL:     buildPubSubURL(opts.OperatorEndpoint, opts.WSSPort),
 		WSSPort:       wssPortOrDefault(opts.WSSPort),
@@ -323,7 +350,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		MaxMemoryMB:        2048,
 		HeartbeatInterval:  heartbeatIntervalOrDefault(opts.HeartbeatInterval),
 
-		// Local storage — all paths anchored to WorkDir
+		// Local storage - all paths anchored to WorkDir
 		LocalStoreDBPath:        filepath.Join(workDir, ".g8e", "local_state.db"),
 		LocalStoreMaxSizeMB:     1024,
 		LocalStoreRetentionDays: 30,

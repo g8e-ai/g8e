@@ -65,7 +65,7 @@ class FsListEntry(G8eBaseModel):
     path: str
     is_dir: bool
     size: int = 0
-    mode: str = ""
+    mode: str | None = None
     mod_time: int = 0
     is_symlink: bool = False
     symlink_target: str | None = None
@@ -129,7 +129,7 @@ class FileHistoryEntry(G8eBaseModel):
 
 
 class CommandInternalResult(G8eBaseModel):
-    """Typed result returned by _execute_command_internal — the pub/sub wire boundary.
+    """Typed result returned by _execute_command_internal - the pub/sub wire boundary.
 
     Built from the raw operator response once it arrives over the pub/sub channel.
     All fields above this boundary must be typed; this model is the conversion point.
@@ -165,19 +165,19 @@ class CommandInternalResult(G8eBaseModel):
 
 
 class CommandRiskContext(G8eBaseModel):
-    working_directory: str = Field(default="", description="Working directory for the command")
-    git_status: str = Field(default="", description="Git repository status")
-    investigation_context: str = Field(default="", description="Brief description of the active investigation (e.g. case title and description) to help Warden reason about expected command scope")
+    working_directory: str | None = Field(default=None, description="Working directory for the command")
+    git_status: str | None = Field(default=None, description="Git repository status")
+    investigation_context: str | None = Field(default=None, description="Brief description of the active investigation (e.g. case title and description) to help Warden reason about expected command scope")
 
 
 class ErrorAnalysisContext(G8eBaseModel):
     retry_count: int = Field(default=0, description="Number of retry attempts so far")
-    working_directory: str = Field(default="", description="Working directory when the error occurred")
+    working_directory: str | None = Field(default=None, description="Working directory when the error occurred")
     execution_id: str | None = Field(default=None, description="Execution ID for correlation")
 
 
 class FileOperationRiskContext(G8eBaseModel):
-    git_status: str = Field(default="", description="Git repository status")
+    git_status: str | None = Field(default=None, description="Git repository status")
     backup_available: bool = Field(default=False, description="Whether a backup exists for the target file")
 
 
@@ -449,9 +449,9 @@ class IntentPermissionResult(G8eBaseModel):
 
 class WebSearchResultItem(G8eBaseModel):
     """A single item returned by the Google Custom Search API."""
-    title: str = Field(default="", description="Result page title")
-    link: str = Field(default="", description="Result page URL")
-    snippet: str = Field(default="", description="Snippet of matching content")
+    title: str | None = Field(default=None, description="Result page title")
+    link: str | None = Field(default=None, description="Result page URL")
+    snippet: str | None = Field(default=None, description="Snippet of matching content")
 
 
 class SearchWebResult(G8eBaseModel):

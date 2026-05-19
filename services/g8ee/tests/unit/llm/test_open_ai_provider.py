@@ -158,7 +158,7 @@ class TestOpenAIProvider:
         }
 
     def test_build_openai_kwargs_with_thinking(self):
-        with patch("app.llm.providers.open_ai.get_model_config") as mock_get_config, \
+        with patch("app.llm.providers.open_ai.get_model_config"), \
              patch("app.llm.providers.open_ai.translate_for_openai") as mock_translate:
 
             mock_translate.return_value = MagicMock(enabled=True, reasoning_effort="high")

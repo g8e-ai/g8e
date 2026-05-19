@@ -72,7 +72,7 @@ func TestGetMachineID(t *testing.T) {
 		machineID, err := getMachineID(logger)
 
 		switch runtime.GOOS {
-		case constants.Status.Platform.Linux, constants.Status.Platform.Darwin:
+		case string(constants.Status.Platform.Linux), string(constants.Status.Platform.Darwin):
 			require.NoError(t, err)
 			assert.NotEmpty(t, machineID)
 		default:
@@ -85,11 +85,11 @@ func TestGetMachineID(t *testing.T) {
 		machineID, err := getMachineID(logger)
 
 		switch runtime.GOOS {
-		case constants.Status.Platform.Linux:
+		case string(constants.Status.Platform.Linux):
 			require.NoError(t, err)
 			assert.NotEmpty(t, machineID)
-			assert.NotContains(t, machineID, constants.Status.Platform.Darwin)
-		case constants.Status.Platform.Darwin:
+			assert.NotContains(t, machineID, string(constants.Status.Platform.Darwin))
+		case string(constants.Status.Platform.Darwin):
 			require.NoError(t, err)
 			assert.NotEmpty(t, machineID)
 		}
@@ -100,7 +100,7 @@ func TestGetLinuxMachineID(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	t.Run("reads machine ID from standard locations", func(t *testing.T) {
-		if runtime.GOOS != constants.Status.Platform.Linux {
+		if runtime.GOOS != string(constants.Status.Platform.Linux) {
 			t.Skip("Linux only")
 		}
 		machineID, err := getLinuxMachineID(logger)
@@ -135,7 +135,7 @@ func TestMachineIDWithTemporaryFile(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	t.Run("reads from first available path", func(t *testing.T) {
-		if runtime.GOOS != constants.Status.Platform.Linux {
+		if runtime.GOOS != string(constants.Status.Platform.Linux) {
 			t.Skip("Linux only")
 		}
 		machineID, err := getLinuxMachineID(logger)
@@ -221,7 +221,7 @@ func TestGetDarwinMachineID_PreferencesFileMissing_ReturnsFallback(t *testing.T)
 	// On Linux (the test environment) the macOS plist path does not exist.
 	// getDarwinMachineID must handle the missing-file case and return a
 	// hostname-based fallback instead of erroring.
-	if runtime.GOOS == constants.Status.Platform.Darwin {
+	if runtime.GOOS == string(constants.Status.Platform.Darwin) {
 		t.Skip("skipped on Darwin: file likely exists and takes the hash path")
 	}
 
@@ -243,7 +243,7 @@ func TestGetDarwinMachineID_PreferencesFileExists_ReturnsHash(t *testing.T) {
 }
 
 func TestGetDarwinMachineID_FallbackContainsHostname(t *testing.T) {
-	if runtime.GOOS == constants.Status.Platform.Darwin {
+	if runtime.GOOS == string(constants.Status.Platform.Darwin) {
 		t.Skip("skipped on Darwin: plist file exists so fallback branch not taken")
 	}
 

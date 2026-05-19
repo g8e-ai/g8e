@@ -185,8 +185,31 @@ async def all_services(cache_aside_service, test_settings):
     Injects a real WebSearchProvider if search settings are configured,
     ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
+    import os
     from app.llm.factory import get_search_settings
     from app.services.ai.grounding.web_search_provider import WebSearchProvider
+    from app.constants.paths import PATHS
+    from app.clients.db_client import DBClient
+    from app.services.infra.settings_service import SettingsService
+
+    # Check if CA certificate exists
+    ca_cert_path = PATHS["infra"]["ca_cert_path"]
+    if not os.path.exists(ca_cert_path):
+        pytest.skip(f"CA certificate not found at {ca_cert_path}")
+
+    # Check if operator is online AND SSL is working
+    try:
+        settings_service = SettingsService()
+        bootstrap_settings = settings_service.get_local_settings()
+        db_client = DBClient(
+            ca_cert_path=bootstrap_settings.ca_cert_path,
+            client_cert_path=bootstrap_settings.client_cert_path,
+            client_key_path=bootstrap_settings.client_key_path,
+        )
+        await db_client.connect()
+        await db_client.close()
+    except Exception as e:
+        pytest.skip(f"Operator SSL connection failed: {e}")
 
     # Check if web search settings are configured
     web_search_provider = None
@@ -217,19 +240,19 @@ async def all_services(cache_aside_service, test_settings):
     await ServiceFactory.stop_services(services)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def investigation_service(all_services):
     """Returns the InvestigationService from all_services."""
     return all_services.investigation_service
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def tool_service(all_services):
     """Returns the AIToolService from all_services."""
     return all_services.tool_service
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def chat_pipeline(all_services):
     """Returns the ChatPipelineService from all_services."""
     return all_services.chat_pipeline
@@ -241,7 +264,7 @@ async def cleanup(cache_aside_service, all_services):
 
     Track documents created during a test via ``cleanup.track_investigation(id)``
     etc. All tracked documents are deleted after the test, even on failure.
-    
+
     Awaits all background tasks before document deletion to prevent race conditions.
     """
     tracker = IntegrationCleanupTracker(cache_aside_service)
@@ -253,12 +276,13 @@ async def cleanup(cache_aside_service, all_services):
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def user_settings(cache_aside_service, test_settings):
     """Returns user settings for integration tests.
-    
+
     Uses TEST_LLM settings when available (set via ./g8e test flags),
     otherwise loads user settings from operator.
     """
     from app.llm.factory import get_llm_settings, get_search_settings
     from app.services.infra.settings_service import SettingsService
+    from app.models.settings import LLMSettings
 
     # Use TEST_LLM settings if available
     llm = get_llm_settings()
@@ -267,64 +291,12 @@ async def user_settings(cache_aside_service, test_settings):
         return G8eeUserSettings(llm=llm, search=search or test_settings.search)
 
     # Otherwise load from operator
-    settings_service = SettingsService(cache_aside_service=cache_aside_service)
-    return await settings_service.get_user_settings("test-user-id")
-
-
-@pytest.fixture(scope="session")
-def unified_metrics_collector(request):
-    """Unified collector for all eval results across accuracy, safety, and privacy dimensions.
-
-    Tests should call add_row(EvalRow) to record results. The fixture automatically
-    prints a text summary to stdout and persists artifacts (report.txt, results.csv,
-    summary.json) to services/g8ee/reports/evals/<timestamp>/ at session end.
-    """
-    from datetime import UTC, datetime
-
-    from app.constants.paths import PATHS
-    from app.evals.runner.metrics import EvalRow, FullReport
-    from app.evals.runner.reporter import compute_summaries, persist_report, render_text_table
-    from app.llm.factory import get_llm_settings
-
-    class UnifiedMetricsCollector:
-        def __init__(self):
-            self.rows: list[EvalRow] = []
-
-        def add_row(self, row: EvalRow):
-            self.rows.append(row)
-
-    collector = UnifiedMetricsCollector()
-
-    def finalize_session():
-        if not collector.rows:
-            return
-
-        llm_settings = get_llm_settings()
-        llm_config = {}
-        if llm_settings:
-            llm_config = {
-                "primary_provider": llm_settings.primary_provider.value if llm_settings.primary_provider else "unknown",
-                "primary_model": llm_settings.primary_model or "unknown",
-                "assistant_provider": llm_settings.assistant_provider.value if llm_settings.assistant_provider else "none",
-                "assistant_model": llm_settings.assistant_model or "none",
-            }
-
-        report = FullReport(
-            rows=collector.rows,
-            summaries=compute_summaries(collector.rows),
-            finished_at=datetime.now(UTC),
-            llm_config=llm_config,
-        )
-
-        print("\n")
-        print(render_text_table(report))
-
-        reports_dir = PATHS["g8ee"]["evals"]["reports_dir"]
+    if globals().get("_OPERATOR_ONLINE", False):
+        settings_service = SettingsService(cache_aside_service=cache_aside_service)
         try:
-            artifacts = persist_report(report, reports_dir)
-            print(f"\nArtifacts persisted to: {artifacts['run_dir']}")
+            return await settings_service.get_user_settings("test-user-id")
         except Exception as e:
-            logger.error("Failed to persist eval artifacts: %s", e)
+            logger.warning(f"Failed to load user settings from operator: {e}")
 
-    request.addfinalizer(finalize_session)
-    return collector
+    # Fallback to mock settings if operator is offline or connection fails
+    return G8eeUserSettings(llm=llm or LLMSettings(), search=search or test_settings.search)

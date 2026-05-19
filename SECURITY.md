@@ -33,4 +33,4 @@ We focus on the Operator (Go), Engine (Python), and Dashboard (Node.js) componen
 
 ## Security Architecture
 
-If you want to dive deep into how we've built our "Zero-Trust" model, check out our [detailed security docs](docs/architecture/security.md). It covers our L1/L2/L3 gates, mTLS setup, and data sovereignty in much more detail.
+If you want to dive deep into how we've built our "Zero-Trust" model, Check out our [detailed security docs](docs/protocol.md#host-sovereignty--audit). It covers our L1/L2/L3 gates, mTLS setup, and data sovereignty in much more detail.

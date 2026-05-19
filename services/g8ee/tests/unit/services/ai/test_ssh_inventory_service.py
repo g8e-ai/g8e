@@ -246,7 +246,7 @@ def test_include_single_file(tmp_path: Path) -> None:
         tmp_path,
         f"""
         Include {included}
-        
+
         Host db-1
             HostName 10.0.0.2
         """,
@@ -279,7 +279,7 @@ def test_include_with_glob_pattern(tmp_path: Path) -> None:
         tmp_path,
         f"""
         Include {config_dir}/*
-        
+
         Host local
             HostName localhost
         """,
@@ -326,7 +326,7 @@ def test_include_nonexistent_path_is_ignored(tmp_path: Path) -> None:
         tmp_path,
         """
         Include /nonexistent/path/config
-        
+
         Host fallback
             HostName 10.0.0.1
         """,
@@ -362,7 +362,7 @@ def test_match_block_with_hosts(tmp_path: Path) -> None:
             Host bastion
                 HostName 10.0.0.1
                 User ops
-        
+
         Host regular
             HostName 10.0.0.2
         """,

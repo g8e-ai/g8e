@@ -44,7 +44,7 @@ EOF
 
 write_healthy_cert() {
     # A plausible-looking (but obviously fake) cert file. Simulates a rotation
-    # artifact — real TLS is never used against a real upstream in this demo.
+    # artifact - real TLS is never used against a real upstream in this demo.
     local not_before not_after
     not_before=$(date -u -d "30 days ago" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
     not_after=$(date -u -d "335 days" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")

@@ -1,31 +1,135 @@
 {
-  "_comment": "Canonical database collection names shared across g8ee (Python) and .",
-
+  "_comment": "Canonical database collection names shared across g8ee (Python) and g8eo (Go).",
   "collections": {
-    "users": "users",
-    "web_sessions": "web_sessions",
-    "operator_sessions": "operator_sessions",
-    "cli_sessions": "cli_sessions",
-    "login_audit": "login_audit",
-    "auth_admin_audit": "auth_admin_audit",
-    "account_locks": "account_locks",
-    "api_keys": "api_keys",
-    "organizations": "organizations",
-    "operators": "operators",
-    "operator_usage": "operator_usage",
-    "cases": "cases",
-    "investigations": "investigations",
-    "tasks": "tasks",
-    "memories": "memories",
-    "settings": "settings",
-    "console_audit": "console_audit",
-    "bound_sessions": "bound_sessions",
-    "passkey_challenges": "passkey_challenges",
-    "tribunal_commands": "tribunal_commands",
-    "agent_activity_metadata": "agent_activity_metadata",
-    "reputation_state": "reputation_state",
-    "reputation_commitments": "reputation_commitments",
-    "stake_resolutions": "stake_resolutions",
-    "revoked_certificates": "revoked_certificates"
+    "users": {
+      "value": "users",
+      "_go_const": "Users",
+      "_python_const": "USERS"
+    },
+    "web_sessions": {
+      "value": "web_sessions",
+      "_go_const": "WebSessions",
+      "_python_const": "WEB_SESSIONS"
+    },
+    "operator_sessions": {
+      "value": "operator_sessions",
+      "_go_const": "OperatorSessions",
+      "_python_const": "OPERATOR_SESSIONS"
+    },
+    "cli_sessions": {
+      "value": "cli_sessions",
+      "_go_const": "CLISessions",
+      "_python_const": "CLI_SESSIONS"
+    },
+    "login_audit": {
+      "value": "login_audit",
+      "_go_const": "LoginAudit",
+      "_python_const": "LOGIN_AUDIT"
+    },
+    "auth_admin_audit": {
+      "value": "auth_admin_audit",
+      "_go_const": "AuthAdminAudit",
+      "_python_const": "AUTH_ADMIN_AUDIT"
+    },
+    "account_locks": {
+      "value": "account_locks",
+      "_go_const": "AccountLocks",
+      "_python_const": "ACCOUNT_LOCKS"
+    },
+    "api_keys": {
+      "value": "api_keys",
+      "_go_const": "APIKeys",
+      "_python_const": "API_KEYS"
+    },
+    "organizations": {
+      "value": "organizations",
+      "_go_const": "Organizations",
+      "_python_const": "ORGANIZATIONS"
+    },
+    "operators": {
+      "value": "operators",
+      "_go_const": "Operators",
+      "_python_const": "OPERATORS"
+    },
+    "operator_usage": {
+      "value": "operator_usage",
+      "_go_const": "OperatorUsage",
+      "_python_const": "OPERATOR_USAGE"
+    },
+    "cases": {
+      "value": "cases",
+      "_go_const": "Cases",
+      "_python_const": "CASES"
+    },
+    "investigations": {
+      "value": "investigations",
+      "_go_const": "Investigations",
+      "_python_const": "INVESTIGATIONS"
+    },
+    "tasks": {
+      "value": "tasks",
+      "_go_const": "Tasks",
+      "_python_const": "TASKS"
+    },
+    "memories": {
+      "value": "memories",
+      "_go_const": "Memories",
+      "_python_const": "MEMORIES"
+    },
+    "settings": {
+      "value": "settings",
+      "_go_const": "Settings",
+      "_python_const": "SETTINGS"
+    },
+    "console_audit": {
+      "value": "console_audit",
+      "_go_const": "ConsoleAudit",
+      "_python_const": "CONSOLE_AUDIT"
+    },
+    "bound_sessions": {
+      "value": "bound_sessions",
+      "_go_const": "BoundSessions",
+      "_python_const": "BOUND_SESSIONS"
+    },
+    "passkey_challenges": {
+      "value": "passkey_challenges",
+      "_go_const": "PasskeyChallenges",
+      "_python_const": "PASSKEY_CHALLENGES"
+    },
+    "tribunal_commands": {
+      "value": "tribunal_commands",
+      "_go_const": "TribunalCommands",
+      "_python_const": "TRIBUNAL_COMMANDS"
+    },
+    "agent_activity_metadata": {
+      "value": "agent_activity_metadata",
+      "_go_const": "AgentActivityMetadata",
+      "_python_const": "AGENT_ACTIVITY_METADATA"
+    },
+    "reputation_state": {
+      "value": "reputation_state",
+      "_go_const": "ReputationState",
+      "_python_const": "REPUTATION_STATE"
+    },
+    "reputation_commitments": {
+      "value": "reputation_commitments",
+      "_go_const": "ReputationCommitments",
+      "_python_const": "REPUTATION_COMMITMENTS"
+    },
+    "stake_resolutions": {
+      "value": "stake_resolutions",
+      "_go_const": "StakeResolutions",
+      "_python_const": "STAKE_RESOLUTIONS"
+    },
+    "revoked_certificates": {
+      "value": "revoked_certificates",
+      "_go_const": "RevokedCertificates",
+      "_python_const": "REVOKED_CERTIFICATES"
+    },
+    "trusted_signers": {
+      "value": "trusted_signers",
+      "_go_const": "TrustedSigners",
+      "_python_const": "TRUSTED_SIGNERS"
+    }
   }
 }

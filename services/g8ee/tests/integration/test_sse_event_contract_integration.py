@@ -81,7 +81,7 @@ class TestSSEEventContract:
         )
 
         published = event_svc._published_events
-        started_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_STARTED]
+        started_events = [e for e in published if e.event_type == EventType.AI_LLM_CHAT_ITERATION_STARTED]
 
         assert len(started_events) == 1
         actual_event = started_events[0]
@@ -131,7 +131,7 @@ class TestSSEEventContract:
 
         # Get published events
         published = event_svc._published_events
-        text_chunk_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
+        text_chunk_events = [e for e in published if e.event_type == EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
 
         assert len(text_chunk_events) >= 1
         actual_event = text_chunk_events[0]
@@ -140,7 +140,7 @@ class TestSSEEventContract:
         expected_fixture = PROTOCOL_SSE_EVENTS["text_chunk_received"]
 
         # Verify structure matches (using actual EventType constants)
-        assert actual_event.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED
+        assert actual_event.event_type == EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED
         assert actual_event.payload.content == expected_fixture["data"]["content"]
         assert actual_event.investigation_id == inputs.investigation_id
         assert actual_event.case_id == inputs.case_id
@@ -178,7 +178,7 @@ class TestSSEEventContract:
         )
 
         published = event_svc._published_events
-        completed_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED]
+        completed_events = [e for e in published if e.event_type == EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED]
 
         assert len(completed_events) >= 1
         actual_event = completed_events[0]
@@ -217,7 +217,7 @@ class TestSSEEventContract:
         )
 
         published = event_svc._published_events
-        failed_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_FAILED]
+        failed_events = [e for e in published if e.event_type == EventType.AI_LLM_CHAT_ITERATION_FAILED]
 
         assert len(failed_events) >= 1
         actual_event = failed_events[0]
@@ -261,12 +261,12 @@ class TestSSEEventContract:
         published = event_svc._published_events
 
         # Verify ERROR event was published
-        error_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_FAILED]
+        error_events = [e for e in published if e.event_type == EventType.AI_LLM_CHAT_ITERATION_FAILED]
         assert len(error_events) == 1
         assert error_events[0].payload.error == "LLM provider error"
 
         # Verify completion event was NOT published (should be skipped when error occurs)
-        completion_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED]
+        completion_events = [e for e in published if e.event_type == EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED]
         assert len(completion_events) == 0, "Completion event should not be published when ERROR chunk is received"
 
     async def test_search_web_events_match_protocol_fixtures(self):
@@ -306,7 +306,7 @@ class TestSSEEventContract:
         )
 
         published = event_svc._published_events
-        tool_call_started_events = [e for e in published if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
+        tool_call_started_events = [e for e in published if e.event_type == EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
 
         assert len(tool_call_started_events) >= 1
         actual_event = tool_call_started_events[0]
@@ -369,10 +369,10 @@ class TestSSEEventContract:
         # Create payload matching fixture
         vote_breakdown = VoteBreakdown(
             candidates_by_member=expected_fixture["data"]["vote_breakdown"]["candidates_by_member"],
-            candidates_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["candidates_by_command"].items()},
+            candidates_by_command=dict(expected_fixture["data"]["vote_breakdown"]["candidates_by_command"].items()),
             winner=expected_fixture["data"]["vote_breakdown"]["winner"],
             winner_supporters=expected_fixture["data"]["vote_breakdown"]["winner_supporters"],
-            dissenters_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["dissenters_by_command"].items()},
+            dissenters_by_command=dict(expected_fixture["data"]["vote_breakdown"]["dissenters_by_command"].items()),
             consensus_strength=expected_fixture["data"]["vote_breakdown"]["consensus_strength"],
             tie_broken=expected_fixture["data"]["vote_breakdown"]["tie_broken"],
             tie_break_reason=expected_fixture["data"]["vote_breakdown"]["tie_break_reason"],
@@ -399,10 +399,10 @@ class TestSSEEventContract:
         # Create payload matching fixture
         vote_breakdown = VoteBreakdown(
             candidates_by_member=expected_fixture["data"]["vote_breakdown"]["candidates_by_member"],
-            candidates_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["candidates_by_command"].items()},
+            candidates_by_command=dict(expected_fixture["data"]["vote_breakdown"]["candidates_by_command"].items()),
             winner=expected_fixture["data"]["vote_breakdown"]["winner"],
             winner_supporters=expected_fixture["data"]["vote_breakdown"]["winner_supporters"],
-            dissenters_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["dissenters_by_command"].items()},
+            dissenters_by_command=dict(expected_fixture["data"]["vote_breakdown"]["dissenters_by_command"].items()),
             consensus_strength=expected_fixture["data"]["vote_breakdown"]["consensus_strength"],
             tie_broken=expected_fixture["data"]["vote_breakdown"]["tie_broken"],
             tie_break_reason=expected_fixture["data"]["vote_breakdown"]["tie_break_reason"],
@@ -468,25 +468,25 @@ async def test_protocol_fixture_event_types_match_constants():
     """Protocol fixture event types match g8ee EventType constants."""
     # Map fixture keys to EventType constants
     fixture_to_constant_mapping = {
-        "text_chunk_received": EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-        "text_completed": EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
-        "chat_iteration_failed": EventType.LLM_CHAT_ITERATION_FAILED,
-        "g8e_web_search_requested": EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
-        "g8e_web_search_completed": EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
-        "g8e_web_search_failed": EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED,
+        "text_chunk_received": EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+        "text_completed": EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED,
+        "chat_iteration_failed": EventType.AI_LLM_CHAT_ITERATION_FAILED,
+        "g8e_web_search_requested": EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
+        "g8e_web_search_completed": EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
+        "g8e_web_search_failed": EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_FAILED,
         "port_check_completed": EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED,
         "port_check_failed": EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
-        "citations_received": EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
+        "citations_received": EventType.AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
         "operator_command_requested": EventType.OPERATOR_COMMAND_REQUESTED,
         "operator_command_started": EventType.OPERATOR_COMMAND_STARTED,
         "operator_command_completed": EventType.OPERATOR_COMMAND_COMPLETED,
         "operator_command_failed": EventType.OPERATOR_COMMAND_FAILED,
-        "llm_lifecycle_started": EventType.LLM_LIFECYCLE_STARTED,
-        "llm_lifecycle_completed": EventType.LLM_LIFECYCLE_COMPLETED,
+        "llm_lifecycle_started": EventType.AI_LLM_LIFECYCLE_STARTED,
+        "llm_lifecycle_completed": EventType.AI_LLM_LIFECYCLE_COMPLETED,
         "platform_sse_connection_established": EventType.PLATFORM_SSE_CONNECTION_ESTABLISHED,
         "platform_sse_keepalive_sent": EventType.PLATFORM_SSE_KEEPALIVE_SENT,
-        "tribunal_voting_consensus_failed": EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED,
-        "tribunal_voting_dissent_recorded": EventType.TRIBUNAL_VOTING_DISSENT_RECORDED,
+        "tribunal_voting_consensus_failed": EventType.AI_TRIBUNAL_VOTING_CONSENSUS_FAILED,
+        "tribunal_voting_dissent_recorded": EventType.AI_TRIBUNAL_VOTING_DISSENT_RECORDED,
     }
 
     for fixture_key, expected_constant in fixture_to_constant_mapping.items():

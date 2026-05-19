@@ -12,47 +12,47 @@
 # limitations under the License.
 
 """
-Integration tests: search_web tool — request, handling, and response.
+Integration tests: search_web tool - request, handling, and response.
 
 These tests exercise the full path from AIToolService.execute_tool_call with
 OperatorToolName.G8E_SEARCH_WEB through MockWebSearchProvider.search() to a
 typed SearchWebResult, and through build_g8e_web_search_grounding to GroundingMetadata.
 
-    Segment 1 — tool registration
+    Segment 1 - tool registration
       G8E_SEARCH_WEB is registered when a web_search_provider is present.
       It is NOT registered when web_search_provider is None.
 
-    Segment 2 — execute_tool_call routing
+    Segment 2 - execute_tool_call routing
       G8E_SEARCH_WEB routes to the provider's search() method with the correct query.
       Result is a typed SearchWebResult.
 
-    Segment 3 — successful search response shape
+    Segment 3 - successful search response shape
       SearchWebResult carries success=True, query, and typed WebSearchResultItem list.
       Each item has title, link, snippet fields.
 
-    Segment 4 — failed / empty search response
+    Segment 4 - failed / empty search response
       Provider returning success=False is passed through as SearchWebResult(success=False).
       Empty results list is valid (no error).
 
-    Segment 5 — grounding metadata construction
+    Segment 5 - grounding metadata construction
       build_g8e_web_search_grounding produces GroundingMetadata with grounding_used=True
       when results are present.
       grounding_used=False when no results or success=False.
 
-    Segment 6 — search_web SSE events through deliver_via_sse
+    Segment 6 - search_web SSE events through deliver_via_sse
       A TOOL_CALL chunk for G8E_SEARCH_WEB produces LLM_TOOL_SEARCH_WEB_REQUESTED.
       A TOOL_RESULT chunk for G8E_SEARCH_WEB with grounding produces CITATIONS event.
 
-    Segment 7 — _search_calls records all invocations (observability)
+    Segment 7 - _search_calls records all invocations (observability)
       MockWebSearchProvider._search_calls captures every search call for assertion.
 
 Real code under test:
     AIToolService.execute_tool_call (app/services/ai/tool_service.py)
     MockWebSearchProvider.build_g8e_web_search_grounding (real grounding logic)
-    deliver_via_sse (app/services/ai/agent_sse.py) — SSE event translation
+    deliver_via_sse (app/services/ai/agent_sse.py) - SSE event translation
 
 Only the WebSearchProvider network boundary is replaced:
-    MockWebSearchProvider — no GCP credentials required
+    MockWebSearchProvider - no GCP credentials required
 """
 
 import pytest
@@ -137,7 +137,7 @@ async def _collect_sse_events(chunks, inputs=None, state=None):
 
 
 # ---------------------------------------------------------------------------
-# Segment 1 — tool registration
+# Segment 1 - tool registration
 # ---------------------------------------------------------------------------
 
 
@@ -163,7 +163,7 @@ class TestSearchWebToolRegistration:
 
 
 # ---------------------------------------------------------------------------
-# Segment 2 — execute_tool_call routing
+# Segment 2 - execute_tool_call routing
 # ---------------------------------------------------------------------------
 
 
@@ -234,7 +234,7 @@ class TestSearchWebRouting:
 
 
 # ---------------------------------------------------------------------------
-# Segment 3 — successful search response shape
+# Segment 3 - successful search response shape
 # ---------------------------------------------------------------------------
 
 
@@ -309,7 +309,7 @@ class TestSearchWebResponseShape:
 
 
 # ---------------------------------------------------------------------------
-# Segment 4 — failed / empty search response
+# Segment 4 - failed / empty search response
 # ---------------------------------------------------------------------------
 
 
@@ -359,7 +359,7 @@ class TestSearchWebFailureHandling:
 
 
 # ---------------------------------------------------------------------------
-# Segment 5 — grounding metadata construction
+# Segment 5 - grounding metadata construction
 # ---------------------------------------------------------------------------
 
 
@@ -430,7 +430,7 @@ class TestSearchWebGrounding:
 
 
 # ---------------------------------------------------------------------------
-# Segment 6 — search_web SSE events through deliver_via_sse
+# Segment 6 - search_web SSE events through deliver_via_sse
 # ---------------------------------------------------------------------------
 
 
@@ -457,7 +457,7 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        tool_call_events = [e for e in events if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
+        tool_call_events = [e for e in events if e.event_type == EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
         assert len(tool_call_events) == 1
         assert tool_call_events[0].payload.tool_name == OperatorToolName.G8E_SEARCH_WEB
 
@@ -478,7 +478,7 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        tool_call_event = next(e for e in events if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED)
+        tool_call_event = next(e for e in events if e.event_type == EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED)
         assert tool_call_event.payload.execution_id == "exe_sw_002"
 
     async def test_search_web_tool_call_started_carries_display_detail(self):
@@ -498,7 +498,7 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        tool_call_event = next(e for e in events if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED)
+        tool_call_event = next(e for e in events if e.event_type == EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED)
         assert tool_call_event.payload.display_detail == "nginx upstream timeout"
 
     async def test_citations_chunk_fires_citations_ready_event(self):
@@ -524,7 +524,7 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        citation_events = [e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED]
+        citation_events = [e for e in events if e.event_type == EventType.AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED]
         assert len(citation_events) == 1
 
     async def test_multiple_search_calls_each_fire_separate_events(self):
@@ -553,12 +553,12 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        tool_call_events = [e for e in events if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
+        tool_call_events = [e for e in events if e.event_type == EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
         assert len(tool_call_events) == 2
 
 
 # ---------------------------------------------------------------------------
-# Segment 7 — _search_calls observability
+# Segment 7 - _search_calls observability
 # ---------------------------------------------------------------------------
 
 

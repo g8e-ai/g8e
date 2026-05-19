@@ -100,8 +100,8 @@ class Part:
         return cls(inline_data=InlineData(mime_type=mime_type, data=data))
 
     @classmethod
-    def from_tool_response(cls, name: str, response: dict[str, Any], id: str | None = None) -> Part:
-        return cls(tool_response=ToolResponse(name=name, response=response, id=id))
+    def from_tool_response(cls, name: str, response: dict[str, Any], call_id: str | None = None) -> Part:
+        return cls(tool_response=ToolResponse(name=name, response=response, id=call_id))
 
 
 @dataclass
@@ -152,7 +152,7 @@ class SdkGroundingRawData:
     """Typed representation of raw SDK grounding metadata extracted at the provider boundary.
 
     Populated by the respective provider and attached to GenerateContentResponse.grounding_raw.
-    Consumed exclusively by GroundingService — never accessed outside the grounding boundary.
+    Consumed exclusively by GroundingService - never accessed outside the grounding boundary.
     """
     web_search_queries: list[str] = field(default_factory=list)
     grounding_chunks: list[SdkGroundingChunk] = field(default_factory=list)

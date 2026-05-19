@@ -16,16 +16,16 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import Request
 
-from app.constants import AuthMethod, MessageSender, ComponentName
+from app.constants import MessageSender, ComponentName
 from app.constants.events import EventType
-from app.models.http_context import RequestContext
+from app.models.http_context import RequestContext, G8eHttpContext
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
 from app.routers.chat_router import (
     answer_triage_question,
     skip_triage_questions,
     timeout_triage_questions,
 )
-from tests.fakes.factories import build_authenticated_user, create_investigation_data
+from tests.fakes.factories import create_investigation_data
 
 pytestmark = [pytest.mark.unit]
 
@@ -34,12 +34,12 @@ class TestTriageEndpoints:
     """Test triage interaction endpoints."""
 
     async def test_answer_triage_question_persists_message(self):
-        mock_request = MagicMock(spec=Request)
+        MagicMock(spec=Request)
         mock_investigation_service = MagicMock()
         mock_chat_pipeline = MagicMock()
         mock_chat_pipeline.run_chat = AsyncMock()
         mock_chat_task_manager = MagicMock()
-        mock_user_settings = MagicMock()
+        MagicMock()
 
         investigation_id = "inv-123"
         user_id = "user-456"
@@ -48,13 +48,11 @@ class TestTriageEndpoints:
         mock_investigation_service.get_investigation = AsyncMock(return_value=investigation)
         mock_investigation_service.investigation_data_service.add_chat_message = AsyncMock(return_value=True)
 
-        user_info = build_authenticated_user(
-            uid=user_id,
+        g8e_context = G8eHttpContext(
             user_id=user_id,
-            email="user@example.com",
-            organization_id="org-789",
             web_session_id=investigation_id,
-            auth_method=AuthMethod.TEST
+            organization_id="org-789",
+            source_component=ComponentName.CLIENT
         )
         payload = TriageAnswerRequest(
             investigation_id=investigation_id,
@@ -74,14 +72,14 @@ class TestTriageEndpoints:
             investigation_service=mock_investigation_service,
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
-            user_settings=mock_user_settings,
-            user_info=user_info
+            settings_service=AsyncMock(),
+            g8e_context=g8e_context
         )
 
         assert result == {"success": True}
         mock_investigation_service.investigation_data_service.add_chat_message.assert_called_once()
         mock_chat_pipeline.run_chat.assert_called_once()
-        args, kwargs = mock_investigation_service.investigation_data_service.add_chat_message.call_args
+        _args, kwargs = mock_investigation_service.investigation_data_service.add_chat_message.call_args
         assert kwargs["sender"] == MessageSender.USER_CHAT
         assert kwargs["metadata"].event_type == EventType.AI_TRIAGE_CLARIFICATION_ANSWERED
         assert kwargs["metadata"].question_index == 1
@@ -92,7 +90,7 @@ class TestTriageEndpoints:
         mock_chat_pipeline = MagicMock()
         mock_chat_pipeline.run_chat = AsyncMock()
         mock_chat_task_manager = MagicMock()
-        mock_user_settings = MagicMock()
+        MagicMock()
 
         investigation_id = "inv-123"
         user_id = "user-456"
@@ -101,13 +99,11 @@ class TestTriageEndpoints:
         mock_investigation_service.get_investigation = AsyncMock(return_value=investigation)
         mock_investigation_service.investigation_data_service.add_chat_message = AsyncMock(return_value=True)
 
-        user_info = build_authenticated_user(
-            uid=user_id,
+        g8e_context = G8eHttpContext(
             user_id=user_id,
-            email="user@example.com",
-            organization_id="org-789",
             web_session_id=investigation_id,
-            auth_method=AuthMethod.TEST
+            organization_id="org-789",
+            source_component=ComponentName.CLIENT
         )
         payload = TriageSkipRequest(
             investigation_id=investigation_id,
@@ -125,14 +121,14 @@ class TestTriageEndpoints:
             investigation_service=mock_investigation_service,
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
-            user_settings=mock_user_settings,
-            user_info=user_info
+            settings_service=AsyncMock(),
+            g8e_context=g8e_context
         )
 
         assert result == {"success": True}
         mock_investigation_service.investigation_data_service.add_chat_message.assert_called_once()
         mock_chat_pipeline.run_chat.assert_called_once()
-        args, kwargs = mock_investigation_service.investigation_data_service.add_chat_message.call_args
+        _args, kwargs = mock_investigation_service.investigation_data_service.add_chat_message.call_args
         assert kwargs["metadata"].event_type == EventType.AI_TRIAGE_CLARIFICATION_SKIPPED
 
     async def test_timeout_triage_questions_persists_message(self):
@@ -144,13 +140,12 @@ class TestTriageEndpoints:
         mock_investigation_service.get_investigation = AsyncMock(return_value=investigation)
         mock_investigation_service.investigation_data_service.add_chat_message = AsyncMock(return_value=True)
 
-        user_info = build_authenticated_user(
-            uid=user_id,
+        g8e_context = G8eHttpContext(
             user_id=user_id,
-            email="user@example.com",
-            organization_id="org-789",
             web_session_id=investigation_id,
-            auth_method=AuthMethod.TEST
+            organization_id="org-789",
+            source_component=ComponentName.CLIENT,
+            investigation_id=investigation_id
         )
         payload = TriageTimeoutRequest(
             investigation_id=investigation_id,
@@ -164,10 +159,10 @@ class TestTriageEndpoints:
         result = await timeout_triage_questions(
             request=payload,
             investigation_service=mock_investigation_service,
-            user_info=user_info
+            g8e_context=g8e_context
         )
 
         assert result == {"success": True}
         mock_investigation_service.investigation_data_service.add_chat_message.assert_called_once()
-        args, kwargs = mock_investigation_service.investigation_data_service.add_chat_message.call_args
+        _args, kwargs = mock_investigation_service.investigation_data_service.add_chat_message.call_args
         assert kwargs["metadata"].event_type == EventType.AI_TRIAGE_CLARIFICATION_TIMEOUT

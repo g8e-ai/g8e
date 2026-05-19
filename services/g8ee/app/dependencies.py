@@ -24,8 +24,8 @@ from app.models.state import G8eeAppState
 from app.services.service_factory import AllServices
 from app.constants import (
     ComponentName,
-    G8eHeaders,
     InternalApiPaths,
+    PROXY_USER_ID_HEADER,
 )
 from app.errors import (
     AuthenticationError,
@@ -157,7 +157,7 @@ async def get_g8ee_case_data_service(request: Request) -> CaseDataService:
 
 async def get_g8ee_investigation_data_service(request: Request) -> InvestigationDataService:
     state = cast(G8eeAppState, request.app.state)
-    service = state.services.investigation_data_service
+    service = cast(InvestigationDataService, state.services.investigation_data_service)
     if not service:
         logger.error("Investigation Data Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Investigation Data Service not available")
@@ -167,7 +167,7 @@ async def get_g8ee_investigation_data_service(request: Request) -> Investigation
 
 async def get_g8ee_investigation_service(request: Request) -> InvestigationService:
     state = cast(G8eeAppState, request.app.state)
-    service = state.services.investigation_service
+    service = cast(InvestigationService, state.services.investigation_service)
     if not service:
         logger.error("Investigation Domain Service not found in app state")
         raise ServiceUnavailableError("Investigation Domain Service not available")
@@ -176,7 +176,7 @@ async def get_g8ee_investigation_service(request: Request) -> InvestigationServi
 
 async def get_g8ee_memory_service(request: Request) -> MemoryDataService:
     state = cast(G8eeAppState, request.app.state)
-    service = state.services.memory_data_service
+    service = cast(MemoryDataService, state.services.memory_data_service)
     if not service:
         logger.error("Memory Data service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Memory service not available")
@@ -373,19 +373,18 @@ async def get_g8ee_event_service(request: Request) -> EventService:
 
 async def get_g8ee_user_settings(
     request: Request,
-    request_context: RequestContext | None = None,
     settings_service: SettingsServiceProtocol = Depends(get_g8ee_settings_service),
 ) -> G8eeUserSettings:
     """Load per-request G8eeUserSettings following Platform Settings < User Settings.
 
-    Extracts user_id from the RequestContext (in body) and overlays user-specific
-    settings on top of the platform settings loaded at startup.
+    Extracts user_id from proxy headers and overlays user-specific settings on top of
+    the platform settings loaded at startup.
     """
-    user_id = request_context.user_id if request_context else None
+    user_id = request.headers.get(PROXY_USER_ID_HEADER)
     if not user_id:
         # We need to return G8eeUserSettings, so we'll get it via the service
         # which will handle the merging logic.
-        return await settings_service.get_user_settings("default") # This will likely return merged platform data
+        return await settings_service.get_user_settings("default")
     return await settings_service.get_user_settings(user_id)
 
 
@@ -398,11 +397,82 @@ async def get_g8ee_current_active_user(request: Request) -> AuthenticatedUser:
     return user
 
 
-async def require_proxy_auth(
+async def require_authenticated_user(
     request: Request,
-    settings: G8eePlatformSettings = Depends(get_g8ee_platform_settings)
+    settings: G8eePlatformSettings = Depends(get_g8ee_platform_settings),
+    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
+    operator_session_service: OperatorSessionService = Depends(get_g8ee_operator_session_service),
 ) -> AuthenticatedUser:
-    return await authenticate_proxy_or_internal(request, settings)
+    user = await authenticate_proxy_or_internal(request, settings, operator_session_service)
+
+    # [PIVOT] Validate session bindings for CLI sessions (Plan §4.6)
+    # If a CLI session ID is provided, it must be bound to the authenticated
+    # operator session. This prevents cross-session routing leaks.
+    if user.cli_session_id:
+        if not user.operator_session_id:
+            from app.errors import AuthenticationError
+            from app.constants import ComponentName
+            raise AuthenticationError("CLI session requires operator session", component=ComponentName.G8EE)
+
+        if not await operator_data_service.validate_cli_session_ownership(
+            user.cli_session_id, user.operator_session_id
+        ):
+            from app.errors import AuthenticationError
+            from app.constants import ComponentName
+            raise AuthenticationError("CLI session ownership mismatch", component=ComponentName.G8EE)
+
+    return user
+
+
+async def require_authenticated_context(
+    request: Request,
+    user: AuthenticatedUser = Depends(require_authenticated_user)
+) -> G8eHttpContext:
+    """Unified authentication and context validation dependency.
+
+    1. Authenticates user via proxy headers, operator session Bearer, or web session cookie (using require_authenticated_user).
+    2. Extracts RequestContext from the request body.
+    3. Validates that the body context matches the authenticated user.
+    4. Returns a validated G8eHttpContext.
+    """
+    # Try to extract context from request body
+    context_data = None
+    try:
+        # FastAPI's Request.json() handles caching of the body
+        body = await request.json()
+        if isinstance(body, dict):
+            context_data = body.get("context")
+    except Exception:
+        # Body might not be JSON or already consumed (shouldn't happen with FastAPI's cache)
+        pass
+
+    if not context_data:
+        # No context in body, return context derived from authenticated headers
+        return G8eHttpContext(
+            user_id=user.uid,
+            web_session_id=user.web_session_id,
+            cli_session_id=user.cli_session_id,
+            source_component=ComponentName.G8EE,  # Default for internal relay
+        )
+
+    # Context found, validate it against the authenticated user
+    request_context = RequestContext.model_validate(context_data)
+
+    # Check if this is an exempt path (e.g. operator auth relay)
+    is_exempt = request.url.path in [
+        InternalApiPaths.OPERATOR_AUTHENTICATE,
+        InternalApiPaths.OPERATOR_DEVICE_LINKS_REGISTER,
+        InternalApiPaths.OPERATOR_SESSION_VALIDATE,
+        InternalApiPaths.OPERATOR_SESSION_REFRESH,
+        InternalApiPaths.OPERATOR_AUTH_LISTEN,
+        InternalApiPaths.API_KEY_GENERATE,
+        InternalApiPaths.CERTIFICATE_REVOKE,
+    ]
+
+    g8e_context = G8eHttpContext.from_request_context(request_context, is_exempt_path=is_exempt)
+    g8e_context.validate_against_user(user)
+
+    return g8e_context
 
 
 async def health_check_dependencies(request: Request) -> HealthCheckResult:
@@ -446,5 +516,6 @@ __all__ = [
     "get_g8eeweb_search_provider",
     "health_check_dependencies",
     "is_infrastructure_health_check_ip",
-    "require_proxy_auth",
+    "require_authenticated_context",
+    "require_authenticated_user",
 ]

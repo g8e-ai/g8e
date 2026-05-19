@@ -20,7 +20,7 @@ communication via operator pub/sub.
 
 from datetime import datetime
 from typing import Literal, Union
-from pydantic import Field, field_validator, TypeAdapter
+from pydantic import Field, field_validator, model_validator, TypeAdapter
 from uuid import uuid4
 
 from app.constants import ComponentName, EventType, ExecutionStatus, HeartbeatType
@@ -437,7 +437,7 @@ class G8eoHeartbeatPayload(G8eBaseModel):
     """Typed wire model for the g8eo heartbeat pub/sub payload.
 
     Canonical shape defined in protocol/proto/operator.proto (HeartbeatSnapshot message).
-    This is the boundary model — validated once when the raw pub/sub
+    This is the boundary model - validated once when the raw pub/sub
     message arrives in command_pubsub.py, then passed typed throughout.
     """
     event_type: EventType | None = None
@@ -525,29 +525,44 @@ class G8eoResultEnvelope(G8eBaseModel):
     """Inbound-only envelope parsed from the g8eo results pub/sub channel.
 
     Carries routing fields and a typed payload parsed at the wire boundary.
-    This is a parse-only boundary object — not a persisted document.
+    This is a parse-only boundary object - not a persisted document.
 
-    Payload is always required — errors are represented by specific error payload types
+    Payload is always required - errors are represented by specific error payload types
     in the G8eoResultPayload union (e.g., FetchLogsErrorPayload, FetchHistoryErrorPayload).
     """
 
-    id: str = Field(default_factory=lambda: str(uuid4()), description="Unique per-message UUID v4 from g8eo. NOT a correlation key — do NOT use to match results to outbound commands. For correlation, use payload.execution_id.")
+    id: str = Field(default_factory=lambda: str(uuid4()), description="Unique per-message UUID v4 from g8eo. NOT a correlation key - do NOT use to match results to outbound commands. For correlation, use payload.execution_id.")
     event_type: EventType = Field(..., description="Event type from g8eo")
     operator_id: str = Field(..., description="Operator ID from channel routing")
     operator_session_id: str = Field(..., description="Operator session ID from channel routing")
     case_id: str | None = Field(default=None, description="Case ID propagated from the original command")
     investigation_id: str | None = Field(default=None, description="Investigation ID propagated from the original command")
     task_id: str | None = Field(default=None, description="Task ID propagated from the original command")
+    web_session_id: str | None = Field(default=None, description="Web session ID")
+    cli_session_id: str | None = Field(default=None, description="CLI session ID")
+    user_id: str | None = Field(default=None, description="User identifier")
     payload: G8eoResultPayload = Field(
         ...,
         discriminator="payload_type",
-        description="Typed payload — uses discriminator for type-safe parsing. Always required."
+        description="Typed payload - uses discriminator for type-safe parsing. Always required."
     )
+
+    @model_validator(mode="after")
+    def validate_session_ids(self) -> "G8eoResultEnvelope":
+        """Ensure strict separation of session types and validate required context.
+
+        Matches G8eHttpContext validation logic for consistency.
+        """
+        # Note: G8eoResultEnvelope is usually from ComponentName.G8EO
+        # but we still enforce session exclusivity if present.
+        if self.web_session_id and self.cli_session_id:
+            raise ValueError("Envelope cannot have both web_session_id and cli_session_id")
+        return self
 
 
 class G8eMessage(G8eBaseModel):
     """Standardized message for operator pub/sub communication between g8e components.
-    
+
     The payload field uses a Union discriminator pattern for type-safe parsing.
     Consumers can parse inbound messages without knowing the concrete type in advance.
     """
@@ -558,15 +573,35 @@ class G8eMessage(G8eBaseModel):
     source_component: ComponentName = Field(..., description="Source component that published this message")
     instance_id: str | None = Field(default=None, description="Optional instance identifier for the source component")
     event_type: EventType = Field(..., description="Event type identifier")
-    case_id: str = Field(..., description="Case ID associated with this message")
-    task_id: str = Field(..., description="Task ID associated with this message")
-    investigation_id: str = Field(..., description="Investigation ID associated with this message")
-    web_session_id: str = Field(..., description="Web session ID for targeted delivery to specific browser tabs")
+    case_id: str | None = Field(default=None, description="Case ID associated with this message")
+    task_id: str | None = Field(default=None, description="Task ID associated with this message")
+    investigation_id: str | None = Field(default=None, description="Investigation ID associated with this message")
+    web_session_id: str | None = Field(default=None, description="Web session ID for targeted delivery to specific browser tabs")
+    cli_session_id: str | None = Field(default=None, description="CLI session ID for targeted delivery to specific CLI clients")
+    user_id: str | None = Field(default=None, description="User identifier associated with this message")
     operator_session_id: str | None = Field(default=None, description="Operator session ID for g8eo Operator identification")
     operator_id: str | None = Field(default=None, description="Operator ID for g8eo Operator identification")
     api_key: str | None = Field(default=None, description="Operator API key carried on pub/sub messages for identity continuity")
     payload: G8eOutboundPayload | None = Field(
         default=None,
         discriminator="payload_type",
-        description="Typed payload for this message — uses discriminator for type-safe parsing"
+        description="Typed payload for this message - uses discriminator for type-safe parsing"
     )
+
+    @model_validator(mode="after")
+    def validate_session_ids(self) -> "G8eMessage":
+        """Ensure strict separation of session types and validate required context.
+
+        Matches G8eHttpContext validation logic for consistency.
+        """
+        if self.source_component == ComponentName.CLIENT:
+            if self.web_session_id and self.cli_session_id:
+                raise ValueError("Message cannot have both web_session_id and cli_session_id")
+
+            if not self.web_session_id and not self.cli_session_id:
+                raise ValueError("Message must have either web_session_id or cli_session_id for CLIENT source")
+
+            if not self.user_id:
+                raise ValueError("user_id is required for CLIENT source")
+
+        return self

@@ -20,6 +20,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 )
 
 // Vault manages the encrypted LFAA data store.
@@ -299,7 +301,7 @@ func (v *Vault) Reset(confirmDestroy bool) error {
 
 	dbPath := filepath.Join(v.dataDir, "g8e.db")
 	if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
-		v.logger.Warn("Failed to delete database file", "error", err)
+		v.logger.Warn("Failed to delete database file", string(constants.ConnectionStateError), err)
 	}
 
 	os.Remove(dbPath + "-wal")

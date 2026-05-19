@@ -57,6 +57,7 @@ from app.models.operators import (
     HeartbeatUserDetails,
     OperatorDocument,
 )
+from app.models.pubsub_messages import G8eoResultEnvelope, G8eoResultPayload
 from app.utils.timestamp import now
 
 # ---------------------------------------------------------------------------
@@ -163,7 +164,7 @@ def build_investigation_with_operators(
     web_session_id: str = "test-web-session",
 ) -> EnrichedInvestigationContext:
     """Build an EnrichedInvestigationContext with operator_documents."""
-    total = len(operator_documents) if operator_documents else (1 if operators_bound else 0)
+    len(operator_documents) if operator_documents else (1 if operators_bound else 0)
     return build_enriched_context(
         investigation_id=inv_id,
         case_id=case_id,
@@ -230,7 +231,7 @@ def build_g8e_http_context(
     is_operator_auth_relay: bool = False,
 ) -> G8eHttpContext:
     """Build a G8eHttpContext with fixed deterministic defaults for unit tests.
-    
+
     Args:
         is_operator_auth_relay: Set to True for device token flows (evals) where web_session_id/user_id are None.
                                  Must be paired with source_component=ComponentName.CLIENT.
@@ -313,7 +314,7 @@ def build_production_operator_document(
     """Build a production-like OperatorDocument for evaluation and benchmark tests.
 
     Reflects a realistic production Operator environment where the binary
-    was started with ``sudo ./g8eo`` — root user, systemd init, bare-metal
+    was started with ``sudo ./g8eo`` - root user, systemd init, bare-metal
     Linux host.  This ensures accuracy tests exercise the agent's reasoning
     without colliding with the security layer that blocks ``sudo``.
     """
@@ -418,7 +419,7 @@ def build_operator_heartbeat(
 
 def create_mock_llm_provider(text: str):
     """Build a mock LLM provider for tests.
-    
+
     If text is provided, generate_content returns a mock response with that text.
     """
     from unittest.mock import AsyncMock, MagicMock
@@ -503,4 +504,23 @@ def create_investigation_memory(
         response_style=response_style,
         problem_solving_approach=problem_solving_approach,
         interaction_style=interaction_style,
+    )
+
+
+
+
+def build_g8eo_result_envelope(
+    event_type: EventType,
+    payload: G8eoResultPayload,
+    operator_id: str = "op-1",
+    operator_session_id: str = "sess-1",
+    **kwargs
+) -> G8eoResultEnvelope:
+    """Create a valid G8eoResultEnvelope for tests."""
+    return G8eoResultEnvelope(
+        event_type=event_type,
+        operator_id=operator_id,
+        operator_session_id=operator_session_id,
+        payload=payload,
+        **kwargs
     )

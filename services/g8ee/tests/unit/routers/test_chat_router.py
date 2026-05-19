@@ -16,12 +16,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import Request
 
-from app.constants import AuthMethod, ChatSessionStatus, InvestigationStatus
+from app.constants import ChatSessionStatus, InvestigationStatus, ComponentName
 from app.constants.events import EventType
 from app.errors import ResourceNotFoundError
 from app.routers.chat_router import router
+from app.models.http_context import G8eHttpContext
 from tests.fakes.factories import (
-    build_authenticated_user,
     build_case_model,
     create_conversation_message,
     create_investigation_data,
@@ -54,13 +54,11 @@ class TestGetChatSession:
             web_session_id=web_session_id,
             request=mock_request,
             investigation_service=mock_investigation_service,
-            user_info=build_authenticated_user(
-                uid=user_id,
+            g8e_context=G8eHttpContext(
                 user_id=user_id,
-                email="user@example.com",
-                organization_id="org-789",
                 web_session_id=web_session_id,
-                auth_method=AuthMethod.TEST
+                organization_id="org-789",
+                source_component=ComponentName.CLIENT
             ),
         )
 
@@ -89,13 +87,11 @@ class TestGetChatSession:
                 web_session_id="session-123",
                 request=mock_request,
                 investigation_service=mock_investigation_service,
-                user_info=build_authenticated_user(
-                    uid=other_id,
+                g8e_context=G8eHttpContext(
                     user_id=other_id,
-                    email="other@example.com",
-                    organization_id="org-789",
                     web_session_id="session-123",
-                    auth_method=AuthMethod.TEST
+                    organization_id="org-789",
+                    source_component=ComponentName.CLIENT
                 ),
             )
 
@@ -114,13 +110,11 @@ class TestGetChatSession:
                 web_session_id="session-missing",
                 request=mock_request,
                 investigation_service=mock_investigation_service,
-                user_info=build_authenticated_user(
-                    uid="user-456",
+                g8e_context=G8eHttpContext(
                     user_id="user-456",
-                    email="user@example.com",
-                    organization_id="org-789",
                     web_session_id="session-missing",
-                    auth_method=AuthMethod.TEST
+                    organization_id="org-789",
+                    source_component=ComponentName.CLIENT
                 ),
             )
 
@@ -146,13 +140,11 @@ class TestGetChatSession:
             web_session_id="session-closed",
             request=mock_request,
             investigation_service=mock_investigation_service,
-            user_info=build_authenticated_user(
-                uid=user_id,
+            g8e_context=G8eHttpContext(
                 user_id=user_id,
-                email="user@example.com",
-                organization_id="org-789",
                 web_session_id="session-closed",
-                auth_method=AuthMethod.TEST
+                organization_id="org-789",
+                source_component=ComponentName.CLIENT
             ),
         )
 
@@ -181,7 +173,7 @@ class TestGetLatestChatSessionForCase:
             user_id=user_id,
         )
         investigation.conversation_history = [
-            create_conversation_message(sender=EventType.EVENT_SOURCE_USER_CHAT, content="Hello")
+            create_conversation_message(sender=EventType.SOURCE_USER_CHAT, content="Hello")
         ]
         mock_investigation_service.investigation_data_service.get_case_investigations = AsyncMock(return_value=[investigation])
 
@@ -190,13 +182,11 @@ class TestGetLatestChatSessionForCase:
             request=mock_request,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,
-            user_info=build_authenticated_user(
-                uid=user_id,
+            g8e_context=G8eHttpContext(
                 user_id=user_id,
-                email="user@example.com",
-                organization_id="org-789",
                 web_session_id="session-123",
-                auth_method=AuthMethod.TEST
+                source_component=ComponentName.CLIENT,
+                organization_id="org-789",
             ),
         )
 
@@ -223,13 +213,11 @@ class TestGetLatestChatSessionForCase:
             request=mock_request,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,
-            user_info=build_authenticated_user(
-                uid=user_id,
+            g8e_context=G8eHttpContext(
                 user_id=user_id,
-                email="user@example.com",
-                organization_id="org-789",
                 web_session_id="session-123",
-                auth_method=AuthMethod.TEST
+                organization_id="org-789",
+                source_component=ComponentName.CLIENT
             ),
         )
 
@@ -250,9 +238,9 @@ class TestGetLatestChatSessionForCase:
         mock_case_service.get_case = AsyncMock(return_value=case)
 
         inv_old = create_investigation_data(investigation_id="inv-old", case_id="case-789", user_id=user_id)
-        inv_old.conversation_history = [create_conversation_message(sender=EventType.EVENT_SOURCE_USER_CHAT, content="Old")]
+        inv_old.conversation_history = [create_conversation_message(sender=EventType.SOURCE_USER_CHAT, content="Old")]
         inv_new = create_investigation_data(investigation_id="inv-new", case_id="case-789", user_id=user_id)
-        inv_new.conversation_history = [create_conversation_message(sender=EventType.EVENT_SOURCE_USER_CHAT, content="New")]
+        inv_new.conversation_history = [create_conversation_message(sender=EventType.SOURCE_USER_CHAT, content="New")]
         mock_investigation_service.investigation_data_service.get_case_investigations = AsyncMock(
             return_value=[inv_old, inv_new]
         )
@@ -262,13 +250,11 @@ class TestGetLatestChatSessionForCase:
             request=mock_request,
             case_service=mock_case_service,
             investigation_service=mock_investigation_service,
-            user_info=build_authenticated_user(
-                uid=user_id,
+            g8e_context=G8eHttpContext(
                 user_id=user_id,
-                email="user@example.com",
-                organization_id="org-789",
                 web_session_id="session-123",
-                auth_method=AuthMethod.TEST
+                organization_id="org-789",
+                source_component=ComponentName.CLIENT
             ),
         )
 
@@ -291,13 +277,11 @@ class TestGetLatestChatSessionForCase:
                 request=mock_request,
                 case_service=mock_case_service,
                 investigation_service=mock_investigation_service,
-                user_info=build_authenticated_user(
-                    uid=user_id,
+                g8e_context=G8eHttpContext(
                     user_id=user_id,
-                    email="user@example.com",
-                    organization_id="org-789",
                     web_session_id="session-123",
-                    auth_method=AuthMethod.TEST
+                    organization_id="org-789",
+                    source_component=ComponentName.CLIENT
                 ),
             )
 
@@ -320,13 +304,11 @@ class TestGetLatestChatSessionForCase:
                 request=mock_request,
                 case_service=mock_case_service,
                 investigation_service=mock_investigation_service,
-                user_info=build_authenticated_user(
-                    uid=other_id,
+                g8e_context=G8eHttpContext(
                     user_id=other_id,
-                    email="other@example.com",
-                    organization_id="org-789",
                     web_session_id="session-123",
-                    auth_method=AuthMethod.TEST
+                    organization_id="org-789",
+                    source_component=ComponentName.CLIENT
                 ),
             )
 

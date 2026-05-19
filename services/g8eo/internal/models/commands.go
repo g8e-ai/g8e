@@ -16,7 +16,7 @@ package models
 import (
 	"time"
 
-	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 )
 
 type ExecutionRequestPayload struct {
@@ -36,36 +36,37 @@ type ExecutionRequestPayload struct {
 	Priority          int               `json:"priority,omitempty"`
 	Tags              map[string]string `json:"tags,omitempty"`
 	Justification     string            `json:"justification,omitempty"`
+	Intent            string            `json:"intent,omitempty"`
 	SentinelMode      string            `json:"sentinel_mode,omitempty"`
 }
 
 type ExecutionResultsPayload struct {
-	PayloadType       string                    `json:"payload_type"`
-	ExecutionID       string                    `json:"execution_id"`
-	CaseID            string                    `json:"case_id"`
-	TaskID            *string                   `json:"task_id,omitempty"`
-	InvestigationID   string                    `json:"investigation_id"`
-	Command           string                    `json:"command"`
-	Args              []string                  `json:"args,omitempty"`
-	Status            constants.ExecutionStatus `json:"status"`
-	DurationSeconds   float64                   `json:"duration_seconds"`
-	OperatorID        string                    `json:"operator_id"`
-	OperatorSessionID string                    `json:"operator_session_id"`
-	Stdout            string                    `json:"stdout,omitempty"`
-	Stderr            string                    `json:"stderr,omitempty"`
-	StdoutSize        int                       `json:"stdout_size"`
-	StderrSize        int                       `json:"stderr_size"`
-	StdoutHash        string                    `json:"stdout_hash,omitempty"`
-	StderrHash        string                    `json:"stderr_hash,omitempty"`
-	StoredLocally     bool                      `json:"stored_locally"`
-	ReturnCode        *int                      `json:"return_code,omitempty"`
-	ErrorMessage      *string                   `json:"error_message,omitempty"`
-	ErrorType         *string                   `json:"error_type,omitempty"`
-	StartTime         *time.Time                `json:"start_time,omitempty"`
-	EndTime           *time.Time                `json:"end_time,omitempty"`
-	TerminalOutput    *TerminalOutput           `json:"terminal_output,omitempty"`
-	SystemInfo        *ExecutionSystemInfo      `json:"system_info,omitempty"`
-	EnvironmentInfo   *ExecutionEnvironmentInfo `json:"environment_info,omitempty"`
+	PayloadType       string                     `json:"payload_type"`
+	ExecutionID       string                     `json:"execution_id"`
+	CaseID            string                     `json:"case_id"`
+	TaskID            *string                    `json:"task_id,omitempty"`
+	InvestigationID   string                     `json:"investigation_id"`
+	Command           string                     `json:"command"`
+	Args              []string                   `json:"args,omitempty"`
+	Status            operatorv1.ExecutionStatus `json:"status"`
+	DurationSeconds   float64                    `json:"duration_seconds"`
+	OperatorID        string                     `json:"operator_id"`
+	OperatorSessionID string                     `json:"operator_session_id"`
+	Stdout            string                     `json:"stdout,omitempty"`
+	Stderr            string                     `json:"stderr,omitempty"`
+	StdoutSize        int                        `json:"stdout_size"`
+	StderrSize        int                        `json:"stderr_size"`
+	StdoutHash        string                     `json:"stdout_hash,omitempty"`
+	StderrHash        string                     `json:"stderr_hash,omitempty"`
+	StoredLocally     bool                       `json:"stored_locally"`
+	ReturnCode        *int                       `json:"return_code,omitempty"`
+	ErrorMessage      *string                    `json:"error_message,omitempty"`
+	ErrorType         *string                    `json:"error_type,omitempty"`
+	StartTime         *time.Time                 `json:"start_time,omitempty"`
+	EndTime           *time.Time                 `json:"end_time,omitempty"`
+	TerminalOutput    *TerminalOutput            `json:"terminal_output,omitempty"`
+	SystemInfo        *ExecutionSystemInfo       `json:"system_info,omitempty"`
+	EnvironmentInfo   *ExecutionEnvironmentInfo  `json:"environment_info,omitempty"`
 }
 
 type CommandRequestPayload struct {
@@ -152,14 +153,14 @@ type AuditDirectCmdRequestPayload struct {
 }
 
 type AuditDirectCmdResultPayload struct {
-	Command              string                    `json:"command"`
-	ExecutionID          string                    `json:"execution_id,omitempty"`
-	ExitCode             *int                      `json:"exit_code,omitempty"`
-	Status               constants.ExecutionStatus `json:"status,omitempty"`
-	Output               string                    `json:"output,omitempty"`
-	Stderr               string                    `json:"stderr,omitempty"`
-	ExecutionTimeSeconds float64                   `json:"execution_time_seconds,omitempty"`
-	OperatorSessionID    string                    `json:"operator_session_id"`
+	Command              string                     `json:"command"`
+	ExecutionID          string                     `json:"execution_id,omitempty"`
+	ExitCode             *int                       `json:"exit_code,omitempty"`
+	Status               operatorv1.ExecutionStatus `json:"status,omitempty"`
+	Output               string                     `json:"output,omitempty"`
+	Stderr               string                     `json:"stderr,omitempty"`
+	ExecutionTimeSeconds float64                    `json:"execution_time_seconds,omitempty"`
+	OperatorSessionID    string                     `json:"operator_session_id"`
 }
 
 type FsReadRequestPayload struct {

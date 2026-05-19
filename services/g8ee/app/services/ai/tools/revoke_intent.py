@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``revoke_intent_permission`` tool — revoke a previously granted AWS intent."""
+"""``revoke_intent_permission`` tool - revoke a previously granted AWS intent."""
 
 from __future__ import annotations
 
@@ -36,12 +36,11 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.REVOKE_INTENT,
-        description=load_prompt(PromptFile.TOOL_REVOKE_INTENT),
+        description=load_prompt(PromptFile.TOOLS_REVOKE_INTENT),
         parameters=schema_from_model(RevokeIntentArgs),
     )
-    return declaration
 
 
 async def handle(

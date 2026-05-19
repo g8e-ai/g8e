@@ -13,114 +13,39 @@
 
 from enum import StrEnum
 
-class AgentMode(StrEnum):
-    OPERATOR_BOUND = "g8e.bound"
-    OPERATOR_NOT_BOUND = "g8e.not.bound"
-    CLOUD_OPERATOR_BOUND = "cloud.g8e.bound"
-
-class PromptSection(StrEnum):
-    IDENTITY = "identity"
-    SAFETY = "safety"
-    LOYALTY = "loyalty"
-    DISSENT = "dissent"
-    CAPABILITIES = "capabilities"
-    EXECUTION = "execution"
-    TOOLS = "tools"
-    DOCS = "docs"
-    SYSTEM_CONTEXT = "system_context"
-    SENTINEL_MODE = "sentinel_mode"
-    TRIAGE_CONTEXT = "triage_context"
-    INVESTIGATION_CONTEXT = "investigation_context"
-    RESPONSE_CONSTRAINTS = "response_constraints"
-    LEARNED_CONTEXT = "learned_context"
-    AGENT_PERSONA = "agent_persona"
+from g8e_protocol.constants import AgentMode, PromptFile, PromptSection
 
 
 class InvestigationContextLabel(StrEnum):
+    """Investigation context field labels for UI formatting (g8ee-specific)."""
     CASE = "Case"
     DESCRIPTION = "Description"
     STATUS = "Status"
     PRIORITY = "Priority"
     SEVERITY = "Severity"
 
-class PromptFile(StrEnum):
-    # Core
-    CORE_IDENTITY = "core/identity.txt"
-    CORE_SAFETY = "core/safety.txt"
-    CORE_LOYALTY = "core/loyalty.txt"
-    CORE_DISSENT = "core/dissent.txt"
 
-    # System
-    SYSTEM_RESPONSE_CONSTRAINTS = "system/response_constraints.txt"
-    SYSTEM_SENTINEL_MODE = "system/sentinel_mode.txt"
+# Add path property to PromptFile for backward compatibility
+# This is a g8ee-specific convenience property
+PromptFile.path = property(lambda self: self.value)
 
-    # Modes - Operator Bound
-    MODE_OPERATOR_BOUND_CAPABILITIES = "modes/operator_bound/capabilities.txt"
-    MODE_OPERATOR_BOUND_EXECUTION = "modes/operator_bound/execution.txt"
-    MODE_OPERATOR_BOUND_TOOLS = "modes/operator_bound/tools.txt"
 
-    # Modes - Operator Not Bound
-    MODE_OPERATOR_NOT_BOUND_CAPABILITIES = "modes/operator_not_bound/capabilities.txt"
-    MODE_OPERATOR_NOT_BOUND_EXECUTION = "modes/operator_not_bound/execution.txt"
-    MODE_OPERATOR_NOT_BOUND_TOOLS = "modes/operator_not_bound/tools.txt"
-    MODE_OPERATOR_NOT_BOUND_CAPABILITIES_NO_SEARCH = "modes/operator_not_bound/capabilities_no_search.txt"
-    MODE_OPERATOR_NOT_BOUND_EXECUTION_NO_SEARCH = "modes/operator_not_bound/execution_no_search.txt"
-
-    # Modes - Cloud Operator Bound
-    MODE_CLOUD_OPERATOR_BOUND_CAPABILITIES = "modes/cloud_operator_bound/capabilities.txt"
-    MODE_CLOUD_OPERATOR_BOUND_EXECUTION = "modes/cloud_operator_bound/execution.txt"
-    MODE_CLOUD_OPERATOR_BOUND_TOOLS = "modes/cloud_operator_bound/tools.txt"
-
-    # Tools
-    TOOL_RUN_COMMANDS = "tools/run_commands_with_operator.txt"
-    TOOL_FILE_CREATE = "tools/file_create_on_operator.txt"
-    TOOL_FILE_WRITE = "tools/file_write_on_operator.txt"
-    TOOL_FILE_READ = "tools/file_read_on_operator.txt"
-    TOOL_FILE_UPDATE = "tools/file_update_on_operator.txt"
-    TOOL_SEARCH_WEB = "tools/g8e_web_search.txt"
-    TOOL_CHECK_PORT = "tools/check_port_status.txt"
-    TOOL_LIST_FILES = "tools/list_files_and_directories_with_detailed_metadata.txt"
-    TOOL_RECURSIVE_GREP = "tools/recursive_grep_search.txt"
-    TOOL_GRANT_INTENT = "tools/grant_intent_permission.txt"
-    TOOL_REVOKE_INTENT = "tools/revoke_intent_permission.txt"
-    TOOL_FETCH_FILE_HISTORY = "tools/fetch_file_history.txt"
-    TOOL_FETCH_FILE_DIFF = "tools/fetch_file_diff.txt"
-    TOOL_QUERY_INVESTIGATION_CONTEXT = "tools/query_investigation_context.txt"
-    TOOL_GET_COMMAND_CONSTRAINTS = "tools/get_command_constraints.txt"
-    TOOL_SSH_INVENTORY = "tools/list_ssh_inventory.txt"
-    TOOL_STREAM_OPERATOR = "tools/stream_operator_to_ssh_fleet.txt"
-
-    # Analysis
-
-    # Tribunal
-    TRIBUNAL_GENERATOR = "tribunal/generator.txt"
-    TRIBUNAL_GENERATOR_ROUND_2 = "tribunal/generator_round_2.txt"
-    TRIBUNAL_ROUND_2_AXIOM = "tribunal/round_2/axiom.txt"
-    TRIBUNAL_ROUND_2_CONCORD = "tribunal/round_2/concord.txt"
-    TRIBUNAL_ROUND_2_VARIANCE = "tribunal/round_2/variance.txt"
-    TRIBUNAL_ROUND_2_PRAGMA = "tribunal/round_2/pragma.txt"
-    TRIBUNAL_ROUND_2_NEMESIS = "tribunal/round_2/nemesis.txt"
-    TRIBUNAL_AUDITOR = "tribunal/auditor.txt"
-
-    @property
-    def path(self) -> str:
-        """Get the relative path for the prompt file."""
-        return self.value
-
+# AGENT_MODE_PROMPT_FILES mapping - derived from protocol JSON structure
+# Maps AgentMode values to PromptSection -> PromptFile mappings
 AGENT_MODE_PROMPT_FILES = {
     AgentMode.OPERATOR_BOUND: {
-        PromptSection.CAPABILITIES: PromptFile.MODE_OPERATOR_BOUND_CAPABILITIES,
-        PromptSection.EXECUTION: PromptFile.MODE_OPERATOR_BOUND_EXECUTION,
-        PromptSection.TOOLS: PromptFile.MODE_OPERATOR_BOUND_TOOLS,
+        PromptSection.CAPABILITIES: PromptFile.MODES_OPERATOR_BOUND_CAPABILITIES,
+        PromptSection.EXECUTION: PromptFile.MODES_OPERATOR_BOUND_EXECUTION,
+        PromptSection.TOOLS: PromptFile.MODES_OPERATOR_BOUND_TOOLS,
     },
     AgentMode.OPERATOR_NOT_BOUND: {
-        PromptSection.CAPABILITIES: PromptFile.MODE_OPERATOR_NOT_BOUND_CAPABILITIES,
-        PromptSection.EXECUTION: PromptFile.MODE_OPERATOR_NOT_BOUND_EXECUTION,
-        PromptSection.TOOLS: PromptFile.MODE_OPERATOR_NOT_BOUND_TOOLS,
+        PromptSection.CAPABILITIES: PromptFile.MODES_OPERATOR_NOT_BOUND_CAPABILITIES,
+        PromptSection.EXECUTION: PromptFile.MODES_OPERATOR_NOT_BOUND_EXECUTION,
+        PromptSection.TOOLS: PromptFile.MODES_OPERATOR_NOT_BOUND_TOOLS,
     },
     AgentMode.CLOUD_OPERATOR_BOUND: {
-        PromptSection.CAPABILITIES: PromptFile.MODE_CLOUD_OPERATOR_BOUND_CAPABILITIES,
-        PromptSection.EXECUTION: PromptFile.MODE_CLOUD_OPERATOR_BOUND_EXECUTION,
-        PromptSection.TOOLS: PromptFile.MODE_CLOUD_OPERATOR_BOUND_TOOLS,
+        PromptSection.CAPABILITIES: PromptFile.MODES_CLOUD_OPERATOR_BOUND_CAPABILITIES,
+        PromptSection.EXECUTION: PromptFile.MODES_CLOUD_OPERATOR_BOUND_EXECUTION,
+        PromptSection.TOOLS: PromptFile.MODES_CLOUD_OPERATOR_BOUND_TOOLS,
     },
 }

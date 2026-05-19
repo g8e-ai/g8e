@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 )
 
@@ -318,13 +319,13 @@ func (ls *LocalStoreService) GetExecution(executionID string) (*ExecutionRecord,
 
 	record.TimestampUTC, err = sqliteutil.ParseTimestamp(timestampStr)
 	if err != nil {
-		ls.logger.Warn("Failed to parse execution timestamp", "raw", timestampStr, "error", err)
+		ls.logger.Warn("Failed to parse execution timestamp", "raw", timestampStr, string(constants.ConnectionStateError), err)
 	}
 
 	if len(stdoutCompressed) > 0 {
 		decompressed, err := sqliteutil.Decompress(stdoutCompressed)
 		if err != nil {
-			ls.logger.Warn("Failed to decompress stdout", "error", err)
+			ls.logger.Warn("Failed to decompress stdout", string(constants.ConnectionStateError), err)
 		} else {
 			record.StdoutCompressed = decompressed
 		}
@@ -333,7 +334,7 @@ func (ls *LocalStoreService) GetExecution(executionID string) (*ExecutionRecord,
 	if len(stderrCompressed) > 0 {
 		decompressed, err := sqliteutil.Decompress(stderrCompressed)
 		if err != nil {
-			ls.logger.Warn("Failed to decompress stderr", "error", err)
+			ls.logger.Warn("Failed to decompress stderr", string(constants.ConnectionStateError), err)
 		} else {
 			record.StderrCompressed = decompressed
 		}
@@ -364,7 +365,7 @@ func localStorePrune(config *LocalStoreConfig) sqliteutil.PruneFunc {
 
 		result, err := db.Exec("DELETE FROM execution_log WHERE timestamp_utc < ?", cutoff)
 		if err != nil {
-			logger.Error("Failed to prune old records", "error", err)
+			logger.Error("Failed to prune old records", string(constants.ConnectionStateError), err)
 			return
 		}
 		rowsDeleted, _ := result.RowsAffected()
@@ -374,7 +375,7 @@ func localStorePrune(config *LocalStoreConfig) sqliteutil.PruneFunc {
 
 		diffResult, err := db.Exec("DELETE FROM file_diff_log WHERE timestamp_utc < ?", cutoff)
 		if err != nil {
-			logger.Error("Failed to prune old file diff records", "error", err)
+			logger.Error("Failed to prune old file diff records", string(constants.ConnectionStateError), err)
 		} else {
 			diffRowsDeleted, _ := diffResult.RowsAffected()
 			if diffRowsDeleted > 0 {
@@ -384,12 +385,12 @@ func localStorePrune(config *LocalStoreConfig) sqliteutil.PruneFunc {
 
 		_, err = db.Exec("DELETE FROM kv WHERE expires_at < ?", sqliteutil.FormatTimestamp(time.Now()))
 		if err != nil {
-			logger.Error("Failed to prune expired kv records", "error", err)
+			logger.Error("Failed to prune expired kv records", string(constants.ConnectionStateError), err)
 		}
 
 		dbSizeBytes, err := db.GetSizeBytes()
 		if err != nil {
-			logger.Warn("Failed to get database size", "error", err)
+			logger.Warn("Failed to get database size", string(constants.ConnectionStateError), err)
 		}
 		maxSizeBytes := config.MaxDBSizeMB * 1024 * 1024
 
@@ -403,7 +404,7 @@ func localStorePrune(config *LocalStoreConfig) sqliteutil.PruneFunc {
 				)
 			`)
 			if err != nil {
-				logger.Error("Failed to prune execution_log for size limit", "error", err)
+				logger.Error("Failed to prune execution_log for size limit", string(constants.ConnectionStateError), err)
 			}
 
 			_, err = db.Exec(`
@@ -415,14 +416,14 @@ func localStorePrune(config *LocalStoreConfig) sqliteutil.PruneFunc {
 				)
 			`)
 			if err != nil {
-				logger.Error("Failed to prune file_diff_log for size limit", "error", err)
+				logger.Error("Failed to prune file_diff_log for size limit", string(constants.ConnectionStateError), err)
 			}
 
 			logger.Info("Pruned for size limit", "db_size_mb", dbSizeBytes/(1024*1024))
 		}
 
 		if err := db.RunIncrementalVacuum(1000); err != nil {
-			logger.Info("Failed to run incremental vacuum", "error", err)
+			logger.Info("Failed to run incremental vacuum", string(constants.ConnectionStateError), err)
 		}
 	}
 }
@@ -598,13 +599,13 @@ func (ls *LocalStoreService) GetFileDiff(diffID string) (*FileDiffRecord, error)
 	var parseErr error
 	record.TimestampUTC, parseErr = sqliteutil.ParseTimestamp(timestampStr)
 	if parseErr != nil {
-		ls.logger.Warn("Failed to parse file diff timestamp", "raw", timestampStr, "error", parseErr)
+		ls.logger.Warn("Failed to parse file diff timestamp", "raw", timestampStr, string(constants.ConnectionStateError), parseErr)
 	}
 
 	if len(diffCompressed) > 0 {
 		decompressed, err := sqliteutil.Decompress(diffCompressed)
 		if err != nil {
-			ls.logger.Warn("Failed to decompress file diff", "error", err)
+			ls.logger.Warn("Failed to decompress file diff", string(constants.ConnectionStateError), err)
 		} else {
 			record.DiffCompressed = decompressed
 		}
@@ -680,13 +681,13 @@ func (ls *LocalStoreService) GetFileDiffsBySession(operatorSessionID string, lim
 			&operatorID,
 		)
 		if err != nil {
-			ls.logger.Warn("Failed to scan file diff row", "error", err)
+			ls.logger.Warn("Failed to scan file diff row", string(constants.ConnectionStateError), err)
 			continue
 		}
 
 		ts, tsErr := sqliteutil.ParseTimestamp(timestampStr)
 		if tsErr != nil {
-			ls.logger.Warn("Failed to parse file diff timestamp", "raw", timestampStr, "error", tsErr)
+			ls.logger.Warn("Failed to parse file diff timestamp", "raw", timestampStr, string(constants.ConnectionStateError), tsErr)
 		}
 		record.TimestampUTC = ts
 

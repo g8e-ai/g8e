@@ -16,12 +16,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any, Protocol, cast, runtime_checkable
 
 from app.constants.paths import PATHS
-from app.utils.path import resolve_project_root
 from app.utils.security import validate_safe_path
 
 # Filename of the tamper-evidence manifest written by g8eo SecretManager

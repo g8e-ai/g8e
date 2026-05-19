@@ -17,7 +17,7 @@ networks:
       config:
         - subnet: 10.210.0.0/24
 
-# Shared operator env — merged into each node's environment map below.
+# Shared operator env - merged into each node's environment map below.
 x-operator-env: &operator-env
   G8E_ENDPOINT: ${G8E_ENDPOINT:-localhost}
 
@@ -40,7 +40,7 @@ x-web-node: &web-node
   labels:
     - "demo.service=web-node"
   volumes:
-    - ../../../.g8e/pki/ca/ca.crt:/operator/ca.crt:ro
+    - ../../../.g8e/pki/root/root_ca.crt:/operator/ca.crt:ro
 
 services:
   node-01:

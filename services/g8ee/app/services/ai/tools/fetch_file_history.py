@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``fetch_file_history`` tool — return the operator-side edit history for a path."""
+"""``fetch_file_history`` tool - return the operator-side edit history for a path."""
 
 from __future__ import annotations
 
@@ -38,12 +38,11 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.FETCH_FILE_HISTORY,
-        description=load_prompt(PromptFile.TOOL_FETCH_FILE_HISTORY),
+        description=load_prompt(PromptFile.TOOLS_FETCH_FILE_HISTORY),
         parameters=schema_from_model(FetchFileHistoryArgs),
     )
-    return declaration
 
 
 async def handle(

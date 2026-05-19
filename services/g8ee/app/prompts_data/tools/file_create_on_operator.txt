@@ -8,7 +8,7 @@ Use for:
 
 <parameters>
 - file_path, content, justification: REQUIRED
-- target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
+- target_operator: operator_id or hostname - REQUIRED when multiple operators bound (prefer hostname when available)
 </parameters>
 
 <behavior>

@@ -130,7 +130,7 @@ class TestUpdateMemoryFromConversation:
         conversation_history = [
             ConversationHistoryMessage(
                 id=f"msg-{i}",
-                sender=EventType.EVENT_SOURCE_USER_CHAT,
+                sender=EventType.SOURCE_USER_CHAT,
                 content=f"Message {i}",
                 timestamp=datetime.now(UTC),
                 metadata=ConversationMessageMetadata(sentinel_mode=False),
@@ -207,7 +207,7 @@ class TestConversationToContents:
         conversation_history = [
             ConversationHistoryMessage(
                 id="msg-1",
-                sender=EventType.EVENT_SOURCE_USER_CHAT,
+                sender=EventType.SOURCE_USER_CHAT,
                 content="Normal message",
                 timestamp=datetime.now(UTC),
                 metadata=ConversationMessageMetadata(sentinel_mode=False),
@@ -216,7 +216,7 @@ class TestConversationToContents:
             ),
             ConversationHistoryMessage(
                 id="msg-2",
-                sender=EventType.EVENT_SOURCE_AI_PRIMARY,
+                sender=EventType.SOURCE_AI_PRIMARY,
                 content="Thinking message",
                 timestamp=datetime.now(UTC),
                 metadata=AIResponseMetadata(sentinel_mode=False, is_thinking=True),
@@ -327,7 +327,7 @@ class TestConversationToContents:
         conversation_history = [
             ConversationHistoryMessage(
                 id="msg-1",
-                sender=EventType.EVENT_SOURCE_SYSTEM,
+                sender=EventType.SOURCE_SYSTEM,
                 content="System message",
                 timestamp=datetime.now(UTC),
                 metadata=ConversationMessageMetadata(sentinel_mode=False),
@@ -630,13 +630,13 @@ class TestConversationToContentsPayload:
         assert "Crimson relay" in text
 
     def test_empty_content_messages_excluded_from_payload(self):
-        investigation = InvestigationModel(
+        InvestigationModel(
             id="inv-1", case_id="case-1", user_id="user-1",
             status=InvestigationStatus.OPEN, case_title="Test",
             sentinel_mode=False,
         )
 
-        conversation_history=[ConversationHistoryMessage(
+        [ConversationHistoryMessage(
             id="msg-1", sender=MessageSender.USER_CHAT,
             content="User question",
             timestamp=datetime.now(UTC),

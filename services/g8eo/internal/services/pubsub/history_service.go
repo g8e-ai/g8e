@@ -21,9 +21,10 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -50,7 +51,7 @@ func NewHistoryService(cfg *config.Config, logger *slog.Logger, client PubSubCli
 func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg PubSubCommandMessage) {
 	var protoFetch operatorv1.FetchLogsRequested
 	if err := proto.Unmarshal(msg.Payload, &protoFetch); err != nil {
-		hs.logger.Error("Failed to decode fetch logs payload as protobuf FetchLogsRequested", "error", err)
+		hs.logger.Error("Failed to decode fetch logs payload as protobuf FetchLogsRequested", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "invalid request payload")
 		return
 	}
@@ -62,7 +63,7 @@ func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg PubSub
 		return
 	}
 
-	vaultMode := protoFetch.SentinelMode
+	vaultMode := constants.VaultMode(protoFetch.SentinelMode)
 	if vaultMode == "" {
 		vaultMode = constants.Status.VaultMode.Raw
 	}
@@ -87,7 +88,7 @@ func (hs *HistoryService) handleFetchFromRawVault(ctx context.Context, msg PubSu
 
 	record, err := hs.rawVault.GetRawExecution(executionID)
 	if err != nil {
-		hs.logger.Error("Failed to retrieve execution from raw vault", "error", err)
+		hs.logger.Error("Failed to retrieve execution from raw vault", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err))
 		return
 	}
@@ -110,7 +111,7 @@ func (hs *HistoryService) handleFetchFromScrubbedVault(ctx context.Context, msg 
 
 	record, err := hs.localStore.GetExecution(executionID)
 	if err != nil {
-		hs.logger.Error("Failed to retrieve execution from scrubbed vault", "error", err)
+		hs.logger.Error("Failed to retrieve execution from scrubbed vault", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err))
 		return
 	}
@@ -136,7 +137,7 @@ func (hs *HistoryService) publishFetchLogsResultFromRaw(ctx context.Context, msg
 			StdoutSize:   int32(record.StdoutSize),
 			StderrSize:   int32(record.StderrSize),
 			Timestamp:    record.TimestampUTC.Format(time.RFC3339Nano),
-			SentinelMode: constants.Status.VaultMode.Raw,
+			SentinelMode: marshaler.Status(constants.Status.VaultMode.Raw),
 		})
 	hs.logger.Info("Fetch logs result transmitted (Raw Vault)",
 		"execution_id", record.ID,
@@ -156,7 +157,7 @@ func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSub
 			StdoutSize:   int32(record.StdoutSize),
 			StderrSize:   int32(record.StderrSize),
 			Timestamp:    record.TimestampUTC.Format(time.RFC3339Nano),
-			SentinelMode: constants.Status.VaultMode.Scrubbed,
+			SentinelMode: marshaler.Status(constants.Status.VaultMode.Scrubbed),
 		})
 	hs.logger.Info("Fetch logs result transmitted",
 		"execution_id", record.ID,
@@ -177,7 +178,7 @@ func (hs *HistoryService) HandleFetchHistoryRequest(ctx context.Context, msg Pub
 
 	payload, err := hs.historyHandler.HandleFetchHistory(msg.Payload)
 	if err != nil {
-		hs.logger.Error("History handler failed", "error", err)
+		hs.logger.Error("History handler failed", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchHistory.Failed,
 			fmt.Sprintf("failed to fetch history: %v", err))
 		return
@@ -190,7 +191,7 @@ func (hs *HistoryService) HandleFetchHistoryRequest(ctx context.Context, msg Pub
 func (hs *HistoryService) HandleFetchFileHistoryRequest(ctx context.Context, msg PubSubCommandMessage) {
 	var protoFetch operatorv1.FetchFileHistoryRequested
 	if err := proto.Unmarshal(msg.Payload, &protoFetch); err != nil {
-		hs.logger.Error("Failed to decode fetch file history payload as protobuf FetchFileHistoryRequested", "error", err)
+		hs.logger.Error("Failed to decode fetch file history payload as protobuf FetchFileHistoryRequested", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileHistory.Failed, "invalid request payload")
 		return
 	}
@@ -205,7 +206,7 @@ func (hs *HistoryService) HandleFetchFileHistoryRequest(ctx context.Context, msg
 
 	payload, err := hs.historyHandler.HandleFetchFileHistory(msg.Payload)
 	if err != nil {
-		hs.logger.Error("File history handler failed", "error", err)
+		hs.logger.Error("File history handler failed", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileHistory.Failed,
 			fmt.Sprintf("failed to fetch file history: %v", err))
 		return
@@ -218,7 +219,7 @@ func (hs *HistoryService) HandleFetchFileHistoryRequest(ctx context.Context, msg
 func (hs *HistoryService) HandleRestoreFileRequest(ctx context.Context, msg PubSubCommandMessage) {
 	var protoRestore operatorv1.RestoreFileRequested
 	if err := proto.Unmarshal(msg.Payload, &protoRestore); err != nil {
-		hs.logger.Error("Failed to decode restore file payload as protobuf RestoreFileRequested", "error", err)
+		hs.logger.Error("Failed to decode restore file payload as protobuf RestoreFileRequested", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.RestoreFile.Failed, "invalid request payload")
 		return
 	}
@@ -233,7 +234,7 @@ func (hs *HistoryService) HandleRestoreFileRequest(ctx context.Context, msg PubS
 
 	payload, err := hs.historyHandler.HandleRestoreFile(msg.Payload)
 	if err != nil {
-		hs.logger.Error("Restore file handler failed", "error", err)
+		hs.logger.Error("Restore file handler failed", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.RestoreFile.Failed,
 			fmt.Sprintf("failed to restore file: %v", err))
 		return
@@ -255,7 +256,7 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg Pu
 
 	var protoDiff operatorv1.FetchFileDiffRequested
 	if err := proto.Unmarshal(msg.Payload, &protoDiff); err != nil {
-		hs.logger.Error("Failed to decode fetch file diff payload as protobuf FetchFileDiffRequested", "error", err)
+		hs.logger.Error("Failed to decode fetch file diff payload as protobuf FetchFileDiffRequested", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed, "invalid request payload")
 		return
 	}
@@ -270,7 +271,7 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg Pu
 	if diffID != "" {
 		record, err := hs.localStore.GetFileDiff(diffID)
 		if err != nil {
-			hs.logger.Error("Failed to fetch file diff", "diff_id", diffID, "error", err)
+			hs.logger.Error("Failed to fetch file diff", "diff_id", diffID, string(constants.ConnectionStateError), err)
 			publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,
 				fmt.Sprintf("failed to fetch file diff: %v", err))
 			return
@@ -304,7 +305,7 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg Pu
 	if operatorSessionID != "" {
 		records, err := hs.localStore.GetFileDiffsBySession(operatorSessionID, int(limit))
 		if err != nil {
-			hs.logger.Error("Failed to fetch file diffs by session", "operator_session_id", operatorSessionID, "error", err)
+			hs.logger.Error("Failed to fetch file diffs by session", "operator_session_id", operatorSessionID, string(constants.ConnectionStateError), err)
 			publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,
 				fmt.Sprintf("failed to fetch file diffs: %v", err))
 			return

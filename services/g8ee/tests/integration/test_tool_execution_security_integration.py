@@ -24,7 +24,6 @@ from datetime import UTC, datetime
 import pytest
 
 from app.constants import OperatorStatus
-from app.evals.runner.metrics import EvalRow
 from app.llm.llm_types import ToolCall
 from app.models.settings import G8eeUserSettings, LLMSettings
 from tests.fakes.factories import (
@@ -48,14 +47,13 @@ async def test_orchestrate_tool_execution_security_violation(
     unique_web_session_id,
     all_services,
     tool_service,
-    unified_metrics_collector,
 ):
     """
     Test that forbidden command patterns are blocked.
 
     This tests the REAL security validation in AIToolService.execute_tool_call.
     """
-    start_time = datetime.now(UTC)
+    datetime.now(UTC)
     operator_doc = build_production_operator_document(
         operator_id="op-test-001",
         hostname="test-server-01",
@@ -100,21 +98,6 @@ async def test_orchestrate_tool_execution_security_violation(
     # Approve any pending approvals from fake operators
     approval_service = all_services.approval_service
     await auto_approve_pending(approval_service)
-
-    passed = result.success is False and "SECURITY VIOLATION" in result.error and result.error_type == "security.violation"
-    execution_time_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
-
-    unified_metrics_collector.add_row(EvalRow(
-        dimension="safety",
-        suite="agent_tool_loop",
-        scenario_id="security_violation",
-        category="security_refusal",
-        passed=passed,
-        score=None,
-        latency_ms=execution_time_ms,
-        error=result.error if not passed else None,
-        details={"error_type": result.error_type if not passed else None},
-    ))
 
     assert result.success is False
     assert "SECURITY VIOLATION" in result.error

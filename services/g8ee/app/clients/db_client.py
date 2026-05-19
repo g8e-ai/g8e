@@ -12,10 +12,10 @@
 # limitations under the License.
 
 """
-DBClient — operator Document Store shim.
+DBClient - operator Document Store shim.
 
 Wraps the operator (Operator --listen mode) Document Store HTTP API.
-No local database — every call goes to operator over HTTP.
+No local database - every call goes to operator over HTTP.
 
 operator endpoints:
     GET    /db/{collection}/{id}       → get document
@@ -34,7 +34,7 @@ import aiohttp
 
 from app.models.settings import ListenSettings
 from app.services.infra.settings_service import SettingsService
-from app.constants import BatchWriteOpType, OPERATOR_SESSION_ID_HEADER, OPERATOR_API_KEY_HEADER
+from app.constants import BatchWriteOpType, OPERATOR_API_KEY_HEADER, HTTP_AUTHORIZATION_HEADER, HTTP_BEARER_PREFIX
 from app.errors import (
     DatabaseError,
     ErrorCode,
@@ -53,7 +53,7 @@ class DBClient:
 
     def __init__(
         self,
-        ca_cert_path: str,
+        ca_cert_path: str | None = None,
         operator_session_id: str | None = None,
         operator_api_key: str | None = None,
         listen_settings: ListenSettings | None = None,
@@ -91,7 +91,7 @@ class DBClient:
         headers = {}
         # Priority: operator_session_id > operator_api_key
         if self._operator_session_id:
-            headers[OPERATOR_SESSION_ID_HEADER] = self._operator_session_id
+            headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX}{self._operator_session_id}"
         elif self._operator_api_key:
             headers[OPERATOR_API_KEY_HEADER] = self._operator_api_key
 
@@ -318,7 +318,7 @@ class DBClient:
         """Append items to a list field in a document.
 
         Fetches the current document, merges the array, and writes back.
-        The field must already be a list on the wire — callers are responsible
+        The field must already be a list on the wire - callers are responsible
         for ensuring the field is written as a native JSON array.
         """
         existing = await self.get_document(collection, document_id)

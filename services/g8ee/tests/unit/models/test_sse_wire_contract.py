@@ -45,7 +45,7 @@ class TestSessionEventWireContract:
     def test_from_session_event_creates_wire_structure(self):
         payload = _SamplePayload(message="test", timestamp=datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC))
         session_event = SessionEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             web_session_id="sess-123",
             user_id="user-abc",
@@ -58,7 +58,7 @@ class TestSessionEventWireContract:
 
         assert wire.web_session_id == "sess-123"
         assert wire.user_id == "user-abc"
-        assert wire.event.type == EventType.LLM_CHAT_ITERATION_THINKING_STARTED
+        assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
         assert wire.event.data["message"] == "test"
         assert wire.event.data["web_session_id"] == "sess-123"
         assert wire.event.data["user_id"] == "user-abc"
@@ -69,7 +69,7 @@ class TestSessionEventWireContract:
     def test_from_session_event_with_optional_fields_none(self):
         payload = _SamplePayload(message="test")
         session_event = SessionEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             web_session_id="sess-123",
             user_id="user-abc",
@@ -79,7 +79,7 @@ class TestSessionEventWireContract:
 
         assert wire.web_session_id == "sess-123"
         assert wire.user_id == "user-abc"
-        assert wire.event.type == EventType.LLM_CHAT_ITERATION_THINKING_STARTED
+        assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
         assert wire.event.data["message"] == "test"
         assert wire.event.data["web_session_id"] == "sess-123"
         assert wire.event.data["user_id"] == "user-abc"
@@ -90,7 +90,7 @@ class TestSessionEventWireContract:
     def test_wire_dump_serializes_to_json_safe_dict(self):
         payload = _SamplePayload(message="test")
         session_event = SessionEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             web_session_id="sess-123",
             user_id="user-abc",
@@ -110,7 +110,7 @@ class TestSessionEventWireContract:
         dt = datetime(2026, 1, 15, 10, 30, 0, 123456, tzinfo=UTC)
         payload = _SamplePayload(message="test", timestamp=dt)
         session_event = SessionEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             web_session_id="sess-123",
             user_id="user-abc",
@@ -126,7 +126,7 @@ class TestSessionEventWireContract:
     def test_wire_dump_omits_none_optional_fields(self):
         payload = _SamplePayload(message="test", timestamp=None, count=None)
         session_event = SessionEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             web_session_id="sess-123",
             user_id="user-abc",
@@ -145,7 +145,7 @@ class TestBackgroundEventWireContract:
     def test_from_background_event_creates_wire_structure(self):
         payload = _SamplePayload(message="test", timestamp=datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC))
         background_event = BackgroundEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             user_id="user-abc",
             investigation_id="inv-def",
@@ -156,7 +156,7 @@ class TestBackgroundEventWireContract:
         wire = BackgroundEventWire.from_background_event(background_event)
 
         assert wire.user_id == "user-abc"
-        assert wire.event.type == EventType.LLM_CHAT_ITERATION_THINKING_STARTED
+        assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
         assert wire.event.data["message"] == "test"
         assert wire.event.data["user_id"] == "user-abc"
         assert wire.event.data["investigation_id"] == "inv-def"
@@ -166,7 +166,7 @@ class TestBackgroundEventWireContract:
     def test_from_background_event_with_optional_fields_none(self):
         payload = _SamplePayload(message="test")
         background_event = BackgroundEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             user_id="user-abc",
         )
@@ -174,7 +174,7 @@ class TestBackgroundEventWireContract:
         wire = BackgroundEventWire.from_background_event(background_event)
 
         assert wire.user_id == "user-abc"
-        assert wire.event.type == EventType.LLM_CHAT_ITERATION_THINKING_STARTED
+        assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
         assert wire.event.data["message"] == "test"
         assert wire.event.data["user_id"] == "user-abc"
         assert "investigation_id" not in wire.event.data
@@ -184,7 +184,7 @@ class TestBackgroundEventWireContract:
     def test_wire_dump_serializes_to_json_safe_dict(self):
         payload = _SamplePayload(message="test")
         background_event = BackgroundEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             user_id="user-abc",
         )
@@ -202,7 +202,7 @@ class TestBackgroundEventWireContract:
         dt = datetime(2026, 1, 15, 10, 30, 0, 123456, tzinfo=UTC)
         payload = _SamplePayload(message="test", timestamp=dt)
         background_event = BackgroundEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             user_id="user-abc",
         )
@@ -217,7 +217,7 @@ class TestBackgroundEventWireContract:
     def test_wire_dump_omits_none_optional_fields(self):
         payload = _SamplePayload(message="test", timestamp=None, count=None)
         background_event = BackgroundEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             user_id="user-abc",
         )
@@ -237,7 +237,7 @@ class TestSSEWireContractInvariants:
         payload = _SamplePayload(message="test")
 
         session_event = SessionEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             web_session_id="sess-123",
             user_id="user-abc",
@@ -246,7 +246,7 @@ class TestSSEWireContractInvariants:
         session_dumped = session_wire.model_dump(mode="json")
 
         background_event = BackgroundEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             user_id="user-abc",
         )
@@ -261,7 +261,7 @@ class TestSSEWireContractInvariants:
         payload = _SamplePayload(message="test")
 
         session_event = SessionEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=payload,
             web_session_id="sess-123",
             user_id="user-abc",
@@ -281,7 +281,7 @@ class TestSSEWireContractInvariants:
         outer = _NestedPayload(inner=inner)
 
         session_event = SessionEvent(
-            event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+            event_type=EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED,
             payload=outer,
             web_session_id="sess-123",
             user_id="user-abc",

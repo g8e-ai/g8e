@@ -22,7 +22,6 @@ from app.constants import (
     PROXY_USER_ID_HEADER,
     AuthMethod,
     ComponentName,
-    G8eHeaders,
     HealthStatus,
 )
 from app.dependencies import (
@@ -39,7 +38,7 @@ from app.dependencies import (
     get_g8ee_platform_settings,
     get_g8ee_pubsub_client,
     health_check_dependencies,
-    require_proxy_auth,
+    require_authenticated_user,
 )
 from app.errors import (
     AuthenticationError,
@@ -283,7 +282,7 @@ def _make_internal_request(client_ip, path, headers=None, settings_token=None):
     return request
 
 
-class TestRequireProxyAuth:
+class TestRequireAuthenticatedUser:
     async def test_proxy_headers_return_authenticated_user(self, mock_request, mock_settings):
         mock_request.app.state.settings = mock_settings
         mock_request.headers = {
@@ -291,7 +290,7 @@ class TestRequireProxyAuth:
             PROXY_USER_EMAIL_HEADER: "user@example.com",
             PROXY_ORGANIZATION_ID_HEADER: "org-xyz",
         }
-        result = await require_proxy_auth(mock_request, mock_settings)
+        result = await require_authenticated_user(mock_request, mock_settings)
         assert result.uid == "user-abc"
         assert result.email == "user@example.com"
         assert result.organization_id == "org-xyz"
@@ -305,23 +304,23 @@ class TestRequireProxyAuth:
             "x-g8e-websession-id": "sess-abc",
         }
         with pytest.raises(AuthenticationError, match="Authentication required"):
-            await require_proxy_auth(mock_request, settings)
+            await require_authenticated_user(mock_request, settings)
 
     async def test_no_auth_raises_authentication_error(self, mock_request, mock_settings):
         mock_request.headers = {}
         with pytest.raises(AuthenticationError, match="Authentication required"):
-            await require_proxy_auth(mock_request, mock_settings)
+            await require_authenticated_user(mock_request, mock_settings)
 
     async def test_authentication_error_http_status_is_401(self, mock_request, mock_settings):
         mock_request.headers = {}
         with pytest.raises(AuthenticationError) as exc_info:
-            await require_proxy_auth(mock_request, mock_settings)
+            await require_authenticated_user(mock_request, mock_settings)
         assert exc_info.value.get_http_status() == 401
 
     async def test_proxy_user_id_without_email_raises_authentication_error(self, mock_request, mock_settings):
         mock_request.headers = {PROXY_USER_ID_HEADER: "user-abc"}
         with pytest.raises(AuthenticationError):
-            await require_proxy_auth(mock_request, mock_settings)
+            await require_authenticated_user(mock_request, mock_settings)
 
 
 class TestHealthCheckDependencies:

@@ -84,9 +84,9 @@ async def test_generate_command_round_2_triggered():
 
         # Verify Round 2 events were emitted
         emitted_event_types = [call[0][0].event_type for call in mock_event_service.publish.call_args_list]
-        assert EventType.TRIBUNAL_VOTING_ROUND_2_STARTED in emitted_event_types
-        assert EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED in emitted_event_types
+        assert EventType.AI_TRIBUNAL_VOTING_ROUND_2_STARTED in emitted_event_types
+        assert EventType.AI_TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED in emitted_event_types
 
         # Regression Test: Ensure TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED is emitted instead of FAILED
-        assert EventType.TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED in emitted_event_types
-        assert EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED not in emitted_event_types
+        assert EventType.AI_TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED in emitted_event_types
+        assert EventType.AI_TRIBUNAL_VOTING_CONSENSUS_FAILED not in emitted_event_types

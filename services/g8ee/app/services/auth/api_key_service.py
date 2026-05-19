@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import secrets
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.constants import DB_COLLECTION_API_KEYS, ApiKeyStatus
 from app.models.api_keys import ApiKeyDocument
@@ -48,7 +48,7 @@ class ApiKeyService:
 
     def generate_raw_key(self, prefix: str = "g8e_") -> str:
         """Generate a new raw API key.
-        
+
         Default prefix is 'g8e_' matching canonical format from protocol/constants/api_key_patterns.json.
         For operator keys, use format: g8e_{8hex}_{64hex} (e.g., g8e_1a2b3c4d_...64hex...).
         For regular keys, use format: g8e_{64hex}.
@@ -237,7 +237,7 @@ class ApiKeyService:
                 return
 
             doc = ApiKeyDocument.model_validate(data)
-            updates = {"last_used_at": now()}
+            updates: dict[str, Any] = {"last_used_at": now()}
 
             # Establish fingerprint if not already set (immutable thereafter)
             if not doc.system_fingerprint and system_fingerprint:

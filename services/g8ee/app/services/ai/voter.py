@@ -105,7 +105,7 @@ def weighted_vote(candidates: list[CandidateCommand], total_members: int) -> tup
     # Tie detected - apply tie-breaker ladder
     # 1. Shortest command wins (compositional pressure)
     shortest_cmd = min(top_candidates, key=len)
-    if len(set(len(c) for c in top_candidates)) > 1:
+    if len({len(c) for c in top_candidates}) > 1:
         # Multiple lengths, pick shortest
         winner = shortest_cmd
         dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}

@@ -165,7 +165,7 @@ async def test_run_chat_exception_handler_publishes_iteration_failed():
 
     # Verify ITERATION_FAILED was published
     events = svc.event_service.published
-    failed_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_FAILED]
+    failed_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.AI_LLM_CHAT_ITERATION_FAILED]
 
     assert len(failed_events) == 1
     from app.models.events import ChatErrorPayload
@@ -190,7 +190,7 @@ async def test_run_chat_impl_coerces_provider_override_to_enum():
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
-    inputs, state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    inputs, _state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     captured: dict = {}
@@ -226,7 +226,7 @@ async def test_run_chat_impl_coerces_provider_override_to_enum():
 
 async def test_prepare_chat_context_passes_lite_model_to_triage():
     """Regression: triage runs on the lite provider, so model_override
-    must be the lite model — not the primary model.
+    must be the lite model - not the primary model.
 
     Previously chat_pipeline passed llm_primary_model as the triage override,
     causing cross-provider mismatches (e.g. a Claude model name sent to the
@@ -293,13 +293,13 @@ async def test_prepare_chat_context_passes_lite_model_to_triage():
 
 
 async def test_run_chat_impl_rejects_unknown_provider_override():
-    """An unknown provider override surfaces as a ValueError — not a
+    """An unknown provider override surfaces as a ValueError - not a
     silent bad-value in an enum-typed field."""
     from app.models.settings import G8eeUserSettings, LLMSettings
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
-    inputs, state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    inputs, _state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     user_settings = G8eeUserSettings(llm=LLMSettings())
@@ -321,7 +321,7 @@ async def test_run_chat_impl_rejects_unknown_provider_override():
 
 async def test_run_chat_impl_selects_lite_provider_for_simple_complexity():
     """Regression: when triage returns SIMPLE complexity, the lite provider
-    should be used — not the primary provider.
+    should be used - not the primary provider.
 
     Previously, get_llm_provider was called before triage, so is_assistant always
     defaulted to False, causing cross-provider mismatches (e.g. Gemini model sent
@@ -341,7 +341,7 @@ async def test_run_chat_impl_selects_lite_provider_for_simple_complexity():
         intent_confidence=TriageConfidence.HIGH,
         intent_summary="ok",
     )
-    inputs, state = _make_chat_context(triage_result=simple_triage_result)
+    inputs, _state = _make_chat_context(triage_result=simple_triage_result)
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     captured: dict = {}

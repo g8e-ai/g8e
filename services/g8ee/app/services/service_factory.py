@@ -72,6 +72,9 @@ from app.models.settings import G8eePlatformSettings
 from app.utils.whitelist_validator import get_whitelist_validator, register_whitelist_validator
 from app.utils.blacklist_validator import get_blacklist_validator, register_blacklist_validator
 from app.utils.auto_approved_validator import get_auto_approved_validator, register_auto_approved_validator
+from app.db.db_service import DBService
+from app.db.kv_service import KVService
+from app.db.blob_service import BlobService
 
 if TYPE_CHECKING:
     from app.clients.blob_client import BlobClient
@@ -455,7 +458,7 @@ class ServiceFactory:
             agent_activity_data_service=data_services.agent_activity_data_service,
         )
 
-        all_services = AllServices(
+        return AllServices(
             db_service=db_service,
             kv_service=kv_service,
             blob_service=blob_service,
@@ -498,7 +501,6 @@ class ServiceFactory:
             certificate_service=operator_services.certificate_service,
         )
 
-        return all_services
 
     @staticmethod
     def bind_to_app_state(app: object, services: AllServices) -> None:

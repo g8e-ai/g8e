@@ -70,7 +70,7 @@ func RunStream(args []string) {
 	fs.StringVar(&hostsFile, "hosts", "", "File of hosts (one per line) or - for stdin")
 	fs.IntVar(&concurrency, "concurrency", defaultConcurrency, "Max parallel SSH sessions")
 	fs.IntVar(&timeoutSec, "timeout", int(defaultTimeout.Seconds()), "Per-host dial+inject timeout in seconds")
-	fs.StringVar(&endpoint, "endpoint", "", "Platform endpoint — if set, starts operator on each remote host")
+	fs.StringVar(&endpoint, "endpoint", "", "Platform endpoint - if set, starts operator on each remote host")
 	fs.StringVar(&deviceToken, "device-token", "", "Device link token (supports single and mass deployment via max_uses)")
 	fs.StringVar(&apiKey, "key", "", "API key auth")
 	fs.BoolVar(&noGit, "no-git", false, "Disable ledger")
@@ -140,7 +140,7 @@ func RunStream(args []string) {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigCh
-		fmt.Fprintln(os.Stderr, "\n[stream] signal received — cancelling all sessions...")
+		fmt.Fprintln(os.Stderr, "\n[stream] signal received - cancelling all sessions...")
 		cancel()
 	}()
 
@@ -304,7 +304,9 @@ func collectHosts(positional []string, hostsFile string) ([]string, error) {
 			if err != nil {
 				return nil, fmt.Errorf("open hosts file: %w", err)
 			}
-			defer f.Close()
+			defer func() {
+				_ = f.Close()
+			}()
 			scanner = bufio.NewScanner(f)
 		}
 		for scanner.Scan() {
@@ -349,7 +351,11 @@ func shellQuote(s string) string {
 
 // emitJSON writes a StreamStatusEvent as a JSON line to stdout.
 func emitJSON(evt StreamStatusEvent) {
-	data, _ := json.Marshal(evt)
+	data, err := json.Marshal(evt)
+	if err != nil {
+		fmt.Printf(`{"error":"failed to marshal event","details":"%s"}\n`, err)
+		return
+	}
 	fmt.Println(string(data))
 }
 

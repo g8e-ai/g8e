@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class AgentActivityDataService:
     """Data service for recording and querying AI agent activity metadata.
-    
+
     Provides CRUD operations for agent activity metadata records, which are
     used for data science analysis and telemetry.
     """
@@ -43,10 +43,10 @@ class AgentActivityDataService:
         metadata: AgentActivityMetadata,
     ) -> AgentActivityMetadata:
         """Record a new agent activity metadata entry.
-        
+
         Args:
             metadata: The activity metadata to record
-            
+
         Returns:
             The recorded metadata with assigned ID
         """
@@ -85,10 +85,10 @@ class AgentActivityDataService:
 
     async def get_activity(self, activity_id: str) -> AgentActivityMetadata | None:
         """Retrieve a single activity metadata record by ID.
-        
+
         Args:
             activity_id: The activity metadata ID
-            
+
         Returns:
             The activity metadata, or None if not found
         """
@@ -128,7 +128,7 @@ class AgentActivityDataService:
         limit: int = 100,
     ) -> list[AgentActivityMetadata]:
         """Query agent activity metadata with optional filters.
-        
+
         Args:
             user_id: Filter by user ID
             investigation_id: Filter by investigation ID
@@ -136,7 +136,7 @@ class AgentActivityDataService:
             model_name: Filter by model name
             agent_mode: Filter by agent mode
             limit: Maximum number of results to return
-            
+
         Returns:
             List of matching activity metadata records
         """
@@ -179,7 +179,7 @@ class AgentActivityDataService:
 
     async def delete_activity(self, activity_id: str) -> None:
         """Delete an agent activity metadata record.
-        
+
         Args:
             activity_id: The activity metadata ID to delete
         """

@@ -25,7 +25,7 @@ class FakeEventService:
     """Typed fake implementing EventServiceProtocol.
 
     Records all publish calls for assertion in tests. Does not perform any
-    real I/O. Implements the protocol structurally — no inheritance required.
+    real I/O. Implements the protocol structurally - no inheritance required.
     """
 
     def __init__(self) -> None:
@@ -78,9 +78,11 @@ class FakeEventService:
         investigation_id: str,
         event_type: EventType,
         payload: dict[str, object] | G8eBaseModel,
-        web_session_id: str,
+        web_session_id: str | None,
         case_id: str,
         user_id: str,
+        *,
+        cli_session_id: str | None = None,
     ) -> None:
         """Typed fake for publish_investigation_event."""
         # We can just record this as a SessionEvent in self.published
@@ -89,6 +91,7 @@ class FakeEventService:
             payload=payload,
             investigation_id=investigation_id,
             web_session_id=web_session_id,
+            cli_session_id=cli_session_id,
             case_id=case_id,
             user_id=user_id,
         )

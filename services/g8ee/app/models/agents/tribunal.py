@@ -26,7 +26,7 @@ class TribunalError(Exception):
     """Base class for all Tribunal terminal-state failures.
 
     Every subclass represents a distinct reason the Tribunal could not
-    produce a trusted command. There is no fallback — Sage never proposes
+    produce a trusted command. There is no fallback - Sage never proposes
     a command directly, so a failed Tribunal means the tool call must
     fail. Callers should catch this base class (rather than each concrete
     subclass) when mapping errors to user-facing tool-call failures, and
@@ -305,7 +305,7 @@ class ConsensusConfidence:
             return "consensus_failed"
 
         strength = vote_breakdown.consensus_strength
-        total_members = len(vote_breakdown.candidates_by_member)
+        len(vote_breakdown.candidates_by_member)
 
         if strength == 1.0:
             if auditor_passed is True:
@@ -435,7 +435,7 @@ class TribunalAuditorCompletedPayload(G8eBaseModel):
 class TribunalSessionStartedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_SESSION_STARTED events."""
     request: str
-    guidelines: str = ""
+    guidelines: str | None = None
     model: str
     num_passes: int = Field(ge=1)
     members: list[TribunalMember]
@@ -562,7 +562,7 @@ class TribunalDissentRecordedPayload(G8eBaseModel):
     Fired once per losing cluster (distinct normalised command that
     lost the vote). Audit / analytics only; does not affect execution.
     Both `losing_command` and `dissenting_member_ids` are required
-    and must be non-empty — these events are never emitted for empty
+    and must be non-empty - these events are never emitted for empty
     clusters.
     """
     request: str

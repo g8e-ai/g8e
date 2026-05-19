@@ -28,6 +28,7 @@ from app.constants import (
     OperatorType,
     AgentMode,
     ReasoningAgent,
+    WorkflowType,
 )
 from app.models.base import G8eBaseModel
 from app.models.grounding import GroundingMetadata
@@ -53,7 +54,7 @@ _TARGET_OPERATORS_DESCRIPTION = (
     "STRONGLY PREFER passing ['all'] whenever the user's intent covers every bound system "
     "(e.g. 'on all systems', 'across the fleet', 'on all N hosts', or the user explicitly "
     "names a count matching the bound operator count). DO NOT enumerate individual operators "
-    "for whole-fleet intent — use ['all']. Only enumerate specific hostnames/operator_ids/indices "
+    "for whole-fleet intent - use ['all']. Only enumerate specific hostnames/operator_ids/indices "
     "when the user is asking about a proper subset. The same Tribunal-generated command executes "
     "on all resolved systems in parallel under one approval."
 )
@@ -68,20 +69,20 @@ class SageOperatorRequest(TargetedOperatorBase):
     string. The Tribunal-produced command is then routed to the Operator via
     ExecutorCommandArgs.
 
-    This type has NO command field — the caller literally cannot pass a
+    This type has NO command field - the caller literally cannot pass a
     command. The invariant is structural, not conventional.
     """
-    request: str = Field(
-        default="",
+    request: str | None = Field(
+        default=None,
         description=(
-            "Natural-language description of what the Operator must accomplish — "
+            "Natural-language description of what the Operator must accomplish - "
             "what to learn, verify, or change. Focus on investigative intent, "
             "not shell syntax. The Tribunal translates this into a precise command "
             "for the target OS/shell."
         ),
     )
-    guidelines: str = Field(
-        default="",
+    guidelines: str | None = Field(
+        default=None,
         description=(
             "Optional constraints on the command itself: tools or flags to prefer "
             "or avoid, portability requirements, edge cases the command must handle "
@@ -98,7 +99,7 @@ class ExecutorCommandArgs(TargetedOperatorBase):
     """Internal executor payload for run_commands_with_operator.
 
     This type is what the executor receives AFTER the Tribunal has produced
-    the command. The `command` field is REQUIRED — this invariant is structural.
+    the command. The `command` field is REQUIRED - this invariant is structural.
     Sage never writes to this type directly; see SageOperatorRequest for the
     Sage-facing surface.
 
@@ -106,8 +107,8 @@ class ExecutorCommandArgs(TargetedOperatorBase):
     orchestrate_tool_execution after Tribunal generates the command.
     """
     command: str = Field(..., description="Shell command produced by the Tribunal (required).")
-    request: str = Field(default="", description="Caller's natural-language request passed to the Tribunal (shown to the user as justification).")
-    guidelines: str = Field(default="", description="Caller's optional guidelines on command shape passed to the Tribunal.")
+    request: str | None = Field(default=None, description="Caller's natural-language request passed to the Tribunal (shown to the user as justification).")
+    guidelines: str | None = Field(default=None, description="Caller's optional guidelines on command shape passed to the Tribunal.")
     expected_output_lines: int = Field(default=10, description="Approximate number of stdout lines expected (used for UI sizing).")
     correlation_id: str | None = Field(default=None, description="Tribunal correlation ID linking this command to the originating Tribunal session")
     timeout_seconds: int = Field(default=300, description="Maximum seconds to wait for command completion before timing out.")
@@ -165,7 +166,7 @@ class AgentInputs(G8eBaseModel):
     g8e_context: G8eHttpContext
     web_session_id: str | None = None
     task_id: str | None = None
-    agent_mode: AgentMode
+    agent_mode: AgentMode | WorkflowType
     active_agent: ReasoningAgent | None = None
     request_settings: G8eeUserSettings
 
@@ -173,7 +174,7 @@ class AgentInputs(G8eBaseModel):
     model_to_use: str | None = None
     max_tokens: int | None = None
     conversation_history: list[ConversationHistoryMessage] = Field(default_factory=list)
-    system_instructions: str = ""
+    system_instructions: str | None = None
     contents: list[Content] = Field(default_factory=list)
     generation_config: PrimaryLLMSettings | None = None
     user_memories: list[InvestigationMemory] = Field(default_factory=list)

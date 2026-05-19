@@ -21,6 +21,7 @@ authority for shell command generation.
 import logging
 from typing import Any
 
+from app.errors import ConfigurationError
 from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
 from app.models.agent import OperatorContext
@@ -74,8 +75,8 @@ from app.services.ai.tribunal.stages.generation import (
 from app.services.ai.tribunal.stages.voting import _run_voting_stage
 from app.services.ai.tribunal.stages.warden import _run_warden_stage
 from app.services.ai.tribunal.utils import (
-    _member_for_pass,
-    _resolve_model,
+    member_for_pass,
+    resolve_model,
 )
 
 logger = logging.getLogger(__name__)
@@ -140,7 +141,7 @@ async def _build_and_emit_result(
     )
 
     await emitter.emit(
-        EventType.TRIBUNAL_SESSION_COMPLETED,
+        EventType.AI_TRIBUNAL_SESSION_COMPLETED,
         TribunalSessionCompletedPayload(
             request=request,
             final_command=final_command or "",
@@ -211,17 +212,17 @@ async def generate_command(
 
     if not settings.llm.llm_command_gen_enabled:
         await emitter.emit(
-            EventType.TRIBUNAL_SESSION_DISABLED,
+            EventType.AI_TRIBUNAL_SESSION_DISABLED,
             TribunalSessionDisabledPayload(request=request),
         )
         raise TribunalDisabledError(request=request)
 
     try:
-        generation_model = _resolve_model(settings.llm, tier="lite", request=request)
-        auditor_model = _resolve_model(settings.llm, tier="primary", request=request)
+        generation_model = resolve_model(settings.llm, tier="lite", request=request)
+        auditor_model = resolve_model(settings.llm, tier="primary", request=request)
     except TribunalModelNotConfiguredError as exc:
         await emitter.emit(
-            EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
+            EventType.AI_TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
             TribunalSessionModelNotConfiguredPayload(
                 request=request,
                 provider=exc.provider,
@@ -231,10 +232,10 @@ async def generate_command(
         raise
 
     num_passes = max(1, settings.llm.llm_command_gen_passes)
-    members = [_member_for_pass(i) for i in range(num_passes)]
+    members = [member_for_pass(i) for i in range(num_passes)]
 
     await emitter.emit(
-        EventType.TRIBUNAL_SESSION_STARTED,
+        EventType.AI_TRIBUNAL_SESSION_STARTED,
         TribunalSessionStartedPayload(
             request=request,
             guidelines=guidelines,
@@ -251,7 +252,7 @@ async def generate_command(
         lite_provider = settings.llm.lite_provider
         provider_name = lite_provider.value if lite_provider else "not_configured"
         await emitter.emit(
-            EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
+            EventType.AI_TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
             TribunalSessionProviderUnavailablePayload(
                 request=request,
                 provider=provider_name,
@@ -292,7 +293,7 @@ async def generate_command(
                     vote_breakdown.consensus_strength, TRIBUNAL_MIN_CONSENSUS)
 
         await emitter.emit(
-            EventType.TRIBUNAL_VOTING_ROUND_STARTED,
+            EventType.AI_TRIBUNAL_VOTING_ROUND_STARTED,
             TribunalSessionStartedPayload(
                 request=request,
                 guidelines=guidelines,
@@ -307,7 +308,7 @@ async def generate_command(
         r1_clusters, _, _ = _anonymize_clusters(candidates)
 
         await emitter.emit(
-            EventType.TRIBUNAL_VOTING_ROUND_2_STARTED,
+            EventType.AI_TRIBUNAL_VOTING_ROUND_2_STARTED,
             TribunalSessionStartedPayload(
                 request=request,
                 guidelines=guidelines,
@@ -334,7 +335,7 @@ async def generate_command(
 
         if vote_winner is not None:
             await emitter.emit(
-                EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED,
+                EventType.AI_TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED,
                 TribunalVotingCompletedPayload(
                     vote_winner=vote_winner,
                     vote_score=vote_score,
@@ -346,7 +347,7 @@ async def generate_command(
             round_2_vote_breakdown = vote_breakdown
         else:
             await emitter.emit(
-                EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_FAILED,
+                EventType.AI_TRIBUNAL_VOTING_ROUND_2_CONSENSUS_FAILED,
                 TribunalConsensusFailedPayload(
                     request=request,
                     vote_breakdown=vote_breakdown,
@@ -355,7 +356,7 @@ async def generate_command(
             round_2_vote_breakdown = vote_breakdown
 
         await emitter.emit(
-            EventType.TRIBUNAL_VOTING_ROUND_COMPLETED,
+            EventType.AI_TRIBUNAL_VOTING_ROUND_COMPLETED,
             TribunalSessionCompletedPayload(
                 request=request,
                 final_command=vote_winner or "",

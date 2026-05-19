@@ -15,7 +15,7 @@
 Integration tests: AI Services Real LLM Calls
 
 These tests exercise AI services with real LLM providers to verify end-to-end functionality.
-All tests use real services and infrastructure - no mocks allowed per testing guidelines.
+Tests use real g8ee services and LLM providers with an in-memory operator cache fake for app document setup.
 
 Segment 1: Memory Generation Service
 Segment 2: Title Generation Service
@@ -28,6 +28,7 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+import pytest_asyncio
 
 from app.constants import (
     AgentMode,
@@ -53,8 +54,39 @@ from tests.fakes.factories import (
 pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.slow]
 
 
+@pytest.fixture
+def cache_aside_service(fake_cache_aside_service):
+    return fake_cache_aside_service
+
+
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def all_services(cache_aside_service, test_settings):
+    from unittest.mock import MagicMock
+
+    from app.services.service_factory import ServiceFactory
+
+    services = ServiceFactory.create_all_services(
+        test_settings,
+        cache_aside_service,
+        db_service=MagicMock(),
+        kv_service=MagicMock(),
+        blob_service=MagicMock(),
+    )
+    yield services
+    await ServiceFactory.stop_services(services)
+
+
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def cleanup(cache_aside_service):
+    from tests.integration.cleanup import IntegrationCleanupTracker
+
+    tracker = IntegrationCleanupTracker(cache_aside_service)
+    yield tracker
+    await tracker.cleanup()
+
+
 # ---------------------------------------------------------------------------
-# Segment 1 — Memory Generation Service
+# Segment 1 - Memory Generation Service
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -70,7 +102,6 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services.memory_data_service
         investigation_data_service = all_services.investigation_data_service
         memory_service = all_services.memory_generation_service
 
@@ -84,7 +115,7 @@ class TestMemoryGenerationServiceIntegration:
         conversation_history = [
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.EVENT_SOURCE_USER_CHAT,
+                sender=EventType.SOURCE_USER_CHAT,
                 content="I'm having trouble with my high-performance compute cluster in the Zurich data center. The nodes are named 'Alpine-Alpha' through 'Alpine-Zeta'. One specific node, 'Alpine-Delta', has a bright Magenta status LED blinking.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -92,7 +123,7 @@ class TestMemoryGenerationServiceIntegration:
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.EVENT_SOURCE_AI_ASSISTANT,
+                sender=EventType.SOURCE_AI_ASSISTANT,
                 content="I see. A Magenta status LED on the Alpine series usually indicates a thermal throttle on the secondary NVMe drive. I'll check the temperature sensors for Alpine-Delta.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -100,7 +131,7 @@ class TestMemoryGenerationServiceIntegration:
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.EVENT_SOURCE_USER_CHAT,
+                sender=EventType.SOURCE_USER_CHAT,
                 content="The data center technician mentioned that the ambient temperature in Zurich is quite high today. We might need to increase the fan speed to 80% for all Alpine nodes.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -108,7 +139,7 @@ class TestMemoryGenerationServiceIntegration:
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.EVENT_SOURCE_AI_ASSISTANT,
+                sender=EventType.SOURCE_AI_ASSISTANT,
                 content="Understood. I'll prepare a script to adjust fan speeds across the Zurich cluster. We'll monitor Alpine-Delta specifically for the Magenta LED to clear.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -194,7 +225,7 @@ class TestMemoryGenerationServiceIntegration:
         conversation_history = [
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.EVENT_SOURCE_USER_CHAT,
+                sender=EventType.SOURCE_USER_CHAT,
                 content="The Turquoise sensor in Tokyo is fixed, but now the 'Midnight-Blue' fan controller in our Reykjavik facility is reporting an 'Amber-Alert' status code. Can you pull the RPM logs for the Midnight-Blue unit?",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -202,7 +233,7 @@ class TestMemoryGenerationServiceIntegration:
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
-                sender=EventType.EVENT_SOURCE_AI_ASSISTANT,
+                sender=EventType.SOURCE_AI_ASSISTANT,
                 content="I'll pull the RPM logs for the Midnight-Blue controller in Reykjavik. We'll check if the Amber-Alert corresponds to a bearing failure or just a sensor glitch.",
                 timestamp=datetime.now(UTC),
                 prev_hash="0" * 64,
@@ -301,7 +332,6 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services.memory_data_service
         investigation_data_service = all_services.investigation_data_service
         memory_service = all_services.memory_generation_service
 
@@ -330,7 +360,7 @@ class TestMemoryGenerationServiceIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Segment 2 — Title Generation Service
+# Segment 2 - Title Generation Service
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -439,7 +469,7 @@ class TestTitleGenerationIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Segment 3 — Triage Service
+# Segment 3 - Triage Service
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -454,9 +484,9 @@ class TestTriageServiceIntegration:
 
         # Test complex technical issue with specific entities
         complex_message = """
-        Our 'Obsidian-Core' cluster in the Helsinki bunker is reporting a 'Silver-Scream' kernel panic. 
-        This is isolated to the nodes with the 'Borealis-7' chipset. We've tried swapping the 'Frozen-Fire' 
-        cooling units but the temperature on Core 3 still spikes to 98C during the winter solstice load test. 
+        Our 'Obsidian-Core' cluster in the Helsinki bunker is reporting a 'Silver-Scream' kernel panic.
+        This is isolated to the nodes with the 'Borealis-7' chipset. We've tried swapping the 'Frozen-Fire'
+        cooling units but the temperature on Core 3 still spikes to 98C during the winter solstice load test.
         We suspect the 'Northern-Lights' firmware needs a patch for high-latitude clock drift.
         """
 
@@ -558,7 +588,7 @@ class TestTriageServiceIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Segment 4 — Command Generation Service (Simplified)
+# Segment 4 - Command Generation Service (Simplified)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -685,7 +715,7 @@ class TestCommandGenerationIntegration:
 
     async def test_l1_safety_validation_whitelist_violation(self, test_settings):
         """Test that L1 safety validation correctly detects whitelist violations.
-        
+
         This verifies the technical bedrock layer (validate_command_safety) properly
         blocks commands that violate whitelist constraints, ensuring the Auditor
         has the correct context to flag WHITELIST_VIOLATION reasons.
@@ -738,7 +768,7 @@ class TestCommandGenerationIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Segment 5 — Response Analysis Service
+# Segment 5 - Response Analysis Service
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")

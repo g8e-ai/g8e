@@ -269,7 +269,7 @@ class OperatorCommandService:
 
         Single-operator runs and multi-operator ("batch") runs share the same pipeline:
         one command validation, one risk analysis, one approval, then N parallel per-operator
-        dispatches correlated by a batch_id. For N==1 the return shape matches legacy behavior.
+        dispatches correlated by a batch_id. For N==1 the return shape matches the single-operator response.
         """
         command = args.command.strip()
         # Sage never writes `command` directly; the Tribunal produces it from
@@ -283,14 +283,14 @@ class OperatorCommandService:
 
         logger.info("[COMMAND] Starting execution: %s", command)
 
-        # 1. Resolve target operator(s) — unified path for singular and batch.
+        # 1. Resolve target operator(s) - unified path for singular and batch.
         operator_documents = investigation.operator_documents if investigation else []
         try:
             target_operator_docs = self._resolve_targets(operator_documents, args)
         except (ValidationError, BusinessLogicError, ValueError) as e:
             logger.error("[COMMAND] Operator resolution failed: %s", e, exc_info=True)
             return CommandExecutionResult(
-                success=False, error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.", error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
+                success=False, error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.", error_type=CommandErrorType.G8E_RESOLUTION_ERROR,
             )
 
         # All resolved operators must have a live session.
@@ -306,11 +306,11 @@ class OperatorCommandService:
         target_systems: list[TargetSystem] = self._execution_service.build_target_systems_list(target_operator_docs)
         is_batch = len(target_operator_docs) > 1
 
-        # Primary operator is the first resolved — used for approval identity fields.
+        # Primary operator is the first resolved - used for approval identity fields.
         primary = target_operator_docs[0]
 
         # 2. Command validation (L1 technical bedrock: whitelist/blacklist/forbidden patterns)
-        # Prefer the per-request (user) command_validation settings — get_user_settings
+        # Prefer the per-request (user) command_validation settings - get_user_settings
         # already falls back to platform defaults when no user document exists.
         cv = request_settings.command_validation if request_settings else self._cv
         whitelist_override = parse_command_csv(cv.whitelisted_commands)
@@ -386,7 +386,7 @@ class OperatorCommandService:
                 task_id=AITaskId.COMMAND,
             )
 
-        # 4. Approval gate — a single approval covers the whole batch.
+        # 4. Approval gate - a single approval covers the whole batch.
         # Auto-approved base commands skip the human approval prompt
         # (the human has rubber-stamped them via auto_approved_commands).
         if is_auto_approved:
@@ -421,7 +421,7 @@ class OperatorCommandService:
                 approval_id=approval_result.approval_id,
             )
 
-        # 5. Fan-out dispatch — one execution_id per operator, bounded concurrency.
+        # 5. Fan-out dispatch - one execution_id per operator, bounded concurrency.
         max_concurrency = self._be.max_concurrency
         fail_fast = self._be.fail_fast
         semaphore = asyncio.Semaphore(max_concurrency)
@@ -506,11 +506,16 @@ class OperatorCommandService:
                 )
 
                 try:
-                    internal_result, envelope = await self._execution_service.execute(
+                    internal_result, _ = await self._execution_service.execute(
                         g8e_message=g8e_message,
                         g8e_context=g8e_context,
                         timeout_seconds=args.timeout_seconds,
                     )
+                    if internal_result is None:
+                        raise BusinessLogicError(
+                            "Execution service returned None for internal_result",
+                            component="g8ee"
+                        )
                 except Exception as e:
                     logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, e)
                     if fail_fast:
@@ -601,9 +606,9 @@ class OperatorCommandService:
     ) -> CommandExecutionResult:
         """Collapse per-operator results into a single CommandExecutionResult.
 
-        For N==1 we preserve legacy field population (output/stderr/exit_code at top level)
-        so downstream consumers keep working. For N>1 we additionally populate batch fields
-        and a combined output with per-host headers so the agent can reason about divergence.
+        For N==1 we populate the single-operator fields (output/stderr/exit_code at top
+        level). For N>1 we additionally populate batch fields and a combined output with
+        per-host headers so the agent can reason about divergence.
         """
         successful = [r for r in per_operator_results if r.success]
         failed = [r for r in per_operator_results if not r.success]

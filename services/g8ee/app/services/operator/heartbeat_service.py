@@ -11,13 +11,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import logging
 
 from app.clients.pubsub_client import PubSubClient
-from app.errors import ConfigurationError
+from app.errors import ConfigurationError, ValidationError
 from app.constants.events import EventType
-from app.constants.channels import PubSubChannel
+from app.constants.channels import OperatorChannel
 from app.models.events import BackgroundEvent, SessionEvent
 from app.models.operators import (
     HeartbeatSSEEnvelope,
@@ -27,7 +26,7 @@ from app.models.operators import (
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
 from app.services.protocols import OperatorDataServiceProtocol, EventServiceProtocol
-from app.utils.envelope_builder import decode_g8eo_result_envelope
+from app.utils.envelope_builder import decode_and_validate_uap_heartbeat
 
 logger = logging.getLogger(__name__)
 
@@ -79,12 +78,10 @@ class HeartbeatSnapshotService:
             raise ConfigurationError("pubsub_client must be set before calling start()", component="g8ee")
         await self._pubsub_client.ensure_connected()
 
-        # Pattern-subscribe to every operator heartbeat channel. g8eo publishes
-        # its bootstrap heartbeat the instant authentication completes, so g8ee
-        # MUST be listening before any specific operator session exists. A single
-        # pattern subscription captures every operator's heartbeats from the
-        # first packet onward without per-session register/deregister races.
-        pattern = f"{PubSubChannel.HEARTBEAT_PREFIX.value}:*"
+        # Pattern-subscribe to every operator heartbeat channel. A single pattern
+        # subscription captures every operator's heartbeats from the first packet
+        # onward without per-session register/deregister races.
+        pattern = f"{OperatorChannel.HEARTBEAT.value}:*"
         self._pubsub_client.on_pmessage(pattern, self._on_pattern_heartbeat_message)
         await self._pubsub_client.psubscribe(pattern)
         logger.info("[HEARTBEAT] Pattern-subscribed to %s", pattern)
@@ -94,7 +91,7 @@ class HeartbeatSnapshotService:
 
     async def stop(self) -> None:
         if self._pubsub_client:
-            pattern = f"{PubSubChannel.HEARTBEAT_PREFIX.value}:*"
+            pattern = f"{OperatorChannel.HEARTBEAT.value}:*"
             try:
                 await self._pubsub_client.punsubscribe(pattern)
             except Exception:
@@ -141,13 +138,13 @@ class HeartbeatSnapshotService:
 
     async def _on_ws_disconnect(self) -> None:
         self._ready = False
-        logger.warning("[HEARTBEAT] WebSocket disconnected — ready state reset, preserving active sessions for re-subscription")
+        logger.warning("[HEARTBEAT] WebSocket disconnected - ready state reset, preserving active sessions for re-subscription")
 
     async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
         """Track an operator session as active.
 
         Subscription is handled via a single ``heartbeat:*`` pattern set up in
-        ``start()`` — this method only records the (operator, session) pair so
+        ``start()`` - this method only records the (operator, session) pair so
         callers can observe activity. It is idempotent and never opens a new
         per-session pubsub subscription.
         """
@@ -158,7 +155,7 @@ class HeartbeatSnapshotService:
         )
 
     async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        """Stop tracking an operator session. No pubsub state to release—
+        """Stop tracking an operator session. No pubsub state to release - 
         the pattern subscription is shared across all operators.
         """
         self._active_sessions.discard((operator_id, operator_session_id))
@@ -175,14 +172,11 @@ class HeartbeatSnapshotService:
 
     async def _on_heartbeat_message(self, channel: str, data: str | bytes | dict[str, object]) -> None:
         try:
-            # channel format: heartbeat:operator_id:operator_session_id
-            parts = channel.split(":")
-            if len(parts) != 3:
-                logger.warning("[HEARTBEAT] Invalid channel format: %s", channel)
+            try:
+                _, operator_id, operator_session_id = OperatorChannel.parse(channel)
+            except ValueError as e:
+                logger.warning("[HEARTBEAT] Invalid channel format: %s - %s", channel, e)
                 return
-
-            operator_id = parts[1]
-            operator_session_id = parts[2]
 
             logger.info(
                 "[HEARTBEAT] Received heartbeat message from pubsub",
@@ -197,26 +191,13 @@ class HeartbeatSnapshotService:
                 logger.warning("[HEARTBEAT] Missing operator_id or operator_session_id in channel: %s", channel)
                 return
 
-            if isinstance(data, bytes):
-                # UAP/Universal Action Protocol: Heartbeats are now GovernanceEnvelopes containing HeartbeatResult
-                logger.debug("[HEARTBEAT] Decoding binary heartbeat envelope")
-                envelope_dict = decode_g8eo_result_envelope(data)
-                raw = envelope_dict.get("payload", {})
+            try:
+                payload = decode_and_validate_uap_heartbeat(data, operator_id, operator_session_id)
+                logger.debug("[HEARTBEAT] Decoded and validated UAP heartbeat envelope")
+            except ValidationError as e:
+                logger.warning("[HEARTBEAT] Failed to decode/validate UAP heartbeat: %s", e)
+                return
 
-                # Ensure identity fields from envelope are present in payload
-                if not raw.get("operator_id"):
-                    raw["operator_id"] = envelope_dict.get("operator_id")
-                if not raw.get("operator_session_id"):
-                    raw["operator_session_id"] = envelope_dict.get("operator_session_id")
-                if not raw.get("event_type"):
-                    raw["event_type"] = str(envelope_dict.get("event_type"))
-                if not raw.get("timestamp"):
-                    raw["timestamp"] = envelope_dict.get("timestamp")
-            else:
-                # Legacy JSON support (though we prefer Protobuf in v0.2.0+)
-                raw = data if isinstance(data, dict) else json.loads(data)
-
-            payload = G8eoHeartbeatPayload.model_validate(raw)
             self._active_sessions.add((operator_id, operator_session_id))
             logger.info(
                 "[HEARTBEAT] Payload validated, processing heartbeat",

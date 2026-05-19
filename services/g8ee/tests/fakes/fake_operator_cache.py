@@ -37,6 +37,12 @@ class FakeOperatorCache:
     async def get_operator(self, operator_id: str):
         return None
 
+    async def get_cli_session(self, cli_session_id: str):
+        return None
+
+    async def validate_cli_session_ownership(self, cli_session_id: str, operator_session_id: str) -> bool:
+        return True
+
     async def query_operators(self, field_filters=None, limit=1000, bypass_cache=False):
         return []
 

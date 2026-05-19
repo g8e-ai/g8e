@@ -52,7 +52,7 @@
     "users_stats": "/users/stats",
     "users_email": "/users/email/{email}",
     "users_passkeys": "/users/{user_id}/passkeys",
-    "session": "/session/{session_id}",
+    "session": "/session/{web_session_id}",
     "device_links": "/device-links",
     "device_links_user": "/device-links/user/{user_id}",
     "settings": "/settings"

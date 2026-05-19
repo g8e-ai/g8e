@@ -377,7 +377,7 @@ func TestSchemaIdempotent(t *testing.T) {
 	require.NoError(t, db1.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
-	// Re-open same database — schema init should not fail or lose data
+	// Re-open same database - schema init should not fail or lose data
 	db2, err := NewListenDBService(dir, secretsDir, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer db2.Close()
@@ -507,7 +507,7 @@ func TestKVSet_OverwriteReplacesValue(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// KVTTL — no-expiry path
+// KVTTL - no-expiry path
 // ---------------------------------------------------------------------------
 
 func TestKVTTL_NoExpiry(t *testing.T) {
@@ -609,9 +609,9 @@ func TestSSEEventsCount_EmptyTable(t *testing.T) {
 func TestSSEEventsAppendAndCount(t *testing.T) {
 	db := newTestDB(t)
 
-	require.NoError(t, db.SSEEventsAppend("sess-1", "TEXT", `{"chunk":"hello"}`))
-	require.NoError(t, db.SSEEventsAppend("sess-1", "TEXT", `{"chunk":"world"}`))
-	require.NoError(t, db.SSEEventsAppend("sess-2", "DONE", `{}`))
+	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"hello"}`))
+	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"world"}`))
+	require.NoError(t, db.SSEEventsAppend(SSERoute{CLISessionID: "sess-2"}, "DONE", `{}`))
 
 	count, err := db.SSEEventsCount()
 	require.NoError(t, err)
@@ -621,8 +621,8 @@ func TestSSEEventsAppendAndCount(t *testing.T) {
 func TestSSEEventsWipe_DeletesAllRows(t *testing.T) {
 	db := newTestDB(t)
 
-	require.NoError(t, db.SSEEventsAppend("sess-1", "TEXT", `{"chunk":"a"}`))
-	require.NoError(t, db.SSEEventsAppend("sess-2", "DONE", `{}`))
+	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"a"}`))
+	require.NoError(t, db.SSEEventsAppend(SSERoute{CLISessionID: "sess-2"}, "DONE", `{}`))
 
 	deleted, err := db.SSEEventsWipe()
 	require.NoError(t, err)

@@ -1,8 +1,8 @@
 {
-  "_comment": "Canonical InvestigationModel document shape. g8ee is the authority — it creates and owns this document in its SQLite store. client reads it via g8ee HTTP API to render the dashboard and forward context. A field mismatch breaks investigation creation, conversation history, and AI context building.",
+  "_comment": "Canonical InvestigationModel document shape. g8ee is the authority - it creates and owns this document in its SQLite store. client reads it via g8ee HTTP API to render the dashboard and forward context. A field mismatch breaks investigation creation, conversation history, and AI context building.",
 
   "_authority": "operator (CacheAside)",
-  "_consumers": ["client (JS — renders dashboard, queries investigations via CacheAside)", "g8ee (SQLite — creates and updates investigations, syncs to operator)", "g8eo (receives investigation_id in command envelopes, does not read the document directly)"],
+  "_consumers": ["client (JS - renders dashboard, queries investigations via CacheAside)", "g8ee (SQLite - creates and updates investigations, syncs to operator)", "g8eo (receives investigation_id in command envelopes, does not read the document directly)"],
 
   "investigation": {
     "_description": "Full investigation document as stored in operator and synchronized from g8ee SQLite. Accessed via CacheAside service.",
@@ -17,7 +17,7 @@
       "case_id": {
         "type": "string",
         "required": true,
-        "description": "Associated case ID. Required — investigations are always linked to a case."
+        "description": "Associated case ID. Required - investigations are always linked to a case."
       },
       "case_title": {
         "type": "string",
@@ -76,7 +76,7 @@
       "sentinel_mode": {
         "type": "boolean",
         "required": true,
-        "description": "When true, operator output is scrubbed by Sentinel before storage and AI context. Must be explicitly set — no default."
+        "description": "When true, operator output is scrubbed by Sentinel before storage and AI context. Must be explicitly set - no default."
       }
     },
 
@@ -221,7 +221,7 @@
       "type": "array",
       "required": true,
       "default": [],
-      "description": "Investigation lifecycle events. Managed by G8EE. Does NOT include conversation messages — use conversation_history for that.",
+      "description": "Investigation lifecycle events. Managed by G8EE. Does NOT include conversation messages - use conversation_history for that.",
       "items": {
         "id": { "type": "string", "required": false },
         "attempt_number": { "type": "integer", "required": true },

@@ -34,7 +34,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 )
 
 const (
@@ -47,8 +49,6 @@ const (
 	hubCommonName       = "g8e Hub Intermediate CA"
 	operatorCommonName  = "g8e Operator Intermediate CA"
 	bootstrapCommonName = "g8e Bootstrap Intermediate CA"
-
-	trustDomain = "g8e.local"
 )
 
 // PKIAuthority manages the full PKI hierarchy for the Operator.
@@ -210,7 +210,7 @@ func (pki *PKIAuthority) ensureRootCA() error {
 	needRoot := !fileExists(rootKeyPath) || !fileExists(rootCertPath)
 	if !needRoot {
 		if err := pki.loadCertificatePair(rootCertPath, rootKeyPath, &pki.rootCert, &pki.rootKey); err != nil {
-			pki.logger.Warn("[PKI] Failed to load root CA, regenerating", "error", err)
+			pki.logger.Warn("[PKI] Failed to load root CA, regenerating", string(constants.ConnectionStateError), err)
 			needRoot = true
 		}
 	}
@@ -232,7 +232,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	needHub := !fileExists(hubKeyPath) || !fileExists(hubCertPath)
 	if !needHub {
 		if err := pki.loadCertificatePair(hubCertPath, hubKeyPath, &pki.hubCert, &pki.hubKey); err != nil {
-			pki.logger.Warn("[PKI] Failed to load hub CA, regenerating", "error", err)
+			pki.logger.Warn("[PKI] Failed to load hub CA, regenerating", string(constants.ConnectionStateError), err)
 			needHub = true
 		}
 	}
@@ -249,7 +249,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	needOperator := !fileExists(operatorKeyPath) || !fileExists(operatorCertPath)
 	if !needOperator {
 		if err := pki.loadCertificatePair(operatorCertPath, operatorKeyPath, &pki.operatorCert, &pki.operatorKey); err != nil {
-			pki.logger.Warn("[PKI] Failed to load operator CA, regenerating", "error", err)
+			pki.logger.Warn("[PKI] Failed to load operator CA, regenerating", string(constants.ConnectionStateError), err)
 			needOperator = true
 		}
 	}
@@ -266,7 +266,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	needBootstrap := !fileExists(bootstrapKeyPath) || !fileExists(bootstrapCertPath)
 	if !needBootstrap {
 		if err := pki.loadCertificatePair(bootstrapCertPath, bootstrapKeyPath, &pki.bootstrapCert, &pki.bootstrapKey); err != nil {
-			pki.logger.Warn("[PKI] Failed to load bootstrap CA, regenerating", "error", err)
+			pki.logger.Warn("[PKI] Failed to load bootstrap CA, regenerating", string(constants.ConnectionStateError), err)
 			needBootstrap = true
 		}
 	}
@@ -288,7 +288,7 @@ func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
 	if !needService {
 		tlsCert, err := tls.LoadX509KeyPair(serviceCertPath, serviceKeyPath)
 		if err != nil {
-			pki.logger.Warn("[PKI] Failed to load service cert, regenerating", "error", err)
+			pki.logger.Warn("[PKI] Failed to load service cert, regenerating", string(constants.ConnectionStateError), err)
 			needService = true
 		} else {
 			if isExpiringSoon(tlsCert) {
@@ -326,23 +326,29 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 		return fmt.Errorf("failed to write root bundle: %w", err)
 	}
 
-	// Hub bundle (root + hub intermediate)
+	// Hub bundle (root + hub intermediate + operator intermediate + bootstrap intermediate)
 	hubBundlePath := filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem")
 	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt"))
 	if err != nil {
 		return fmt.Errorf("failed to read hub CA: %w", err)
 	}
+	operatorPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt"))
+	if err != nil {
+		return fmt.Errorf("failed to read operator CA: %w", err)
+	}
+	bootstrapPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "bootstrap_ca.crt"))
+	if err != nil {
+		return fmt.Errorf("failed to read bootstrap CA: %w", err)
+	}
 	hubBundle := append([]byte(rootPEM), hubPEM...)
+	hubBundle = append(hubBundle, operatorPEM...)
+	hubBundle = append(hubBundle, bootstrapPEM...)
 	if err := os.WriteFile(hubBundlePath, hubBundle, 0644); err != nil {
 		return fmt.Errorf("failed to write hub bundle: %w", err)
 	}
 
 	// Operator bundle (root + operator intermediate)
 	operatorBundlePath := filepath.Join(pki.pkiDir, "trust", "operator-bundle.pem")
-	operatorPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt"))
-	if err != nil {
-		return fmt.Errorf("failed to read operator CA: %w", err)
-	}
 	operatorBundle := append([]byte(rootPEM), operatorPEM...)
 	if err := os.WriteFile(operatorBundlePath, operatorBundle, 0644); err != nil {
 		return fmt.Errorf("failed to write operator bundle: %w", err)
@@ -350,10 +356,6 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 
 	// Bootstrap bundle (root + bootstrap intermediate)
 	bootstrapBundlePath := filepath.Join(pki.pkiDir, "trust", "bootstrap-bundle.pem")
-	bootstrapPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "bootstrap_ca.crt"))
-	if err != nil {
-		return fmt.Errorf("failed to read bootstrap CA: %w", err)
-	}
 	bootstrapBundle := append([]byte(rootPEM), bootstrapPEM...)
 	if err := os.WriteFile(bootstrapBundlePath, bootstrapBundle, 0644); err != nil {
 		return fmt.Errorf("failed to write bootstrap bundle: %w", err)
@@ -361,7 +363,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 
 	// Trust domain metadata
 	trustDomainData := map[string]string{
-		"trust_domain": trustDomain,
+		"trust_domain": protocol.TrustDomain,
 	}
 	trustDomainJSON, _ := json.MarshalIndent(trustDomainData, "", "  ")
 	if err := os.WriteFile(filepath.Join(pki.pkiDir, "trust", "trust-domain.json"), trustDomainJSON, 0644); err != nil {
@@ -394,7 +396,7 @@ func (pki *PKIAuthority) RevokeCertificate(serial string, reason string) error {
 	}
 	body, _ := json.Marshal(doc)
 
-	return pki.db.DocSet(string(constants.CollectionRevokedCertificates), serial, body)
+	return pki.db.DocSet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial, body)
 }
 
 // GenerateRevocationBundle creates a signed JSON bundle of all revoked certificate serials.
@@ -406,7 +408,7 @@ func (pki *PKIAuthority) GenerateRevocationBundle() (bundleJSON string, signatur
 		return "", "", fmt.Errorf("database not available")
 	}
 
-	docs, err := pki.db.DocQuery(string(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
+	docs, err := pki.db.DocQuery(marshaler.CollectionName(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
 	if err != nil {
 		return "", "", err
 	}
@@ -419,7 +421,7 @@ func (pki *PKIAuthority) GenerateRevocationBundle() (bundleJSON string, signatur
 	bundle := map[string]interface{}{
 		"revoked_serials": revoked,
 		"generated_at":    time.Now().UTC(),
-		"trust_domain":    trustDomain,
+		"trust_domain":    protocol.TrustDomain,
 	}
 
 	bundleBytes, err := json.Marshal(bundle)
@@ -442,7 +444,7 @@ func (pki *PKIAuthority) IsRevoked(serial string) (bool, error) {
 		return false, fmt.Errorf("database not available")
 	}
 
-	doc, err := pki.db.DocGet(string(constants.CollectionRevokedCertificates), serial)
+	doc, err := pki.db.DocGet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial)
 	if err != nil {
 		return false, err
 	}
@@ -480,13 +482,17 @@ func (pki *PKIAuthority) signData(data []byte, key *ecdsa.PrivateKey) (string, e
 }
 
 // SignCSR signs a certificate signing request using the operator intermediate CA.
-// leafType should be "operator" or "app".
-func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID, operatorID, sessionID string) (certPEM, chainPEM string, err error) {
+// leafType should be "operator", "app", or "cli".
+// Parameters:
+//   - For "operator": organizationID, operatorID, sessionID (operator_session_id)
+//   - For "cli": userID, sessionID (cli_session_id)
+//   - For "app": operatorID (app identity)
+func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID, operatorID, userID, sessionID string) (certPEM, chainPEM string, err error) {
 	pki.mu.Lock()
 	defer pki.mu.Unlock()
 
 	if pki.operatorCert == nil || pki.operatorKey == nil {
-		return "", "", fmt.Errorf("operator CA not loaded — call EnsurePKI first")
+		return "", "", fmt.Errorf("operator CA not loaded - call EnsurePKI first")
 	}
 
 	block, _ := pem.Decode([]byte(csrPEM))
@@ -521,15 +527,19 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 	}
 
 	// Set URI SAN for workload identity
-	var uriSAN string
-	if leafType == "operator" {
-		uriSAN = fmt.Sprintf("spiffe://%s/operator/%s/%s/%s", trustDomain, organizationID, operatorID, sessionID)
-	} else if leafType == "app" {
-		uriSAN = fmt.Sprintf("spiffe://%s/app/%s", trustDomain, operatorID)
+	wid := protocol.NewWorkloadIdentity()
+	var uriURL *url.URL
+	switch leafType {
+	case string(constants.SessionTypeOperator):
+		uriURL, _ = wid.OperatorSPIFFEURL(organizationID, operatorID, sessionID)
+	case string(constants.SessionTypeCLI):
+		uriURL, _ = wid.CLISPIFFEURL(userID, sessionID)
+	case "app":
+		uriURL, _ = wid.AppSPIFFEURL(operatorID)
 	}
-	if uriSAN != "" {
-		parsed, _ := url.Parse(uriSAN)
-		template.URIs = []*url.URL{parsed}
+
+	if uriURL != nil {
+		template.URIs = []*url.URL{uriURL}
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.operatorCert, csr.PublicKey, pki.operatorKey)
@@ -711,7 +721,7 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 }
 
 func (pki *PKIAuthority) ensureAppCerts() error {
-	apps := []string{constants.Status.ComponentName.G8EE}
+	apps := []string{marshaler.Status(constants.Status.ComponentName.G8EE)}
 	for _, app := range apps {
 		keyPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".key")
 		certPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".crt")
@@ -740,8 +750,13 @@ func (pki *PKIAuthority) generateAppCert(app, keyPath, certPath string) error {
 		return err
 	}
 
-	serial, _ := randomSerial()
+	serial, err := randomSerial()
+	if err != nil {
+		return err
+	}
 	now := time.Now().UTC()
+	wid := protocol.NewWorkloadIdentity()
+	appURI, _ := wid.AppSPIFFEURL(app)
 	template := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
@@ -754,9 +769,7 @@ func (pki *PKIAuthority) generateAppCert(app, keyPath, certPath string) error {
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		DNSNames:    []string{"localhost", "g8e.local", app},
 		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
-		URIs: []*url.URL{
-			{Scheme: "spiffe", Host: trustDomain, Path: "/app/" + app},
-		},
+		URIs:        []*url.URL{appURI},
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.hubCert, &priv.PublicKey, pki.hubKey)
@@ -781,7 +794,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.crt")
 
 	if pki.hubCert == nil || pki.hubKey == nil {
-		return fmt.Errorf("hub CA not loaded — call EnsurePKI first")
+		return fmt.Errorf("hub CA not loaded - call EnsurePKI first")
 	}
 
 	serviceKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
@@ -794,13 +807,12 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 		return err
 	}
 
-	dnsNames := []string{"localhost", "g8e.local", "operator", constants.Status.ComponentName.G8EE}
+	dnsNames := []string{"localhost", "g8e.local", string(constants.SessionTypeOperator), marshaler.Status(constants.Status.ComponentName.G8EE)}
 	ipAddresses := append([]net.IP{net.ParseIP("127.0.0.1")}, extraIPs...)
 
 	// Add URI SAN for workload identity
-	uriSANs := []string{
-		fmt.Sprintf("spiffe://%s/hub/operator-listen", trustDomain),
-	}
+	wid := protocol.NewWorkloadIdentity()
+	hubURL, _ := wid.HubSPIFFEURL()
 
 	now := time.Now().UTC()
 	template := &x509.Certificate{
@@ -816,7 +828,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		DNSNames:              dnsNames,
 		IPAddresses:           ipAddresses,
-		URIs:                  parseURIs(uriSANs),
+		URIs:                  []*url.URL{hubURL},
 		BasicConstraintsValid: true,
 	}
 
@@ -849,15 +861,6 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	}
 
 	return nil
-}
-
-func parseURIs(uris []string) []*url.URL {
-	result := make([]*url.URL, len(uris))
-	for i, u := range uris {
-		parsed, _ := url.Parse(u)
-		result[i] = parsed
-	}
-	return result
 }
 
 func randomSerial() (*big.Int, error) {

@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class TribunalPersona(AgentPersonaModel):
     """Tribunal: The five-member command-translation panel.
-    
+
     This is a documentation-only persona representing the Tribunal collective.
     """
 
@@ -25,7 +25,7 @@ class TribunalPersona(AgentPersonaModel):
             id="tribunal",
             display_name="Tribunal",
             icon="groups",
-            description="The five-member command-translation panel — converts Sage's intent into an executable command through ensemble consensus.",
+            description="The five-member command-translation panel - converts Sage's intent into an executable command through ensemble consensus.",
             role="arbitrator",
             model_tier="lite",
             tools=[],

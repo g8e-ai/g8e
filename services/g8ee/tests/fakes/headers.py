@@ -22,7 +22,7 @@ inbound request that carries g8e context headers.
 from app.constants import G8eHeaders
 
 TEST_G8E_HEADERS: dict[str, str] = {
-    G8eHeaders.WEB_SESSION_ID.lower():       "session-test-abc123",
+    G8eHeaders.CLI_SESSION_ID.lower():       "session-test-abc123",
     G8eHeaders.SOURCE_COMPONENT.lower(): "client",
     G8eHeaders.EXECUTION_ID.lower():     "exec-test-001",
 }

@@ -47,7 +47,7 @@ def _build_tool_service(web_search_provider: WebSearchProvider | None = None) ->
 # and in the ``OperatorToolName`` enum, but their AI-facing surface has been
 # deleted and is pending restoration. The full-coverage invariant
 # ``test_every_operator_tool_name_has_a_spec`` uses this set as its only
-# allowlist — every entry here is a TODO for the restoration PR.
+# allowlist - every entry here is a TODO for the restoration PR.
 #
 # **Do not add to this set without explicit, documented reason.** Removing
 # an entry requires adding a ``ToolSpec`` in ``tool_registry.TOOL_SPECS``
@@ -62,7 +62,7 @@ def test_pending_restoration_tools_are_not_in_operator_tools():
     ``OPERATOR_TOOLS`` is consumed by ``execute_tool_call`` (bound-operator auth
     gate) and ``agent_tool_loop`` (Tribunal routing). Listing a pending name
     there without a ``ToolSpec`` would create a dead approval-gate entry that
-    ``_assert_tool_registry_invariants`` already catches at startup — this test
+    ``_assert_tool_registry_invariants`` already catches at startup - this test
     pins the contract and fails loudly if the invariant drifts.
     """
     assert _PENDING_RESTORATION.isdisjoint(OPERATOR_TOOLS)
@@ -105,7 +105,7 @@ def test_pending_restoration_allowlist_does_not_shadow_active_specs():
     stale = _PENDING_RESTORATION & spec_names
     assert not stale, (
         f"_PENDING_RESTORATION contains names that DO have a ToolSpec: "
-        f"{sorted(stale)}. Remove them from _PENDING_RESTORATION — they are "
+        f"{sorted(stale)}. Remove them from _PENDING_RESTORATION - they are "
         f"no longer pending."
     )
 
@@ -119,7 +119,7 @@ def test_tool_service_init_registers_all_operator_tools():
     svc = _build_tool_service(web_search_provider=MagicMock(spec=WebSearchProvider))
     declared = {
         name.value if isinstance(name, OperatorToolName) else str(name)
-        for name in svc._tool_declarations.keys()
+        for name in svc._tool_declarations
     }
     assert OPERATOR_TOOLS.issubset(declared)
 
@@ -129,7 +129,7 @@ def test_tool_service_init_registers_required_universal_tools():
     svc = _build_tool_service(web_search_provider=None)
     declared = {
         name.value if isinstance(name, OperatorToolName) else str(name)
-        for name in svc._tool_declarations.keys()
+        for name in svc._tool_declarations
     }
     required = AI_UNIVERSAL_TOOLS - {OperatorToolName.G8E_SEARCH_WEB.value}
     assert required.issubset(declared)
@@ -216,7 +216,7 @@ def test_every_spec_has_builder_and_handler_callable():
     """Every ``ToolSpec`` must carry direct ``builder`` / ``handler`` callables.
 
     The registry references the per-tool modules under
-    ``app.services.ai.tools`` directly — no string-based attribute lookup on
+    ``app.services.ai.tools`` directly - no string-based attribute lookup on
     ``AIToolService``. This guards against a regression where a spec ships
     with a non-callable (e.g. ``None``) wired in.
     """
@@ -237,7 +237,7 @@ def test_operator_gated_specs_only_exposed_in_bound_modes():
     """OPERATOR_GATED tools must never be advertised in OPERATOR_NOT_BOUND.
 
     Exposing an operator-gated tool without a bound operator would let the LLM call it,
-    only to have ``execute_tool_call`` reject it at dispatch time — a wasted turn and
+    only to have ``execute_tool_call`` reject it at dispatch time - a wasted turn and
     a confusing failure surface. The ``ToolScope.OPERATOR_GATED`` guard in
     ``tool_registry._validate_specs`` enforces this at import time; this test pins
     the contract for future readers.

@@ -28,6 +28,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 )
 
 // configCounter generates monotonically increasing IDs within a single test binary
@@ -110,9 +111,9 @@ func (w testLogWriter) Write(p []byte) (int, error) {
 // GetTestOperatorDirectURL returns the client WebSocket gateway base URL for g8eo pub/sub tests.
 // g8eo connects to pub/sub via client (the single external entry point) at port 443; client
 // proxies /ws/pubsub to operator internally. operator is not directly accessible from outside
-// the docker network. Must not include a path — callers append /ws/pubsub as needed.
+// the docker network. Must not include a path - callers append /ws/pubsub as needed.
 func GetTestOperatorDirectURL() string {
-	if u := os.Getenv(string(constants.EnvVar.OperatorPubSubURL)); u != "" {
+	if u := os.Getenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL)); u != "" {
 		return u
 	}
 	return "wss://" + constants.DefaultEndpoint + ":443"
@@ -120,7 +121,7 @@ func GetTestOperatorDirectURL() string {
 
 // TempFile registers a t.Cleanup to remove path when the test ends.
 // Use this whenever a test needs a file outside of t.TempDir() (e.g. /tmp).
-// The file is NOT created by this function — only the cleanup is registered.
+// The file is NOT created by this function - only the cleanup is registered.
 func TempFile(t *testing.T, path string) {
 	t.Helper()
 	t.Cleanup(func() {

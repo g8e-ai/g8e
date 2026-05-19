@@ -46,7 +46,7 @@ def scalar_to_canonical_str(scalar: float) -> str:
 
     Uses a fixed 12-decimal representation so floating-point round-trip
     differences (e.g. ``0.1 + 0.2``) cannot produce divergent leaf bytes
-    across re-derivations. Trailing zeros are *kept* — fixed-width keeps
+    across re-derivations. Trailing zeros are *kept* - fixed-width keeps
     the canonicalisation trivially obvious from the wire bytes.
     """
     return f"{scalar:.12f}"
@@ -138,9 +138,6 @@ def verify_proof(leaf: bytes, proof: list[str], root: str, index: int) -> bool:
     idx = index
     for sibling_hex in proof:
         sibling = bytes.fromhex(sibling_hex)
-        if idx % 2 == 0:
-            current = _hash_pair(current, sibling)
-        else:
-            current = _hash_pair(sibling, current)
+        current = _hash_pair(current, sibling) if idx % 2 == 0 else _hash_pair(sibling, current)
         idx //= 2
     return current.hex() == root

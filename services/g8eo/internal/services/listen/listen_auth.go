@@ -22,46 +22,76 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 )
+
+// contextKey is a custom type for context keys to avoid collisions.
+type contextKey string
+
+const (
+	userIDKey contextKey = "user_id"
+)
+
+// AuthError represents a structured authentication error.
+type AuthError struct {
+	Message string `json:"error"`
+	Reason  string `json:"reason,omitempty"`
+	Status  int    `json:"-"`
+}
+
+func (e *AuthError) Error() string {
+	b, _ := json.Marshal(e)
+	return string(b)
+}
+
+func (e *AuthError) Is(target error) bool {
+	_, ok := target.(*AuthError)
+	return ok
+}
 
 // AuthService handles authentication for the Listen service.
 type AuthService struct {
 	db         *ListenDBService
 	pki        *PKIAuthority
 	logger     *slog.Logger
+	userSvc    *UserService
 	secretsDir string
 }
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *ListenDBService, pki *PKIAuthority, logger *slog.Logger, secretsDir string) *AuthService {
+func NewAuthService(db *ListenDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, secretsDir string) *AuthService {
 	return &AuthService{
 		db:         db,
 		pki:        pki,
 		logger:     logger,
+		userSvc:    userSvc,
 		secretsDir: secretsDir,
 	}
 }
 
 // ValidateOperatorSession checks if a session ID is valid and returns the operator document.
-func (s *AuthService) ValidateOperatorSession(sessionID string) (*models.OperatorDocumentGo, error) {
-	if sessionID == "" {
-		return nil, fmt.Errorf("missing session id")
+// Auth depends on session validity (existence + certificate revocation), not on operator
+// status liveness signals from other processes. The primary session invalidation mechanism
+// is certificate revocation via PKI authority.
+func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models.OperatorDocumentGo, error) {
+	if operatorSessionID == "" {
+		return nil, &AuthError{Message: "missing operator_session_id", Status: http.StatusUnauthorized}
 	}
 
 	filters := []models.DocFilter{
-		{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sessionID))},
-		{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.Status.OperatorStatus.Active))},
+		{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", operatorSessionID))},
 	}
 
-	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(docs) == 0 {
-		return nil, fmt.Errorf("invalid or expired operator session")
+		return nil, &AuthError{Message: "invalid or expired operator session", Status: http.StatusUnauthorized}
 	}
 
 	// Convert Document to OperatorDocumentGo
@@ -73,6 +103,39 @@ func (s *AuthService) ValidateOperatorSession(sessionID string) (*models.Operato
 	var op models.OperatorDocumentGo
 	if err := json.Unmarshal(b, &op); err != nil {
 		return nil, err
+	}
+
+	// [PIVOT] Reject terminated identities (Plan §4.6)
+	// We allow OFFLINE and STALE statuses to authenticate (to support bootstrap
+	// and recovery), but TERMINATED is a hard-gate rejection.
+	if op.Status == constants.Status.OperatorStatus.Terminated {
+		return nil, &AuthError{
+			Message: "operator identity disabled",
+			Reason:  marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated),
+			Status:  http.StatusForbidden,
+		}
+	}
+
+	// Enforce session expiry (TTL)
+	// Default session TTL is 24h if not specified.
+	sessionTTL := 24 * time.Hour
+	// We use the Document store's authoritative CreatedAt for TTL enforcement.
+	if !docs[0].CreatedAt.IsZero() && time.Since(docs[0].CreatedAt) > sessionTTL {
+		return nil, &AuthError{Message: "operator session expired", Reason: "ttl_exceeded", Status: http.StatusUnauthorized}
+	}
+
+	// Check if the linked user is active (plan §4.6)
+	// This is the single chokepoint that makes retirement real - without it,
+	// a stale CLI cert can still talk to the substrate.
+	if s.userSvc != nil && op.UserID != "" {
+		user, err := s.userSvc.GetByID(op.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load user %s: %w", op.UserID, err)
+		}
+		if user != nil && !user.IsActive() {
+			// Return structured error for disabled users
+			return nil, &AuthError{Message: "identity disabled", Reason: "retired_by_real_login", Status: http.StatusForbidden}
+		}
 	}
 
 	return &op, nil
@@ -81,20 +144,20 @@ func (s *AuthService) ValidateOperatorSession(sessionID string) (*models.Operato
 // ValidateAPIKey checks if an API key is valid and returns the operator document.
 func (s *AuthService) ValidateAPIKey(apiKey string) (*models.OperatorDocumentGo, error) {
 	if apiKey == "" {
-		return nil, fmt.Errorf("missing api key")
+		return nil, &AuthError{Message: "missing api key", Status: http.StatusUnauthorized}
 	}
 
 	filters := []models.DocFilter{
 		{Field: "operator_api_key", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", apiKey))},
 	}
 
-	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(docs) == 0 {
-		return nil, fmt.Errorf("invalid api key")
+		return nil, &AuthError{Message: "invalid api key", Status: http.StatusUnauthorized}
 	}
 
 	// Convert Document to OperatorDocumentGo
@@ -108,7 +171,28 @@ func (s *AuthService) ValidateAPIKey(apiKey string) (*models.OperatorDocumentGo,
 		return nil, err
 	}
 
+	// Check if the linked user is active (plan §4.6)
+	if s.userSvc != nil && op.UserID != "" {
+		user, err := s.userSvc.GetByID(op.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load user %s: %w", op.UserID, err)
+		}
+		if user != nil && !user.IsActive() {
+			return nil, &AuthError{Message: "identity disabled", Reason: "retired_by_real_login", Status: http.StatusForbidden}
+		}
+	}
+
 	return &op, nil
+}
+
+// ExtractOperatorSessionID returns the operator session ID from the request headers.
+// It prefers Authorization: Bearer <token>.
+func (s *AuthService) ExtractOperatorSessionID(r *http.Request) string {
+	authHeader := r.Header.Get(constants.HeaderAuthorization)
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		return strings.TrimPrefix(authHeader, "Bearer ")
+	}
+	return ""
 }
 
 // Middleware returns an http.Handler that authenticates requests.
@@ -138,6 +222,35 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Blob endpoint: allow device-link token authentication for bootstrap
+		// Devices use device-link tokens to download the operator binary
+		if strings.HasPrefix(r.URL.Path, "/blob/") {
+			authHeader := r.Header.Get(constants.HeaderAuthorization)
+			if strings.HasPrefix(authHeader, "Bearer ") {
+				token := strings.TrimPrefix(authHeader, "Bearer ")
+				if strings.HasPrefix(token, "dlk_") && len(token) >= 20 {
+					// Validate device-link token exists and is not expired
+					linkKey := "g8e:device-link:" + token
+					raw, found := s.db.KVGet(linkKey)
+					if found {
+						var linkData map[string]interface{}
+						if err := json.Unmarshal([]byte(raw), &linkData); err == nil {
+							if expiresAt, ok := linkData["expires_at"].(string); ok {
+								if expTime, err := time.Parse(time.RFC3339, expiresAt); err == nil {
+									if expTime.After(time.Now()) {
+										// Token is valid, allow access
+										next.ServeHTTP(w, r)
+										return
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			// If device-link token validation fails, fall through to mTLS requirement
+		}
+
 		// [PIVOT] Enforce mTLS for all other routes (Phase 6)
 		// Client certificates must be present and verified by the hub/root CA.
 		// tls.VerifyClientCertIfGiven ensures the chain is already verified if present.
@@ -150,32 +263,36 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		// [PIVOT] Verify certificate revocation status (Phase 6)
 		if s.pki != nil {
 			if err := s.pki.VerifyCertificate(r.TLS.PeerCertificates[0]); err != nil {
-				s.logger.Warn("mTLS client certificate revoked or invalid", "path", r.URL.Path, "error", err)
+				s.logger.Warn("mTLS client certificate revoked or invalid", "path", r.URL.Path, string(constants.ConnectionStateError), err)
 				s.jsonError(w, http.StatusUnauthorized, "mTLS client certificate revoked or invalid")
 				return
 			}
 		}
 
 		// We prioritize session auth for operators.
-		sessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+		// [PIVOT] Prefer standard Authorization: Bearer <token> header (Plan §4.6)
+		operatorSessionID := s.ExtractOperatorSessionID(r)
 
-		if sessionID != "" {
-			op, err := s.ValidateOperatorSession(sessionID)
+		cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
+
+		if operatorSessionID != "" {
+			op, err := s.ValidateOperatorSession(operatorSessionID)
 			if err == nil {
 				// [PIVOT] Verify URI SAN identity (Phase 6)
 				// The client cert must bind to the same operator session.
+				// SPIFFE ID format: protocol.WorkloadIdentity.OperatorSPIFFEID()
 				if len(r.TLS.PeerCertificates) > 0 {
+					wid := protocol.NewWorkloadIdentity()
 					cert := r.TLS.PeerCertificates[0]
 					match := false
 					for _, uri := range cert.URIs {
-						// spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
-						if strings.Contains(uri.String(), "/"+op.ID+"/"+sessionID) {
+						if wid.MatchesOperator(uri.String(), op.OrganizationID, op.ID, operatorSessionID) {
 							match = true
 							break
 						}
 					}
 					if !match {
-						s.logger.Warn("mTLS URI SAN mismatch for operator session", "path", r.URL.Path, "operator_id", op.ID, "session_id", sessionID)
+						s.logger.Warn("mTLS URI SAN mismatch for operator session", "path", r.URL.Path, "operator_id", op.ID, "operator_session_id", operatorSessionID)
 						s.jsonError(w, http.StatusForbidden, "mTLS identity mismatch")
 						return
 					}
@@ -184,16 +301,92 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			s.logger.Warn("Invalid operator session attempt", "session_id", sessionID[:8]+"...")
+			s.logger.Warn("Invalid operator session attempt", "operator_session_id", operatorSessionID[:8]+"...", string(constants.ConnectionStateError), err)
+
+			// If it's a structured AuthError, return it properly
+			if ae, ok := err.(*AuthError); ok {
+				s.jsonError(w, ae.Status, ae.Message) // Note: jsonError wraps it in {"error": ...}
+				return
+			}
+		} else if cliSessionID != "" {
+			// CLI authentication via CLI session ID and CLI certificate
+			// Verify the CLI certificate matches the CLI session ID
+			// SPIFFE ID format: protocol.WorkloadIdentity.CLISPIFFEID()
+			if len(r.TLS.PeerCertificates) > 0 {
+				wid := protocol.NewWorkloadIdentity()
+				cert := r.TLS.PeerCertificates[0]
+
+				// [PIVOT] Verify CLI session and lookup UserID (Plan §4.6)
+				cliDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+				if err != nil {
+					s.logger.Error("failed to load CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
+					s.jsonError(w, http.StatusInternalServerError, "failed to load session")
+					return
+				}
+				if cliDoc == nil {
+					s.logger.Warn("CLI session not found", "cli_session_id", cliSessionID)
+					s.jsonError(w, http.StatusUnauthorized, "invalid CLI session")
+					return
+				}
+
+				var cliSession models.CLISession
+				b, _ := json.Marshal(cliDoc.Data)
+				if err := json.Unmarshal(b, &cliSession); err != nil {
+					s.logger.Error("failed to parse CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
+					s.jsonError(w, http.StatusInternalServerError, "failed to parse session")
+					return
+				}
+
+				// Check expiry
+				if !cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(time.Now()) {
+					s.logger.Warn("CLI session expired", "cli_session_id", cliSessionID)
+					s.jsonError(w, http.StatusUnauthorized, "CLI session expired")
+					return
+				}
+
+				// Check if the linked user is active
+				if s.userSvc != nil && cliSession.UserID != "" {
+					user, err := s.userSvc.GetByID(cliSession.UserID)
+					if err != nil {
+						s.logger.Error("failed to load user for CLI session", "user_id", cliSession.UserID, string(constants.ConnectionStateError), err)
+						s.jsonError(w, http.StatusInternalServerError, "identity validation failed")
+						return
+					}
+					if user != nil && !user.IsActive() {
+						s.logger.Warn("CLI session identity disabled", "user_id", cliSession.UserID)
+						s.jsonError(w, http.StatusForbidden, "identity disabled")
+						return
+					}
+				}
+
+				// Verify the CLI certificate matches the CLI session ID
+				// SPIFFE ID format: protocol.WorkloadIdentity.CLISPIFFEID()
+				match := false
+				for _, uri := range cert.URIs {
+					if wid.MatchesCLI(uri.String(), cliSession.UserID, cliSessionID) {
+						match = true
+						break
+					}
+				}
+				if !match {
+					s.logger.Warn("mTLS URI SAN mismatch for CLI session", "path", r.URL.Path, "cli_session_id", cliSessionID)
+					s.jsonError(w, http.StatusForbidden, "mTLS identity mismatch")
+					return
+				}
+			}
+
+			next.ServeHTTP(w, r)
+			return
 		} else {
 			// [PIVOT] System/App Authentication via URI SAN (Phase 6)
 			// If no session ID is provided, we check if the certificate belongs to a trusted system app.
 			// Note: /_query requires operator session authentication - no app bypass allowed.
+			// SPIFFE ID format: protocol.WorkloadIdentity.AppSPIFFEID()
 			if len(r.TLS.PeerCertificates) > 0 {
+				wid := protocol.NewWorkloadIdentity()
 				cert := r.TLS.PeerCertificates[0]
 				for _, uri := range cert.URIs {
-					// Reference apps use spiffe://g8e.local/app/<app_id>
-					if strings.Contains(uri.String(), "/app/"+constants.Status.ComponentName.G8EE) {
+					if wid.MatchesApp(uri.String(), marshaler.Status(constants.Status.ComponentName.G8EE)) {
 						next.ServeHTTP(w, r)
 						return
 					}
@@ -236,46 +429,59 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *ListenDBService) htt
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("g8e_session")
 		if err != nil || cookie == nil {
-			s.jsonError(w, http.StatusUnauthorized, "session cookie required")
+			s.jsonError(w, http.StatusUnauthorized, "web session cookie required")
 			return
 		}
 
 		sessionID := cookie.Value
 		if sessionID == "" {
-			s.jsonError(w, http.StatusUnauthorized, "invalid session cookie")
+			s.jsonError(w, http.StatusUnauthorized, "invalid web session cookie")
 			return
 		}
 
 		// Validate web session
-		doc, err := db.DocGet(string(constants.CollectionWebSessions), sessionID)
+		doc, err := db.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), sessionID)
 		if err != nil {
-			s.jsonError(w, http.StatusUnauthorized, "session validation failed")
+			s.jsonError(w, http.StatusUnauthorized, "web session validation failed")
 			return
 		}
 		if doc == nil {
-			s.jsonError(w, http.StatusUnauthorized, "session not found")
+			s.jsonError(w, http.StatusUnauthorized, "web session not found")
 			return
 		}
 
 		// Check expiry
-		var session models.WebSession
+		var webSession models.WebSession
 		data, err := json.Marshal(doc.Data)
 		if err != nil {
-			s.jsonError(w, http.StatusUnauthorized, "session parse failed")
+			s.jsonError(w, http.StatusUnauthorized, "web session parse failed")
 			return
 		}
-		if err := json.Unmarshal(data, &session); err != nil {
-			s.jsonError(w, http.StatusUnauthorized, "session parse failed")
+		if err := json.Unmarshal(data, &webSession); err != nil {
+			s.jsonError(w, http.StatusUnauthorized, "web session parse failed")
 			return
 		}
 
-		if time.Now().UnixMilli() > session.ExpiresAtUnixMs {
-			s.jsonError(w, http.StatusUnauthorized, "session expired")
+		if time.Now().UnixMilli() > webSession.ExpiresAtUnixMs {
+			s.jsonError(w, http.StatusUnauthorized, "web session expired")
 			return
+		}
+
+		// Check if the user is active (plan §4.6)
+		if s.userSvc != nil {
+			user, err := s.userSvc.GetByID(webSession.UserID)
+			if err != nil {
+				s.jsonError(w, http.StatusUnauthorized, "user validation failed")
+				return
+			}
+			if user != nil && !user.IsActive() {
+				s.jsonError(w, http.StatusUnauthorized, "identity disabled")
+				return
+			}
 		}
 
 		// Stamp context with user_id
-		ctx := context.WithValue(r.Context(), "user_id", session.UserID)
+		ctx := context.WithValue(r.Context(), userIDKey, webSession.UserID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

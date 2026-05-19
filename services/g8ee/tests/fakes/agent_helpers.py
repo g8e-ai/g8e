@@ -185,8 +185,8 @@ def make_provider_chunk(
     thought: bool = False,
     text: str = "",
     thought_signature: ThoughtSignature = None,
-    tool_calls: list = None,
-    finish_reason: str = None,
+    tool_calls: list | None = None,
+    finish_reason: str | None = None,
 ) -> MagicMock:
     """Build a minimal fake provider chunk."""
     chunk = MagicMock()
@@ -276,9 +276,11 @@ def make_event_service():
         investigation_id: str,
         event_type: str,
         payload: dict | object,
-        web_session_id: str,
+        web_session_id: str | None,
         case_id: str,
         user_id: str,
+        *,
+        cli_session_id: str | None = None,
     ):
         """Capture investigation event calls and create proper SessionEvent."""
         session_event = SessionEvent(
@@ -286,6 +288,7 @@ def make_event_service():
             payload=payload,
             investigation_id=investigation_id,
             web_session_id=web_session_id,
+            cli_session_id=cli_session_id,
             case_id=case_id,
             user_id=user_id,
         )

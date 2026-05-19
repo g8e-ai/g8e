@@ -66,21 +66,20 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
                 path_params.get("user_id")
             )
 
-            if user_id_in_request:
-                if user_id_in_request != g8e_context.user_id:
-                    logger.error(
-                        "AUTHORIZATION VIOLATION: User attempted to access another user's data",
-                        extra={
-                            "authenticated_user_id": g8e_context.user_id,
-                            "requested_user_id": user_id_in_request,
-                            "path": request.url.path,
-                            "method": request.method,
-                        }
-                    )
-                    raise AuthorizationError(
-                        "Access denied: Cannot access other user's resources",
-                        component=ComponentName.G8EE
-                    )
+            if user_id_in_request and user_id_in_request != g8e_context.user_id:
+                logger.error(
+                    "AUTHORIZATION VIOLATION: User attempted to access another user's data",
+                    extra={
+                        "authenticated_user_id": g8e_context.user_id,
+                        "requested_user_id": user_id_in_request,
+                        "path": request.url.path,
+                        "method": request.method,
+                    }
+                )
+                raise AuthorizationError(
+                    "Access denied: Cannot access other user's resources",
+                    component=ComponentName.G8EE
+                )
 
             # Extract investigation_id and case_id from path or query
             investigation_id = (
@@ -126,10 +125,7 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
     def _is_user_scoped_path(self, path: str) -> bool:
         # Check if the path starts with any of our internal paths
         # InternalApiPaths.G8EE_INVESTIGATIONS is usually /api/internal/investigations
-        for internal_path in self.INTERNAL_PATHS:
-            if path.startswith(internal_path):
-                return True
-        return False
+        return any(path.startswith(internal_path) for internal_path in self.INTERNAL_PATHS)
 
     def _extract_g8e_context(self, request: Request) -> G8eHttpContext | None:
         if hasattr(request.state, "g8e_context"):

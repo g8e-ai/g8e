@@ -26,14 +26,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 )
 
 func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	workDir := t.TempDir()
-	
+
 	// Setup test files
 	require.NoError(t, os.WriteFile(filepath.Join(workDir, "file1.txt"), []byte("hello world\nthis is a test\ng8e is cool"), 0644))
 	require.NoError(t, os.Mkdir(filepath.Join(workDir, "subdir"), 0755))
@@ -54,9 +54,9 @@ func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 
 		result, err := service.ExecuteFsGrep(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Equal(t, 2, result.TotalMatches)
-		
+
 		foundFiles := make(map[string]bool)
 		for _, m := range result.Matches {
 			foundFiles[filepath.Base(m.Path)] = true
@@ -78,7 +78,7 @@ func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 
 		result, err := service.ExecuteFsGrep(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Equal(t, 1, result.TotalMatches)
 		assert.Contains(t, result.Matches[0].Content, "g8e is cool")
 	})
@@ -95,7 +95,7 @@ func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 
 		result, err := service.ExecuteFsGrep(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Equal(t, 1, result.TotalMatches)
 		assert.Equal(t, "file1.txt", filepath.Base(result.Matches[0].Path))
 	})
@@ -111,7 +111,7 @@ func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 
 		result, err := service.ExecuteFsGrep(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Equal(t, 2, result.TotalMatches)
 		assert.True(t, result.Truncated)
 	})
@@ -127,7 +127,7 @@ func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 
 		result, err := service.ExecuteFsGrep(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusFailed, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
 		assert.Equal(t, "invalid_pattern", *result.ErrorType)
 	})
 }

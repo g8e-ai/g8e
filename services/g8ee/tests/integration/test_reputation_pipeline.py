@@ -156,7 +156,7 @@ class TestReputationPipelineIntegration:
 
         # Verify SSE events
         published = [e.event_type for e in event_svc._published_events]
-        assert EventType.REPUTATION_STATE_UPDATED in published
+        assert EventType.AI_REPUTATION_STATE_UPDATED in published
 
     async def test_failed_tribunal_command_triggers_tier2_slash(self, mock_tool_executor):
         """A failed Tribunal command (Tier 2) should trigger resolution with slashing."""
@@ -225,8 +225,8 @@ class TestReputationPipelineIntegration:
 
         # Verify events including slashing
         published = [e.event_type for e in event_svc._published_events]
-        assert EventType.REPUTATION_STATE_UPDATED in published
-        assert EventType.REPUTATION_SLASH_TIER2 in published
+        assert EventType.AI_REPUTATION_STATE_UPDATED in published
+        assert EventType.AI_REPUTATION_SLASH_TIER2 in published
 
     async def test_non_tribunal_tool_skips_resolution(self, mock_tool_executor):
         """Non-Tribunal tools (e.g. file_read) should never trigger reputation resolution."""

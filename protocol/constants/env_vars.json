@@ -1,71 +1,433 @@
 {
-  "llm": {
-    "G8E_LLM_PROVIDER": "llm.primary_provider",
-    "G8E_LLM_PRIMARY_MODEL": "llm.primary_model",
-    "G8E_LLM_ASSISTANT_MODEL": "llm.assistant_model",
-    "G8E_LLM_OPENAI_ENDPOINT": "llm.openai_endpoint",
-    "G8E_LLM_OLLAMA_ENDPOINT": "llm.ollama_endpoint",
-    "G8E_LLM_ANTHROPIC_ENDPOINT": "llm.anthropic_endpoint",
-    "G8E_LLM_OPENAI_API_KEY": "llm.openai_api_key",
-    "G8E_LLM_OLLAMA_API_KEY": "llm.ollama_api_key",
-    "G8E_LLM_GEMINI_API_KEY": "llm.gemini_api_key",
-    "G8E_LLM_ANTHROPIC_API_KEY": "llm.anthropic_api_key",
-    "G8E_LLM_MAX_TOKENS": "llm.max_tokens",
-    "G8E_LLM_COMMAND_GEN_ENABLED": "llm.command_gen_enabled",
-    "G8E_LLM_COMMAND_GEN_AUDITOR": "llm.command_gen_auditor",
-    "G8E_LLM_COMMAND_GEN_PASSES": "llm.command_gen_passes"
+  "G8E_LLM_MAX_TOKENS": {
+    "value": "G8E_LLM_MAX_TOKENS",
+    "config_key": "llm.max_tokens",
+    "_go_const": "LLMMaxTokens",
+    "_python_const": "LLM_MAX_TOKENS"
   },
-  "auth": {
-    "G8E_SESSION_ENCRYPTION_KEY": "auth.session_encryption_key",
-    "G8E_API_KEY": "auth.g8e_api_key"
+  "G8E_LLM_COMMAND_GEN_ENABLED": {
+    "value": "G8E_LLM_COMMAND_GEN_ENABLED",
+    "config_key": "llm.command_gen_enabled",
+    "_go_const": "LLMCommandGenEnabled",
+    "_python_const": "LLM_COMMAND_GEN_ENABLED"
   },
-  "general": {
-    "G8E_APP_URL": "general.app_url",
-    "G8E_ALLOWED_ORIGINS": "general.allowed_origins",
-    "G8E_PASSKEY_RP_NAME": "general.passkey_rp_name",
-    "G8E_PASSKEY_RP_ID": "general.passkey_rp_id",
-    "G8E_PASSKEY_ORIGIN": "general.passkey_origin"
+  "G8E_LLM_COMMAND_GEN_AUDITOR": {
+    "value": "G8E_LLM_COMMAND_GEN_AUDITOR",
+    "config_key": "llm.command_gen_auditor",
+    "_go_const": "LLMCommandGenAuditor",
+    "_python_const": "LLM_COMMAND_GEN_AUDITOR"
   },
-  "search": {
-    "G8E_VERTEX_SEARCH_ENABLED": "vertex_search.enabled",
-    "G8E_VERTEX_SEARCH_PROJECT_ID": "vertex_search.project_id",
-    "G8E_VERTEX_SEARCH_ENGINE_ID": "vertex_search.engine_id",
-    "G8E_VERTEX_SEARCH_LOCATION": "vertex_search.location",
-    "G8E_VERTEX_SEARCH_API_KEY": "vertex_search.api_key",
-    "G8E_GOOGLE_SEARCH_ENABLED": "google_search.enabled",
-    "G8E_GOOGLE_SEARCH_API_KEY": "google_search.api_key",
-    "G8E_GOOGLE_SEARCH_ENGINE_ID": "google_search.engine_id"
+  "G8E_LLM_COMMAND_GEN_PASSES": {
+    "value": "G8E_LLM_COMMAND_GEN_PASSES",
+    "config_key": "llm.command_gen_passes",
+    "_go_const": "LLMCommandGenPasses",
+    "_python_const": "LLM_COMMAND_GEN_PASSES"
   },
-  "operator": {
-    "G8E_INTERNAL_HTTP_URL": "listen.http_url",
-    "G8E_INTERNAL_PUBSUB_URL": "listen.pubsub_url",
-    "G8E_OPERATOR_BLOB_URL": "listen.blob_url"
+  "G8E_SESSION_ENCRYPTION_KEY": {
+    "value": "G8E_SESSION_ENCRYPTION_KEY",
+    "config_key": "auth.session_encryption_key",
+    "_go_const": "SessionEncryptionKey",
+    "_python_const": "SESSION_ENCRYPTION_KEY"
   },
-  "platform": {
-    "G8E_DOCKER_GID": "platform.docker_gid",
-    "G8E_HTTPS_PORT": "platform.https_port",
-    "G8E_HTTP_PORT": "platform.http_port",
-    "G8E_PORT": "platform.port",
-    "G8E_SESSION_TTL": "platform.session_ttl",
-    "G8E_ABSOLUTE_SESSION_TIMEOUT": "platform.absolute_session_timeout",
-    "G8E_ENVIRONMENT": "platform.environment",
-    "G8E_UPLOAD_PATH": "platform.upload_path",
-    "G8E_DOCS_DIR": "platform.docs_dir",
-    "G8E_SUPERVISOR_PORT": "platform.supervisor_port"
+  "G8E_API_KEY": {
+    "value": "G8E_API_KEY",
+    "config_key": "auth.g8e_api_key",
+    "_go_const": "APIKey",
+    "_python_const": "API_KEY"
   },
-  "component_urls": {
-    "G8EE_URL": "component_urls.g8ee_url",
-    "G8E_CLIENT_URL": "component_urls.client_url",
-    "G8E_OPERATOR_ENDPOINT": "component_urls.operator_endpoint"
+  "G8E_APP_URL": {
+    "value": "G8E_APP_URL",
+    "config_key": "general.app_url",
+    "_go_const": "AppURL",
+    "_python_const": "APP_URL"
   },
-  "command_validation": {
-    "G8E_ENABLE_COMMAND_WHITELISTING": "command_validation.enable_whitelisting",
-    "G8E_ENABLE_COMMAND_BLACKLISTING": "command_validation.enable_blacklisting"
+  "G8E_ALLOWED_ORIGINS": {
+    "value": "G8E_ALLOWED_ORIGINS",
+    "config_key": "general.allowed_origins",
+    "_go_const": "AllowedOrigins",
+    "_python_const": "ALLOWED_ORIGINS"
   },
-  "ssl": {
-    "G8E_PKI_DIR": "ssl.pki_dir",
-    "G8E_SECRETS_DIR": "ssl.secrets_dir",
-    "G8E_PUBSUB_CA_CERT": "ssl.pubsub_ca_cert",
-    "G8E_SSL_CERT_FILE": "ssl.ssl_cert_file"
+  "G8E_PASSKEY_RP_NAME": {
+    "value": "G8E_PASSKEY_RP_NAME",
+    "config_key": "general.passkey_rp_name",
+    "_go_const": "PasskeyRPName",
+    "_python_const": "PASSKEY_RP_NAME"
+  },
+  "G8E_PASSKEY_RP_ID": {
+    "value": "G8E_PASSKEY_RP_ID",
+    "config_key": "general.passkey_rp_id",
+    "_go_const": "PasskeyRPID",
+    "_python_const": "PASSKEY_RP_ID"
+  },
+  "G8E_PASSKEY_ORIGIN": {
+    "value": "G8E_PASSKEY_ORIGIN",
+    "config_key": "general.passkey_origin",
+    "_go_const": "PasskeyOrigin",
+    "_python_const": "PASSKEY_ORIGIN"
+  },
+  "G8E_VERTEX_SEARCH_ENABLED": {
+    "value": "G8E_VERTEX_SEARCH_ENABLED",
+    "config_key": "vertex_search.enabled",
+    "_go_const": "VertexSearchEnabled",
+    "_python_const": "VERTEX_SEARCH_ENABLED"
+  },
+  "G8E_VERTEX_SEARCH_PROJECT_ID": {
+    "value": "G8E_VERTEX_SEARCH_PROJECT_ID",
+    "config_key": "vertex_search.project_id",
+    "_go_const": "VertexSearchProjectID",
+    "_python_const": "VERTEX_SEARCH_PROJECT_ID"
+  },
+  "G8E_VERTEX_SEARCH_ENGINE_ID": {
+    "value": "G8E_VERTEX_SEARCH_ENGINE_ID",
+    "config_key": "vertex_search.engine_id",
+    "_go_const": "VertexSearchEngineID",
+    "_python_const": "VERTEX_SEARCH_ENGINE_ID"
+  },
+  "G8E_VERTEX_SEARCH_LOCATION": {
+    "value": "G8E_VERTEX_SEARCH_LOCATION",
+    "config_key": "vertex_search.location",
+    "_go_const": "VertexSearchLocation",
+    "_python_const": "VERTEX_SEARCH_LOCATION"
+  },
+  "G8E_VERTEX_SEARCH_API_KEY": {
+    "value": "G8E_VERTEX_SEARCH_API_KEY",
+    "config_key": "vertex_search.api_key",
+    "_go_const": "VertexSearchAPIKey",
+    "_python_const": "VERTEX_SEARCH_API_KEY"
+  },
+  "G8E_GOOGLE_SEARCH_ENABLED": {
+    "value": "G8E_GOOGLE_SEARCH_ENABLED",
+    "config_key": "google_search.google_enabled",
+    "_go_const": "GoogleSearchEnabled",
+    "_python_const": "GOOGLE_SEARCH_ENABLED"
+  },
+  "G8E_GOOGLE_SEARCH_API_KEY": {
+    "value": "G8E_GOOGLE_SEARCH_API_KEY",
+    "config_key": "google_search.google_api_key",
+    "_go_const": "GoogleSearchAPIKey",
+    "_python_const": "GOOGLE_SEARCH_API_KEY"
+  },
+  "G8E_GOOGLE_SEARCH_ENGINE_ID": {
+    "value": "G8E_GOOGLE_SEARCH_ENGINE_ID",
+    "config_key": "google_search.google_engine_id",
+    "_go_const": "GoogleSearchEngineID",
+    "_python_const": "GOOGLE_SEARCH_ENGINE_ID"
+  },
+  "G8E_INTERNAL_HTTP_URL": {
+    "value": "G8E_INTERNAL_HTTP_URL",
+    "config_key": "listen.http_url",
+    "_go_const": "InternalHTTPURL",
+    "_python_const": "INTERNAL_HTTP_URL"
+  },
+  "G8E_INTERNAL_PUBSUB_URL": {
+    "value": "G8E_INTERNAL_PUBSUB_URL",
+    "config_key": "listen.pubsub_url",
+    "_go_const": "InternalPubSubURL",
+    "_python_const": "INTERNAL_PUBSUB_URL"
+  },
+  "G8E_OPERATOR_BLOB_URL": {
+    "value": "G8E_OPERATOR_BLOB_URL",
+    "config_key": "listen.blob_url",
+    "_go_const": "OperatorBlobURL",
+    "_python_const": "OPERATOR_BLOB_URL"
+  },
+  "G8E_DOCKER_GID": {
+    "value": "G8E_DOCKER_GID",
+    "config_key": "platform.docker_gid",
+    "_go_const": "DockerGID",
+    "_python_const": "DOCKER_GID"
+  },
+  "G8E_HTTPS_PORT": {
+    "value": "G8E_HTTPS_PORT",
+    "config_key": "platform.https_port",
+    "_go_const": "HTTPSPort",
+    "_python_const": "HTTPS_PORT"
+  },
+  "G8E_HTTP_PORT": {
+    "value": "G8E_HTTP_PORT",
+    "config_key": "platform.http_port",
+    "_go_const": "HTTPPort",
+    "_python_const": "HTTP_PORT"
+  },
+  "G8E_PORT": {
+    "value": "G8E_PORT",
+    "config_key": "platform.port",
+    "_go_const": "Port",
+    "_python_const": "PORT"
+  },
+  "G8E_SESSION_TTL": {
+    "value": "G8E_SESSION_TTL",
+    "config_key": "platform.session_ttl",
+    "_go_const": "SessionTTL",
+    "_python_const": "SESSION_TTL"
+  },
+  "G8E_ABSOLUTE_SESSION_TIMEOUT": {
+    "value": "G8E_ABSOLUTE_SESSION_TIMEOUT",
+    "config_key": "platform.absolute_session_timeout",
+    "_go_const": "AbsoluteSessionTimeout",
+    "_python_const": "ABSOLUTE_SESSION_TIMEOUT"
+  },
+  "G8E_ENVIRONMENT": {
+    "value": "G8E_ENVIRONMENT",
+    "config_key": "platform.environment",
+    "_go_const": "Environment",
+    "_python_const": "ENVIRONMENT"
+  },
+  "G8E_UPLOAD_PATH": {
+    "value": "G8E_UPLOAD_PATH",
+    "config_key": "platform.upload_path",
+    "_go_const": "UploadPath",
+    "_python_const": "UPLOAD_PATH"
+  },
+  "G8E_DOCS_DIR": {
+    "value": "G8E_DOCS_DIR",
+    "config_key": "platform.docs_dir",
+    "_go_const": "DocsDir",
+    "_python_const": "DOCS_DIR"
+  },
+  "G8E_SUPERVISOR_PORT": {
+    "value": "G8E_SUPERVISOR_PORT",
+    "config_key": "platform.supervisor_port",
+    "_go_const": "SupervisorPort",
+    "_python_const": "SUPERVISOR_PORT"
+  },
+  "G8EE_URL": {
+    "value": "G8EE_URL",
+    "config_key": "component_urls.g8ee_url",
+    "_go_const": "G8EEURL",
+    "_python_const": "G8EE_URL"
+  },
+  "G8E_CLIENT_URL": {
+    "value": "G8E_CLIENT_URL",
+    "config_key": "component_urls.client_url",
+    "_go_const": "ClientURL",
+    "_python_const": "CLIENT_URL"
+  },
+  "G8E_OPERATOR_ENDPOINT": {
+    "value": "G8E_OPERATOR_ENDPOINT",
+    "config_key": "component_urls.operator_endpoint",
+    "_go_const": "OperatorEndpoint",
+    "_python_const": "OPERATOR_ENDPOINT"
+  },
+  "G8E_ENABLE_COMMAND_WHITELISTING": {
+    "value": "G8E_ENABLE_COMMAND_WHITELISTING",
+    "config_key": "command_validation.enable_whitelisting",
+    "_go_const": "EnableCommandWhitelisting",
+    "_python_const": "ENABLE_COMMAND_WHITELISTING"
+  },
+  "G8E_ENABLE_COMMAND_BLACKLISTING": {
+    "value": "G8E_ENABLE_COMMAND_BLACKLISTING",
+    "config_key": "command_validation.enable_blacklisting",
+    "_go_const": "EnableCommandBlacklisting",
+    "_python_const": "ENABLE_COMMAND_BLACKLISTING"
+  },
+  "G8E_PKI_DIR": {
+    "value": "G8E_PKI_DIR",
+    "config_key": "ssl.pki_dir",
+    "_go_const": "PKIDir",
+    "_python_const": "PKIDir"
+  },
+  "G8E_SECRETS_DIR": {
+    "value": "G8E_SECRETS_DIR",
+    "config_key": "ssl.secrets_dir",
+    "_go_const": "SecretsDir",
+    "_python_const": "SECRETS_DIR"
+  },
+  "G8E_PUBSUB_CA_CERT": {
+    "value": "G8E_PUBSUB_CA_CERT",
+    "config_key": "ssl.pubsub_ca_cert",
+    "_go_const": "PubSubCACert",
+    "_python_const": "PUBSUB_CA_CERT"
+  },
+  "G8E_SSL_CERT_FILE": {
+    "value": "G8E_SSL_CERT_FILE",
+    "config_key": "ssl.ssl_cert_file",
+    "_go_const": "SSLCertFile",
+    "_python_const": "SSL_CERT_FILE"
+  },
+  "G8E_OPERATOR_API_KEY": {
+    "value": "G8E_OPERATOR_API_KEY",
+    "config_key": "runtime.operator_api_key",
+    "_go_const": "OperatorAPIKey",
+    "_python_const": "OPERATOR_API_KEY"
+  },
+  "G8E_OPERATOR_SESSION_ID": {
+    "value": "G8E_OPERATOR_SESSION_ID",
+    "config_key": "runtime.operator_session_id",
+    "_go_const": "OperatorSessionID",
+    "_python_const": "OPERATOR_SESSION_ID"
+  },
+  "G8E_INTERNAL_AUTH_TOKEN": {
+    "value": "G8E_INTERNAL_AUTH_TOKEN",
+    "config_key": "runtime.internal_auth_token",
+    "_go_const": "InternalAuthToken",
+    "_python_const": "INTERNAL_AUTH_TOKEN"
+  },
+  "G8E_DEVICE_TOKEN": {
+    "value": "G8E_DEVICE_TOKEN",
+    "config_key": "runtime.device_token",
+    "_go_const": "DeviceToken",
+    "_python_const": "DEVICE_TOKEN"
+  },
+  "G8E_LOG_LEVEL": {
+    "value": "G8E_LOG_LEVEL",
+    "config_key": "runtime.log_level",
+    "_go_const": "LogLevel",
+    "_python_const": "LOG_LEVEL"
+  },
+  "G8E_DATA_DIR": {
+    "value": "G8E_DATA_DIR",
+    "config_key": "runtime.data_dir",
+    "_go_const": "DataDir",
+    "_python_const": "DATA_DIR"
+  },
+  "G8E_LOCAL_STORE_ENABLED": {
+    "value": "G8E_LOCAL_STORE_ENABLED",
+    "config_key": "runtime.local_store_enabled",
+    "_go_const": "LocalStoreEnabled",
+    "_python_const": "LOCAL_STORE_ENABLED"
+  },
+  "G8E_LOCAL_DB_PATH": {
+    "value": "G8E_LOCAL_DB_PATH",
+    "config_key": "runtime.local_db_path",
+    "_go_const": "LocalDBPath",
+    "_python_const": "LOCAL_DB_PATH"
+  },
+  "G8E_LOCAL_STORE_MAX_SIZE_MB": {
+    "value": "G8E_LOCAL_STORE_MAX_SIZE_MB",
+    "config_key": "runtime.local_store_max_size_mb",
+    "_go_const": "LocalStoreMaxSizeMB",
+    "_python_const": "LOCAL_STORE_MAX_SIZE_MB"
+  },
+  "G8E_LOCAL_STORE_RETENTION_DAYS": {
+    "value": "G8E_LOCAL_STORE_RETENTION_DAYS",
+    "config_key": "runtime.local_store_retention_days",
+    "_go_const": "LocalStoreRetentionDays",
+    "_python_const": "LOCAL_STORE_RETENTION_DAYS"
+  },
+  "G8E_IP_SERVICE": {
+    "value": "G8E_IP_SERVICE",
+    "config_key": "external.ip_service",
+    "_go_const": "IPService",
+    "_python_const": "IP_SERVICE"
+  },
+  "G8E_IP_RESOLVER": {
+    "value": "G8E_IP_RESOLVER",
+    "config_key": "external.ip_resolver",
+    "_go_const": "IPResolver",
+    "_python_const": "IP_RESOLVER"
+  },
+  "G8E_OPENCLAW_GATEWAY_TOKEN": {
+    "value": "G8E_OPENCLAW_GATEWAY_TOKEN",
+    "config_key": "external.openclaw_gateway_token",
+    "_go_const": "OpenClawGatewayToken",
+    "_python_const": "OPENCLAW_GATEWAY_TOKEN"
+  },
+  "SHELL": {
+    "value": "SHELL",
+    "config_key": "system.shell",
+    "_go_const": "Shell",
+    "_python_const": "SHELL"
+  },
+  "LANG": {
+    "value": "LANG",
+    "config_key": "system.lang",
+    "_go_const": "Lang",
+    "_python_const": "LANG"
+  },
+  "TERM": {
+    "value": "TERM",
+    "config_key": "system.term",
+    "_go_const": "Term",
+    "_python_const": "TERM"
+  },
+  "TZ": {
+    "value": "TZ",
+    "config_key": "system.tz",
+    "_go_const": "TZ",
+    "_python_const": "TZ"
+  },
+  "PATH": {
+    "value": "PATH",
+    "config_key": "system.path",
+    "_go_const": "Path",
+    "_python_const": "PATH"
+  },
+  "SSH_AUTH_SOCK": {
+    "value": "SSH_AUTH_SOCK",
+    "config_key": "system.ssh_auth_sock",
+    "_go_const": "SSHAuthSock",
+    "_python_const": "SSH_AUTH_SOCK"
+  },
+  "USER": {
+    "value": "USER",
+    "config_key": "system.user",
+    "_go_const": "User",
+    "_python_const": "USER"
+  },
+  "USERNAME": {
+    "value": "USERNAME",
+    "config_key": "system.username",
+    "_go_const": "Username",
+    "_python_const": "USERNAME"
+  },
+  "LOGNAME": {
+    "value": "LOGNAME",
+    "config_key": "system.logname",
+    "_go_const": "LogName",
+    "_python_const": "LOGNAME"
+  },
+  "G8E_OPERATOR_ID": {
+    "value": "G8E_OPERATOR_ID",
+    "_go_const": "OperatorID",
+    "_python_const": "OPERATOR_ID"
+  },
+  "G8E_USER_ID": {
+    "value": "G8E_USER_ID",
+    "_go_const": "UserID",
+    "_python_const": "USER_ID"
+  },
+  "G8E_CLI_SESSION_ID": {
+    "value": "G8E_CLI_SESSION_ID",
+    "_go_const": "CLISessionID",
+    "_python_const": "CLI_SESSION_ID"
+  },
+  "G8E_PROTOCOL_DIR": {
+    "value": "G8E_PROTOCOL_DIR",
+    "_go_const": "ProtocolDir",
+    "_python_const": "PROTOCOL_DIR"
+  },
+  "G8E_TEST_TMP_DIR": {
+    "value": "G8E_TEST_TMP_DIR",
+    "_go_const": "TestTmpDir",
+    "_python_const": "TEST_TMP_DIR"
+  },
+  "G8E_TEST_OPERATOR_PUBSUB_URL": {
+    "value": "G8E_TEST_OPERATOR_PUBSUB_URL",
+    "_go_const": "TestOperatorPubSubURL",
+    "_python_const": "TEST_OPERATOR_PUBSUB_URL"
+  },
+  "G8E_STRICT_CONSTANTS_LINT": {
+    "value": "G8E_STRICT_CONSTANTS_LINT",
+    "_go_const": "StrictConstantsLint",
+    "_python_const": "STRICT_CONSTANTS_LINT"
+  },
+  "G8E_RUNTIME_DIR": {
+    "value": "G8E_RUNTIME_DIR",
+    "config_key": "runtime.runtime_dir",
+    "_go_const": "RuntimeDir",
+    "_python_const": "RUNTIME_DIR"
+  },
+  "G8E_SSH_CONFIG_PATH": {
+    "value": "G8E_SSH_CONFIG_PATH",
+    "config_key": "ssh.config_path",
+    "_go_const": "SSHConfigPath",
+    "_python_const": "SSH_CONFIG_PATH"
+  },
+  "G8E_PROJECT_ROOT": {
+    "value": "G8E_PROJECT_ROOT",
+    "config_key": "runtime.project_root",
+    "_go_const": "ProjectRoot",
+    "_python_const": "PROJECT_ROOT"
   }
 }

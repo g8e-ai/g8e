@@ -27,11 +27,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/certs"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/listen"
 )
 
 // ---------------------------------------------------------------------------
-// Helpers — minimal in-process TLS pub/sub server for unit tests
+// Helpers - minimal in-process TLS pub/sub server for unit tests
 // ---------------------------------------------------------------------------
 
 // newTLSPubSubServer starts a TLS httptest.Server backed by a real PubSubBroker.
@@ -66,7 +68,7 @@ func newTLSPubSubServer(t *testing.T) string {
 }
 
 // ---------------------------------------------------------------------------
-// TestPubSubAvailable — unit coverage via in-process TLS server
+// TestPubSubAvailable - unit coverage via in-process TLS server
 // ---------------------------------------------------------------------------
 
 // TestPubSubAvailable_ReachableServer exercises the full dial path of
@@ -75,18 +77,18 @@ func newTLSPubSubServer(t *testing.T) string {
 // the in-process address; certs.SetCA is overridden so the dialer trusts it.
 func TestPubSubAvailable_ReachableServer(t *testing.T) {
 	wssBase := newTLSPubSubServer(t)
-	t.Setenv("G8E_OPERATOR_PUBSUB_URL", wssBase)
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), wssBase)
 
 	TestPubSubAvailable(t)
 }
 
 // ---------------------------------------------------------------------------
-// SubscribeToChannel — unit coverage via in-process TLS server
+// SubscribeToChannel - unit coverage via in-process TLS server
 // ---------------------------------------------------------------------------
 
 func TestSubscribeToChannel_ReturnsChannel(t *testing.T) {
 	wssBase := newTLSPubSubServer(t)
-	t.Setenv("G8E_OPERATOR_PUBSUB_URL", wssBase)
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), wssBase)
 
 	ch := SubscribeToChannel(t, wssBase, "results:op1:sess1")
 	require.NotNil(t, ch)
@@ -94,7 +96,7 @@ func TestSubscribeToChannel_ReturnsChannel(t *testing.T) {
 
 func TestSubscribeToChannel_ReceivesPublishedPayload(t *testing.T) {
 	wssBase := newTLSPubSubServer(t)
-	t.Setenv("G8E_OPERATOR_PUBSUB_URL", wssBase)
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), wssBase)
 
 	channel := CreateTestChannel(t, "results")
 	ch := SubscribeToChannel(t, wssBase, channel)
@@ -114,7 +116,7 @@ func TestSubscribeToChannel_ReceivesPublishedPayload(t *testing.T) {
 
 func TestSubscribeToChannel_IgnoresNonMessageFrames(t *testing.T) {
 	wssBase := newTLSPubSubServer(t)
-	t.Setenv("G8E_OPERATOR_PUBSUB_URL", wssBase)
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), wssBase)
 
 	channel := CreateTestChannel(t, "results")
 	ch := SubscribeToChannel(t, wssBase, channel)
@@ -131,7 +133,7 @@ func TestSubscribeToChannel_IgnoresNonMessageFrames(t *testing.T) {
 
 func TestSubscribeToChannel_MultipleMessages(t *testing.T) {
 	wssBase := newTLSPubSubServer(t)
-	t.Setenv("G8E_OPERATOR_PUBSUB_URL", wssBase)
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), wssBase)
 
 	channel := CreateTestChannel(t, "results")
 	ch := SubscribeToChannel(t, wssBase, channel)
@@ -150,7 +152,7 @@ func TestSubscribeToChannel_MultipleMessages(t *testing.T) {
 
 func TestSubscribeToChannel_ChannelIsolation(t *testing.T) {
 	wssBase := newTLSPubSubServer(t)
-	t.Setenv("G8E_OPERATOR_PUBSUB_URL", wssBase)
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), wssBase)
 
 	ch1 := CreateTestChannel(t, "results")
 	ch2 := CreateTestChannel(t, "results")
@@ -175,12 +177,12 @@ func TestSubscribeToChannel_ChannelIsolation(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// PublishTestMessage — unit coverage via in-process TLS server
+// PublishTestMessage - unit coverage via in-process TLS server
 // ---------------------------------------------------------------------------
 
 func TestPublishTestMessage_JSONPayload(t *testing.T) {
 	wssBase := newTLSPubSubServer(t)
-	t.Setenv("G8E_OPERATOR_PUBSUB_URL", wssBase)
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), wssBase)
 
 	channel := CreateTestChannel(t, "cmd")
 	ch := SubscribeToChannel(t, wssBase, channel)
@@ -199,7 +201,7 @@ func TestPublishTestMessage_JSONPayload(t *testing.T) {
 
 func TestPublishTestMessage_NonJSONPayload_WrappedAsQuotedString(t *testing.T) {
 	wssBase := newTLSPubSubServer(t)
-	t.Setenv("G8E_OPERATOR_PUBSUB_URL", wssBase)
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), wssBase)
 
 	channel := CreateTestChannel(t, "cmd")
 	ch := SubscribeToChannel(t, wssBase, channel)
@@ -214,7 +216,7 @@ func TestPublishTestMessage_NonJSONPayload_WrappedAsQuotedString(t *testing.T) {
 
 func TestPublishTestMessage_DeliveredToSubscriber(t *testing.T) {
 	wssBase := newTLSPubSubServer(t)
-	t.Setenv("G8E_OPERATOR_PUBSUB_URL", wssBase)
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), wssBase)
 
 	channel := CreateTestChannel(t, "heartbeat")
 	ch := SubscribeToChannel(t, wssBase, channel)
@@ -229,7 +231,7 @@ func TestPublishTestMessage_DeliveredToSubscriber(t *testing.T) {
 
 func TestPublishTestMessage_MultipleSequential(t *testing.T) {
 	wssBase := newTLSPubSubServer(t)
-	t.Setenv("G8E_OPERATOR_PUBSUB_URL", wssBase)
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.TestOperatorPubSubURL), wssBase)
 
 	channel := CreateTestChannel(t, "results")
 	ch := SubscribeToChannel(t, wssBase, channel)

@@ -66,11 +66,10 @@ def client(mock_session):
 
 @pytest.fixture
 def disconnected_client():
-    client = KVCacheClient(
+    return KVCacheClient(
         http_url="https://localhost:9000",
         component_name=ComponentName.G8EE,
     )
-    return client
 
 class TestKVCacheClientInit:
     def test_explicit_urls_override_defaults(self):
@@ -231,13 +230,13 @@ class TestKVCacheClientUnhealthyGuards:
     async def test_set_with_ex(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "ok"}')
         await client.set("foo", "bar", ex=60)
-        args, kwargs = mock_session.request.call_args
+        _args, kwargs = mock_session.request.call_args
         assert kwargs["json"] == {"value": "bar", "ttl": 60}
 
     async def test_set_with_px(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "ok"}')
         await client.set("foo", "bar", px=2500)
-        args, kwargs = mock_session.request.call_args
+        _args, kwargs = mock_session.request.call_args
         assert kwargs["json"] == {"value": "bar", "ttl": 2}
 
     async def test_set_failure(self, client, mock_session):
@@ -332,7 +331,7 @@ class TestKVCacheClientJSONOperations:
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "ok"}')
         res = await client.set_json("foo", {"a": 1})
         assert res is True
-        args, kwargs = mock_session.request.call_args
+        _args, kwargs = mock_session.request.call_args
         assert kwargs["json"]["value"] == '{"a": 1}'
 
 
@@ -345,7 +344,7 @@ class TestKVCacheClientHashOperations:
         ]
         res = await client.hset("hkey", "f1", "v1")
         assert res == 1
-        args, kwargs = mock_session.request.call_args
+        _args, kwargs = mock_session.request.call_args
         assert kwargs["json"]["value"] == '{"f1": "v1"}'
 
     async def test_hset_existing(self, client, mock_session):
@@ -355,7 +354,7 @@ class TestKVCacheClientHashOperations:
         ]
         res = await client.hset("hkey", "f2", "v2")
         assert res == 1
-        args, kwargs = mock_session.request.call_args
+        _args, kwargs = mock_session.request.call_args
         assert "f1" in kwargs["json"]["value"]
         assert "f2" in kwargs["json"]["value"]
 
@@ -378,7 +377,7 @@ class TestKVCacheClientHashOperations:
         ]
         res = await client.hdel("hkey", "f1")
         assert res == 1
-        args, kwargs = mock_session.request.call_args
+        _args, kwargs = mock_session.request.call_args
         assert "f1" not in kwargs["json"]["value"]
         assert "f2" in kwargs["json"]["value"]
 
@@ -473,7 +472,7 @@ class TestKVCacheClientListOperations:
         ]
         res = await client.rpush("lkey", "b", "c")
         assert res == 3
-        args, kwargs = mock_session.request.call_args
+        _args, kwargs = mock_session.request.call_args
         assert kwargs["json"]["value"] == '["a", "b", "c"]'
 
     async def test_lpush(self, client, mock_session):
@@ -483,7 +482,7 @@ class TestKVCacheClientListOperations:
         ]
         res = await client.lpush("lkey", "b", "c")
         assert res == 3
-        args, kwargs = mock_session.request.call_args
+        _args, kwargs = mock_session.request.call_args
         assert kwargs["json"]["value"] == '["c", "b", "a"]'
 
     async def test_lrange(self, client, mock_session):
@@ -505,7 +504,7 @@ class TestKVCacheClientListOperations:
         ]
         res = await client.ltrim("lkey", 1, 3)
         assert res is True
-        args, kwargs = mock_session.request.call_args
+        _args, kwargs = mock_session.request.call_args
         assert kwargs["json"]["value"] == "[2, 3, 4]"
 
 

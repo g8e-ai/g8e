@@ -21,8 +21,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
 
@@ -45,7 +45,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 		result, err := svc.ExecuteCommand(ctx, req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		// Should NOT be literal "$HOME", should be expanded
 		assert.NotContains(t, result.Stdout, "$HOME")
 		assert.Contains(t, result.Stdout, "/") // Should contain a path
@@ -64,7 +64,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 		result, err := svc.ExecuteCommand(ctx, req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		// Should NOT be literal "~", should be expanded to home path
 		assert.NotEqual(t, "~\n", result.Stdout)
 		assert.Contains(t, result.Stdout, "/") // Should contain a path
@@ -83,7 +83,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 		result, err := svc.ExecuteCommand(ctx, req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "2") // "hello world" = 2 words
 	})
 
@@ -102,7 +102,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 		duration := time.Since(start)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusTimeout, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT, result.Status)
 		assert.Less(t, duration.Seconds(), 3.0, "Should timeout around 2 seconds")
 	})
 
@@ -124,7 +124,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 		require.NoError(t, err)
 		// Should complete quickly, not hang
 		assert.Less(t, duration.Seconds(), 3.0)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 	})
 
 	t.Run("glob_expansion", func(t *testing.T) {
@@ -140,7 +140,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 		result, err := svc.ExecuteCommand(ctx, req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		// Should have expanded the glob, not literal "*.conf"
 		assert.NotContains(t, result.Stdout, "*.conf")
 	})
@@ -158,7 +158,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 		result, err := svc.ExecuteCommand(ctx, req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "Done waiting")
 	})
 }

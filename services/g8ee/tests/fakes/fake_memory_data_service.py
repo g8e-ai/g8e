@@ -45,14 +45,13 @@ class FakeMemoryDataService:
 
     async def create_memory(self, investigation: InvestigationModel) -> InvestigationMemory:
         self.create_calls.append(investigation)
-        memory = InvestigationMemory(
+        return InvestigationMemory(
             case_id=investigation.case_id,
             investigation_id=investigation.id,
             user_id=investigation.user_id,
             status=investigation.status,
             case_title=investigation.case_title,
         )
-        return memory
 
     async def save_memory(self, memory: InvestigationMemory, is_new: bool) -> None:
         self.save_calls.append((memory, is_new))

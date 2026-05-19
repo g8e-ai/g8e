@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``file_update_on_operator`` tool — find-and-replace edit on the operator."""
+"""``file_update_on_operator`` tool - find-and-replace edit on the operator."""
 
 from __future__ import annotations
 
@@ -38,12 +38,11 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.FILE_UPDATE,
-        description=load_prompt(PromptFile.TOOL_FILE_UPDATE),
+        description=load_prompt(PromptFile.TOOLS_FILE_UPDATE),
         parameters=schema_from_model(FileUpdateArgs),
     )
-    return declaration
 
 
 async def handle(

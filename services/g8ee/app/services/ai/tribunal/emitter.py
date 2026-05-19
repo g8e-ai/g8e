@@ -21,14 +21,14 @@ from app.services.protocols import EventServiceProtocol
 logger = logging.getLogger(__name__)
 
 _TERMINAL_TRIBUNAL_EVENTS = {
-    EventType.TRIBUNAL_SESSION_STARTED,
-    EventType.TRIBUNAL_SESSION_COMPLETED,
-    EventType.TRIBUNAL_SESSION_DISABLED,
-    EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
-    EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
-    EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
-    EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
-    EventType.TRIBUNAL_SESSION_AUDITOR_FAILED,
+    EventType.AI_TRIBUNAL_SESSION_STARTED,
+    EventType.AI_TRIBUNAL_SESSION_COMPLETED,
+    EventType.AI_TRIBUNAL_SESSION_DISABLED,
+    EventType.AI_TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
+    EventType.AI_TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
+    EventType.AI_TRIBUNAL_SESSION_SYSTEM_ERROR,
+    EventType.AI_TRIBUNAL_SESSION_GENERATION_FAILED,
+    EventType.AI_TRIBUNAL_SESSION_AUDITOR_FAILED,
 }
 
 class TribunalEmitter:
@@ -36,8 +36,8 @@ class TribunalEmitter:
 
     def __init__(
         self,
-        event_service: EventServiceProtocol,
-        g8e_context: G8eHttpContext,
+        event_service: EventServiceProtocol | None,
+        g8e_context: G8eHttpContext | None,
         correlation_id: str | None = None,
     ):
         self.event_service = event_service

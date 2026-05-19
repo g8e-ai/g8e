@@ -12,24 +12,24 @@
 # limitations under the License.
 
 import json
-import os
 from enum import StrEnum
 from pathlib import Path
 
 from app.constants.protocol import _AGENTS, _STATUS
 from app.constants.paths import PATHS
+from app.constants.models import SecurityConstraintsConstants
 
 
-def _load_security_constraints() -> dict:
+def _load_security_constraints() -> SecurityConstraintsConstants:
     """Load security constraints from protocol model."""
     protocol_models_dir = PATHS["infra"]["protocol_models_dir"]
     protocol_models_path = Path(protocol_models_dir) / "security_constraints.json"
     try:
         with open(protocol_models_path) as f:
             constraints = json.load(f)
-        return constraints
+        return SecurityConstraintsConstants.model_validate(constraints)
     except Exception:
-        return {}
+        return SecurityConstraintsConstants()
 
 
 _SECURITY_CONSTRAINTS = _load_security_constraints()
@@ -85,7 +85,7 @@ THINKING_LEVEL_PRIORITY_ASC: tuple["ThinkingLevel", ...] = (
 class ThinkingDialect(StrEnum):
     """Wire dialect a self-hosted (Ollama) model expects for reasoning toggling.
 
-    Cloud providers (Gemini/OpenAI/Anthropic) do not need this — their
+    Cloud providers (Gemini/OpenAI/Anthropic) do not need this - their
     translation is fixed. Ollama hosts a heterogeneous zoo of model families
     where the same internal ThinkingLevel maps to different on-the-wire knobs.
     """
@@ -154,18 +154,18 @@ class AttachmentType(StrEnum):
     """
     def __str__(self) -> str:
         return self.value
-    PDF   = _STATUS["attachment.type"]["pdf"]
-    IMAGE = _STATUS["attachment.type"]["image"]
-    TEXT  = _STATUS["attachment.type"]["text"]
-    OTHER = _STATUS["attachment.type"]["other"]
+    PDF   = _STATUS["attachment.type"]["pdf"]["value"]
+    IMAGE = _STATUS["attachment.type"]["image"]["value"]
+    TEXT  = _STATUS["attachment.type"]["text"]["value"]
+    OTHER = _STATUS["attachment.type"]["other"]["value"]
 
 
 class GroundingSource(StrEnum):
     """Identifies the origin of grounding context fed to the AI.
 
-    ATTACHMENT       — user-uploaded file (PDF, image, text) injected as LLM Parts.
-    WEB_SEARCH       — explicit search_web tool call result (provider-agnostic).
-    PROVIDER_NATIVE  — native provider grounding (e.g. Gemini Search grounding metadata).
+    ATTACHMENT       - user-uploaded file (PDF, image, text) injected as LLM Parts.
+    WEB_SEARCH       - explicit search_web tool call result (provider-agnostic).
+    PROVIDER_NATIVE  - native provider grounding (e.g. Gemini Search grounding metadata).
     """
     def __str__(self) -> str:
         return self.value
@@ -197,7 +197,7 @@ class CommandGenerationOutcome(StrEnum):
     """Terminal outcomes the Tribunal pipeline can produce.
 
     Only successful outcomes are enumerated. Sage never proposes a command,
-    so there is no `fallback` outcome — when the Tribunal cannot produce
+    so there is no `fallback` outcome - when the Tribunal cannot produce
     a command it raises a typed TribunalError (disabled / provider_unavailable /
     generation_failed / system_error / auditor_failed / model_not_configured)
     and the tool call fails.
@@ -328,11 +328,11 @@ class ApprovalErrorType(StrEnum):
     """
     def __str__(self) -> str:
         return self.value
-    APPROVAL_PUBLISH_FAILURE    = _STATUS["approval.error.type"]["approval.publish.failure"]
-    APPROVAL_EXCEPTION          = _STATUS["approval.error.type"]["approval.exception"]
-    APPROVAL_TIMEOUT            = _STATUS["approval.error.type"]["approval.timeout"]
-    INVALID_INTENT              = _STATUS["approval.error.type"]["invalid.intent"]
-    INTENT_APPROVAL_EXCEPTION   = _STATUS["approval.error.type"]["intent.approval.exception"]
+    APPROVAL_PUBLISH_FAILURE    = _STATUS["approval.error.type"]["approval.publish.failure"]["value"]
+    APPROVAL_EXCEPTION          = _STATUS["approval.error.type"]["approval.exception"]["value"]
+    APPROVAL_TIMEOUT            = _STATUS["approval.error.type"]["approval.timeout"]["value"]
+    INVALID_INTENT              = _STATUS["approval.error.type"]["invalid.intent"]["value"]
+    INTENT_APPROVAL_EXCEPTION   = _STATUS["approval.error.type"]["intent.approval.exception"]["value"]
 
 
 # OpenAI models
@@ -367,7 +367,7 @@ OLLAMA_LLAMA_3_2_3B            = "llama3.2:3b"
 OLLAMA_QWEN3_5_2B              = "qwen3.5:2b"
 
 # llama.cpp models
-LLAMACPP_GEMMA4_E2B           = _STATUS["llm.models"]["llamacpp"]["gemma4.e2b"]
+LLAMACPP_GEMMA4_E2B           = _STATUS["llm.models"]["llamacpp.gemma4.e2b"]["value"]
 
 
 # Provider default models
@@ -384,6 +384,10 @@ OLLAMA_DEFAULT_ENDPOINT         = "http://localhost:11434"
 ANTHROPIC_DEFAULT_ENDPOINT     = "https://api.anthropic.com"
 GEMINI_DEFAULT_ENDPOINT         = ""  # Gemini uses different discovery mechanism
 LLAMACPP_DEFAULT_ENDPOINT       = "http://localhost:11444"
+
+
+# Ollama host normalization defaults
+OLLAMA_DEFAULT_PROTOCOL         = "http://"
 
 
 DEFAULT_FINISH_REASON           = "STOP"
@@ -488,7 +492,8 @@ MAX_OUTPUT_LENGTH               = 100_000
 
 # Certificates
 CLIENT_CERT_VALIDITY_DAYS = 365
-DEFAULT_PKI_DIR = os.environ.get("G8E_PKI_DIR", "/operator/pki")
+from g8e_protocol.paths import PKI_DIR
+DEFAULT_PKI_DIR = str(PKI_DIR)
 CERT_SUBJECT_ORG          = "g8e Operator"
 CERT_SUBJECT_COUNTRY      = "US"
 CRL_ISSUER                = "g8e Platform CA"
@@ -528,66 +533,14 @@ INVESTIGATION_LOOKUP_RETRY_DELAYS_MS = [100, 200, 300]
 DB_TIMESTAMP = "__SERVER_TIMESTAMP__"
 
 FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = tuple(
-    _SECURITY_CONSTRAINTS.get("forbidden_command_patterns", {}).get("patterns", [
-        "sudo",
-        "su ",
-        "su\t",
-        "su -",
-        "pkexec",
-        "doas",
-        "runas",
-        "chmod +s",
-        "chmod u+s",
-        "chmod g+s",
-        "setuid",
-        "setgid",
-        "eval ",
-        "exec ",
-        "$(",
-        "`",
-        "> /dev/sd",
-        "> /dev/nvme",
-        "> /dev/vd",
-        "dd if=",
-        "nsenter",
-        "unshare",
-        ":(){ :|:& };:",
-        "| bash",
-        "| sh",
-        "| zsh",
-        "| python",
-        "| perl",
-        "| php",
-        "| ruby",
-        "| node",
-        "base64 -d",
-        "base64 --decode",
-        "rm -rf /",
-        "rm -rf /etc",
-        "rm -rf /var",
-        "rm -rf /usr",
-        "rm -rf /bin",
-        "chmod 777",
-        "chmod -R 777",
-        "chmod a+rwx",
-        "chown -R",
-        "> /etc/passwd",
-        "> /etc/shadow",
-        "> /etc/sudoers",
-        ">> /etc/passwd",
-        ">> /etc/shadow",
-        ">> /etc/sudoers",
-        "iptables -F",
-        "ufw disable",
-        "history -c",
-        "unset HISTFILE",
-        "rm $0",
-        "rm $BASH_SOURCE",
-    ])
+    _SECURITY_CONSTRAINTS.forbidden_command_patterns.get(
+        "patterns",
+        SecurityConstraintsConstants.get_default_forbidden_patterns()
+    )
 )
 
 G8EE_APP_TITLE                       = "g8e Engine"
-G8EE_APP_DESCRIPTION                 = "g8e Engine (g8ee) — AI engine for the g8e platform. Agentic AI system with LLM provider abstraction providing Zero-Trust AI for infrastructure operations."
+G8EE_APP_DESCRIPTION                 = "g8e Engine (g8ee) - AI engine for the g8e platform. Agentic AI system with LLM provider abstraction providing Zero-Trust AI for infrastructure operations."
 G8EE_APP_CONTACT_NAME                = "g8e Support"
 G8EE_APP_CONTACT_URL                 = "https://localhost"
 G8EE_APP_CONTACT_EMAIL               = "help@g8e.ai"
@@ -608,7 +561,8 @@ HTTP_METHOD_OPTIONS                 = "OPTIONS"
 
 class StreamChunkFromModelType(StrEnum):
     """Types of chunks emitted by the agent streaming pipeline."""
-    __str__ = lambda self: self.value
+    def __str__(self):
+        return self.value
 
     TEXT        = "TEXT"
     THINKING    = "THINKING"

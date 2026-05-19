@@ -120,11 +120,11 @@ func authenticateWithDeviceTokenUsingClient(token string, endpoint string, logge
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		hostname = "unknown"
+		hostname = string(constants.SystemHealthUnknown)
 	}
 
 	if username == "" {
-		username = "unknown"
+		username = string(constants.SystemHealthUnknown)
 	}
 
 	// Generate a private key for this operator session.

@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``run_commands_with_operator`` tool — Tribunal-routed shell execution."""
+"""``run_commands_with_operator`` tool - Tribunal-routed shell execution."""
 
 from __future__ import annotations
 
@@ -36,15 +36,14 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.RUN_COMMANDS,
-        description=load_prompt(PromptFile.TOOL_RUN_COMMANDS),
+        description=load_prompt(PromptFile.TOOLS_RUN_COMMANDS),
         parameters=schema_from_model(
             SageOperatorRequest,
             required_override=["request"],
         ),
     )
-    return declaration
 
 
 async def handle(

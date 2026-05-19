@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-KVCacheClient — HTTP-based Key-Value client for operator.
+KVCacheClient - HTTP-based Key-Value client for operator.
 
 Talks to the Operator in --listen mode via HTTP (KV store).
 API: get, set, delete, exists, expire, ttl, keys,
@@ -34,9 +34,10 @@ from app.utils.aiohttp_session import new_kv_http_session
 from app.constants import (
     ComponentName,
     ErrorCode,
-    OPERATOR_SESSION_ID_HEADER,
     OPERATOR_API_KEY_HEADER,
     HTTP_CONTENT_TYPE_HEADER,
+    HTTP_AUTHORIZATION_HEADER,
+    HTTP_BEARER_PREFIX,
 )
 from app.errors import NetworkError
 
@@ -72,7 +73,7 @@ class KVCacheClient:
         self.http_url = (http_url or listen_settings.http_url).rstrip("/")
         self.component_name = component_name
         self._timeout = timeout
-        self._ca_cert_path = ca_cert_path
+        self._ca_cert_path: str | None = ca_cert_path
         self._client_cert_path = client_cert_path
         self._client_key_path = client_key_path
         self._operator_session_id = operator_session_id
@@ -85,7 +86,7 @@ class KVCacheClient:
         headers = {HTTP_CONTENT_TYPE_HEADER: "application/json"}
         # Priority: operator_session_id > operator_api_key
         if self._operator_session_id:
-            headers[OPERATOR_SESSION_ID_HEADER] = self._operator_session_id
+            headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX}{self._operator_session_id}"
         elif self._operator_api_key:
             headers[OPERATOR_API_KEY_HEADER] = self._operator_api_key
 

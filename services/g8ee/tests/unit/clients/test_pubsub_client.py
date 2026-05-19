@@ -22,7 +22,6 @@ from app.constants import (
     ComponentName,
     PubSubAction,
     PubSubField,
-    PubSubMessageType,
     PubSubWireEventType,
 )
 from tests.fakes.async_helpers import async_iter
@@ -31,12 +30,11 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture
 def disconnected_client():
-    client = PubSubClient(
+    return PubSubClient(
         pubsub_url="wss://localhost:9001",
         component_name=ComponentName.G8EE,
         auditor_hmac_key="test-key-1234",
     )
-    return client
 
 class TestPubSubClientInit:
     def test_explicit_urls_override_defaults(self):
@@ -65,9 +63,6 @@ class TestPubSubWireProtocolConstants:
         assert PubSubWireEventType.MESSAGE == "message"
         assert PubSubWireEventType.PMESSAGE == "pmessage"
         assert PubSubWireEventType.SUBSCRIBED == "subscribed"
-
-    def test_backward_compat_alias_is_wire_event_type(self):
-        assert PubSubMessageType is PubSubWireEventType
 
     def test_pubsub_action_has_psubscribe(self):
         assert PubSubAction.PSUBSCRIBE == "psubscribe"
@@ -163,7 +158,7 @@ class TestPubSubClientPsubscribe:
 
     async def test_psubscribe_adds_pattern_after_ensure_ws(self, connected_client, task_tracker):
         """Regression: pattern must be added to _subscribed_patterns after
-        _ensure_ws() — same race condition as subscribe()."""
+        _ensure_ws() - same race condition as subscribe()."""
         pattern = "results:*"
 
         async def mock_ack():
@@ -216,7 +211,6 @@ class TestWsReaderReconnection:
         mock_ws.__aiter__ = MagicMock(return_value=async_iter([]))
 
         reconnect_called = asyncio.Event()
-        original_reconnect = connected_client._reconnect_loop
 
         async def mock_reconnect():
             reconnect_called.set()
@@ -294,7 +288,6 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
         return msg
 
     async def test_result_with_matching_envelope_id_is_dispatched(self, connected_client):
-        exec_id = "cmd_protocol_correlation_id_1234"
         cmd_channel = "cmd:op-1:sess-1"
         results_channel = "results:op-1:sess-1"
 
@@ -335,7 +328,6 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
         assert data == result_data
 
     async def test_pmessage_with_matching_envelope_id_is_dispatched(self, connected_client):
-        exec_id = "cmd_protocol_correlation_id_pmsg"
         cmd_channel = "cmd:op-2:sess-2"
         results_pattern = "results:*"
         results_channel = "results:op-2:sess-2"
@@ -492,7 +484,6 @@ class TestReconnectLoop:
                 raise ConnectionError("operator down")
 
         delays = []
-        original_sleep = asyncio.sleep
 
         async def mock_sleep(delay):
             delays.append(delay)
@@ -551,7 +542,7 @@ class TestPubSubClientCoverage:
             await disconnected_client._ensure_ws()
 
         assert disconnected_client.pubsub_url == "ws://localhost:9001"
-        args, kwargs = mock_session.ws_connect.call_args
+        args, _kwargs = mock_session.ws_connect.call_args
         assert args[0].startswith("wss://")
 
     async def test_ensure_ws_uses_mtls_without_internal_token(self, disconnected_client):

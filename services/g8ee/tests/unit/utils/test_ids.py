@@ -22,7 +22,7 @@ Every generator function is tested for:
 - Timestamp segment is a valid Unix epoch integer
 - Intent-scoped generators embed the intent string in the correct position
 
-No external infrastructure required — pure unit tests.
+No external infrastructure required - pure unit tests.
 """
 
 import re
@@ -88,8 +88,8 @@ def _assert_hex_segment(segment: str, expected_length: int) -> None:
 def _assert_timestamp_segment(segment: str) -> None:
     assert segment.isdigit(), f"Timestamp segment is not all digits: {segment!r}"
     ts = int(segment)
-    assert ts > 1_700_000_000, f"Timestamp {ts} is before 2023 — likely malformed"
-    assert ts < 2_000_000_000, f"Timestamp {ts} is after 2033 — likely malformed"
+    assert ts > 1_700_000_000, f"Timestamp {ts} is before 2023 - likely malformed"
+    assert ts < 2_000_000_000, f"Timestamp {ts} is after 2033 - likely malformed"
 
 
 class TestGenerateApprovalId:
@@ -423,7 +423,7 @@ class TestGenerateIamRevokeIntentExecutionId:
 
 
 class TestPrefixConstantAlignment:
-    """Each generator must use the exact constant value — not a hardcoded string."""
+    """Each generator must use the exact constant value - not a hardcoded string."""
 
     def test_approval_id_prefix_value_is_approval(self):
         assert APPROVAL_ID_PREFIX == "approval"
@@ -513,7 +513,7 @@ class TestIdDistinctness:
 
 class TestCommandExecutionIdPatternInvariant:
     """``generate_command_execution_id`` must emit IDs that match
-    ``COMMAND_EXECUTION_ID_PATTERN`` — the pattern is the canonical wire
+    ``COMMAND_EXECUTION_ID_PATTERN`` - the pattern is the canonical wire
     format; drift in the generator must fail loudly rather than silently."""
 
     def test_generator_output_matches_canonical_pattern(self):

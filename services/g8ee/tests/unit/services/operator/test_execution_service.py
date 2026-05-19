@@ -19,12 +19,12 @@ import pytest
 from app.constants.events import EventType
 from app.constants.status import AITaskId, ComponentName, ExecutionStatus, CommandErrorType
 from app.errors import BusinessLogicError, ValidationError
-from app.models.http_context import RequestContext, G8eHttpContext
+from app.models.http_context import RequestContext
 from app.models.command_request_payloads import CommandRequestPayload
 from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatSystemIdentity
-from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
+from app.models.pubsub_messages import G8eMessage
 from app.services.operator.execution_service import OperatorExecutionService
-from tests.fakes.factories import build_g8e_http_context
+from tests.fakes.factories import build_g8e_http_context, build_g8eo_result_envelope
 
 pytestmark = [pytest.mark.unit]
 
@@ -295,7 +295,7 @@ class TestOperatorExecutionServiceDispatch:
             payload=CommandRequestPayload(command="echo hi", execution_id="exec-1")
         )
         g8e_context = build_g8e_http_context()
-        res, env = await execution_service.dispatch_command(msg, g8e_context)
+        res, _env = await execution_service.dispatch_command(msg, g8e_context)
         assert res.status == ExecutionStatus.FAILED
         assert res.error_type == CommandErrorType.PUBSUB_SUBSCRIPTION_NOT_READY
 
@@ -316,7 +316,7 @@ class TestOperatorExecutionServiceDispatch:
             payload=CommandRequestPayload(command="echo hi", execution_id="exec-1")
         )
         g8e_context = build_g8e_http_context()
-        res, env = await execution_service.dispatch_command(msg, g8e_context)
+        res, _env = await execution_service.dispatch_command(msg, g8e_context)
         assert res.status == ExecutionStatus.FAILED
         assert res.error_type == CommandErrorType.NO_OPERATORS_AVAILABLE
         mock_pubsub.release_future.assert_called_once_with("exec-1")
@@ -326,7 +326,7 @@ class TestOperatorExecutionServiceDispatch:
         future = asyncio.Future()
         mock_pubsub.register_future.return_value = future
         from app.models.pubsub_messages import ExecutionStatusPayload
-        envelope = G8eoResultEnvelope(
+        envelope = build_g8eo_result_envelope(
             operator_id="op-1",
             operator_session_id="sess-1",
             event_type=EventType.OPERATOR_COMMAND_COMPLETED,
@@ -350,7 +350,7 @@ class TestOperatorExecutionServiceDispatch:
             payload=CommandRequestPayload(command="echo hi", execution_id="exec-1")
         )
         g8e_context = build_g8e_http_context()
-        res, env = await execution_service.dispatch_command(msg, g8e_context)
+        res, _env = await execution_service.dispatch_command(msg, g8e_context)
         assert res.status == ExecutionStatus.COMPLETED
         assert res.output == ""
         mock_pubsub.release_future.assert_called_once_with("exec-1")
@@ -424,7 +424,7 @@ class TestOperatorExecutionServiceDirectCommand:
     async def test_wait_and_broadcast_payload_mismatch(self, execution_service, mock_event_service):
         future = asyncio.Future()
         from app.models.pubsub_messages import ExecutionStatusPayload
-        envelope = G8eoResultEnvelope(
+        envelope = build_g8eo_result_envelope(
             operator_id="op-1",
             operator_session_id="sess-1",
             event_type=EventType.OPERATOR_COMMAND_COMPLETED,

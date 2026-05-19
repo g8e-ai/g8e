@@ -91,6 +91,7 @@ class G8eError(Exception):
         category_to_status = {
             ErrorCategory.VALIDATION: 400,
             ErrorCategory.BUSINESS_LOGIC: 400,
+            ErrorCategory.CONFIGURATION: 400,
             ErrorCategory.AUTH: 401,
             ErrorCategory.PERMISSION: 403,
             ErrorCategory.RESOURCE_NOT_FOUND: 404,
@@ -112,6 +113,7 @@ class ConfigurationError(G8eError):
         cause: Exception | None = None,
         details: dict[str, Any] | None = None,
         component: str = "g8ee",
+        remediation_steps: list[str] | None = None,
     ):
         super().__init__(
             message,
@@ -120,6 +122,7 @@ class ConfigurationError(G8eError):
             cause=cause,
             details=details,
             component=component,
+            remediation_steps=remediation_steps,
         )
 
 class MissingBootstrapSecretError(ConfigurationError):
@@ -412,7 +415,7 @@ class InternalUnexpectedError(G8eError):
 # These are raised by LLM provider adapters when a request asks the model for
 # a capability it does not support (extended thinking, function calling, etc).
 # They are caught by name/type at call sites that need to decide whether to
-# downgrade, retry without the capability, or skip a test — never by matching
+# downgrade, retry without the capability, or skip a test - never by matching
 # on exception message substrings. Consumers MUST use isinstance() rather
 # than string parsing.
 class ModelCapabilityError(ExternalServiceError):

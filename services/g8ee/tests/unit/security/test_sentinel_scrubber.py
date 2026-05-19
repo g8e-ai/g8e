@@ -89,7 +89,7 @@ class TestSentinelScrubberEmptyAndDisabled:
         assert SentinelScrubber(SentinelConfig(enabled=False)).is_enabled() is False
 
     def test_clean_text_is_unchanged(self):
-        text = "nginx is returning a 502 on /api/health — check the upstream config"
+        text = "nginx is returning a 502 on /api/health - check the upstream config"
         result = _scrubber.scrub(text)
         assert result.scrubbed_text == text
         assert result.was_modified is False
@@ -417,7 +417,7 @@ class TestScrubResultMetadata:
 class TestMultiPatternMessage:
     def test_mixed_pii_and_credentials_scrubbed(self):
         text = (
-            "Contact alice@corp.com — use token ghp_" + "X" * 40 +
+            "Contact alice@corp.com - use token ghp_" + "X" * 40 +
             " to push. DB is postgres://alice:secret123@db.internal/prod"
         )
         result = _scrubber.scrub(text)

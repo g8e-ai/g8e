@@ -55,10 +55,10 @@ class TriageAgent:
 
     async def triage(self, request: TriageRequest) -> TriageResult:
         """Perform the triage operation using the configured LLM provider.
-        
+
         Args:
             request: The TriageRequest containing message, history, and settings.
-            
+
         Returns:
             TriageResult containing complexity and intent classification.
         """
@@ -188,7 +188,7 @@ class TriageAgent:
         error_message: str | None = None,
     ) -> TriageResult:
         """Create an escalation result when triage fails.
-        
+
         When triage cannot determine complexity, we escalate to COMPLEX (full LLM)
         as a safe default. This is more conservative than assuming SIMPLE.
         """

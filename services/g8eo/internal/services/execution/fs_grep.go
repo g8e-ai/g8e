@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/security"
 )
 
@@ -57,7 +57,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 		CaseID:          req.CaseID,
 		TaskID:          req.TaskID,
 		InvestigationID: req.InvestigationID,
-		Status:          constants.ExecutionStatusExecuting,
+		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 		Path:            req.Path,
 		Pattern:         req.Pattern,
 		Matches:         []models.FsGrepMatch{},
@@ -192,7 +192,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 	result.Matches = matches
 	result.TotalMatches = len(matches)
 	result.Truncated = truncated
-	result.Status = constants.ExecutionStatusCompleted
+	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 
 	endTime := time.Now().UTC()
 	result.EndTime = &endTime
@@ -240,7 +240,7 @@ func (s *FsGrepService) searchInFile(path string, re *regexp.Regexp, limit int) 
 }
 
 func (s *FsGrepService) failResult(result *models.FsGrepResult, errorType, errorMsg string) (*models.FsGrepResult, error) {
-	result.Status = constants.ExecutionStatusFailed
+	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 	result.ErrorType = &errorType
 	result.ErrorMessage = &errorMsg
 	endTime := time.Now().UTC()

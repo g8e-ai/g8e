@@ -30,8 +30,12 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestLoad_Defaults(t *testing.T) {
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
+	wantWorkDir := FindProjectRoot()
+	if wantWorkDir == "" {
+		var err error
+		wantWorkDir, err = os.Getwd()
+		require.NoError(t, err)
+	}
 
 	cfg, err := Load(LoadOptions{
 		APIKey:           "test-key",
@@ -49,10 +53,10 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, 30, cfg.LocalStoreRetentionDays)
 	assert.Equal(t, 443, cfg.HTTPPort)
 
-	// WorkDir defaults to the process cwd when --working-dir is not supplied
-	assert.Equal(t, cwd, cfg.WorkDir)
+	// WorkDir defaults to the project root when --working-dir is not supplied
+	assert.Equal(t, wantWorkDir, cfg.WorkDir)
 	// LocalStoreDBPath is anchored to WorkDir
-	assert.Equal(t, filepath.Join(cwd, ".g8e", "local_state.db"), cfg.LocalStoreDBPath)
+	assert.Equal(t, filepath.Join(wantWorkDir, ".g8e", "local_state.db"), cfg.LocalStoreDBPath)
 	assert.True(t, filepath.IsAbs(cfg.LocalStoreDBPath))
 }
 
@@ -215,8 +219,12 @@ func TestLoad_ValidationErrors(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadListen_Defaults(t *testing.T) {
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
+	wantWorkDir := FindProjectRoot()
+	if wantWorkDir == "" {
+		var err error
+		wantWorkDir, err = os.Getwd()
+		require.NoError(t, err)
+	}
 
 	cfg, err := LoadListen(0, 0, 0, 0, "", "", "", "", "", true)
 	require.NoError(t, err)
@@ -225,9 +233,9 @@ func TestLoadListen_Defaults(t *testing.T) {
 	assert.True(t, cfg.Listen.Enabled)
 	assert.Equal(t, 0, cfg.Listen.WSSPort)
 	assert.Equal(t, 0, cfg.Listen.HTTPPort)
-	assert.Equal(t, filepath.Join(cwd, ".g8e", "data"), cfg.Listen.DataDir)
+	assert.Equal(t, filepath.Join(wantWorkDir, ".g8e", "data"), cfg.Listen.DataDir)
 	assert.True(t, filepath.IsAbs(cfg.Listen.DataDir))
-	assert.Equal(t, "g8eo-listen", cfg.ComponentName)
+	assert.Equal(t, constants.Status.ComponentName.G8EOListen, cfg.ComponentName)
 }
 
 func TestLoadListen_ExplicitValues(t *testing.T) {
@@ -256,13 +264,17 @@ func TestLoadListen_ExplicitValues(t *testing.T) {
 
 func TestLoadListen_PartialDefaults(t *testing.T) {
 	t.Run("only wss port overridden", func(t *testing.T) {
-		cwd, err := os.Getwd()
-		require.NoError(t, err)
+		wantWorkDir := FindProjectRoot()
+		if wantWorkDir == "" {
+			var err error
+			wantWorkDir, err = os.Getwd()
+			require.NoError(t, err)
+		}
 		cfg, err := LoadListen(9001, 0, 0, 0, "", "", "", "", "", true)
 		require.NoError(t, err)
 		assert.Equal(t, 9001, cfg.Listen.WSSPort)
 		assert.Equal(t, 0, cfg.Listen.HTTPPort)
-		assert.Equal(t, filepath.Join(cwd, ".g8e", "data"), cfg.Listen.DataDir)
+		assert.Equal(t, filepath.Join(wantWorkDir, ".g8e", "data"), cfg.Listen.DataDir)
 	})
 
 	t.Run("only data dir overridden", func(t *testing.T) {

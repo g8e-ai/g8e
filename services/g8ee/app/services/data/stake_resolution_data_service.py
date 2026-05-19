@@ -33,7 +33,7 @@ from app.constants import (
 from app.errors import DatabaseError, ValidationError
 from app.models.cache import FieldFilter
 from app.models.reputation import StakeResolution
-from app.services.cache.cache_aside import CacheAsideService
+from app.services.protocols import DocumentServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,10 @@ class StakeResolutionDataService:
     update method.
     """
 
-    def __init__(self, cache: CacheAsideService) -> None:
+    cache: DocumentServiceProtocol
+    collection: str
+
+    def __init__(self, cache: DocumentServiceProtocol) -> None:
         self.cache = cache
         self.collection = DB_COLLECTION_STAKE_RESOLUTIONS
 

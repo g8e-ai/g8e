@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-Tests for app.main.lifespan — the FastAPI startup/shutdown orchestrator.
+Tests for app.main.lifespan - the FastAPI startup/shutdown orchestrator.
 
 main.py responsibilities:
     Phase 0: Bootstrap settings (SettingsService, initialize_g8e_service, setup_logging)
@@ -154,7 +154,7 @@ class TestLifespanStartup:
 
     async def test_delegates_to_service_factory(self, mock_app):
         mocks, patches = _build_mocks()
-        settings, _ = _configure_settings(mocks)
+        _settings, _ = _configure_settings(mocks)
         factory = _configure_factory(mocks)
         try:
             async with lifespan(mock_app):

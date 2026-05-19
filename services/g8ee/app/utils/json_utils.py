@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 def extract_json_from_text(text: str) -> dict | None:
     """Extract and parse a JSON object from a potentially messy text string.
-    
+
     Handles:
     - Markdown code blocks (```json ... ```)
     - Leading/trailing whitespace
@@ -95,7 +95,7 @@ class DateTimeEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles datetime objects and other special types."""
 
     def default(self, o: Any) -> Any:
-        if isinstance(o, datetime) or isinstance(o, date):
+        if isinstance(o, (datetime, date)):
             return o.isoformat()
         if isinstance(o, Decimal):
             return float(o)

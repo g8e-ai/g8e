@@ -24,8 +24,8 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -78,7 +78,7 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 		HeartbeatType:     heartbeatType,
 		SystemIdentity: models.HeartbeatSystemIdentity{
 			Hostname:     system.GetHostname(),
-			OS:           system.GetOSName(),
+			OS:           constants.Platform(system.GetOSName()),
 			Architecture: system.GetArchitecture(),
 			PWD:          pwd,
 			CurrentUser:  system.GetCurrentUser(),
@@ -120,7 +120,7 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 			LedgerMirrorEnabled: hs.config.GitAvailable && !hs.config.NoGit,
 		},
 		FingerprintDetails: &models.HeartbeatFingerprintDetails{
-			OS:           runtime.GOOS,
+			OS:           constants.Platform(runtime.GOOS),
 			Architecture: runtime.GOARCH,
 			CPUCount:     runtime.NumCPU(),
 			MachineID:    hs.config.SystemFingerprint,
@@ -148,20 +148,21 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 	return heartbeat
 }
 
-// buildProtoHeartbeat converts a legacy models.Heartbeat to a v0.2.0 operatorv1.HeartbeatResult.
+// buildProtoHeartbeat converts the in-memory models.Heartbeat into the canonical
+// operatorv1.HeartbeatResult protobuf carried on the pub/sub heartbeat channel.
 func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1.HeartbeatResult {
 	p := &operatorv1.HeartbeatResult{
 		OperatorId:        h.OperatorID,
 		OperatorSessionId: h.OperatorSessionID,
 		Timestamp:         h.Timestamp,
 		Status:            string(h.HeartbeatType),
-		EventType:         h.EventType,
-		SourceComponent:   h.SourceComponent,
+		EventType:         string(h.EventType),
+		SourceComponent:   string(h.SourceComponent),
 		CaseId:            h.CaseID,
 		InvestigationId:   h.InvestigationID,
 		SystemIdentity: &operatorv1.SystemIdentity{
 			Hostname:     h.SystemIdentity.Hostname,
-			Os:           h.SystemIdentity.OS,
+			Os:           string(h.SystemIdentity.OS),
 			Architecture: h.SystemIdentity.Architecture,
 			Pwd:          h.SystemIdentity.PWD,
 			CurrentUser:  h.SystemIdentity.CurrentUser,
@@ -175,7 +176,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 		},
 		VersionInfo: &operatorv1.VersionInfo{
 			OperatorVersion: h.VersionInfo.OperatorVersion,
-			Status:          h.VersionInfo.Status,
+			Status:          string(h.VersionInfo.Status),
 		},
 		UptimeInfo: &operatorv1.UptimeInfo{
 			Uptime:        h.UptimeInfo.Uptime,
@@ -237,7 +238,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 
 	if h.FingerprintDetails != nil {
 		p.FingerprintDetails = &operatorv1.FingerprintDetails{
-			Os:           h.FingerprintDetails.OS,
+			Os:           string(h.FingerprintDetails.OS),
 			Architecture: h.FingerprintDetails.Architecture,
 			CpuCount:     int32(h.FingerprintDetails.CPUCount),
 			MachineId:    h.FingerprintDetails.MachineID,
@@ -259,7 +260,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg PubSubCommandMessage) {
 	var protoReq operatorv1.HeartbeatRequested
 	if err := proto.Unmarshal(msg.Payload, &protoReq); err != nil {
-		hs.logger.Error("[HEARTBEAT] Failed to decode heartbeat request payload as protobuf HeartbeatRequested", "error", err)
+		hs.logger.Error("[HEARTBEAT] Failed to decode heartbeat request payload as protobuf HeartbeatRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 
@@ -273,7 +274,7 @@ func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg PubSubCommand
 	if hs.results != nil {
 		protoHeartbeat := hs.buildProtoHeartbeat(heartbeat)
 		if err := hs.results.PublishHeartbeat(ctx, protoHeartbeat); err != nil {
-			hs.logger.Error("[HEARTBEAT] Failed to send requested heartbeat", "error", err)
+			hs.logger.Error("[HEARTBEAT] Failed to send requested heartbeat", string(constants.ConnectionStateError), err)
 		} else {
 			hs.logger.Info("[HEARTBEAT] Requested heartbeat sent successfully")
 		}
@@ -293,7 +294,7 @@ func (hs *HeartbeatService) SendAutomatic() {
 	if hs.results != nil {
 		protoHeartbeat := hs.buildProtoHeartbeat(heartbeat)
 		if err := hs.results.PublishHeartbeat(hs.ctx, protoHeartbeat); err != nil {
-			hs.logger.Error("[HEARTBEAT] Failed to send automatic heartbeat", "error", err)
+			hs.logger.Error("[HEARTBEAT] Failed to send automatic heartbeat", string(constants.ConnectionStateError), err)
 		} else {
 			hs.logger.Info("[HEARTBEAT] Automatic heartbeat sent successfully")
 		}

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.6] - 2026-05-19
+
+### Added
+- **Intent Classification:** Revived intent classification to be a first-class citizen in the architecture.
+- **SPIFFE URI SAN:** Refactored SPIFFE URI SAN logic to strengthen mTLS and workload identity.
+
+### Changed
+- **CLI & UX Improvements:** Improved login UX, operator-side UX, and trust script stability. Enhanced build output for Mac and Linux.
+- **Protocol Refinement:** Ripped out legacy protobuf definitions, refined boundary structures, and decoupled operator auth from the app layer.
+- **Session Isolation:** Improved session typing and untangled CLI chat sessions to better separate the substrate and app layer.
+- **Code Quality & Linting:** Comprehensive code quality passes including Go critic/lint fixes, Ruff, and Pyright typing improvements.
+- **Eval & Testing:** Refactored the eval harness and bench tests. Improved chaos testing with better audit summaries, L1 reporting, and correct DB location.
+- **Documentation:** Reorganized and updated documentation including improved diagrams and README updates.
+
+### Fixed
+- **SSL Configuration:** Addressed SSL fix.
+- **Test Stability:** Fixed test stability issues including `g8ee` test fixes and model configuration improvements for tests.
+
 ## [0.2.5] - 2026-05-16
 
 ### Added
@@ -300,7 +318,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **g8ee Model Serialization:** Introduced `UTCDatetime` type for all wire-facing datetime fields, serializing to ISO 8601 with `Z` suffix. Replaced custom `flatten_for_wire()`, `flatten_for_db()`, and `flatten_for_llm()` methods with Pydantic's native `model_dump(mode="json")` for boundary serialization. Added `SessionEventWire` and `BackgroundEventWire` models for SSE event contracts.
 
 ### Changed
-- **Multi-Operator Batches:** `batch_id` correlation is now surfaced end-to-end — on `CommandExecutionResult`, approval metadata, and conversation message metadata — so agents and the dashboard can tie per-operator events and follow-up actions back to a single batched approval.
+- **Multi-Operator Batches:** `batch_id` correlation is now surfaced end-to-end - on `CommandExecutionResult`, approval metadata, and conversation message metadata - so agents and the dashboard can tie per-operator events and follow-up actions back to a single batched approval.
 - **Task Tracking:** Task ID and TDTS tracking added for better correlation and debugging.
 - **Setup Page:** Users can now reuse Gemini API key for Vertex AI search in the setup page.
 
