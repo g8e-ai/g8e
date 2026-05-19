@@ -76,7 +76,7 @@ up: generate-compose build
 	@DEVICE_TOKEN="$(DEVICE_TOKEN)" $(COMPOSE) $(COMPOSE_FILES) -f docker-compose.dashboard.yml up -d --no-build --remove-orphans
 	@echo ""
 	@echo "==========================================================="
-	@echo "  ACME Corp Global Fleet — $(NODE_COUNT) devices up"
+	@echo "  ACME Corp Global Fleet - $(NODE_COUNT) devices up"
 	@echo "==========================================================="
 	@echo ""
 	@echo "  Quick inspection:"

@@ -33,7 +33,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Helpers — minimal in-process TLS pub/sub server for unit tests
+// Helpers - minimal in-process TLS pub/sub server for unit tests
 // ---------------------------------------------------------------------------
 
 // newTLSPubSubServer starts a TLS httptest.Server backed by a real PubSubBroker.
@@ -68,7 +68,7 @@ func newTLSPubSubServer(t *testing.T) string {
 }
 
 // ---------------------------------------------------------------------------
-// TestPubSubAvailable — unit coverage via in-process TLS server
+// TestPubSubAvailable - unit coverage via in-process TLS server
 // ---------------------------------------------------------------------------
 
 // TestPubSubAvailable_ReachableServer exercises the full dial path of
@@ -83,7 +83,7 @@ func TestPubSubAvailable_ReachableServer(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// SubscribeToChannel — unit coverage via in-process TLS server
+// SubscribeToChannel - unit coverage via in-process TLS server
 // ---------------------------------------------------------------------------
 
 func TestSubscribeToChannel_ReturnsChannel(t *testing.T) {
@@ -177,7 +177,7 @@ func TestSubscribeToChannel_ChannelIsolation(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// PublishTestMessage — unit coverage via in-process TLS server
+// PublishTestMessage - unit coverage via in-process TLS server
 // ---------------------------------------------------------------------------
 
 func TestPublishTestMessage_JSONPayload(t *testing.T) {

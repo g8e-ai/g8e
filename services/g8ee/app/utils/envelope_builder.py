@@ -53,7 +53,7 @@ def sign_l2_tribunal(event_type: str, payload_bytes: bytes, hmac_key: str) -> st
 
     The signature binds the event_type to its payload bytes using
     HMAC-SHA256 with the shared auditor key. The canonical material is
-    ``event_type + "\\n" + payload_bytes`` — both sides MUST compute
+    ``event_type + "\\n" + payload_bytes`` - both sides MUST compute
     the signature over the identical byte sequence.
 
     Returns the hex-encoded digest. Never returns an empty string on

@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-WebSearchProvider — web search execution and citation processing.
+WebSearchProvider - web search execution and citation processing.
 
 Executes web search queries and returns typed results. Also owns all
 web-search-specific citation logic: source info extraction, inline citation

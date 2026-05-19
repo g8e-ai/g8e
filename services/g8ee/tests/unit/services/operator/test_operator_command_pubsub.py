@@ -83,7 +83,7 @@ class TestStartPubSubListeners:
         assert command_service._pubsub_service._pubsub_ready is True
 
     async def test_no_handlers_registered_at_startup(self, command_service, heartbeat_service):
-        """Test no channel handlers are registered at startup — only at register_operator_session."""
+        """Test no channel handlers are registered at startup - only at register_operator_session."""
         await command_service.start_pubsub_listeners()
         command_service._pubsub_service.pubsub_client.on_channel_message.assert_not_called()
         heartbeat_service._pubsub_client.on_channel_message.assert_not_called()

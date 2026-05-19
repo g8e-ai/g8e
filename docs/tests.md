@@ -12,14 +12,14 @@ g8e is designed to be a **testing environment and a production environment at th
 
 ## Core Engineering Principles
 
-- **Hermetic execution** — Tests run directly on the host via `./g8e test`. Go for the substrate (`g8eo`); repo-local Python for explicit app-layer targets (`g8ee`).
-- **Real infrastructure** — Substrate test runs begin with `./g8e platform start`. App-layer tests require explicit app startup via `./g8e apps start g8ee` or `./g8e platform start --with-apps`.
-- **No mocks policy** — Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use the real wire paths.
-- **mTLS by default** — Most internal and substrate communication requires mTLS. The runner injects certs from `.g8e/pki` automatically when authenticated (`./g8e login`).
-- **Body-embedded context** — Business and session context is provided as a `RequestContext` in the request body. `X-G8E-*` context headers are not supported and are ignored by the substrate.
-- **Real LLM calls** — AI integration tests use real provider APIs (Gemini, Anthropic, OpenAI, etc.). HTTP interception is not permitted for LLM clients.
-- **Reproduce first** — Always reproduce a bug with a failing test before generating a fix.
-- **Contract tests** — Enforce alignment between the Operator, optional adapters, and `protocol/` constants/models with typed protobuf assertions.
+- **Hermetic execution** - Tests run directly on the host via `./g8e test`. Go for the substrate (`g8eo`); repo-local Python for explicit app-layer targets (`g8ee`).
+- **Real infrastructure** - Substrate test runs begin with `./g8e platform start`. App-layer tests require explicit app startup via `./g8e apps start g8ee` or `./g8e platform start --with-apps`.
+- **No mocks policy** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use the real wire paths.
+- **mTLS by default** - Most internal and substrate communication requires mTLS. The runner injects certs from `.g8e/pki` automatically when authenticated (`./g8e login`).
+- **Body-embedded context** - Business and session context is provided as a `RequestContext` in the request body. `X-G8E-*` context headers are not supported and are ignored by the substrate.
+- **Real LLM calls** - AI integration tests use real provider APIs (Gemini, Anthropic, OpenAI, etc.). HTTP interception is not permitted for LLM clients.
+- **Reproduce first** - Always reproduce a bug with a failing test before generating a fix.
+- **Contract tests** - Enforce alignment between the Operator, optional adapters, and `protocol/` constants/models with typed protobuf assertions.
 
 ---
 
@@ -88,22 +88,22 @@ Available flags: `-p` (provider), `-m` (primary model), `-a` (assistant model), 
 
 ### Go (g8eo)
 
-- **Tooling** — `gotestsum` if available for dots-style output.
-- **Race detection** — Always enabled via `-race`.
-- **Parallelism** — `-parallel 4` and a `180s` timeout by default.
-- **Coverage** — `--coverage` generates and displays reports.
-- **Concurrency invariants** — Goroutines must have explicit cancellation contexts and clear channel ownership. LFAA payloads must include an `execution_id`.
+- **Tooling** - `gotestsum` if available for dots-style output.
+- **Race detection** - Always enabled via `-race`.
+- **Parallelism** - `-parallel 4` and a `180s` timeout by default.
+- **Coverage** - `--coverage` generates and displays reports.
+- **Concurrency invariants** - Goroutines must have explicit cancellation contexts and clear channel ownership. LFAA payloads must include an `execution_id`.
 
 ### Python (g8ee)
 
-- **Type safety** — `--pyright` runs strict AST-level checking via `pyrightconfig.services.json`.
-- **Linting** — `--ruff` (and `--ruff-fix`) enforces project style.
-- **Parallelism** — `-j auto` or `-j <N>` runs pytest in parallel via `pytest-xdist`.
-- **Pydantic enforcement** — Domain objects extend `G8eBaseModel`. Extra fields are rejected.
+- **Type safety** - `--pyright` runs strict AST-level checking via `pyrightconfig.services.json`.
+- **Linting** - `--ruff` (and `--ruff-fix`) enforces project style.
+- **Parallelism** - `-j auto` or `-j <N>` runs pytest in parallel via `pytest-xdist`.
+- **Pydantic enforcement** - Domain objects extend `G8eBaseModel`. Extra fields are rejected.
 
 ### Lints
 
-- **`make lint-no-bare-session-id`** — CI-enforced lint preventing bare `sessionid` in the codebase. Excludes vendor, generated files, `.local.dev`, `.github`, and the Makefile itself.
+- **`make lint-no-bare-session-id`** - CI-enforced lint preventing bare `sessionid` in the codebase. Excludes vendor, generated files, `.local.dev`, `.github`, and the Makefile itself.
 
 ---
 
@@ -111,11 +111,11 @@ Available flags: `-p` (provider), `-m` (primary model), `-a` (assistant model), 
 
 When debugging connectivity:
 
-- `9000` — Operator mTLS API
-- `9001` — Operator Pub/Sub (WSS)
-- `9002` — Operator Bootstrap (HTTP)
-- `9003` — Operator Public (BYO/Browser)
-- `8443` — g8ee Adapter (HTTPS)
+- `9000` - Operator mTLS API
+- `9001` - Operator Pub/Sub (WSS)
+- `9002` - Operator Bootstrap (HTTP)
+- `9003` - Operator Public (BYO/Browser)
+- `8443` - g8ee Adapter (HTTPS)
 
 ---
 
@@ -135,8 +135,8 @@ The platform includes automated verification of its own security posture:
 
 GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 
-- **`verify-proto`** — Generated Go and Python code is in sync with `.proto` definitions.
-- **`test-g8eo`** (blocking) — Installs Go, starts the platform, runs `./g8e test`.
-- **`apps-g8ee`** (non-blocking, `continue-on-error: true`) — Installs Python, starts g8ee, runs its suite.
+- **`verify-proto`** - Generated Go and Python code is in sync with `.proto` definitions.
+- **`test-g8eo`** (blocking) - Installs Go, starts the platform, runs `./g8e test`.
+- **`apps-g8ee`** (non-blocking, `continue-on-error: true`) - Installs Python, starts g8ee, runs its suite.
 
 See also: [Evals](evals.md), [Scripts](scripts.md), [Contribution Guide](../CONTRIBUTING.md).

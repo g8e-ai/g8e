@@ -17,7 +17,7 @@ networks:
       config:
         - subnet: 10.210.0.0/24
 
-# Shared operator env — merged into each node's environment map below.
+# Shared operator env - merged into each node's environment map below.
 x-operator-env: &operator-env
   G8E_ENDPOINT: ${G8E_ENDPOINT:-localhost}
 

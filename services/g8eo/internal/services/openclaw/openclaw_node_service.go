@@ -36,7 +36,7 @@ import (
 )
 
 // ────────────────────────────────────────────────────────────────
-// Wire types — mirror OpenClaw's Gateway Protocol JSON shapes
+// Wire types - mirror OpenClaw's Gateway Protocol JSON shapes
 // ────────────────────────────────────────────────────────────────
 
 type ocFrame struct {
@@ -132,7 +132,7 @@ const (
 
 // OpenClawNodeService connects the g8e Operator binary to an OpenClaw Gateway
 // as a Node Host. It advertises system.run and system.which, executes shell
-// commands on request, and streams results back — with no g8e infrastructure
+// commands on request, and streams results back - with no g8e infrastructure
 // dependency (no g8ee, no client, no pub/sub, no auth bootstrap).
 type OpenClawNodeService struct {
 	gatewayURL  string

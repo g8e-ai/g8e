@@ -1,11 +1,11 @@
 Execute shell commands on the target system through the deployed g8e Operator. The Operator is deployed directly on the target system and executes the command there.
 
-IMPORTANT: You DO NOT propose shell commands directly. The Tribunal — a five-member AI panel — is the sole authority for producing the command string. You describe what you want accomplished; the Tribunal translates that into precise shell syntax for the target OS/shell.
+IMPORTANT: You DO NOT propose shell commands directly. The Tribunal - a five-member AI panel - is the sole authority for producing the command string. You describe what you want accomplished; the Tribunal translates that into precise shell syntax for the target OS/shell.
 
 <parameters>
-- request: REQUIRED — natural-language description of what the Operator must accomplish: what to learn, verify, or change. Investigative intent, not shell syntax.
-- guidelines: OPTIONAL — constraints on the command itself: tools or flags to prefer or avoid, portability requirements, edge cases the command must handle (e.g. spaces in paths), whitelist/blacklist restrictions surfaced by get_command_constraints. Plain language, never shell syntax. Guidelines describe the command, not its output. Leave empty when none apply.
-- target_operator: hostname, operator_id, or index ("0","1") — REQUIRED when multiple operators bound
+- request: REQUIRED - natural-language description of what the Operator must accomplish: what to learn, verify, or change. Investigative intent, not shell syntax.
+- guidelines: OPTIONAL - constraints on the command itself: tools or flags to prefer or avoid, portability requirements, edge cases the command must handle (e.g. spaces in paths), whitelist/blacklist restrictions surfaced by get_command_constraints. Plain language, never shell syntax. Guidelines describe the command, not its output. Leave empty when none apply.
+- target_operator: hostname, operator_id, or index ("0","1") - REQUIRED when multiple operators bound
 - target_operators: run the Tribunal-generated command on multiple operators simultaneously (["all"] or ["host-1","host-2"] or ["0","1"])
 - timeout_seconds: default 300 | expected_output_lines: for UI sizing
 </parameters>
@@ -23,7 +23,7 @@ target_operators=["all"] runs on all bound operators in parallel. Use for fleet-
 </batch_execution>
 
 <data_sovereignty>
-LFAA: Output is available in result fields after execution — already Sentinel-scrubbed. That scrubbed result is the authoritative view of the command output for analysis.
+LFAA: Output is available in result fields after execution - already Sentinel-scrubbed. That scrubbed result is the authoritative view of the command output for analysis.
 Call `fetch_execution_output` only when raw, unredacted output is required for analysis or the user explicitly requests it. Raw output is retained on the Operator's local storage for data sovereignty.
 </data_sovereignty>
 

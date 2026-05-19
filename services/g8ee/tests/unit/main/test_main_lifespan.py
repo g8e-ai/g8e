@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-Tests for app.main.lifespan — the FastAPI startup/shutdown orchestrator.
+Tests for app.main.lifespan - the FastAPI startup/shutdown orchestrator.
 
 main.py responsibilities:
     Phase 0: Bootstrap settings (SettingsService, initialize_g8e_service, setup_logging)

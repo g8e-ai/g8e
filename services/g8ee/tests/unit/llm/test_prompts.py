@@ -593,8 +593,8 @@ def test_build_modular_system_prompt_dash_includes_full_governance_stack(mock_lo
     Per the Tribunal GDD (`.local.dev/dev/tribunal-game.md` §14.1) the
     GDD's interrogator role ("Dash" in the doc) maps to the **triage**
     agent. The code's `dash` agent is the fast-path responder that
-    plays the same game as Sage — same safety / loyalty / dissent /
-    mode / tools / response-constraints stack — only the persona block
+    plays the same game as Sage - same safety / loyalty / dissent /
+    mode / tools / response-constraints stack - only the persona block
     differs. A prior implementation routed Dash through a slim path
     that stripped this governance bundle; this test pins the unified
     behaviour so that regression cannot return without being seen.
@@ -621,7 +621,7 @@ def test_build_modular_system_prompt_dash_includes_full_governance_stack(mock_lo
         assert f"Content of {required}" in prompt, (
             f"Dash must include {required} (same stack as Sage)"
         )
-    # Mode prompts (capabilities/execution/tools) must be present too —
+    # Mode prompts (capabilities/execution/tools) must be present too  - 
     # Dash carries the operator + g8e_web_search tool surface and
     # therefore needs the same mode-driven scaffolding as Sage.
     assert "Capabilities prompt" in prompt

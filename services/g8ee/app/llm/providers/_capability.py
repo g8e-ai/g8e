@@ -53,7 +53,7 @@ def translate_capability_error(
     """Inspect ``exc`` and raise a typed capability error if it matches.
 
     If the error does not look like a capability rejection, returns without
-    raising — the caller is expected to re-raise the original exception.
+    raising - the caller is expected to re-raise the original exception.
 
     Heuristics only run for capabilities the caller actually requested; an
     error mentioning "tools" when tools were not requested is not a tool

@@ -20,7 +20,7 @@ Tests:
 - is_operator_tool detection via OperatorToolName membership
 - execution_id and _web_session_id injected into tool_args_with_id for operator functions
 - internal fields NOT injected for non-operator functions (e.g. search_web)
-- ToolCallResult structure — tool_name, call_info, result_info typed models
+- ToolCallResult structure - tool_name, call_info, result_info typed models
 - call_info.is_operator_tool reflects correct detection
 - Tribunal refinement: generate_command called for run_commands_with_operator
 - Tribunal refinement: refined command replaces original in tool_args
@@ -348,7 +348,7 @@ class TestToolArgsInjection:
 
     async def test_execution_id_passed_as_kwarg_for_operator_tool(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         """The canonical per-tool execution_id is threaded to the executor via the
-        ``execution_id`` keyword — not stuffed into the LLM-facing tool_args dict.
+        ``execution_id`` keyword - not stuffed into the LLM-facing tool_args dict.
         This keeps the args validated by the typed Pydantic model clean while still
         giving the executor (and every downstream operator service) an authoritative
         id to use for the execution registry and UI lifecycle events.
@@ -410,7 +410,7 @@ class TestToolArgsInjection:
     async def test_original_args_preserved_without_hidden_injection(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         """The Tribunal adds ``command`` to the executor args; the caller's original
         ``request``/``guidelines`` are preserved. Internal routing fields
-        (``execution_id``, ``_web_session_id``) MUST NOT be silently injected —
+        (``execution_id``, ``_web_session_id``) MUST NOT be silently injected  - 
         they are passed as typed parameters instead."""
         captured_args = {}
 

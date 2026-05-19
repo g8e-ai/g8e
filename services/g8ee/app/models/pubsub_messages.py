@@ -437,7 +437,7 @@ class G8eoHeartbeatPayload(G8eBaseModel):
     """Typed wire model for the g8eo heartbeat pub/sub payload.
 
     Canonical shape defined in protocol/proto/operator.proto (HeartbeatSnapshot message).
-    This is the boundary model — validated once when the raw pub/sub
+    This is the boundary model - validated once when the raw pub/sub
     message arrives in command_pubsub.py, then passed typed throughout.
     """
     event_type: EventType | None = None
@@ -525,13 +525,13 @@ class G8eoResultEnvelope(G8eBaseModel):
     """Inbound-only envelope parsed from the g8eo results pub/sub channel.
 
     Carries routing fields and a typed payload parsed at the wire boundary.
-    This is a parse-only boundary object — not a persisted document.
+    This is a parse-only boundary object - not a persisted document.
 
-    Payload is always required — errors are represented by specific error payload types
+    Payload is always required - errors are represented by specific error payload types
     in the G8eoResultPayload union (e.g., FetchLogsErrorPayload, FetchHistoryErrorPayload).
     """
 
-    id: str = Field(default_factory=lambda: str(uuid4()), description="Unique per-message UUID v4 from g8eo. NOT a correlation key — do NOT use to match results to outbound commands. For correlation, use payload.execution_id.")
+    id: str = Field(default_factory=lambda: str(uuid4()), description="Unique per-message UUID v4 from g8eo. NOT a correlation key - do NOT use to match results to outbound commands. For correlation, use payload.execution_id.")
     event_type: EventType = Field(..., description="Event type from g8eo")
     operator_id: str = Field(..., description="Operator ID from channel routing")
     operator_session_id: str = Field(..., description="Operator session ID from channel routing")
@@ -544,7 +544,7 @@ class G8eoResultEnvelope(G8eBaseModel):
     payload: G8eoResultPayload = Field(
         ...,
         discriminator="payload_type",
-        description="Typed payload — uses discriminator for type-safe parsing. Always required."
+        description="Typed payload - uses discriminator for type-safe parsing. Always required."
     )
 
     @model_validator(mode="after")
@@ -585,7 +585,7 @@ class G8eMessage(G8eBaseModel):
     payload: G8eOutboundPayload | None = Field(
         default=None,
         discriminator="payload_type",
-        description="Typed payload for this message — uses discriminator for type-safe parsing"
+        description="Typed payload for this message - uses discriminator for type-safe parsing"
     )
 
     @model_validator(mode="after")

@@ -536,7 +536,7 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 	}
 }
 
-// runListenMode starts the Operator in listen mode — the platform's central
+// runListenMode starts the Operator in listen mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution substrate.
 func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, logLevel string) {
@@ -546,7 +546,7 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 		os.Exit(constants.ExitConfigError)
 	}
 
-	logger.Info("g8e Operator — Listen Mode (operator)", "version", version, "build", buildID)
+	logger.Info("g8e Operator - Listen Mode (operator)", "version", version, "build", buildID)
 
 	cfg, err := config.LoadListen(wssPort, httpPort, bootstrapPort, publicPort, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName, false)
 	if err != nil {
@@ -774,7 +774,7 @@ func runOpenClawMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 		os.Exit(constants.ExitConfigError)
 	}
 
-	logger.Info("g8e Operator — OpenClaw Node Host", "version", version, "build", buildID)
+	logger.Info("g8e Operator - OpenClaw Node Host", "version", version, "build", buildID)
 
 	svc, err := openclaw.NewOpenClawNodeService(
 		cfg.GatewayURL,

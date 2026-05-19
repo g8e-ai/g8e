@@ -9,7 +9,7 @@ EVALS_VENV="$SCRIPT_DIR/services/g8ee/.venv"
 
 _ensure_evals_venv() {
     if [[ ! -x "$EVALS_VENV/bin/python" ]]; then
-        echo "[evals] g8ee virtualenv missing at $EVALS_VENV — run './g8e platform start' or 'make -C services/g8ee venv' first" >&2
+        echo "[evals] g8ee virtualenv missing at $EVALS_VENV - run './g8e platform start' or 'make -C services/g8ee venv' first" >&2
         exit 1
     fi
     if ! "$EVALS_VENV/bin/python" -c "import g8e_evals" >/dev/null 2>&1; then
@@ -38,17 +38,17 @@ case "$SUB" in
         # Tribunal → Warden) via /api/internal/chat, so the platform must be
         # running and the caller must be authenticated.
         if ! _operator_running; then
-            echo "[g8e] Operator listen mode is not running — start it: ./g8e platform start" >&2
+            echo "[g8e] Operator listen mode is not running - start it: ./g8e platform start" >&2
             exit 1
         fi
         if ! _g8ee_running; then
-            echo "[g8e] g8ee Engine is not running — start it: ./g8e apps start g8ee" >&2
+            echo "[g8e] g8ee Engine is not running - start it: ./g8e apps start g8ee" >&2
             exit 1
         fi
         if ! _load_credentials; then
             _operator_bootstrap
             _load_credentials || {
-                echo "[g8e] no cached credentials — run: ./g8e login" >&2
+                echo "[g8e] no cached credentials - run: ./g8e login" >&2
                 exit 1
             }
         fi

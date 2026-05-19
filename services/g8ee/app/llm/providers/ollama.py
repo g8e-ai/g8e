@@ -230,7 +230,7 @@ class OllamaProvider(LLMProvider):
         thinking) paths. Assistant and lite calls pass thinking_config=None;
         we synthesize an OFF translation so dialect=NONE models still omit
         the kwarg entirely while NATIVE_TOGGLE models receive ``think=False``
-        — matching the contract enforced on the primary path.
+        - matching the contract enforced on the primary path.
         """
         level = thinking_config.thinking_level if thinking_config is not None else ThinkingLevel.OFF
         translation = translate_for_ollama(level, get_model_config(model))

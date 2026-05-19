@@ -196,7 +196,7 @@ def test_auth_wiring_matches_shell_helpers(fake_pki):
     assert shell["cookies"] == py["cookies"]
     assert py["cookies"].get(SESSION_COOKIE_NAME) == env["OPERATOR_SESSION_ID"]
 
-    # Header parity — the canary. Any new required header added to
+    # Header parity - the canary. Any new required header added to
     # _append_g8e_auth_headers but not AuthContext.auth_headers
     # (or vice versa) lights this up.
     assert shell["headers"] == py["headers"], (

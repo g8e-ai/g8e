@@ -7,7 +7,7 @@ produced by the protocol (`g8e_protocol.models.events.SessionEventWire` /
 
 If the publisher renames `event`, `event.type`, `event.data`, or moves
 `investigation_id` / `content` / `transaction_hash` to a new location,
-these tests fail loudly — preventing silent bench drift.
+these tests fail loudly - preventing silent bench drift.
 """
 
 import os

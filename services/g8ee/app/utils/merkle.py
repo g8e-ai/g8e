@@ -46,7 +46,7 @@ def scalar_to_canonical_str(scalar: float) -> str:
 
     Uses a fixed 12-decimal representation so floating-point round-trip
     differences (e.g. ``0.1 + 0.2``) cannot produce divergent leaf bytes
-    across re-derivations. Trailing zeros are *kept* — fixed-width keeps
+    across re-derivations. Trailing zeros are *kept* - fixed-width keeps
     the canonicalisation trivially obvious from the wire bytes.
     """
     return f"{scalar:.12f}"

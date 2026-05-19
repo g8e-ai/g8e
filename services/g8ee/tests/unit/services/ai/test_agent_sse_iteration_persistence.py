@@ -164,7 +164,7 @@ async def test_callback_skipped_when_iteration_text_is_whitespace_only():
 
     await deliver_via_sse(
         stream=_stream(
-            # Whitespace-only pre-tool text — must be dropped.
+            # Whitespace-only pre-tool text - must be dropped.
             _text("   \n  "),
             _tool_call(),
             _tool_result(),
@@ -247,7 +247,7 @@ async def test_callback_failure_does_not_abort_stream():
 
 
 async def test_omitting_callback_still_completes_stream():
-    """The new parameter is optional — passing nothing must not break the flow."""
+    """The new parameter is optional - passing nothing must not break the flow."""
     inputs, state = make_agent_run_args(
         case_id="case-iter-6",
         investigation_id="inv-iter-6",

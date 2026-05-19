@@ -27,7 +27,7 @@ import (
 // and stores it via SetCA for use by all subsequent TLS connections.
 //
 // This is the bootstrap step that establishes trust. The trust bundle endpoint is
-// unauthenticated by design — it is equivalent to a certificate pinning
+// unauthenticated by design - it is equivalent to a certificate pinning
 // fetch. All subsequent connections are verified against this trust bundle.
 func FetchAndSetCA(ctx context.Context, caURL string) error {
 	client := &http.Client{Timeout: 15 * time.Second}

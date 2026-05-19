@@ -226,7 +226,7 @@ class OperatorManager:
 
         user_id = op.get('user_id')
         if not user_id:
-            raise RuntimeError("Operator has no user_id — cannot rotate key")
+            raise RuntimeError("Operator has no user_id - cannot rotate key")
 
         result = operator_request(
             'POST',
@@ -266,7 +266,7 @@ class OperatorManager:
                 return None
 
         if not user_id:
-            raise RuntimeError("Operator has no user_id — cannot terminate")
+            raise RuntimeError("Operator has no user_id - cannot terminate")
 
         result = operator_request(
             'POST',

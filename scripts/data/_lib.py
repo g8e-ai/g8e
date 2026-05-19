@@ -160,7 +160,7 @@ def get_auditor_hmac_key() -> str:
 
 
 # =============================================================================
-# Operator HTTP client — direct DB/KV access
+# Operator HTTP client - direct DB/KV access
 # =============================================================================
 
 def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
@@ -226,7 +226,7 @@ def kv_delete_pattern(pattern: str) -> int:
 
 
 # =============================================================================
-# Operator API client — for resource management (users, operators, etc.)
+# Operator API client - for resource management (users, operators, etc.)
 # =============================================================================
 
 def resolve_user_id(user_id: str | None, email: str | None) -> str | None:

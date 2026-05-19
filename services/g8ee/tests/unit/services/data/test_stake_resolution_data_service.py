@@ -15,7 +15,7 @@
 
 Pins the load-bearing properties:
 
-1. The composite document id is `{tribunal_command_id}:{agent_id}` —
+1. The composite document id is `{tribunal_command_id}:{agent_id}`  - 
    this is the write-once idempotency guard.
 2. `create()` returns the existing row unchanged on replay (no second
    write to the cache).

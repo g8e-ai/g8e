@@ -83,7 +83,7 @@ _EVENT_STYLE: dict[str, tuple[str, str, str]] = {
     "g8e.v1.ai.reputation.slash.tier3":         ("REPUTATION/slash.t3", "red",     "line"),
 
     # LLM lifecycle / chat-level failures (credential errors, provider
-    # outages, dead-lettered messages — surface these prominently so the
+    # outages, dead-lettered messages - surface these prominently so the
     # operator sees them in the live stream instead of having to grep the
     # receipt JSON.
     "g8e.v1.ai.llm.lifecycle.requested":      ("LLM/requested", "blue",   "line"),
@@ -161,7 +161,7 @@ class TurnRenderer:
     def render(self, event_type: str, payload: dict[str, Any]) -> None:
         style = _EVENT_STYLE.get(event_type)
         if style is None:
-            # Unknown / less interesting event — log compactly so it still
+            # Unknown / less interesting event - log compactly so it still
             # shows up in the trail without dominating the terminal.
             return
 

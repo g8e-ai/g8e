@@ -39,7 +39,7 @@ GOVULNCHECK := $(shell command -v govulncheck 2>/dev/null || ([ -f "$$(go env GO
 help:
 	@echo "g8eo Operator Makefile"
 	@echo ""
-	@echo "Build (g8ep container — no local Go required):"
+	@echo "Build (g8ep container - no local Go required):"
 	@echo "  build             Build linux/amd64 inside g8ep container"
 	@echo "  build-all         Build all architectures inside g8ep container (CI)"
 	@echo ""
@@ -70,7 +70,7 @@ help:
 	@echo "  version       Show version info"
 
 # =============================================================================
-# BUILD TARGETS — g8ep container
+# BUILD TARGETS - g8ep container
 # =============================================================================
 .PHONY: build
 build:
@@ -113,7 +113,7 @@ build-all:
 	@echo "All architectures built successfully."
 
 # =============================================================================
-# BUILD TARGETS — local Go
+# BUILD TARGETS - local Go
 # =============================================================================
 .PHONY: build-local
 build-local: _build-local-binary

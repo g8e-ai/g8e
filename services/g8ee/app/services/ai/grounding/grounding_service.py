@@ -12,14 +12,14 @@
 # limitations under the License.
 
 """
-GroundingService — top-level grounding coordinator.
+GroundingService - top-level grounding coordinator.
 
 Converts provider-native SDK grounding data (SdkGroundingRawData) into canonical
 GroundingMetadata. Acts as the pipeline entry point for all grounding sources:
 
-  PROVIDER_NATIVE — SDK-level grounding (e.g. Gemini Search grounding)
-  WEB_SEARCH      — explicit search_web tool call (see WebSearchProvider)
-  ATTACHMENT      — user-uploaded file (see AttachmentGroundingProvider)
+  PROVIDER_NATIVE - SDK-level grounding (e.g. Gemini Search grounding)
+  WEB_SEARCH      - explicit search_web tool call (see WebSearchProvider)
+  ATTACHMENT      - user-uploaded file (see AttachmentGroundingProvider)
 
 Web-search-specific logic (source info extraction, inline citation insertion,
 citation number normalisation) lives in WebSearchProvider.
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 class GroundingService:
     """Converts raw SDK provider grounding data into canonical GroundingMetadata.
 
-    Stateless — all methods are pure functions operating on their arguments.
+    Stateless - all methods are pure functions operating on their arguments.
     Instantiated once at startup and injected where needed.
     """
 

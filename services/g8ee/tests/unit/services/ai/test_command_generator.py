@@ -1821,7 +1821,7 @@ class TestPromptFields:
         """Every Tribunal template (+ auditor) must render cleanly with _prompt_fields.
 
         After the scaffolding refactor, placeholders live in TRIBUNAL_PROMPT_TEMPLATE
-        and TRIBUNAL_AUDITOR_TEMPLATE — not in the persona text itself. This test
+        and TRIBUNAL_AUDITOR_TEMPLATE - not in the persona text itself. This test
         guards against drift in either the templates or _prompt_fields.
         """
         from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY

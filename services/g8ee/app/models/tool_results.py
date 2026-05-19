@@ -129,7 +129,7 @@ class FileHistoryEntry(G8eBaseModel):
 
 
 class CommandInternalResult(G8eBaseModel):
-    """Typed result returned by _execute_command_internal — the pub/sub wire boundary.
+    """Typed result returned by _execute_command_internal - the pub/sub wire boundary.
 
     Built from the raw operator response once it arrives over the pub/sub channel.
     All fields above this boundary must be typed; this model is the conversion point.

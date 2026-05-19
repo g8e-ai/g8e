@@ -12,10 +12,10 @@
 # limitations under the License.
 
 """
-DBClient — operator Document Store shim.
+DBClient - operator Document Store shim.
 
 Wraps the operator (Operator --listen mode) Document Store HTTP API.
-No local database — every call goes to operator over HTTP.
+No local database - every call goes to operator over HTTP.
 
 operator endpoints:
     GET    /db/{collection}/{id}       → get document
@@ -318,7 +318,7 @@ class DBClient:
         """Append items to a list field in a document.
 
         Fetches the current document, merges the array, and writes back.
-        The field must already be a list on the wire — callers are responsible
+        The field must already be a list on the wire - callers are responsible
         for ensuring the field is written as a native JSON array.
         """
         existing = await self.get_document(collection, document_id)

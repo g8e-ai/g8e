@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 """
-Function call execution — tool display metadata, grounding merge, single
+Function call execution - tool display metadata, grounding merge, single
 tool call dispatch, and sequential turn-level execution loop.
 """
 
@@ -487,7 +487,7 @@ async def execute_turn_tool_calls(
 
     Yields TOOL_CALL and TOOL_RESULT StreamChunkFromModel chunks for
     each call. On completion appends the list of ToolCallResponse records
-    to result_out (always exactly one item — a list of responses for the turn).
+    to result_out (always exactly one item - a list of responses for the turn).
     """
     num_calls = len(pending_tool_calls)
     use_parallel = request_settings.llm.llm_parallel_tool_calls

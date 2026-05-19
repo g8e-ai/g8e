@@ -507,8 +507,8 @@ def build_modular_system_prompt(
     (`.local.dev/dev/tribunal-game.md` §14.1), the GDD's interrogator
     role ("Dash" in the doc) maps to the **triage** agent, not to the
     code's `dash` agent. The code's `dash` is the fast-path responder
-    that plays the same game as Sage — same safety / loyalty / dissent
-    / mode / tools stack — just on the assistant model tier when triage
+    that plays the same game as Sage - same safety / loyalty / dissent
+    / mode / tools stack - just on the assistant model tier when triage
     routes simple work to it. Only the persona block differs between
     Sage and Dash.
 
@@ -518,12 +518,12 @@ def build_modular_system_prompt(
     that uses the same mode. The agent-specific persona follows, and
     per-turn dynamic context is appended last.
 
-      1. safety     — absolute forbidden operations (static, shared)
-      2. loyalty    — mission-over-moment doctrine (static, shared)
-      3. dissent    — warning protocol, denial memory, escalation (static, shared)
-      4. capabilities / execution / tools — mode-dependent (static per mode)
+      1. safety     - absolute forbidden operations (static, shared)
+      2. loyalty    - mission-over-moment doctrine (static, shared)
+      3. dissent    - warning protocol, denial memory, escalation (static, shared)
+      4. capabilities / execution / tools - mode-dependent (static per mode)
       5. response_constraints (static, shared)
-      6. identity / persona — per-agent (static per agent)
+      6. identity / persona - per-agent (static per agent)
       7. system_context (dynamic)
       8. sentinel_mode (dynamic)
       9. triage_context (dynamic)

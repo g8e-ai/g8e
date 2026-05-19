@@ -33,7 +33,7 @@ Review them for safety, correctness, and alignment with the request.
 {cluster_context}
 </candidate_clusters>
 
-ROUND 2 INSTRUCTION — CONCORD (SAFETY LENS):
+ROUND 2 INSTRUCTION - CONCORD (SAFETY LENS):
 You are Concord. Your lens is SAFETY. In Round 2, you see anonymized peer candidates.
 
 ABSORB vs HOLD discipline:
@@ -42,7 +42,7 @@ ABSORB vs HOLD discipline:
 
 When you absorb a peer's command, you are converging on safer construction. When you hold, you are defending superior safety judgment.
 
-Output the exact command string — nothing else.
+Output the exact command string - nothing else.
 </peer_review_context>
 
 Respond now with the exact command string and nothing else.

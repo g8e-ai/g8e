@@ -1,4 +1,4 @@
-# g8eo — Reference Operator
+# g8eo - Reference Operator
 
 **g8eo** is the reference Go implementation of the **Operator** role defined by the g8e Protocol. It is a sovereign, single-binary execution boundary that enforces the protocol's 3-layer governance hierarchy.
 
@@ -19,7 +19,7 @@
 The g8e platform is built on the g8e Protocol as substrate. A conforming Operator implementation is what makes that protocol live on a host.
 
 - **Protocol (Substrate)**: The wire contract, schemas, and L1/L2/L3 verification rules. Mandatory and immutable for any client or implementation.
-- **Reference Operator (`g8eo`)**: In **Listen Mode** it acts as the platform's backbone for the reference deployment — protocol hub, persistence layer (SQLite), pub/sub broker, root CA, and audit authority. In **Standard Mode** it acts as the execution agent on a managed host. It is sufficient on its own to receive, verify, and execute protocol-governed transactions, and it is replaceable by any conforming Operator.
+- **Reference Operator (`g8eo`)**: In **Listen Mode** it acts as the platform's backbone for the reference deployment - protocol hub, persistence layer (SQLite), pub/sub broker, root CA, and audit authority. In **Standard Mode** it acts as the execution agent on a managed host. It is sufficient on its own to receive, verify, and execute protocol-governed transactions, and it is replaceable by any conforming Operator.
 - **Reference Application Layer (Optional)**: Reference components like the Engine (`g8ee`) consume the public Operator protocol surface. They have no privileged substrate responsibilities and no private access channels.
 
 ```mermaid
@@ -65,17 +65,17 @@ Transforms the reference Operator into the platform's backbone. Started with the
 
 - **Role**: Reference hub for the bundled deployment.
 - **Capabilities**:
-    - **Substrate API** — `POST /api/governance/envelope` is the only customer-facing mutation entry point.
-    - **Document Store** — JSON document CRUD on a Collection/ID pattern with `json_extract` query support.
-    - **KV Store** — TTL-aware ephemeral state with `GLOB` pattern scanning and cursor-based `KVScan`. Supports a Write-Only cache policy.
-    - **Blob Store** — Binary persistence for attachments, large objects, and certificate material.
-    - **Pub/Sub Broker** — High-performance WebSocket fan-out. Mutation channels (`cmd:*`) are governed.
-    - **SSE Buffer** — Per-session ring buffer for Server-Sent Events reconnection replay.
-    - **State Root Provider** — Deterministic Merkle state root across all authoritative Hub data.
-    - **Nonce Manager** — Sliding-window replay protection for governance transactions.
-    - **Root CA / PKI** — Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
-    - **Secrets Vault** — Tamper-evident bootstrap secrets with a `bootstrap_digest.json` manifest.
-    - **Audit Authority** — Append-only encrypted log of every event and signed `ActionReceipt`.
+    - **Substrate API** - `POST /api/governance/envelope` is the only customer-facing mutation entry point.
+    - **Document Store** - JSON document CRUD on a Collection/ID pattern with `json_extract` query support.
+    - **KV Store** - TTL-aware ephemeral state with `GLOB` pattern scanning and cursor-based `KVScan`. Supports a Write-Only cache policy.
+    - **Blob Store** - Binary persistence for attachments, large objects, and certificate material.
+    - **Pub/Sub Broker** - High-performance WebSocket fan-out. Mutation channels (`cmd:*`) are governed.
+    - **SSE Buffer** - Per-session ring buffer for Server-Sent Events reconnection replay.
+    - **State Root Provider** - Deterministic Merkle state root across all authoritative Hub data.
+    - **Nonce Manager** - Sliding-window replay protection for governance transactions.
+    - **Root CA / PKI** - Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
+    - **Secrets Vault** - Tamper-evident bootstrap secrets with a `bootstrap_digest.json` manifest.
+    - **Audit Authority** - Append-only encrypted log of every event and signed `ActionReceipt`.
 
 #### Four-Port Contract
 Listen Mode exposes four distinct ports for different protocol surfaces:
@@ -185,8 +185,8 @@ Client identities follow the SPIFFE URI scheme, encoded in the certificate's URI
 
 CLI and Operator are cryptographically distinct principals with separate keys, separate CSRs, and separate certificates:
 
-- **Operator certificates** — Bound to `operator_session_id`. Authorize host-side mutations.
-- **CLI certificates** — Bound to `cli_session_id`. Authorize BYO/CLI clients to issue commands and receive SSE.
+- **Operator certificates** - Bound to `operator_session_id`. Authorize host-side mutations.
+- **CLI certificates** - Bound to `cli_session_id`. Authorize BYO/CLI clients to issue commands and receive SSE.
 
 This means CLI sessions cannot impersonate operator agents and operator sessions cannot drain another client's event stream. SSE routes are bound to CLI sessions specifically.
 
@@ -217,7 +217,7 @@ The **Warden** signs all mutation receipts with an Ed25519 key. For external ver
     *   **Audit Vault**: Cryptographically signed, append-only record of all session activity (encrypted at rest).
     *   **Scrubbed Vault**: Sentinel-processed output for AI context and platform-side reporting.
     *   **Raw Vault**: Unscrubbed command output for deep forensic analysis (customer-access only).
-3.  **The Ledger (Managed Hosts)**: Multi-Ledger Architecture — a fleet of per-session isolated git repositories providing cryptographic history and instant rollback. Each operator session owns its own git repo under `.g8e/data/ledger/sessions/<operator_session_id>/`.
+3.  **The Ledger (Managed Hosts)**: Multi-Ledger Architecture - a fleet of per-session isolated git repositories providing cryptographic history and instant rollback. Each operator session owns its own git repo under `.g8e/data/ledger/sessions/<operator_session_id>/`.
 
 ### Coordination Store (g8eo --listen)
 
@@ -227,19 +227,19 @@ The Coordination Store is the platform's central coordination point, implemented
 Hub state is anchored by a Merkle state root computed deterministically across all documents, active KV entries, and blobs. Every governance transaction carries `state_merkle_root`; the Operator rejects any transaction whose root does not match the current authoritative state. This makes it impossible for an agent to act on stale reality.
 
 #### Cache-Aside read/write contract
-- **Writes** — Always go to the authoritative DB first, then invalidate the cache key.
-- **Reads** — `get_document` checks the KV cache; on miss it fetches from the DB and warms the cache. `query_documents` hashes query parameters for result caching.
-- **Atomic array ops** — `arrayUnion`/`arrayRemove` operate on the DB and invalidate the cache.
-- **Write-Only mode** — Application adapters set `enable_cache_read: false`, ensuring every read is satisfied by the authoritative database while still populating the cache for ecosystem consumers.
+- **Writes** - Always go to the authoritative DB first, then invalidate the cache key.
+- **Reads** - `get_document` checks the KV cache; on miss it fetches from the DB and warms the cache. `query_documents` hashes query parameters for result caching.
+- **Atomic array ops** - `arrayUnion`/`arrayRemove` operate on the DB and invalidate the cache.
+- **Write-Only mode** - Application adapters set `enable_cache_read: false`, ensuring every read is satisfied by the authoritative database while still populating the cache for ecosystem consumers.
 
 #### PKI and Secrets directories (root of trust)
 - **.g8e/pki/** stores the CA hierarchy and trust bundles:
-    - **Root CA** — `root/root_ca.crt`
-    - **Intermediate CAs** — Hub CA, Operator CA, Bootstrap CA.
-    - **Trust Bundles** — `trust/hub-bundle.pem` (Root + Hub Intermediate).
+    - **Root CA** - `root/root_ca.crt`
+    - **Intermediate CAs** - Hub CA, Operator CA, Bootstrap CA.
+    - **Trust Bundles** - `trust/hub-bundle.pem` (Root + Hub Intermediate).
 - **.g8e/secrets/** stores tamper-evident bootstrap material:
     - `session_encryption_key`, `warden_signing_key`, `warden_key_id`.
-    - `bootstrap_digest.json` — SHA-256 digests of every secret. Mismatch fails startup hard.
+    - `bootstrap_digest.json` - SHA-256 digests of every secret. Mismatch fails startup hard.
 
 ### The Ledger (Multi-Ledger Architecture)
 
@@ -260,11 +260,11 @@ Sentinel protects data privacy in two phases:
 
 The Hub is the WSS broker and governance gate for all real-time traffic.
 
-- **Channel format** — `{prefix}:{operator_id}:{operator_session_id}`. Always parse with a bounded split.
-- **Mutation channels** — `cmd:*` and `auditor:*` only accept envelopes via `POST /api/governance/envelope`.
-- **Non-mutation channels** — `heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*` flow through `/pubsub/publish`.
-- **Fail-closed** — Missing `message_id` or `operator_session_id` → reject. Unknown `event_type` → drop.
-- **Subscribe-and-wait** — Subscribers must wait for the broker's `{"type":"subscribed","channel":"..."}` ack before publishing or dispatching commands.
+- **Channel format** - `{prefix}:{operator_id}:{operator_session_id}`. Always parse with a bounded split.
+- **Mutation channels** - `cmd:*` and `auditor:*` only accept envelopes via `POST /api/governance/envelope`.
+- **Non-mutation channels** - `heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*` flow through `/pubsub/publish`.
+- **Fail-closed** - Missing `message_id` or `operator_session_id` → reject. Unknown `event_type` → drop.
+- **Subscribe-and-wait** - Subscribers must wait for the broker's `{"type":"subscribed","channel":"..."}` ack before publishing or dispatching commands.
 
 ## Audit Vault (Hub side)
 
@@ -272,10 +272,10 @@ The Hub keeps an authoritative encrypted audit vault keyed by `transaction_hash`
 
 ## Lifecycle
 
-1. **Bootstrap (first boot)** — Hub generates CA hierarchy, trust bundles, and bootstrap secrets. Server certs are issued.
-2. **Identity bootstrap (zero-touch)** — `./g8e platform start -a` creates a local superadmin and loopback CLI cert. The first real login retires the bootstrap user.
-3. **Steady state** — The Hub serves the four ports, dispatches governed envelopes, and fans results back via pub/sub and SSE.
-4. **Reset/wipe** — `wipe` clears app data; `reset` deletes data + secrets; `clean` destructive removal of `.g8e/`.
+1. **Bootstrap (first boot)** - Hub generates CA hierarchy, trust bundles, and bootstrap secrets. Server certs are issued.
+2. **Identity bootstrap (zero-touch)** - `./g8e platform start -a` creates a local superadmin and loopback CLI cert. The first real login retires the bootstrap user.
+3. **Steady state** - The Hub serves the four ports, dispatches governed envelopes, and fans results back via pub/sub and SSE.
+4. **Reset/wipe** - `wipe` clears app data; `reset` deletes data + secrets; `clean` destructive removal of `.g8e/`.
 
 ## Implementation Reference
 
@@ -316,7 +316,7 @@ The Hub keeps an authoritative encrypted audit vault keyed by `transaction_hash`
 
 | Code | Meaning | Action |
 |---|---|---|
-| **0** | Success | — |
+| **0** | Success | - |
 | **1** | General error | Inspect logs under `.g8e/logs/` |
 | **2** | Auth failure | Verify device-link token or API key |
 | **3** | Permission denied | Check filesystem permissions on `.g8e/` |
@@ -349,7 +349,7 @@ The wire contract lives in `protocol/proto/`; the shared JSON registries in `pro
 
 ## Related Documentation
 
-- [**g8e Protocol**](protocol.md) — The wire contract and governance hierarchy.
-- [**Security Architecture**](protocol.md#host-sovereignty--audit) — mTLS, Sentinel, and host sovereignty.
-- [**Contribution Guide**](../CONTRIBUTING.md) — Build instructions and testing standards.
-- [**g8ee Engine**](g8ee.md) — Reference AI reasoning application.
+- [**g8e Protocol**](protocol.md) - The wire contract and governance hierarchy.
+- [**Security Architecture**](protocol.md#host-sovereignty--audit) - mTLS, Sentinel, and host sovereignty.
+- [**Contribution Guide**](../CONTRIBUTING.md) - Build instructions and testing standards.
+- [**g8ee Engine**](g8ee.md) - Reference AI reasoning application.

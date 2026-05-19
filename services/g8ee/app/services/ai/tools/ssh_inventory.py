@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``list_ssh_inventory`` tool — read-only enumeration of the SSH fleet."""
+"""``list_ssh_inventory`` tool - read-only enumeration of the SSH fleet."""
 
 from __future__ import annotations
 

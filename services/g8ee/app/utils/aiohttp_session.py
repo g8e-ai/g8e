@@ -14,14 +14,14 @@
 """
 aiohttp.ClientSession constructors.
 
-Three transport roles exist in g8ee — each has exactly one constructor here.
+Three transport roles exist in g8ee - each has exactly one constructor here.
 No aiohttp.ClientSession(...) calls anywhere else in the codebase.
 
 Roles
 -----
-new_kv_http_session        — KV/REST HTTP to the Operator listen port (kv_cache_client)
-new_pubsub_ws_session      — WebSocket carrier session for pub/sub (pubsub_client)
-new_component_http_session — inter-service HTTP with retry/circuit-breaker (HTTPClient , CacheAsideService)
+new_kv_http_session        - KV/REST HTTP to the Operator listen port (kv_cache_client)
+new_pubsub_ws_session      - WebSocket carrier session for pub/sub (pubsub_client)
+new_component_http_session - inter-service HTTP with retry/circuit-breaker (HTTPClient , CacheAsideService)
 
 SSL
 ---
@@ -30,7 +30,7 @@ resolved from SSLSettings) and returns a loaded SSLContext for the first path
 that exists on disk, or None if no cert is present.
 
 WebSocket SSL is passed directly to ws_connect(), not to the session connector,
-so new_pubsub_ws_session does not wire SSL — the caller resolves it via
+so new_pubsub_ws_session does not wire SSL - the caller resolves it via
 resolve_pubsub_ssl_context(ssl_settings) and passes it to ws_connect().
 """
 
@@ -126,7 +126,7 @@ def new_pubsub_ws_session(
     """Carrier session for the WebSocket pub/sub connection.
 
     Used by PubSubClient.
-    No default headers — WebSocket frames are not HTTP requests.
+    No default headers - WebSocket frames are not HTTP requests.
     SSL is NOT wired into the connector here; pass resolve_pubsub_ssl_context()
     to ws_connect() directly so the scheme check happens at connect time.
     """
@@ -166,7 +166,7 @@ def new_component_http_session(
 ) -> aiohttp.ClientSession:
     """Session for inter-component HTTP (HTTPClient , CacheAsideService).
 
-    Always probes for a CA cert regardless of scheme — internal services
+    Always probes for a CA cert regardless of scheme - internal services
     may sit behind TLS even in dev.  Uses _json_dumps for datetime-aware
     JSON serialization.
     """

@@ -10,7 +10,7 @@ Version: v0.4.0
 
 g8ee is the **optional reference AI engine** of the g8e platform. It is one concrete application-layer adapter built on top of the [g8e Protocol](protocol.md); the protocol substrate (`g8eo`, the reference Operator) is the only mandatory component. g8ee demonstrates how a Tribunal-based, multi-provider LLM reasoning system can act as a **Layer 2 (Consensus) producer** that emits typed, signed `GovernanceEnvelope` (UAP) transactions to a conforming Operator for verification and execution.
 
-If you are building a BYO client, you do not need g8ee — anything that produces protocol-conformant transactions is interchangeable with it. g8ee is shipped in-tree as the first reference consumer of that same public contract.
+If you are building a BYO client, you do not need g8ee - anything that produces protocol-conformant transactions is interchangeable with it. g8ee is shipped in-tree as the first reference consumer of that same public contract.
 
 ## Position in the Platform
 
@@ -77,16 +77,16 @@ If Dash or Sage encounters ambiguity, they must use the Interrogation Protocol:
 - Questions must be strictly binary to maximize information gain.
 - The `<interrogation>` block must be the entire response; tool execution is suppressed until the user answers.
 
-### 4. Governance & Safety — The Engine-Internal Byzantine Cascade
+### 4. Governance & Safety - The Engine-Internal Byzantine Cascade
 
 Every host-mutating tool call flows through an ordered cascade. Each stage is independently configurable across providers/models so a single compromised model cannot drive a mutation end-to-end. The cascade is implemented in `services/g8ee/app/services/ai/` and orchestrated by `generator.py:generate_command`.
 
 1. **Sentinel ingress scrub**: PII, credentials, and tokens are stripped from every byte of operator output before any AI sees it.
-2. **Tribunal generation**: Sage's intent is dispatched in isolation to five members — Axiom (composition), Concord (safety), Variance (edge cases), Pragma (convention), Nemesis (calibrated adversary). The *Amnesia Principle* means no member sees another's candidate and no member knows which seat Nemesis occupies. Each emits exactly one shell command string and stakes reputation on it.
-3. **Tribunal voting (Round 1)**: Uniform 1-vote-per-member weighting. Minimum consensus is 2 votes (default 5 members). Tie-breaks apply in order: shortest command, non-Nemesis cluster wins over Nemesis-including cluster, alphabetical. Nemesis votes are *not* auto-discarded — they only lose tie-breaks; reputation slashing applies if Nemesis raised a false flag or abstained on a real flaw.
+2. **Tribunal generation**: Sage's intent is dispatched in isolation to five members - Axiom (composition), Concord (safety), Variance (edge cases), Pragma (convention), Nemesis (calibrated adversary). The *Amnesia Principle* means no member sees another's candidate and no member knows which seat Nemesis occupies. Each emits exactly one shell command string and stakes reputation on it.
+3. **Tribunal voting (Round 1)**: Uniform 1-vote-per-member weighting. Minimum consensus is 2 votes (default 5 members). Tie-breaks apply in order: shortest command, non-Nemesis cluster wins over Nemesis-including cluster, alphabetical. Nemesis votes are *not* auto-discarded - they only lose tie-breaks; reputation slashing applies if Nemesis raised a false flag or abstained on a real flaw.
 4. **Round 2 (only on R1 consensus failure)**: Members re-emit with anonymized R1 clusters as peer-review context. If R2 also fails, `TribunalConsensusFailedError` is raised back to Sage so it can re-articulate intent.
 5. **Warden risk analysis (runs *before* Auditor)**: The Warden coordinator orchestrates command-risk / error / file-risk sub-agents and classifies the winner LOW / MEDIUM / HIGH. The **Two-Strike Circuit Breaker**: a first HIGH returns contextual feedback to Sage so it can propose a safer alternative; a second HIGH in the same investigation raises `AGENT_CONFLICT_DETECTED` and forces human intervention. Successful execution resets the strike counter.
-6. **Auditor verification**: If Warden clears the command, the Auditor (primary tier) sees the request, the operator context, and the anonymized candidate clusters — *not* full conversation history. Verdicts are `ok`, `swap:<cluster_id>` (promote a dissenter), or `revised:<command>`. On pass, the verdict is bound to a SHA-256 **Merkle commitment** over the agent reputation scoreboard, chained by `prev_root` HMAC-SHA256. Reputation-commitment failure is fatal — the verdict cannot proceed.
+6. **Auditor verification**: If Warden clears the command, the Auditor (primary tier) sees the request, the operator context, and the anonymized candidate clusters - *not* full conversation history. Verdicts are `ok`, `swap:<cluster_id>` (promote a dissenter), or `revised:<command>`. On pass, the verdict is bound to a SHA-256 **Merkle commitment** over the agent reputation scoreboard, chained by `prev_root` HMAC-SHA256. Reputation-commitment failure is fatal - the verdict cannot proceed.
 7. **L1 re-validation**: Any command produced via swap or revision is re-checked against `validate_command_safety` (forbidden patterns, blacklist, whitelist) before it can leave the Engine.
 8. **L2/L3 envelope wrap**: The verified command is packaged as a typed `CommandRequested` payload inside a `GovernanceEnvelope`, signed by the L2 Tribunal key.
 9. **Approval Pipeline**: State-changing operations trigger an `OPERATOR_COMMAND_APPROVAL_REQUESTED` event, halting execution until a human approves via the UI (or `auto_approved.json` policy applies). L3 auto-approval never bypasses L1 or L2.
@@ -337,9 +337,9 @@ g8ee uses three distinct clients for data operations.
 
 | Client | Transport | Purpose |
 |--------|-----------|---------|
-| `DBClient` | HTTP | Document store — cases, investigations, operators, memories. |
+| `DBClient` | HTTP | Document store - cases, investigations, operators, memories. |
 | `KVClient` | HTTP + WebSocket | KV store operations and pub/sub. |
-| `InternalHttpClient` | HTTP | Internal API — SSE push, intent management, etc. |
+| `InternalHttpClient` | HTTP | Internal API - SSE push, intent management, etc. |
 
 ### Context Propagation (`RequestContext`)
 Business context (user_id, case_id, investigation_id, etc.) is passed in the **request body** via a typed `RequestContext` field. This eliminates the fragile header-as-state pattern.

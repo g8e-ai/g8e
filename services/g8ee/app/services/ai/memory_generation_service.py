@@ -52,10 +52,10 @@ FALLBACK_TEXT_LIMIT = 2000
 
 
 class MemoryGenerationService:
-    """AI-backed memory analysis — updates an InvestigationMemory from conversation history.
+    """AI-backed memory analysis - updates an InvestigationMemory from conversation history.
 
     Depends on MemoryDataService for all persistence. Does not touch the DB or KV
-    directly — all reads and writes are delegated to MemoryDataService.
+    directly - all reads and writes are delegated to MemoryDataService.
     """
 
     def __init__(self, memory_crud: MemoryDataServiceProtocol) -> None:

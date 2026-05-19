@@ -16,7 +16,7 @@ LLM Provider Factory
 
 One entry point:
 
-  get_llm_provider(settings, is_assistant=False) — returns a cached LLMProvider instance
+  get_llm_provider(settings, is_assistant=False) - returns a cached LLMProvider instance
       based on the given LLMSettings. The provider type is settings.primary_provider by
       default, or settings.assistant_provider when is_assistant=True. The model is passed
       per-call to generate_content_stream_primary / generate_content_assistant.
@@ -134,8 +134,8 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False, is_lite:
     SSL strategy:
       - Ollama endpoints may be internal (LAN, Docker
         network) and need the platform CA cert for TLS verification.
-      - Gemini is always a public Google API — never needs the platform CA.
-      - Anthropic / OpenAI cloud APIs are public — the provider decides
+      - Gemini is always a public Google API - never needs the platform CA.
+      - Anthropic / OpenAI cloud APIs are public - the provider decides
         based on the endpoint whether to use the platform CA or the public
         CA bundle (certifi).
 

@@ -14,16 +14,16 @@ The scripts layer is the primary operational interface for the g8e platform. It 
 
 g8e avoids container-orchestration complexity by running directly on the host. There are two distinct tiers:
 
-1. **Substrate (mandatory)** — The `g8eo` binary in `--listen` mode. Owns persistence, PKI, pub/sub, and governance enforcement.
-2. **Application Layer (optional)** — Reference adapters like `g8ee` that consume the public protocol. Run as managed host processes.
+1. **Substrate (mandatory)** - The `g8eo` binary in `--listen` mode. Owns persistence, PKI, pub/sub, and governance enforcement.
+2. **Application Layer (optional)** - Reference adapters like `g8ee` that consume the public protocol. Run as managed host processes.
 
 ### The `./g8e` CLI entry point
 
 The root `./g8e` script is a Bash-based dispatcher and the single entry point for all platform operations.
 
-- **Global flags** — `--api-key` / `-k` (explicit API key), `--device-token` (device-link token), `--dev` (skip prod-readiness gates).
-- **Host runtime state** — All runtime data lives at `./.g8e/`: `data/`, `pki/`, `secrets/`, `logs/`.
-- **Credentials** — Authenticated commands use `~/.g8e/credentials`.
+- **Global flags** - `--api-key` / `-k` (explicit API key), `--device-token` (device-link token), `--dev` (skip prod-readiness gates).
+- **Host runtime state** - All runtime data lives at `./.g8e/`: `data/`, `pki/`, `secrets/`, `logs/`.
+- **Credentials** - Authenticated commands use `~/.g8e/credentials`.
 
 Running `./g8e` without arguments launches the Interactive Platform Manager. Direct command form: `./g8e <command> [subcommand] [options]`.
 
@@ -31,7 +31,7 @@ Running `./g8e` without arguments launches the Interactive Platform Manager. Dir
 
 ## Command Categories
 
-### Platform Management — `./g8e platform`
+### Platform Management - `./g8e platform`
 
 Orchestrates the substrate lifecycle via `scripts/core/build.sh`.
 
@@ -47,7 +47,7 @@ Orchestrates the substrate lifecycle via `scripts/core/build.sh`.
 | `logs` | Stream aggregated logs from `./.g8e/logs/`. |
 | `settings` | Read or update platform configuration. |
 
-### Application Layer — `./g8e apps`
+### Application Layer - `./g8e apps`
 
 Manages optional, opt-in adapters.
 
@@ -61,7 +61,7 @@ Manages optional, opt-in adapters.
 
 Apps are BYO clients with no substrate responsibilities and no private coupling.
 
-### Operator Operations — `./g8e operator`
+### Operator Operations - `./g8e operator`
 
 Lifecycle for `g8eo` binaries and remote fleet deployment.
 
@@ -74,15 +74,15 @@ Lifecycle for `g8eo` binaries and remote fleet deployment.
 | `reauth` | Trigger re-authentication of a running operator process. |
 | `ssh-config` | Manage SSH identities for fleet operations. |
 
-### Identity — `./g8e login` / `./g8e logout`
+### Identity - `./g8e login` / `./g8e logout`
 
 `login` mints CLI cert + key, captures session id, and writes credentials to `~/.g8e/credentials`. `logout` clears local session and credentials.
 
-### Chat — `./g8e chat [prompt]`
+### Chat - `./g8e chat [prompt]`
 
 Starts an interactive web session with the AI Engine. Optional initial prompt.
 
-### Variables — `./g8e vars`
+### Variables - `./g8e vars`
 
 | Command | Purpose |
 |---|---|
@@ -91,27 +91,27 @@ Starts an interactive web session with the AI Engine. Optional initial prompt.
 | `get <key>` | Display a variable. |
 | `unset <key>` | Remove a variable. |
 
-### Data & Security — `./g8e data` / `./g8e security`
+### Data & Security - `./g8e data` / `./g8e security`
 
 Dispatched via `scripts/cmd/infra.sh`.
 
-**`data`** — Python helpers for substrate state:
+**`data`** - Python helpers for substrate state:
 
-- `users` — User and session management.
-- `operators` — Operator registration and slot management.
-- `store <collection> list|get` — Document store and KV queries.
-- `device-links` — Device-link token lifecycle.
-- `audit` — LFAA git-ledger and audit vault queries.
-- `settings` — Low-level platform configuration.
+- `users` - User and session management.
+- `operators` - Operator registration and slot management.
+- `store <collection> list|get` - Document store and KV queries.
+- `device-links` - Device-link token lifecycle.
+- `audit` - LFAA git-ledger and audit vault queries.
+- `settings` - Low-level platform configuration.
 
-**`security`** — TLS and identity invariants:
+**`security`** - TLS and identity invariants:
 
-- `validate` — PKI integrity and environment consistency.
-- `mtls-test` — Connectivity test for mTLS trust.
-- `passkeys` — WebAuthn/FIDO2 hardware-bound identity management.
-- `scan-licenses` — Dependency license compliance.
+- `validate` - PKI integrity and environment consistency.
+- `mtls-test` - Connectivity test for mTLS trust.
+- `passkeys` - WebAuthn/FIDO2 hardware-bound identity management.
+- `scan-licenses` - Dependency license compliance.
 
-### Testing — `./g8e test`
+### Testing - `./g8e test`
 
 See [Tests](tests.md). Native toolchains via `scripts/testing/run_tests.sh`.
 
@@ -121,7 +121,7 @@ See [Tests](tests.md). Native toolchains via `scripts/testing/run_tests.sh`.
 | `g8ee [path]` | Optional Python Engine adapter tests with LLM provider support. |
 | `chaos [options]` | Resiliency testing via `chaos_tester` (e.g., `--count=100`). |
 
-### Evals — `./g8e evals`
+### Evals - `./g8e evals`
 
 See [Evals](evals.md).
 
@@ -131,7 +131,7 @@ See [Evals](evals.md).
 | `verify-receipts <report-dir>` | Re-verify receipt signatures offline. |
 | `list` | List benchmark suites and bundled gold sets. |
 
-### Demo — `./g8e demo`
+### Demo - `./g8e demo`
 
 See [Demos](demos.md).
 
@@ -146,7 +146,7 @@ See [Demos](demos.md).
 | `devices` / `broken` | List discovered or unhealthy devices. |
 | `operators` | Status of g8e operator processes in the fleet. |
 
-### LLM — `./g8e llm`
+### LLM - `./g8e llm`
 
 | Command | Purpose |
 |---|---|
@@ -154,12 +154,12 @@ See [Demos](demos.md).
 | `show` / `get` / `set` | View or update LLM variables. |
 | `restart` | Restart inference engine to apply settings. |
 
-### Integrations — `./g8e mcp` / `./g8e search` / `./g8e ssh` / `./g8e aws`
+### Integrations - `./g8e mcp` / `./g8e search` / `./g8e ssh` / `./g8e aws`
 
-- `mcp` — Model Context Protocol integration (`config`, `test`, `status`).
-- `search` — Vertex AI Search configuration (`setup`, `disable`).
-- `ssh` — Manage host SSH key mounts.
-- `aws` — Manage AWS credential mounts.
+- `mcp` - Model Context Protocol integration (`config`, `test`, `status`).
+- `search` - Vertex AI Search configuration (`setup`, `disable`).
+- `ssh` - Manage host SSH key mounts.
+- `aws` - Manage AWS credential mounts.
 
 ---
 
@@ -187,12 +187,12 @@ scripts/
 
 ## Technical Invariants
 
-1. **Path resolution** — Scripts resolve `G8E_PROJECT_ROOT` relative to their own location.
+1. **Path resolution** - Scripts resolve `G8E_PROJECT_ROOT` relative to their own location.
    - Bash: `$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)`
    - Python: `Path(__file__).parent.parent.parent.absolute()`
-2. **Service readiness** — The platform is not "ready" until the Hub `/healthz` passes. `build.sh` blocks until this state.
-3. **Canonical wire format** — All client-facing interaction uses canonical JSON (protojson). Binary protobuf is reserved for internal storage.
-4. **Fail-closed execution** — Scripts never mask failures or proceed with missing trust material. Missing trust bundles or secrets exit with an actionable error pointing at the platform substrate.
+2. **Service readiness** - The platform is not "ready" until the Hub `/healthz` passes. `build.sh` blocks until this state.
+3. **Canonical wire format** - All client-facing interaction uses canonical JSON (protojson). Binary protobuf is reserved for internal storage.
+4. **Fail-closed execution** - Scripts never mask failures or proceed with missing trust material. Missing trust bundles or secrets exit with an actionable error pointing at the platform substrate.
 
 For detailed help on any subcommand: `./g8e <command> --help`.
 

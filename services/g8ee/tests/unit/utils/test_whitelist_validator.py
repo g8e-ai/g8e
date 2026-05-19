@@ -231,7 +231,7 @@ class TestExtractParameterName:
 
 
 # ---------------------------------------------------------------------------
-# validate_command — core paths
+# validate_command - core paths
 # ---------------------------------------------------------------------------
 
 class TestValidateCommandEmpty:
@@ -465,7 +465,7 @@ class TestParseCommandCsv:
 
 
 # ---------------------------------------------------------------------------
-# validate_command — allowed_commands_override (CSV mode)
+# validate_command - allowed_commands_override (CSV mode)
 # ---------------------------------------------------------------------------
 
 class TestValidateCommandWithOverride:

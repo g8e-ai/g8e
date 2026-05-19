@@ -167,7 +167,7 @@ _exec_in_pod() {
     if docker ps --filter "name=^g8ep$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8ep$"; then
         docker exec -i g8ep "$@"
     else
-        _err "Platform not running — g8ep is required (run ./g8e platform start)"
+        _err "Platform not running - g8ep is required (run ./g8e platform start)"
         exit 1
     fi
 }
@@ -280,7 +280,7 @@ if [[ "$NON_INTERACTIVE" == true ]]; then
 else
     _header "Select LLM Provider"
     echo
-    echo "  1) Gemini       (Google — recommended, most tested)"
+    echo "  1) Gemini       (Google - recommended, most tested)"
     echo "  2) Anthropic    (Claude)"
     echo "  3) OpenAI       (GPT)"
     echo "  4) Ollama       (remote Ollama server)"
@@ -523,7 +523,7 @@ _write_to_db() {
     _build_db_args
 
     if ! docker ps --filter "name=^g8ep$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8ep$"; then
-        _warn "Platform not running — DB write skipped (run ./g8e platform start)"
+        _warn "Platform not running - DB write skipped (run ./g8e platform start)"
         return 1
     fi
 
@@ -532,7 +532,7 @@ _write_to_db() {
         return 0
     fi
 
-    _warn "Could not write to DB — settings will apply after next platform restart"
+    _warn "Could not write to DB - settings will apply after next platform restart"
     return 1
 }
 

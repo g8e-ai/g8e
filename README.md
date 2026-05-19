@@ -4,7 +4,7 @@
 
 g8e is a zero-trust execution substrate that forces AI tool calls into a governance envelope. It physically separates intent generation from execution, requiring a compliant agentic system to reach structural consensus before mutating state.
 
-Designed for universal interoperability, g8e provides a mandatory security perimeter for standard JSON-based protocols like Anthropic's **Model Context Protocol (MCP)** and **Agent-to-Agent (A2A)**. While these protocols define the "what" (the payload), g8e serves as the **Admission Gate**—ensuring every transaction is typed, signed, and state-bound before it touches the host.
+Designed for universal interoperability, g8e provides a mandatory security perimeter for standard JSON-based protocols like Anthropic's **Model Context Protocol (MCP)** and **Agent-to-Agent (A2A)**. While these protocols define the "what" (the payload), g8e serves as the **Admission Gate** - ensuring every transaction is typed, signed, and state-bound before it touches the host.
 
 ---
 

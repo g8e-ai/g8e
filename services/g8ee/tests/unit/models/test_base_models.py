@@ -464,7 +464,7 @@ class TestHierarchyContracts:
     def test_investigation_model_has_no_standalone_id_override(self):
         from app.models.investigations import InvestigationModel
         assert "id" not in InvestigationModel.__annotations__, \
-            "InvestigationModel must not redefine 'id' — it inherits from G8eIdentifiableModel"
+            "InvestigationModel must not redefine 'id' - it inherits from G8eIdentifiableModel"
 
     def test_case_model_is_identifiable(self):
         from app.models.cases import CaseModel

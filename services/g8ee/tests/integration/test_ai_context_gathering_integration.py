@@ -18,22 +18,22 @@ These tests exercise the complete AI context gathering pipeline from raw HTTP
 context through InvestigationService to the final EnrichedInvestigationContext
 used by the AI agent. All tests use real services and infrastructure.
 
-    Segment 1 — Basic investigation context resolution
+    Segment 1 - Basic investigation context resolution
       Resolve investigation by investigation_id and case_id with retry logic.
 
-    Segment 2 — Memory context attachment
+    Segment 2 - Memory context attachment
       Test memory attachment, missing memory handling, and memory data integrity.
 
-    Segment 3 — Operator enrichment and context extraction
+    Segment 3 - Operator enrichment and context extraction
       Test bound operator resolution, system context extraction, and multi-operator scenarios.
 
-    Segment 4 — Complete context assembly end-to-end
+    Segment 4 - Complete context assembly end-to-end
       Full pipeline from G8eHttpContext to EnrichedInvestigationContext with all components.
 
-    Segment 5 — Error handling and edge cases
+    Segment 5 - Error handling and edge cases
       Missing investigations, operator lookup failures, and partial context scenarios.
 
-    Segment 6 — Context extraction for AI consumption
+    Segment 6 - Context extraction for AI consumption
       Test extract_system_context and extract_all_operators_context functions.
 
 Real code under test:
@@ -128,7 +128,7 @@ async def cleanup(cache_aside_service):
 
 
 # ---------------------------------------------------------------------------
-# Segment 1 — Basic investigation context resolution
+# Segment 1 - Basic investigation context resolution
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -330,7 +330,7 @@ class TestInvestigationContextResolution:
 
 
 # ---------------------------------------------------------------------------
-# Segment 2 — Memory context attachment
+# Segment 2 - Memory context attachment
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -529,7 +529,7 @@ class TestMemoryContextAttachment:
 
 
 # ---------------------------------------------------------------------------
-# Segment 3 — Operator enrichment and context extraction
+# Segment 3 - Operator enrichment and context extraction
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -852,7 +852,7 @@ class TestOperatorEnrichment:
 
 
 # ---------------------------------------------------------------------------
-# Segment 4 — Complete context assembly end-to-end
+# Segment 4 - Complete context assembly end-to-end
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -1013,7 +1013,7 @@ class TestCompleteContextAssembly:
 
 
 # ---------------------------------------------------------------------------
-# Segment 5 — Error handling and edge cases (real integration tests only)
+# Segment 5 - Error handling and edge cases (real integration tests only)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -1064,7 +1064,7 @@ class TestContextGatheringErrorHandling:
 
 
 # ---------------------------------------------------------------------------
-# Segment 6 — Context extraction for AI consumption
+# Segment 6 - Context extraction for AI consumption
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")

@@ -14,7 +14,7 @@
 """Operator LFAA Service
 
 Publishes Local-First Audit Architecture audit events to g8eo operators
-over pub/sub. Pure fire-and-forget publish — no approval, no pending store.
+over pub/sub. Pure fire-and-forget publish - no approval, no pending store.
 """
 
 import logging

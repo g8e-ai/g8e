@@ -492,7 +492,7 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 	defer pki.mu.Unlock()
 
 	if pki.operatorCert == nil || pki.operatorKey == nil {
-		return "", "", fmt.Errorf("operator CA not loaded — call EnsurePKI first")
+		return "", "", fmt.Errorf("operator CA not loaded - call EnsurePKI first")
 	}
 
 	block, _ := pem.Decode([]byte(csrPEM))
@@ -794,7 +794,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.crt")
 
 	if pki.hubCert == nil || pki.hubKey == nil {
-		return fmt.Errorf("hub CA not loaded — call EnsurePKI first")
+		return fmt.Errorf("hub CA not loaded - call EnsurePKI first")
 	}
 
 	serviceKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)

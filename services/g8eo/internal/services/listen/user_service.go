@@ -128,7 +128,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 		return fmt.Errorf("user not found: %s", userID)
 	}
 	if existing.Status == constants.UserStatusDisabled {
-		// Already disabled — idempotent no-op, but still record an audit row
+		// Already disabled - idempotent no-op, but still record an audit row
 		// so the caller's intent is visible if they retried.
 		return s.appendAdminAudit(models.AdminAuditEntry{
 			Action:     models.AdminAuditActionRetireLocalSuperadmin,
@@ -159,7 +159,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 		},
 	}); err != nil {
 		// Audit write failed AFTER state change. Best we can do is log loudly
-		// and propagate — the caller (registration) treats this as a hard
+		// and propagate - the caller (registration) treats this as a hard
 		// failure so we never reach a half-state where superadmin is disabled
 		// but the audit trail does not record why.
 		return fmt.Errorf("user %s disabled but audit append failed: %w", userID, err)

@@ -232,7 +232,7 @@ async def internal_chat(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ):
     """
-    Non-streaming chat endpoint — default path for browser sessions.
+    Non-streaming chat endpoint - default path for browser sessions.
 
     Creates case + investigation inline when case_id is absent, then fires
     run_chat as a background task. The AI response and all tool events are
@@ -320,7 +320,7 @@ async def internal_chat(
             )
         except Exception as sse_err:
             logger.warning(
-                "[INTERNAL-HTTP] Failed to publish g8e.v1.app.case.created SSE — case created successfully, continuing",
+                "[INTERNAL-HTTP] Failed to publish g8e.v1.app.case.created SSE - case created successfully, continuing",
                 extra={"case_id": g8e_context.case_id, "error": str(sse_err)},
             )
 
@@ -1059,7 +1059,7 @@ async def update_operator_api_key(
 
         # Rotate the API key in the canonical store BEFORE updating the operator doc.
         # Failure here means the operator doc is left untouched and the old key remains
-        # authoritative — no phantom keys, no split-brain.
+        # authoritative - no phantom keys, no split-brain.
         rotated = await api_key_service.rotate_operator_key(
             old_api_key=operator.api_key,
             new_api_key=request.api_key,

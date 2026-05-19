@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-PubSubClient — WebSocket-based Pub/Sub client for operator.
+PubSubClient - WebSocket-based Pub/Sub client for operator.
 
 Talks to the Operator in --listen mode via WebSocket.
 Supports: subscribe, psubscribe, publish,
@@ -505,7 +505,7 @@ class PubSubClient:
         self._pmessage_handlers.setdefault(pattern, []).append(handler)
 
     # =========================================================================
-    # Domain pub/sub — g8eo Operator command/result/heartbeat channels
+    # Domain pub/sub - g8eo Operator command/result/heartbeat channels
     # =========================================================================
 
     async def publish_command(

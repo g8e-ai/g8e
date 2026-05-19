@@ -125,7 +125,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	}
 
 	// Check if the linked user is active (plan §4.6)
-	// This is the single chokepoint that makes retirement real — without it,
+	// This is the single chokepoint that makes retirement real - without it,
 	// a stale CLI cert can still talk to the substrate.
 	if s.userSvc != nil && op.UserID != "" {
 		user, err := s.userSvc.GetByID(op.UserID)

@@ -17,7 +17,7 @@ Typed client publish events.
 All events published to client are represented as one of two typed envelopes:
 
 - SessionEvent: routes to a specific connected browser session. web_session_id,
-  case_id, and investigation_id are all required — the caller must have all
+  case_id, and investigation_id are all required - the caller must have all
   three or the event cannot be constructed.
 
 - BackgroundEvent: system-initiated, no browser session. client fans the event
@@ -39,7 +39,7 @@ from app.models.base import G8eBaseModel, Field, UTCDatetime
 class SessionEvent(G8eBaseModel):
     """Event that must reach a specific connected client session.
 
-    Use this when the triggering request arrived on a known client session —
+    Use this when the triggering request arrived on a known client session  - 
     either a browser (web_session_id) or a BYO CLI client (cli_session_id).
     Both are first-class session types and the substrate keeps their routing
     namespaces strictly disjoint, so producers MUST set exactly one of the two
@@ -77,7 +77,7 @@ class BackgroundEvent(G8eBaseModel):
 
     client fans the event out to every active SSE session owned by user_id.
     investigation_id and case_id are optional correlation hints carried inside
-    the payload — they do not drive routing.
+    the payload - they do not drive routing.
     """
 
     event_type: EventType = Field(description="client event type")

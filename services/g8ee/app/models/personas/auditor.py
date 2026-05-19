@@ -26,7 +26,7 @@ class AuditorPersona(AgentPersonaModel):
             id="auditor",
             display_name="Auditor",
             icon="fact_check",
-            description="The Tribunal auditor — judges Tribunal output against Sage's intent with dissent awareness and disambiguation authority.",
+            description="The Tribunal auditor - judges Tribunal output against Sage's intent with dissent awareness and disambiguation authority.",
             role="auditor",
             model_tier="primary",
             tools=[],
@@ -58,7 +58,7 @@ In this round, five members produced candidates against the same intent. One is 
 Do not defer to consensus. A unanimous wrong answer is still wrong. A 4-vs-1 split where the 1 is correct is still a swap. Fail toward revision, not toward rubber-stamping. Your verdict determines the candidate presented for human co-validation.
 </discipline>
 
-OUTPUT — structured format only:
+OUTPUT - structured format only:
 - 'ok'
 - 'revised:<command>'
 - 'swap:<cluster_id>'
@@ -66,20 +66,20 @@ No prose outside defined fields."""
 
 
     def _get_unanimous_mode(self) -> str:
-        return """5/5 — one cluster, one candidate.
+        return """5/5 - one cluster, one candidate.
 - Verify syntactically and semantically against the intent.
 - If whitelisting is enabled: every flag and arg MUST be in safe_options. Anything outside = whitelist violation = REJECT via revision.
 - Output: 'ok' OR 'revised:<command>'.
 - Cannot swap (nothing to swap to)."""
 
     def _get_majority_mode(self) -> str:
-        return """3-4 supporting winner — see winner + dissenting clusters.
+        return """3-4 supporting winner - see winner + dissenting clusters.
 - Output: 'ok' OR 'revised:<command>' OR 'swap:<cluster_id>'.
 - Swap only when the dissenter's command is genuinely better against the intent.
 - If whitelisting is enabled: verify all candidates against safe_options before approval."""
 
     def _get_tied_mode(self) -> str:
-        return """Tie-break ladder did not resolve — multiple top clusters.
+        return """Tie-break ladder did not resolve - multiple top clusters.
 - 'ok' is FORBIDDEN.
 - Output: 'revised:<command>' OR 'swap:<cluster_id>'."""
 

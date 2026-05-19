@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``fetch_file_history`` tool — return the operator-side edit history for a path."""
+"""``fetch_file_history`` tool - return the operator-side edit history for a path."""
 
 from __future__ import annotations
 

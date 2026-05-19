@@ -135,7 +135,7 @@ def build_command_service(
 ) -> OperatorCommandService:
     """Build an OperatorCommandService with typed fakes for all dependencies.
 
-    All parameters are optional — provide only the fakes you need to configure
+    All parameters are optional - provide only the fakes you need to configure
     or assert on. Omitted deps default to a fresh fake with sensible defaults.
     """
     cache_aside_service = create_mock_cache_aside_service()

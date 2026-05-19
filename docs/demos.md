@@ -30,13 +30,13 @@ Generate the `dlk_…` device-link token from the running platform first.
 
 The runnable demo assets are sourced from `/demo` in the repo:
 
-- **`@/home/bob/g8e/demo/demo.md`** — Full demo system reference: profiles, fleet taxonomy, failure modes, operational commands, and troubleshooting.
-- **`@/home/bob/g8e/demo/profiles/`** — Profile directories. Each profile defines fleet size, device taxonomy, and failure modes.
-  - `acme-corp/` — Default profile. Realistic enterprise taxonomy (retail, factory, warehouse, office, network/DC), 100–1000 nodes, mixed failure modes.
-  - `fleet/` — Minimalist simulator optimized for high-density testing (up to 2000+ nodes).
-  - `nginx/` — Original 10-node "Broken Web App" demo.
-- **`@/home/bob/g8e/demo/Makefile`** — Profile build targets.
-- **`@/home/bob/g8e/demo/.active`** — Marker file for the currently selected profile.
+- **`@/home/bob/g8e/demo/demo.md`** - Full demo system reference: profiles, fleet taxonomy, failure modes, operational commands, and troubleshooting.
+- **`@/home/bob/g8e/demo/profiles/`** - Profile directories. Each profile defines fleet size, device taxonomy, and failure modes.
+  - `acme-corp/` - Default profile. Realistic enterprise taxonomy (retail, factory, warehouse, office, network/DC), 100–1000 nodes, mixed failure modes.
+  - `fleet/` - Minimalist simulator optimized for high-density testing (up to 2000+ nodes).
+  - `nginx/` - Original 10-node "Broken Web App" demo.
+- **`@/home/bob/g8e/demo/Makefile`** - Profile build targets.
+- **`@/home/bob/g8e/demo/.active`** - Marker file for the currently selected profile.
 
 ---
 

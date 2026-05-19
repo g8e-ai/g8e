@@ -70,7 +70,7 @@ func RunStream(args []string) {
 	fs.StringVar(&hostsFile, "hosts", "", "File of hosts (one per line) or - for stdin")
 	fs.IntVar(&concurrency, "concurrency", defaultConcurrency, "Max parallel SSH sessions")
 	fs.IntVar(&timeoutSec, "timeout", int(defaultTimeout.Seconds()), "Per-host dial+inject timeout in seconds")
-	fs.StringVar(&endpoint, "endpoint", "", "Platform endpoint — if set, starts operator on each remote host")
+	fs.StringVar(&endpoint, "endpoint", "", "Platform endpoint - if set, starts operator on each remote host")
 	fs.StringVar(&deviceToken, "device-token", "", "Device link token (supports single and mass deployment via max_uses)")
 	fs.StringVar(&apiKey, "key", "", "API key auth")
 	fs.BoolVar(&noGit, "no-git", false, "Disable ledger")
@@ -140,7 +140,7 @@ func RunStream(args []string) {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigCh
-		fmt.Fprintln(os.Stderr, "\n[stream] signal received — cancelling all sessions...")
+		fmt.Fprintln(os.Stderr, "\n[stream] signal received - cancelling all sessions...")
 		cancel()
 	}()
 

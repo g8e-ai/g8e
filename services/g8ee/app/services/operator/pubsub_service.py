@@ -91,10 +91,10 @@ class OperatorPubSubService:
             logger.info("[PUBSUB] Pub/sub client already ready")
             return
         if self.pubsub_client is None:
-            raise ValidationError("pubsub_client not initialized — call set_pubsub_client() first", component="g8ee")
+            raise ValidationError("pubsub_client not initialized - call set_pubsub_client() first", component="g8ee")
         await self.pubsub_client.ensure_connected()
         self._pubsub_ready = True
-        logger.info("[PUBSUB] Pub/sub client ready — awaiting operator session registrations")
+        logger.info("[PUBSUB] Pub/sub client ready - awaiting operator session registrations")
 
     async def stop(self) -> None:
         for operator_id, operator_session_id in list(self._active_operator_sessions_set):
@@ -111,7 +111,7 @@ class OperatorPubSubService:
         if key in self._active_operator_sessions_set:
             return
         if self.pubsub_client is None:
-            raise ValidationError("pubsub_client not initialized — call set_pubsub_client() first", component="g8ee")
+            raise ValidationError("pubsub_client not initialized - call set_pubsub_client() first", component="g8ee")
         results_ch = OperatorChannel.results(operator_id, operator_session_id)
         self.pubsub_client.on_channel_message(results_ch, self._dispatch_results_message)
         await self.pubsub_client.subscribe(results_ch)
@@ -126,7 +126,7 @@ class OperatorPubSubService:
 
     async def publish_command(self, operator_id: str, operator_session_id: str, command_data: G8eMessage) -> int:
         if self.pubsub_client is None:
-            raise ValidationError("pubsub_client not initialized — call set_pubsub_client() first", component="g8ee")
+            raise ValidationError("pubsub_client not initialized - call set_pubsub_client() first", component="g8ee")
         return await self.pubsub_client.publish_command(
             operator_id=operator_id,
             operator_session_id=operator_session_id,

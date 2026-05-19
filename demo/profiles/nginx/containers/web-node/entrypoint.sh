@@ -12,7 +12,7 @@ ssh-keygen -A > /dev/null 2>&1
 echo "[$NODE_ID] SSH server started"
 
 # Write fake secrets file (for Sentinel scrubbing demo)
-# Values are live-generated at container startup — no credential-shaped strings in the repo.
+# Values are live-generated at container startup - no credential-shaped strings in the repo.
 _db_pass="$(openssl rand -hex 16)"
 _aws_key_id="$(openssl rand -hex 10 | tr '[:lower:]' '[:upper:]')"
 _aws_secret="$(openssl rand -base64 30 | tr -d '\n/')"

@@ -10,14 +10,14 @@ ALWAYS use this tool BEFORE attempting file operations (file_read_on_operator, f
 <optional>
 - max_depth: Recursion depth (default: 1, current directory only)
 - include_hidden: Include files starting with `.` (default: false)
-- target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
+- target_operator: operator_id or hostname - REQUIRED when multiple operators bound (prefer hostname when available)
 </optional>
 </parameters>
 
 <behavior>
 1. Before reading any file: list its parent directory first to confirm the file exists and get exact filename
 2. Before running commands on files: list the directory to verify the target file/directory exists
-3. Use for existence checks: returns error if path is missing — this is the canonical way to check if a directory exists
+3. Use for existence checks: returns error if path is missing - this is the canonical way to check if a directory exists
 4. Use max_depth=0 for current directory only, max_depth=1 for immediate subdirectories
 5. When multiple operators are bound to the session, you MUST specify target_operator (prefer hostname or operator_id)
 </behavior>

@@ -35,7 +35,7 @@ import (
 )
 
 // listenSchema is the canonical operator SQLite schema, embedded at compile time
-// from `schema.sql`. That file is the single source of truth — do not inline
+// from `schema.sql`. That file is the single source of truth - do not inline
 // CREATE TABLE statements in Go code.
 //
 //go:embed schema.sql
@@ -283,7 +283,7 @@ func (s *ListenDBService) Close() error {
 }
 
 // =============================================================================
-// Document Store — collection/id based CRUD
+// Document Store - collection/id based CRUD
 // =============================================================================
 
 // DocGet retrieves a document by collection and id.
@@ -305,7 +305,7 @@ func (s *ListenDBService) DocGet(collection, id string) (*models.Document, error
 }
 
 // DocSet creates or replaces a document. data must be valid JSON.
-// Timestamps are managed by the service — created_at is set once on insert and
+// Timestamps are managed by the service - created_at is set once on insert and
 // never overwritten. updated_at is refreshed on every upsert.
 func (s *ListenDBService) DocSet(collection, id string, data json.RawMessage) error {
 	var userDoc map[string]json.RawMessage
@@ -802,7 +802,7 @@ func (s *ListenDBService) KVExpire(key string, ttlSeconds int) bool {
 
 // SSERoute is the routing target for an SSE event row. Exactly one of the
 // three id fields MUST be non-empty. The substrate refuses to talk about a
-// bare session id — every routing key is tagged at the type level so a
+// bare session id - every routing key is tagged at the type level so a
 // web_session_id can never be mis-delivered as a cli_session_id (or vice
 // versa) and a user_id (background fan-out) can never be mistaken for a
 // per-session id.
@@ -975,7 +975,7 @@ func (s *ListenDBService) RunTTLCleanup(ctx context.Context) {
 }
 
 // =============================================================================
-// Blob Store — raw binary storage keyed by namespace + id
+// Blob Store - raw binary storage keyed by namespace + id
 // =============================================================================
 
 // BlobRecord is the metadata returned for a stored blob (data excluded).

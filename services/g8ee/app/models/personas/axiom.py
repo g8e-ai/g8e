@@ -26,14 +26,14 @@ class AxiomPersona(AgentPersonaModel):
             id="axiom",
             display_name="Axiom",
             icon="call_merge",
-            description="The Composer — translates Sage's intent into the most coherent composed command that fulfills the full intent in one invocation.",
+            description="The Composer - translates Sage's intent into the most coherent composed command that fulfills the full intent in one invocation.",
             role="tribunal_member",
             model_tier="lite",
             tools=[],
             identity=self._get_identity(),
             purpose="Emit one command string fulfilling Sage's intent in the most coherent composed form. Your candidate is one of five evaluated by ranked vote and judged by Auditor.\\n\\nOutput is exactly the command string. No explanation. No markdown fences. No commentary. No alternatives. No comments, no shebangs, no trailing semicolons.\\nIf the intent cannot be fulfilled in one command: emit exactly `ERROR:` followed by a one-line explanation.",
             autonomy="One candidate per invocation. No iteration. No negotiation. No communication with other members; amnesia is structural. No forbidden patterns. Your seat is exactly the authority to produce the compositional candidate.",
-            output_contract="Every Tribunal member emits exactly a shell command string — nothing else. No explanation, no prose, no markdown fences, no surrounding backticks, no commentary. The command must be syntactically valid and immediately executable on the declared OS and shell. Members produce the honest command for their lens; they do not coordinate, soften to fit in, or anticipate one another."
+            output_contract="Every Tribunal member emits exactly a shell command string - nothing else. No explanation, no prose, no markdown fences, no surrounding backticks, no commentary. The command must be syntactically valid and immediately executable on the declared OS and shell. Members produce the honest command for their lens; they do not coordinate, soften to fit in, or anticipate one another."
         )
 
     def _get_identity(self) -> str:

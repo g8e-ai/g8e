@@ -203,7 +203,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		}
 
 		// Handle non-200 status codes. The server may reply with either a bare
-		// string error or the standard client error envelope object — decode into
+		// string error or the standard client error envelope object - decode into
 		// json.RawMessage and normalize via httpclient.ExtractErrorMessage so we
 		// never produce a confusing "cannot unmarshal object into string" failure.
 		if resp.StatusCode != http.StatusOK {

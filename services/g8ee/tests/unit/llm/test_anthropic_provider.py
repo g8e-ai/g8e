@@ -161,7 +161,7 @@ class TestBuildKwargsThinkingMode:
         must uplift max_tokens rather than truncate the budget (the old behaviour
         left ~1 output token for Opus HIGH)."""
         request = self._build(max_tokens=8_192)
-        # budget is still the requested 16_384 — not clamped down.
+        # budget is still the requested 16_384 - not clamped down.
         assert request.thinking["budget_tokens"] == 16_384
         # max_tokens is uplifted to budget + output reserve (4096).
         assert request.max_tokens == 16_384 + 4_096

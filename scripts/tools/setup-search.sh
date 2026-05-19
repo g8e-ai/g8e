@@ -117,10 +117,10 @@ _write_to_db() {
         if docker exec g8ep python3 /app/scripts/data/manage-operator.py settings set "${db_args[@]}" 2>/dev/null; then
             _ok "Settings written to DB"
         else
-            _warn "Could not write to DB — settings will apply after next platform restart"
+            _warn "Could not write to DB - settings will apply after next platform restart"
         fi
     else
-        _warn "Platform not running — DB write skipped (run ./g8e platform start)"
+        _warn "Platform not running - DB write skipped (run ./g8e platform start)"
     fi
 }
 
@@ -158,7 +158,7 @@ fi
 
 _header "g8e Web Search Setup"
 echo
-_info "Enables the search_web tool — lets the AI search the web during investigations."
+_info "Enables the search_web tool - lets the AI search the web during investigations."
 _info "Requires a Vertex AI Search app (Discovery Engine) in your GCP project."
 echo
 
@@ -184,7 +184,7 @@ if [[ "$NON_INTERACTIVE" == false && "$_is_configured" == false ]]; then
     echo ""
     echo "    Click 'Create credentials' -> 'API key'."
     echo ""
-    echo "    Recommendation: keep it simple — restrict the key to these two APIs only:"
+    echo "    Recommendation: keep it simple - restrict the key to these two APIs only:"
     echo "      - Gemini for Google Cloud API  (used by the AI engine)"
     echo "      - Discovery Engine API          (used by web search)"
     echo ""
@@ -202,7 +202,7 @@ if [[ "$NON_INTERACTIVE" == false && "$_is_configured" == false ]]; then
     echo ""
     echo "    Click 'Create app' -> 'Custom search (general)' -> follow the prompts."
     echo "    When asked to create a data store, choose 'Website' and add your domains."
-    echo "    Note the App ID shown after creation — you will need it below."
+    echo "    Note the App ID shown after creation - you will need it below."
     echo ""
 fi
 
@@ -224,7 +224,7 @@ if [[ "$NON_INTERACTIVE" == true ]]; then
     G8E_SEARCH_LOCATION="${ARG_LOCATION:-global}"
 else
     _header "GCP Project ID"
-    _info "Found in the GCP console URL: console.cloud.google.com/... — the project selector at the top."
+    _info "Found in the GCP console URL: console.cloud.google.com/... - the project selector at the top."
     echo
     printf "  Project ID [%s]: " "${_current_project_id:-your-gcp-project-id}" >&2
     IFS= read -r _input
@@ -265,7 +265,7 @@ else
         if [[ -n "$_current_api_key" ]]; then
             _info "An existing API key is set. Leave blank to keep it."
         else
-            _info "GEMINI_API_KEY is set — leave blank to use the same key."
+            _info "GEMINI_API_KEY is set - leave blank to use the same key."
         fi
         G8E_SEARCH_API_KEY="$(_prompt_secret "API key")"
         [[ -z "$G8E_SEARCH_API_KEY" ]] && G8E_SEARCH_API_KEY="$_api_key_default"
@@ -317,13 +317,13 @@ asyncio.run(run())
     elif echo "$_validate_output" | grep -q "^FAIL:"; then
         _err_msg="$(echo "$_validate_output" | grep "^FAIL:" | sed 's/^FAIL://')"
         _warn "Search returned an error: ${_err_msg}"
-        _info "Saving config anyway — check your project ID and engine ID."
+        _info "Saving config anyway - check your project ID and engine ID."
     else
         _warn "Unexpected validation output. Saving config anyway."
         _info "$_validate_output"
     fi
 else
-    _warn "g8ep container is not running — skipping live validation."
+    _warn "g8ep container is not running - skipping live validation."
     _info "Run './g8e platform start' then './g8e search setup' to validate."
 fi
 
@@ -356,8 +356,8 @@ echo
 _info "Settings written to DB"
 echo
 _info "If you use Gemini as your LLM provider, set GEMINI_API_KEY to the same key:"
-echo "    ./g8e llm setup   — re-run LLM setup to enter the key for Gemini"
+echo "    ./g8e llm setup   - re-run LLM setup to enter the key for Gemini"
 echo
-echo "    ./g8e platform restart   — apply without full rebuild"
-echo "    ./g8e search disable     — remove web search configuration"
+echo "    ./g8e platform restart   - apply without full rebuild"
+echo "    ./g8e search disable     - remove web search configuration"
 echo

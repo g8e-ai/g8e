@@ -283,7 +283,7 @@ class OperatorCommandService:
 
         logger.info("[COMMAND] Starting execution: %s", command)
 
-        # 1. Resolve target operator(s) — unified path for singular and batch.
+        # 1. Resolve target operator(s) - unified path for singular and batch.
         operator_documents = investigation.operator_documents if investigation else []
         try:
             target_operator_docs = self._resolve_targets(operator_documents, args)
@@ -306,11 +306,11 @@ class OperatorCommandService:
         target_systems: list[TargetSystem] = self._execution_service.build_target_systems_list(target_operator_docs)
         is_batch = len(target_operator_docs) > 1
 
-        # Primary operator is the first resolved — used for approval identity fields.
+        # Primary operator is the first resolved - used for approval identity fields.
         primary = target_operator_docs[0]
 
         # 2. Command validation (L1 technical bedrock: whitelist/blacklist/forbidden patterns)
-        # Prefer the per-request (user) command_validation settings — get_user_settings
+        # Prefer the per-request (user) command_validation settings - get_user_settings
         # already falls back to platform defaults when no user document exists.
         cv = request_settings.command_validation if request_settings else self._cv
         whitelist_override = parse_command_csv(cv.whitelisted_commands)
@@ -386,7 +386,7 @@ class OperatorCommandService:
                 task_id=AITaskId.COMMAND,
             )
 
-        # 4. Approval gate — a single approval covers the whole batch.
+        # 4. Approval gate - a single approval covers the whole batch.
         # Auto-approved base commands skip the human approval prompt
         # (the human has rubber-stamped them via auto_approved_commands).
         if is_auto_approved:
@@ -421,7 +421,7 @@ class OperatorCommandService:
                 approval_id=approval_result.approval_id,
             )
 
-        # 5. Fan-out dispatch — one execution_id per operator, bounded concurrency.
+        # 5. Fan-out dispatch - one execution_id per operator, bounded concurrency.
         max_concurrency = self._be.max_concurrency
         fail_fast = self._be.fail_fast
         semaphore = asyncio.Semaphore(max_concurrency)

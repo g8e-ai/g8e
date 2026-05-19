@@ -66,7 +66,7 @@ def _make_service(operator_data_service=None, event_service=None):
 
 
 class TestSetPubsubClient:
-    """set_pubsub_client — configuration guard and assignment."""
+    """set_pubsub_client - configuration guard and assignment."""
 
     @pytest.fixture
     def service(self):
@@ -87,7 +87,7 @@ class TestSetPubsubClient:
 
 
 class TestHeartbeatServiceLifecycle:
-    """start() and stop() — lifecycle management."""
+    """start() and stop() - lifecycle management."""
 
     @pytest.fixture
     def service(self):
@@ -154,7 +154,7 @@ class TestHeartbeatServiceLifecycle:
 
 
 class TestRegisterDeregisterSession:
-    """register_operator_session / deregister_operator_session — bookkeeping only.
+    """register_operator_session / deregister_operator_session - bookkeeping only.
 
     Heartbeat subscription is set up once via a protocol ``heartbeat:*`` pattern
     in ``start()``. These methods only track which (operator, session) pairs
@@ -221,7 +221,7 @@ def _make_envelope(payload_dict: dict) -> dict:
 
 
 class TestOnHeartbeatMessage:
-    """_on_heartbeat_message — channel routing, data parsing, session auto-register, exception guard."""
+    """_on_heartbeat_message - channel routing, data parsing, session auto-register, exception guard."""
 
     @pytest.fixture
     async def service(self):
@@ -282,7 +282,7 @@ class TestOnHeartbeatMessage:
 
 
 class TestHeartbeatSnapshotServiceIdentity:
-    """_validate_operator_identity — channel vs wire claim cross-check."""
+    """_validate_operator_identity - channel vs wire claim cross-check."""
 
     @pytest.fixture
     def service(self):
@@ -302,7 +302,7 @@ class TestHeartbeatSnapshotServiceIdentity:
 
 
 class TestHeartbeatSnapshotServiceOperatorValidation:
-    """_get_and_validate_operator — data service lookup and status gating."""
+    """_get_and_validate_operator - data service lookup and status gating."""
 
     @pytest.fixture
     def mock_operator_data_service(self):
@@ -335,7 +335,7 @@ class TestHeartbeatSnapshotServiceOperatorValidation:
 
         The operator's status is a property of the operator doc itself; it is not
         a gate for receiving heartbeats. Unknown operators (None) are still rejected
-        upstream via API-key validation — see test_cache_miss_returns_none.
+        upstream via API-key validation - see test_cache_miss_returns_none.
         """
         for status in OperatorStatus:
             operator = OperatorDocument(id="op-222", status=status, user_id="user-1", bound_web_session_id="ws-1")
@@ -348,7 +348,7 @@ class TestHeartbeatSnapshotServiceOperatorValidation:
 
 
 class TestHeartbeatSnapshotServiceProcessMessage:
-    """process_heartbeat_message — full pipeline using G8eoHeartbeatPayload directly."""
+    """process_heartbeat_message - full pipeline using G8eoHeartbeatPayload directly."""
 
     @pytest.fixture
     def mock_operator_data_service(self):
@@ -466,7 +466,7 @@ class TestHeartbeatSnapshotServiceProcessMessage:
 
         That event's shape is the full operator list (delivered via keepalive).
         Publishing a sparse per-heartbeat payload under the same event type
-        causes the frontend to wipe its operator list — regression guard.
+        causes the frontend to wipe its operator list - regression guard.
         """
         mock_operator_data_service.get_operator.return_value = bound_operator
 
@@ -492,7 +492,7 @@ class TestHeartbeatSnapshotServiceProcessMessage:
 
 
 class TestPushHeartbeatSSE:
-    """_push_heartbeat_sse — EventService.publish paths and no-web-session guard."""
+    """_push_heartbeat_sse - EventService.publish paths and no-web-session guard."""
 
     @pytest.fixture
     def mock_event_service(self):
@@ -622,7 +622,7 @@ class TestPushHeartbeatSSE:
 
 
 class TestValidateHeartbeatTimestamp:
-    """_validate_heartbeat_timestamp — reads timestamp directly from G8eoHeartbeatPayload."""
+    """_validate_heartbeat_timestamp - reads timestamp directly from G8eoHeartbeatPayload."""
 
     @pytest.fixture
     def service(self):
@@ -645,7 +645,7 @@ class TestValidateHeartbeatTimestamp:
 
 
 class TestWsDisconnectHandler:
-    """_on_ws_disconnect — resets ready state and clears active sessions."""
+    """_on_ws_disconnect - resets ready state and clears active sessions."""
 
     @pytest.fixture
     def service(self):
@@ -663,7 +663,7 @@ class TestWsDisconnectHandler:
 
     async def test_disconnect_preserves_active_sessions(self, service):
         """Disconnect should preserve active sessions for observability across
-        reconnect — the protocol heartbeat:* pattern subscription is restored
+        reconnect - the protocol heartbeat:* pattern subscription is restored
         independently by the pubsub client's reconnect logic."""
         await service.start()
         await service.register_operator_session("op-1", "sess-1")
@@ -718,7 +718,7 @@ class TestWsDisconnectHandler:
 
 
 class TestG8eoHeartbeatPayloadApiKey:
-    """G8eoHeartbeatPayload — api_key field acceptance and default."""
+    """G8eoHeartbeatPayload - api_key field acceptance and default."""
 
     def test_api_key_field_accepted(self):
         payload = _make_payload(api_key="g8e_abc123")
@@ -734,7 +734,7 @@ class TestG8eoHeartbeatPayloadApiKey:
 
 
 class TestHeartbeatServiceConstruction:
-    """Direct construction via __init__ — dependency injection contract."""
+    """Direct construction via __init__ - dependency injection contract."""
 
     async def test_constructs_with_required_dependencies(self):
         svc = HeartbeatSnapshotService(

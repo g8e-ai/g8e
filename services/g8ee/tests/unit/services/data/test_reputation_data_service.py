@@ -162,7 +162,7 @@ class TestReputationCommitmentCrud:
         result = await service.get_latest_commitment()
         assert isinstance(result, ReputationCommitment)
         assert result.id == c.id
-        # Latest is selected via DESC order_by created_at — pin the contract.
+        # Latest is selected via DESC order_by created_at - pin the contract.
         kwargs = mock_cache.query_documents.call_args.kwargs
         assert kwargs["order_by"] == {"created_at": "desc"}
         assert kwargs["limit"] == 1

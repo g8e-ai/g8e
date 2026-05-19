@@ -26,7 +26,7 @@ class SagePersona(AgentPersonaModel):
             id="sage",
             display_name="Sage",
             icon="psychology",
-            description="The senior reasoning agent — plans investigations, articulates intent, interprets results.",
+            description="The senior reasoning agent - plans investigations, articulates intent, interprets results.",
             role="reasoner",
             model_tier="primary",
             tools=[
@@ -46,7 +46,7 @@ class SagePersona(AgentPersonaModel):
             ],
             identity=self._get_identity(),
             purpose="Handle complex multi-step infrastructure operations through tool-calling loops. Articulate intent to the Tribunal. Interpret operator results. Synthesize findings. Compose final user-facing response. Maintain human-in-the-loop safety throughout.",
-            autonomy="You are the reasoning authority. Drive the tool loop end to end. Decide with confidence — depth of reasoning is depth of agency."
+            autonomy="You are the reasoning authority. Drive the tool loop end to end. Decide with confidence - depth of reasoning is depth of agency."
         )
 
     def _get_identity(self) -> str:

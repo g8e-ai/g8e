@@ -328,7 +328,7 @@ async def test_triage_defaults_posture_to_normal_when_field_missing(fake_provide
 
 
 async def test_triage_escalation_returns_normal_posture(fake_provider, mock_settings):
-    """Malformed LLM output must fall back to NORMAL posture — a failed read
+    """Malformed LLM output must fall back to NORMAL posture - a failed read
     is not the same as detecting adversarial intent."""
     fake_provider.add_response("not json at all")
 

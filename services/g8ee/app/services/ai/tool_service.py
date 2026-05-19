@@ -21,7 +21,7 @@ declaration build and execution body lives in its own module under
 corresponding :class:`ToolSpec`.
 
 Adding a new tool means writing one module under ``tools/`` plus one
-``ToolSpec`` entry — no method ever needs to be added here.
+``ToolSpec`` entry - no method ever needs to be added here.
 """
 
 from __future__ import annotations

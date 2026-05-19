@@ -54,7 +54,7 @@ _TARGET_OPERATORS_DESCRIPTION = (
     "STRONGLY PREFER passing ['all'] whenever the user's intent covers every bound system "
     "(e.g. 'on all systems', 'across the fleet', 'on all N hosts', or the user explicitly "
     "names a count matching the bound operator count). DO NOT enumerate individual operators "
-    "for whole-fleet intent — use ['all']. Only enumerate specific hostnames/operator_ids/indices "
+    "for whole-fleet intent - use ['all']. Only enumerate specific hostnames/operator_ids/indices "
     "when the user is asking about a proper subset. The same Tribunal-generated command executes "
     "on all resolved systems in parallel under one approval."
 )
@@ -69,13 +69,13 @@ class SageOperatorRequest(TargetedOperatorBase):
     string. The Tribunal-produced command is then routed to the Operator via
     ExecutorCommandArgs.
 
-    This type has NO command field — the caller literally cannot pass a
+    This type has NO command field - the caller literally cannot pass a
     command. The invariant is structural, not conventional.
     """
     request: str | None = Field(
         default=None,
         description=(
-            "Natural-language description of what the Operator must accomplish — "
+            "Natural-language description of what the Operator must accomplish - "
             "what to learn, verify, or change. Focus on investigative intent, "
             "not shell syntax. The Tribunal translates this into a precise command "
             "for the target OS/shell."
@@ -99,7 +99,7 @@ class ExecutorCommandArgs(TargetedOperatorBase):
     """Internal executor payload for run_commands_with_operator.
 
     This type is what the executor receives AFTER the Tribunal has produced
-    the command. The `command` field is REQUIRED — this invariant is structural.
+    the command. The `command` field is REQUIRED - this invariant is structural.
     Sage never writes to this type directly; see SageOperatorRequest for the
     Sage-facing surface.
 

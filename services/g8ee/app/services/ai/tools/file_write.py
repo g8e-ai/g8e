@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``file_write_on_operator`` tool — overwrite an existing file."""
+"""``file_write_on_operator`` tool - overwrite an existing file."""
 
 from __future__ import annotations
 

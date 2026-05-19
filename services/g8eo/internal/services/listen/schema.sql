@@ -2,11 +2,11 @@
 -- Canonical schema for the g8e coordination store (g8e.operator --listen mode).
 -- Embedded into `listen_db.go` via `//go:embed schema.sql` and applied on
 -- database open via `ListenDBService.initSchema`. This file is the SINGLE
--- source of truth for the operator schema — do not duplicate it elsewhere.
+-- source of truth for the operator schema - do not duplicate it elsewhere.
 --
 -- All domain data (users, sessions, operators, cases, etc.) is stored as JSON
 -- documents in the documents table. client and g8ee interact with this store
--- exclusively via the client HTTP API — neither component holds a local SQLite
+-- exclusively via the client HTTP API - neither component holds a local SQLite
 -- database.
 
 -- Document store: unified collection/id based storage
@@ -33,9 +33,9 @@ CREATE INDEX IF NOT EXISTS idx_kv_expires ON kv_store(expires_at);
 -- SSE event buffer: per-routing-target ring buffer for reconnection replay.
 -- Each row carries exactly one of three first-class routing keys, expressed as
 -- distinct columns so the substrate never has to talk about a bare session id:
---   * web_session_id — browser UI session (mTLS cookie session)
---   * cli_session_id — BYO/CLI/scripted client session (mTLS cert session)
---   * user_id        — background fanout to every session a user owns
+--   * web_session_id - browser UI session (mTLS cookie session)
+--   * cli_session_id - BYO/CLI/scripted client session (mTLS cert session)
+--   * user_id        - background fanout to every session a user owns
 -- web and cli are routed identically by the substrate but MUST never be
 -- conflated under a single shared id namespace.
 CREATE TABLE IF NOT EXISTS sse_events (

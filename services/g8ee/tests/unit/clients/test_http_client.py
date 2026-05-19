@@ -91,7 +91,7 @@ async def authed_client():
 
 
 # =============================================================================
-# G8eHeaders — COMPONENT_ID must not exist (regression guard)
+# G8eHeaders - COMPONENT_ID must not exist (regression guard)
 # =============================================================================
 
 class TestG8eHeaders:
@@ -112,7 +112,7 @@ class TestG8eHeaders:
 
 
 # =============================================================================
-# AiohttpResponse — properties
+# AiohttpResponse - properties
 # =============================================================================
 
 class TestAiohttpResponse:
@@ -141,7 +141,7 @@ class TestAiohttpResponse:
 
 
 # =============================================================================
-# RequestTrace — timezone-aware timestamps via now()
+# RequestTrace - timezone-aware timestamps via now()
 # =============================================================================
 
 class TestRequestTrace:
@@ -256,7 +256,7 @@ class TestCircuitBreakerConfig:
 
 
 # =============================================================================
-# CircuitBreaker — state transitions use CircuitBreakerState enum
+# CircuitBreaker - state transitions use CircuitBreakerState enum
 # =============================================================================
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -314,7 +314,7 @@ class TestCircuitBreaker:
 
 
 # =============================================================================
-# HTTPClient  — init and header injection
+# HTTPClient  - init and header injection
 # =============================================================================
 
 class TestG8eHTTPClientInit:
@@ -359,7 +359,7 @@ class TestG8eHTTPClientInit:
 
 
 # =============================================================================
-# HTTPClient  — _prepare_request header construction
+# HTTPClient  - _prepare_request header construction
 # =============================================================================
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -423,7 +423,7 @@ class TestG8eHTTPClientPrepareRequest:
 
 
 # =============================================================================
-# HTTPClient  — circuit breaker per-endpoint isolation
+# HTTPClient  - circuit breaker per-endpoint isolation
 # =============================================================================
 
 class TestG8eHTTPClientCircuitBreakerIsolation:
@@ -471,7 +471,7 @@ class TestG8eHTTPClientCircuitBreakerIsolation:
 
 
 # =============================================================================
-# HTTPClient  — context manager
+# HTTPClient  - context manager
 # =============================================================================
 
 class TestG8eHTTPClientContextManager:
@@ -513,7 +513,7 @@ class TestG8eHTTPClientContextManager:
 
 
 # =============================================================================
-# get_service_client — ValidationError on missing base_url
+# get_service_client - ValidationError on missing base_url
 # =============================================================================
 
 class TestGetServiceClient:
@@ -705,7 +705,7 @@ class TestCalculateBackoff:
 
 
 # =============================================================================
-# HTTPClient .request() — error branches (mocked aiohttp session)
+# HTTPClient .request() - error branches (mocked aiohttp session)
 # =============================================================================
 
 def _make_mock_response(status: int, body: bytes = b"") -> MagicMock:
@@ -725,7 +725,7 @@ def _make_mock_response(status: int, body: bytes = b"") -> MagicMock:
 
 @pytest.mark.asyncio(loop_scope="session")
 class TestG8eHTTPClientRequest:
-    """HTTPClient .request() — response and exception error branches."""
+    """HTTPClient .request() - response and exception error branches."""
 
     async def _make_client_with_mock_session(self, mock_response_cm):
         c = HTTPClient (

@@ -243,7 +243,7 @@ Examples:
                                help='Full credential ID to revoke (from list output)')
     revoke_parser.add_argument('--force', action='store_true', help='Skip confirmation')
 
-    reset_parser = subparsers.add_parser('reset', help='Reset passkey credentials — user will be prompted to register a new passkey on next login')
+    reset_parser = subparsers.add_parser('reset', help='Reset passkey credentials - user will be prompted to register a new passkey on next login')
     reset_parser.add_argument('--user-id', type=str, help='User ID')
     reset_parser.add_argument('--email', type=str, help='User email')
     reset_parser.add_argument('--force', action='store_true', help='Skip confirmation')

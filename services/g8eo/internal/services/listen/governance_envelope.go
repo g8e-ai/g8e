@@ -50,10 +50,10 @@ func (ls *ListenService) SetEnvelopeProcessor(p EnvelopeProcessor) {
 //   - 200 OK: envelope verified and executed (receipt body); receipt.status
 //     reflects whether the underlying handler succeeded or failed.
 //   - 400 Bad Request: malformed envelope (decode failure, empty body,
-//     payload too large) — no governance state mutated.
+//     payload too large) - no governance state mutated.
 //   - 403 Forbidden: governance verification failed before execution
 //     (expired, replayed, hash mismatch, missing/invalid L2/L3, unknown
-//     action type) — no state mutated, no receipt produced.
+//     action type) - no state mutated, no receipt produced.
 //   - 503 Service Unavailable: envelope processor not yet initialized.
 //   - 405 Method Not Allowed: non-POST methods.
 func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Request) {
@@ -91,7 +91,7 @@ func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Re
 
 	// Receipt is returned as JSON. Execution-failure receipts (status=FAILED)
 	// are still HTTP 200 because they represent a verified, audited outcome
-	// — the caller has cryptographic evidence of the attempt.
+	// - the caller has cryptographic evidence of the attempt.
 	jsonResponse(w, http.StatusOK, receipt)
 }
 

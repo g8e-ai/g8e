@@ -71,7 +71,7 @@ TTL_STRATEGIES = {
     DB_COLLECTION_OPERATORS: CACHE_TTL_MEDIUM,
     # Reputation: state is read every Auditor verdict (cache it long); commitments are
     # append-only and consulted only by the Auditor's prev_root lookup and audit replay
-    # — the per-document cache adds no value, so use SHORT to keep stale reads bounded.
+    # - the per-document cache adds no value, so use SHORT to keep stale reads bounded.
     DB_COLLECTION_REPUTATION_STATE: CACHE_TTL_LONG,
     DB_COLLECTION_REPUTATION_COMMITMENTS: CACHE_TTL_SHORT,
 }

@@ -16,7 +16,7 @@
 Tests that exercise code paths containing ``async for`` must provide iterators
 that correctly implement the async iterator protocol (``__aiter__`` returning
 an object with ``__anext__``). ``MagicMock(return_value=iter([...]))`` does
-not satisfy this — a plain ``list_iterator`` lacks ``__anext__`` and
+not satisfy this - a plain ``list_iterator`` lacks ``__anext__`` and
 ``async for`` raises ``TypeError`` before any loop body executes.
 
 Use ``async_iter(...)`` to wrap a sequence of frames in a real async

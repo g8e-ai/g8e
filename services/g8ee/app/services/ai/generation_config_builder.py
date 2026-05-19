@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 class AIGenerationConfigBuilder:
     """Stateless factory for GenerateContentConfig objects.
 
-    All methods are static — no instance required. Used directly by services
+    All methods are static - no instance required. Used directly by services
     that build configs without needing AIRequestBuilder's tool/attachment state.
     """
 
@@ -271,7 +271,7 @@ class AIGenerationConfigBuilder:
         """Build a lightweight GenerateContentConfig for stateless analysis calls.
 
         Used by triage, memory updates, risk analysis, and error analysis.
-        Thinking is explicitly disabled — these calls expect concise, parseable
+        Thinking is explicitly disabled - these calls expect concise, parseable
         text output and must never emit thought tokens.
         """
         no_thinking = types.ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False)

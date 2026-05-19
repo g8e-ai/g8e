@@ -59,7 +59,7 @@ class ReputationState(G8eBaseModel):
     """Per-agent reputation scalar maintained as an EMA across conversations.
 
     One row per persona id (axiom, concord, variance, pragma, nemesis, sage,
-    triage, auditor). Scalar only — never history (GDD §5). The document id
+    triage, auditor). Scalar only - never history (GDD §5). The document id
     in the `reputation_state` collection is the `agent_id`.
 
     Read by: `auditor_service` (cross-chain memory, sole reader); the Phase 3
@@ -128,7 +128,7 @@ class ReputationCommitment(G8eIdentifiableModel):
     signature without the Auditor's cooperation, given the HMAC key.
 
     Inherits ``id``, ``created_at``, ``updated_at`` from
-    ``G8eIdentifiableModel`` (note: ``updated_at`` is unused — commitments
+    ``G8eIdentifiableModel`` (note: ``updated_at`` is unused - commitments
     are never revised).
     """
 
@@ -184,7 +184,7 @@ class ReputationCommitmentCreatedPayload(G8eBaseModel):
 class ReputationCommitmentFailedPayload(G8eBaseModel):
     """SSE payload for `REPUTATION_COMMITMENT_FAILED` events.
 
-    Commitment failures are non-fatal in Phase 2 — the verdict still stands.
+    Commitment failures are non-fatal in Phase 2 - the verdict still stands.
     This payload surfaces the failure so ops can observe commitment-chain
     gaps without needing to scrape logs.
     """

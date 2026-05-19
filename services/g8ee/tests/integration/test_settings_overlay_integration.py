@@ -368,7 +368,7 @@ class TestG8eeSettingsOverlayIntegration:
     async def test_overlay_auth_merge_is_model_driven(self, cache_service):
         """Every ``AuthSettings`` field present in the platform DB document
         and absent from local bootstrap settings must overlay onto the merged
-        object — without ``overlay_platform_data`` having to hand-list it.
+        object - without ``overlay_platform_data`` having to hand-list it.
 
         This locks in the structural fix for a recurring class of bugs where
         adding a new auth token (e.g. ``auditor_hmac_key``) silently failed

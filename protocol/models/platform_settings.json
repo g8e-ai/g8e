@@ -3,8 +3,8 @@
 
   "_authority": "operator (Secrets) / client (Config)",
   "_consumers": [
-    "g8ee (Python — reads at startup and on cache miss to build base Settings)",
-    "client (JS — reads to serve internal settings API and UI dashboard)"
+    "g8ee (Python - reads at startup and on cache miss to build base Settings)",
+    "client (JS - reads to serve internal settings API and UI dashboard)"
   ],
   "_collection": "settings",
   "_document_id": "platform_settings",

@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``file_read_on_operator`` tool — read a file via the file-edit pipeline."""
+"""``file_read_on_operator`` tool - read a file via the file-edit pipeline."""
 
 from __future__ import annotations
 

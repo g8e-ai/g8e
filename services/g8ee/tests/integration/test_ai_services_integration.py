@@ -86,7 +86,7 @@ async def cleanup(cache_aside_service):
 
 
 # ---------------------------------------------------------------------------
-# Segment 1 — Memory Generation Service
+# Segment 1 - Memory Generation Service
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -360,7 +360,7 @@ class TestMemoryGenerationServiceIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Segment 2 — Title Generation Service
+# Segment 2 - Title Generation Service
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -469,7 +469,7 @@ class TestTitleGenerationIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Segment 3 — Triage Service
+# Segment 3 - Triage Service
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -588,7 +588,7 @@ class TestTriageServiceIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Segment 4 — Command Generation Service (Simplified)
+# Segment 4 - Command Generation Service (Simplified)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -768,7 +768,7 @@ class TestCommandGenerationIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Segment 5 — Response Analysis Service
+# Segment 5 - Response Analysis Service
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")

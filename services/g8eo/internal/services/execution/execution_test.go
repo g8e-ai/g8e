@@ -464,7 +464,7 @@ func TestExecutionService_CancelExecution_DoesNotSetCancelledStatus(t *testing.T
 	// Regression: CancelExecution previously wrote ExecutionStatusCancelled after
 	// unlocking the mutex, creating a window where it raced with
 	// executeCommandInternal's authoritative status write. The dead write was
-	// removed — verify it no longer appears in the result.
+	// removed - verify it no longer appears in the result.
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
@@ -534,7 +534,7 @@ func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
 			select {
 			case <-execDone:
 			case <-time.After(5 * time.Second):
-				t.Errorf("execution %s did not complete — possible deadlock", id)
+				t.Errorf("execution %s did not complete - possible deadlock", id)
 			}
 		}(reqID)
 	}
@@ -543,7 +543,7 @@ func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
 		select {
 		case <-done:
 		case <-time.After(15 * time.Second):
-			t.Fatal("workers did not finish — deadlock suspected")
+			t.Fatal("workers did not finish - deadlock suspected")
 		}
 	}
 }

@@ -136,7 +136,7 @@ def test_load_auditor_hmac_key_reads_file_and_caches(volume: Path, bootstrap: Bo
     assert bootstrap.load_auditor_hmac_key() == "hmac-value"
 
     # Mutating the file after the first successful load must not affect
-    # subsequent reads — the cache is the whole point of the loader (one
+    # subsequent reads - the cache is the whole point of the loader (one
     # value per process lifetime; rotation requires restart, mirrored on
     # the g8eo side).
     (volume / "auditor_hmac_key").write_text("rotated")

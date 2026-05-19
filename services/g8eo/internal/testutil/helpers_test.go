@@ -180,7 +180,7 @@ func TestTempFile_RegistersCleanup(t *testing.T) {
 	// File must still exist before the test ends.
 	_, err := os.Stat(path)
 	require.NoError(t, err, "file must exist before cleanup runs")
-	// Cleanup runs when t ends — verified by t.Cleanup registration in TempFile itself.
+	// Cleanup runs when t ends - verified by t.Cleanup registration in TempFile itself.
 }
 
 func TestTempFile_NonExistentFile_NoError(t *testing.T) {

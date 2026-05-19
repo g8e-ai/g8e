@@ -652,7 +652,7 @@ func TestStop_BeforeStart_DoesNotPanic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenClawNodeService: %v", err)
 	}
-	// Stop before Start — cancel is nil, must not panic
+	// Stop before Start - cancel is nil, must not panic
 	assert.NotPanics(t, func() { svc.Stop() })
 }
 

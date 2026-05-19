@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``query_investigation_context`` tool — read-only inspection of investigation state."""
+"""``query_investigation_context`` tool - read-only inspection of investigation state."""
 
 from __future__ import annotations
 

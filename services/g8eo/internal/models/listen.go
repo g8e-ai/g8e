@@ -22,7 +22,7 @@ import (
 )
 
 // Document is the internal representation of a stored document.
-// Timestamps are native time.Time — convert to wire format via ForWire().
+// Timestamps are native time.Time - convert to wire format via ForWire().
 type Document struct {
 	ID         string
 	Collection string

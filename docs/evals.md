@@ -6,7 +6,7 @@ title: Evals
 
 Last Updated: 2026-05-18
 
-The evals harness drives the **real g8ee chat pipeline end-to-end** — Triage, Dash/Sage, Tribunal, Auditor, Warden — captures every agent stage emitted on the Operator's per-session SSE buffer, and folds the full agent trail into a per-task receipt for offline replay. This is the gold-standard evaluation path: the model under test exercises the same code paths a real user hits via `./g8e chat send`.
+The evals harness drives the **real g8ee chat pipeline end-to-end** - Triage, Dash/Sage, Tribunal, Auditor, Warden - captures every agent stage emitted on the Operator's per-session SSE buffer, and folds the full agent trail into a per-task receipt for offline replay. This is the gold-standard evaluation path: the model under test exercises the same code paths a real user hits via `./g8e chat send`.
 
 ---
 
@@ -18,7 +18,7 @@ evals/
 │   ├── harness.py                # Task / Response / Score / SUTConfig
 │   ├── transport.py              # AuthContext: mTLS + cookie + headers
 │   ├── sut/
-│   │   ├── g8ee_chat.py          # G8eeChatSUT — drives /api/internal/chat
+│   │   ├── g8ee_chat.py          # G8eeChatSUT - drives /api/internal/chat
 │   │   └── wire.py               # Typed SSE wire envelopes (parity with g8ee)
 │   ├── agent_trail_renderer.py   # Live per-event CLI rendering
 │   ├── receipts/
@@ -79,8 +79,8 @@ Inline verification runs during `bench`. To re-verify a saved report directory o
 
 The harness is fail-closed without canonical mTLS + session credentials:
 
-1. `./g8e platform start` — Operator + g8ee.
-2. `./g8e login` — mints client cert/key, captures session id, exports the env vars `scripts/cmd/evals.sh` re-exports for the bench:
+1. `./g8e platform start` - Operator + g8ee.
+2. `./g8e login` - mints client cert/key, captures session id, exports the env vars `scripts/cmd/evals.sh` re-exports for the bench:
    - `OPERATOR_SESSION_ID`, `USER_ID`
    - `G8E_CLI_CERT`, `G8E_CLI_KEY`, `G8E_TRUST_BUNDLE`
    - `G8EE_URL`, `G8E_INTERNAL_HTTP_URL`, `G8E_PKI_DIR`
@@ -100,10 +100,10 @@ The harness is fail-closed without canonical mTLS + session credentials:
 
 Useful flags:
 
-- `--verbose-text` — stream the agent's response inline as chunks arrive.
-- `--idle-timeout` — seconds without any SSE event before declaring idle (default 180s).
-- `--assistant-provider/--assistant-model`, `--lite-provider/--lite-model` — per-role overrides for Tribunal/Auditor and lightweight calls.
-- `--mode baseline|receipt` — baseline mode runs without binding; receipt mode requires `--operator-session-id` and `--operator-id`.
+- `--verbose-text` - stream the agent's response inline as chunks arrive.
+- `--idle-timeout` - seconds without any SSE event before declaring idle (default 180s).
+- `--assistant-provider/--assistant-model`, `--lite-provider/--lite-model` - per-role overrides for Tribunal/Auditor and lightweight calls.
+- `--mode baseline|receipt` - baseline mode runs without binding; receipt mode requires `--operator-session-id` and `--operator-id`.
 
 ---
 
@@ -111,8 +111,8 @@ Useful flags:
 
 Each run writes `reports/<suite>-<ts>/`:
 
-- `results.jsonl` — one row per task with full `agent_trail`, `event_counts_by_type`, `terminal_event`, `case_id`, `investigation_id`, assembled `answer`, optional `substrate_receipt`, and benchmark score.
-- `summary.json` — aggregate stats from `report/aggregate.py`.
+- `results.jsonl` - one row per task with full `agent_trail`, `event_counts_by_type`, `terminal_event`, `case_id`, `investigation_id`, assembled `answer`, optional `substrate_receipt`, and benchmark score.
+- `summary.json` - aggregate stats from `report/aggregate.py`.
 
 ---
 

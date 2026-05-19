@@ -56,11 +56,11 @@ The root `./g8e` script is a Bash-based dispatcher and the single entry point fo
 
 g8e is split into the **Protocol (substrate)**, an **Operator** that implements it on a host, and an optional **Application Layer**.
 
-- **Protocol (substrate)** — Shared `.proto` schemas plus the canonical-JSON wire contract; the source of truth for what every Operator and client must honor.
-- **Reference Operator (`g8eo`)** — In `--listen` mode it is the foundational service for the bundled deployment: generates the platform CA, foundational secrets, and exposes the public protocol API.
-- **Reference Application Layer (optional)** — Reference adapters like `g8ee` consume the public protocol surface on equal footing with any BYO client.
-- **Host-native execution** — Core components run as native processes.
-- **Zero-config discovery** — Services use a standardized local runtime directory (`.g8e/`) for discovery and configuration sharing.
+- **Protocol (substrate)** - Shared `.proto` schemas plus the canonical-JSON wire contract; the source of truth for what every Operator and client must honor.
+- **Reference Operator (`g8eo`)** - In `--listen` mode it is the foundational service for the bundled deployment: generates the platform CA, foundational secrets, and exposes the public protocol API.
+- **Reference Application Layer (optional)** - Reference adapters like `g8ee` consume the public protocol surface on equal footing with any BYO client.
+- **Host-native execution** - Core components run as native processes.
+- **Zero-config discovery** - Services use a standardized local runtime directory (`.g8e/`) for discovery and configuration sharing.
 
 ---
 
@@ -75,9 +75,9 @@ g8e is split into the **Protocol (substrate)**, an **Operator** that implements 
 
 The `./g8e platform start` command (invoked via `scripts/core/build.sh`) manages the sequence:
 1. **Operator binary check/build** → Operator starts in `--listen mode`.
-2. **Root of trust generation** (first boot only) — ECDSA P-384 CA hierarchy, intermediate CAs, and trust bundles in `.g8e/pki/`; `session_encryption_key`, `warden_signing_key` in `.g8e/secrets/`.
-3. **Optional service initialization** — `g8ee` starts under its venv with mTLS + URI SAN identity.
-4. **Asynchronous convergence** — Services poll health endpoints (e.g., Engine polls `https://localhost:9000/health`).
+2. **Root of trust generation** (first boot only) - ECDSA P-384 CA hierarchy, intermediate CAs, and trust bundles in `.g8e/pki/`; `session_encryption_key`, `warden_signing_key` in `.g8e/secrets/`.
+3. **Optional service initialization** - `g8ee` starts under its venv with mTLS + URI SAN identity.
+4. **Asynchronous convergence** - Services poll health endpoints (e.g., Engine polls `https://localhost:9000/health`).
 
 ---
 
@@ -90,7 +90,7 @@ All runtime state is rooted at `./.g8e/`.
 | `.g8e/pki/` | CA, intermediates, trust bundles | preserve | preserve | nuke |
 | `.g8e/secrets/` | Bootstrap secrets (session key) | preserve | wipe | nuke |
 | `.g8e/data/` | SQLite + blobs | wipe (API) | wipe | nuke |
-| `.g8e/logs/` | Component stdout/stderr | — | — | nuke |
+| `.g8e/logs/` | Component stdout/stderr | - | - | nuke |
 | `.g8e/pids/` | Process IDs | clear | clear | nuke |
 
 - **`./g8e platform wipe`**: Clears application-layer data via the Operator API but preserves platform settings.
@@ -121,15 +121,15 @@ AI agents tend to wrap poorly understood code in new abstractions. This is stric
 ## Component Rules
 
 ### g8eo / Operator (Go)
-- **LFAA payload stamping** — All LFAA results include an `execution_id`.
-- **Concurrency** — Goroutines have explicit cancellation contexts and clear channel ownership.
-- **Protocol boundary** — Any capability needed by bundled apps or BYO clients is exposed through the public Operator protocol.
-- **Execution boundary** — Warden is the sole circuit breaker before dispatch. Every accepted mutation emits a signed `ActionReceipt`.
+- **LFAA payload stamping** - All LFAA results include an `execution_id`.
+- **Concurrency** - Goroutines have explicit cancellation contexts and clear channel ownership.
+- **Protocol boundary** - Any capability needed by bundled apps or BYO clients is exposed through the public Operator protocol.
+- **Execution boundary** - Warden is the sole circuit breaker before dispatch. Every accepted mutation emits a signed `ActionReceipt`.
 
 ### g8ee (Python/FastAPI, optional adapter)
-- **Pydantic enforcement** — Domain objects extend `G8eBaseModel`. Pydantic enforces type checking and rejects extra fields.
-- **Async safety** — Avoid state-modifying `finally` blocks in async generators.
-- **Adapter boundary** — Must produce protocol-verifiable proposals and proofs.
+- **Pydantic enforcement** - Domain objects extend `G8eBaseModel`. Pydantic enforces type checking and rejects extra fields.
+- **Async safety** - Avoid state-modifying `finally` blocks in async generators.
+- **Adapter boundary** - Must produce protocol-verifiable proposals and proofs.
 
 ---
 
@@ -156,7 +156,7 @@ All tests are orchestrated via the `./g8e` CLI. **Never call `pytest` or `go tes
 
 ## Evals (AI Benchmarks)
 
-The evals harness drives the **real g8ee chat pipeline end-to-end** — Triage, Dash/Sage, Tribunal, Auditor, Warden — and fold the full agent trail into a per-task receipt.
+The evals harness drives the **real g8ee chat pipeline end-to-end** - Triage, Dash/Sage, Tribunal, Auditor, Warden - and fold the full agent trail into a per-task receipt.
 
 ```bash
 # 1. Start the platform and login

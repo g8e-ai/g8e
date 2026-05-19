@@ -14,7 +14,7 @@
 """
 Integration tests: title generator against a real LLM.
 
-Marked ai_integration — skipped automatically when no LLM provider is
+Marked ai_integration - skipped automatically when no LLM provider is
 configured (LLM_ENDPOINT / LLM_API_KEY). Runs against the configured
 assistant model.
 
@@ -84,7 +84,7 @@ class TestTitleGeneratorIntegration:
         assert len(result.generated_title) <= 40
 
     async def test_title_is_single_line(self, user_settings):
-        """Title must always be a single line — no newlines."""
+        """Title must always be a single line - no newlines."""
         result = await generate_case_title(
             "Database connection pool exhausted under high load in production environment",
             settings=user_settings

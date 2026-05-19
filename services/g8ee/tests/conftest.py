@@ -14,7 +14,7 @@
 """
 Pytest configuration for g8ee tests.
 
-Fixtures only — no factory functions or plain classes here.
+Fixtures only - no factory functions or plain classes here.
 Factory functions and mock classes live in tests/fixtures/mocks.py.
 Context/model builders live in tests/fixtures/investigations.py and
 tests/fixtures/operators.py.
@@ -401,7 +401,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 # ---------------------------------------------------------------------------
-# Unit test fixtures — mocks and fakes
+# Unit test fixtures - mocks and fakes
 # ---------------------------------------------------------------------------
 
 
@@ -626,7 +626,7 @@ def mock_db_service():
 
 
 # ---------------------------------------------------------------------------
-# Unit test fixtures — domain objects (using consolidated factories)
+# Unit test fixtures - domain objects (using consolidated factories)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture

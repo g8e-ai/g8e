@@ -22,7 +22,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// gitOutput — runs git command and returns stdout
+// gitOutput - runs git command and returns stdout
 // ---------------------------------------------------------------------------
 
 func TestAuditVaultService_GitOutput_ReturnsOutput(t *testing.T) {
@@ -102,7 +102,7 @@ func TestAuditVaultService_GitOutput_ErrorWhenGitPathEmpty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// gitGetCurrentHash — wraps gitOutput("rev-parse", "HEAD")
+// gitGetCurrentHash - wraps gitOutput("rev-parse", "HEAD")
 // ---------------------------------------------------------------------------
 
 func TestAuditVaultService_GitGetCurrentHash_ReturnsHash(t *testing.T) {

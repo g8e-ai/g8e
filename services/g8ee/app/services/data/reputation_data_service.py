@@ -22,7 +22,7 @@ in §14.5 of the GDD progress doc):
 - The Phase 3 `reputation_service` writes `reputation_state` after each
   execution result lands.
 
-No other agent persona may import this module — that boundary is what
+No other agent persona may import this module - that boundary is what
 keeps Information Isolation (GDD §3) intact.
 """
 
@@ -49,7 +49,7 @@ class ReputationDataService:
 
     `reputation_state` documents are keyed by ``agent_id`` (one row per
     persona). `reputation_commitment` documents are keyed by their UUID
-    ``id`` and are append-only — there is intentionally no ``update`` for
+    ``id`` and are append-only - there is intentionally no ``update`` for
     commitments.
     """
 
@@ -213,7 +213,7 @@ class ReputationDataService:
         """Return the deployment's most recent commitment, or None at genesis.
 
         Used by the Auditor to populate `prev_root` on the next commitment
-        — the cross-chain spine in GDD §14.4.
+        - the cross-chain spine in GDD §14.4.
         """
         try:
             results = await self.cache.query_documents(

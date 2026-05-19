@@ -290,7 +290,7 @@ class TestGetHttpStatus:
 
 
 # ---------------------------------------------------------------------------
-# Error subclasses — defaults and specialised fields
+# Error subclasses - defaults and specialised fields
 # ---------------------------------------------------------------------------
 
 class TestErrorSubclasses:
