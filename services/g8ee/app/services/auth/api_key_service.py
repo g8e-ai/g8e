@@ -48,7 +48,7 @@ class ApiKeyService:
 
     def generate_raw_key(self, prefix: str = "g8e_") -> str:
         """Generate a new raw API key.
-        
+
         Default prefix is 'g8e_' matching canonical format from protocol/constants/api_key_patterns.json.
         For operator keys, use format: g8e_{8hex}_{64hex} (e.g., g8e_1a2b3c4d_...64hex...).
         For regular keys, use format: g8e_{64hex}.

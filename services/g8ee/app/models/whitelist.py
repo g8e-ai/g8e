@@ -21,7 +21,7 @@ from .base import G8eBaseModel
 
 class WhitelistedCommand(G8eBaseModel):
     """Metadata for a whitelisted command, including constraints and examples.
-    
+
     Internal g8ee whitelist contract.
     """
     command: str

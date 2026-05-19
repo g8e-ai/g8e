@@ -23,6 +23,7 @@ from app.services.protocols import (
     EventServiceProtocol,
 )
 from app.utils.timestamp import parse_iso
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -104,10 +105,8 @@ class HeartbeatStaleMonitorService:
     async def stop(self) -> None:
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
             self._task = None
             logger.info("[HEARTBEAT-MONITOR] Stopped")
 

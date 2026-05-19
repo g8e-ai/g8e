@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 class OperatorCommandValidator:
     """
     Security validator for Operator command execution.
-    
+
     Ensures that:
     1. WebSession token is valid and not expired
     2. Operator status allows command execution

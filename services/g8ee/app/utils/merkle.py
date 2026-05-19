@@ -138,9 +138,6 @@ def verify_proof(leaf: bytes, proof: list[str], root: str, index: int) -> bool:
     idx = index
     for sibling_hex in proof:
         sibling = bytes.fromhex(sibling_hex)
-        if idx % 2 == 0:
-            current = _hash_pair(current, sibling)
-        else:
-            current = _hash_pair(sibling, current)
+        current = _hash_pair(current, sibling) if idx % 2 == 0 else _hash_pair(sibling, current)
         idx //= 2
     return current.hex() == root

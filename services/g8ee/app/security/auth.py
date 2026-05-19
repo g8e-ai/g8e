@@ -55,10 +55,7 @@ def is_infrastructure_health_check_ip(ip: str) -> bool:
             except ValueError:
                 pass
 
-    if normalized_ip.startswith("10."):
-        return True
-
-    return False
+    return bool(normalized_ip.startswith("10."))
 
 
 async def authenticate_proxy_or_internal(

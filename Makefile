@@ -25,6 +25,7 @@ help:
 	@echo "  build-g8eo    Build the Operator service"
 	@echo "  test-g8eo     Run Operator tests"
 	@echo "  lint-g8eo     Run Operator linters (golangci-lint)"
+	@echo "  lint-g8ee     Run Engine linters (ruff, pyright)"
 	@echo "  vulncheck-g8eo Run Operator vulnerability check"
 	@echo "  test-g8ee     Run Engine tests"
 
@@ -82,6 +83,10 @@ test-g8eo:
 .PHONY: lint-g8eo
 lint-g8eo:
 	@$(MAKE) -C services/g8eo lint
+
+.PHONY: lint-g8ee
+lint-g8ee:
+	@$(MAKE) -C services/g8ee lint
 
 .PHONY: vulncheck-g8eo
 vulncheck-g8eo:

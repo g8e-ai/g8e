@@ -23,7 +23,7 @@ from app.models.cache import BatchWriteOperation, CacheOperationResult, Document
 
 class FakeKVClient:
     """In-memory fake for operator KV client.
-    
+
     Provides a real dict-backed store so tests can assert on actual stored
     values. Used by KVCacheClient.
     """
@@ -109,7 +109,7 @@ class FakeKVClient:
 
 class FakePubSubClient:
     """In-memory fake for operator Pub/Sub client.
-    
+
     Used by PubSubClient.
     """
 

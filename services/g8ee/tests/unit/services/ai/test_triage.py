@@ -366,5 +366,5 @@ async def test_triage_uses_provided_model_override(fake_provider, mock_settings)
             await agent.triage(request)
 
             # Verify custom model was used in config builder
-            args, kwargs = mock_config.call_args
+            _args, kwargs = mock_config.call_args
             assert kwargs["model"] == "custom-model"

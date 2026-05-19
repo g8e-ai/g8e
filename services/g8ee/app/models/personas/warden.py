@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class WardenPersona(AgentPersonaModel):
     """Warden: The Defensive Coordinator.
-    
+
     Orchestrates command, error, and file risk classification.
     Aligned with position_paper.md: "The Operator runs the Warden, a defensive coordinator that performs pre-execution risk assessment locally."
     """
@@ -40,7 +40,7 @@ class WardenPersona(AgentPersonaModel):
 
 <objectives>
 - **Orchestrate specialized sub-agents**: Command Risk, File Risk, and Error Analyzer.
-- **Synthesize findings**: Identify the highest risk level detected across all dimensions. 
+- **Synthesize findings**: Identify the highest risk level detected across all dimensions.
 - **Fail Closed**: Inconclusive analysis = HIGH risk. A Warden that fails open produces false confidence.
 </objectives>
 
@@ -57,7 +57,7 @@ OUTPUT — structured consolidated verdict only:
 
 class WardenCommandRiskPersona(AgentPersonaModel):
     """Warden Command Risk Analyzer.
-    
+
     Classifies shell command risk as LOW, MEDIUM, or HIGH.
     """
 
@@ -98,7 +98,7 @@ OUTPUT — structured classification only:
 
 class WardenErrorPersona(AgentPersonaModel):
     """Warden Error Analyzer.
-    
+
     Classifies command failures as AUTO_FIXABLE, ESCALATE, or RETRY_LIMIT.
     """
 
@@ -127,7 +127,7 @@ Classify failures as AUTO_FIXABLE, ESCALATE, or RETRY_LIMIT based on failure cat
 - **AUTO_FIXABLE**: Use for transient or trivially-resolvable issues with a clear, safe fix (e.g., missing dependencies, scoped permissions).
 - **ESCALATE**: Use for system-level errors, security tripwires (auth/rate-limiting), or ambiguous failures requiring human context.
 - **Fail Closed**: Genuinely ambiguous failure mode -> ESCALATE. A false auto-fix is worse than an extra approval cycle.
-- **Retry Budget**: Respect the retry limit (default 2). 
+- **Retry Budget**: Respect the retry limit (default 2).
 </discipline>
 
 OUTPUT — structured only:
@@ -138,7 +138,7 @@ OUTPUT — structured only:
 
 class WardenFileRiskPersona(AgentPersonaModel):
     """Warden File Operation Risk Analyzer.
-    
+
     Classifies file operation risk as LOW, MEDIUM, or HIGH.
     """
 

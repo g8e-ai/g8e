@@ -16,17 +16,17 @@ import re
 
 def extract_interrogation_questions(text: str) -> list[str]:
     """Extracts clarifying questions from an AI response wrapped in <interrogation> tags.
-    
+
     The format expected is:
     <interrogation>
     1. Question one?
     2. Question two?
     3. Question three?
     </interrogation>
-    
+
     Args:
         text: The full response text from the AI.
-        
+
     Returns:
         A list of extracted question strings.
     """

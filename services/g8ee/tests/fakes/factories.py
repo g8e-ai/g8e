@@ -164,7 +164,7 @@ def build_investigation_with_operators(
     web_session_id: str = "test-web-session",
 ) -> EnrichedInvestigationContext:
     """Build an EnrichedInvestigationContext with operator_documents."""
-    total = len(operator_documents) if operator_documents else (1 if operators_bound else 0)
+    len(operator_documents) if operator_documents else (1 if operators_bound else 0)
     return build_enriched_context(
         investigation_id=inv_id,
         case_id=case_id,
@@ -231,7 +231,7 @@ def build_g8e_http_context(
     is_operator_auth_relay: bool = False,
 ) -> G8eHttpContext:
     """Build a G8eHttpContext with fixed deterministic defaults for unit tests.
-    
+
     Args:
         is_operator_auth_relay: Set to True for device token flows (evals) where web_session_id/user_id are None.
                                  Must be paired with source_component=ComponentName.CLIENT.
@@ -419,7 +419,7 @@ def build_operator_heartbeat(
 
 def create_mock_llm_provider(text: str):
     """Build a mock LLM provider for tests.
-    
+
     If text is provided, generate_content returns a mock response with that text.
     """
     from unittest.mock import AsyncMock, MagicMock

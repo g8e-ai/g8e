@@ -93,12 +93,12 @@ class TestOperatorCommandServiceInit:
     def test_pubsub_client_starts_as_none(self):
         """pubsub_client is None until set_pubsub_client is called."""
         service = build_command_service(skip_pubsub_client=True)
-        assert service._pubsub_service.pubsub_client is None  # noqa: SLF001
+        assert service._pubsub_service.pubsub_client is None
 
     def test_pubsub_ready_starts_false(self):
         """_pubsub_ready starts False."""
         service = _make_service()
-        assert service._pubsub_service._pubsub_ready is False  # noqa: SLF001
+        assert service._pubsub_service._pubsub_ready is False
 
 
 # ---------------------------------------------------------------------------
@@ -114,9 +114,9 @@ class TestClientSetters:
         """set_pubsub_client assigns the client."""
         service = _make_service()
         # pubsub_client is already a FakePubSubClient from builder
-        client = service._pubsub_service.pubsub_client  # noqa: SLF001
+        client = service._pubsub_service.pubsub_client
         service.set_pubsub_client(client)
-        assert service._pubsub_service.pubsub_client is client  # noqa: SLF001
+        assert service._pubsub_service.pubsub_client is client
 
     def test_set_pubsub_client_raises_validation_error_on_none(self):
         """set_pubsub_client(None) must raise ValidationError."""
@@ -142,7 +142,7 @@ class TestBroadcastCommandEvent:
     async def test_publishes_event_to_client(self):
         """OperatorExecutionService publishes events via event_service.publish_command_event."""
         service = _make_service()
-        execution_svc = service._execution_service  # noqa: SLF001
+        execution_svc = service._execution_service
         execution_svc.event_service.publish_command_event = AsyncMock()
 
         class _TestEvent(G8eBaseModel):
@@ -171,7 +171,7 @@ class TestBroadcastCommandEvent:
     async def test_swallows_client_publish_exception(self):
         """client publish exceptions from execute_command_internal paths must not propagate."""
         service = _make_service()
-        execution_svc = service._execution_service  # noqa: SLF001
+        execution_svc = service._execution_service
         execution_svc.event_service.publish_command_event = AsyncMock(
             side_effect=Exception("client unreachable")
         )
@@ -203,59 +203,59 @@ class TestResolveIntentDependencies:
 
     def test_no_dependencies_returned_unchanged(self):
         service = _make_service()
-        result = service._intent_service._resolve_intent_dependencies(["ec2_discovery"])  # noqa: SLF001
+        result = service._intent_service._resolve_intent_dependencies(["ec2_discovery"])
         assert result == ["ec2_discovery"]
 
     def test_management_intent_pulls_in_discovery(self):
         """ec2_management requires ec2_discovery."""
         service = _make_service()
-        result = service._intent_service._resolve_intent_dependencies(["ec2_management"])  # noqa: SLF001
+        result = service._intent_service._resolve_intent_dependencies(["ec2_management"])
         assert "ec2_discovery" in result
         assert "ec2_management" in result
 
     def test_s3_write_pulls_in_s3_read(self):
         service = _make_service()
-        result = service._intent_service._resolve_intent_dependencies(["s3_write"])  # noqa: SLF001
+        result = service._intent_service._resolve_intent_dependencies(["s3_write"])
         assert "s3_read" in result
         assert "s3_write" in result
 
     def test_s3_delete_pulls_in_s3_read(self):
         service = _make_service()
-        result = service._intent_service._resolve_intent_dependencies(["s3_delete"])  # noqa: SLF001
+        result = service._intent_service._resolve_intent_dependencies(["s3_delete"])
         assert "s3_read" in result
 
     def test_dynamodb_write_pulls_in_dynamodb_read(self):
         service = _make_service()
-        result = service._intent_service._resolve_intent_dependencies(["dynamodb_write"])  # noqa: SLF001
+        result = service._intent_service._resolve_intent_dependencies(["dynamodb_write"])
         assert "dynamodb_read" in result
 
     def test_result_is_sorted(self):
         """Output must be alphabetically sorted."""
         service = _make_service()
-        result = service._intent_service._resolve_intent_dependencies(["s3_write", "ec2_management"])  # noqa: SLF001
+        result = service._intent_service._resolve_intent_dependencies(["s3_write", "ec2_management"])
         assert result == sorted(result)
 
     def test_no_duplicates_when_dependency_already_requested(self):
         """Requesting both ec2_management and ec2_discovery must not duplicate ec2_discovery."""
         service = _make_service()
-        result = service._intent_service._resolve_intent_dependencies(["ec2_management", "ec2_discovery"])  # noqa: SLF001
+        result = service._intent_service._resolve_intent_dependencies(["ec2_management", "ec2_discovery"])
         assert result.count("ec2_discovery") == 1
 
     def test_transitive_dependencies_resolved(self):
         """ec2_snapshot_management -> ec2_discovery (one hop)."""
         service = _make_service()
-        result = service._intent_service._resolve_intent_dependencies(["ec2_snapshot_management"])  # noqa: SLF001
+        result = service._intent_service._resolve_intent_dependencies(["ec2_snapshot_management"])
         assert "ec2_discovery" in result
 
     def test_multiple_independent_intents(self):
         service = _make_service()
-        result = service._intent_service._resolve_intent_dependencies(["cloudwatch_logs", "iam_discovery"])  # noqa: SLF001
+        result = service._intent_service._resolve_intent_dependencies(["cloudwatch_logs", "iam_discovery"])
         assert "cloudwatch_logs" in result
         assert "iam_discovery" in result
 
     def test_empty_list_returns_empty(self):
         service = _make_service()
-        result = service._intent_service._resolve_intent_dependencies([])  # noqa: SLF001
+        result = service._intent_service._resolve_intent_dependencies([])
         assert result == []
 
 

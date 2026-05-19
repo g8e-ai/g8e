@@ -146,25 +146,25 @@ class TestIsSafeValue:
     """_is_safe_value must reject unsafe chars regardless of leading dash."""
 
     def test_empty_string_is_unsafe(self, validator):
-        assert validator._is_safe_value("") is False  # noqa: SLF001
+        assert validator._is_safe_value("") is False
 
     def test_bare_dash_is_unsafe(self, validator):
-        assert validator._is_safe_value("-") is False  # noqa: SLF001
+        assert validator._is_safe_value("-") is False
 
     def test_double_dash_is_unsafe(self, validator):
-        assert validator._is_safe_value("--") is False  # noqa: SLF001
+        assert validator._is_safe_value("--") is False
 
     def test_plain_flag_is_safe(self, validator):
-        assert validator._is_safe_value("-c") is True  # noqa: SLF001
+        assert validator._is_safe_value("-c") is True
 
     def test_long_flag_is_safe(self, validator):
-        assert validator._is_safe_value("--count") is True  # noqa: SLF001
+        assert validator._is_safe_value("--count") is True
 
     def test_alphanumeric_value_is_safe(self, validator):
-        assert validator._is_safe_value("google.com") is True  # noqa: SLF001
+        assert validator._is_safe_value("google.com") is True
 
     def test_numeric_value_is_safe(self, validator):
-        assert validator._is_safe_value("4") is True  # noqa: SLF001
+        assert validator._is_safe_value("4") is True
 
     @pytest.mark.parametrize("unsafe", [
         "-c;rm -rf /",
@@ -180,13 +180,13 @@ class TestIsSafeValue:
     ])
     def test_dash_prefixed_with_unsafe_chars_is_rejected(self, validator, unsafe):
         """Regression: previously returned True for any dash-prefixed value."""
-        assert validator._is_safe_value(unsafe) is False  # noqa: SLF001
+        assert validator._is_safe_value(unsafe) is False
 
     @pytest.mark.parametrize("unsafe_char", [
         ";", "&", "`", "$", "(", ")", "{", "}", "<", ">", "\\",
     ])
     def test_unsafe_chars_rejected(self, validator, unsafe_char):
-        assert validator._is_safe_value(f"val{unsafe_char}") is False  # noqa: SLF001
+        assert validator._is_safe_value(f"val{unsafe_char}") is False
 
 
 # ---------------------------------------------------------------------------
@@ -197,22 +197,22 @@ class TestMatchesSafeOption:
     """_matches_safe_option handles exact flags and parameterized patterns."""
 
     def test_exact_flag_match(self, validator):
-        assert validator._matches_safe_option("-4", ["-4"], "-4") is True  # noqa: SLF001
+        assert validator._matches_safe_option("-4", ["-4"], "-4") is True
 
     def test_exact_flag_no_match(self, validator):
-        assert validator._matches_safe_option("-6", ["-6"], "-4") is False  # noqa: SLF001
+        assert validator._matches_safe_option("-6", ["-6"], "-4") is False
 
     def test_space_separated_param_match(self, validator):
-        assert validator._matches_safe_option("-c", ["-c", "4"], "-c <count>") is True  # noqa: SLF001
+        assert validator._matches_safe_option("-c", ["-c", "4"], "-c <count>") is True
 
     def test_space_separated_param_no_match(self, validator):
-        assert validator._matches_safe_option("-W", ["-W", "5"], "-c <count>") is False  # noqa: SLF001
+        assert validator._matches_safe_option("-W", ["-W", "5"], "-c <count>") is False
 
     def test_equals_param_match(self, validator):
-        assert validator._matches_safe_option("--color=auto", ["--color=auto"], "--color=<mode>") is True  # noqa: SLF001
+        assert validator._matches_safe_option("--color=auto", ["--color=auto"], "--color=<mode>") is True
 
     def test_equals_param_no_match(self, validator):
-        assert validator._matches_safe_option("--other=auto", ["--other=auto"], "--color=<mode>") is False  # noqa: SLF001
+        assert validator._matches_safe_option("--other=auto", ["--other=auto"], "--color=<mode>") is False
 
 
 # ---------------------------------------------------------------------------
@@ -221,13 +221,13 @@ class TestMatchesSafeOption:
 
 class TestExtractParameterName:
     def test_extracts_name_from_angle_brackets(self, validator):
-        assert validator._extract_parameter_name("-c <count>") == "count"  # noqa: SLF001
+        assert validator._extract_parameter_name("-c <count>") == "count"
 
     def test_extracts_name_from_equals_form(self, validator):
-        assert validator._extract_parameter_name("--max-depth=<depth>") == "depth"  # noqa: SLF001
+        assert validator._extract_parameter_name("--max-depth=<depth>") == "depth"
 
     def test_returns_none_when_no_brackets(self, validator):
-        assert validator._extract_parameter_name("-4") is None  # noqa: SLF001
+        assert validator._extract_parameter_name("-4") is None
 
 
 # ---------------------------------------------------------------------------

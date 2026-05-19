@@ -151,10 +151,7 @@ def is_ollama_endpoint(url: str | None) -> bool:
         if hostname and "ollama" in hostname.lower():
             return True
 
-        if "ollama" in parsed.path.lower():
-            return True
-
-        return False
+        return "ollama" in parsed.path.lower()
     except Exception:
         return "11434" in url or "ollama" in url.lower()
 
@@ -172,26 +169,23 @@ def resolve_model(
     Resolve the model to use for a given tier with fallback chain.
 
     Args:
-        tier: One of "primary", "assistant", or "lite" indicating which model tier to resolve
-        primary_override: Override value for primary model (from request args)
-        assistant_override: Override value for assistant model (from request args)
-        lite_override: Override value for lite model (from request args)
-        settings_primary_model: Default primary model from settings
-        settings_assistant_model: Default assistant model from settings
-        settings_lite_model: Default lite model from settings
+        tier: One of "primary", "assistant", or "lite"
+        primary_override: Override value for primary model
+        assistant_override: Override value for assistant model
+        lite_override: Override value for lite model
+        settings_primary_model: Resolved primary model from settings
+        settings_assistant_model: Resolved assistant model from settings
+        settings_lite_model: Resolved lite model from settings
 
     Returns:
         The resolved model name, or None if no model is configured for the tier
-
-    Raises:
-        ValueError: If tier is not "primary", "assistant", or "lite"
     """
     if tier == "primary":
-        return primary_override if primary_override else settings_primary_model
+        return primary_override or settings_primary_model
     if tier == "assistant":
-        return assistant_override if assistant_override else settings_assistant_model
+        return assistant_override or settings_assistant_model
     if tier == "lite":
-        return lite_override if lite_override else settings_lite_model
+        return lite_override or settings_lite_model
     raise ValueError(
         f"Invalid model tier: {tier}. Must be 'primary', 'assistant', or 'lite'."
     )

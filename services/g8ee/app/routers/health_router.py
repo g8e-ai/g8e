@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 async def health_check():
     """
     Basic health check endpoint - publicly accessible.
-    
+
     Returns simple 'OK' response for load balancer health checks.
     No authentication required for this endpoint only.
     """
@@ -44,10 +44,10 @@ async def health_check():
 async def liveness_check():
     """
     Liveness probe.
-    
+
     Checks if the service process is alive.
     This should be a fast, simple check that only verifies the process is responsive.
-    
+
     SECURITY: Internal only - for health probes.
     """
     return {

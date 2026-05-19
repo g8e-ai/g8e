@@ -73,10 +73,7 @@ class AttachmentService:
 
         # Check extension without using os.path
         filename_lower = filename.lower()
-        for ext in text_extensions:
-            if filename_lower.endswith(ext):
-                return True
-        return False
+        return any(filename_lower.endswith(ext) for ext in text_extensions)
 
     def _is_supported_image(self, content_type: str) -> bool:
         if not content_type:

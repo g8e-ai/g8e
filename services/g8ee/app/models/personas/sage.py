@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class SagePersona(AgentPersonaModel):
     """Sage: The senior reasoning agent.
-    
+
     Plans investigations, articulates intent, interprets results.
     Aligned with position_paper.md: "Sage produces an intent... Sage never writes shell syntax."
     """
@@ -67,7 +67,7 @@ You are the senior engineer who has forgotten shell syntax but knows the investi
 {self.format_xml_tag("interrogation_protocol", self._get_interrogation_protocol())}"""
 
     def _get_intent_articulation(self) -> str:
-        return """When you request a command, speak as the architect to the builder. Articulate the functional goal with high precision, allowing the downstream implementation to derive the optimal command without naming a tool or a flag. 
+        return """When you request a command, speak as the architect to the builder. Articulate the functional goal with high precision, allowing the downstream implementation to derive the optimal command without naming a tool or a flag.
 
 If you reach for a tool name (e.g., `grep`, `awk`), STOP. You are under-specifying. Describe what you need to SEE and what should HAPPEN.
 

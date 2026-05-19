@@ -34,12 +34,12 @@ class TestTriageEndpoints:
     """Test triage interaction endpoints."""
 
     async def test_answer_triage_question_persists_message(self):
-        mock_request = MagicMock(spec=Request)
+        MagicMock(spec=Request)
         mock_investigation_service = MagicMock()
         mock_chat_pipeline = MagicMock()
         mock_chat_pipeline.run_chat = AsyncMock()
         mock_chat_task_manager = MagicMock()
-        mock_user_settings = MagicMock()
+        MagicMock()
 
         investigation_id = "inv-123"
         user_id = "user-456"
@@ -79,7 +79,7 @@ class TestTriageEndpoints:
         assert result == {"success": True}
         mock_investigation_service.investigation_data_service.add_chat_message.assert_called_once()
         mock_chat_pipeline.run_chat.assert_called_once()
-        args, kwargs = mock_investigation_service.investigation_data_service.add_chat_message.call_args
+        _args, kwargs = mock_investigation_service.investigation_data_service.add_chat_message.call_args
         assert kwargs["sender"] == MessageSender.USER_CHAT
         assert kwargs["metadata"].event_type == EventType.AI_TRIAGE_CLARIFICATION_ANSWERED
         assert kwargs["metadata"].question_index == 1
@@ -90,7 +90,7 @@ class TestTriageEndpoints:
         mock_chat_pipeline = MagicMock()
         mock_chat_pipeline.run_chat = AsyncMock()
         mock_chat_task_manager = MagicMock()
-        mock_user_settings = MagicMock()
+        MagicMock()
 
         investigation_id = "inv-123"
         user_id = "user-456"
@@ -128,7 +128,7 @@ class TestTriageEndpoints:
         assert result == {"success": True}
         mock_investigation_service.investigation_data_service.add_chat_message.assert_called_once()
         mock_chat_pipeline.run_chat.assert_called_once()
-        args, kwargs = mock_investigation_service.investigation_data_service.add_chat_message.call_args
+        _args, kwargs = mock_investigation_service.investigation_data_service.add_chat_message.call_args
         assert kwargs["metadata"].event_type == EventType.AI_TRIAGE_CLARIFICATION_SKIPPED
 
     async def test_timeout_triage_questions_persists_message(self):
@@ -164,5 +164,5 @@ class TestTriageEndpoints:
 
         assert result == {"success": True}
         mock_investigation_service.investigation_data_service.add_chat_message.assert_called_once()
-        args, kwargs = mock_investigation_service.investigation_data_service.add_chat_message.call_args
+        _args, kwargs = mock_investigation_service.investigation_data_service.add_chat_message.call_args
         assert kwargs["metadata"].event_type == EventType.AI_TRIAGE_CLARIFICATION_TIMEOUT

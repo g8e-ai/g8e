@@ -72,7 +72,7 @@ def _make_service(
 ) -> tuple[OperatorPortService, FakePubSubService, FakeExecutionService]:
     pubsub = FakePubSubService()
     if pubsub_ready:
-        pubsub._ready = True  # noqa: SLF001
+        pubsub._ready = True
     operator = resolved_operator or _make_operator()
     event_service = FakeEventService()
     execution = FakeExecutionService(

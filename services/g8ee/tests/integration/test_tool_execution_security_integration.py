@@ -53,7 +53,7 @@ async def test_orchestrate_tool_execution_security_violation(
 
     This tests the REAL security validation in AIToolService.execute_tool_call.
     """
-    start_time = datetime.now(UTC)
+    datetime.now(UTC)
     operator_doc = build_production_operator_document(
         operator_id="op-test-001",
         hostname="test-server-01",

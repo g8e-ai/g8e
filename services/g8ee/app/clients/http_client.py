@@ -86,8 +86,8 @@ class RequestTrace(G8eBaseModel):
     @property
     def as_headers(self) -> dict[str, str]:
         """Convert trace info to HTTP headers
-        
-        Note: Context fields (case_id, task_id, investigation_id, execution_id) are now 
+
+        Note: Context fields (case_id, task_id, investigation_id, execution_id) are now
         embedded in request bodies via RequestContext, not in headers.
         """
         return {}
@@ -262,7 +262,7 @@ class HTTPClient:
 
     def refresh_mtls_credentials(self, cert_path: str | None, key_path: str | None) -> None:
         """Update the client's mTLS credentials.
-        
+
         If the paths have changed, the next request will create a new session
         with the updated credentials.
         """
@@ -718,7 +718,7 @@ class HTTPClient:
         Raises:
             NetworkError: On connection or response errors
         """
-        final_url, request_headers, trace, request_context = await self._prepare_request(
+        final_url, request_headers, _trace, request_context = await self._prepare_request(
             method, url, headers, context=context
         )
         request_kwargs: dict[str, Any] = {}

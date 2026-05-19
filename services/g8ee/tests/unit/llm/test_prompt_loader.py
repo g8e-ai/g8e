@@ -150,7 +150,7 @@ class TestListPrompts:
     def test_values_are_path_objects(self):
         prompts = list_prompts("core")
 
-        for name, path in prompts.items():
+        for path in prompts.values():
             assert isinstance(path, Path)
             assert path.exists()
             assert path.suffix == ".txt"

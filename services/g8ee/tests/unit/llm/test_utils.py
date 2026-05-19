@@ -123,7 +123,7 @@ class TestSchemaToDict:
         assert result == {"type": "string", "enum": ["a", "b"]}
 
 class TestIsInternalEndpoint:
-    @pytest.mark.parametrize("url,expected", [
+    @pytest.mark.parametrize(("url", "expected"), [
         ("http://localhost:9000", True),
         ("http://127.0.0.1:11434", True),
         ("http://[::1]:11434", True),
@@ -174,7 +174,7 @@ class TestIsInternalEndpoint:
         assert is_internal_endpoint(None) is False
 
 class TestIsOllamaEndpoint:
-    @pytest.mark.parametrize("url,expected", [
+    @pytest.mark.parametrize(("url", "expected"), [
         ("http://localhost:11434", True),
         ("http://ollama:11434", True),
         ("http://my-ollama-server:8000", True),

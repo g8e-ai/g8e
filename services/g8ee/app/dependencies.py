@@ -429,7 +429,7 @@ async def require_authenticated_context(
     user: AuthenticatedUser = Depends(require_authenticated_user)
 ) -> G8eHttpContext:
     """Unified authentication and context validation dependency.
-    
+
     1. Authenticates user via proxy headers, operator session Bearer, or web session cookie (using require_authenticated_user).
     2. Extracts RequestContext from the request body.
     3. Validates that the body context matches the authenticated user.

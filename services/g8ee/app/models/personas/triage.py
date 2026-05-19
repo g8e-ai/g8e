@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class TriagePersona(AgentPersonaModel):
     """Triage: The Interrogator/Classifier.
-    
+
     Classifies incoming messages by complexity, intent, and user posture.
     Aligned with position_paper.md: "Triage classifies the message: complex, action-oriented, posture cautious. Routes to Sage."
     """

@@ -107,7 +107,7 @@ class OperatorIntentService:
                     if dep not in all_intents:
                         all_intents.add(dep)
                         changed = True
-        return sorted(list(all_intents))
+        return sorted(all_intents)
 
     def _get_verification_action_for_intent(self, intent: str) -> str | None:
         return CLOUD_INTENT_VERIFICATION_ACTIONS.get(intent)

@@ -93,17 +93,17 @@ def get_search_settings() -> SearchSettings | None:
 def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool = False, is_lite: bool = False) -> str:
     """Generate a cache key for provider instances based on configuration."""
     role = "lite" if is_lite else "assistant" if is_assistant else "primary"
-    provider, api_key, endpoint = settings.resolve(role)
+    provider, api_key, endpoint, _ = settings.resolve(role)
 
     provider_value = provider or "none"
     key_parts = [provider_value]
 
     if provider_value == LLMProvider.GEMINI.value:
         key_parts.append(api_key or "")
-    elif provider_value == LLMProvider.OPENAI.value or provider_value == LLMProvider.ANTHROPIC.value:
+    elif provider_value in (LLMProvider.OPENAI.value, LLMProvider.ANTHROPIC.value):
         key_parts.append(endpoint or "")
         key_parts.append(api_key or "")
-    elif provider_value == LLMProvider.OLLAMA.value or provider_value == LLMProvider.LLAMACPP.value:
+    elif provider_value in (LLMProvider.OLLAMA.value, LLMProvider.LLAMACPP.value):
         key_parts.append(_normalize_ollama_host(endpoint or ""))
         key_parts.append(api_key or "")
 
@@ -112,7 +112,6 @@ def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool = False, i
 
 async def clear_provider_cache() -> None:
     """Close and clear all cached provider instances. Intended for shutdown/testing."""
-    global _provider_cache
     for provider in _provider_cache.values():
         try:
             await provider.force_close()
@@ -147,7 +146,7 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False, is_lite:
         return _provider_cache[cache_key]
 
     role = "lite" if is_lite else "assistant" if is_assistant else "primary"
-    provider_str, api_key, endpoint = settings.resolve(role)
+    provider_str, api_key, endpoint, _ = settings.resolve(role)
 
     if not provider_str:
         from app.errors import ConfigurationError

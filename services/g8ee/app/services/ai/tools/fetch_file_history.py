@@ -38,12 +38,11 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.FETCH_FILE_HISTORY,
         description=load_prompt(PromptFile.TOOLS_FETCH_FILE_HISTORY),
         parameters=schema_from_model(FetchFileHistoryArgs),
     )
-    return declaration
 
 
 async def handle(

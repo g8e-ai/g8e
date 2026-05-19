@@ -100,8 +100,8 @@ class Part:
         return cls(inline_data=InlineData(mime_type=mime_type, data=data))
 
     @classmethod
-    def from_tool_response(cls, name: str, response: dict[str, Any], id: str | None = None) -> Part:
-        return cls(tool_response=ToolResponse(name=name, response=response, id=id))
+    def from_tool_response(cls, name: str, response: dict[str, Any], call_id: str | None = None) -> Part:
+        return cls(tool_response=ToolResponse(name=name, response=response, id=call_id))
 
 
 @dataclass

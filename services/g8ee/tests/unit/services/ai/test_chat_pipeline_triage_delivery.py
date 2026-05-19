@@ -190,7 +190,7 @@ async def test_run_chat_impl_coerces_provider_override_to_enum():
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
-    inputs, state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    inputs, _state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     captured: dict = {}
@@ -299,7 +299,7 @@ async def test_run_chat_impl_rejects_unknown_provider_override():
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
-    inputs, state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    inputs, _state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     user_settings = G8eeUserSettings(llm=LLMSettings())
@@ -341,7 +341,7 @@ async def test_run_chat_impl_selects_lite_provider_for_simple_complexity():
         intent_confidence=TriageConfidence.HIGH,
         intent_summary="ok",
     )
-    inputs, state = _make_chat_context(triage_result=simple_triage_result)
+    inputs, _state = _make_chat_context(triage_result=simple_triage_result)
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     captured: dict = {}

@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class AuditorPersona(AgentPersonaModel):
     """Auditor: The Tribunal judge.
-    
+
     Judges Tribunal output against Sage's intent with dissent awareness and disambiguation authority.
     Aligned with position_paper.md: "The Auditor handles only machine-domain validation: consistency, grounding, procedural correctness."
     """

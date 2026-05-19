@@ -630,13 +630,13 @@ class TestConversationToContentsPayload:
         assert "Crimson relay" in text
 
     def test_empty_content_messages_excluded_from_payload(self):
-        investigation = InvestigationModel(
+        InvestigationModel(
             id="inv-1", case_id="case-1", user_id="user-1",
             status=InvestigationStatus.OPEN, case_title="Test",
             sentinel_mode=False,
         )
 
-        conversation_history=[ConversationHistoryMessage(
+        [ConversationHistoryMessage(
             id="msg-1", sender=MessageSender.USER_CHAT,
             content="User question",
             timestamp=datetime.now(UTC),

@@ -38,7 +38,7 @@ class TestG8eeSettingsOverlayIntegration:
 
     async def test_get_platform_settings_loads_from_operator(self, settings_service, cache_service):
         """Verify platform settings are loaded from the correct operator collection/ID.
-        
+
         G8eePlatformSettings no longer carries LLM config. LLM settings are
         accessed via get_user_settings() which falls back to platform data
         when no user document exists.

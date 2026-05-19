@@ -27,7 +27,7 @@ from .base import Field, G8eBaseModel, UTCDatetime, field_validator, model_valid
 
 class BoundOperator(G8eBaseModel):
     """Represents a bound operator in the HTTP context.
-    
+
     Internal g8ee-client contract for bound operator context.
     """
     operator_id: str = Field(..., description="Unique operator identifier")
@@ -38,7 +38,7 @@ class BoundOperator(G8eBaseModel):
 
 class RequestContext(G8eBaseModel):
     """Request context embedded in request bodies instead of headers.
-    
+
     This eliminates the fragile header-as-state pattern that forced every client
     (CLI, BYO, tests, evals) to re-implement the same header assembly.
     Context is now passed in the request body as a typed field.
@@ -175,7 +175,7 @@ class G8eHttpContext(G8eBaseModel):
     @model_validator(mode="after")
     def validate_session_or_operator_auth(self):
         """Ensure strict separation of session types and validate required context.
-        
+
         Rules:
         1. For CLIENT source:
            - MUST have either web_session_id OR cli_session_id (mutually exclusive).
@@ -220,7 +220,7 @@ class G8eHttpContext(G8eBaseModel):
 
     def validate_against_user(self, user: Any):
         """Verify that session IDs in context match the authenticated user's sessions.
-        
+
         Args:
             user: AuthenticatedUser object (from headers).
         """
@@ -257,7 +257,7 @@ class G8eHttpContext(G8eBaseModel):
     @classmethod
     def from_request_context(cls, request_context: RequestContext, is_exempt_path: bool = False) -> "G8eHttpContext":
         """Create G8eHttpContext from RequestContext (extracted from request body).
-        
+
         This is the new preferred method for context extraction, eliminating
         the fragile header-as-state pattern.
         """

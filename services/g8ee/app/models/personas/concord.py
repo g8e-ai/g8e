@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class ConcordPersona(AgentPersonaModel):
     """Concord: The Guardian.
-    
+
     Translates Sage's intent into the safest command that does the job.
     Aligned with position_paper.md: "Concord (safety): pressure for defensive flags and read-only discipline"
     """

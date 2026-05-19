@@ -561,7 +561,7 @@ class TestToolCallResultStructure:
 
     async def test_event_id_invariant_through_execution_threading(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings):
         """Regression: event IDs must remain invariant through execution_id threading.
-        
+
         This test verifies that when execution_id is threaded through the tool
         execution pipeline (Report 1), the event IDs generated for call_info
         and result_info events remain consistent and don't change mid-stream.

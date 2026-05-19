@@ -157,7 +157,7 @@ def _ai_primary_calls(mock_add: AsyncMock) -> list[dict]:
 async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
     """Every on_iteration_text invocation must produce an AI_PRIMARY row."""
     svc = _make_pipeline()
-    inputs, state = _make_ctx()
+    inputs, _state = _make_ctx()
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     iteration_texts = [
@@ -225,7 +225,7 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
 async def test_final_persist_skipped_when_response_text_is_whitespace_only():
     """Agents ending on a tool result must not produce an empty AI_PRIMARY row."""
     svc = _make_pipeline()
-    inputs, state = _make_ctx()
+    inputs, _state = _make_ctx()
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     async def _fake_run_with_sse(**kwargs):
@@ -264,7 +264,7 @@ async def test_final_persist_skipped_when_response_text_is_whitespace_only():
 async def test_iteration_callback_skips_whitespace_only_text():
     """Whitespace-only iteration text must not produce an AI_PRIMARY row."""
     svc = _make_pipeline()
-    inputs, state = _make_ctx()
+    inputs, _state = _make_ctx()
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     async def _fake_run_with_sse(**kwargs):
@@ -309,7 +309,7 @@ async def test_iteration_callback_passed_to_run_with_sse():
     regress to a no-op.
     """
     svc = _make_pipeline()
-    inputs, state = _make_ctx()
+    inputs, _state = _make_ctx()
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     captured: dict = {}

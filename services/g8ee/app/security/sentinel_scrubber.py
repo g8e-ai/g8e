@@ -79,7 +79,7 @@ class RegexScrubber:
 class SentinelScrubber:
     """
     Zero-trust data scrubber for user chat messages.
-    
+
     Applies regex-based scrubbing to remove sensitive data before
     messages are sent to the cloud AI.
     """
@@ -138,10 +138,10 @@ class SentinelScrubber:
     def scrub_text(self, text: str) -> str:
         """
         Scrub sensitive data from text.
-        
+
         Args:
             text: Input text to scrub
-            
+
         Returns:
             Scrubbed text with sensitive data replaced by placeholders
         """
@@ -151,10 +151,10 @@ class SentinelScrubber:
     def scrub(self, text: str) -> ScrubResult:
         """
         Scrub sensitive data from text with detailed result.
-        
+
         Args:
             text: Input text to scrub
-            
+
         Returns:
             ScrubResult with scrubbed text and metadata
         """

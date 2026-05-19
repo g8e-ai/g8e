@@ -54,7 +54,7 @@ from tests.fakes.factories import (
 pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.slow]
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def cache_aside_service(fake_cache_aside_service):
     return fake_cache_aside_service
 
@@ -102,7 +102,6 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services.memory_data_service
         investigation_data_service = all_services.investigation_data_service
         memory_service = all_services.memory_generation_service
 
@@ -333,7 +332,6 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services.memory_data_service
         investigation_data_service = all_services.investigation_data_service
         memory_service = all_services.memory_generation_service
 
@@ -486,9 +484,9 @@ class TestTriageServiceIntegration:
 
         # Test complex technical issue with specific entities
         complex_message = """
-        Our 'Obsidian-Core' cluster in the Helsinki bunker is reporting a 'Silver-Scream' kernel panic. 
-        This is isolated to the nodes with the 'Borealis-7' chipset. We've tried swapping the 'Frozen-Fire' 
-        cooling units but the temperature on Core 3 still spikes to 98C during the winter solstice load test. 
+        Our 'Obsidian-Core' cluster in the Helsinki bunker is reporting a 'Silver-Scream' kernel panic.
+        This is isolated to the nodes with the 'Borealis-7' chipset. We've tried swapping the 'Frozen-Fire'
+        cooling units but the temperature on Core 3 still spikes to 98C during the winter solstice load test.
         We suspect the 'Northern-Lights' firmware needs a patch for high-latitude clock drift.
         """
 
@@ -717,7 +715,7 @@ class TestCommandGenerationIntegration:
 
     async def test_l1_safety_validation_whitelist_violation(self, test_settings):
         """Test that L1 safety validation correctly detects whitelist violations.
-        
+
         This verifies the technical bedrock layer (validate_command_safety) properly
         blocks commands that violate whitelist constraints, ensuring the Auditor
         has the correct context to flag WHITELIST_VIOLATION reasons.

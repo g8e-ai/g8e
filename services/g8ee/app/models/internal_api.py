@@ -389,7 +389,7 @@ class OperatorTerminateResponse(G8eBaseModel):
 
 class ApiKeyGenerationRequest(G8eBaseModel):
     """Request model for API key generation.
-    
+
     Authority: g8ee.
     """
     prefix: str = Field(default="g8e_", description="API key prefix")

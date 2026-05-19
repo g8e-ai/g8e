@@ -419,7 +419,7 @@ class TestRequestCommandApproval:
             investigation_data_service=investigation_data_service,
         )
 
-        approval_id = generate_approval_id()
+        generate_approval_id()
         g8e_context = G8eHttpContext(
             case_id="case-1",
             investigation_id="inv-1",
@@ -469,7 +469,7 @@ class TestRequestCommandApproval:
             investigation_data_service=investigation_data_service,
         )
 
-        approval_id = generate_approval_id()
+        generate_approval_id()
         g8e_context = G8eHttpContext(
             case_id="case-1",
             investigation_id="inv-1",

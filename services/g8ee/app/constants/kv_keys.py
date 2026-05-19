@@ -20,7 +20,7 @@ _PROTOCOL_DIR = PATHS["infra"]["protocol_constants_dir"]
 
 T = TypeVar("T")
 
-def _load(filename: str, model_cls: type[T]) -> T:
+def _load[T](filename: str, model_cls: type[T]) -> T:
     path = _PROTOCOL_DIR + "/" + filename
     try:
         with open(path) as f:

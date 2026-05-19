@@ -70,7 +70,7 @@ class SshInventoryService:
             )
 
         try:
-            mtime = path.stat().st_mtime
+            _ = path.stat().st_mtime
             # Track hash of all mtimes (main file + included files)
             mtime_hash = self._compute_mtime_hash(path)
         except OSError as exc:
@@ -169,10 +169,7 @@ def _resolve_include_path(pattern: str, config_dir: Path) -> list[Path]:
     expanded = os.path.expanduser(pattern)
 
     # If the path is absolute, use it as-is; otherwise, make it relative to config_dir
-    if os.path.isabs(expanded):
-        glob_pattern = expanded
-    else:
-        glob_pattern = str(config_dir / expanded)
+    glob_pattern = expanded if os.path.isabs(expanded) else str(config_dir / expanded)
 
     # Resolve the glob pattern
     matched = glob.glob(glob_pattern)
@@ -219,7 +216,6 @@ def _parse_ssh_config(
     current_hostname: str | None = None
     current_user: str | None = None
     current_port: int | None = None
-    in_match_block = False
 
     def flush():
         for alias in current_aliases:
@@ -274,7 +270,6 @@ def _parse_ssh_config(
             current_hostname = None
             current_user = None
             current_port = None
-            in_match_block = True
             continue
 
         if key == "host":
@@ -284,7 +279,6 @@ def _parse_ssh_config(
             current_hostname = None
             current_user = None
             current_port = None
-            in_match_block = False
             continue
 
         if not current_aliases:

@@ -60,7 +60,7 @@ from .agent import g8eEngine
 from app.services.investigation.investigation_service import extract_all_operators_context, InvestigationService
 from app.services.investigation.memory_data_service import MemoryDataService
 from .memory_generation_service import MemoryGenerationService
-from .chat_task_manager import BackgroundTaskManager as BackgroundTaskManager
+from .chat_task_manager import BackgroundTaskManager
 from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
 from app.services.data.agent_activity_data_service import AgentActivityDataService
@@ -118,8 +118,8 @@ class ChatPipelineService:
         lite_endpoint_override: str | None = None,
     ) -> None:
         """Synchronously validate that LLM models and their required credentials are configured.
-        
-        This allows routers to fail-fast before starting long-running 
+
+        This allows routers to fail-fast before starting long-running
         background tasks if basic configuration is missing.
         """
         llm = user_settings.llm
@@ -187,7 +187,7 @@ class ChatPipelineService:
 
         # Check primary tier
         if primary:
-            provider, api_key, endpoint = llm.resolve(
+            provider, api_key, endpoint, _ = llm.resolve(
                 "primary",
                 provider_override=primary_provider_override,
                 api_key_override=primary_api_key_override,
@@ -197,7 +197,7 @@ class ChatPipelineService:
 
         # Check assistant tier
         if assistant:
-            provider, api_key, endpoint = llm.resolve(
+            provider, api_key, endpoint, _ = llm.resolve(
                 "assistant",
                 provider_override=assistant_provider_override,
                 api_key_override=assistant_api_key_override,
@@ -207,7 +207,7 @@ class ChatPipelineService:
 
         # Check lite tier
         if lite:
-            provider, api_key, endpoint = llm.resolve(
+            provider, api_key, endpoint, _ = llm.resolve(
                 "lite",
                 provider_override=lite_provider_override,
                 api_key_override=lite_api_key_override,
@@ -321,7 +321,7 @@ class ChatPipelineService:
             primary_override=model_overrides.for_main_generation(needs_primary=True),
             assistant_override=model_overrides.for_main_generation(needs_primary=False),
             lite_override=None,
-            settings_primary_model=request_settings.llm.primary_model,
+            settings_primary_model=request_settings.llm.resolved_primary_model,
             settings_assistant_model=request_settings.llm.resolved_assistant_model,
             settings_lite_model=request_settings.llm.resolved_lite_model,
         )
@@ -529,7 +529,7 @@ class ChatPipelineService:
         error: str | None = None,
     ) -> None:
         """Record agent activity metadata for data science analysis.
-        
+
         This is called after each chat turn completes to capture comprehensive
         telemetry including model usage, token consumption, tool execution,
         triage classification, and performance metrics.
@@ -790,113 +790,62 @@ class ChatPipelineService:
             len(attachments) if attachments else 0
         )
 
-        # Resolve effective provider/key/endpoint per tier. When a request
-        # overrides the provider, credential and endpoint resolution must
-        # follow the override provider, not the stored one — otherwise the
-        # stored provider's (often None) credentials shadow the request and
-        # the request fails validation even though the user supplied a
-        # complete override.
-        def resolve_tier(
-            stored_provider,
-            stored_role_key: str | None,
-            stored_role_endpoint: str | None,
-            provider_override: str | None,
-            api_key_override: str | None,
-            endpoint_override: str | None,
-        ) -> tuple[str | None, str | None, str | None]:
-            effective_provider = provider_override or (
-                stored_provider.value if stored_provider else None
-            )
-
-            api_key = api_key_override or stored_role_key
-            endpoint = endpoint_override or stored_role_endpoint
-
-            if not api_key and effective_provider:
-                provider_keys = {
-                    LLMProvider.OPENAI.value: user_settings.llm.openai_api_key,
-                    LLMProvider.ANTHROPIC.value: user_settings.llm.anthropic_api_key,
-                    LLMProvider.GEMINI.value: user_settings.llm.gemini_api_key,
-                    LLMProvider.OLLAMA.value: user_settings.llm.ollama_api_key,
-                    LLMProvider.LLAMACPP.value: user_settings.llm.llamacpp_api_key,
-                }
-                api_key = provider_keys.get(effective_provider)
-
-            if not endpoint and effective_provider:
-                provider_endpoints = {
-                    LLMProvider.OPENAI.value: user_settings.llm.openai_endpoint,
-                    LLMProvider.ANTHROPIC.value: user_settings.llm.anthropic_endpoint,
-                    LLMProvider.OLLAMA.value: user_settings.llm.ollama_endpoint,
-                    LLMProvider.GEMINI.value: None,
-                    LLMProvider.LLAMACPP.value: user_settings.llm.llamacpp_endpoint,
-                }
-                endpoint = provider_endpoints.get(effective_provider)
-
-            return effective_provider, api_key, endpoint
-
-        # Coerce the raw HTTP string to LLMProvider explicitly —
-        # model_copy(update=...) skips validation and would leave a bare
-        # str in the enum-typed field.
+        # Resolve effective provider/key/endpoint per tier.
         resolved_settings = user_settings
 
-        primary_provider, primary_api_key, primary_endpoint = resolve_tier(
-            user_settings.llm.primary_provider,
-            user_settings.llm.primary_api_key,
-            user_settings.llm.primary_endpoint,
-            llm_primary_provider,
-            llm_primary_api_key,
-            llm_primary_endpoint,
+        primary_provider, primary_api_key, primary_endpoint, primary_model = user_settings.llm.resolve(
+            "primary",
+            provider_override=llm_primary_provider,
+            api_key_override=llm_primary_api_key,
+            endpoint_override=llm_primary_endpoint,
+            model_override=llm_primary_model,
         )
         if primary_provider:
-            # CodeQL: Ensure we only log known provider names to avoid accidental secret leakage if fields are swapped
-            safe_primary = primary_provider if primary_provider in [p.value for p in LLMProvider] else "REDACTED"
-            logger.info("[SSE-CHAT] Applying primary_provider override: %s", safe_primary)
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_provider": LLMProvider(primary_provider)})})
         if primary_api_key:
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_api_key": primary_api_key})})
         if primary_endpoint:
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_endpoint": primary_endpoint})})
+        if primary_model:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_model": primary_model})})
 
-        assistant_provider, assistant_api_key, assistant_endpoint = resolve_tier(
-            user_settings.llm.assistant_provider,
-            user_settings.llm.assistant_api_key,
-            user_settings.llm.assistant_endpoint,
-            llm_assistant_provider,
-            llm_assistant_api_key,
-            llm_assistant_endpoint,
+        assistant_provider, assistant_api_key, assistant_endpoint, assistant_model = user_settings.llm.resolve(
+            "assistant",
+            provider_override=llm_assistant_provider,
+            api_key_override=llm_assistant_api_key,
+            endpoint_override=llm_assistant_endpoint,
+            model_override=llm_assistant_model,
         )
         if assistant_provider:
-            # CodeQL: Ensure we only log known provider names to avoid accidental secret leakage if fields are swapped
-            safe_assistant = assistant_provider if assistant_provider in [p.value for p in LLMProvider] else "REDACTED"
-            logger.info("[SSE-CHAT] Applying assistant_provider override: %s", safe_assistant)
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_provider": LLMProvider(assistant_provider)})})
         if assistant_api_key:
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_api_key": assistant_api_key})})
         if assistant_endpoint:
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_endpoint": assistant_endpoint})})
+        if assistant_model:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_model": assistant_model})})
 
-        lite_provider, lite_api_key, lite_endpoint = resolve_tier(
-            user_settings.llm.lite_provider,
-            user_settings.llm.lite_api_key,
-            user_settings.llm.lite_endpoint,
-            llm_lite_provider,
-            llm_lite_api_key,
-            llm_lite_endpoint,
+        lite_provider, lite_api_key, lite_endpoint, lite_model = user_settings.llm.resolve(
+            "lite",
+            provider_override=llm_lite_provider,
+            api_key_override=llm_lite_api_key,
+            endpoint_override=llm_lite_endpoint,
+            model_override=llm_lite_model,
         )
         if lite_provider:
-            # CodeQL: Ensure we only log known provider names to avoid accidental secret leakage if fields are swapped
-            safe_lite = lite_provider if lite_provider in [p.value for p in LLMProvider] else "REDACTED"
-            logger.info("[SSE-CHAT] Applying lite_provider override: %s", safe_lite)
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_provider": LLMProvider(lite_provider)})})
         if lite_api_key:
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_api_key": lite_api_key})})
         if lite_endpoint:
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_endpoint": lite_endpoint})})
+        if lite_model:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_model": lite_model})})
 
         logger.info("[SSE-CHAT] About to call _prepare_chat_context")
         model_overrides = ModelOverrideResolver(
-            primary_model=llm_primary_model,
-            assistant_model=llm_assistant_model,
-            lite_model=llm_lite_model,
+            primary_model=primary_model,
+            assistant_model=assistant_model,
+            lite_model=lite_model,
         )
         inputs = await self._prepare_chat_context(
             message=message,

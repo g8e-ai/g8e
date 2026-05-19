@@ -36,12 +36,11 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.GRANT_INTENT,
         description=load_prompt(PromptFile.TOOLS_GRANT_INTENT),
         parameters=schema_from_model(GrantIntentArgs),
     )
-    return declaration
 
 
 async def handle(

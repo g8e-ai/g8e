@@ -232,10 +232,7 @@ class OllamaProvider(LLMProvider):
         the kwarg entirely while NATIVE_TOGGLE models receive ``think=False``
         — matching the contract enforced on the primary path.
         """
-        if thinking_config is not None:
-            level = thinking_config.thinking_level
-        else:
-            level = ThinkingLevel.OFF
+        level = thinking_config.thinking_level if thinking_config is not None else ThinkingLevel.OFF
         translation = translate_for_ollama(level, get_model_config(model))
         if translation.think is not None:
             kwargs["think"] = translation.think

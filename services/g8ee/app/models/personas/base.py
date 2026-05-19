@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class AgentPersonaModel(BaseModel):
     """Base model for all AI agent personas.
-    
+
     This replaces the JSON-based persona definitions with structured code models,
     ensuring consistency, validation, and strong alignment with the architecture.
     """

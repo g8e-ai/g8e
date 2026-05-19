@@ -42,7 +42,7 @@ from .fake_investigation_service import FakeInvestigationService
 
 def create_pure_mock_cache_aside():
     """Returns a MagicMock spec'd to CacheAsideService with AsyncMock methods.
-    
+
     Use this for pure unit tests of services that depend on CacheAsideService
     where you only want to assert on the service-level interface calls.
     """

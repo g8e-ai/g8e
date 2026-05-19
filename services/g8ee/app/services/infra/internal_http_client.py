@@ -87,7 +87,7 @@ class InternalHttpClient:
 
     def _ensure_mtls(self) -> None:
         """Ensure mTLS credentials are up to date from settings.
-        
+
         Caches cert/key paths to avoid redundant refresh calls on every request.
         Only refreshes when paths actually change.
         """
@@ -286,7 +286,7 @@ class InternalHttpClient:
         context: G8eHttpContext | None = None,
     ) -> OperatorLinkResponse:
         """Generate a single-operator handshake link (dlk_ token) via client.
-        
+
         This is a prerequisite for the 'stream_operator' tool (Phase 4).
         """
         try:

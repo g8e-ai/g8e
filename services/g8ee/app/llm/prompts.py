@@ -158,7 +158,7 @@ def build_command_constraints_message(
     blacklisted_commands: list[dict[str, str]] | None,
 ) -> str:
     """Generate a human-readable message describing active command constraints.
-    
+
     Args:
         whitelisting_enabled: Whether whitelist enforcement is active
         blacklisting_enabled: Whether blacklist enforcement is active
@@ -206,7 +206,7 @@ def build_command_constraints_message(
 
 def build_forbidden_patterns_message() -> str:
     """Generate a message listing all forbidden command patterns."""
-    patterns = sorted(list(FORBIDDEN_COMMAND_PATTERNS))
+    patterns = sorted(FORBIDDEN_COMMAND_PATTERNS)
     return f"The following patterns are FORBIDDEN and will be rejected: {', '.join(patterns)}"
 
 
@@ -258,7 +258,7 @@ def build_tribunal_prompt_fields(
     default_working_directory: str,
 ) -> dict[str, str]:
     """Build the common template kwargs used by every Tribunal persona prompt.
-    
+
     Returns a dict with keys: os, shell, working_directory, user_context,
     operator_context, forbidden_patterns_message, request, guidelines.
     """
@@ -292,7 +292,7 @@ def build_tribunal_auditor_context(
     clusters: list[dict[str, Any]],
 ) -> str:
     """Build the mode-specific context for the auditor prompt.
-    
+
     Args:
         mode: "unanimous", "majority", or "tied"
         winner: The winning command string
@@ -350,7 +350,7 @@ def build_tribunal_generator_prompt(
     member: str | None = None,
 ) -> str:
     """Build the prompt for a Tribunal generation pass.
-    
+
     Args:
         member: Tribunal member id (e.g., "axiom", "concord", etc.) for persona-specific R2 prompts.
     """
@@ -655,12 +655,12 @@ def build_modular_system_prompt(
         "[PROMPT] sections=%d total_chars=%d operator_bound=%s sections=[%s]",
         len(sections), len(full_prompt), operator_bound, ", ".join(section_labels)
     )
-    for label, section in zip(section_labels, sections):
+    for label, section in zip(section_labels, sections, strict=False):
         logger.info("[PROMPT] section=%-24s chars=%d", label, len(section))
     logger.info("[PROMPT] full_prompt:\n%s", full_prompt)
 
     context_sizes = {
-        label: len(section) for label, section in zip(section_labels, sections)
+        label: len(section) for label, section in zip(section_labels, sections, strict=False)
     }
     context_sizes["total"] = len(full_prompt)
 

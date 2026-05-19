@@ -140,7 +140,7 @@ class AIToolService:
         """
         declared = {
             name.value if isinstance(name, OperatorToolName) else str(name)
-            for name in self._tool_declarations.keys()
+            for name in self._tool_declarations
         }
         missing_operator = OPERATOR_TOOLS - declared
         if missing_operator:

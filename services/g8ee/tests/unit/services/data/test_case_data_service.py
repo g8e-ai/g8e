@@ -401,7 +401,7 @@ class TestCaseDataService:
         await service.get_case_history(query)
 
         # Verify filters were passed
-        args, kwargs = mock_cache.query_documents.call_args
+        _args, kwargs = mock_cache.query_documents.call_args
         filters = kwargs["field_filters"]
         assert len(filters) == 4 # case_id, start_time, end_time, event_type
 
@@ -412,7 +412,7 @@ class TestCaseDataService:
         mock_cache.query_documents.return_value = []
         await service.get_case_tasks("case-123", TaskStatus.COMPLETED)
 
-        args, kwargs = mock_cache.query_documents.call_args
+        _args, kwargs = mock_cache.query_documents.call_args
         filters = kwargs["field_filters"]
         assert len(filters) == 2 # case_id, status
 

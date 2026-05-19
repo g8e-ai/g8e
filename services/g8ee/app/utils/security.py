@@ -16,14 +16,14 @@ from pathlib import Path
 def validate_safe_path(path: str | Path, root: str | Path) -> Path:
     """
     Ensures a path is safe and stays within the specified root directory.
-    
+
     Args:
         path: The path to validate (absolute or relative)
         root: The allowed root directory
-        
+
     Returns:
         The resolved absolute Path object
-        
+
     Raises:
         ValueError: If the path is invalid or attempts traversal outside the root
     """

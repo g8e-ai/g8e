@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class NemesisPersona(AgentPersonaModel):
     """Nemesis: The Adversary.
-    
+
     Produces a plausible-but-flawed command, or honestly abstains when no attack surface exists.
     Aligned with position_paper.md: "Nemesis (calibrated adversary): proposes flawed-but-plausible commands to stress the Auditor"
     """

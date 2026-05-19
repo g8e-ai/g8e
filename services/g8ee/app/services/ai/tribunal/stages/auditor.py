@@ -55,8 +55,8 @@ logger = logging.getLogger(__name__)
 
 class TribunalAuditor:
     """Service for handling the Tribunal audit stage and reputation commitment.
-    
-    Extracts side effects (SSE events, reputation DB writes) to allow mocking 
+
+    Extracts side effects (SSE events, reputation DB writes) to allow mocking
     as a single unit in orchestrator tests.
     """
 

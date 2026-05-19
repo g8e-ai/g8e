@@ -367,7 +367,7 @@ class TestG8eHTTPClientPrepareRequest:
     """_prepare_request must build correct headers from config and context."""
 
     async def test_prepare_request_injects_request_id(self, client):
-        _url, headers, trace, request_ctx = await client._prepare_request("GET", "/api/health", headers={}, context=None)
+        _url, _headers, trace, request_ctx = await client._prepare_request("GET", "/api/health", headers={}, context=None)
         # When no context provided, request_ctx is None
         # Execution ID is in the trace object
         assert request_ctx is None
@@ -396,7 +396,7 @@ class TestG8eHTTPClientPrepareRequest:
         assert headers["X-Custom"] == "override"
 
     async def test_prepare_request_trace_id_propagated_to_request_context(self, client):
-        _url, headers, trace, request_ctx = await client._prepare_request("GET", "/api/health", headers={}, context=None)
+        _url, _headers, trace, request_ctx = await client._prepare_request("GET", "/api/health", headers={}, context=None)
         # When no context provided, request_ctx is None
         assert request_ctx is None
         # Execution ID is in the trace object
@@ -410,7 +410,7 @@ class TestG8eHTTPClientPrepareRequest:
             case_id="case-456",
             investigation_id="inv-789",
         )
-        _url, headers, _trace, request_ctx = await client._prepare_request(
+        _url, _headers, _trace, request_ctx = await client._prepare_request(
             "POST", "/api/internal/chat/stream", headers={}, context=ctx
         )
         # Context is now embedded in request body, not headers
@@ -506,7 +506,8 @@ class TestG8eHTTPClientContextManager:
             ca_cert_path="/mock/ca.crt",
         )
         await c._get_http_session()
-        assert c._session is not None and not c._session.closed
+        assert c._session is not None
+        assert not c._session.closed
         await c.close()
         assert c._session is None
 
@@ -868,7 +869,6 @@ class TestG8eHTTPClientRequest:
 
     async def test_retryable_status_retries_and_eventually_raises(self):
         resp_503 = _make_mock_response(503, b"service unavailable")
-        call_count = 0
         original_request = MagicMock(return_value=resp_503)
 
         c = HTTPClient (

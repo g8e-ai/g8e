@@ -206,12 +206,12 @@ async def get_chat_session(
 ) -> ChatSessionResponse:
     """
     Get chat session information.
-    
+
     SECURITY: Validates that the authenticated user owns the session/investigation.
-    
+
     Args:
         web_session_id: Chat session identifier (investigation_id)
-        
+
     Returns:
         Chat session information including associated case context
     """

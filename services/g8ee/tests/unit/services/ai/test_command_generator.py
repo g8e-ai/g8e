@@ -242,7 +242,7 @@ class TestRoleImportRegression:
             command_constraints_message="No whitelist or blacklist constraints are active.",
             investigation_id="inv-test",
         )
-        final_cmd, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id = (
+        _final_cmd, _outcome, auditor_passed, auditor_revision, _auditor_reason, _commitment_id = (
             audit_result.final_command,
             audit_result.outcome,
             audit_result.passed,
@@ -1030,7 +1030,7 @@ class TestGenerateCommandHappyPath:
         The first ``passes`` calls return ``generation_text`` (concurrent
         generation stage). Subsequent calls return ``auditor_text`` (or
         repeat ``generation_text`` when ``auditor_text`` is ``None``).
-        
+
         Auditor responses are automatically converted to JSON format.
         """
         call_count = 0
@@ -1464,7 +1464,7 @@ class TestGenerateCommandAuditorFailure:
 
         The first ``passes`` calls return ``generation_text`` (generation stage).
         Subsequent calls use ``auditor_side_effect`` or ``auditor_return``.
-        
+
         Auditor responses are automatically converted to JSON format if they are plain text.
         """
         call_count = 0
@@ -1848,9 +1848,9 @@ class TestPromptFields:
             default_shell=DEFAULT_SHELL,
             default_working_directory=DEFAULT_WORKING_DIRECTORY,
         )
-        common = dict(
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-        )
+        common = {
+            "command_constraints_message": "No whitelist or blacklist constraints are active.",
+        }
 
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
             rendered = TRIBUNAL_PROMPT_TEMPLATE.format(
@@ -1863,7 +1863,7 @@ class TestPromptFields:
             assert "host1" in rendered, f"{member_id}: operator_context did not render"
             assert "FORBIDDEN" in rendered, f"{member_id}: forbidden_patterns missing"
 
-        auditor = get_agent_persona("auditor")
+        get_agent_persona("auditor")
         rendered = TRIBUNAL_AUDITOR_TEMPLATE.format(
             auditor_context="Auditor context placeholder",
             **common,

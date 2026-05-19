@@ -100,11 +100,11 @@ class CommandValidationSettings(G8eBaseModel):
       and *execution* constraint.
 
       Two mutually exclusive whitelist sources exist:
-      
+
       1. JSON whitelist (config/whitelist.json): Provides rich per-command
          validation including safe_options and validation regexes for parameters.
          This is the default and recommended mode for production use.
-      
+
       2. CSV whitelist (whitelisted_commands field): A simple comma-separated
          list of base commands. When non-empty, this REPLACES the JSON whitelist
          entirely and uses only basic character-level validation. The JSON
@@ -273,18 +273,23 @@ class LLMSettings(G8eBaseModel):
     lite_api_key: str | None = Field(default=None, repr=False)
     lite_endpoint: str | None = Field(default=None)
 
+    openai_model: str | None = Field(default=None)
     openai_endpoint: str | None = Field(default=OPENAI_DEFAULT_ENDPOINT)
     openai_api_key: str | None = Field(default=None, repr=False)
 
+    ollama_model: str | None = Field(default=None)
     ollama_endpoint: str | None = Field(default=OLLAMA_DEFAULT_ENDPOINT)
     ollama_api_key: str | None = Field(default=None, repr=False)
 
+    gemini_model: str | None = Field(default=None)
     gemini_api_key: str | None = Field(default=None, repr=False)
 
+    anthropic_model: str | None = Field(default=None)
     anthropic_endpoint: str | None = Field(default=ANTHROPIC_DEFAULT_ENDPOINT)
     anthropic_api_key: str | None = Field(default=None, repr=False)
     ollama_assistant_model: str | None = Field(default=None)
 
+    llamacpp_model: str | None = Field(default=None)
     llamacpp_endpoint: str | None = Field(default=LLAMACPP_DEFAULT_ENDPOINT)
     llamacpp_api_key: str | None = Field(default=None, repr=False)
     llamacpp_assistant_model: str | None = Field(default=None)
@@ -296,14 +301,60 @@ class LLMSettings(G8eBaseModel):
     llm_parallel_tool_calls: bool = Field(default=True)
 
     @property
+    def resolved_primary_model(self) -> str | None:
+        """Return the configured primary model, or provider default if not set."""
+        if self.primary_model:
+            return self.primary_model
+        
+        if self.primary_provider:
+            provider_models = {
+                LLMProvider.OPENAI: self.openai_model,
+                LLMProvider.ANTHROPIC: self.anthropic_model,
+                LLMProvider.GEMINI: self.gemini_model,
+                LLMProvider.OLLAMA: self.ollama_model,
+                LLMProvider.LLAMACPP: self.llamacpp_model,
+            }
+            return provider_models.get(self.primary_provider)
+        return None
+
+    @property
     def resolved_assistant_model(self) -> str | None:
-        """Return the configured assistant model, or None if not set."""
-        return self.assistant_model or None
+        """Return the configured assistant model, or provider default if not set."""
+        if self.assistant_model:
+            return self.assistant_model
+        
+        if self.assistant_provider:
+            provider_models = {
+                LLMProvider.OPENAI: self.openai_model,
+                LLMProvider.ANTHROPIC: self.anthropic_model,
+                LLMProvider.GEMINI: self.gemini_model,
+                LLMProvider.OLLAMA: self.ollama_model,
+                LLMProvider.LLAMACPP: self.llamacpp_model,
+            }
+            return provider_models.get(self.assistant_provider)
+        return None
 
     @property
     def resolved_lite_model(self) -> str | None:
-        """Return the configured lite model, or assistant_model as fallback if lite is not set."""
-        return self.lite_model or self.assistant_model or None
+        """Return the configured lite model, or assistant_model/provider default as fallback."""
+        if self.lite_model:
+            return self.lite_model
+        
+        # Try provider default for lite role if lite_provider is set
+        if self.lite_provider:
+            provider_models = {
+                LLMProvider.OPENAI: self.openai_model,
+                LLMProvider.ANTHROPIC: self.anthropic_model,
+                LLMProvider.GEMINI: self.gemini_model,
+                LLMProvider.OLLAMA: self.ollama_model,
+                LLMProvider.LLAMACPP: self.llamacpp_model,
+            }
+            provider_default = provider_models.get(self.lite_provider)
+            if provider_default:
+                return provider_default
+
+        # Fall back to assistant model (which already falls back to provider default)
+        return self.resolved_assistant_model
 
     def resolve(
         self,
@@ -311,54 +362,55 @@ class LLMSettings(G8eBaseModel):
         provider_override: str | None = None,
         api_key_override: str | None = None,
         endpoint_override: str | None = None,
-    ) -> tuple[str | None, str | None, str | None]:
-        """Resolve provider, API key, and endpoint for a given role.
+        model_override: str | None = None,
+    ) -> tuple[str | None, str | None, str | None, str | None]:
+        """Resolve provider, API key, endpoint, and model for a given role.
 
         Args:
             role: One of 'primary', 'assistant', or 'lite'.
             provider_override: Optional provider string to override the stored provider.
             api_key_override: Optional API key to override the resolved key.
             endpoint_override: Optional endpoint to override the resolved endpoint.
+            model_override: Optional model name to override the resolved model.
 
         Returns:
-            Tuple of (provider, api_key, endpoint). Provider is the string value of the LLMProvider enum.
+            Tuple of (provider, api_key, endpoint, model). Provider is the string value of the LLMProvider enum.
         """
         role_to_attrs = {
-            "primary": (self.primary_provider, self.primary_api_key, self.primary_endpoint),
-            "assistant": (self.assistant_provider, self.assistant_api_key, self.assistant_endpoint),
-            "lite": (self.lite_provider, self.lite_api_key, self.lite_endpoint),
+            "primary": (self.primary_provider, self.primary_api_key, self.primary_endpoint, self.primary_model),
+            "assistant": (self.assistant_provider, self.assistant_api_key, self.assistant_endpoint, self.assistant_model),
+            "lite": (self.lite_provider, self.lite_api_key, self.lite_endpoint, self.lite_model),
         }
 
         if role not in role_to_attrs:
             raise ValueError(f"Invalid role: {role}. Must be one of: primary, assistant, lite")
 
-        stored_provider, stored_role_key, stored_role_endpoint = role_to_attrs[role]
+        stored_provider, stored_role_key, stored_role_endpoint, stored_role_model = role_to_attrs[role]
 
         effective_provider = provider_override or (stored_provider.value if stored_provider else None)
         api_key = api_key_override or stored_role_key
         endpoint = endpoint_override or stored_role_endpoint
+        model = model_override or stored_role_model
 
-        if not api_key and effective_provider:
-            provider_keys = {
-                LLMProvider.OPENAI.value: self.openai_api_key,
-                LLMProvider.ANTHROPIC.value: self.anthropic_api_key,
-                LLMProvider.GEMINI.value: self.gemini_api_key,
-                LLMProvider.OLLAMA.value: self.ollama_api_key,
-                LLMProvider.LLAMACPP.value: self.llamacpp_api_key,
+        if effective_provider:
+            provider_defaults = {
+                LLMProvider.OPENAI.value: (self.openai_api_key, self.openai_endpoint, self.openai_model),
+                LLMProvider.ANTHROPIC.value: (self.anthropic_api_key, self.anthropic_endpoint, self.anthropic_model),
+                LLMProvider.GEMINI.value: (self.gemini_api_key, None, self.gemini_model),
+                LLMProvider.OLLAMA.value: (self.ollama_api_key, self.ollama_endpoint, self.ollama_model),
+                LLMProvider.LLAMACPP.value: (self.llamacpp_api_key, self.llamacpp_endpoint, self.llamacpp_model),
             }
-            api_key = provider_keys.get(effective_provider)
+            
+            p_key, p_endpoint, p_model = provider_defaults.get(effective_provider, (None, None, None))
+            
+            if not api_key:
+                api_key = p_key
+            if not endpoint:
+                endpoint = p_endpoint
+            if not model:
+                model = p_model
 
-        if not endpoint and effective_provider:
-            provider_endpoints = {
-                LLMProvider.OPENAI.value: self.openai_endpoint,
-                LLMProvider.ANTHROPIC.value: self.anthropic_endpoint,
-                LLMProvider.OLLAMA.value: self.ollama_endpoint,
-                LLMProvider.GEMINI.value: None,
-                LLMProvider.LLAMACPP.value: self.llamacpp_endpoint,
-            }
-            endpoint = provider_endpoints.get(effective_provider)
-
-        return effective_provider, api_key, endpoint
+        return effective_provider, api_key, endpoint, model
 
     @property
     def primary_endpoint_resolved(self) -> str | None:

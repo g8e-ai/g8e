@@ -73,7 +73,7 @@ class TestOllamaProviderConstruction:
     def test_constructor_strips_trailing_slash(self):
         mock_client = MagicMock()
         with patch(PATCH_TARGET, return_value=mock_client) as mock_ctor:
-            provider = OllamaProvider(
+            OllamaProvider(
                 endpoint="http://localhost:11434/",
                 api_key="test-key",
             )
@@ -90,7 +90,7 @@ class TestOllamaProviderConstruction:
     def test_constructor_adds_http_prefix(self):
         mock_client = MagicMock()
         with patch(PATCH_TARGET, return_value=mock_client) as mock_ctor:
-            provider = OllamaProvider(
+            OllamaProvider(
                 endpoint="localhost:11434",
                 api_key="test-key",
             )

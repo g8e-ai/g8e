@@ -47,7 +47,7 @@ class OperatorSessionService:
         self,
         session_id_override: str,
         session_data: dict[str, Any],
-        request_context: dict[str, Any] = None,
+        request_context: dict[str, Any] | None = None,
         ttl_seconds: int | None = None,
     ) -> OperatorSessionDocument:
         """Create a new operator session.

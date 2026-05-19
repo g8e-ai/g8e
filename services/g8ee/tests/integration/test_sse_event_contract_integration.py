@@ -369,10 +369,10 @@ class TestSSEEventContract:
         # Create payload matching fixture
         vote_breakdown = VoteBreakdown(
             candidates_by_member=expected_fixture["data"]["vote_breakdown"]["candidates_by_member"],
-            candidates_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["candidates_by_command"].items()},
+            candidates_by_command=dict(expected_fixture["data"]["vote_breakdown"]["candidates_by_command"].items()),
             winner=expected_fixture["data"]["vote_breakdown"]["winner"],
             winner_supporters=expected_fixture["data"]["vote_breakdown"]["winner_supporters"],
-            dissenters_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["dissenters_by_command"].items()},
+            dissenters_by_command=dict(expected_fixture["data"]["vote_breakdown"]["dissenters_by_command"].items()),
             consensus_strength=expected_fixture["data"]["vote_breakdown"]["consensus_strength"],
             tie_broken=expected_fixture["data"]["vote_breakdown"]["tie_broken"],
             tie_break_reason=expected_fixture["data"]["vote_breakdown"]["tie_break_reason"],
@@ -399,10 +399,10 @@ class TestSSEEventContract:
         # Create payload matching fixture
         vote_breakdown = VoteBreakdown(
             candidates_by_member=expected_fixture["data"]["vote_breakdown"]["candidates_by_member"],
-            candidates_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["candidates_by_command"].items()},
+            candidates_by_command=dict(expected_fixture["data"]["vote_breakdown"]["candidates_by_command"].items()),
             winner=expected_fixture["data"]["vote_breakdown"]["winner"],
             winner_supporters=expected_fixture["data"]["vote_breakdown"]["winner_supporters"],
-            dissenters_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["dissenters_by_command"].items()},
+            dissenters_by_command=dict(expected_fixture["data"]["vote_breakdown"]["dissenters_by_command"].items()),
             consensus_strength=expected_fixture["data"]["vote_breakdown"]["consensus_strength"],
             tie_broken=expected_fixture["data"]["vote_breakdown"]["tie_broken"],
             tie_break_reason=expected_fixture["data"]["vote_breakdown"]["tie_break_reason"],

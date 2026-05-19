@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class PragmaPersona(AgentPersonaModel):
     """Pragma: The Conventional.
-    
+
     Translates Sage's intent into the command the target system's community would produce.
     Aligned with position_paper.md: "Pragma (convention): pressure for idiomatic OS-specific tools"
     """

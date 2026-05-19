@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class AxiomPersona(AgentPersonaModel):
     """Axiom: The Composer.
-    
+
     Translates Sage's intent into the most coherent composed command.
     Aligned with position_paper.md: "Axiom (composition): pressure for clean multi-stage pipelines"
     """

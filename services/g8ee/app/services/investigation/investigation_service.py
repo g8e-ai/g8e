@@ -531,11 +531,11 @@ def extract_operator_context_by_target(
 ) -> OperatorContext | None:
     """
     Extract system context for a specific target operator.
-    
+
     Args:
         investigation: Enriched investigation context
         target_operator: Target operator identifier (operator_id, hostname, or index)
-        
+
     Returns:
         OperatorContext for the targeted operator, or None if not found
     """

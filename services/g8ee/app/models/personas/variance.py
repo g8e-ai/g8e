@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class VariancePersona(AgentPersonaModel):
     """Variance: The Exhaustive.
-    
+
     Translates Sage's intent into a command that handles the edge cases an obvious version misses.
     Aligned with position_paper.md: "Variance (edge cases): pressure for robustness against locales, spaces, nulls"
     """

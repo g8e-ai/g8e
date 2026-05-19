@@ -185,8 +185,8 @@ def make_provider_chunk(
     thought: bool = False,
     text: str = "",
     thought_signature: ThoughtSignature = None,
-    tool_calls: list = None,
-    finish_reason: str = None,
+    tool_calls: list | None = None,
+    finish_reason: str | None = None,
 ) -> MagicMock:
     """Build a minimal fake provider chunk."""
     chunk = MagicMock()

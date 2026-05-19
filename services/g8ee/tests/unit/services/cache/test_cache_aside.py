@@ -180,7 +180,7 @@ class TestCacheAsideService:
         mock_kv_cache_client.seed_json(query_key, [{"id": "user-5"}])
 
         # Delete document using db client with manual cache invalidation
-        result = await service.db.delete_document(DB_COLLECTION_USERS, "user-5")
+        await service.db.delete_document(DB_COLLECTION_USERS, "user-5")
         key = service.make_key(DB_COLLECTION_USERS, "user-5")
         await service.kv.delete(key)
         await service.invalidate_query_cache(DB_COLLECTION_USERS)

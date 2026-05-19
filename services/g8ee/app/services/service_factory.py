@@ -458,7 +458,7 @@ class ServiceFactory:
             agent_activity_data_service=data_services.agent_activity_data_service,
         )
 
-        all_services = AllServices(
+        return AllServices(
             db_service=db_service,
             kv_service=kv_service,
             blob_service=blob_service,
@@ -501,7 +501,6 @@ class ServiceFactory:
             certificate_service=operator_services.certificate_service,
         )
 
-        return all_services
 
     @staticmethod
     def bind_to_app_state(app: object, services: AllServices) -> None:

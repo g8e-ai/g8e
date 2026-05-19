@@ -34,12 +34,11 @@ class CertificateDataService:
         """Get all revoked certificate records."""
         try:
             # query_documents handles cache-aside internally
-            rows = await self.cache.query_documents(
+            return await self.cache.query_documents(
                 collection=self.collection,
                 field_filters=[],
                 limit=10000,
             )
-            return rows
         except Exception as e:
             logger.error("[CERT-DATA] Failed to query revocations: %s", e)
             return []

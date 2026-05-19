@@ -31,7 +31,7 @@ from app.llm.provider import LLMProvider
 
 class FakeLLMProvider(LLMProvider):
     """A fake LLM provider for testing that avoids AsyncMock/MagicMock.
-    
+
     Adheres to testing.md principles: 'Never mock LLM clients'.
     This provides a deterministic fake implementation instead of a mock.
     """
@@ -160,8 +160,8 @@ class FakeLLMProvider(LLMProvider):
         model: str,
         contents: list[Content],
         config: GenerateContentConfig,
-        tools: list[ToolGroup] = None,
-        system_instructions: str = None,
+        tools: list[ToolGroup] | None = None,
+        system_instructions: str | None = None,
     ) -> GenerateContentResponse:
         self.call_log.append({
             "method": "generate_content",
@@ -181,8 +181,8 @@ class FakeLLMProvider(LLMProvider):
         model: str,
         contents: list[Content],
         config: GenerateContentConfig,
-        tools: list[ToolGroup] = None,
-        system_instructions: str = None,
+        tools: list[ToolGroup] | None = None,
+        system_instructions: str | None = None,
     ) -> AsyncGenerator[StreamChunkFromModel]:
         self.call_log.append({
             "method": "generate_content_stream",

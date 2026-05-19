@@ -21,8 +21,8 @@ Tests cover all 16 AI tools:
     Segment 1 — Command Execution Tools
       Test run_commands_with_operator tool payload handling
 
-    Segment 2 — File Operation Tools  
-      Test file_create_on_operator, file_write_on_operator, file_read_on_operator, 
+    Segment 2 — File Operation Tools
+      Test file_create_on_operator, file_write_on_operator, file_read_on_operator,
       file_update_on_operator tools payload handling
 
     Segment 3 — File System Tools
@@ -84,22 +84,19 @@ pytestmark = [pytest.mark.integration]
 @pytest.fixture
 def mock_operator_command_service():
     """Mock operator command service for deterministic testing."""
-    service = AsyncMock(spec=OperatorCommandService)
-    return service
+    return AsyncMock(spec=OperatorCommandService)
 
 
 @pytest.fixture
 def mock_investigation_service():
     """Mock investigation service for deterministic testing."""
-    service = AsyncMock(spec=InvestigationService)
-    return service
+    return AsyncMock(spec=InvestigationService)
 
 
 @pytest.fixture
 def mock_web_search_provider():
     """Mock web search provider for deterministic testing."""
-    provider = AsyncMock(spec=WebSearchProvider)
-    return provider
+    return AsyncMock(spec=WebSearchProvider)
 
 
 @pytest.fixture

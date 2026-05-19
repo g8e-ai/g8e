@@ -119,7 +119,7 @@ def test_tool_service_init_registers_all_operator_tools():
     svc = _build_tool_service(web_search_provider=MagicMock(spec=WebSearchProvider))
     declared = {
         name.value if isinstance(name, OperatorToolName) else str(name)
-        for name in svc._tool_declarations.keys()
+        for name in svc._tool_declarations
     }
     assert OPERATOR_TOOLS.issubset(declared)
 
@@ -129,7 +129,7 @@ def test_tool_service_init_registers_required_universal_tools():
     svc = _build_tool_service(web_search_provider=None)
     declared = {
         name.value if isinstance(name, OperatorToolName) else str(name)
-        for name in svc._tool_declarations.keys()
+        for name in svc._tool_declarations
     }
     required = AI_UNIVERSAL_TOOLS - {OperatorToolName.G8E_SEARCH_WEB.value}
     assert required.issubset(declared)

@@ -383,7 +383,7 @@ class g8eEngine:
                     types.Part.from_tool_response(
                         name=r.tool_name,
                         response=r.flattened_response,
-                        id=r.tool_call_id,
+                        call_id=r.tool_call_id,
                     )
                     for r in fc_responses
                 ]

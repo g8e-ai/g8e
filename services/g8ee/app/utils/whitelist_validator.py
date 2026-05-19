@@ -348,15 +348,11 @@ class CommandWhitelistValidator:
         if not value:
             return False
 
-        if value == "-" or value == "--":
+        if value in {"-", "--"}:
             return False
 
         unsafe_chars = [";", "&", "`", "$", "(", ")", "{", "}", "<", ">", "\\", "\n", "\r", "\t"]
-        for char in unsafe_chars:
-            if char in value:
-                return False
-
-        return True
+        return all(char not in value for char in unsafe_chars)
 
     def _matches_safe_option(self, arg: str, remaining_args: list[str], safe_option: str) -> bool:
         """Check if argument matches a safe option pattern."""
@@ -403,7 +399,7 @@ class CommandWhitelistValidator:
     def get_available_commands_with_metadata(self, platform: Platform = Platform.LINUX) -> list[WhitelistedCommand]:
         """Get list of all available commands for a platform with their metadata."""
         available = []
-        for category_name, commands in self.commands_by_category.items():
+        for commands in self.commands_by_category.values():
             for exec_name, config in commands.items():
                 if platform in config.get("platforms", []):
                     metadata = self.get_command_metadata(config.get("command", exec_name), platform)
@@ -414,7 +410,7 @@ class CommandWhitelistValidator:
     def get_available_commands(self, platform: Platform = Platform.LINUX) -> list[str]:
         """Get list of all available commands for a platform."""
         available = []
-        for category_name, commands in self.commands_by_category.items():
+        for commands in self.commands_by_category.values():
             for exec_name, config in commands.items():
                 if platform in config.get("platforms", []):
                     available.append(config.get("command", exec_name))

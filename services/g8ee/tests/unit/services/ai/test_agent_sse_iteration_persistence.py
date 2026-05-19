@@ -276,10 +276,10 @@ async def test_omitting_callback_still_completes_stream():
 
 async def test_no_session_flow_populates_response_text_without_sse():
     """No-session flows (web_session_id=None) must process stream to populate state.response_text.
-    
+
     Regression test for a bug where agent produced empty responses because
     stream was consumed without processing chunks when web_session_id was None.
-    
+
     Note: case_id is provided for test factory compatibility but is not used when web_session_id is None.
     """
     inputs, state = make_agent_run_args(

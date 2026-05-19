@@ -316,15 +316,15 @@ class HeartbeatVersionInfo(G8eBaseModel):
 class HeartbeatSnapshot(G8eBaseModel):
     """
     Clean, normalized heartbeat data structure.
-    
+
     This is the canonical representation of Operator heartbeat data.
     g8eo sends heartbeats every 30 seconds with system telemetry.
-    
+
     Storage:
     - Stored in database Operator document (heartbeat_history array, max 10)
     - Sent to client via SSE for real-time UI updates
     - NOT stored in operator cache
-    
+
     Usage:
     - AI context for understanding Operator system state
     - UI display of Operator health metrics
@@ -744,7 +744,7 @@ class IntentApprovalEvent(ApprovalContext):
 class TruncatedOutput(G8eBaseModel):
     """
     Output that has been truncated for storage efficiency.
-    
+
     Keeps first and last N lines (default 20 each) for AI context.
     This allows the AI to see the beginning (headers, initial output)
     and end (final results, errors) of command output without storing
@@ -760,11 +760,11 @@ class TruncatedOutput(G8eBaseModel):
     def from_output(cls, output: str, limit: int = 20) -> TruncatedOutput:
         """
         Create TruncatedOutput from raw output string.
-        
+
         Args:
             output: Raw output string (stdout/stderr)
             limit: Number of lines to keep from start and end
-            
+
         Returns:
             TruncatedOutput with first/last lines preserved
         """

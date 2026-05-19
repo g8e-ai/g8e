@@ -44,7 +44,7 @@ class TestTribunalApprovalCorrelation:
 
     async def test_tribunal_correlation_id_flows_to_all_events(self):
         """Tribunal correlation_id is carried through to all Tribunal SSE events."""
-        inputs, state = make_agent_run_args(
+        inputs, _state = make_agent_run_args(
             case_id="correlation-test-case-001",
             investigation_id="correlation-test-inv-001",
             web_session_id="correlation-test-sess-001",
@@ -112,7 +112,7 @@ class TestTribunalApprovalCorrelation:
 
     async def test_approval_event_includes_web_session_id(self):
         """Approval events must include web_session_id for SSE boundary validation."""
-        inputs, state = make_agent_run_args(
+        inputs, _state = make_agent_run_args(
             case_id="web-session-test-case-001",
             investigation_id="web-session-test-inv-001",
             web_session_id="web-session-test-sess-001",

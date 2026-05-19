@@ -239,7 +239,7 @@ async def internal_chat(
     delivered to the browser via the existing SSE connection; this endpoint
     returns immediately with case/investigation IDs so the browser can update
     its state without waiting for the LLM.
-    
+
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
@@ -799,7 +799,7 @@ async def delete_case(
 ):
     """
     Delete a case and all related data - internal cluster use only.
-    
+
     Deletes:
     - Case document
     - All investigations with this case_id
@@ -884,7 +884,7 @@ async def terminate_operator(
 ):
     """
     Terminate an operator slot.
-    
+
     Atomically marks operator status TERMINATED and appends a TERMINATED audit
     history entry under a single per-operator lock so concurrent writes cannot
     interleave a partial termination.
@@ -1105,7 +1105,7 @@ async def generate_api_key(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ):
     """Generate a new API key.
-    
+
     Authority: g8ee.
     SECURITY: Internal only - client component.
     """
@@ -1130,7 +1130,7 @@ async def revoke_operator_certificate(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ):
     """Revoke an operator certificate.
-    
+
     Authority: g8ee.
     SECURITY: Internal only - client component.
     """
@@ -1667,8 +1667,7 @@ async def query_investigations(
     )
 
     # Use the request object directly since it already contains the filters
-    investigations = await investigation_service.investigation_data_service.query_investigations(request)
-    return investigations
+    return await investigation_service.investigation_data_service.query_investigations(request)
 
 
 @router.post(InternalApiPaths.G8EE_INVESTIGATION + "/get", response_model=InvestigationModel)
@@ -1679,7 +1678,7 @@ async def get_investigation(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ):
     """Get investigation by ID - internal cluster use only.
-    
+
     SECURITY: Validates that the authenticated user owns the investigation.
     """
     logger.info(
@@ -1762,7 +1761,7 @@ async def sync_user_settings(
 ):
     """
     Sync user settings from client - internal cluster use only.
-    
+
     Invalidates the local cache for the user's settings so subsequent
     requests will fetch the fresh settings from operator.
     """

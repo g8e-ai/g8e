@@ -550,7 +550,7 @@ class G8eoResultEnvelope(G8eBaseModel):
     @model_validator(mode="after")
     def validate_session_ids(self) -> "G8eoResultEnvelope":
         """Ensure strict separation of session types and validate required context.
-        
+
         Matches G8eHttpContext validation logic for consistency.
         """
         # Note: G8eoResultEnvelope is usually from ComponentName.G8EO
@@ -562,7 +562,7 @@ class G8eoResultEnvelope(G8eBaseModel):
 
 class G8eMessage(G8eBaseModel):
     """Standardized message for operator pub/sub communication between g8e components.
-    
+
     The payload field uses a Union discriminator pattern for type-safe parsing.
     Consumers can parse inbound messages without knowing the concrete type in advance.
     """
@@ -591,7 +591,7 @@ class G8eMessage(G8eBaseModel):
     @model_validator(mode="after")
     def validate_session_ids(self) -> "G8eMessage":
         """Ensure strict separation of session types and validate required context.
-        
+
         Matches G8eHttpContext validation logic for consistency.
         """
         if self.source_component == ComponentName.CLIENT:

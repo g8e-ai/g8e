@@ -123,7 +123,6 @@ class TestSessionAuthListener:
         operator_session_id = "ops_123"
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
         auth_channel = f"auth.publish:session:{session_hash}"
-        response_channel = f"auth.response:session:{session_hash}"
 
         mock_session_service.validate_operator_session.return_value = None
 
@@ -140,7 +139,6 @@ class TestSessionAuthListener:
         operator_session_id = "ops_123"
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
         auth_channel = f"auth.publish:session:{session_hash}"
-        response_channel = f"auth.response:session:{session_hash}"
 
         mock_session_service.validate_operator_session.side_effect = Exception("boom")
 
@@ -158,7 +156,7 @@ class TestSessionAuthListener:
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
         auth_channel = f"auth.publish:session:{session_hash}"
 
-        with patch("asyncio.sleep", new=AsyncMock()) as mock_sleep:
+        with patch("asyncio.sleep", new=AsyncMock()):
             await listener.listen(operator_session_id, "op1", "u1", "org1")
 
             # Find the background task for auto_cleanup

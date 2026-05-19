@@ -305,7 +305,7 @@ class ConsensusConfidence:
             return "consensus_failed"
 
         strength = vote_breakdown.consensus_strength
-        total_members = len(vote_breakdown.candidates_by_member)
+        len(vote_breakdown.candidates_by_member)
 
         if strength == 1.0:
             if auditor_passed is True:

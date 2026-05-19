@@ -20,17 +20,17 @@ package constants
 type UserRole string
 
 const (
-	UserRoleUser UserRole = "user"
-	UserRoleAdmin UserRole = "admin"
+	UserRoleUser       UserRole = "user"
+	UserRoleAdmin      UserRole = "admin"
 	UserRoleSuperadmin UserRole = "superadmin"
-	UserRoleOperator UserRole = "operator"
+	UserRoleOperator   UserRole = "operator"
 )
 
 // UserStatus is a typed string for user status.
 type UserStatus string
 
 const (
-	UserStatusActive UserStatus = "active"
+	UserStatusActive   UserStatus = "active"
 	UserStatusDisabled UserStatus = "disabled"
 )
 
@@ -38,14 +38,14 @@ const (
 type OperatorStatus string
 
 const (
-	OperatorStatusAvailable OperatorStatus = "available"
+	OperatorStatusAvailable   OperatorStatus = "available"
 	OperatorStatusUnavailable OperatorStatus = "unavailable"
-	OperatorStatusOffline OperatorStatus = "offline"
-	OperatorStatusBound OperatorStatus = "bound"
-	OperatorStatusStale OperatorStatus = "stale"
-	OperatorStatusActive OperatorStatus = "active"
-	OperatorStatusStopped OperatorStatus = "stopped"
-	OperatorStatusTerminated OperatorStatus = "terminated"
+	OperatorStatusOffline     OperatorStatus = "offline"
+	OperatorStatusBound       OperatorStatus = "bound"
+	OperatorStatusStale       OperatorStatus = "stale"
+	OperatorStatusActive      OperatorStatus = "active"
+	OperatorStatusStopped     OperatorStatus = "stopped"
+	OperatorStatusTerminated  OperatorStatus = "terminated"
 )
 
 // OperatorType is a typed string for g8e type.
@@ -53,15 +53,15 @@ type OperatorType string
 
 const (
 	OperatorTypeSystem OperatorType = "system"
-	OperatorTypeCloud OperatorType = "cloud"
+	OperatorTypeCloud  OperatorType = "cloud"
 )
 
 // CloudSubtype is a typed string for cloud subtype.
 type CloudSubtype string
 
 const (
-	CloudSubtypeAWS CloudSubtype = "aws"
-	CloudSubtypeGCP CloudSubtype = "gcp"
+	CloudSubtypeAWS   CloudSubtype = "aws"
+	CloudSubtypeGCP   CloudSubtype = "gcp"
 	CloudSubtypeAzure CloudSubtype = "azure"
 )
 
@@ -69,25 +69,25 @@ const (
 type ExecutionStatus string
 
 const (
-	ExecutionStatusPending ExecutionStatus = "pending"
-	ExecutionStatusExecuting ExecutionStatus = "executing"
-	ExecutionStatusCompleted ExecutionStatus = "completed"
-	ExecutionStatusFailed ExecutionStatus = "failed"
-	ExecutionStatusTimeout ExecutionStatus = "timeout"
-	ExecutionStatusCancelled ExecutionStatus = "cancelled"
+	ExecutionStatusPending         ExecutionStatus = "pending"
+	ExecutionStatusExecuting       ExecutionStatus = "executing"
+	ExecutionStatusCompleted       ExecutionStatus = "completed"
+	ExecutionStatusFailed          ExecutionStatus = "failed"
+	ExecutionStatusTimeout         ExecutionStatus = "timeout"
+	ExecutionStatusCancelled       ExecutionStatus = "cancelled"
 	ExecutionStatusCancelRequested ExecutionStatus = "cancel_requested"
-	ExecutionStatusDenied ExecutionStatus = "denied"
-	ExecutionStatusFeedback ExecutionStatus = "feedback"
+	ExecutionStatusDenied          ExecutionStatus = "denied"
+	ExecutionStatusFeedback        ExecutionStatus = "feedback"
 )
 
 // ActionStatus is a typed string for action status.
 type ActionStatus string
 
 const (
-	ActionStatusCompleted ActionStatus = "completed"
-	ActionStatusFailed ActionStatus = "failed"
-	ActionStatusTimeout ActionStatus = "timeout"
-	ActionStatusCancelled ActionStatus = "cancelled"
+	ActionStatusCompleted     ActionStatus = "completed"
+	ActionStatusFailed        ActionStatus = "failed"
+	ActionStatusTimeout       ActionStatus = "timeout"
+	ActionStatusCancelled     ActionStatus = "cancelled"
 	ActionStatusUserCancelled ActionStatus = "user.cancelled"
 )
 
@@ -95,23 +95,23 @@ const (
 type SentinelStatus string
 
 const (
-	SentinelStatusSuccess SentinelStatus = "success"
-	SentinelStatusFailure SentinelStatus = "failure"
-	SentinelStatusMisuse SentinelStatus = "misuse"
+	SentinelStatusSuccess       SentinelStatus = "success"
+	SentinelStatusFailure       SentinelStatus = "failure"
+	SentinelStatusMisuse        SentinelStatus = "misuse"
 	SentinelStatusNotExecutable SentinelStatus = "not_executable"
-	SentinelStatusNotFound SentinelStatus = "not_found"
-	SentinelStatusInvalidExit SentinelStatus = "invalid_exit"
-	SentinelStatusInterrupted SentinelStatus = "interrupted"
-	SentinelStatusKilled SentinelStatus = "killed"
-	SentinelStatusTerminated SentinelStatus = "terminated"
-	SentinelStatusError SentinelStatus = "error"
+	SentinelStatusNotFound      SentinelStatus = "not_found"
+	SentinelStatusInvalidExit   SentinelStatus = "invalid_exit"
+	SentinelStatusInterrupted   SentinelStatus = "interrupted"
+	SentinelStatusKilled        SentinelStatus = "killed"
+	SentinelStatusTerminated    SentinelStatus = "terminated"
+	SentinelStatusError         SentinelStatus = "error"
 )
 
 // VaultMode is a typed string for vault mode.
 type VaultMode string
 
 const (
-	VaultModeRaw VaultMode = "raw"
+	VaultModeRaw      VaultMode = "raw"
 	VaultModeScrubbed VaultMode = "scrubbed"
 )
 
@@ -119,9 +119,9 @@ const (
 type ApiKeyStatus string
 
 const (
-	APIKeyStatusActive ApiKeyStatus = "active"
-	APIKeyStatusRevoked ApiKeyStatus = "revoked"
-	APIKeyStatusExpired ApiKeyStatus = "expired"
+	APIKeyStatusActive    ApiKeyStatus = "active"
+	APIKeyStatusRevoked   ApiKeyStatus = "revoked"
+	APIKeyStatusExpired   ApiKeyStatus = "expired"
 	APIKeyStatusSuspended ApiKeyStatus = "suspended"
 )
 
@@ -129,62 +129,62 @@ const (
 type InvestigationStatus string
 
 const (
-	InvestigationStatusOpen InvestigationStatus = "Open"
-	InvestigationStatusClosed InvestigationStatus = "Closed"
+	InvestigationStatusOpen      InvestigationStatus = "Open"
+	InvestigationStatusClosed    InvestigationStatus = "Closed"
 	InvestigationStatusEscalated InvestigationStatus = "Escalated"
-	InvestigationStatusResolved InvestigationStatus = "Resolved"
+	InvestigationStatusResolved  InvestigationStatus = "Resolved"
 )
 
 // CaseStatus is a typed string for case status.
 type CaseStatus string
 
 const (
-	CaseStatusNew CaseStatus = "New"
-	CaseStatusTriage CaseStatus = "Triage"
-	CaseStatusEscalated CaseStatus = "Escalated"
+	CaseStatusNew                CaseStatus = "New"
+	CaseStatusTriage             CaseStatus = "Triage"
+	CaseStatusEscalated          CaseStatus = "Escalated"
 	CaseStatusWaitingForCustomer CaseStatus = "WaitingForCustomer"
-	CaseStatusInProgress CaseStatus = "InProgress"
-	CaseStatusHumanReview CaseStatus = "HumanReview"
-	CaseStatusResolved CaseStatus = "Resolved"
-	CaseStatusClosed CaseStatus = "Closed"
+	CaseStatusInProgress         CaseStatus = "InProgress"
+	CaseStatusHumanReview        CaseStatus = "HumanReview"
+	CaseStatusResolved           CaseStatus = "Resolved"
+	CaseStatusClosed             CaseStatus = "Closed"
 )
 
 // TaskStatus is a typed string for task status.
 type TaskStatus string
 
 const (
-	TaskStatusPending TaskStatus = "pending"
+	TaskStatusPending    TaskStatus = "pending"
 	TaskStatusInProgress TaskStatus = "executing"
-	TaskStatusCompleted TaskStatus = "completed"
-	TaskStatusFailed TaskStatus = "failed"
-	TaskStatusCancelled TaskStatus = "cancelled"
+	TaskStatusCompleted  TaskStatus = "completed"
+	TaskStatusFailed     TaskStatus = "failed"
+	TaskStatusCancelled  TaskStatus = "cancelled"
 )
 
 // ComponentName is a typed string for component name.
 type ComponentName string
 
 const (
-	ComponentNameG8EE ComponentName = "g8ee"
-	ComponentNameG8EO ComponentName = "g8eo"
+	ComponentNameG8EE       ComponentName = "g8ee"
+	ComponentNameG8EO       ComponentName = "g8eo"
 	ComponentNameG8EOListen ComponentName = "g8eo-listen"
-	ComponentNameClient ComponentName = "client"
+	ComponentNameClient     ComponentName = "client"
 )
 
 // ComponentStatus is a typed string for component status.
 type ComponentStatus string
 
 const (
-	ComponentStatusActive ComponentStatus = "active"
-	ComponentStatusInactive ComponentStatus = "inactive"
+	ComponentStatusActive      ComponentStatus = "active"
+	ComponentStatusInactive    ComponentStatus = "inactive"
 	ComponentStatusMaintenance ComponentStatus = "maintenance"
-	ComponentStatusError ComponentStatus = "error"
+	ComponentStatusError       ComponentStatus = "error"
 )
 
 // HealthStatus is a typed string for health status.
 type HealthStatus string
 
 const (
-	HealthStatusHealthy HealthStatus = "healthy"
+	HealthStatusHealthy   HealthStatus = "healthy"
 	HealthStatusUnhealthy HealthStatus = "unhealthy"
 )
 
@@ -192,21 +192,21 @@ const (
 type ApprovalType string
 
 const (
-	ApprovalTypeCommand ApprovalType = "command"
-	ApprovalTypeFileEdit ApprovalType = "file.edit"
-	ApprovalTypeIntent ApprovalType = "intent"
+	ApprovalTypeCommand       ApprovalType = "command"
+	ApprovalTypeFileEdit      ApprovalType = "file.edit"
+	ApprovalTypeIntent        ApprovalType = "intent"
 	ApprovalTypeAgentContinue ApprovalType = "agent.continue"
-	ApprovalTypeStream ApprovalType = "stream"
+	ApprovalTypeStream        ApprovalType = "stream"
 )
 
 // ApprovalErrorType is a typed string for approval error type.
 type ApprovalErrorType string
 
 const (
-	ApprovalErrorTypeApprovalPublishFailure ApprovalErrorType = "approval.publish.failure"
-	ApprovalErrorTypeApprovalException ApprovalErrorType = "approval.exception"
-	ApprovalErrorTypeApprovalTimeout ApprovalErrorType = "approval.timeout"
-	ApprovalErrorTypeInvalidIntent ApprovalErrorType = "invalid.intent"
+	ApprovalErrorTypeApprovalPublishFailure  ApprovalErrorType = "approval.publish.failure"
+	ApprovalErrorTypeApprovalException       ApprovalErrorType = "approval.exception"
+	ApprovalErrorTypeApprovalTimeout         ApprovalErrorType = "approval.timeout"
+	ApprovalErrorTypeInvalidIntent           ApprovalErrorType = "invalid.intent"
 	ApprovalErrorTypeIntentApprovalException ApprovalErrorType = "intent.approval.exception"
 )
 
@@ -214,9 +214,9 @@ const (
 type AttachmentType string
 
 const (
-	AttachmentTypePdf AttachmentType = "pdf"
+	AttachmentTypePdf   AttachmentType = "pdf"
 	AttachmentTypeImage AttachmentType = "image"
-	AttachmentTypeText AttachmentType = "text"
+	AttachmentTypeText  AttachmentType = "text"
 	AttachmentTypeOther AttachmentType = "other"
 )
 
@@ -224,8 +224,8 @@ const (
 type WorkflowType string
 
 const (
-	WorkflowTypeG8eBound WorkflowType = "g8e.bound"
-	WorkflowTypeG8eNotBound WorkflowType = "g8e.not.bound"
+	WorkflowTypeG8eBound      WorkflowType = "g8e.bound"
+	WorkflowTypeG8eNotBound   WorkflowType = "g8e.not.bound"
 	WorkflowTypeG8eCloudBound WorkflowType = "g8e.cloud.bound"
 )
 
@@ -233,27 +233,27 @@ const (
 type RiskLevel string
 
 const (
-	RiskLevelLow RiskLevel = "LOW"
+	RiskLevelLow    RiskLevel = "LOW"
 	RiskLevelMedium RiskLevel = "MEDIUM"
-	RiskLevelHigh RiskLevel = "HIGH"
+	RiskLevelHigh   RiskLevel = "HIGH"
 )
 
 // RiskThreshold is a typed string for risk threshold.
 type RiskThreshold string
 
 const (
-	RiskThresholdLow RiskThreshold = "low"
+	RiskThresholdLow    RiskThreshold = "low"
 	RiskThresholdMedium RiskThreshold = "medium"
-	RiskThresholdHigh RiskThreshold = "high"
+	RiskThresholdHigh   RiskThreshold = "high"
 )
 
 // EscalationRisk is a typed string for escalation risk.
 type EscalationRisk string
 
 const (
-	EscalationRiskLow EscalationRisk = "low"
-	EscalationRiskMedium EscalationRisk = "medium"
-	EscalationRiskHigh EscalationRisk = "high"
+	EscalationRiskLow      EscalationRisk = "low"
+	EscalationRiskMedium   EscalationRisk = "medium"
+	EscalationRiskHigh     EscalationRisk = "high"
 	EscalationRiskCritical EscalationRisk = "critical"
 )
 
@@ -261,9 +261,9 @@ const (
 type Platform string
 
 const (
-	PlatformLinux Platform = "linux"
+	PlatformLinux   Platform = "linux"
 	PlatformWindows Platform = "windows"
-	PlatformDarwin Platform = "darwin"
+	PlatformDarwin  Platform = "darwin"
 )
 
 // HeartbeatType is a typed string for heartbeat type.
@@ -279,7 +279,7 @@ const (
 type G8eAvailability string
 
 const (
-	G8eAvailabilityOnline G8eAvailability = "ONLINE"
+	G8eAvailabilityOnline  G8eAvailability = "ONLINE"
 	G8eAvailabilityOffline G8eAvailability = "OFFLINE"
 )
 
@@ -288,25 +288,25 @@ type VersionStability string
 
 const (
 	VersionStabilityStable VersionStability = "stable"
-	VersionStabilityBeta VersionStability = "beta"
-	VersionStabilityDev VersionStability = "dev"
+	VersionStabilityBeta   VersionStability = "beta"
+	VersionStabilityDev    VersionStability = "dev"
 )
 
 // SessionType is a typed string for session type.
 type SessionType string
 
 const (
-	SessionTypeWeb SessionType = "web"
+	SessionTypeWeb      SessionType = "web"
 	SessionTypeOperator SessionType = "operator"
-	SessionTypeCLI SessionType = "cli"
+	SessionTypeCLI      SessionType = "cli"
 )
 
 // ConversationStatus is a typed string for conversation status.
 type ConversationStatus string
 
 const (
-	ConversationStatusActive ConversationStatus = "active"
-	ConversationStatusInactive ConversationStatus = "inactive"
+	ConversationStatusActive    ConversationStatus = "active"
+	ConversationStatusInactive  ConversationStatus = "inactive"
 	ConversationStatusCompleted ConversationStatus = "completed"
 )
 
@@ -314,9 +314,9 @@ const (
 type InfrastructureStatus string
 
 const (
-	InfrastructureStatusUnknown InfrastructureStatus = "unknown"
-	InfrastructureStatusHealthy InfrastructureStatus = "healthy"
-	InfrastructureStatusStable InfrastructureStatus = "stable"
+	InfrastructureStatusUnknown  InfrastructureStatus = "unknown"
+	InfrastructureStatusHealthy  InfrastructureStatus = "healthy"
+	InfrastructureStatusStable   InfrastructureStatus = "stable"
 	InfrastructureStatusDegraded InfrastructureStatus = "degraded"
 	InfrastructureStatusCritical InfrastructureStatus = "critical"
 )
@@ -325,47 +325,47 @@ const (
 type AiSource string
 
 const (
-	AISourceToolCall AiSource = "ai.tool.call"
+	AISourceToolCall         AiSource = "ai.tool.call"
 	AISourceTerminalAnchored AiSource = "ai.terminal.anchored"
-	AISourceTerminalDirect AiSource = "ai.terminal.direct"
+	AISourceTerminalDirect   AiSource = "ai.terminal.direct"
 )
 
 // AITaskId is a typed string for ai task id.
 type AITaskId string
 
 const (
-	AITaskIDChat AITaskId = "ai.chat"
-	AITaskIDAgentContinue AITaskId = "ai.agent.continue"
-	AITaskIDCommand AITaskId = "ai.command"
-	AITaskIDDirectCommand AITaskId = "ai.direct.command"
-	AITaskIDFileEdit AITaskId = "ai.file.edit"
-	AITaskIDFsList AITaskId = "ai.fs.list"
-	AITaskIDFsRead AITaskId = "ai.fs.read"
-	AITaskIDPortCheck AITaskId = "ai.port.check"
-	AITaskIDFetchLogs AITaskId = "ai.fetch.logs"
-	AITaskIDFetchHistory AITaskId = "ai.fetch.history"
+	AITaskIDChat             AITaskId = "ai.chat"
+	AITaskIDAgentContinue    AITaskId = "ai.agent.continue"
+	AITaskIDCommand          AITaskId = "ai.command"
+	AITaskIDDirectCommand    AITaskId = "ai.direct.command"
+	AITaskIDFileEdit         AITaskId = "ai.file.edit"
+	AITaskIDFsList           AITaskId = "ai.fs.list"
+	AITaskIDFsRead           AITaskId = "ai.fs.read"
+	AITaskIDPortCheck        AITaskId = "ai.port.check"
+	AITaskIDFetchLogs        AITaskId = "ai.fetch.logs"
+	AITaskIDFetchHistory     AITaskId = "ai.fetch.history"
 	AITaskIDFetchFileHistory AITaskId = "ai.fetch.file.history"
-	AITaskIDRestoreFile AITaskId = "ai.restore.file"
-	AITaskIDFetchFileDiff AITaskId = "ai.fetch.file.diff"
-	AITaskIDRecursiveGrep AITaskId = "ai.recursive_grep"
-	AITaskIDIntentGrant AITaskId = "ai.intent.grant"
-	AITaskIDIntentRevoke AITaskId = "ai.intent.revoke"
+	AITaskIDRestoreFile      AITaskId = "ai.restore.file"
+	AITaskIDFetchFileDiff    AITaskId = "ai.fetch.file.diff"
+	AITaskIDRecursiveGrep    AITaskId = "ai.recursive_grep"
+	AITaskIDIntentGrant      AITaskId = "ai.intent.grant"
+	AITaskIDIntentRevoke     AITaskId = "ai.intent.revoke"
 )
 
 // ThinkingActionType is a typed string for thinking action type.
 type ThinkingActionType string
 
 const (
-	ThinkingActionTypeStart ThinkingActionType = "start"
+	ThinkingActionTypeStart  ThinkingActionType = "start"
 	ThinkingActionTypeUpdate ThinkingActionType = "update"
-	ThinkingActionTypeEnd ThinkingActionType = "end"
+	ThinkingActionTypeEnd    ThinkingActionType = "end"
 )
 
 // ToolCallStatus is a typed string for tool call status.
 type ToolCallStatus string
 
 const (
-	ToolCallStatusStarted ToolCallStatus = "started"
+	ToolCallStatusStarted   ToolCallStatus = "started"
 	ToolCallStatusCompleted ToolCallStatus = "completed"
 )
 
@@ -373,12 +373,12 @@ const (
 type CommandStatus string
 
 const (
-	CommandStatusPending CommandStatus = "pending"
+	CommandStatusPending   CommandStatus = "pending"
 	CommandStatusExecuting CommandStatus = "executing"
-	CommandStatusOutput CommandStatus = "output"
+	CommandStatusOutput    CommandStatus = "output"
 	CommandStatusCompleted CommandStatus = "completed"
-	CommandStatusFailed CommandStatus = "failed"
-	CommandStatusTimeout CommandStatus = "timeout"
+	CommandStatusFailed    CommandStatus = "failed"
+	CommandStatusTimeout   CommandStatus = "timeout"
 	CommandStatusCancelled CommandStatus = "cancelled"
 )
 
@@ -387,27 +387,27 @@ type ToolDisplayCategory string
 
 const (
 	ToolDisplayCategoryExecution ToolDisplayCategory = "execution"
-	ToolDisplayCategoryFile ToolDisplayCategory = "file"
-	ToolDisplayCategoryNetwork ToolDisplayCategory = "network"
-	ToolDisplayCategorySearch ToolDisplayCategory = "search"
-	ToolDisplayCategoryGeneral ToolDisplayCategory = "general"
+	ToolDisplayCategoryFile      ToolDisplayCategory = "file"
+	ToolDisplayCategoryNetwork   ToolDisplayCategory = "network"
+	ToolDisplayCategorySearch    ToolDisplayCategory = "search"
+	ToolDisplayCategoryGeneral   ToolDisplayCategory = "general"
 )
 
 // CommandCategory is a typed string for command category.
 type CommandCategory string
 
 const (
-	CommandCategoryCSVWhitelist CommandCategory = "csv_whitelist"
+	CommandCategoryCSVWhitelist       CommandCategory = "csv_whitelist"
 	CommandCategoryNetworkDiagnostics CommandCategory = "network_diagnostics"
-	CommandCategorySystemDiagnostics CommandCategory = "system_diagnostics"
+	CommandCategorySystemDiagnostics  CommandCategory = "system_diagnostics"
 )
 
 // ToolCallDefaults is a typed string for tool call defaults.
 type ToolCallDefaults string
 
 const (
-	ToolCallDefaultsLabel ToolCallDefaults = "Processing"
-	ToolCallDefaultsIcon ToolCallDefaults = "sync"
+	ToolCallDefaultsLabel    ToolCallDefaults = "Processing"
+	ToolCallDefaultsIcon     ToolCallDefaults = "sync"
 	ToolCallDefaultsCategory ToolCallDefaults = "general"
 )
 
@@ -423,31 +423,31 @@ type TribunalOutcome string
 
 const (
 	TribunalOutcomeVerificationFailed TribunalOutcome = "verification_failed"
-	TribunalOutcomeConsensus TribunalOutcome = "consensus"
-	TribunalOutcomeVerified TribunalOutcome = "verified"
-	TribunalOutcomeConsensusFailed TribunalOutcome = "consensus_failed"
+	TribunalOutcomeConsensus          TribunalOutcome = "consensus"
+	TribunalOutcomeVerified           TribunalOutcome = "verified"
+	TribunalOutcomeConsensusFailed    TribunalOutcome = "consensus_failed"
 )
 
 // TribunalFallbackReason is a typed string for tribunal fallback reason.
 type TribunalFallbackReason string
 
 const (
-	TribunalFallbackReasonDisabled TribunalFallbackReason = "disabled"
+	TribunalFallbackReasonDisabled            TribunalFallbackReason = "disabled"
 	TribunalFallbackReasonProviderUnavailable TribunalFallbackReason = "provider_unavailable"
-	TribunalFallbackReasonAllPassesFailed TribunalFallbackReason = "all_passes_failed"
-	TribunalFallbackReasonNoVoteWinner TribunalFallbackReason = "no_vote_winner"
+	TribunalFallbackReasonAllPassesFailed     TribunalFallbackReason = "all_passes_failed"
+	TribunalFallbackReasonNoVoteWinner        TribunalFallbackReason = "no_vote_winner"
 )
 
 // CitationLayout is a typed string for citation layout.
 type CitationLayout string
 
 const (
-	CitationLayoutHoverCardWidthPx CitationLayout = "360"
-	CitationLayoutFaviconSizePx CitationLayout = "16"
+	CitationLayoutHoverCardWidthPx          CitationLayout = "360"
+	CitationLayoutFaviconSizePx             CitationLayout = "16"
 	CitationLayoutHoverCardViewportMarginPx CitationLayout = "8"
-	CitationLayoutHeadingSegmentMaxLength CitationLayout = "60"
-	CitationLayoutSentenceLookaheadChars CitationLayout = "120"
-	CitationLayoutParagraphLookaheadChars CitationLayout = "200"
+	CitationLayoutHeadingSegmentMaxLength   CitationLayout = "60"
+	CitationLayoutSentenceLookaheadChars    CitationLayout = "120"
+	CitationLayoutParagraphLookaheadChars   CitationLayout = "200"
 )
 
 // G8eActionType is a typed string for g8e action type.
@@ -455,90 +455,90 @@ type G8eActionType string
 
 const (
 	G8eActionTypeCommandExecution G8eActionType = "operator.command.execution"
-	G8eActionTypeCommandExecuted G8eActionType = "operator.command.executed"
-	G8eActionTypeFileRead G8eActionType = "operator.file.read"
-	G8eActionTypeFileEdit G8eActionType = "operator.file.edit"
-	G8eActionTypeFileList G8eActionType = "operator.file.list"
-	G8eActionTypePortCheck G8eActionType = "g8e.port.check"
+	G8eActionTypeCommandExecuted  G8eActionType = "operator.command.executed"
+	G8eActionTypeFileRead         G8eActionType = "operator.file.read"
+	G8eActionTypeFileEdit         G8eActionType = "operator.file.edit"
+	G8eActionTypeFileList         G8eActionType = "operator.file.list"
+	G8eActionTypePortCheck        G8eActionType = "g8e.port.check"
 )
 
 // ActionType is a typed string for action type.
 type ActionType string
 
 const (
-	ActionTypeExecuteBash ActionType = "EXECUTE_BASH"
-	ActionTypeFileEdit ActionType = "FILE_EDIT"
-	ActionTypeFsList ActionType = "FS_LIST"
-	ActionTypeFsRead ActionType = "FS_READ"
-	ActionTypeFsGrep ActionType = "FS_GREP"
-	ActionTypePortCheck ActionType = "PORT_CHECK"
-	ActionTypeFetchLogs ActionType = "FETCH_LOGS"
-	ActionTypeFetchHistory ActionType = "FETCH_HISTORY"
+	ActionTypeExecuteBash      ActionType = "EXECUTE_BASH"
+	ActionTypeFileEdit         ActionType = "FILE_EDIT"
+	ActionTypeFsList           ActionType = "FS_LIST"
+	ActionTypeFsRead           ActionType = "FS_READ"
+	ActionTypeFsGrep           ActionType = "FS_GREP"
+	ActionTypePortCheck        ActionType = "PORT_CHECK"
+	ActionTypeFetchLogs        ActionType = "FETCH_LOGS"
+	ActionTypeFetchHistory     ActionType = "FETCH_HISTORY"
 	ActionTypeFetchFileHistory ActionType = "FETCH_FILE_HISTORY"
-	ActionTypeRestoreFile ActionType = "RESTORE_FILE"
-	ActionTypeShutdown ActionType = "SHUTDOWN"
-	ActionTypeHeartbeat ActionType = "HEARTBEAT"
-	ActionTypeEvalAnswer ActionType = "EVAL_ANSWER"
-	ActionTypeGrantIntent ActionType = "GRANT_INTENT"
-	ActionTypeRevokeIntent ActionType = "REVOKE_INTENT"
+	ActionTypeRestoreFile      ActionType = "RESTORE_FILE"
+	ActionTypeShutdown         ActionType = "SHUTDOWN"
+	ActionTypeHeartbeat        ActionType = "HEARTBEAT"
+	ActionTypeEvalAnswer       ActionType = "EVAL_ANSWER"
+	ActionTypeGrantIntent      ActionType = "GRANT_INTENT"
+	ActionTypeRevokeIntent     ActionType = "REVOKE_INTENT"
 )
 
 // CommandErrorType is a typed string for command error type.
 type CommandErrorType string
 
 const (
-	CommandErrorTypeValidationError CommandErrorType = "validation.error"
-	CommandErrorTypeSecurityError CommandErrorType = "security.error"
-	CommandErrorTypeSecurityViolation CommandErrorType = "security.violation"
-	CommandErrorTypeBindingViolation CommandErrorType = "binding.violation"
-	CommandErrorTypeNoOperatorsAvailable CommandErrorType = "no.operators.available"
-	CommandErrorTypeG8eResolutionError CommandErrorType = "g8e.resolution.error"
-	CommandErrorTypeCloudOperatorRequired CommandErrorType = "cloud.operator.required"
-	CommandErrorTypeBlacklistViolation CommandErrorType = "blacklist.violation"
-	CommandErrorTypeWhitelistViolation CommandErrorType = "whitelist.violation"
-	CommandErrorTypeExecutionFailed CommandErrorType = "execution.failed"
-	CommandErrorTypeExecutionError CommandErrorType = "execution.error"
-	CommandErrorTypeUserDenied CommandErrorType = "user.denied"
-	CommandErrorTypeUserFeedback CommandErrorType = "user.feedback"
-	CommandErrorTypePermissionDenied CommandErrorType = "permission.denied"
-	CommandErrorTypeCommandTimeout CommandErrorType = "command.timeout"
-	CommandErrorTypeCommandExecutionFailed CommandErrorType = "command.execution.failed"
+	CommandErrorTypeValidationError            CommandErrorType = "validation.error"
+	CommandErrorTypeSecurityError              CommandErrorType = "security.error"
+	CommandErrorTypeSecurityViolation          CommandErrorType = "security.violation"
+	CommandErrorTypeBindingViolation           CommandErrorType = "binding.violation"
+	CommandErrorTypeNoOperatorsAvailable       CommandErrorType = "no.operators.available"
+	CommandErrorTypeG8eResolutionError         CommandErrorType = "g8e.resolution.error"
+	CommandErrorTypeCloudOperatorRequired      CommandErrorType = "cloud.operator.required"
+	CommandErrorTypeBlacklistViolation         CommandErrorType = "blacklist.violation"
+	CommandErrorTypeWhitelistViolation         CommandErrorType = "whitelist.violation"
+	CommandErrorTypeExecutionFailed            CommandErrorType = "execution.failed"
+	CommandErrorTypeExecutionError             CommandErrorType = "execution.error"
+	CommandErrorTypeUserDenied                 CommandErrorType = "user.denied"
+	CommandErrorTypeUserFeedback               CommandErrorType = "user.feedback"
+	CommandErrorTypePermissionDenied           CommandErrorType = "permission.denied"
+	CommandErrorTypeCommandTimeout             CommandErrorType = "command.timeout"
+	CommandErrorTypeCommandExecutionFailed     CommandErrorType = "command.execution.failed"
 	CommandErrorTypePubSubSubscriptionNotReady CommandErrorType = "pubsub.subscription.not.ready"
-	CommandErrorTypeUnknownTool CommandErrorType = "unknown.tool"
-	CommandErrorTypeFsListFailed CommandErrorType = "fs.list.failed"
-	CommandErrorTypeFsReadFailed CommandErrorType = "fs.read.failed"
-	CommandErrorTypeUserCancelled CommandErrorType = "user.cancelled"
-	CommandErrorTypeRiskAnalysisBlocked CommandErrorType = "risk.analysis.blocked"
-	CommandErrorTypeApprovalDenied CommandErrorType = "approval.denied"
-	CommandErrorTypeOperationTimeout CommandErrorType = "operation.timeout"
-	CommandErrorTypeInvalidIntent CommandErrorType = "invalid.intent"
-	CommandErrorTypeMissingOperatorID CommandErrorType = "missing.operator.id"
-	CommandErrorTypePartialIAMUpdateFailed CommandErrorType = "partial.iam.update.failed"
-	CommandErrorTypePartialIAMDetachFailed CommandErrorType = "partial.iam.detach.failed"
-	CommandErrorTypeRestoreFileFailed CommandErrorType = "restore.file.failed"
-	CommandErrorTypeFetchFileDiffFailed CommandErrorType = "fetch.file.diff.failed"
-	CommandErrorTypeFetchLogsFailed CommandErrorType = "fetch.logs.failed"
-	CommandErrorTypeFetchHistoryFailed CommandErrorType = "fetch.history.failed"
-	CommandErrorTypeFetchFileHistoryFailed CommandErrorType = "fetch.file.history.failed"
-	CommandErrorTypePortCheckFailed CommandErrorType = "port.check.failed"
-	CommandErrorTypeApprovalTimeout CommandErrorType = "approval.timeout"
-	CommandErrorTypePermissionError CommandErrorType = "permission.error"
-	CommandErrorTypeConfigurationError CommandErrorType = "configuration.error"
-	CommandErrorTypeAgentConflict CommandErrorType = "agent.conflict"
+	CommandErrorTypeUnknownTool                CommandErrorType = "unknown.tool"
+	CommandErrorTypeFsListFailed               CommandErrorType = "fs.list.failed"
+	CommandErrorTypeFsReadFailed               CommandErrorType = "fs.read.failed"
+	CommandErrorTypeUserCancelled              CommandErrorType = "user.cancelled"
+	CommandErrorTypeRiskAnalysisBlocked        CommandErrorType = "risk.analysis.blocked"
+	CommandErrorTypeApprovalDenied             CommandErrorType = "approval.denied"
+	CommandErrorTypeOperationTimeout           CommandErrorType = "operation.timeout"
+	CommandErrorTypeInvalidIntent              CommandErrorType = "invalid.intent"
+	CommandErrorTypeMissingOperatorID          CommandErrorType = "missing.operator.id"
+	CommandErrorTypePartialIAMUpdateFailed     CommandErrorType = "partial.iam.update.failed"
+	CommandErrorTypePartialIAMDetachFailed     CommandErrorType = "partial.iam.detach.failed"
+	CommandErrorTypeRestoreFileFailed          CommandErrorType = "restore.file.failed"
+	CommandErrorTypeFetchFileDiffFailed        CommandErrorType = "fetch.file.diff.failed"
+	CommandErrorTypeFetchLogsFailed            CommandErrorType = "fetch.logs.failed"
+	CommandErrorTypeFetchHistoryFailed         CommandErrorType = "fetch.history.failed"
+	CommandErrorTypeFetchFileHistoryFailed     CommandErrorType = "fetch.file.history.failed"
+	CommandErrorTypePortCheckFailed            CommandErrorType = "port.check.failed"
+	CommandErrorTypeApprovalTimeout            CommandErrorType = "approval.timeout"
+	CommandErrorTypePermissionError            CommandErrorType = "permission.error"
+	CommandErrorTypeConfigurationError         CommandErrorType = "configuration.error"
+	CommandErrorTypeAgentConflict              CommandErrorType = "agent.conflict"
 )
 
 // FileOperation is a typed string for file operation.
 type FileOperation string
 
 const (
-	FileOperationRead FileOperation = "read"
-	FileOperationCreate FileOperation = "create"
-	FileOperationWrite FileOperation = "write"
-	FileOperationUpdate FileOperation = "update"
+	FileOperationRead    FileOperation = "read"
+	FileOperationCreate  FileOperation = "create"
+	FileOperationWrite   FileOperation = "write"
+	FileOperationUpdate  FileOperation = "update"
 	FileOperationReplace FileOperation = "replace"
-	FileOperationInsert FileOperation = "insert"
-	FileOperationDelete FileOperation = "delete"
-	FileOperationPatch FileOperation = "patch"
+	FileOperationInsert  FileOperation = "insert"
+	FileOperationDelete  FileOperation = "delete"
+	FileOperationPatch   FileOperation = "patch"
 )
 
 // NetworkProtocol is a typed string for network protocol.
@@ -553,7 +553,7 @@ const (
 type AuthProvider string
 
 const (
-	AuthProviderLocal AuthProvider = "local"
+	AuthProviderLocal   AuthProvider = "local"
 	AuthProviderPasskey AuthProvider = "passkey"
 )
 
@@ -562,7 +562,7 @@ type AuthMethod string
 
 const (
 	AuthMethodKvPubSub AuthMethod = "kv_pubsub"
-	AuthMethodSession AuthMethod = "session"
+	AuthMethodSession  AuthMethod = "session"
 )
 
 // ConnectionState is a typed string for connection state.
@@ -570,11 +570,11 @@ type ConnectionState string
 
 const (
 	ConnectionStateDisconnected ConnectionState = "disconnected"
-	ConnectionStateConnecting ConnectionState = "connecting"
-	ConnectionStateConnected ConnectionState = "connected"
+	ConnectionStateConnecting   ConnectionState = "connecting"
+	ConnectionStateConnected    ConnectionState = "connected"
 	ConnectionStateReconnecting ConnectionState = "reconnecting"
-	ConnectionStateClosed ConnectionState = "closed"
-	ConnectionStateError ConnectionState = "error"
+	ConnectionStateClosed       ConnectionState = "closed"
+	ConnectionStateError        ConnectionState = "error"
 )
 
 // Environment is a typed string for environment.
@@ -582,27 +582,27 @@ type Environment string
 
 const (
 	EnvironmentProduction Environment = "production"
-	EnvironmentDev Environment = "dev"
-	EnvironmentTest Environment = "test"
+	EnvironmentDev        Environment = "dev"
+	EnvironmentTest       Environment = "test"
 )
 
 // DeviceLinkStatus is a typed string for device link status.
 type DeviceLinkStatus string
 
 const (
-	DeviceLinkStatusActive DeviceLinkStatus = "active"
-	DeviceLinkStatusPending DeviceLinkStatus = "pending"
-	DeviceLinkStatusUsed DeviceLinkStatus = "used"
+	DeviceLinkStatusActive    DeviceLinkStatus = "active"
+	DeviceLinkStatusPending   DeviceLinkStatus = "pending"
+	DeviceLinkStatusUsed      DeviceLinkStatus = "used"
 	DeviceLinkStatusExhausted DeviceLinkStatus = "exhausted"
-	DeviceLinkStatusExpired DeviceLinkStatus = "expired"
-	DeviceLinkStatusRevoked DeviceLinkStatus = "revoked"
+	DeviceLinkStatusExpired   DeviceLinkStatus = "expired"
+	DeviceLinkStatusRevoked   DeviceLinkStatus = "revoked"
 )
 
 // DeviceLinkSuccess is a typed string for device link success.
 type DeviceLinkSuccess string
 
 const (
-	DeviceLinkSuccessListed DeviceLinkSuccess = "Device links listed successfully"
+	DeviceLinkSuccessListed  DeviceLinkSuccess = "Device links listed successfully"
 	DeviceLinkSuccessCreated DeviceLinkSuccess = "Device link created successfully"
 	DeviceLinkSuccessRevoked DeviceLinkSuccess = "Device link revoked successfully"
 	DeviceLinkSuccessDeleted DeviceLinkSuccess = "Device link deleted successfully"
@@ -612,54 +612,54 @@ const (
 type SystemHealth string
 
 const (
-	SystemHealthHealthy SystemHealth = "healthy"
-	SystemHealthDegraded SystemHealth = "degraded"
+	SystemHealthHealthy   SystemHealth = "healthy"
+	SystemHealthDegraded  SystemHealth = "degraded"
 	SystemHealthUnhealthy SystemHealth = "unhealthy"
-	SystemHealthUnknown SystemHealth = "unknown"
+	SystemHealthUnknown   SystemHealth = "unknown"
 )
 
 // SessionKeyPrefix is a typed string for session key prefix.
 type SessionKeyPrefix string
 
 const (
-	SessionKeyPrefixWeb SessionKeyPrefix = "web_session"
+	SessionKeyPrefixWeb      SessionKeyPrefix = "web_session"
 	SessionKeyPrefixOperator SessionKeyPrefix = "operator_session"
-	SessionKeyPrefixCLI SessionKeyPrefix = "cli_session"
+	SessionKeyPrefixCLI      SessionKeyPrefix = "cli_session"
 )
 
 // OperatorHistoryEventType is a typed string for history event type.
 type OperatorHistoryEventType string
 
 const (
-	HistoryEventTypeCreated OperatorHistoryEventType = "created"
-	HistoryEventTypeSlotCreated OperatorHistoryEventType = "slot.created"
-	HistoryEventTypeSlotConsumed OperatorHistoryEventType = "slot.consumed"
-	HistoryEventTypeSlotReleased OperatorHistoryEventType = "slot.released"
-	HistoryEventTypeBound OperatorHistoryEventType = "bound"
-	HistoryEventTypeUnbound OperatorHistoryEventType = "unbound"
-	HistoryEventTypeHeartbeatReceived OperatorHistoryEventType = "heartbeat.received"
-	HistoryEventTypeStatusChanged OperatorHistoryEventType = "status.changed"
-	HistoryEventTypeAPIKeyRefreshed OperatorHistoryEventType = "api.key.refreshed"
-	HistoryEventTypeCreatedFromRefresh OperatorHistoryEventType = "created.from.refresh"
+	HistoryEventTypeCreated              OperatorHistoryEventType = "created"
+	HistoryEventTypeSlotCreated          OperatorHistoryEventType = "slot.created"
+	HistoryEventTypeSlotConsumed         OperatorHistoryEventType = "slot.consumed"
+	HistoryEventTypeSlotReleased         OperatorHistoryEventType = "slot.released"
+	HistoryEventTypeBound                OperatorHistoryEventType = "bound"
+	HistoryEventTypeUnbound              OperatorHistoryEventType = "unbound"
+	HistoryEventTypeHeartbeatReceived    OperatorHistoryEventType = "heartbeat.received"
+	HistoryEventTypeStatusChanged        OperatorHistoryEventType = "status.changed"
+	HistoryEventTypeAPIKeyRefreshed      OperatorHistoryEventType = "api.key.refreshed"
+	HistoryEventTypeCreatedFromRefresh   OperatorHistoryEventType = "created.from.refresh"
 	HistoryEventTypeTerminatedForRefresh OperatorHistoryEventType = "terminated.for.refresh"
-	HistoryEventTypeReset OperatorHistoryEventType = "reset"
-	HistoryEventTypeTerminated OperatorHistoryEventType = "terminated"
-	HistoryEventTypeAuthenticated OperatorHistoryEventType = "authenticated"
-	HistoryEventTypeDeactivated OperatorHistoryEventType = "deactivated"
-	HistoryEventTypeStopped OperatorHistoryEventType = "stopped"
-	HistoryEventTypeShutdownRequested OperatorHistoryEventType = "shutdown.requested"
-	HistoryEventTypeClaimed OperatorHistoryEventType = "claimed"
-	HistoryEventTypeReconnected OperatorHistoryEventType = "reconnected"
-	HistoryEventTypeRegistered OperatorHistoryEventType = "registered"
+	HistoryEventTypeReset                OperatorHistoryEventType = "reset"
+	HistoryEventTypeTerminated           OperatorHistoryEventType = "terminated"
+	HistoryEventTypeAuthenticated        OperatorHistoryEventType = "authenticated"
+	HistoryEventTypeDeactivated          OperatorHistoryEventType = "deactivated"
+	HistoryEventTypeStopped              OperatorHistoryEventType = "stopped"
+	HistoryEventTypeShutdownRequested    OperatorHistoryEventType = "shutdown.requested"
+	HistoryEventTypeClaimed              OperatorHistoryEventType = "claimed"
+	HistoryEventTypeReconnected          OperatorHistoryEventType = "reconnected"
+	HistoryEventTypeRegistered           OperatorHistoryEventType = "registered"
 )
 
 // HistoryActor is a typed string for history actor.
 type HistoryActor string
 
 const (
-	HistoryActorNone HistoryActor = ""
-	HistoryActorUser HistoryActor = "user"
-	HistoryActorG8EO HistoryActor = "g8eo"
+	HistoryActorNone   HistoryActor = ""
+	HistoryActorUser   HistoryActor = "user"
+	HistoryActorG8EO   HistoryActor = "g8eo"
 	HistoryActorSystem HistoryActor = "system"
 )
 
@@ -668,10 +668,10 @@ type AuditSseEventType string
 
 const (
 	AuditSseEventTypeConnected AuditSseEventType = "audit.connected"
-	AuditSseEventTypeMetadata AuditSseEventType = "audit.metadata"
-	AuditSseEventTypeEvent AuditSseEventType = "audit.event"
-	AuditSseEventTypeComplete AuditSseEventType = "audit.complete"
-	AuditSseEventTypeError AuditSseEventType = "audit.error"
+	AuditSseEventTypeMetadata  AuditSseEventType = "audit.metadata"
+	AuditSseEventTypeEvent     AuditSseEventType = "audit.event"
+	AuditSseEventTypeComplete  AuditSseEventType = "audit.complete"
+	AuditSseEventTypeError     AuditSseEventType = "audit.error"
 )
 
 // AuditEventSource is a typed string for audit event source.
@@ -685,31 +685,31 @@ const (
 type AuditEventType string
 
 const (
-	AuditEventTypeMessage AuditEventType = "message"
-	AuditEventTypeCommandExecuted AuditEventType = "command.executed"
-	AuditEventTypeCommandApproved AuditEventType = "command.approved"
-	AuditEventTypeCommandDenied AuditEventType = "command.denied"
-	AuditEventTypeCommandStarted AuditEventType = "command.started"
+	AuditEventTypeMessage             AuditEventType = "message"
+	AuditEventTypeCommandExecuted     AuditEventType = "command.executed"
+	AuditEventTypeCommandApproved     AuditEventType = "command.approved"
+	AuditEventTypeCommandDenied       AuditEventType = "command.denied"
+	AuditEventTypeCommandStarted      AuditEventType = "command.started"
 	AuditEventTypeEscalationRequested AuditEventType = "escalation.requested"
-	AuditEventTypeEscalationApproved AuditEventType = "escalation.approved"
-	AuditEventTypeFileModified AuditEventType = "file.modified"
-	AuditEventTypeFileCreated AuditEventType = "file.created"
-	AuditEventTypeFileDeleted AuditEventType = "file.deleted"
-	AuditEventTypePermissionGranted AuditEventType = "permission.granted"
-	AuditEventTypePermissionRevoked AuditEventType = "permission.revoked"
-	AuditEventTypeConfigChanged AuditEventType = "config.changed"
-	AuditEventTypeG8eBound AuditEventType = "g8e.bound"
-	AuditEventTypeSessionStarted AuditEventType = "session.started"
+	AuditEventTypeEscalationApproved  AuditEventType = "escalation.approved"
+	AuditEventTypeFileModified        AuditEventType = "file.modified"
+	AuditEventTypeFileCreated         AuditEventType = "file.created"
+	AuditEventTypeFileDeleted         AuditEventType = "file.deleted"
+	AuditEventTypePermissionGranted   AuditEventType = "permission.granted"
+	AuditEventTypePermissionRevoked   AuditEventType = "permission.revoked"
+	AuditEventTypeConfigChanged       AuditEventType = "config.changed"
+	AuditEventTypeG8eBound            AuditEventType = "g8e.bound"
+	AuditEventTypeSessionStarted      AuditEventType = "session.started"
 )
 
 // LoginAuditEventType is a typed string for login audit event type.
 type LoginAuditEventType string
 
 const (
-	LoginAuditEventTypeLoginSuccess LoginAuditEventType = "login_success"
-	LoginAuditEventTypeLoginFailed LoginAuditEventType = "login_failed"
-	LoginAuditEventTypeLoginAnomaly LoginAuditEventType = "login_anomaly"
-	LoginAuditEventTypeAccountLocked LoginAuditEventType = "account_locked"
+	LoginAuditEventTypeLoginSuccess    LoginAuditEventType = "login_success"
+	LoginAuditEventTypeLoginFailed     LoginAuditEventType = "login_failed"
+	LoginAuditEventTypeLoginAnomaly    LoginAuditEventType = "login_anomaly"
+	LoginAuditEventTypeAccountLocked   LoginAuditEventType = "account_locked"
 	LoginAuditEventTypeAccountUnlocked LoginAuditEventType = "account_unlocked"
 )
 
@@ -718,14 +718,14 @@ type AuthAuditEventType string
 
 const (
 	AuthAuditEventTypeAuthSuccess AuthAuditEventType = "auth_success"
-	AuthAuditEventTypeAuthFailed AuthAuditEventType = "auth_failed"
+	AuthAuditEventTypeAuthFailed  AuthAuditEventType = "auth_failed"
 )
 
 // DownloadAuditEventType is a typed string for download audit event type.
 type DownloadAuditEventType string
 
 const (
-	DownloadAuditEventTypeDownloadTokenFailed DownloadAuditEventType = "download_token_failed"
+	DownloadAuditEventTypeDownloadTokenFailed  DownloadAuditEventType = "download_token_failed"
 	DownloadAuditEventTypeDownloadTokenSuccess DownloadAuditEventType = "download_token_success"
 )
 
@@ -733,8 +733,8 @@ const (
 type AuthAuditResult string
 
 const (
-	AuthAuditResultSuccess AuthAuditResult = "success"
-	AuthAuditResultFailure AuthAuditResult = "failure"
+	AuthAuditResultSuccess       AuthAuditResult = "success"
+	AuthAuditResultFailure       AuthAuditResult = "failure"
 	AuthAuditResultInvalidAPIKey AuthAuditResult = "invalid_api_key"
 )
 
@@ -742,13 +742,13 @@ const (
 type SessionEndReason string
 
 const (
-	SessionEndReasonUserLogout SessionEndReason = "user_logout"
-	SessionEndReasonIntegrityFailure SessionEndReason = "integrity_failure"
+	SessionEndReasonUserLogout          SessionEndReason = "user_logout"
+	SessionEndReasonIntegrityFailure    SessionEndReason = "integrity_failure"
 	SessionEndReasonSessionRegeneration SessionEndReason = "session_regeneration"
-	SessionEndReasonInvalidateAll SessionEndReason = "invalidate_all"
-	SessionEndReasonUserDeleted SessionEndReason = "user_deleted"
-	SessionEndReasonTimeoutAbsolute SessionEndReason = "timeout_absolute"
-	SessionEndReasonTimeoutIdle SessionEndReason = "timeout_idle"
+	SessionEndReasonInvalidateAll       SessionEndReason = "invalidate_all"
+	SessionEndReasonUserDeleted         SessionEndReason = "user_deleted"
+	SessionEndReasonTimeoutAbsolute     SessionEndReason = "timeout_absolute"
+	SessionEndReasonTimeoutIdle         SessionEndReason = "timeout_idle"
 )
 
 // SessionSuspiciousReason is a typed string for session suspicious reason.
@@ -762,48 +762,48 @@ const (
 type SessionEventType string
 
 const (
-	SessionEventTypeSessionCreated SessionEventType = "session.created"
-	SessionEventTypeSessionEnded SessionEventType = "session.ended"
-	SessionEventTypeSessionRegenerated SessionEventType = "session.regenerated"
-	SessionEventTypeSessionTimeoutAbsolute SessionEventType = "session.timeout.absolute"
-	SessionEventTypeSessionTimeoutIdle SessionEventType = "session.timeout.idle"
+	SessionEventTypeSessionCreated            SessionEventType = "session.created"
+	SessionEventTypeSessionEnded              SessionEventType = "session.ended"
+	SessionEventTypeSessionRegenerated        SessionEventType = "session.regenerated"
+	SessionEventTypeSessionTimeoutAbsolute    SessionEventType = "session.timeout.absolute"
+	SessionEventTypeSessionTimeoutIdle        SessionEventType = "session.timeout.idle"
 	SessionEventTypeSessionSuspiciousActivity SessionEventType = "session.suspicious_activity"
-	SessionEventTypeG8eBound SessionEventType = "g8e.bound"
-	SessionEventTypeG8eUnbound SessionEventType = "g8e.unbound"
+	SessionEventTypeG8eBound                  SessionEventType = "g8e.bound"
+	SessionEventTypeG8eUnbound                SessionEventType = "g8e.unbound"
 )
 
 // OperatorToolName is a typed string for g8e tool name.
 type OperatorToolName string
 
 const (
-	G8eToolNameRunCommands OperatorToolName = "run_commands_with_operator"
-	G8eToolNameFileCreate OperatorToolName = "file_create_on_operator"
-	G8eToolNameFileWrite OperatorToolName = "file_write_on_operator"
-	G8eToolNameFileRead OperatorToolName = "file_read_on_operator"
-	G8eToolNameFileUpdate OperatorToolName = "file_update_on_operator"
-	G8eToolNameCheckPort OperatorToolName = "check_port_status"
-	G8eToolNameListFiles OperatorToolName = "list_files_and_directories_with_detailed_metadata"
-	G8eToolNameReadFileContent OperatorToolName = "read_file_content"
-	G8eToolNameGrantIntent OperatorToolName = "grant_intent_permission"
-	G8eToolNameRevokeIntent OperatorToolName = "revoke_intent_permission"
-	G8eToolNameFetchExecutionOutput OperatorToolName = "fetch_execution_output"
-	G8eToolNameFetchSessionHistory OperatorToolName = "fetch_session_history"
-	G8eToolNameFetchFileHistory OperatorToolName = "fetch_file_history"
-	G8eToolNameRestoreFile OperatorToolName = "restore_file"
-	G8eToolNameFetchFileDiff OperatorToolName = "fetch_file_diff"
-	G8eToolNameG8eWebSearch OperatorToolName = "g8e_web_search"
+	G8eToolNameRunCommands               OperatorToolName = "run_commands_with_operator"
+	G8eToolNameFileCreate                OperatorToolName = "file_create_on_operator"
+	G8eToolNameFileWrite                 OperatorToolName = "file_write_on_operator"
+	G8eToolNameFileRead                  OperatorToolName = "file_read_on_operator"
+	G8eToolNameFileUpdate                OperatorToolName = "file_update_on_operator"
+	G8eToolNameCheckPort                 OperatorToolName = "check_port_status"
+	G8eToolNameListFiles                 OperatorToolName = "list_files_and_directories_with_detailed_metadata"
+	G8eToolNameReadFileContent           OperatorToolName = "read_file_content"
+	G8eToolNameGrantIntent               OperatorToolName = "grant_intent_permission"
+	G8eToolNameRevokeIntent              OperatorToolName = "revoke_intent_permission"
+	G8eToolNameFetchExecutionOutput      OperatorToolName = "fetch_execution_output"
+	G8eToolNameFetchSessionHistory       OperatorToolName = "fetch_session_history"
+	G8eToolNameFetchFileHistory          OperatorToolName = "fetch_file_history"
+	G8eToolNameRestoreFile               OperatorToolName = "restore_file"
+	G8eToolNameFetchFileDiff             OperatorToolName = "fetch_file_diff"
+	G8eToolNameG8eWebSearch              OperatorToolName = "g8e_web_search"
 	G8eToolNameQueryInvestigationContext OperatorToolName = "query_investigation_context"
-	G8eToolNameGetCommandConstraints OperatorToolName = "get_command_constraints"
-	G8eToolNameListSSHInventory OperatorToolName = "list_ssh_inventory"
-	G8eToolNameRecursiveGrep OperatorToolName = "recursive_grep_search"
-	G8eToolNameStreamOperator OperatorToolName = "stream_operator_to_ssh_fleet"
+	G8eToolNameGetCommandConstraints     OperatorToolName = "get_command_constraints"
+	G8eToolNameListSSHInventory          OperatorToolName = "list_ssh_inventory"
+	G8eToolNameRecursiveGrep             OperatorToolName = "recursive_grep_search"
+	G8eToolNameStreamOperator            OperatorToolName = "stream_operator_to_ssh_fleet"
 )
 
 // ListenMode is a typed string for listen mode.
 type ListenMode string
 
 const (
-	ListenModeMode ListenMode = "listen"
+	ListenModeMode     ListenMode = "listen"
 	ListenModeStatusOK ListenMode = "ok"
 )
 
@@ -812,45 +812,45 @@ type StreamStatus string
 
 const (
 	StreamStatusCancelled StreamStatus = "cancelled"
-	StreamStatusFailed StreamStatus = "failed"
-	StreamStatusExited StreamStatus = "exited"
+	StreamStatusFailed    StreamStatus = "failed"
+	StreamStatusExited    StreamStatus = "exited"
 	StreamStatusCompleted StreamStatus = "completed"
-	StreamStatusSummary StreamStatus = "summary"
+	StreamStatusSummary   StreamStatus = "summary"
 )
 
 // LlmModels is a typed string for llm models.
 type LlmModels string
 
 const (
-	LLMModelsGemini31Pro LlmModels = "gemini-3.1-pro-preview"
-	LLMModelsGemini3Flash LlmModels = "gemini-3-flash-preview"
-	LLMModelsGemini31FlashLite LlmModels = "gemini-3.1-flash-lite"
-	LLMModelsOpenaiGpt54 LlmModels = "gpt-5.4"
-	LLMModelsOpenaiGpt54Pro LlmModels = "gpt-5.4-pro"
-	LLMModelsOpenaiGpt54Mini LlmModels = "gpt-5.4-mini"
-	LLMModelsOpenaiGpt54Nano LlmModels = "gpt-5.4-nano"
-	LLMModelsAnthropicClaude46Opus LlmModels = "claude-opus-4-6"
+	LLMModelsGemini31Pro             LlmModels = "gemini-3.1-pro-preview"
+	LLMModelsGemini3Flash            LlmModels = "gemini-3-flash-preview"
+	LLMModelsGemini31FlashLite       LlmModels = "gemini-3.1-flash-lite"
+	LLMModelsOpenaiGpt54             LlmModels = "gpt-5.4"
+	LLMModelsOpenaiGpt54Pro          LlmModels = "gpt-5.4-pro"
+	LLMModelsOpenaiGpt54Mini         LlmModels = "gpt-5.4-mini"
+	LLMModelsOpenaiGpt54Nano         LlmModels = "gpt-5.4-nano"
+	LLMModelsAnthropicClaude46Opus   LlmModels = "claude-opus-4-6"
 	LLMModelsAnthropicClaude46Sonnet LlmModels = "claude-sonnet-4-6"
-	LLMModelsAnthropicClaude45Haiku LlmModels = "claude-haiku-4-5"
-	LLMModelsOllamaQwen35122b LlmModels = "qwen3.5:122b"
-	LLMModelsOllamaGlm51 LlmModels = "glm-5.1:cloud"
-	LLMModelsOllamaGemma426b LlmModels = "gemma4:26b"
-	LLMModelsOllamaGemma4E4b LlmModels = "gemma4:e4b"
-	LLMModelsOllamaGemma4E2b LlmModels = "gemma4:e2b"
-	LLMModelsOllamaGemma4E2bG8ea LlmModels = "gemma4:e2b"
-	LLMModelsOllamaNemotron330b LlmModels = "nemotron-3-nano:30b"
-	LLMModelsOllamaLlama323b LlmModels = "llama3.2:3b"
-	LLMModelsOllamaQwen352b LlmModels = "qwen3.5:2b"
-	LLMModelsLlamacppGemma4E2b LlmModels = "google_gemma-4-E2B-it-Q4_K_M.gguf"
+	LLMModelsAnthropicClaude45Haiku  LlmModels = "claude-haiku-4-5"
+	LLMModelsOllamaQwen35122b        LlmModels = "qwen3.5:122b"
+	LLMModelsOllamaGlm51             LlmModels = "glm-5.1:cloud"
+	LLMModelsOllamaGemma426b         LlmModels = "gemma4:26b"
+	LLMModelsOllamaGemma4E4b         LlmModels = "gemma4:e4b"
+	LLMModelsOllamaGemma4E2b         LlmModels = "gemma4:e2b"
+	LLMModelsOllamaGemma4E2bG8ea     LlmModels = "gemma4:e2b"
+	LLMModelsOllamaNemotron330b      LlmModels = "nemotron-3-nano:30b"
+	LLMModelsOllamaLlama323b         LlmModels = "llama3.2:3b"
+	LLMModelsOllamaQwen352b          LlmModels = "qwen3.5:2b"
+	LLMModelsLlamacppGemma4E2b       LlmModels = "google_gemma-4-E2B-it-Q4_K_M.gguf"
 )
 
 // Priority is a typed string for priority.
 type Priority string
 
 const (
-	PriorityLow Priority = "1"
-	PriorityMedium Priority = "2"
-	PriorityHigh Priority = "3"
+	PriorityLow      Priority = "1"
+	PriorityMedium   Priority = "2"
+	PriorityHigh     Priority = "3"
 	PriorityCritical Priority = "4"
 )
 
@@ -858,9 +858,9 @@ const (
 type Severity string
 
 const (
-	SeverityLow Severity = "1"
-	SeverityMedium Severity = "2"
-	SeverityHigh Severity = "3"
+	SeverityLow      Severity = "1"
+	SeverityMedium   Severity = "2"
+	SeverityHigh     Severity = "3"
 	SeverityCritical Severity = "4"
 )
 
@@ -868,9 +868,9 @@ const (
 type TribunalAuditStatus string
 
 const (
-	TribunalAuditStatusOk TribunalAuditStatus = "ok"
+	TribunalAuditStatusOk      TribunalAuditStatus = "ok"
 	TribunalAuditStatusRevised TribunalAuditStatus = "revised"
-	TribunalAuditStatusSwap TribunalAuditStatus = "swap"
+	TribunalAuditStatusSwap    TribunalAuditStatus = "swap"
 )
 
 // TribunalAuditMode is a typed string for tribunal audit mode.
@@ -878,8 +878,8 @@ type TribunalAuditMode string
 
 const (
 	TribunalAuditModeUnanimous TribunalAuditMode = "unanimous"
-	TribunalAuditModeMajority TribunalAuditMode = "majority"
-	TribunalAuditModeTied TribunalAuditMode = "tied"
+	TribunalAuditModeMajority  TribunalAuditMode = "majority"
+	TribunalAuditModeTied      TribunalAuditMode = "tied"
 )
 
 // SlashTier is a typed string for reputation slash_tier.
@@ -895,7 +895,7 @@ const (
 type ToolScope string
 
 const (
-	ToolScopeUniversal ToolScope = "universal"
+	ToolScopeUniversal     ToolScope = "universal"
 	ToolScopeOperatorGated ToolScope = "operator_gated"
 )
 
@@ -903,167 +903,167 @@ const (
 type ScrubberPriority string
 
 const (
-	ScrubberPriorityExactCredential ScrubberPriority = "10"
-	ScrubberPriorityUrlOrConnection ScrubberPriority = "20"
+	ScrubberPriorityExactCredential      ScrubberPriority = "10"
+	ScrubberPriorityUrlOrConnection      ScrubberPriority = "20"
 	ScrubberPriorityContextualCredential ScrubberPriority = "30"
-	ScrubberPriorityGenericPII ScrubberPriority = "40"
+	ScrubberPriorityGenericPII           ScrubberPriority = "40"
 )
 
 // Status groups all status constants for easy access.
 var Status = struct {
 	UserRole struct {
-		User UserRole
-		Admin UserRole
+		User       UserRole
+		Admin      UserRole
 		Superadmin UserRole
-		Operator UserRole
+		Operator   UserRole
 	}
 	UserStatus struct {
-		Active UserStatus
+		Active   UserStatus
 		Disabled UserStatus
 	}
 	OperatorStatus struct {
-		Available OperatorStatus
+		Available   OperatorStatus
 		Unavailable OperatorStatus
-		Offline OperatorStatus
-		Bound OperatorStatus
-		Stale OperatorStatus
-		Active OperatorStatus
-		Stopped OperatorStatus
-		Terminated OperatorStatus
+		Offline     OperatorStatus
+		Bound       OperatorStatus
+		Stale       OperatorStatus
+		Active      OperatorStatus
+		Stopped     OperatorStatus
+		Terminated  OperatorStatus
 	}
 	OperatorType struct {
 		System OperatorType
-		Cloud OperatorType
+		Cloud  OperatorType
 	}
 	CloudSubtype struct {
-		AWS CloudSubtype
-		GCP CloudSubtype
+		AWS   CloudSubtype
+		GCP   CloudSubtype
 		Azure CloudSubtype
 	}
 	ExecutionStatus struct {
-		Pending ExecutionStatus
-		Executing ExecutionStatus
-		Completed ExecutionStatus
-		Failed ExecutionStatus
-		Timeout ExecutionStatus
-		Cancelled ExecutionStatus
+		Pending         ExecutionStatus
+		Executing       ExecutionStatus
+		Completed       ExecutionStatus
+		Failed          ExecutionStatus
+		Timeout         ExecutionStatus
+		Cancelled       ExecutionStatus
 		CancelRequested ExecutionStatus
-		Denied ExecutionStatus
-		Feedback ExecutionStatus
+		Denied          ExecutionStatus
+		Feedback        ExecutionStatus
 	}
 	ActionStatus struct {
-		Completed ActionStatus
-		Failed ActionStatus
-		Timeout ActionStatus
-		Cancelled ActionStatus
+		Completed     ActionStatus
+		Failed        ActionStatus
+		Timeout       ActionStatus
+		Cancelled     ActionStatus
 		UserCancelled ActionStatus
 	}
 	SentinelStatus struct {
-		Success SentinelStatus
-		Failure SentinelStatus
-		Misuse SentinelStatus
+		Success       SentinelStatus
+		Failure       SentinelStatus
+		Misuse        SentinelStatus
 		NotExecutable SentinelStatus
-		NotFound SentinelStatus
-		InvalidExit SentinelStatus
-		Interrupted SentinelStatus
-		Killed SentinelStatus
-		Terminated SentinelStatus
-		Error SentinelStatus
+		NotFound      SentinelStatus
+		InvalidExit   SentinelStatus
+		Interrupted   SentinelStatus
+		Killed        SentinelStatus
+		Terminated    SentinelStatus
+		Error         SentinelStatus
 	}
 	VaultMode struct {
-		Raw VaultMode
+		Raw      VaultMode
 		Scrubbed VaultMode
 	}
 	ApiKeyStatus struct {
-		Active ApiKeyStatus
-		Revoked ApiKeyStatus
-		Expired ApiKeyStatus
+		Active    ApiKeyStatus
+		Revoked   ApiKeyStatus
+		Expired   ApiKeyStatus
 		Suspended ApiKeyStatus
 	}
 	InvestigationStatus struct {
-		Open InvestigationStatus
-		Closed InvestigationStatus
+		Open      InvestigationStatus
+		Closed    InvestigationStatus
 		Escalated InvestigationStatus
-		Resolved InvestigationStatus
+		Resolved  InvestigationStatus
 	}
 	CaseStatus struct {
-		New CaseStatus
-		Triage CaseStatus
-		Escalated CaseStatus
+		New                CaseStatus
+		Triage             CaseStatus
+		Escalated          CaseStatus
 		WaitingForCustomer CaseStatus
-		InProgress CaseStatus
-		HumanReview CaseStatus
-		Resolved CaseStatus
-		Closed CaseStatus
+		InProgress         CaseStatus
+		HumanReview        CaseStatus
+		Resolved           CaseStatus
+		Closed             CaseStatus
 	}
 	TaskStatus struct {
-		Pending TaskStatus
+		Pending    TaskStatus
 		InProgress TaskStatus
-		Completed TaskStatus
-		Failed TaskStatus
-		Cancelled TaskStatus
+		Completed  TaskStatus
+		Failed     TaskStatus
+		Cancelled  TaskStatus
 	}
 	ComponentName struct {
-		G8EE ComponentName
-		G8EO ComponentName
+		G8EE       ComponentName
+		G8EO       ComponentName
 		G8EOListen ComponentName
-		CLIENT ComponentName
+		CLIENT     ComponentName
 	}
 	ComponentStatus struct {
-		Active ComponentStatus
-		Inactive ComponentStatus
+		Active      ComponentStatus
+		Inactive    ComponentStatus
 		Maintenance ComponentStatus
-		Error ComponentStatus
+		Error       ComponentStatus
 	}
 	HealthStatus struct {
-		Healthy HealthStatus
+		Healthy   HealthStatus
 		Unhealthy HealthStatus
 	}
 	ApprovalType struct {
-		Command ApprovalType
-		FileEdit ApprovalType
-		Intent ApprovalType
+		Command       ApprovalType
+		FileEdit      ApprovalType
+		Intent        ApprovalType
 		AgentContinue ApprovalType
-		Stream ApprovalType
+		Stream        ApprovalType
 	}
 	ApprovalErrorType struct {
-		ApprovalPublishFailure ApprovalErrorType
-		ApprovalException ApprovalErrorType
-		ApprovalTimeout ApprovalErrorType
-		InvalidIntent ApprovalErrorType
+		ApprovalPublishFailure  ApprovalErrorType
+		ApprovalException       ApprovalErrorType
+		ApprovalTimeout         ApprovalErrorType
+		InvalidIntent           ApprovalErrorType
 		IntentApprovalException ApprovalErrorType
 	}
 	AttachmentType struct {
-		Pdf AttachmentType
+		Pdf   AttachmentType
 		Image AttachmentType
-		Text AttachmentType
+		Text  AttachmentType
 		Other AttachmentType
 	}
 	WorkflowType struct {
-		G8eBound WorkflowType
-		G8eNotBound WorkflowType
+		G8eBound      WorkflowType
+		G8eNotBound   WorkflowType
 		G8eCloudBound WorkflowType
 	}
 	RiskLevel struct {
-		Low RiskLevel
+		Low    RiskLevel
 		Medium RiskLevel
-		High RiskLevel
+		High   RiskLevel
 	}
 	RiskThreshold struct {
-		Low RiskThreshold
+		Low    RiskThreshold
 		Medium RiskThreshold
-		High RiskThreshold
+		High   RiskThreshold
 	}
 	EscalationRisk struct {
-		Low EscalationRisk
-		Medium EscalationRisk
-		High EscalationRisk
+		Low      EscalationRisk
+		Medium   EscalationRisk
+		High     EscalationRisk
 		Critical EscalationRisk
 	}
 	Platform struct {
-		Linux Platform
+		Linux   Platform
 		Windows Platform
-		Darwin Platform
+		Darwin  Platform
 	}
 	HeartbeatType struct {
 		Automatic HeartbeatType
@@ -1071,87 +1071,87 @@ var Status = struct {
 		Requested HeartbeatType
 	}
 	G8eAvailability struct {
-		Online G8eAvailability
+		Online  G8eAvailability
 		Offline G8eAvailability
 	}
 	VersionStability struct {
 		Stable VersionStability
-		Beta VersionStability
-		Dev VersionStability
+		Beta   VersionStability
+		Dev    VersionStability
 	}
 	SessionType struct {
-		Web SessionType
+		Web      SessionType
 		Operator SessionType
-		CLI SessionType
+		CLI      SessionType
 	}
 	ConversationStatus struct {
-		Active ConversationStatus
-		Inactive ConversationStatus
+		Active    ConversationStatus
+		Inactive  ConversationStatus
 		Completed ConversationStatus
 	}
 	InfrastructureStatus struct {
-		Unknown InfrastructureStatus
-		Healthy InfrastructureStatus
-		Stable InfrastructureStatus
+		Unknown  InfrastructureStatus
+		Healthy  InfrastructureStatus
+		Stable   InfrastructureStatus
 		Degraded InfrastructureStatus
 		Critical InfrastructureStatus
 	}
 	AiSource struct {
-		ToolCall AiSource
+		ToolCall         AiSource
 		TerminalAnchored AiSource
-		TerminalDirect AiSource
+		TerminalDirect   AiSource
 	}
 	AITaskId struct {
-		Chat AITaskId
-		AgentContinue AITaskId
-		Command AITaskId
-		DirectCommand AITaskId
-		FileEdit AITaskId
-		FsList AITaskId
-		FsRead AITaskId
-		PortCheck AITaskId
-		FetchLogs AITaskId
-		FetchHistory AITaskId
+		Chat             AITaskId
+		AgentContinue    AITaskId
+		Command          AITaskId
+		DirectCommand    AITaskId
+		FileEdit         AITaskId
+		FsList           AITaskId
+		FsRead           AITaskId
+		PortCheck        AITaskId
+		FetchLogs        AITaskId
+		FetchHistory     AITaskId
 		FetchFileHistory AITaskId
-		RestoreFile AITaskId
-		FetchFileDiff AITaskId
-		RecursiveGrep AITaskId
-		IntentGrant AITaskId
-		IntentRevoke AITaskId
+		RestoreFile      AITaskId
+		FetchFileDiff    AITaskId
+		RecursiveGrep    AITaskId
+		IntentGrant      AITaskId
+		IntentRevoke     AITaskId
 	}
 	ThinkingActionType struct {
-		Start ThinkingActionType
+		Start  ThinkingActionType
 		Update ThinkingActionType
-		End ThinkingActionType
+		End    ThinkingActionType
 	}
 	ToolCallStatus struct {
-		Started ToolCallStatus
+		Started   ToolCallStatus
 		Completed ToolCallStatus
 	}
 	CommandStatus struct {
-		Pending CommandStatus
+		Pending   CommandStatus
 		Executing CommandStatus
-		Output CommandStatus
+		Output    CommandStatus
 		Completed CommandStatus
-		Failed CommandStatus
-		Timeout CommandStatus
+		Failed    CommandStatus
+		Timeout   CommandStatus
 		Cancelled CommandStatus
 	}
 	ToolDisplayCategory struct {
 		Execution ToolDisplayCategory
-		File ToolDisplayCategory
-		Network ToolDisplayCategory
-		Search ToolDisplayCategory
-		General ToolDisplayCategory
+		File      ToolDisplayCategory
+		Network   ToolDisplayCategory
+		Search    ToolDisplayCategory
+		General   ToolDisplayCategory
 	}
 	CommandCategory struct {
-		CSVWhitelist CommandCategory
+		CSVWhitelist       CommandCategory
 		NetworkDiagnostics CommandCategory
-		SystemDiagnostics CommandCategory
+		SystemDiagnostics  CommandCategory
 	}
 	ToolCallDefaults struct {
-		Label ToolCallDefaults
-		Icon ToolCallDefaults
+		Label    ToolCallDefaults
+		Icon     ToolCallDefaults
 		Category ToolCallDefaults
 	}
 	TribunalAuditorReason struct {
@@ -1159,323 +1159,323 @@ var Status = struct {
 	}
 	TribunalOutcome struct {
 		VerificationFailed TribunalOutcome
-		Consensus TribunalOutcome
-		Verified TribunalOutcome
-		ConsensusFailed TribunalOutcome
+		Consensus          TribunalOutcome
+		Verified           TribunalOutcome
+		ConsensusFailed    TribunalOutcome
 	}
 	TribunalFallbackReason struct {
-		Disabled TribunalFallbackReason
+		Disabled            TribunalFallbackReason
 		ProviderUnavailable TribunalFallbackReason
-		AllPassesFailed TribunalFallbackReason
-		NoVoteWinner TribunalFallbackReason
+		AllPassesFailed     TribunalFallbackReason
+		NoVoteWinner        TribunalFallbackReason
 	}
 	CitationLayout struct {
-		HoverCardWidthPx CitationLayout
-		FaviconSizePx CitationLayout
+		HoverCardWidthPx          CitationLayout
+		FaviconSizePx             CitationLayout
 		HoverCardViewportMarginPx CitationLayout
-		HeadingSegmentMaxLength CitationLayout
-		SentenceLookaheadChars CitationLayout
-		ParagraphLookaheadChars CitationLayout
+		HeadingSegmentMaxLength   CitationLayout
+		SentenceLookaheadChars    CitationLayout
+		ParagraphLookaheadChars   CitationLayout
 	}
 	G8eActionType struct {
 		CommandExecution G8eActionType
-		CommandExecuted G8eActionType
-		FileRead G8eActionType
-		FileEdit G8eActionType
-		FileList G8eActionType
-		PortCheck G8eActionType
+		CommandExecuted  G8eActionType
+		FileRead         G8eActionType
+		FileEdit         G8eActionType
+		FileList         G8eActionType
+		PortCheck        G8eActionType
 	}
 	ActionType struct {
-		ExecuteBash ActionType
-		FileEdit ActionType
-		FsList ActionType
-		FsRead ActionType
-		FsGrep ActionType
-		PortCheck ActionType
-		FetchLogs ActionType
-		FetchHistory ActionType
+		ExecuteBash      ActionType
+		FileEdit         ActionType
+		FsList           ActionType
+		FsRead           ActionType
+		FsGrep           ActionType
+		PortCheck        ActionType
+		FetchLogs        ActionType
+		FetchHistory     ActionType
 		FetchFileHistory ActionType
-		RestoreFile ActionType
-		Shutdown ActionType
-		Heartbeat ActionType
-		EvalAnswer ActionType
-		GrantIntent ActionType
-		RevokeIntent ActionType
+		RestoreFile      ActionType
+		Shutdown         ActionType
+		Heartbeat        ActionType
+		EvalAnswer       ActionType
+		GrantIntent      ActionType
+		RevokeIntent     ActionType
 	}
 	CommandErrorType struct {
-		ValidationError CommandErrorType
-		SecurityError CommandErrorType
-		SecurityViolation CommandErrorType
-		BindingViolation CommandErrorType
-		NoOperatorsAvailable CommandErrorType
-		G8eResolutionError CommandErrorType
-		CloudOperatorRequired CommandErrorType
-		BlacklistViolation CommandErrorType
-		WhitelistViolation CommandErrorType
-		ExecutionFailed CommandErrorType
-		ExecutionError CommandErrorType
-		UserDenied CommandErrorType
-		UserFeedback CommandErrorType
-		PermissionDenied CommandErrorType
-		CommandTimeout CommandErrorType
-		CommandExecutionFailed CommandErrorType
+		ValidationError            CommandErrorType
+		SecurityError              CommandErrorType
+		SecurityViolation          CommandErrorType
+		BindingViolation           CommandErrorType
+		NoOperatorsAvailable       CommandErrorType
+		G8eResolutionError         CommandErrorType
+		CloudOperatorRequired      CommandErrorType
+		BlacklistViolation         CommandErrorType
+		WhitelistViolation         CommandErrorType
+		ExecutionFailed            CommandErrorType
+		ExecutionError             CommandErrorType
+		UserDenied                 CommandErrorType
+		UserFeedback               CommandErrorType
+		PermissionDenied           CommandErrorType
+		CommandTimeout             CommandErrorType
+		CommandExecutionFailed     CommandErrorType
 		PubsubSubscriptionNotReady CommandErrorType
-		UnknownTool CommandErrorType
-		FsListFailed CommandErrorType
-		FsReadFailed CommandErrorType
-		UserCancelled CommandErrorType
-		RiskAnalysisBlocked CommandErrorType
-		ApprovalDenied CommandErrorType
-		OperationTimeout CommandErrorType
-		InvalidIntent CommandErrorType
-		MissingOperatorID CommandErrorType
-		PartialIAMUpdateFailed CommandErrorType
-		PartialIAMDetachFailed CommandErrorType
-		RestoreFileFailed CommandErrorType
-		FetchFileDiffFailed CommandErrorType
-		FetchLogsFailed CommandErrorType
-		FetchHistoryFailed CommandErrorType
-		FetchFileHistoryFailed CommandErrorType
-		PortCheckFailed CommandErrorType
-		ApprovalTimeout CommandErrorType
-		PermissionError CommandErrorType
-		ConfigurationError CommandErrorType
-		AgentConflict CommandErrorType
+		UnknownTool                CommandErrorType
+		FsListFailed               CommandErrorType
+		FsReadFailed               CommandErrorType
+		UserCancelled              CommandErrorType
+		RiskAnalysisBlocked        CommandErrorType
+		ApprovalDenied             CommandErrorType
+		OperationTimeout           CommandErrorType
+		InvalidIntent              CommandErrorType
+		MissingOperatorID          CommandErrorType
+		PartialIAMUpdateFailed     CommandErrorType
+		PartialIAMDetachFailed     CommandErrorType
+		RestoreFileFailed          CommandErrorType
+		FetchFileDiffFailed        CommandErrorType
+		FetchLogsFailed            CommandErrorType
+		FetchHistoryFailed         CommandErrorType
+		FetchFileHistoryFailed     CommandErrorType
+		PortCheckFailed            CommandErrorType
+		ApprovalTimeout            CommandErrorType
+		PermissionError            CommandErrorType
+		ConfigurationError         CommandErrorType
+		AgentConflict              CommandErrorType
 	}
 	FileOperation struct {
-		Read FileOperation
-		Create FileOperation
-		Write FileOperation
-		Update FileOperation
+		Read    FileOperation
+		Create  FileOperation
+		Write   FileOperation
+		Update  FileOperation
 		Replace FileOperation
-		Insert FileOperation
-		Delete FileOperation
-		Patch FileOperation
+		Insert  FileOperation
+		Delete  FileOperation
+		Patch   FileOperation
 	}
 	NetworkProtocol struct {
 		TCP NetworkProtocol
 		UDP NetworkProtocol
 	}
 	AuthProvider struct {
-		Local AuthProvider
+		Local   AuthProvider
 		Passkey AuthProvider
 	}
 	AuthMethod struct {
 		KvPubsub AuthMethod
-		Session AuthMethod
+		Session  AuthMethod
 	}
 	ConnectionState struct {
 		Disconnected ConnectionState
-		Connecting ConnectionState
-		Connected ConnectionState
+		Connecting   ConnectionState
+		Connected    ConnectionState
 		Reconnecting ConnectionState
-		Closed ConnectionState
-		Error ConnectionState
+		Closed       ConnectionState
+		Error        ConnectionState
 	}
 	Environment struct {
 		Production Environment
-		Dev Environment
-		Test Environment
+		Dev        Environment
+		Test       Environment
 	}
 	DeviceLinkStatus struct {
-		Active DeviceLinkStatus
-		Pending DeviceLinkStatus
-		Used DeviceLinkStatus
+		Active    DeviceLinkStatus
+		Pending   DeviceLinkStatus
+		Used      DeviceLinkStatus
 		Exhausted DeviceLinkStatus
-		Expired DeviceLinkStatus
-		Revoked DeviceLinkStatus
+		Expired   DeviceLinkStatus
+		Revoked   DeviceLinkStatus
 	}
 	DeviceLinkSuccess struct {
-		Listed DeviceLinkSuccess
+		Listed  DeviceLinkSuccess
 		Created DeviceLinkSuccess
 		Revoked DeviceLinkSuccess
 		Deleted DeviceLinkSuccess
 	}
 	SystemHealth struct {
-		Healthy SystemHealth
-		Degraded SystemHealth
+		Healthy   SystemHealth
+		Degraded  SystemHealth
 		Unhealthy SystemHealth
-		Unknown SystemHealth
+		Unknown   SystemHealth
 	}
 	SessionKeyPrefix struct {
-		Web SessionKeyPrefix
+		Web      SessionKeyPrefix
 		Operator SessionKeyPrefix
-		CLI SessionKeyPrefix
+		CLI      SessionKeyPrefix
 	}
 	OperatorHistoryEventType struct {
-		Created OperatorHistoryEventType
-		SlotCreated OperatorHistoryEventType
-		SlotConsumed OperatorHistoryEventType
-		SlotReleased OperatorHistoryEventType
-		Bound OperatorHistoryEventType
-		Unbound OperatorHistoryEventType
-		HeartbeatReceived OperatorHistoryEventType
-		StatusChanged OperatorHistoryEventType
-		APIKeyRefreshed OperatorHistoryEventType
-		CreatedFromRefresh OperatorHistoryEventType
+		Created              OperatorHistoryEventType
+		SlotCreated          OperatorHistoryEventType
+		SlotConsumed         OperatorHistoryEventType
+		SlotReleased         OperatorHistoryEventType
+		Bound                OperatorHistoryEventType
+		Unbound              OperatorHistoryEventType
+		HeartbeatReceived    OperatorHistoryEventType
+		StatusChanged        OperatorHistoryEventType
+		APIKeyRefreshed      OperatorHistoryEventType
+		CreatedFromRefresh   OperatorHistoryEventType
 		TerminatedForRefresh OperatorHistoryEventType
-		Reset OperatorHistoryEventType
-		Terminated OperatorHistoryEventType
-		Authenticated OperatorHistoryEventType
-		Deactivated OperatorHistoryEventType
-		Stopped OperatorHistoryEventType
-		ShutdownRequested OperatorHistoryEventType
-		Claimed OperatorHistoryEventType
-		Reconnected OperatorHistoryEventType
-		Registered OperatorHistoryEventType
+		Reset                OperatorHistoryEventType
+		Terminated           OperatorHistoryEventType
+		Authenticated        OperatorHistoryEventType
+		Deactivated          OperatorHistoryEventType
+		Stopped              OperatorHistoryEventType
+		ShutdownRequested    OperatorHistoryEventType
+		Claimed              OperatorHistoryEventType
+		Reconnected          OperatorHistoryEventType
+		Registered           OperatorHistoryEventType
 	}
 	HistoryActor struct {
-		None HistoryActor
-		User HistoryActor
-		G8EO HistoryActor
+		None   HistoryActor
+		User   HistoryActor
+		G8EO   HistoryActor
 		System HistoryActor
 	}
 	AuditSseEventType struct {
 		Connected AuditSseEventType
-		Metadata AuditSseEventType
-		Event AuditSseEventType
-		Complete AuditSseEventType
-		Error AuditSseEventType
+		Metadata  AuditSseEventType
+		Event     AuditSseEventType
+		Complete  AuditSseEventType
+		Error     AuditSseEventType
 	}
 	AuditEventSource struct {
 		Conversation AuditEventSource
 	}
 	AuditEventType struct {
-		Message AuditEventType
-		CommandExecuted AuditEventType
-		CommandApproved AuditEventType
-		CommandDenied AuditEventType
-		CommandStarted AuditEventType
+		Message             AuditEventType
+		CommandExecuted     AuditEventType
+		CommandApproved     AuditEventType
+		CommandDenied       AuditEventType
+		CommandStarted      AuditEventType
 		EscalationRequested AuditEventType
-		EscalationApproved AuditEventType
-		FileModified AuditEventType
-		FileCreated AuditEventType
-		FileDeleted AuditEventType
-		PermissionGranted AuditEventType
-		PermissionRevoked AuditEventType
-		ConfigChanged AuditEventType
-		G8eBound AuditEventType
-		SessionStarted AuditEventType
+		EscalationApproved  AuditEventType
+		FileModified        AuditEventType
+		FileCreated         AuditEventType
+		FileDeleted         AuditEventType
+		PermissionGranted   AuditEventType
+		PermissionRevoked   AuditEventType
+		ConfigChanged       AuditEventType
+		G8eBound            AuditEventType
+		SessionStarted      AuditEventType
 	}
 	LoginAuditEventType struct {
-		LoginSuccess LoginAuditEventType
-		LoginFailed LoginAuditEventType
-		LoginAnomaly LoginAuditEventType
-		AccountLocked LoginAuditEventType
+		LoginSuccess    LoginAuditEventType
+		LoginFailed     LoginAuditEventType
+		LoginAnomaly    LoginAuditEventType
+		AccountLocked   LoginAuditEventType
 		AccountUnlocked LoginAuditEventType
 	}
 	AuthAuditEventType struct {
 		AuthSuccess AuthAuditEventType
-		AuthFailed AuthAuditEventType
+		AuthFailed  AuthAuditEventType
 	}
 	DownloadAuditEventType struct {
-		DownloadTokenFailed DownloadAuditEventType
+		DownloadTokenFailed  DownloadAuditEventType
 		DownloadTokenSuccess DownloadAuditEventType
 	}
 	AuthAuditResult struct {
-		Success AuthAuditResult
-		Failure AuthAuditResult
+		Success       AuthAuditResult
+		Failure       AuthAuditResult
 		InvalidAPIKey AuthAuditResult
 	}
 	SessionEndReason struct {
-		UserLogout SessionEndReason
-		IntegrityFailure SessionEndReason
+		UserLogout          SessionEndReason
+		IntegrityFailure    SessionEndReason
 		SessionRegeneration SessionEndReason
-		InvalidateAll SessionEndReason
-		UserDeleted SessionEndReason
-		TimeoutAbsolute SessionEndReason
-		TimeoutIdle SessionEndReason
+		InvalidateAll       SessionEndReason
+		UserDeleted         SessionEndReason
+		TimeoutAbsolute     SessionEndReason
+		TimeoutIdle         SessionEndReason
 	}
 	SessionSuspiciousReason struct {
 		ExcessiveIPChanges SessionSuspiciousReason
 	}
 	SessionEventType struct {
-		SessionCreated SessionEventType
-		SessionEnded SessionEventType
-		SessionRegenerated SessionEventType
-		SessionTimeoutAbsolute SessionEventType
-		SessionTimeoutIdle SessionEventType
+		SessionCreated            SessionEventType
+		SessionEnded              SessionEventType
+		SessionRegenerated        SessionEventType
+		SessionTimeoutAbsolute    SessionEventType
+		SessionTimeoutIdle        SessionEventType
 		SessionSuspiciousActivity SessionEventType
-		G8eBound SessionEventType
-		G8eUnbound SessionEventType
+		G8eBound                  SessionEventType
+		G8eUnbound                SessionEventType
 	}
 	OperatorToolName struct {
-		RunCommands OperatorToolName
-		FileCreate OperatorToolName
-		FileWrite OperatorToolName
-		FileRead OperatorToolName
-		FileUpdate OperatorToolName
-		CheckPort OperatorToolName
-		ListFiles OperatorToolName
-		ReadFileContent OperatorToolName
-		GrantIntent OperatorToolName
-		RevokeIntent OperatorToolName
-		FetchExecutionOutput OperatorToolName
-		FetchSessionHistory OperatorToolName
-		FetchFileHistory OperatorToolName
-		RestoreFile OperatorToolName
-		FetchFileDiff OperatorToolName
-		G8eWebSearch OperatorToolName
+		RunCommands               OperatorToolName
+		FileCreate                OperatorToolName
+		FileWrite                 OperatorToolName
+		FileRead                  OperatorToolName
+		FileUpdate                OperatorToolName
+		CheckPort                 OperatorToolName
+		ListFiles                 OperatorToolName
+		ReadFileContent           OperatorToolName
+		GrantIntent               OperatorToolName
+		RevokeIntent              OperatorToolName
+		FetchExecutionOutput      OperatorToolName
+		FetchSessionHistory       OperatorToolName
+		FetchFileHistory          OperatorToolName
+		RestoreFile               OperatorToolName
+		FetchFileDiff             OperatorToolName
+		G8eWebSearch              OperatorToolName
 		QueryInvestigationContext OperatorToolName
-		GetCommandConstraints OperatorToolName
-		ListSSHInventory OperatorToolName
-		RecursiveGrep OperatorToolName
-		StreamOperator OperatorToolName
+		GetCommandConstraints     OperatorToolName
+		ListSSHInventory          OperatorToolName
+		RecursiveGrep             OperatorToolName
+		StreamOperator            OperatorToolName
 	}
 	ListenMode struct {
-		Mode ListenMode
+		Mode     ListenMode
 		StatusOK ListenMode
 	}
 	StreamStatus struct {
 		Cancelled StreamStatus
-		Failed StreamStatus
-		Exited StreamStatus
+		Failed    StreamStatus
+		Exited    StreamStatus
 		Completed StreamStatus
-		Summary StreamStatus
+		Summary   StreamStatus
 	}
 	LlmModels struct {
-		Gemini31Pro LlmModels
-		Gemini3Flash LlmModels
-		Gemini31FlashLite LlmModels
-		OpenaiGpt54 LlmModels
-		OpenaiGpt54Pro LlmModels
-		OpenaiGpt54Mini LlmModels
-		OpenaiGpt54Nano LlmModels
-		AnthropicClaude46Opus LlmModels
+		Gemini31Pro             LlmModels
+		Gemini3Flash            LlmModels
+		Gemini31FlashLite       LlmModels
+		OpenaiGpt54             LlmModels
+		OpenaiGpt54Pro          LlmModels
+		OpenaiGpt54Mini         LlmModels
+		OpenaiGpt54Nano         LlmModels
+		AnthropicClaude46Opus   LlmModels
 		AnthropicClaude46Sonnet LlmModels
-		AnthropicClaude45Haiku LlmModels
-		OllamaQwen35122b LlmModels
-		OllamaGlm51 LlmModels
-		OllamaGemma426b LlmModels
-		OllamaGemma4E4b LlmModels
-		OllamaGemma4E2b LlmModels
-		OllamaGemma4E2bG8ea LlmModels
-		OllamaNemotron330b LlmModels
-		OllamaLlama323b LlmModels
-		OllamaQwen352b LlmModels
-		LlamacppGemma4E2b LlmModels
+		AnthropicClaude45Haiku  LlmModels
+		OllamaQwen35122b        LlmModels
+		OllamaGlm51             LlmModels
+		OllamaGemma426b         LlmModels
+		OllamaGemma4E4b         LlmModels
+		OllamaGemma4E2b         LlmModels
+		OllamaGemma4E2bG8ea     LlmModels
+		OllamaNemotron330b      LlmModels
+		OllamaLlama323b         LlmModels
+		OllamaQwen352b          LlmModels
+		LlamacppGemma4E2b       LlmModels
 	}
 	Priority struct {
-		Low Priority
-		Medium Priority
-		High Priority
+		Low      Priority
+		Medium   Priority
+		High     Priority
 		Critical Priority
 	}
 	Severity struct {
-		Low Severity
-		Medium Severity
-		High Severity
+		Low      Severity
+		Medium   Severity
+		High     Severity
 		Critical Severity
 	}
 	TribunalAuditStatus struct {
-		OK TribunalAuditStatus
+		OK      TribunalAuditStatus
 		Revised TribunalAuditStatus
-		Swap TribunalAuditStatus
+		Swap    TribunalAuditStatus
 	}
 	TribunalAuditMode struct {
 		Unanimous TribunalAuditMode
-		Majority TribunalAuditMode
-		Tied TribunalAuditMode
+		Majority  TribunalAuditMode
+		Tied      TribunalAuditMode
 	}
 	SlashTier struct {
 		Tier1 SlashTier
@@ -1483,299 +1483,299 @@ var Status = struct {
 		Tier3 SlashTier
 	}
 	ToolScope struct {
-		Universal ToolScope
+		Universal     ToolScope
 		OperatorGated ToolScope
 	}
 	ScrubberPriority struct {
-		ExactCredential ScrubberPriority
-		UrlOrConnection ScrubberPriority
+		ExactCredential      ScrubberPriority
+		UrlOrConnection      ScrubberPriority
 		ContextualCredential ScrubberPriority
-		GenericPII ScrubberPriority
+		GenericPII           ScrubberPriority
 	}
 }{
 	UserRole: struct {
-		User UserRole
-		Admin UserRole
+		User       UserRole
+		Admin      UserRole
 		Superadmin UserRole
-		Operator UserRole
+		Operator   UserRole
 	}{
-		User: UserRoleUser,
-		Admin: UserRoleAdmin,
+		User:       UserRoleUser,
+		Admin:      UserRoleAdmin,
 		Superadmin: UserRoleSuperadmin,
-		Operator: UserRoleOperator,
+		Operator:   UserRoleOperator,
 	},
 	UserStatus: struct {
-		Active UserStatus
+		Active   UserStatus
 		Disabled UserStatus
 	}{
-		Active: UserStatusActive,
+		Active:   UserStatusActive,
 		Disabled: UserStatusDisabled,
 	},
 	OperatorStatus: struct {
-		Available OperatorStatus
+		Available   OperatorStatus
 		Unavailable OperatorStatus
-		Offline OperatorStatus
-		Bound OperatorStatus
-		Stale OperatorStatus
-		Active OperatorStatus
-		Stopped OperatorStatus
-		Terminated OperatorStatus
+		Offline     OperatorStatus
+		Bound       OperatorStatus
+		Stale       OperatorStatus
+		Active      OperatorStatus
+		Stopped     OperatorStatus
+		Terminated  OperatorStatus
 	}{
-		Available: OperatorStatusAvailable,
+		Available:   OperatorStatusAvailable,
 		Unavailable: OperatorStatusUnavailable,
-		Offline: OperatorStatusOffline,
-		Bound: OperatorStatusBound,
-		Stale: OperatorStatusStale,
-		Active: OperatorStatusActive,
-		Stopped: OperatorStatusStopped,
-		Terminated: OperatorStatusTerminated,
+		Offline:     OperatorStatusOffline,
+		Bound:       OperatorStatusBound,
+		Stale:       OperatorStatusStale,
+		Active:      OperatorStatusActive,
+		Stopped:     OperatorStatusStopped,
+		Terminated:  OperatorStatusTerminated,
 	},
 	OperatorType: struct {
 		System OperatorType
-		Cloud OperatorType
+		Cloud  OperatorType
 	}{
 		System: OperatorTypeSystem,
-		Cloud: OperatorTypeCloud,
+		Cloud:  OperatorTypeCloud,
 	},
 	CloudSubtype: struct {
-		AWS CloudSubtype
-		GCP CloudSubtype
+		AWS   CloudSubtype
+		GCP   CloudSubtype
 		Azure CloudSubtype
 	}{
-		AWS: CloudSubtypeAWS,
-		GCP: CloudSubtypeGCP,
+		AWS:   CloudSubtypeAWS,
+		GCP:   CloudSubtypeGCP,
 		Azure: CloudSubtypeAzure,
 	},
 	ExecutionStatus: struct {
-		Pending ExecutionStatus
-		Executing ExecutionStatus
-		Completed ExecutionStatus
-		Failed ExecutionStatus
-		Timeout ExecutionStatus
-		Cancelled ExecutionStatus
+		Pending         ExecutionStatus
+		Executing       ExecutionStatus
+		Completed       ExecutionStatus
+		Failed          ExecutionStatus
+		Timeout         ExecutionStatus
+		Cancelled       ExecutionStatus
 		CancelRequested ExecutionStatus
-		Denied ExecutionStatus
-		Feedback ExecutionStatus
+		Denied          ExecutionStatus
+		Feedback        ExecutionStatus
 	}{
-		Pending: ExecutionStatusPending,
-		Executing: ExecutionStatusExecuting,
-		Completed: ExecutionStatusCompleted,
-		Failed: ExecutionStatusFailed,
-		Timeout: ExecutionStatusTimeout,
-		Cancelled: ExecutionStatusCancelled,
+		Pending:         ExecutionStatusPending,
+		Executing:       ExecutionStatusExecuting,
+		Completed:       ExecutionStatusCompleted,
+		Failed:          ExecutionStatusFailed,
+		Timeout:         ExecutionStatusTimeout,
+		Cancelled:       ExecutionStatusCancelled,
 		CancelRequested: ExecutionStatusCancelRequested,
-		Denied: ExecutionStatusDenied,
-		Feedback: ExecutionStatusFeedback,
+		Denied:          ExecutionStatusDenied,
+		Feedback:        ExecutionStatusFeedback,
 	},
 	ActionStatus: struct {
-		Completed ActionStatus
-		Failed ActionStatus
-		Timeout ActionStatus
-		Cancelled ActionStatus
+		Completed     ActionStatus
+		Failed        ActionStatus
+		Timeout       ActionStatus
+		Cancelled     ActionStatus
 		UserCancelled ActionStatus
 	}{
-		Completed: ActionStatusCompleted,
-		Failed: ActionStatusFailed,
-		Timeout: ActionStatusTimeout,
-		Cancelled: ActionStatusCancelled,
+		Completed:     ActionStatusCompleted,
+		Failed:        ActionStatusFailed,
+		Timeout:       ActionStatusTimeout,
+		Cancelled:     ActionStatusCancelled,
 		UserCancelled: ActionStatusUserCancelled,
 	},
 	SentinelStatus: struct {
-		Success SentinelStatus
-		Failure SentinelStatus
-		Misuse SentinelStatus
+		Success       SentinelStatus
+		Failure       SentinelStatus
+		Misuse        SentinelStatus
 		NotExecutable SentinelStatus
-		NotFound SentinelStatus
-		InvalidExit SentinelStatus
-		Interrupted SentinelStatus
-		Killed SentinelStatus
-		Terminated SentinelStatus
-		Error SentinelStatus
+		NotFound      SentinelStatus
+		InvalidExit   SentinelStatus
+		Interrupted   SentinelStatus
+		Killed        SentinelStatus
+		Terminated    SentinelStatus
+		Error         SentinelStatus
 	}{
-		Success: SentinelStatusSuccess,
-		Failure: SentinelStatusFailure,
-		Misuse: SentinelStatusMisuse,
+		Success:       SentinelStatusSuccess,
+		Failure:       SentinelStatusFailure,
+		Misuse:        SentinelStatusMisuse,
 		NotExecutable: SentinelStatusNotExecutable,
-		NotFound: SentinelStatusNotFound,
-		InvalidExit: SentinelStatusInvalidExit,
-		Interrupted: SentinelStatusInterrupted,
-		Killed: SentinelStatusKilled,
-		Terminated: SentinelStatusTerminated,
-		Error: SentinelStatusError,
+		NotFound:      SentinelStatusNotFound,
+		InvalidExit:   SentinelStatusInvalidExit,
+		Interrupted:   SentinelStatusInterrupted,
+		Killed:        SentinelStatusKilled,
+		Terminated:    SentinelStatusTerminated,
+		Error:         SentinelStatusError,
 	},
 	VaultMode: struct {
-		Raw VaultMode
+		Raw      VaultMode
 		Scrubbed VaultMode
 	}{
-		Raw: VaultModeRaw,
+		Raw:      VaultModeRaw,
 		Scrubbed: VaultModeScrubbed,
 	},
 	ApiKeyStatus: struct {
-		Active ApiKeyStatus
-		Revoked ApiKeyStatus
-		Expired ApiKeyStatus
+		Active    ApiKeyStatus
+		Revoked   ApiKeyStatus
+		Expired   ApiKeyStatus
 		Suspended ApiKeyStatus
 	}{
-		Active: APIKeyStatusActive,
-		Revoked: APIKeyStatusRevoked,
-		Expired: APIKeyStatusExpired,
+		Active:    APIKeyStatusActive,
+		Revoked:   APIKeyStatusRevoked,
+		Expired:   APIKeyStatusExpired,
 		Suspended: APIKeyStatusSuspended,
 	},
 	InvestigationStatus: struct {
-		Open InvestigationStatus
-		Closed InvestigationStatus
+		Open      InvestigationStatus
+		Closed    InvestigationStatus
 		Escalated InvestigationStatus
-		Resolved InvestigationStatus
+		Resolved  InvestigationStatus
 	}{
-		Open: InvestigationStatusOpen,
-		Closed: InvestigationStatusClosed,
+		Open:      InvestigationStatusOpen,
+		Closed:    InvestigationStatusClosed,
 		Escalated: InvestigationStatusEscalated,
-		Resolved: InvestigationStatusResolved,
+		Resolved:  InvestigationStatusResolved,
 	},
 	CaseStatus: struct {
-		New CaseStatus
-		Triage CaseStatus
-		Escalated CaseStatus
+		New                CaseStatus
+		Triage             CaseStatus
+		Escalated          CaseStatus
 		WaitingForCustomer CaseStatus
-		InProgress CaseStatus
-		HumanReview CaseStatus
-		Resolved CaseStatus
-		Closed CaseStatus
+		InProgress         CaseStatus
+		HumanReview        CaseStatus
+		Resolved           CaseStatus
+		Closed             CaseStatus
 	}{
-		New: CaseStatusNew,
-		Triage: CaseStatusTriage,
-		Escalated: CaseStatusEscalated,
+		New:                CaseStatusNew,
+		Triage:             CaseStatusTriage,
+		Escalated:          CaseStatusEscalated,
 		WaitingForCustomer: CaseStatusWaitingForCustomer,
-		InProgress: CaseStatusInProgress,
-		HumanReview: CaseStatusHumanReview,
-		Resolved: CaseStatusResolved,
-		Closed: CaseStatusClosed,
+		InProgress:         CaseStatusInProgress,
+		HumanReview:        CaseStatusHumanReview,
+		Resolved:           CaseStatusResolved,
+		Closed:             CaseStatusClosed,
 	},
 	TaskStatus: struct {
-		Pending TaskStatus
+		Pending    TaskStatus
 		InProgress TaskStatus
-		Completed TaskStatus
-		Failed TaskStatus
-		Cancelled TaskStatus
+		Completed  TaskStatus
+		Failed     TaskStatus
+		Cancelled  TaskStatus
 	}{
-		Pending: TaskStatusPending,
+		Pending:    TaskStatusPending,
 		InProgress: TaskStatusInProgress,
-		Completed: TaskStatusCompleted,
-		Failed: TaskStatusFailed,
-		Cancelled: TaskStatusCancelled,
+		Completed:  TaskStatusCompleted,
+		Failed:     TaskStatusFailed,
+		Cancelled:  TaskStatusCancelled,
 	},
 	ComponentName: struct {
-		G8EE ComponentName
-		G8EO ComponentName
+		G8EE       ComponentName
+		G8EO       ComponentName
 		G8EOListen ComponentName
-		CLIENT ComponentName
+		CLIENT     ComponentName
 	}{
-		G8EE: ComponentNameG8EE,
-		G8EO: ComponentNameG8EO,
+		G8EE:       ComponentNameG8EE,
+		G8EO:       ComponentNameG8EO,
 		G8EOListen: ComponentNameG8EOListen,
-		CLIENT: ComponentNameClient,
+		CLIENT:     ComponentNameClient,
 	},
 	ComponentStatus: struct {
-		Active ComponentStatus
-		Inactive ComponentStatus
+		Active      ComponentStatus
+		Inactive    ComponentStatus
 		Maintenance ComponentStatus
-		Error ComponentStatus
+		Error       ComponentStatus
 	}{
-		Active: ComponentStatusActive,
-		Inactive: ComponentStatusInactive,
+		Active:      ComponentStatusActive,
+		Inactive:    ComponentStatusInactive,
 		Maintenance: ComponentStatusMaintenance,
-		Error: ComponentStatusError,
+		Error:       ComponentStatusError,
 	},
 	HealthStatus: struct {
-		Healthy HealthStatus
+		Healthy   HealthStatus
 		Unhealthy HealthStatus
 	}{
-		Healthy: HealthStatusHealthy,
+		Healthy:   HealthStatusHealthy,
 		Unhealthy: HealthStatusUnhealthy,
 	},
 	ApprovalType: struct {
-		Command ApprovalType
-		FileEdit ApprovalType
-		Intent ApprovalType
+		Command       ApprovalType
+		FileEdit      ApprovalType
+		Intent        ApprovalType
 		AgentContinue ApprovalType
-		Stream ApprovalType
+		Stream        ApprovalType
 	}{
-		Command: ApprovalTypeCommand,
-		FileEdit: ApprovalTypeFileEdit,
-		Intent: ApprovalTypeIntent,
+		Command:       ApprovalTypeCommand,
+		FileEdit:      ApprovalTypeFileEdit,
+		Intent:        ApprovalTypeIntent,
 		AgentContinue: ApprovalTypeAgentContinue,
-		Stream: ApprovalTypeStream,
+		Stream:        ApprovalTypeStream,
 	},
 	ApprovalErrorType: struct {
-		ApprovalPublishFailure ApprovalErrorType
-		ApprovalException ApprovalErrorType
-		ApprovalTimeout ApprovalErrorType
-		InvalidIntent ApprovalErrorType
+		ApprovalPublishFailure  ApprovalErrorType
+		ApprovalException       ApprovalErrorType
+		ApprovalTimeout         ApprovalErrorType
+		InvalidIntent           ApprovalErrorType
 		IntentApprovalException ApprovalErrorType
 	}{
-		ApprovalPublishFailure: ApprovalErrorTypeApprovalPublishFailure,
-		ApprovalException: ApprovalErrorTypeApprovalException,
-		ApprovalTimeout: ApprovalErrorTypeApprovalTimeout,
-		InvalidIntent: ApprovalErrorTypeInvalidIntent,
+		ApprovalPublishFailure:  ApprovalErrorTypeApprovalPublishFailure,
+		ApprovalException:       ApprovalErrorTypeApprovalException,
+		ApprovalTimeout:         ApprovalErrorTypeApprovalTimeout,
+		InvalidIntent:           ApprovalErrorTypeInvalidIntent,
 		IntentApprovalException: ApprovalErrorTypeIntentApprovalException,
 	},
 	AttachmentType: struct {
-		Pdf AttachmentType
+		Pdf   AttachmentType
 		Image AttachmentType
-		Text AttachmentType
+		Text  AttachmentType
 		Other AttachmentType
 	}{
-		Pdf: AttachmentTypePdf,
+		Pdf:   AttachmentTypePdf,
 		Image: AttachmentTypeImage,
-		Text: AttachmentTypeText,
+		Text:  AttachmentTypeText,
 		Other: AttachmentTypeOther,
 	},
 	WorkflowType: struct {
-		G8eBound WorkflowType
-		G8eNotBound WorkflowType
+		G8eBound      WorkflowType
+		G8eNotBound   WorkflowType
 		G8eCloudBound WorkflowType
 	}{
-		G8eBound: WorkflowTypeG8eBound,
-		G8eNotBound: WorkflowTypeG8eNotBound,
+		G8eBound:      WorkflowTypeG8eBound,
+		G8eNotBound:   WorkflowTypeG8eNotBound,
 		G8eCloudBound: WorkflowTypeG8eCloudBound,
 	},
 	RiskLevel: struct {
-		Low RiskLevel
+		Low    RiskLevel
 		Medium RiskLevel
-		High RiskLevel
+		High   RiskLevel
 	}{
-		Low: RiskLevelLow,
+		Low:    RiskLevelLow,
 		Medium: RiskLevelMedium,
-		High: RiskLevelHigh,
+		High:   RiskLevelHigh,
 	},
 	RiskThreshold: struct {
-		Low RiskThreshold
+		Low    RiskThreshold
 		Medium RiskThreshold
-		High RiskThreshold
+		High   RiskThreshold
 	}{
-		Low: RiskThresholdLow,
+		Low:    RiskThresholdLow,
 		Medium: RiskThresholdMedium,
-		High: RiskThresholdHigh,
+		High:   RiskThresholdHigh,
 	},
 	EscalationRisk: struct {
-		Low EscalationRisk
-		Medium EscalationRisk
-		High EscalationRisk
+		Low      EscalationRisk
+		Medium   EscalationRisk
+		High     EscalationRisk
 		Critical EscalationRisk
 	}{
-		Low: EscalationRiskLow,
-		Medium: EscalationRiskMedium,
-		High: EscalationRiskHigh,
+		Low:      EscalationRiskLow,
+		Medium:   EscalationRiskMedium,
+		High:     EscalationRiskHigh,
 		Critical: EscalationRiskCritical,
 	},
 	Platform: struct {
-		Linux Platform
+		Linux   Platform
 		Windows Platform
-		Darwin Platform
+		Darwin  Platform
 	}{
-		Linux: PlatformLinux,
+		Linux:   PlatformLinux,
 		Windows: PlatformWindows,
-		Darwin: PlatformDarwin,
+		Darwin:  PlatformDarwin,
 	},
 	HeartbeatType: struct {
 		Automatic HeartbeatType
@@ -1787,158 +1787,158 @@ var Status = struct {
 		Requested: HeartbeatTypeRequested,
 	},
 	G8eAvailability: struct {
-		Online G8eAvailability
+		Online  G8eAvailability
 		Offline G8eAvailability
 	}{
-		Online: G8eAvailabilityOnline,
+		Online:  G8eAvailabilityOnline,
 		Offline: G8eAvailabilityOffline,
 	},
 	VersionStability: struct {
 		Stable VersionStability
-		Beta VersionStability
-		Dev VersionStability
+		Beta   VersionStability
+		Dev    VersionStability
 	}{
 		Stable: VersionStabilityStable,
-		Beta: VersionStabilityBeta,
-		Dev: VersionStabilityDev,
+		Beta:   VersionStabilityBeta,
+		Dev:    VersionStabilityDev,
 	},
 	SessionType: struct {
-		Web SessionType
+		Web      SessionType
 		Operator SessionType
-		CLI SessionType
+		CLI      SessionType
 	}{
-		Web: SessionTypeWeb,
+		Web:      SessionTypeWeb,
 		Operator: SessionTypeOperator,
-		CLI: SessionTypeCLI,
+		CLI:      SessionTypeCLI,
 	},
 	ConversationStatus: struct {
-		Active ConversationStatus
-		Inactive ConversationStatus
+		Active    ConversationStatus
+		Inactive  ConversationStatus
 		Completed ConversationStatus
 	}{
-		Active: ConversationStatusActive,
-		Inactive: ConversationStatusInactive,
+		Active:    ConversationStatusActive,
+		Inactive:  ConversationStatusInactive,
 		Completed: ConversationStatusCompleted,
 	},
 	InfrastructureStatus: struct {
-		Unknown InfrastructureStatus
-		Healthy InfrastructureStatus
-		Stable InfrastructureStatus
+		Unknown  InfrastructureStatus
+		Healthy  InfrastructureStatus
+		Stable   InfrastructureStatus
 		Degraded InfrastructureStatus
 		Critical InfrastructureStatus
 	}{
-		Unknown: InfrastructureStatusUnknown,
-		Healthy: InfrastructureStatusHealthy,
-		Stable: InfrastructureStatusStable,
+		Unknown:  InfrastructureStatusUnknown,
+		Healthy:  InfrastructureStatusHealthy,
+		Stable:   InfrastructureStatusStable,
 		Degraded: InfrastructureStatusDegraded,
 		Critical: InfrastructureStatusCritical,
 	},
 	AiSource: struct {
-		ToolCall AiSource
+		ToolCall         AiSource
 		TerminalAnchored AiSource
-		TerminalDirect AiSource
+		TerminalDirect   AiSource
 	}{
-		ToolCall: AISourceToolCall,
+		ToolCall:         AISourceToolCall,
 		TerminalAnchored: AISourceTerminalAnchored,
-		TerminalDirect: AISourceTerminalDirect,
+		TerminalDirect:   AISourceTerminalDirect,
 	},
 	AITaskId: struct {
-		Chat AITaskId
-		AgentContinue AITaskId
-		Command AITaskId
-		DirectCommand AITaskId
-		FileEdit AITaskId
-		FsList AITaskId
-		FsRead AITaskId
-		PortCheck AITaskId
-		FetchLogs AITaskId
-		FetchHistory AITaskId
+		Chat             AITaskId
+		AgentContinue    AITaskId
+		Command          AITaskId
+		DirectCommand    AITaskId
+		FileEdit         AITaskId
+		FsList           AITaskId
+		FsRead           AITaskId
+		PortCheck        AITaskId
+		FetchLogs        AITaskId
+		FetchHistory     AITaskId
 		FetchFileHistory AITaskId
-		RestoreFile AITaskId
-		FetchFileDiff AITaskId
-		RecursiveGrep AITaskId
-		IntentGrant AITaskId
-		IntentRevoke AITaskId
+		RestoreFile      AITaskId
+		FetchFileDiff    AITaskId
+		RecursiveGrep    AITaskId
+		IntentGrant      AITaskId
+		IntentRevoke     AITaskId
 	}{
-		Chat: AITaskIDChat,
-		AgentContinue: AITaskIDAgentContinue,
-		Command: AITaskIDCommand,
-		DirectCommand: AITaskIDDirectCommand,
-		FileEdit: AITaskIDFileEdit,
-		FsList: AITaskIDFsList,
-		FsRead: AITaskIDFsRead,
-		PortCheck: AITaskIDPortCheck,
-		FetchLogs: AITaskIDFetchLogs,
-		FetchHistory: AITaskIDFetchHistory,
+		Chat:             AITaskIDChat,
+		AgentContinue:    AITaskIDAgentContinue,
+		Command:          AITaskIDCommand,
+		DirectCommand:    AITaskIDDirectCommand,
+		FileEdit:         AITaskIDFileEdit,
+		FsList:           AITaskIDFsList,
+		FsRead:           AITaskIDFsRead,
+		PortCheck:        AITaskIDPortCheck,
+		FetchLogs:        AITaskIDFetchLogs,
+		FetchHistory:     AITaskIDFetchHistory,
 		FetchFileHistory: AITaskIDFetchFileHistory,
-		RestoreFile: AITaskIDRestoreFile,
-		FetchFileDiff: AITaskIDFetchFileDiff,
-		RecursiveGrep: AITaskIDRecursiveGrep,
-		IntentGrant: AITaskIDIntentGrant,
-		IntentRevoke: AITaskIDIntentRevoke,
+		RestoreFile:      AITaskIDRestoreFile,
+		FetchFileDiff:    AITaskIDFetchFileDiff,
+		RecursiveGrep:    AITaskIDRecursiveGrep,
+		IntentGrant:      AITaskIDIntentGrant,
+		IntentRevoke:     AITaskIDIntentRevoke,
 	},
 	ThinkingActionType: struct {
-		Start ThinkingActionType
+		Start  ThinkingActionType
 		Update ThinkingActionType
-		End ThinkingActionType
+		End    ThinkingActionType
 	}{
-		Start: ThinkingActionTypeStart,
+		Start:  ThinkingActionTypeStart,
 		Update: ThinkingActionTypeUpdate,
-		End: ThinkingActionTypeEnd,
+		End:    ThinkingActionTypeEnd,
 	},
 	ToolCallStatus: struct {
-		Started ToolCallStatus
+		Started   ToolCallStatus
 		Completed ToolCallStatus
 	}{
-		Started: ToolCallStatusStarted,
+		Started:   ToolCallStatusStarted,
 		Completed: ToolCallStatusCompleted,
 	},
 	CommandStatus: struct {
-		Pending CommandStatus
+		Pending   CommandStatus
 		Executing CommandStatus
-		Output CommandStatus
+		Output    CommandStatus
 		Completed CommandStatus
-		Failed CommandStatus
-		Timeout CommandStatus
+		Failed    CommandStatus
+		Timeout   CommandStatus
 		Cancelled CommandStatus
 	}{
-		Pending: CommandStatusPending,
+		Pending:   CommandStatusPending,
 		Executing: CommandStatusExecuting,
-		Output: CommandStatusOutput,
+		Output:    CommandStatusOutput,
 		Completed: CommandStatusCompleted,
-		Failed: CommandStatusFailed,
-		Timeout: CommandStatusTimeout,
+		Failed:    CommandStatusFailed,
+		Timeout:   CommandStatusTimeout,
 		Cancelled: CommandStatusCancelled,
 	},
 	ToolDisplayCategory: struct {
 		Execution ToolDisplayCategory
-		File ToolDisplayCategory
-		Network ToolDisplayCategory
-		Search ToolDisplayCategory
-		General ToolDisplayCategory
+		File      ToolDisplayCategory
+		Network   ToolDisplayCategory
+		Search    ToolDisplayCategory
+		General   ToolDisplayCategory
 	}{
 		Execution: ToolDisplayCategoryExecution,
-		File: ToolDisplayCategoryFile,
-		Network: ToolDisplayCategoryNetwork,
-		Search: ToolDisplayCategorySearch,
-		General: ToolDisplayCategoryGeneral,
+		File:      ToolDisplayCategoryFile,
+		Network:   ToolDisplayCategoryNetwork,
+		Search:    ToolDisplayCategorySearch,
+		General:   ToolDisplayCategoryGeneral,
 	},
 	CommandCategory: struct {
-		CSVWhitelist CommandCategory
+		CSVWhitelist       CommandCategory
 		NetworkDiagnostics CommandCategory
-		SystemDiagnostics CommandCategory
+		SystemDiagnostics  CommandCategory
 	}{
-		CSVWhitelist: CommandCategoryCSVWhitelist,
+		CSVWhitelist:       CommandCategoryCSVWhitelist,
 		NetworkDiagnostics: CommandCategoryNetworkDiagnostics,
-		SystemDiagnostics: CommandCategorySystemDiagnostics,
+		SystemDiagnostics:  CommandCategorySystemDiagnostics,
 	},
 	ToolCallDefaults: struct {
-		Label ToolCallDefaults
-		Icon ToolCallDefaults
+		Label    ToolCallDefaults
+		Icon     ToolCallDefaults
 		Category ToolCallDefaults
 	}{
-		Label: ToolCallDefaultsLabel,
-		Icon: ToolCallDefaultsIcon,
+		Label:    ToolCallDefaultsLabel,
+		Icon:     ToolCallDefaultsIcon,
 		Category: ToolCallDefaultsCategory,
 	},
 	TribunalAuditorReason: struct {
@@ -1948,186 +1948,186 @@ var Status = struct {
 	},
 	TribunalOutcome: struct {
 		VerificationFailed TribunalOutcome
-		Consensus TribunalOutcome
-		Verified TribunalOutcome
-		ConsensusFailed TribunalOutcome
+		Consensus          TribunalOutcome
+		Verified           TribunalOutcome
+		ConsensusFailed    TribunalOutcome
 	}{
 		VerificationFailed: TribunalOutcomeVerificationFailed,
-		Consensus: TribunalOutcomeConsensus,
-		Verified: TribunalOutcomeVerified,
-		ConsensusFailed: TribunalOutcomeConsensusFailed,
+		Consensus:          TribunalOutcomeConsensus,
+		Verified:           TribunalOutcomeVerified,
+		ConsensusFailed:    TribunalOutcomeConsensusFailed,
 	},
 	TribunalFallbackReason: struct {
-		Disabled TribunalFallbackReason
+		Disabled            TribunalFallbackReason
 		ProviderUnavailable TribunalFallbackReason
-		AllPassesFailed TribunalFallbackReason
-		NoVoteWinner TribunalFallbackReason
+		AllPassesFailed     TribunalFallbackReason
+		NoVoteWinner        TribunalFallbackReason
 	}{
-		Disabled: TribunalFallbackReasonDisabled,
+		Disabled:            TribunalFallbackReasonDisabled,
 		ProviderUnavailable: TribunalFallbackReasonProviderUnavailable,
-		AllPassesFailed: TribunalFallbackReasonAllPassesFailed,
-		NoVoteWinner: TribunalFallbackReasonNoVoteWinner,
+		AllPassesFailed:     TribunalFallbackReasonAllPassesFailed,
+		NoVoteWinner:        TribunalFallbackReasonNoVoteWinner,
 	},
 	CitationLayout: struct {
-		HoverCardWidthPx CitationLayout
-		FaviconSizePx CitationLayout
+		HoverCardWidthPx          CitationLayout
+		FaviconSizePx             CitationLayout
 		HoverCardViewportMarginPx CitationLayout
-		HeadingSegmentMaxLength CitationLayout
-		SentenceLookaheadChars CitationLayout
-		ParagraphLookaheadChars CitationLayout
+		HeadingSegmentMaxLength   CitationLayout
+		SentenceLookaheadChars    CitationLayout
+		ParagraphLookaheadChars   CitationLayout
 	}{
-		HoverCardWidthPx: CitationLayoutHoverCardWidthPx,
-		FaviconSizePx: CitationLayoutFaviconSizePx,
+		HoverCardWidthPx:          CitationLayoutHoverCardWidthPx,
+		FaviconSizePx:             CitationLayoutFaviconSizePx,
 		HoverCardViewportMarginPx: CitationLayoutHoverCardViewportMarginPx,
-		HeadingSegmentMaxLength: CitationLayoutHeadingSegmentMaxLength,
-		SentenceLookaheadChars: CitationLayoutSentenceLookaheadChars,
-		ParagraphLookaheadChars: CitationLayoutParagraphLookaheadChars,
+		HeadingSegmentMaxLength:   CitationLayoutHeadingSegmentMaxLength,
+		SentenceLookaheadChars:    CitationLayoutSentenceLookaheadChars,
+		ParagraphLookaheadChars:   CitationLayoutParagraphLookaheadChars,
 	},
 	G8eActionType: struct {
 		CommandExecution G8eActionType
-		CommandExecuted G8eActionType
-		FileRead G8eActionType
-		FileEdit G8eActionType
-		FileList G8eActionType
-		PortCheck G8eActionType
+		CommandExecuted  G8eActionType
+		FileRead         G8eActionType
+		FileEdit         G8eActionType
+		FileList         G8eActionType
+		PortCheck        G8eActionType
 	}{
 		CommandExecution: G8eActionTypeCommandExecution,
-		CommandExecuted: G8eActionTypeCommandExecuted,
-		FileRead: G8eActionTypeFileRead,
-		FileEdit: G8eActionTypeFileEdit,
-		FileList: G8eActionTypeFileList,
-		PortCheck: G8eActionTypePortCheck,
+		CommandExecuted:  G8eActionTypeCommandExecuted,
+		FileRead:         G8eActionTypeFileRead,
+		FileEdit:         G8eActionTypeFileEdit,
+		FileList:         G8eActionTypeFileList,
+		PortCheck:        G8eActionTypePortCheck,
 	},
 	ActionType: struct {
-		ExecuteBash ActionType
-		FileEdit ActionType
-		FsList ActionType
-		FsRead ActionType
-		FsGrep ActionType
-		PortCheck ActionType
-		FetchLogs ActionType
-		FetchHistory ActionType
+		ExecuteBash      ActionType
+		FileEdit         ActionType
+		FsList           ActionType
+		FsRead           ActionType
+		FsGrep           ActionType
+		PortCheck        ActionType
+		FetchLogs        ActionType
+		FetchHistory     ActionType
 		FetchFileHistory ActionType
-		RestoreFile ActionType
-		Shutdown ActionType
-		Heartbeat ActionType
-		EvalAnswer ActionType
-		GrantIntent ActionType
-		RevokeIntent ActionType
+		RestoreFile      ActionType
+		Shutdown         ActionType
+		Heartbeat        ActionType
+		EvalAnswer       ActionType
+		GrantIntent      ActionType
+		RevokeIntent     ActionType
 	}{
-		ExecuteBash: ActionTypeExecuteBash,
-		FileEdit: ActionTypeFileEdit,
-		FsList: ActionTypeFsList,
-		FsRead: ActionTypeFsRead,
-		FsGrep: ActionTypeFsGrep,
-		PortCheck: ActionTypePortCheck,
-		FetchLogs: ActionTypeFetchLogs,
-		FetchHistory: ActionTypeFetchHistory,
+		ExecuteBash:      ActionTypeExecuteBash,
+		FileEdit:         ActionTypeFileEdit,
+		FsList:           ActionTypeFsList,
+		FsRead:           ActionTypeFsRead,
+		FsGrep:           ActionTypeFsGrep,
+		PortCheck:        ActionTypePortCheck,
+		FetchLogs:        ActionTypeFetchLogs,
+		FetchHistory:     ActionTypeFetchHistory,
 		FetchFileHistory: ActionTypeFetchFileHistory,
-		RestoreFile: ActionTypeRestoreFile,
-		Shutdown: ActionTypeShutdown,
-		Heartbeat: ActionTypeHeartbeat,
-		EvalAnswer: ActionTypeEvalAnswer,
-		GrantIntent: ActionTypeGrantIntent,
-		RevokeIntent: ActionTypeRevokeIntent,
+		RestoreFile:      ActionTypeRestoreFile,
+		Shutdown:         ActionTypeShutdown,
+		Heartbeat:        ActionTypeHeartbeat,
+		EvalAnswer:       ActionTypeEvalAnswer,
+		GrantIntent:      ActionTypeGrantIntent,
+		RevokeIntent:     ActionTypeRevokeIntent,
 	},
 	CommandErrorType: struct {
-		ValidationError CommandErrorType
-		SecurityError CommandErrorType
-		SecurityViolation CommandErrorType
-		BindingViolation CommandErrorType
-		NoOperatorsAvailable CommandErrorType
-		G8eResolutionError CommandErrorType
-		CloudOperatorRequired CommandErrorType
-		BlacklistViolation CommandErrorType
-		WhitelistViolation CommandErrorType
-		ExecutionFailed CommandErrorType
-		ExecutionError CommandErrorType
-		UserDenied CommandErrorType
-		UserFeedback CommandErrorType
-		PermissionDenied CommandErrorType
-		CommandTimeout CommandErrorType
-		CommandExecutionFailed CommandErrorType
+		ValidationError            CommandErrorType
+		SecurityError              CommandErrorType
+		SecurityViolation          CommandErrorType
+		BindingViolation           CommandErrorType
+		NoOperatorsAvailable       CommandErrorType
+		G8eResolutionError         CommandErrorType
+		CloudOperatorRequired      CommandErrorType
+		BlacklistViolation         CommandErrorType
+		WhitelistViolation         CommandErrorType
+		ExecutionFailed            CommandErrorType
+		ExecutionError             CommandErrorType
+		UserDenied                 CommandErrorType
+		UserFeedback               CommandErrorType
+		PermissionDenied           CommandErrorType
+		CommandTimeout             CommandErrorType
+		CommandExecutionFailed     CommandErrorType
 		PubsubSubscriptionNotReady CommandErrorType
-		UnknownTool CommandErrorType
-		FsListFailed CommandErrorType
-		FsReadFailed CommandErrorType
-		UserCancelled CommandErrorType
-		RiskAnalysisBlocked CommandErrorType
-		ApprovalDenied CommandErrorType
-		OperationTimeout CommandErrorType
-		InvalidIntent CommandErrorType
-		MissingOperatorID CommandErrorType
-		PartialIAMUpdateFailed CommandErrorType
-		PartialIAMDetachFailed CommandErrorType
-		RestoreFileFailed CommandErrorType
-		FetchFileDiffFailed CommandErrorType
-		FetchLogsFailed CommandErrorType
-		FetchHistoryFailed CommandErrorType
-		FetchFileHistoryFailed CommandErrorType
-		PortCheckFailed CommandErrorType
-		ApprovalTimeout CommandErrorType
-		PermissionError CommandErrorType
-		ConfigurationError CommandErrorType
-		AgentConflict CommandErrorType
+		UnknownTool                CommandErrorType
+		FsListFailed               CommandErrorType
+		FsReadFailed               CommandErrorType
+		UserCancelled              CommandErrorType
+		RiskAnalysisBlocked        CommandErrorType
+		ApprovalDenied             CommandErrorType
+		OperationTimeout           CommandErrorType
+		InvalidIntent              CommandErrorType
+		MissingOperatorID          CommandErrorType
+		PartialIAMUpdateFailed     CommandErrorType
+		PartialIAMDetachFailed     CommandErrorType
+		RestoreFileFailed          CommandErrorType
+		FetchFileDiffFailed        CommandErrorType
+		FetchLogsFailed            CommandErrorType
+		FetchHistoryFailed         CommandErrorType
+		FetchFileHistoryFailed     CommandErrorType
+		PortCheckFailed            CommandErrorType
+		ApprovalTimeout            CommandErrorType
+		PermissionError            CommandErrorType
+		ConfigurationError         CommandErrorType
+		AgentConflict              CommandErrorType
 	}{
-		ValidationError: CommandErrorTypeValidationError,
-		SecurityError: CommandErrorTypeSecurityError,
-		SecurityViolation: CommandErrorTypeSecurityViolation,
-		BindingViolation: CommandErrorTypeBindingViolation,
-		NoOperatorsAvailable: CommandErrorTypeNoOperatorsAvailable,
-		G8eResolutionError: CommandErrorTypeG8eResolutionError,
-		CloudOperatorRequired: CommandErrorTypeCloudOperatorRequired,
-		BlacklistViolation: CommandErrorTypeBlacklistViolation,
-		WhitelistViolation: CommandErrorTypeWhitelistViolation,
-		ExecutionFailed: CommandErrorTypeExecutionFailed,
-		ExecutionError: CommandErrorTypeExecutionError,
-		UserDenied: CommandErrorTypeUserDenied,
-		UserFeedback: CommandErrorTypeUserFeedback,
-		PermissionDenied: CommandErrorTypePermissionDenied,
-		CommandTimeout: CommandErrorTypeCommandTimeout,
-		CommandExecutionFailed: CommandErrorTypeCommandExecutionFailed,
+		ValidationError:            CommandErrorTypeValidationError,
+		SecurityError:              CommandErrorTypeSecurityError,
+		SecurityViolation:          CommandErrorTypeSecurityViolation,
+		BindingViolation:           CommandErrorTypeBindingViolation,
+		NoOperatorsAvailable:       CommandErrorTypeNoOperatorsAvailable,
+		G8eResolutionError:         CommandErrorTypeG8eResolutionError,
+		CloudOperatorRequired:      CommandErrorTypeCloudOperatorRequired,
+		BlacklistViolation:         CommandErrorTypeBlacklistViolation,
+		WhitelistViolation:         CommandErrorTypeWhitelistViolation,
+		ExecutionFailed:            CommandErrorTypeExecutionFailed,
+		ExecutionError:             CommandErrorTypeExecutionError,
+		UserDenied:                 CommandErrorTypeUserDenied,
+		UserFeedback:               CommandErrorTypeUserFeedback,
+		PermissionDenied:           CommandErrorTypePermissionDenied,
+		CommandTimeout:             CommandErrorTypeCommandTimeout,
+		CommandExecutionFailed:     CommandErrorTypeCommandExecutionFailed,
 		PubsubSubscriptionNotReady: CommandErrorTypePubSubSubscriptionNotReady,
-		UnknownTool: CommandErrorTypeUnknownTool,
-		FsListFailed: CommandErrorTypeFsListFailed,
-		FsReadFailed: CommandErrorTypeFsReadFailed,
-		UserCancelled: CommandErrorTypeUserCancelled,
-		RiskAnalysisBlocked: CommandErrorTypeRiskAnalysisBlocked,
-		ApprovalDenied: CommandErrorTypeApprovalDenied,
-		OperationTimeout: CommandErrorTypeOperationTimeout,
-		InvalidIntent: CommandErrorTypeInvalidIntent,
-		MissingOperatorID: CommandErrorTypeMissingOperatorID,
-		PartialIAMUpdateFailed: CommandErrorTypePartialIAMUpdateFailed,
-		PartialIAMDetachFailed: CommandErrorTypePartialIAMDetachFailed,
-		RestoreFileFailed: CommandErrorTypeRestoreFileFailed,
-		FetchFileDiffFailed: CommandErrorTypeFetchFileDiffFailed,
-		FetchLogsFailed: CommandErrorTypeFetchLogsFailed,
-		FetchHistoryFailed: CommandErrorTypeFetchHistoryFailed,
-		FetchFileHistoryFailed: CommandErrorTypeFetchFileHistoryFailed,
-		PortCheckFailed: CommandErrorTypePortCheckFailed,
-		ApprovalTimeout: CommandErrorTypeApprovalTimeout,
-		PermissionError: CommandErrorTypePermissionError,
-		ConfigurationError: CommandErrorTypeConfigurationError,
-		AgentConflict: CommandErrorTypeAgentConflict,
+		UnknownTool:                CommandErrorTypeUnknownTool,
+		FsListFailed:               CommandErrorTypeFsListFailed,
+		FsReadFailed:               CommandErrorTypeFsReadFailed,
+		UserCancelled:              CommandErrorTypeUserCancelled,
+		RiskAnalysisBlocked:        CommandErrorTypeRiskAnalysisBlocked,
+		ApprovalDenied:             CommandErrorTypeApprovalDenied,
+		OperationTimeout:           CommandErrorTypeOperationTimeout,
+		InvalidIntent:              CommandErrorTypeInvalidIntent,
+		MissingOperatorID:          CommandErrorTypeMissingOperatorID,
+		PartialIAMUpdateFailed:     CommandErrorTypePartialIAMUpdateFailed,
+		PartialIAMDetachFailed:     CommandErrorTypePartialIAMDetachFailed,
+		RestoreFileFailed:          CommandErrorTypeRestoreFileFailed,
+		FetchFileDiffFailed:        CommandErrorTypeFetchFileDiffFailed,
+		FetchLogsFailed:            CommandErrorTypeFetchLogsFailed,
+		FetchHistoryFailed:         CommandErrorTypeFetchHistoryFailed,
+		FetchFileHistoryFailed:     CommandErrorTypeFetchFileHistoryFailed,
+		PortCheckFailed:            CommandErrorTypePortCheckFailed,
+		ApprovalTimeout:            CommandErrorTypeApprovalTimeout,
+		PermissionError:            CommandErrorTypePermissionError,
+		ConfigurationError:         CommandErrorTypeConfigurationError,
+		AgentConflict:              CommandErrorTypeAgentConflict,
 	},
 	FileOperation: struct {
-		Read FileOperation
-		Create FileOperation
-		Write FileOperation
-		Update FileOperation
+		Read    FileOperation
+		Create  FileOperation
+		Write   FileOperation
+		Update  FileOperation
 		Replace FileOperation
-		Insert FileOperation
-		Delete FileOperation
-		Patch FileOperation
+		Insert  FileOperation
+		Delete  FileOperation
+		Patch   FileOperation
 	}{
-		Read: FileOperationRead,
-		Create: FileOperationCreate,
-		Write: FileOperationWrite,
-		Update: FileOperationUpdate,
+		Read:    FileOperationRead,
+		Create:  FileOperationCreate,
+		Write:   FileOperationWrite,
+		Update:  FileOperationUpdate,
 		Replace: FileOperationReplace,
-		Insert: FileOperationInsert,
-		Delete: FileOperationDelete,
-		Patch: FileOperationPatch,
+		Insert:  FileOperationInsert,
+		Delete:  FileOperationDelete,
+		Patch:   FileOperationPatch,
 	},
 	NetworkProtocol: struct {
 		TCP NetworkProtocol
@@ -2137,155 +2137,155 @@ var Status = struct {
 		UDP: NetworkProtocolUDP,
 	},
 	AuthProvider: struct {
-		Local AuthProvider
+		Local   AuthProvider
 		Passkey AuthProvider
 	}{
-		Local: AuthProviderLocal,
+		Local:   AuthProviderLocal,
 		Passkey: AuthProviderPasskey,
 	},
 	AuthMethod: struct {
 		KvPubsub AuthMethod
-		Session AuthMethod
+		Session  AuthMethod
 	}{
 		KvPubsub: AuthMethodKvPubSub,
-		Session: AuthMethodSession,
+		Session:  AuthMethodSession,
 	},
 	ConnectionState: struct {
 		Disconnected ConnectionState
-		Connecting ConnectionState
-		Connected ConnectionState
+		Connecting   ConnectionState
+		Connected    ConnectionState
 		Reconnecting ConnectionState
-		Closed ConnectionState
-		Error ConnectionState
+		Closed       ConnectionState
+		Error        ConnectionState
 	}{
 		Disconnected: ConnectionStateDisconnected,
-		Connecting: ConnectionStateConnecting,
-		Connected: ConnectionStateConnected,
+		Connecting:   ConnectionStateConnecting,
+		Connected:    ConnectionStateConnected,
 		Reconnecting: ConnectionStateReconnecting,
-		Closed: ConnectionStateClosed,
-		Error: ConnectionStateError,
+		Closed:       ConnectionStateClosed,
+		Error:        ConnectionStateError,
 	},
 	Environment: struct {
 		Production Environment
-		Dev Environment
-		Test Environment
+		Dev        Environment
+		Test       Environment
 	}{
 		Production: EnvironmentProduction,
-		Dev: EnvironmentDev,
-		Test: EnvironmentTest,
+		Dev:        EnvironmentDev,
+		Test:       EnvironmentTest,
 	},
 	DeviceLinkStatus: struct {
-		Active DeviceLinkStatus
-		Pending DeviceLinkStatus
-		Used DeviceLinkStatus
+		Active    DeviceLinkStatus
+		Pending   DeviceLinkStatus
+		Used      DeviceLinkStatus
 		Exhausted DeviceLinkStatus
-		Expired DeviceLinkStatus
-		Revoked DeviceLinkStatus
+		Expired   DeviceLinkStatus
+		Revoked   DeviceLinkStatus
 	}{
-		Active: DeviceLinkStatusActive,
-		Pending: DeviceLinkStatusPending,
-		Used: DeviceLinkStatusUsed,
+		Active:    DeviceLinkStatusActive,
+		Pending:   DeviceLinkStatusPending,
+		Used:      DeviceLinkStatusUsed,
 		Exhausted: DeviceLinkStatusExhausted,
-		Expired: DeviceLinkStatusExpired,
-		Revoked: DeviceLinkStatusRevoked,
+		Expired:   DeviceLinkStatusExpired,
+		Revoked:   DeviceLinkStatusRevoked,
 	},
 	DeviceLinkSuccess: struct {
-		Listed DeviceLinkSuccess
+		Listed  DeviceLinkSuccess
 		Created DeviceLinkSuccess
 		Revoked DeviceLinkSuccess
 		Deleted DeviceLinkSuccess
 	}{
-		Listed: DeviceLinkSuccessListed,
+		Listed:  DeviceLinkSuccessListed,
 		Created: DeviceLinkSuccessCreated,
 		Revoked: DeviceLinkSuccessRevoked,
 		Deleted: DeviceLinkSuccessDeleted,
 	},
 	SystemHealth: struct {
-		Healthy SystemHealth
-		Degraded SystemHealth
+		Healthy   SystemHealth
+		Degraded  SystemHealth
 		Unhealthy SystemHealth
-		Unknown SystemHealth
+		Unknown   SystemHealth
 	}{
-		Healthy: SystemHealthHealthy,
-		Degraded: SystemHealthDegraded,
+		Healthy:   SystemHealthHealthy,
+		Degraded:  SystemHealthDegraded,
 		Unhealthy: SystemHealthUnhealthy,
-		Unknown: SystemHealthUnknown,
+		Unknown:   SystemHealthUnknown,
 	},
 	SessionKeyPrefix: struct {
-		Web SessionKeyPrefix
+		Web      SessionKeyPrefix
 		Operator SessionKeyPrefix
-		CLI SessionKeyPrefix
+		CLI      SessionKeyPrefix
 	}{
-		Web: SessionKeyPrefixWeb,
+		Web:      SessionKeyPrefixWeb,
 		Operator: SessionKeyPrefixOperator,
-		CLI: SessionKeyPrefixCLI,
+		CLI:      SessionKeyPrefixCLI,
 	},
 	OperatorHistoryEventType: struct {
-		Created OperatorHistoryEventType
-		SlotCreated OperatorHistoryEventType
-		SlotConsumed OperatorHistoryEventType
-		SlotReleased OperatorHistoryEventType
-		Bound OperatorHistoryEventType
-		Unbound OperatorHistoryEventType
-		HeartbeatReceived OperatorHistoryEventType
-		StatusChanged OperatorHistoryEventType
-		APIKeyRefreshed OperatorHistoryEventType
-		CreatedFromRefresh OperatorHistoryEventType
+		Created              OperatorHistoryEventType
+		SlotCreated          OperatorHistoryEventType
+		SlotConsumed         OperatorHistoryEventType
+		SlotReleased         OperatorHistoryEventType
+		Bound                OperatorHistoryEventType
+		Unbound              OperatorHistoryEventType
+		HeartbeatReceived    OperatorHistoryEventType
+		StatusChanged        OperatorHistoryEventType
+		APIKeyRefreshed      OperatorHistoryEventType
+		CreatedFromRefresh   OperatorHistoryEventType
 		TerminatedForRefresh OperatorHistoryEventType
-		Reset OperatorHistoryEventType
-		Terminated OperatorHistoryEventType
-		Authenticated OperatorHistoryEventType
-		Deactivated OperatorHistoryEventType
-		Stopped OperatorHistoryEventType
-		ShutdownRequested OperatorHistoryEventType
-		Claimed OperatorHistoryEventType
-		Reconnected OperatorHistoryEventType
-		Registered OperatorHistoryEventType
+		Reset                OperatorHistoryEventType
+		Terminated           OperatorHistoryEventType
+		Authenticated        OperatorHistoryEventType
+		Deactivated          OperatorHistoryEventType
+		Stopped              OperatorHistoryEventType
+		ShutdownRequested    OperatorHistoryEventType
+		Claimed              OperatorHistoryEventType
+		Reconnected          OperatorHistoryEventType
+		Registered           OperatorHistoryEventType
 	}{
-		Created: HistoryEventTypeCreated,
-		SlotCreated: HistoryEventTypeSlotCreated,
-		SlotConsumed: HistoryEventTypeSlotConsumed,
-		SlotReleased: HistoryEventTypeSlotReleased,
-		Bound: HistoryEventTypeBound,
-		Unbound: HistoryEventTypeUnbound,
-		HeartbeatReceived: HistoryEventTypeHeartbeatReceived,
-		StatusChanged: HistoryEventTypeStatusChanged,
-		APIKeyRefreshed: HistoryEventTypeAPIKeyRefreshed,
-		CreatedFromRefresh: HistoryEventTypeCreatedFromRefresh,
+		Created:              HistoryEventTypeCreated,
+		SlotCreated:          HistoryEventTypeSlotCreated,
+		SlotConsumed:         HistoryEventTypeSlotConsumed,
+		SlotReleased:         HistoryEventTypeSlotReleased,
+		Bound:                HistoryEventTypeBound,
+		Unbound:              HistoryEventTypeUnbound,
+		HeartbeatReceived:    HistoryEventTypeHeartbeatReceived,
+		StatusChanged:        HistoryEventTypeStatusChanged,
+		APIKeyRefreshed:      HistoryEventTypeAPIKeyRefreshed,
+		CreatedFromRefresh:   HistoryEventTypeCreatedFromRefresh,
 		TerminatedForRefresh: HistoryEventTypeTerminatedForRefresh,
-		Reset: HistoryEventTypeReset,
-		Terminated: HistoryEventTypeTerminated,
-		Authenticated: HistoryEventTypeAuthenticated,
-		Deactivated: HistoryEventTypeDeactivated,
-		Stopped: HistoryEventTypeStopped,
-		ShutdownRequested: HistoryEventTypeShutdownRequested,
-		Claimed: HistoryEventTypeClaimed,
-		Reconnected: HistoryEventTypeReconnected,
-		Registered: HistoryEventTypeRegistered,
+		Reset:                HistoryEventTypeReset,
+		Terminated:           HistoryEventTypeTerminated,
+		Authenticated:        HistoryEventTypeAuthenticated,
+		Deactivated:          HistoryEventTypeDeactivated,
+		Stopped:              HistoryEventTypeStopped,
+		ShutdownRequested:    HistoryEventTypeShutdownRequested,
+		Claimed:              HistoryEventTypeClaimed,
+		Reconnected:          HistoryEventTypeReconnected,
+		Registered:           HistoryEventTypeRegistered,
 	},
 	HistoryActor: struct {
-		None HistoryActor
-		User HistoryActor
-		G8EO HistoryActor
+		None   HistoryActor
+		User   HistoryActor
+		G8EO   HistoryActor
 		System HistoryActor
 	}{
-		None: HistoryActorNone,
-		User: HistoryActorUser,
-		G8EO: HistoryActorG8EO,
+		None:   HistoryActorNone,
+		User:   HistoryActorUser,
+		G8EO:   HistoryActorG8EO,
 		System: HistoryActorSystem,
 	},
 	AuditSseEventType: struct {
 		Connected AuditSseEventType
-		Metadata AuditSseEventType
-		Event AuditSseEventType
-		Complete AuditSseEventType
-		Error AuditSseEventType
+		Metadata  AuditSseEventType
+		Event     AuditSseEventType
+		Complete  AuditSseEventType
+		Error     AuditSseEventType
 	}{
 		Connected: AuditSseEventTypeConnected,
-		Metadata: AuditSseEventTypeMetadata,
-		Event: AuditSseEventTypeEvent,
-		Complete: AuditSseEventTypeComplete,
-		Error: AuditSseEventTypeError,
+		Metadata:  AuditSseEventTypeMetadata,
+		Event:     AuditSseEventTypeEvent,
+		Complete:  AuditSseEventTypeComplete,
+		Error:     AuditSseEventTypeError,
 	},
 	AuditEventSource: struct {
 		Conversation AuditEventSource
@@ -2293,90 +2293,90 @@ var Status = struct {
 		Conversation: AuditEventSourceConversation,
 	},
 	AuditEventType: struct {
-		Message AuditEventType
-		CommandExecuted AuditEventType
-		CommandApproved AuditEventType
-		CommandDenied AuditEventType
-		CommandStarted AuditEventType
+		Message             AuditEventType
+		CommandExecuted     AuditEventType
+		CommandApproved     AuditEventType
+		CommandDenied       AuditEventType
+		CommandStarted      AuditEventType
 		EscalationRequested AuditEventType
-		EscalationApproved AuditEventType
-		FileModified AuditEventType
-		FileCreated AuditEventType
-		FileDeleted AuditEventType
-		PermissionGranted AuditEventType
-		PermissionRevoked AuditEventType
-		ConfigChanged AuditEventType
-		G8eBound AuditEventType
-		SessionStarted AuditEventType
+		EscalationApproved  AuditEventType
+		FileModified        AuditEventType
+		FileCreated         AuditEventType
+		FileDeleted         AuditEventType
+		PermissionGranted   AuditEventType
+		PermissionRevoked   AuditEventType
+		ConfigChanged       AuditEventType
+		G8eBound            AuditEventType
+		SessionStarted      AuditEventType
 	}{
-		Message: AuditEventTypeMessage,
-		CommandExecuted: AuditEventTypeCommandExecuted,
-		CommandApproved: AuditEventTypeCommandApproved,
-		CommandDenied: AuditEventTypeCommandDenied,
-		CommandStarted: AuditEventTypeCommandStarted,
+		Message:             AuditEventTypeMessage,
+		CommandExecuted:     AuditEventTypeCommandExecuted,
+		CommandApproved:     AuditEventTypeCommandApproved,
+		CommandDenied:       AuditEventTypeCommandDenied,
+		CommandStarted:      AuditEventTypeCommandStarted,
 		EscalationRequested: AuditEventTypeEscalationRequested,
-		EscalationApproved: AuditEventTypeEscalationApproved,
-		FileModified: AuditEventTypeFileModified,
-		FileCreated: AuditEventTypeFileCreated,
-		FileDeleted: AuditEventTypeFileDeleted,
-		PermissionGranted: AuditEventTypePermissionGranted,
-		PermissionRevoked: AuditEventTypePermissionRevoked,
-		ConfigChanged: AuditEventTypeConfigChanged,
-		G8eBound: AuditEventTypeG8eBound,
-		SessionStarted: AuditEventTypeSessionStarted,
+		EscalationApproved:  AuditEventTypeEscalationApproved,
+		FileModified:        AuditEventTypeFileModified,
+		FileCreated:         AuditEventTypeFileCreated,
+		FileDeleted:         AuditEventTypeFileDeleted,
+		PermissionGranted:   AuditEventTypePermissionGranted,
+		PermissionRevoked:   AuditEventTypePermissionRevoked,
+		ConfigChanged:       AuditEventTypeConfigChanged,
+		G8eBound:            AuditEventTypeG8eBound,
+		SessionStarted:      AuditEventTypeSessionStarted,
 	},
 	LoginAuditEventType: struct {
-		LoginSuccess LoginAuditEventType
-		LoginFailed LoginAuditEventType
-		LoginAnomaly LoginAuditEventType
-		AccountLocked LoginAuditEventType
+		LoginSuccess    LoginAuditEventType
+		LoginFailed     LoginAuditEventType
+		LoginAnomaly    LoginAuditEventType
+		AccountLocked   LoginAuditEventType
 		AccountUnlocked LoginAuditEventType
 	}{
-		LoginSuccess: LoginAuditEventTypeLoginSuccess,
-		LoginFailed: LoginAuditEventTypeLoginFailed,
-		LoginAnomaly: LoginAuditEventTypeLoginAnomaly,
-		AccountLocked: LoginAuditEventTypeAccountLocked,
+		LoginSuccess:    LoginAuditEventTypeLoginSuccess,
+		LoginFailed:     LoginAuditEventTypeLoginFailed,
+		LoginAnomaly:    LoginAuditEventTypeLoginAnomaly,
+		AccountLocked:   LoginAuditEventTypeAccountLocked,
 		AccountUnlocked: LoginAuditEventTypeAccountUnlocked,
 	},
 	AuthAuditEventType: struct {
 		AuthSuccess AuthAuditEventType
-		AuthFailed AuthAuditEventType
+		AuthFailed  AuthAuditEventType
 	}{
 		AuthSuccess: AuthAuditEventTypeAuthSuccess,
-		AuthFailed: AuthAuditEventTypeAuthFailed,
+		AuthFailed:  AuthAuditEventTypeAuthFailed,
 	},
 	DownloadAuditEventType: struct {
-		DownloadTokenFailed DownloadAuditEventType
+		DownloadTokenFailed  DownloadAuditEventType
 		DownloadTokenSuccess DownloadAuditEventType
 	}{
-		DownloadTokenFailed: DownloadAuditEventTypeDownloadTokenFailed,
+		DownloadTokenFailed:  DownloadAuditEventTypeDownloadTokenFailed,
 		DownloadTokenSuccess: DownloadAuditEventTypeDownloadTokenSuccess,
 	},
 	AuthAuditResult: struct {
-		Success AuthAuditResult
-		Failure AuthAuditResult
+		Success       AuthAuditResult
+		Failure       AuthAuditResult
 		InvalidAPIKey AuthAuditResult
 	}{
-		Success: AuthAuditResultSuccess,
-		Failure: AuthAuditResultFailure,
+		Success:       AuthAuditResultSuccess,
+		Failure:       AuthAuditResultFailure,
 		InvalidAPIKey: AuthAuditResultInvalidAPIKey,
 	},
 	SessionEndReason: struct {
-		UserLogout SessionEndReason
-		IntegrityFailure SessionEndReason
+		UserLogout          SessionEndReason
+		IntegrityFailure    SessionEndReason
 		SessionRegeneration SessionEndReason
-		InvalidateAll SessionEndReason
-		UserDeleted SessionEndReason
-		TimeoutAbsolute SessionEndReason
-		TimeoutIdle SessionEndReason
+		InvalidateAll       SessionEndReason
+		UserDeleted         SessionEndReason
+		TimeoutAbsolute     SessionEndReason
+		TimeoutIdle         SessionEndReason
 	}{
-		UserLogout: SessionEndReasonUserLogout,
-		IntegrityFailure: SessionEndReasonIntegrityFailure,
+		UserLogout:          SessionEndReasonUserLogout,
+		IntegrityFailure:    SessionEndReasonIntegrityFailure,
 		SessionRegeneration: SessionEndReasonSessionRegeneration,
-		InvalidateAll: SessionEndReasonInvalidateAll,
-		UserDeleted: SessionEndReasonUserDeleted,
-		TimeoutAbsolute: SessionEndReasonTimeoutAbsolute,
-		TimeoutIdle: SessionEndReasonTimeoutIdle,
+		InvalidateAll:       SessionEndReasonInvalidateAll,
+		UserDeleted:         SessionEndReasonUserDeleted,
+		TimeoutAbsolute:     SessionEndReasonTimeoutAbsolute,
+		TimeoutIdle:         SessionEndReasonTimeoutIdle,
 	},
 	SessionSuspiciousReason: struct {
 		ExcessiveIPChanges SessionSuspiciousReason
@@ -2384,171 +2384,171 @@ var Status = struct {
 		ExcessiveIPChanges: SessionSuspiciousReasonExcessiveIPChanges,
 	},
 	SessionEventType: struct {
-		SessionCreated SessionEventType
-		SessionEnded SessionEventType
-		SessionRegenerated SessionEventType
-		SessionTimeoutAbsolute SessionEventType
-		SessionTimeoutIdle SessionEventType
+		SessionCreated            SessionEventType
+		SessionEnded              SessionEventType
+		SessionRegenerated        SessionEventType
+		SessionTimeoutAbsolute    SessionEventType
+		SessionTimeoutIdle        SessionEventType
 		SessionSuspiciousActivity SessionEventType
-		G8eBound SessionEventType
-		G8eUnbound SessionEventType
+		G8eBound                  SessionEventType
+		G8eUnbound                SessionEventType
 	}{
-		SessionCreated: SessionEventTypeSessionCreated,
-		SessionEnded: SessionEventTypeSessionEnded,
-		SessionRegenerated: SessionEventTypeSessionRegenerated,
-		SessionTimeoutAbsolute: SessionEventTypeSessionTimeoutAbsolute,
-		SessionTimeoutIdle: SessionEventTypeSessionTimeoutIdle,
+		SessionCreated:            SessionEventTypeSessionCreated,
+		SessionEnded:              SessionEventTypeSessionEnded,
+		SessionRegenerated:        SessionEventTypeSessionRegenerated,
+		SessionTimeoutAbsolute:    SessionEventTypeSessionTimeoutAbsolute,
+		SessionTimeoutIdle:        SessionEventTypeSessionTimeoutIdle,
 		SessionSuspiciousActivity: SessionEventTypeSessionSuspiciousActivity,
-		G8eBound: SessionEventTypeG8eBound,
-		G8eUnbound: SessionEventTypeG8eUnbound,
+		G8eBound:                  SessionEventTypeG8eBound,
+		G8eUnbound:                SessionEventTypeG8eUnbound,
 	},
 	OperatorToolName: struct {
-		RunCommands OperatorToolName
-		FileCreate OperatorToolName
-		FileWrite OperatorToolName
-		FileRead OperatorToolName
-		FileUpdate OperatorToolName
-		CheckPort OperatorToolName
-		ListFiles OperatorToolName
-		ReadFileContent OperatorToolName
-		GrantIntent OperatorToolName
-		RevokeIntent OperatorToolName
-		FetchExecutionOutput OperatorToolName
-		FetchSessionHistory OperatorToolName
-		FetchFileHistory OperatorToolName
-		RestoreFile OperatorToolName
-		FetchFileDiff OperatorToolName
-		G8eWebSearch OperatorToolName
+		RunCommands               OperatorToolName
+		FileCreate                OperatorToolName
+		FileWrite                 OperatorToolName
+		FileRead                  OperatorToolName
+		FileUpdate                OperatorToolName
+		CheckPort                 OperatorToolName
+		ListFiles                 OperatorToolName
+		ReadFileContent           OperatorToolName
+		GrantIntent               OperatorToolName
+		RevokeIntent              OperatorToolName
+		FetchExecutionOutput      OperatorToolName
+		FetchSessionHistory       OperatorToolName
+		FetchFileHistory          OperatorToolName
+		RestoreFile               OperatorToolName
+		FetchFileDiff             OperatorToolName
+		G8eWebSearch              OperatorToolName
 		QueryInvestigationContext OperatorToolName
-		GetCommandConstraints OperatorToolName
-		ListSSHInventory OperatorToolName
-		RecursiveGrep OperatorToolName
-		StreamOperator OperatorToolName
+		GetCommandConstraints     OperatorToolName
+		ListSSHInventory          OperatorToolName
+		RecursiveGrep             OperatorToolName
+		StreamOperator            OperatorToolName
 	}{
-		RunCommands: G8eToolNameRunCommands,
-		FileCreate: G8eToolNameFileCreate,
-		FileWrite: G8eToolNameFileWrite,
-		FileRead: G8eToolNameFileRead,
-		FileUpdate: G8eToolNameFileUpdate,
-		CheckPort: G8eToolNameCheckPort,
-		ListFiles: G8eToolNameListFiles,
-		ReadFileContent: G8eToolNameReadFileContent,
-		GrantIntent: G8eToolNameGrantIntent,
-		RevokeIntent: G8eToolNameRevokeIntent,
-		FetchExecutionOutput: G8eToolNameFetchExecutionOutput,
-		FetchSessionHistory: G8eToolNameFetchSessionHistory,
-		FetchFileHistory: G8eToolNameFetchFileHistory,
-		RestoreFile: G8eToolNameRestoreFile,
-		FetchFileDiff: G8eToolNameFetchFileDiff,
-		G8eWebSearch: G8eToolNameG8eWebSearch,
+		RunCommands:               G8eToolNameRunCommands,
+		FileCreate:                G8eToolNameFileCreate,
+		FileWrite:                 G8eToolNameFileWrite,
+		FileRead:                  G8eToolNameFileRead,
+		FileUpdate:                G8eToolNameFileUpdate,
+		CheckPort:                 G8eToolNameCheckPort,
+		ListFiles:                 G8eToolNameListFiles,
+		ReadFileContent:           G8eToolNameReadFileContent,
+		GrantIntent:               G8eToolNameGrantIntent,
+		RevokeIntent:              G8eToolNameRevokeIntent,
+		FetchExecutionOutput:      G8eToolNameFetchExecutionOutput,
+		FetchSessionHistory:       G8eToolNameFetchSessionHistory,
+		FetchFileHistory:          G8eToolNameFetchFileHistory,
+		RestoreFile:               G8eToolNameRestoreFile,
+		FetchFileDiff:             G8eToolNameFetchFileDiff,
+		G8eWebSearch:              G8eToolNameG8eWebSearch,
 		QueryInvestigationContext: G8eToolNameQueryInvestigationContext,
-		GetCommandConstraints: G8eToolNameGetCommandConstraints,
-		ListSSHInventory: G8eToolNameListSSHInventory,
-		RecursiveGrep: G8eToolNameRecursiveGrep,
-		StreamOperator: G8eToolNameStreamOperator,
+		GetCommandConstraints:     G8eToolNameGetCommandConstraints,
+		ListSSHInventory:          G8eToolNameListSSHInventory,
+		RecursiveGrep:             G8eToolNameRecursiveGrep,
+		StreamOperator:            G8eToolNameStreamOperator,
 	},
 	ListenMode: struct {
-		Mode ListenMode
+		Mode     ListenMode
 		StatusOK ListenMode
 	}{
-		Mode: ListenModeMode,
+		Mode:     ListenModeMode,
 		StatusOK: ListenModeStatusOK,
 	},
 	StreamStatus: struct {
 		Cancelled StreamStatus
-		Failed StreamStatus
-		Exited StreamStatus
+		Failed    StreamStatus
+		Exited    StreamStatus
 		Completed StreamStatus
-		Summary StreamStatus
+		Summary   StreamStatus
 	}{
 		Cancelled: StreamStatusCancelled,
-		Failed: StreamStatusFailed,
-		Exited: StreamStatusExited,
+		Failed:    StreamStatusFailed,
+		Exited:    StreamStatusExited,
 		Completed: StreamStatusCompleted,
-		Summary: StreamStatusSummary,
+		Summary:   StreamStatusSummary,
 	},
 	LlmModels: struct {
-		Gemini31Pro LlmModels
-		Gemini3Flash LlmModels
-		Gemini31FlashLite LlmModels
-		OpenaiGpt54 LlmModels
-		OpenaiGpt54Pro LlmModels
-		OpenaiGpt54Mini LlmModels
-		OpenaiGpt54Nano LlmModels
-		AnthropicClaude46Opus LlmModels
+		Gemini31Pro             LlmModels
+		Gemini3Flash            LlmModels
+		Gemini31FlashLite       LlmModels
+		OpenaiGpt54             LlmModels
+		OpenaiGpt54Pro          LlmModels
+		OpenaiGpt54Mini         LlmModels
+		OpenaiGpt54Nano         LlmModels
+		AnthropicClaude46Opus   LlmModels
 		AnthropicClaude46Sonnet LlmModels
-		AnthropicClaude45Haiku LlmModels
-		OllamaQwen35122b LlmModels
-		OllamaGlm51 LlmModels
-		OllamaGemma426b LlmModels
-		OllamaGemma4E4b LlmModels
-		OllamaGemma4E2b LlmModels
-		OllamaGemma4E2bG8ea LlmModels
-		OllamaNemotron330b LlmModels
-		OllamaLlama323b LlmModels
-		OllamaQwen352b LlmModels
-		LlamacppGemma4E2b LlmModels
+		AnthropicClaude45Haiku  LlmModels
+		OllamaQwen35122b        LlmModels
+		OllamaGlm51             LlmModels
+		OllamaGemma426b         LlmModels
+		OllamaGemma4E4b         LlmModels
+		OllamaGemma4E2b         LlmModels
+		OllamaGemma4E2bG8ea     LlmModels
+		OllamaNemotron330b      LlmModels
+		OllamaLlama323b         LlmModels
+		OllamaQwen352b          LlmModels
+		LlamacppGemma4E2b       LlmModels
 	}{
-		Gemini31Pro: LLMModelsGemini31Pro,
-		Gemini3Flash: LLMModelsGemini3Flash,
-		Gemini31FlashLite: LLMModelsGemini31FlashLite,
-		OpenaiGpt54: LLMModelsOpenaiGpt54,
-		OpenaiGpt54Pro: LLMModelsOpenaiGpt54Pro,
-		OpenaiGpt54Mini: LLMModelsOpenaiGpt54Mini,
-		OpenaiGpt54Nano: LLMModelsOpenaiGpt54Nano,
-		AnthropicClaude46Opus: LLMModelsAnthropicClaude46Opus,
+		Gemini31Pro:             LLMModelsGemini31Pro,
+		Gemini3Flash:            LLMModelsGemini3Flash,
+		Gemini31FlashLite:       LLMModelsGemini31FlashLite,
+		OpenaiGpt54:             LLMModelsOpenaiGpt54,
+		OpenaiGpt54Pro:          LLMModelsOpenaiGpt54Pro,
+		OpenaiGpt54Mini:         LLMModelsOpenaiGpt54Mini,
+		OpenaiGpt54Nano:         LLMModelsOpenaiGpt54Nano,
+		AnthropicClaude46Opus:   LLMModelsAnthropicClaude46Opus,
 		AnthropicClaude46Sonnet: LLMModelsAnthropicClaude46Sonnet,
-		AnthropicClaude45Haiku: LLMModelsAnthropicClaude45Haiku,
-		OllamaQwen35122b: LLMModelsOllamaQwen35122b,
-		OllamaGlm51: LLMModelsOllamaGlm51,
-		OllamaGemma426b: LLMModelsOllamaGemma426b,
-		OllamaGemma4E4b: LLMModelsOllamaGemma4E4b,
-		OllamaGemma4E2b: LLMModelsOllamaGemma4E2b,
-		OllamaGemma4E2bG8ea: LLMModelsOllamaGemma4E2bG8ea,
-		OllamaNemotron330b: LLMModelsOllamaNemotron330b,
-		OllamaLlama323b: LLMModelsOllamaLlama323b,
-		OllamaQwen352b: LLMModelsOllamaQwen352b,
-		LlamacppGemma4E2b: LLMModelsLlamacppGemma4E2b,
+		AnthropicClaude45Haiku:  LLMModelsAnthropicClaude45Haiku,
+		OllamaQwen35122b:        LLMModelsOllamaQwen35122b,
+		OllamaGlm51:             LLMModelsOllamaGlm51,
+		OllamaGemma426b:         LLMModelsOllamaGemma426b,
+		OllamaGemma4E4b:         LLMModelsOllamaGemma4E4b,
+		OllamaGemma4E2b:         LLMModelsOllamaGemma4E2b,
+		OllamaGemma4E2bG8ea:     LLMModelsOllamaGemma4E2bG8ea,
+		OllamaNemotron330b:      LLMModelsOllamaNemotron330b,
+		OllamaLlama323b:         LLMModelsOllamaLlama323b,
+		OllamaQwen352b:          LLMModelsOllamaQwen352b,
+		LlamacppGemma4E2b:       LLMModelsLlamacppGemma4E2b,
 	},
 	Priority: struct {
-		Low Priority
-		Medium Priority
-		High Priority
+		Low      Priority
+		Medium   Priority
+		High     Priority
 		Critical Priority
 	}{
-		Low: PriorityLow,
-		Medium: PriorityMedium,
-		High: PriorityHigh,
+		Low:      PriorityLow,
+		Medium:   PriorityMedium,
+		High:     PriorityHigh,
 		Critical: PriorityCritical,
 	},
 	Severity: struct {
-		Low Severity
-		Medium Severity
-		High Severity
+		Low      Severity
+		Medium   Severity
+		High     Severity
 		Critical Severity
 	}{
-		Low: SeverityLow,
-		Medium: SeverityMedium,
-		High: SeverityHigh,
+		Low:      SeverityLow,
+		Medium:   SeverityMedium,
+		High:     SeverityHigh,
 		Critical: SeverityCritical,
 	},
 	TribunalAuditStatus: struct {
-		OK TribunalAuditStatus
+		OK      TribunalAuditStatus
 		Revised TribunalAuditStatus
-		Swap TribunalAuditStatus
+		Swap    TribunalAuditStatus
 	}{
-		OK: TribunalAuditStatusOk,
+		OK:      TribunalAuditStatusOk,
 		Revised: TribunalAuditStatusRevised,
-		Swap: TribunalAuditStatusSwap,
+		Swap:    TribunalAuditStatusSwap,
 	},
 	TribunalAuditMode: struct {
 		Unanimous TribunalAuditMode
-		Majority TribunalAuditMode
-		Tied TribunalAuditMode
+		Majority  TribunalAuditMode
+		Tied      TribunalAuditMode
 	}{
 		Unanimous: TribunalAuditModeUnanimous,
-		Majority: TribunalAuditModeMajority,
-		Tied: TribunalAuditModeTied,
+		Majority:  TribunalAuditModeMajority,
+		Tied:      TribunalAuditModeTied,
 	},
 	SlashTier: struct {
 		Tier1 SlashTier
@@ -2560,21 +2560,21 @@ var Status = struct {
 		Tier3: SlashTier3,
 	},
 	ToolScope: struct {
-		Universal ToolScope
+		Universal     ToolScope
 		OperatorGated ToolScope
 	}{
-		Universal: ToolScopeUniversal,
+		Universal:     ToolScopeUniversal,
 		OperatorGated: ToolScopeOperatorGated,
 	},
 	ScrubberPriority: struct {
-		ExactCredential ScrubberPriority
-		UrlOrConnection ScrubberPriority
+		ExactCredential      ScrubberPriority
+		UrlOrConnection      ScrubberPriority
 		ContextualCredential ScrubberPriority
-		GenericPII ScrubberPriority
+		GenericPII           ScrubberPriority
 	}{
-		ExactCredential: ScrubberPriorityExactCredential,
-		UrlOrConnection: ScrubberPriorityUrlOrConnection,
+		ExactCredential:      ScrubberPriorityExactCredential,
+		UrlOrConnection:      ScrubberPriorityUrlOrConnection,
 		ContextualCredential: ScrubberPriorityContextualCredential,
-		GenericPII: ScrubberPriorityGenericPII,
+		GenericPII:           ScrubberPriorityGenericPII,
 	},
 }

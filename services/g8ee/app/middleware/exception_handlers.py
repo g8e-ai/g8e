@@ -15,9 +15,9 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from ..errors import G8eError
-from ..models.errors import ErrorBody, ErrorResponse
-from ..constants import G8eHeaders
+from app.errors import G8eError
+from app.models.errors import ErrorBody, ErrorResponse
+from app.constants import G8eHeaders
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def setup_exception_handlers(app: FastAPI) -> None:
         execution_id = request.headers.get("X-G8E-Execution-ID", "unknown")
 
         # Return a generic 500 error in production-safe format
-        from ..constants import ErrorCode, ErrorCategory, ErrorSeverity
+        from app.constants import ErrorCode, ErrorCategory, ErrorSeverity
         error_body = ErrorBody(
             code=ErrorCode.UNEXPECTED_ERROR,
             message="An unexpected internal error occurred",

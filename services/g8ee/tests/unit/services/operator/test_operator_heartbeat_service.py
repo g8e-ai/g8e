@@ -585,7 +585,7 @@ class TestPushHeartbeatSSE:
         )
         mock_event_service.publish.side_effect = Exception("network down")
 
-        await service._push_heartbeat_sse(envelope, _make_payload(), operator)  # noqa: SLF001
+        await service._push_heartbeat_sse(envelope, _make_payload(), operator)
 
     async def test_sse_exception_is_logged_with_traceback(
         self, service, mock_event_service, caplog
@@ -680,7 +680,7 @@ class TestWsDisconnectHandler:
 
         service.set_pubsub_client(client)
 
-        client.on_disconnect.assert_called_once_with(service._on_ws_disconnect)  # noqa: SLF001
+        client.on_disconnect.assert_called_once_with(service._on_ws_disconnect)
 
     async def test_start_resets_ready_after_disconnect(self, service):
         client = _make_mock_pubsub_client()
@@ -742,7 +742,7 @@ class TestHeartbeatServiceConstruction:
             event_service=MagicMock(),
         )
         assert svc.is_ready is False
-        assert svc._pubsub_client is None  # noqa: SLF001
+        assert svc._pubsub_client is None
         assert len(svc.active_sessions) == 0
 
     async def test_distinct_instances_are_independent(self):

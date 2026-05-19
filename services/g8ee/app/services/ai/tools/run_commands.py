@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.RUN_COMMANDS,
         description=load_prompt(PromptFile.TOOLS_RUN_COMMANDS),
         parameters=schema_from_model(
@@ -44,7 +44,6 @@ def build() -> types.ToolDeclaration:
             required_override=["request"],
         ),
     )
-    return declaration
 
 
 async def handle(

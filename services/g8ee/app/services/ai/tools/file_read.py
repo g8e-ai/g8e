@@ -38,12 +38,11 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.FILE_READ,
         description=load_prompt(PromptFile.TOOLS_FILE_READ),
         parameters=schema_from_model(FileReadArgs),
     )
-    return declaration
 
 
 async def handle(

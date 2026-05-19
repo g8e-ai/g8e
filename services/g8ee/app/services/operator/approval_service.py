@@ -126,7 +126,7 @@ class OperatorApprovalService:
             )
         except Exception as e:
             raise ExternalServiceError(
-                "[APPROVAL-HTTP] Failed to process approval response for %s" % response.approval_id,
+                f"[APPROVAL-HTTP] Failed to process approval response for {response.approval_id}",
                 service_name="approval_service",
                 component="g8ee",
             ) from e

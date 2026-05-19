@@ -95,7 +95,7 @@ from tests.fakes.factories import (
 pytestmark = [pytest.mark.integration]
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def cache_aside_service(fake_cache_aside_service):
     return fake_cache_aside_service
 
@@ -244,7 +244,6 @@ class TestInvestigationContextResolution:
         """Missing investigation_id raises ResourceNotFoundError after retries."""
         # Setup
         service = all_services.investigation_service
-        investigation_data_service = all_services.investigation_data_service
 
         # Test & Verify
         with pytest.raises(ResourceNotFoundError) as exc_info:
@@ -546,7 +545,6 @@ class TestOperatorEnrichment:
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
         operator_data_service = all_services.operator_data_service
-        memory_data_service = all_services.memory_data_service
 
         # Create investigation and operator
         investigation = create_investigation_data()
@@ -608,7 +606,6 @@ class TestOperatorEnrichment:
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
         operator_data_service = all_services.operator_data_service
-        memory_data_service = all_services.memory_data_service
 
         # Create investigation and multiple operators
         investigation = create_investigation_data()
@@ -678,7 +675,6 @@ class TestOperatorEnrichment:
         service = all_services.investigation_service
         investigation_data_service = all_services.investigation_data_service
         operator_data_service = all_services.operator_data_service
-        memory_data_service = all_services.memory_data_service
 
         # Create investigation and operators with different statuses
         investigation = create_investigation_data()

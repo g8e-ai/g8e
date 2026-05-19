@@ -269,7 +269,7 @@ class MemoryGenerationService:
         matches = re.findall(json_pattern, text, re.DOTALL | re.IGNORECASE)
         for match in matches:
             stripped = match.strip()
-            if stripped.startswith("{") or stripped.startswith("["):
+            if stripped.startswith(("{", "[")):
                 return stripped
         return None
 
@@ -285,7 +285,7 @@ class MemoryGenerationService:
             line = line.strip()
             if not line:
                 continue
-            if line.startswith("#") or line.startswith("//") or line.startswith("/*"):
+            if line.startswith(("#", "//", "/*")):
                 continue
             # Look for key: value pattern, handling quoted keys like "key": "value"
             if ":" in line and not line.startswith("-"):

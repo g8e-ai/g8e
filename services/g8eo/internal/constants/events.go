@@ -313,186 +313,186 @@ const EventSourceSystem EventType = "g8e.v1.source.system"
 
 // Event.Operator provides hierarchical access to operator event constants
 type _EventOperatorAudit struct {
-	AIMsg EventType
-	Command EventType
-	DirectCmd EventType
+	AIMsg           EventType
+	Command         EventType
+	DirectCmd       EventType
 	DirectCmdResult EventType
-	UserMsg EventType
+	UserMsg         EventType
 }
 type _EventOperatorBootstrap struct {
 	Completed EventType
-	Failed EventType
-	Received EventType
+	Failed    EventType
+	Received  EventType
 	Requested EventType
 }
 type _EventOperatorCommand struct {
-	ApprovalGranted EventType
-	ApprovalPreparing EventType
-	ApprovalRejected EventType
-	ApprovalRequested EventType
+	ApprovalGranted    EventType
+	ApprovalPreparing  EventType
+	ApprovalRejected   EventType
+	ApprovalRequested  EventType
 	CancelAcknowledged EventType
-	CancelFailed EventType
-	CancelRequested EventType
-	Cancelled EventType
-	Completed EventType
-	Execution EventType
-	Failed EventType
-	OutputReceived EventType
-	Requested EventType
-	Result EventType
-	Started EventType
-	StatusUpdated _EventOperatorCommandStatusUpdated
+	CancelFailed       EventType
+	CancelRequested    EventType
+	Cancelled          EventType
+	Completed          EventType
+	Execution          EventType
+	Failed             EventType
+	OutputReceived     EventType
+	Requested          EventType
+	Result             EventType
+	Started            EventType
+	StatusUpdated      _EventOperatorCommandStatusUpdated
 }
 type _EventOperatorCommandStatusUpdated struct {
 	Cancelled EventType
 	Completed EventType
-	Failed EventType
-	Queued EventType
-	Running EventType
+	Failed    EventType
+	Queued    EventType
+	Running   EventType
 }
 type _EventOperatorEval struct {
 	AnswerRequested EventType
 }
 type _EventOperatorFetchFileDiff struct {
 	Completed EventType
-	Failed EventType
-	Received EventType
+	Failed    EventType
+	Received  EventType
 	Requested EventType
-	Started EventType
+	Started   EventType
 }
 type _EventOperatorFetchFileHistory struct {
 	Completed EventType
-	Failed EventType
-	Received EventType
+	Failed    EventType
+	Received  EventType
 	Requested EventType
-	Started EventType
+	Started   EventType
 }
 type _EventOperatorFetchHistory struct {
 	Completed EventType
-	Failed EventType
-	Received EventType
+	Failed    EventType
+	Received  EventType
 	Requested EventType
 }
 type _EventOperatorFetchLogs struct {
 	Completed EventType
-	Failed EventType
-	Received EventType
+	Failed    EventType
+	Received  EventType
 	Requested EventType
 }
 type _EventOperatorFileEdit struct {
-	ApprovalFeedback EventType
-	ApprovalGranted EventType
-	ApprovalRejected EventType
+	ApprovalFeedback  EventType
+	ApprovalGranted   EventType
+	ApprovalRejected  EventType
 	ApprovalRequested EventType
-	Completed EventType
-	Failed EventType
-	Requested EventType
-	Started EventType
-	Timeout EventType
+	Completed         EventType
+	Failed            EventType
+	Requested         EventType
+	Started           EventType
+	Timeout           EventType
 }
 type _EventOperatorFsGrep struct {
 	Completed EventType
-	Failed EventType
-	Received EventType
+	Failed    EventType
+	Received  EventType
 	Requested EventType
-	Started EventType
+	Started   EventType
 }
 type _EventOperatorFsList struct {
 	Completed EventType
-	Failed EventType
-	Received EventType
+	Failed    EventType
+	Received  EventType
 	Requested EventType
-	Started EventType
+	Started   EventType
 }
 type _EventOperatorFsRead struct {
 	Completed EventType
-	Failed EventType
-	Received EventType
+	Failed    EventType
+	Received  EventType
 	Requested EventType
-	Started EventType
+	Started   EventType
 }
 type _EventOperatorIntent struct {
-	ApprovalGranted EventType
-	ApprovalRejected EventType
+	ApprovalGranted   EventType
+	ApprovalRejected  EventType
 	ApprovalRequested EventType
-	Denied EventType
-	Granted EventType
-	Requested EventType
-	RevokeRequested EventType
-	Revoked EventType
+	Denied            EventType
+	Granted           EventType
+	Requested         EventType
+	RevokeRequested   EventType
+	Revoked           EventType
 }
 type _EventOperatorNetworkPing struct {
 	Completed EventType
-	Failed EventType
-	Received EventType
+	Failed    EventType
+	Received  EventType
 	Requested EventType
 }
 type _EventOperatorPortCheck struct {
 	Completed EventType
-	Failed EventType
-	Received EventType
+	Failed    EventType
+	Received  EventType
 	Requested EventType
-	Started EventType
+	Started   EventType
 }
 type _EventOperatorRestoreFile struct {
 	Completed EventType
-	Failed EventType
-	Received EventType
+	Failed    EventType
+	Received  EventType
 	Requested EventType
 }
 type _EventOperatorStatusUpdated struct {
-	Active EventType
-	Available EventType
-	Bound EventType
-	Offline EventType
-	Stale EventType
-	Stopped EventType
-	Terminated EventType
+	Active      EventType
+	Available   EventType
+	Bound       EventType
+	Offline     EventType
+	Stale       EventType
+	Stopped     EventType
+	Terminated  EventType
 	Unavailable EventType
 }
 type _EventOperatorStreamApproval struct {
-	Granted EventType
-	Rejected EventType
+	Granted   EventType
+	Rejected  EventType
 	Requested EventType
 }
 
 type _EventOperator struct {
-	APIKeyRefreshed EventType
-	Audit _EventOperatorAudit
-	Bootstrap _EventOperatorBootstrap
-	BootstrapConfigReceived EventType
-	Bound EventType
-	Command _EventOperatorCommand
-	ContextChanged EventType
-	DeviceRegistered EventType
-	Eval _EventOperatorEval
-	FetchFileDiff _EventOperatorFetchFileDiff
-	FetchFileHistory _EventOperatorFetchFileHistory
-	FetchHistory _EventOperatorFetchHistory
-	FetchLogs _EventOperatorFetchLogs
-	FileEdit _EventOperatorFileEdit
-	FsGrep _EventOperatorFsGrep
-	FsList _EventOperatorFsList
-	FsRead _EventOperatorFsRead
-	Heartbeat EventType
-	HeartbeatMissed EventType
-	HeartbeatReceived EventType
-	HeartbeatRequested EventType
-	Intent _EventOperatorIntent
-	NetworkPing _EventOperatorNetworkPing
-	PanelListUpdated EventType
-	PortCheck _EventOperatorPortCheck
-	RestoreFile _EventOperatorRestoreFile
-	ShutdownAcknowledged EventType
-	ShutdownRequested EventType
+	APIKeyRefreshed          EventType
+	Audit                    _EventOperatorAudit
+	Bootstrap                _EventOperatorBootstrap
+	BootstrapConfigReceived  EventType
+	Bound                    EventType
+	Command                  _EventOperatorCommand
+	ContextChanged           EventType
+	DeviceRegistered         EventType
+	Eval                     _EventOperatorEval
+	FetchFileDiff            _EventOperatorFetchFileDiff
+	FetchFileHistory         _EventOperatorFetchFileHistory
+	FetchHistory             _EventOperatorFetchHistory
+	FetchLogs                _EventOperatorFetchLogs
+	FileEdit                 _EventOperatorFileEdit
+	FsGrep                   _EventOperatorFsGrep
+	FsList                   _EventOperatorFsList
+	FsRead                   _EventOperatorFsRead
+	Heartbeat                EventType
+	HeartbeatMissed          EventType
+	HeartbeatReceived        EventType
+	HeartbeatRequested       EventType
+	Intent                   _EventOperatorIntent
+	NetworkPing              _EventOperatorNetworkPing
+	PanelListUpdated         EventType
+	PortCheck                _EventOperatorPortCheck
+	RestoreFile              _EventOperatorRestoreFile
+	ShutdownAcknowledged     EventType
+	ShutdownRequested        EventType
 	SlotInitializationFailed EventType
-	StatusUpdated _EventOperatorStatusUpdated
-	StreamApproval _EventOperatorStreamApproval
-	TerminalApprovalDenied EventType
+	StatusUpdated            _EventOperatorStatusUpdated
+	StreamApproval           _EventOperatorStreamApproval
+	TerminalApprovalDenied   EventType
 	TerminalAuthStateChanged EventType
-	TerminalThinkingAppend EventType
+	TerminalThinkingAppend   EventType
 	TerminalThinkingComplete EventType
-	Unbound EventType
+	Unbound                  EventType
 }
 
 var Event = struct {
@@ -501,163 +501,163 @@ var Event = struct {
 	Operator: _EventOperator{
 		APIKeyRefreshed: EventOperatorApiKeyRefreshed,
 		Audit: _EventOperatorAudit{
-			AIMsg: EventOperatorAuditAiRecorded,
-			Command: EventOperatorAuditCommandRecorded,
-			DirectCmd: EventOperatorAuditDirectCommandRecorded,
+			AIMsg:           EventOperatorAuditAiRecorded,
+			Command:         EventOperatorAuditCommandRecorded,
+			DirectCmd:       EventOperatorAuditDirectCommandRecorded,
 			DirectCmdResult: EventOperatorAuditDirectCommandResultRecorded,
-			UserMsg: EventOperatorAuditUserRecorded,
+			UserMsg:         EventOperatorAuditUserRecorded,
 		},
 		Bootstrap: _EventOperatorBootstrap{
 			Completed: EventOperatorBootstrapCompleted,
-			Failed: EventOperatorBootstrapFailed,
-			Received: EventOperatorBootstrapReceived,
+			Failed:    EventOperatorBootstrapFailed,
+			Received:  EventOperatorBootstrapReceived,
 			Requested: EventOperatorBootstrapRequested,
 		},
 		BootstrapConfigReceived: EventOperatorBootstrapConfigReceived,
-		Bound: EventOperatorBound,
+		Bound:                   EventOperatorBound,
 		Command: _EventOperatorCommand{
-			ApprovalGranted: EventOperatorCommandApprovalGranted,
-			ApprovalPreparing: EventOperatorCommandApprovalPreparing,
-			ApprovalRejected: EventOperatorCommandApprovalRejected,
-			ApprovalRequested: EventOperatorCommandApprovalRequested,
+			ApprovalGranted:    EventOperatorCommandApprovalGranted,
+			ApprovalPreparing:  EventOperatorCommandApprovalPreparing,
+			ApprovalRejected:   EventOperatorCommandApprovalRejected,
+			ApprovalRequested:  EventOperatorCommandApprovalRequested,
 			CancelAcknowledged: EventOperatorCommandCancelAcknowledged,
-			CancelFailed: EventOperatorCommandCancelFailed,
-			CancelRequested: EventOperatorCommandCancelRequested,
-			Cancelled: EventOperatorCommandCancelled,
-			Completed: EventOperatorCommandCompleted,
-			Execution: EventOperatorCommandExecution,
-			Failed: EventOperatorCommandFailed,
-			OutputReceived: EventOperatorCommandOutputReceived,
-			Requested: EventOperatorCommandRequested,
-			Result: EventOperatorCommandResult,
-			Started: EventOperatorCommandStarted,
+			CancelFailed:       EventOperatorCommandCancelFailed,
+			CancelRequested:    EventOperatorCommandCancelRequested,
+			Cancelled:          EventOperatorCommandCancelled,
+			Completed:          EventOperatorCommandCompleted,
+			Execution:          EventOperatorCommandExecution,
+			Failed:             EventOperatorCommandFailed,
+			OutputReceived:     EventOperatorCommandOutputReceived,
+			Requested:          EventOperatorCommandRequested,
+			Result:             EventOperatorCommandResult,
+			Started:            EventOperatorCommandStarted,
 			StatusUpdated: _EventOperatorCommandStatusUpdated{
 				Cancelled: EventOperatorCommandStatusUpdatedCancelled,
 				Completed: EventOperatorCommandStatusUpdatedCompleted,
-				Failed: EventOperatorCommandStatusUpdatedFailed,
-				Queued: EventOperatorCommandStatusUpdatedQueued,
-				Running: EventOperatorCommandStatusUpdatedRunning,
+				Failed:    EventOperatorCommandStatusUpdatedFailed,
+				Queued:    EventOperatorCommandStatusUpdatedQueued,
+				Running:   EventOperatorCommandStatusUpdatedRunning,
 			},
 		},
-		ContextChanged: EventOperatorContextChanged,
+		ContextChanged:   EventOperatorContextChanged,
 		DeviceRegistered: EventOperatorDeviceRegistered,
 		Eval: _EventOperatorEval{
 			AnswerRequested: EventOperatorEvalAnswerRequested,
 		},
 		FetchFileDiff: _EventOperatorFetchFileDiff{
 			Completed: EventOperatorFileDiffFetchCompleted,
-			Failed: EventOperatorFileDiffFetchFailed,
-			Received: EventOperatorFileDiffFetchReceived,
+			Failed:    EventOperatorFileDiffFetchFailed,
+			Received:  EventOperatorFileDiffFetchReceived,
 			Requested: EventOperatorFileDiffFetchRequested,
-			Started: EventOperatorFileDiffFetchStarted,
+			Started:   EventOperatorFileDiffFetchStarted,
 		},
 		FetchFileHistory: _EventOperatorFetchFileHistory{
 			Completed: EventOperatorFileHistoryFetchCompleted,
-			Failed: EventOperatorFileHistoryFetchFailed,
-			Received: EventOperatorFileHistoryFetchReceived,
+			Failed:    EventOperatorFileHistoryFetchFailed,
+			Received:  EventOperatorFileHistoryFetchReceived,
 			Requested: EventOperatorFileHistoryFetchRequested,
-			Started: EventOperatorFileHistoryFetchStarted,
+			Started:   EventOperatorFileHistoryFetchStarted,
 		},
 		FetchHistory: _EventOperatorFetchHistory{
 			Completed: EventOperatorHistoryFetchCompleted,
-			Failed: EventOperatorHistoryFetchFailed,
-			Received: EventOperatorHistoryFetchReceived,
+			Failed:    EventOperatorHistoryFetchFailed,
+			Received:  EventOperatorHistoryFetchReceived,
 			Requested: EventOperatorHistoryFetchRequested,
 		},
 		FetchLogs: _EventOperatorFetchLogs{
 			Completed: EventOperatorLogsFetchCompleted,
-			Failed: EventOperatorLogsFetchFailed,
-			Received: EventOperatorLogsFetchReceived,
+			Failed:    EventOperatorLogsFetchFailed,
+			Received:  EventOperatorLogsFetchReceived,
 			Requested: EventOperatorLogsFetchRequested,
 		},
 		FileEdit: _EventOperatorFileEdit{
-			ApprovalFeedback: EventOperatorFileEditApprovalFeedback,
-			ApprovalGranted: EventOperatorFileEditApprovalGranted,
-			ApprovalRejected: EventOperatorFileEditApprovalRejected,
+			ApprovalFeedback:  EventOperatorFileEditApprovalFeedback,
+			ApprovalGranted:   EventOperatorFileEditApprovalGranted,
+			ApprovalRejected:  EventOperatorFileEditApprovalRejected,
 			ApprovalRequested: EventOperatorFileEditApprovalRequested,
-			Completed: EventOperatorFileEditCompleted,
-			Failed: EventOperatorFileEditFailed,
-			Requested: EventOperatorFileEditRequested,
-			Started: EventOperatorFileEditStarted,
-			Timeout: EventOperatorFileEditTimeout,
+			Completed:         EventOperatorFileEditCompleted,
+			Failed:            EventOperatorFileEditFailed,
+			Requested:         EventOperatorFileEditRequested,
+			Started:           EventOperatorFileEditStarted,
+			Timeout:           EventOperatorFileEditTimeout,
 		},
 		FsGrep: _EventOperatorFsGrep{
 			Completed: EventOperatorFilesystemGrepCompleted,
-			Failed: EventOperatorFilesystemGrepFailed,
-			Received: EventOperatorFilesystemGrepReceived,
+			Failed:    EventOperatorFilesystemGrepFailed,
+			Received:  EventOperatorFilesystemGrepReceived,
 			Requested: EventOperatorFilesystemGrepRequested,
-			Started: EventOperatorFilesystemGrepStarted,
+			Started:   EventOperatorFilesystemGrepStarted,
 		},
 		FsList: _EventOperatorFsList{
 			Completed: EventOperatorFilesystemListCompleted,
-			Failed: EventOperatorFilesystemListFailed,
-			Received: EventOperatorFilesystemListReceived,
+			Failed:    EventOperatorFilesystemListFailed,
+			Received:  EventOperatorFilesystemListReceived,
 			Requested: EventOperatorFilesystemListRequested,
-			Started: EventOperatorFilesystemListStarted,
+			Started:   EventOperatorFilesystemListStarted,
 		},
 		FsRead: _EventOperatorFsRead{
 			Completed: EventOperatorFilesystemReadCompleted,
-			Failed: EventOperatorFilesystemReadFailed,
-			Received: EventOperatorFilesystemReadReceived,
+			Failed:    EventOperatorFilesystemReadFailed,
+			Received:  EventOperatorFilesystemReadReceived,
 			Requested: EventOperatorFilesystemReadRequested,
-			Started: EventOperatorFilesystemReadStarted,
+			Started:   EventOperatorFilesystemReadStarted,
 		},
-		Heartbeat: EventOperatorHeartbeatSent,
-		HeartbeatMissed: EventOperatorHeartbeatMissed,
-		HeartbeatReceived: EventOperatorHeartbeatReceived,
+		Heartbeat:          EventOperatorHeartbeatSent,
+		HeartbeatMissed:    EventOperatorHeartbeatMissed,
+		HeartbeatReceived:  EventOperatorHeartbeatReceived,
 		HeartbeatRequested: EventOperatorHeartbeatRequested,
 		Intent: _EventOperatorIntent{
-			ApprovalGranted: EventOperatorIntentApprovalGranted,
-			ApprovalRejected: EventOperatorIntentApprovalRejected,
+			ApprovalGranted:   EventOperatorIntentApprovalGranted,
+			ApprovalRejected:  EventOperatorIntentApprovalRejected,
 			ApprovalRequested: EventOperatorIntentApprovalRequested,
-			Denied: EventOperatorIntentDenied,
-			Granted: EventOperatorIntentGranted,
-			Requested: EventOperatorIntentRequested,
-			RevokeRequested: EventOperatorIntentRevokeRequested,
-			Revoked: EventOperatorIntentRevoked,
+			Denied:            EventOperatorIntentDenied,
+			Granted:           EventOperatorIntentGranted,
+			Requested:         EventOperatorIntentRequested,
+			RevokeRequested:   EventOperatorIntentRevokeRequested,
+			Revoked:           EventOperatorIntentRevoked,
 		},
 		NetworkPing: _EventOperatorNetworkPing{
 			Completed: EventOperatorNetworkPingCompleted,
-			Failed: EventOperatorNetworkPingFailed,
-			Received: EventOperatorNetworkPingReceived,
+			Failed:    EventOperatorNetworkPingFailed,
+			Received:  EventOperatorNetworkPingReceived,
 			Requested: EventOperatorNetworkPingRequested,
 		},
 		PanelListUpdated: EventOperatorPanelListUpdated,
 		PortCheck: _EventOperatorPortCheck{
 			Completed: EventOperatorNetworkPortCheckCompleted,
-			Failed: EventOperatorNetworkPortCheckFailed,
-			Received: EventOperatorNetworkPortCheckReceived,
+			Failed:    EventOperatorNetworkPortCheckFailed,
+			Received:  EventOperatorNetworkPortCheckReceived,
 			Requested: EventOperatorNetworkPortCheckRequested,
-			Started: EventOperatorNetworkPortCheckStarted,
+			Started:   EventOperatorNetworkPortCheckStarted,
 		},
 		RestoreFile: _EventOperatorRestoreFile{
 			Completed: EventOperatorFileRestoreCompleted,
-			Failed: EventOperatorFileRestoreFailed,
-			Received: EventOperatorFileRestoreReceived,
+			Failed:    EventOperatorFileRestoreFailed,
+			Received:  EventOperatorFileRestoreReceived,
 			Requested: EventOperatorFileRestoreRequested,
 		},
-		ShutdownAcknowledged: EventOperatorShutdownAcknowledged,
-		ShutdownRequested: EventOperatorShutdownRequested,
+		ShutdownAcknowledged:     EventOperatorShutdownAcknowledged,
+		ShutdownRequested:        EventOperatorShutdownRequested,
 		SlotInitializationFailed: EventOperatorSlotInitializationFailed,
 		StatusUpdated: _EventOperatorStatusUpdated{
-			Active: EventOperatorStatusUpdatedActive,
-			Available: EventOperatorStatusUpdatedAvailable,
-			Bound: EventOperatorStatusUpdatedBound,
-			Offline: EventOperatorStatusUpdatedOffline,
-			Stale: EventOperatorStatusUpdatedStale,
-			Stopped: EventOperatorStatusUpdatedStopped,
-			Terminated: EventOperatorStatusUpdatedTerminated,
+			Active:      EventOperatorStatusUpdatedActive,
+			Available:   EventOperatorStatusUpdatedAvailable,
+			Bound:       EventOperatorStatusUpdatedBound,
+			Offline:     EventOperatorStatusUpdatedOffline,
+			Stale:       EventOperatorStatusUpdatedStale,
+			Stopped:     EventOperatorStatusUpdatedStopped,
+			Terminated:  EventOperatorStatusUpdatedTerminated,
 			Unavailable: EventOperatorStatusUpdatedUnavailable,
 		},
 		StreamApproval: _EventOperatorStreamApproval{
-			Granted: EventOperatorStreamApprovalGranted,
-			Rejected: EventOperatorStreamApprovalRejected,
+			Granted:   EventOperatorStreamApprovalGranted,
+			Rejected:  EventOperatorStreamApprovalRejected,
 			Requested: EventOperatorStreamApprovalRequested,
 		},
-		TerminalApprovalDenied: EventOperatorTerminalApprovalDenied,
+		TerminalApprovalDenied:   EventOperatorTerminalApprovalDenied,
 		TerminalAuthStateChanged: EventOperatorTerminalAuthStateChanged,
-		TerminalThinkingAppend: EventOperatorTerminalThinkingAppend,
+		TerminalThinkingAppend:   EventOperatorTerminalThinkingAppend,
 		TerminalThinkingComplete: EventOperatorTerminalThinkingComplete,
-		Unbound: EventOperatorUnbound,
+		Unbound:                  EventOperatorUnbound,
 	},
 }

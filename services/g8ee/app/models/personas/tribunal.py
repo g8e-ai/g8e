@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class TribunalPersona(AgentPersonaModel):
     """Tribunal: The five-member command-translation panel.
-    
+
     This is a documentation-only persona representing the Tribunal collective.
     """
 

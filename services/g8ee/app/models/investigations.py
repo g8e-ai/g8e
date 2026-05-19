@@ -117,7 +117,7 @@ class AIResponseMetadata(ConversationMessageMetadata):
     """Metadata for AI-generated response messages (EventType.SOURCE_AI_PRIMARY / EVENT_SOURCE_AI_ASSISTANT).
 
     The `source` field here uses EventType.SOURCE_* — the attribution of which AI
-    system produced the response. 
+    system produced the response.
     """
     source: EventType | None = Field(default=None, description="AI response attribution (source_ai, source_tool_call)")
     response_source: EventType | None = Field(default=None, description="Source of the AI response")

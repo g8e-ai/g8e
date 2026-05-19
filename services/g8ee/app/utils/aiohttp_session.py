@@ -72,11 +72,11 @@ def _resolve_ssl_context(
                 import logging
                 logging.getLogger(__name__).warning("[SSL] Failed to open CA cert path %s: %s", path, e)
                 continue
-    return True if use_tls else False
+    return bool(use_tls)
 
 
 def _url_uses_tls(url: str) -> bool:
-    return url.startswith("https://") or url.startswith("wss://")
+    return url.startswith(("https://", "wss://"))
 
 
 def new_kv_http_session(

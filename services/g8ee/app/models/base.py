@@ -37,10 +37,7 @@ from app.utils.timestamp import now
 
 def _to_iso_z(dt: datetime) -> str:
     """Serialize a datetime to ISO 8601 with Z suffix (UTC canonical form)."""
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    else:
-        dt = dt.astimezone(UTC)
+    dt = dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
     return dt.strftime("%Y-%m-%dT%H:%M:%S") + (f".{dt.microsecond:06d}" if dt.microsecond else "") + "Z"
 
 

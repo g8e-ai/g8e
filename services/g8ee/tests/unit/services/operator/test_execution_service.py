@@ -295,7 +295,7 @@ class TestOperatorExecutionServiceDispatch:
             payload=CommandRequestPayload(command="echo hi", execution_id="exec-1")
         )
         g8e_context = build_g8e_http_context()
-        res, env = await execution_service.dispatch_command(msg, g8e_context)
+        res, _env = await execution_service.dispatch_command(msg, g8e_context)
         assert res.status == ExecutionStatus.FAILED
         assert res.error_type == CommandErrorType.PUBSUB_SUBSCRIPTION_NOT_READY
 
@@ -316,7 +316,7 @@ class TestOperatorExecutionServiceDispatch:
             payload=CommandRequestPayload(command="echo hi", execution_id="exec-1")
         )
         g8e_context = build_g8e_http_context()
-        res, env = await execution_service.dispatch_command(msg, g8e_context)
+        res, _env = await execution_service.dispatch_command(msg, g8e_context)
         assert res.status == ExecutionStatus.FAILED
         assert res.error_type == CommandErrorType.NO_OPERATORS_AVAILABLE
         mock_pubsub.release_future.assert_called_once_with("exec-1")
@@ -350,7 +350,7 @@ class TestOperatorExecutionServiceDispatch:
             payload=CommandRequestPayload(command="echo hi", execution_id="exec-1")
         )
         g8e_context = build_g8e_http_context()
-        res, env = await execution_service.dispatch_command(msg, g8e_context)
+        res, _env = await execution_service.dispatch_command(msg, g8e_context)
         assert res.status == ExecutionStatus.COMPLETED
         assert res.output == ""
         mock_pubsub.release_future.assert_called_once_with("exec-1")

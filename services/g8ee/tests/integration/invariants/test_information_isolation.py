@@ -85,14 +85,12 @@ def check_file_for_violations(file_path: Path) -> list[str]:
                     violations.append(f"Import of reputation model: {alias.name}")
 
         # 2. Check for usage of reputation models in code (e.g. as type hints or constructors)
-        if isinstance(node, ast.Name):
-            if node.id in REPUTATION_MODELS:
-                violations.append(f"Direct usage of reputation model: {node.id}")
+        if isinstance(node, ast.Name) and node.id in REPUTATION_MODELS:
+            violations.append(f"Direct usage of reputation model: {node.id}")
 
         # 3. Check for access to reputation-related fields
-        if isinstance(node, ast.Attribute):
-            if node.attr in REPUTATION_FIELDS:
-                violations.append(f"Access to reputation-related field: {node.attr}")
+        if isinstance(node, ast.Attribute) and node.attr in REPUTATION_FIELDS:
+            violations.append(f"Access to reputation-related field: {node.attr}")
 
     return list(set(violations))  # Unique violations
 

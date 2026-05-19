@@ -144,10 +144,10 @@ class TestHistoryEntry:
 class TestCaseModel:
 
     def _make_case(self, **overrides):
-        defaults = dict(
-            title="Database connectivity issue",
-            description="Cannot connect to the primary database",
-        )
+        defaults = {
+            "title": "Database connectivity issue",
+            "description": "Cannot connect to the primary database",
+        }
         defaults.update(overrides)
         return CaseModel(**defaults)
 
@@ -264,11 +264,11 @@ class TestCaseModel:
 class TestCaseCreateRequest:
 
     def _make_request(self, **overrides):
-        defaults = dict(
-            initial_message="Nginx is returning 502 on all endpoints",
-            user_id="user-abc",
-            web_session_id="sess-xyz",
-        )
+        defaults = {
+            "initial_message": "Nginx is returning 502 on all endpoints",
+            "user_id": "user-abc",
+            "web_session_id": "sess-xyz",
+        }
         defaults.update(overrides)
         return CaseCreateRequest(**defaults)
 

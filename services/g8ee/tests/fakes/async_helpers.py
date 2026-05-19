@@ -30,7 +30,7 @@ from typing import TypeVar
 T = TypeVar("T")
 
 
-def async_iter(frames: Iterable[T]) -> AsyncIterator[T]:
+def async_iter[T](frames: Iterable[T]) -> AsyncIterator[T]:
     """Return an async iterator over ``frames`` suitable for ``async for``."""
 
     async def _gen() -> AsyncIterator[T]:

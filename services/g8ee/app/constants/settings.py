@@ -561,7 +561,8 @@ HTTP_METHOD_OPTIONS                 = "OPTIONS"
 
 class StreamChunkFromModelType(StrEnum):
     """Types of chunks emitted by the agent streaming pipeline."""
-    __str__ = lambda self: self.value
+    def __str__(self):
+        return self.value
 
     TEXT        = "TEXT"
     THINKING    = "THINKING"

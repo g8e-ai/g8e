@@ -92,12 +92,12 @@ class TestDependencyStatus:
 class TestHealthCheckResult:
 
     def _make(self, **overrides):
-        defaults = dict(
-            timestamp=_TS,
-            component="g8ee",
-            dependencies={"operator": DependencyStatus(status=HealthStatus.HEALTHY)},
-            overall_status=HealthStatus.HEALTHY,
-        )
+        defaults = {
+            "timestamp": _TS,
+            "component": "g8ee",
+            "dependencies": {"operator": DependencyStatus(status=HealthStatus.HEALTHY)},
+            "overall_status": HealthStatus.HEALTHY,
+        }
         defaults.update(overrides)
         return HealthCheckResult(**defaults)
 
@@ -142,10 +142,10 @@ class TestHealthCheckResult:
 class TestWorkflowHealthResult:
 
     def _make(self, **overrides):
-        defaults = dict(
-            status=HealthStatus.HEALTHY,
-            workflows={"chat": DependencyStatus(status=HealthStatus.HEALTHY)},
-        )
+        defaults = {
+            "status": HealthStatus.HEALTHY,
+            "workflows": {"chat": DependencyStatus(status=HealthStatus.HEALTHY)},
+        }
         defaults.update(overrides)
         return WorkflowHealthResult(**defaults)
 
@@ -184,11 +184,11 @@ class TestWorkflowHealthResult:
 class TestServiceHealthResult:
 
     def _make(self, **overrides):
-        defaults = dict(
-            service=HealthStatus.HEALTHY,
-            timestamp=_TS,
-            checks={"operator": DependencyStatus(status=HealthStatus.HEALTHY)},
-        )
+        defaults = {
+            "service": HealthStatus.HEALTHY,
+            "timestamp": _TS,
+            "checks": {"operator": DependencyStatus(status=HealthStatus.HEALTHY)},
+        }
         defaults.update(overrides)
         return ServiceHealthResult(**defaults)
 
@@ -233,11 +233,11 @@ class TestServiceHealthResult:
 class TestAuthenticatedUser:
 
     def _make(self, **overrides):
-        defaults = dict(
-            uid="user-abc-123",
-            user_id="user-abc-123",
-            auth_method=AuthMethod.PROXY,
-        )
+        defaults = {
+            "uid": "user-abc-123",
+            "user_id": "user-abc-123",
+            "auth_method": AuthMethod.PROXY,
+        }
         defaults.update(overrides)
         return AuthenticatedUser(**defaults)
 
@@ -364,13 +364,13 @@ class TestBoundOperator:
 class TestG8eHttpContext:
 
     def _make(self, **overrides):
-        defaults = dict(
-            web_session_id="session_abc_123",
-            user_id="user-uuid-456",
-            case_id="case-test-001",
-            investigation_id="inv-test-001",
-            source_component=ComponentName.CLIENT,
-        )
+        defaults = {
+            "web_session_id": "session_abc_123",
+            "user_id": "user-uuid-456",
+            "case_id": "case-test-001",
+            "investigation_id": "inv-test-001",
+            "source_component": ComponentName.CLIENT,
+        }
         defaults.update(overrides)
         return G8eHttpContext(**defaults)
 
@@ -601,13 +601,13 @@ class TestRequestContext:
     """Tests for RequestContext model - eliminates header-as-state pattern."""
 
     def _make(self, **overrides):
-        defaults = dict(
-            web_session_id="sess-abc123",
-            user_id="user-xyz789",
-            case_id="case-001",
-            investigation_id="inv-002",
-            source_component=ComponentName.CLIENT,
-        )
+        defaults = {
+            "web_session_id": "sess-abc123",
+            "user_id": "user-xyz789",
+            "case_id": "case-001",
+            "investigation_id": "inv-002",
+            "source_component": ComponentName.CLIENT,
+        }
         defaults.update(overrides)
         return RequestContext(**defaults)
 

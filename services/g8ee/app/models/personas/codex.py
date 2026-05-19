@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class CodexPersona(AgentPersonaModel):
     """Codex: The Memory Builder.
-    
+
     Extracts durable user preferences and scrubbed investigation summaries from conversation history.
     """
 

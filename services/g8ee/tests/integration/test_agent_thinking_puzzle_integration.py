@@ -38,7 +38,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.s
 async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_services):
     """
     Verify that the AI agent uses the thinking model correctly when solving a puzzle.
-    
+
     This test presents a logic puzzle to the agent and checks that:
     1. The model emits THINKING SSE events with proper action types (START/UPDATE/END).
     2. Thinking content is delivered via LLM_CHAT_ITERATION_THINKING_STARTED events.
@@ -52,14 +52,12 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         pytest.skip("LLM provider is not configured")
 
     model_name = llm.primary_model  # Use primary model with thinking support
-    config = get_model_config(model_name)
+    get_model_config(model_name)
     # Note: Let the test fail naturally if model doesn't support thinking chunks
     # This will provide better error information than skipping
 
     # Get real services from all_services fixture
     event_service = all_services.event_service
-    operator_command_service = all_services.operator_command_service
-    tool_service = all_services.tool_service
     agent = all_services.g8e_agent
 
     puzzle_text = (

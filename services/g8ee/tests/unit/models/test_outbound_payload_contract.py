@@ -10,11 +10,11 @@ from app.models.pubsub_messages import G8eOutboundPayload
 def test_g8ee_outbound_payload_union_is_exhaustive():
     """
     Contract test for Phase 8 of the MCP Rip.
-    
-    This test asserts that G8eOutboundPayload (the Union used in G8eMessage) 
+
+    This test asserts that G8eOutboundPayload (the Union used in G8eMessage)
     includes all defined *RequestPayload classes from command_request_payloads.py.
-    
-    If you add a new RequestPayload class, you MUST add it to the Union in 
+
+    If you add a new RequestPayload class, you MUST add it to the Union in
     app/models/pubsub_messages.py, or this test will fail.
     """
     # Get all classes defined in the payloads module

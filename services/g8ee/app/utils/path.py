@@ -14,7 +14,7 @@ def resolve_project_root() -> Path:
 
 def resolve_config_path(filename: str) -> Path:
     """
-    Resolves a config file path using centralized PATHS if available, 
+    Resolves a config file path using centralized PATHS if available,
     otherwise falls back to repo-relative resolution.
     """
     from app.constants.paths import PATHS

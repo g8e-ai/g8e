@@ -451,9 +451,8 @@ class OpenAIProvider(LLMProvider):
         parts = []
         choice = response.choices[0] if response.choices else None
 
-        if choice and choice.message:
-            if choice.message.content:
-                parts.append(Part(text=choice.message.content))
+        if choice and choice.message and choice.message.content:
+            parts.append(Part(text=choice.message.content))
 
         usage = None
         if response.usage:
@@ -571,9 +570,8 @@ class OpenAIProvider(LLMProvider):
         parts = []
         choice = response.choices[0] if response.choices else None
 
-        if choice and choice.message:
-            if choice.message.content:
-                parts.append(Part(text=choice.message.content))
+        if choice and choice.message and choice.message.content:
+            parts.append(Part(text=choice.message.content))
 
         usage = None
         if response.usage:

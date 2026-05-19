@@ -148,7 +148,7 @@ class SettingsService:
 
     def _build_llm_settings(self, user_settings: G8eeUserSettings) -> LLMSettings:
         """Build LLMSettings from G8eeUserSettings.
-        
+
         LLM provider configuration is user-specific only.
         """
         return user_settings.llm

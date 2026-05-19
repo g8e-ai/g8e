@@ -154,7 +154,7 @@ class TestLifespanStartup:
 
     async def test_delegates_to_service_factory(self, mock_app):
         mocks, patches = _build_mocks()
-        settings, _ = _configure_settings(mocks)
+        _settings, _ = _configure_settings(mocks)
         factory = _configure_factory(mocks)
         try:
             async with lifespan(mock_app):

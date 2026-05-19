@@ -87,12 +87,11 @@ async def real_db_client():
 @pytest.fixture
 async def real_cache_aside(real_kv_client, real_db_client):
     """Create a CacheAsideService with real operator clients."""
-    cache_aside = CacheAsideService(
+    return CacheAsideService(
         kv=KVService(real_kv_client),
         db=DBService(real_db_client),
         component_name=ComponentName.G8EE
     )
-    return cache_aside
 
 
 @pytest.mark.asyncio

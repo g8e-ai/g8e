@@ -74,12 +74,12 @@ def judge(mock_provider):
     return EvalJudge(provider=mock_provider, model="gemini-3.1-pro-preview")
 
 
-GRADE_KWARGS = dict(
-    user_query="Test query",
-    interaction_trace="Test trace",
-    expected_behavior="Test behavior",
-    required_concepts=["test"],
-)
+GRADE_KWARGS = {
+    "user_query": "Test query",
+    "interaction_trace": "Test trace",
+    "expected_behavior": "Test behavior",
+    "required_concepts": ["test"],
+}
 
 
 class TestEvalGradeModel:
@@ -454,7 +454,7 @@ class TestPromptConstruction:
 class TestScoreThresholds:
     """Deterministic pass/fail from score, independent of LLM opinion."""
 
-    @pytest.mark.parametrize("score,expected_passed", [
+    @pytest.mark.parametrize(("score", "expected_passed"), [
         (1, False),
         (2, False),
         (3, True),

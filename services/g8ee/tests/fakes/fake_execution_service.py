@@ -86,7 +86,7 @@ class FakeExecutionService:
                 operator_session_id=g8e_message.operator_session_id,
                 command_data=g8e_message,
             )
-        
+
         # If an envelope was provided, try to extract a result from it
         if self._envelope and hasattr(self._envelope, "payload"):
             if isinstance(self._envelope.payload, ExecutionResultsPayload):
@@ -102,7 +102,7 @@ class FakeExecutionService:
                     operator_id=self._envelope.operator_id,
                     completed_at=payload.completed_at,
                 ), self._envelope
-            elif isinstance(self._envelope.payload, PortCheckResultPayload):
+            if isinstance(self._envelope.payload, PortCheckResultPayload):
                 # For PortCheckResultPayload, we just return the envelope
                 # CommandPortService handles it directly if it's the right payload type
                 return CommandInternalResult(

@@ -86,7 +86,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
 
     async def validate_cli_session_ownership(self, cli_session_id: str, operator_session_id: str) -> bool:
         """Verify that the given cli_session_id is owned by the given operator_session_id.
-        
+
         This prevents a malicious client with a valid operator session from draining
         or publishing to someone else's CLI session.
         """

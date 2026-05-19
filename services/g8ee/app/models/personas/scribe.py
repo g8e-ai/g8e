@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class ScribePersona(AgentPersonaModel):
     """Scribe: The Case Titler.
-    
+
     Generates concise, specific case titles.
     """
 

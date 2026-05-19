@@ -85,7 +85,7 @@ class TribunalInvoker:
         tool_executor: AIToolService,
     ) -> tuple[bool, bool, list[WhitelistedCommand], list[dict[str, str]]]:
         """Fetch command validation constraints from request settings.
-        
+
         Returns metadata-rich command list with safe_options and validation patterns.
         """
         whitelisting_enabled = False
@@ -639,7 +639,7 @@ async def _execute_parallel(
     results: list[ToolCallResult] = await asyncio.gather(*tasks)
 
     responses: list[ToolCallResponse] = []
-    for fc, tool_result in zip(pending_tool_calls, results):
+    for fc, tool_result in zip(pending_tool_calls, results, strict=False):
         # Yield status chunks for UI
         yield StreamChunkFromModel(
             type=StreamChunkFromModelType.TOOL_CALL,

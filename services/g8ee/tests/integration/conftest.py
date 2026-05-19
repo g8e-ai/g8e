@@ -240,19 +240,19 @@ async def all_services(cache_aside_service, test_settings):
     await ServiceFactory.stop_services(services)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def investigation_service(all_services):
     """Returns the InvestigationService from all_services."""
     return all_services.investigation_service
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def tool_service(all_services):
     """Returns the AIToolService from all_services."""
     return all_services.tool_service
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def chat_pipeline(all_services):
     """Returns the ChatPipelineService from all_services."""
     return all_services.chat_pipeline
@@ -264,7 +264,7 @@ async def cleanup(cache_aside_service, all_services):
 
     Track documents created during a test via ``cleanup.track_investigation(id)``
     etc. All tracked documents are deleted after the test, even on failure.
-    
+
     Awaits all background tasks before document deletion to prevent race conditions.
     """
     tracker = IntegrationCleanupTracker(cache_aside_service)
@@ -276,7 +276,7 @@ async def cleanup(cache_aside_service, all_services):
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def user_settings(cache_aside_service, test_settings):
     """Returns user settings for integration tests.
-    
+
     Uses TEST_LLM settings when available (set via ./g8e test flags),
     otherwise loads user settings from operator.
     """

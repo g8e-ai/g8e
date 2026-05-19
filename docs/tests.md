@@ -103,7 +103,7 @@ Available flags: `-p` (provider), `-m` (primary model), `-a` (assistant model), 
 
 ### Lints
 
-- **`make lint-no-bare-session-id`** — CI-enforced lint preventing bare `session_id` in the codebase. Excludes vendor, generated files, `.local.dev`, `.github`, and the Makefile itself.
+- **`make lint-no-bare-session-id`** — CI-enforced lint preventing bare `sessionid` in the codebase. Excludes vendor, generated files, `.local.dev`, `.github`, and the Makefile itself.
 
 ---
 
