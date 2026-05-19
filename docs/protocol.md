@@ -6,7 +6,7 @@ title: g8e Protocol
 
 Last Updated: 2026-05-18
 
-The **g8e Protocol** is a governance and compliance standard. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) at the Operator's admission boundary and forces them through a fail-closed verification gauntlet - envelope integrity, typed-payload decode, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the substrate boundary: they never reach the application layer (Warden, execution handlers) and they never touch the host. Admitted payloads produce a cryptographically provable audit trail with a deep local-first record at the site of execution.
+The **g8e Protocol** is a governance and compliance standard. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) at the Operator's admission boundary and forces them through a fail-closed verification gauntlet - envelope integrity, typed-payload decode, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the substrate boundary: they never reach the application layer (Warden, execution handlers) and they never touch the host. Admitted payloads produce a cryptographically provable audit trail with local-first persistence at the site of execution.
 
 The protocol is the only mandatory layer of g8e. Any conforming implementation - Operator, client, or BYO frontend - interoperates by speaking this contract. The reference Operator (`g8eo`) and reference Engine (`g8ee`) are interchangeable with anything that produces and verifies the same envelopes.
 
@@ -82,7 +82,7 @@ Every mutation must pass three independent layers in order. A failure at any lay
 Static, deterministic checks enforced before any code executes.
 
 - **Forbidden patterns** - Custom protobuf field option `(g8e.common.v1.forbidden_patterns)` is reflected at runtime to scan typed payloads (e.g., `command` field) for `sudo`, `su`, `rm -rf /`, etc.
-- **Sentinel pre-execution analysis** - Regex matching against 90+ MITRE ATT&CK threat patterns (reverse shells, privilege escalation, exfiltration).
+- **Sentinel pre-execution analysis** - Regex matching against 90+ threat patterns (reverse shells, privilege escalation, exfiltration).
 - **Allow/deny lists** - Per-host policy in `protocol/constants/` and per-user `command_validation` settings.
 
 ### L2: Consensus (Tribunal)
@@ -126,7 +126,7 @@ The `TransactionVerifier` runs the following gates in order:
 
 ### Execution & Receipt Phase (Operator → Client)
 
-1. The **Warden** signs an executing-state `ActionReceipt` and writes it to the AuditVault. If logging fails, execution is aborted.
+The **Warden** signs an executing-state `ActionReceipt` and writes it to the AuditVault. If logging fails, execution is aborted.
 2. The Warden dispatches the typed payload to its execution handler (e.g., shell executor, file edit handler).
 3. The Warden updates the receipt with the final status (`COMPLETED` / `FAILED`), the post-state root, and a fresh signature.
 4. The Operator publishes a result envelope (also a `GovernanceEnvelope`) carrying the typed result and the signed receipt.
@@ -217,7 +217,7 @@ Platform broadcast: `operator_heartbeats`, `sse_events`, `system_events`.
 ### Multi-Ledger Architecture
 The Operator implements an isolated, git-based ledger for every session:
 - **Isolation**: Each operator session owns a unique git repository at `.g8e/data/ledger/sessions/<id>/`.
-- **Verifiable History**: Every file mutation is mirrored via a two-phase commit (`LedgerHashBefore` -> `LedgerHashAfter`).
+- **Persistence**: Every file mutation is mirrored via a two-phase commit (`LedgerHashBefore` -> `LedgerHashAfter`).
 - **Encryption**: Session ledgers are stored encrypted at rest when the vault is unlocked.
 
 ### Encrypted Audit Vault

@@ -9,6 +9,8 @@ permalink: /docs/
 Last Updated: 2026-05-19
 Version: v0.2.6
 
+> **Note**: Portions of this documentation are AI-generated. While audited for technical accuracy, some descriptive verbiage may remain non-idiomatic or subjective.
+
 The documentation is organized by service and role, separating the mandatory protocol substrate from the optional application-layer components.
 
 ## 1. Protocol Substrate

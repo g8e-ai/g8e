@@ -1,12 +1,12 @@
 # g8eo - Reference Operator
 
-**g8eo** is the reference Go implementation of the **Operator** role defined by the g8e Protocol. It is a sovereign, single-binary execution boundary that enforces the protocol's 3-layer governance hierarchy.
+**g8eo** is the reference Go implementation of the **Operator** role defined by the g8e Protocol. It is a single-binary execution boundary that enforces the protocol's 3-layer governance hierarchy.
 
 ## Core Principles
 
 - **Single Binary, Multi-Mode**: The reference binary runs as the Hub (Listen Mode), Target (Standard Mode), and Fleet Utility (Stream Mode).
 - **mTLS-Everywhere**: All communication is outbound-only from the target and strictly gated by Operator-owned mutual TLS. No inbound ports are required on managed hosts.
-- **Local-First Audit (LFAA)**: The host is the single source of truth for command history and file mutations, stored in a tamper-evident ledger.
+- **Local-First Audit (LFAA)**: The host is the source of truth for command history and file mutations, stored in a tamper-evident ledger.
 - **UAP JSON-First (GovernanceEnvelope)**: Every mutation action is governed by a UAP JSON `GovernanceEnvelope`. This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
 - **3-Layer Governance**: Hard gates at the bedrock (L1), consensus in the middle (L2), and human authorization at the top (L3).
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
@@ -19,7 +19,7 @@
 The g8e platform is built on the g8e Protocol as substrate. A conforming Operator implementation is what makes that protocol live on a host.
 
 - **Protocol (Substrate)**: The wire contract, schemas, and L1/L2/L3 verification rules. Mandatory and immutable for any client or implementation.
-- **Reference Operator (`g8eo`)**: In **Listen Mode** it acts as the platform's backbone for the reference deployment - protocol hub, persistence layer (SQLite), pub/sub broker, root CA, and audit authority. In **Standard Mode** it acts as the execution agent on a managed host. It is sufficient on its own to receive, verify, and execute protocol-governed transactions, and it is replaceable by any conforming Operator.
+- **Reference Operator (`g8eo`)**: In **Listen Mode** it acts as the platform's backbone for the reference deployment - protocol hub, persistence layer (SQLite), pub/sub broker, root CA, and audit authority. **Standard Mode** it acts as the execution agent on a managed host.
 - **Reference Application Layer (Optional)**: Reference components like the Engine (`g8ee`) consume the public Operator protocol surface. They have no privileged substrate responsibilities and no private access channels.
 
 ```mermaid
@@ -224,7 +224,7 @@ The **Warden** signs all mutation receipts with an Ed25519 key. For external ver
 The Coordination Store is the platform's central coordination point, implemented in the `g8eo` binary when running in `--listen` mode. All Hub state lives in a single SQLite database at `.g8e/data/g8e.db`.
 
 #### State Merkle Root Invariant
-Hub state is anchored by a Merkle state root computed deterministically across all documents, active KV entries, and blobs. Every governance transaction carries `state_merkle_root`; the Operator rejects any transaction whose root does not match the current authoritative state. This makes it impossible for an agent to act on stale reality.
+Hub state is anchored by a Merkle state root computed deterministically across authoritative documents, KV entries, and blobs.
 
 #### Cache-Aside read/write contract
 - **Writes** - Always go to the authoritative DB first, then invalidate the cache key.

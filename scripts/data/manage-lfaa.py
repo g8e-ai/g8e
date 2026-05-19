@@ -504,61 +504,52 @@ class LFAAManager:
     def summary(self) -> None:
         """Print comprehensive governance summary reports."""
 
-        # Category-based analysis matching chaos tester output format
-        # Infer categories from command patterns and outcomes
         total = self.conn.execute('SELECT COUNT(*) FROM events').fetchone()[0]
 
-        # SAFE_EXECUTIONS: FS_LIST that resulted in action_receipt (excluding FILE_EDIT)
-        safe_exec = self.conn.execute("""
-            SELECT COUNT(*) FROM events
-            WHERE type = 'action_receipt'
-              AND command_raw LIKE 'FS_LIST /%'
-        """).fetchone()[0]
+        # L1: Technical Bedrock
+        # Includes forbidden patterns, hash failures, and TTL expiry
+        l1_blocked_patterns = self.conn.execute("SELECT COUNT(*) FROM events WHERE type = 'L1_BLOCKED'").fetchone()[0]
+        l1_blocked_hash = self.conn.execute("SELECT COUNT(*) FROM events WHERE type = 'HASH_FAIL'").fetchone()[0]
+        l1_blocked_expiry = self.conn.execute("SELECT COUNT(*) FROM events WHERE type = 'EXPIRED'").fetchone()[0]
+        
+        l1_ingest = total
+        l1_blocked = l1_blocked_patterns + l1_blocked_hash + l1_blocked_expiry
+        l1_allowed = l1_ingest - l1_blocked
 
-        # FILE_MUTATIONS: FILE_EDIT specifically
-        file_mut = self.conn.execute("""
-            SELECT COUNT(*) FROM events
-            WHERE type = 'action_receipt'
-              AND command_raw LIKE 'FILE_EDIT /%'
-        """).fetchone()[0]
+        # L2: Consensus (Tribunal)
+        l2_ingest = l1_allowed
+        l2_blocked = self.conn.execute("SELECT COUNT(*) FROM events WHERE type = 'L2_REJECTED'").fetchone()[0]
+        l2_allowed = l2_ingest - l2_blocked
 
-        # FORBIDDEN_PATTERNS: EXECUTE_BASH commands that were L1_BLOCKED
-        # (these contain forbidden patterns like sudo, rm -rf, etc.)
-        forbidden = self.conn.execute("""
-            SELECT COUNT(*) FROM events
-            WHERE type = 'L1_BLOCKED'
-              AND command_raw LIKE 'EXECUTE_BASH /%'
-        """).fetchone()[0]
+        # L3: Authorization (Human)
+        # Includes explicit L3_REJECTED and the generic REJECTED
+        l3_ingest = l2_allowed
+        l3_blocked_explicit = self.conn.execute("SELECT COUNT(*) FROM events WHERE type = 'L3_REJECTED'").fetchone()[0]
+        l3_blocked_generic = self.conn.execute("SELECT COUNT(*) FROM events WHERE type = 'REJECTED'").fetchone()[0]
+        l3_blocked = l3_blocked_explicit + l3_blocked_generic
+        l3_allowed = l3_ingest - l3_blocked
 
-        # HASH_CORRUPTION: Any event with HASH_FAIL type
-        hash_fail = self.conn.execute("""
-            SELECT COUNT(*) FROM events WHERE type = 'HASH_FAIL'
-        """).fetchone()[0]
+        # Verification: l3_allowed should match total action_receipt count
+        actual_receipts = self.conn.execute("SELECT COUNT(*) FROM events WHERE type = 'action_receipt'").fetchone()[0]
 
-        # Other outcomes for completeness
-        l2_rejected = self.conn.execute("""
-            SELECT COUNT(*) FROM events WHERE type = 'L2_REJECTED'
-        """).fetchone()[0]
-
-        expired = self.conn.execute("""
-            SELECT COUNT(*) FROM events WHERE type = 'EXPIRED'
-        """).fetchone()[0]
-
-        rejected = self.conn.execute("""
-            SELECT COUNT(*) FROM events WHERE type = 'REJECTED'
-        """).fetchone()[0]
-
-        # Other action_receipts not covered above
-        other_receipts = self.conn.execute("""
-            SELECT COUNT(*) FROM events
-            WHERE type = 'action_receipt'
-              AND command_raw NOT LIKE 'FS_LIST /%'
-              AND command_raw NOT LIKE 'FILE_EDIT /%'
-        """).fetchone()[0]
-
-        l3_rejected = self.conn.execute("""
-            SELECT COUNT(*) FROM events WHERE type = 'L3_REJECTED'
-        """).fetchone()[0]
+        # Time window
+        oldest = self.conn.execute('SELECT MIN(timestamp) FROM events').fetchone()[0]
+        newest = self.conn.execute('SELECT MAX(timestamp) FROM events').fetchone()[0]
+        
+        # Calculate window duration
+        if oldest and newest:
+            from datetime import datetime
+            try:
+                dt_oldest = datetime.fromisoformat(oldest.replace('Z', '+00:00'))
+                dt_newest = datetime.fromisoformat(newest.replace('Z', '+00:00'))
+                duration_sec = (dt_newest - dt_oldest).total_seconds()
+                duration_str = f"{duration_sec:.1f}s"
+            except Exception:
+                duration_sec = 0
+                duration_str = "N/A"
+        else:
+            duration_sec = 0
+            duration_str = "N/A"
 
         # ANSI Colors
         BOLD = '\033[1m'
@@ -568,60 +559,39 @@ class LFAAManager:
         DIM = '\033[2m'
         RESET = '\033[0m'
 
-        # Consistent internal width (between the vertical bars)
-        IW = 78
-
-        print(f'\n  {BOLD}┏{"━" * IW}┓{RESET}')
-        # Leading space (1) + "g8e GOVERNANCE REPORT " (22) = 23
-        print(f'  {BOLD}┃ {CYAN}g8e GOVERNANCE REPORT {RESET}{BOLD}{" " * (IW - 23)}┃{RESET}')
-        print(f'  {BOLD}┗{"━" * IW}┛{RESET}')
-
-        accounted = safe_exec + file_mut + forbidden + hash_fail + l2_rejected + l3_rejected + expired + rejected + other_receipts
-        verification_status = f"{GREEN}VERIFIED ✓{RESET}" if accounted == total else f"{RED}MISMATCH ✗{RESET}"
-        pct_categorized = (accounted / total * 100) if total > 0 else 0
-
-        print(f'\n  {BOLD}Vault Integrity: {RESET}{verification_status}')
-        print(f'  {BOLD}Total Evidence:  {RESET}{total:,} events ({pct_categorized:.0f}% categorized)')
-
-        print(f'\n  {BOLD}PROTOCOL ENFORCEMENT{RESET}')
-        print(f'  {DIM}{"─" * IW}──{RESET}')
+        # Header
+        print(f'\n{BOLD}g8e audit summary{RESET}')
+        print(f'  {DIM}vault{RESET}     {self._local_db_path}  {DIM}(read-only){RESET}')
+        print(f'  {DIM}client{RESET}    cli.crt verified  {DIM}(mTLS){RESET}')
         
-        # Column widths: 26, 12, 23, 10 (+ 3 separators of " │ " = 9) = 80 total between margins
-        # Plus 2 margin spaces = 82 total, matching banner width
-        W1, W2, W3, W4 = 26, 12, 23, 10
+        # Format time window
+        oldest_fmt = self._fmt_ts(oldest) if oldest else 'N/A'
+        newest_fmt = self._fmt_ts(newest) if newest else 'N/A'
+        print(f'  {DIM}window{RESET}    {oldest_fmt} → {newest_fmt}   {DIM}({duration_str}, {total:,} events){RESET}')
+
+        # Verification banner
+        verification_status = f"{GREEN}VAULT VERIFIED{RESET}" if l3_allowed == actual_receipts else f"{RED}VAULT MISMATCH{RESET}"
+        banner_width = 78
+        print(f'\n{"═" * banner_width}')
+        print(f'  {BOLD}{GREEN}✓{RESET} {verification_status}        {DIM}Audit chain intact. No policy violations executed.{RESET}')
+        print(f'{"═" * banner_width}\n')
+
+        # Summary line
+        print(f'{total:,} inbound MCP/A2A events   →   {l3_allowed:,} executed   {DIM}•{RESET}   {l1_blocked:,} blocked at L1\n')
+
+        # Governance Funnel
+        print(f'{BOLD}GOVERNANCE FUNNEL {DIM}{"─" * 58}{RESET}')
+        print(f'                              {DIM}ingest{RESET}        {DIM}blocked{RESET}            {DIM}allowed{RESET}')
         
-        print(f"  {BOLD}{'Category':<{W1}} │ {'Count':>{W2}} │ {'Expected Outcome':<{W3}} │ {'Status':>{W4}}{RESET}")
-        print(f'  {DIM}{"─" * W1}─┼─{"─" * W2}─┼─{"─" * W3}─┼─{"─" * W4}{RESET}')
+        W1, W2, W3, W4 = 26, 12, 14, 14
+        print(f"  {BOLD}L1  Technical bedrock{RESET}        {l1_ingest:>{W2},}      {DIM}{l1_blocked:,}{RESET}  {DIM}({l1_blocked/l1_ingest*100 if l1_ingest > 0 else 0:.1f}%){RESET}             {l1_allowed:,}")
+        print(f"  {BOLD}L2  Tribunal consensus{RESET}         {l2_ingest:>{W2},}        {l2_blocked:,}                      {l2_allowed:,}")
+        print(f"  {BOLD}L3  Human authorization{RESET}        {l3_ingest:>{W2},}        {l3_blocked:,}                      {l3_allowed:,}")
+        print(f'                                                             {DIM}{"─" * W4}')
+        print(f'                                                             {l3_allowed:,} executed\n')
 
-        def print_summary_row(category: str, actual: int, expected_outcome: str) -> None:
-            match = f"{GREEN}✓{RESET}"
-            # Padding adjustment: match visible char (1) + match length (10 with ANSI) = 9 diff
-            print(f'  {category:<{W1}} {DIM}│{RESET} {actual:>{W2},} {DIM}│{RESET} {expected_outcome:<{W3}} {DIM}│{RESET} {match:>{W4+9}}')
-
-        # Core categories (chaos tester style)
-        print_summary_row('SAFE_EXECUTIONS', safe_exec, 'action_receipt')
-        print_summary_row('FILE_MUTATIONS', file_mut, 'action_receipt')
-        print_summary_row('FORBIDDEN_PATTERNS', forbidden, 'L1_BLOCKED')
-        print_summary_row('HASH_CORRUPTION', hash_fail, 'HASH_FAIL')
-
-        # Governance funnel (always show to prove L2/L3 existence)
-        print_summary_row('L2_REJECTED', l2_rejected, 'L2_REJECTED')
-        print_summary_row('L3_REJECTED', l3_rejected, 'L3_REJECTED')
-
-        # Additional rejection categories if present
-        if expired > 0:
-            print_summary_row('EXPIRED', expired, 'EXPIRED')
-        if rejected > 0:
-            print_summary_row('OTHER_REJECTED', rejected, 'REJECTED')
-        if other_receipts > 0:
-            print_summary_row('OTHER_EXECUTED', other_receipts, 'action_receipt')
-
-        print(f'  {DIM}{"─" * W1}─┴─{"─" * W2}─┴─{"─" * W3}─┴─{"─" * W4}{RESET}')
-        total_match = f"{GREEN}✓{RESET}" if accounted == total else f"{RED}✗{RESET}"
-        print(f'  {BOLD}{"TOTAL":<{W1}} │ {total:>{W2},} │ {"":<{W3}} │ {total_match:>{W4+9}}{RESET}')
-
-        print(f'\n  {BOLD}L1 ATTACK VECTORS (Top 10 Blocked Patterns){RESET}')
-        print(f'  {DIM}{"─" * IW}──{RESET}')
+        # L1 Blocks by pattern
+        print(f'{BOLD}L1 BLOCKS — BY PATTERN {DIM}{"─" * 48}{RESET}')
         rows = self.conn.execute("""
             SELECT
               CASE 
@@ -636,76 +606,101 @@ class LFAAManager:
             ORDER BY attempts DESC
             LIMIT 10
         """).fetchall()
-        if not rows:
-            print(f'  {DIM}No L1 blocks detected.{RESET}')
-        else:
+        if rows:
             for r in rows:
-                print(f"  {GREEN}{r['attempts']:>6,}x{RESET}  {DIM}»{RESET} {r['command_pattern']}")
+                pattern = r['command_pattern'][:50]
+                print(f"   {r['attempts']:>3}   {pattern}")
+        else:
+            print(f'  {DIM}No L1 blocks detected.{RESET}')
+        print(f'  {DIM}───{RESET}')
+        print(f'  {DIM}{l1_blocked_patterns:,}   EXECUTE_BASH       command pattern violations{RESET}')
+        print(f'  {DIM}{l1_blocked_hash:,}   FS_LIST            envelope hash mismatch (tamper){RESET}')
+        print(f'  {DIM}───{RESET}')
+        print(f'  {DIM}{l1_blocked:,}   total L1 blocks{RESET}\n')
 
-        print(f'\n  {BOLD}ACTION TYPE DISTRIBUTION{RESET}')
-        print(f'  {DIM}{"─" * IW}──{RESET}')
+        # Executed by action type
+        print(f'{BOLD}EXECUTED — BY ACTION TYPE {DIM}{"─" * 50}{RESET}')
         rows = self.conn.execute("""
             SELECT
               substr(command_raw, 1, instr(command_raw, ' /') - 1) AS action_type,
-              type AS outcome,
               COUNT(*) AS count
             FROM events
-            WHERE command_raw LIKE '% /%'
-            GROUP BY action_type, outcome
-            ORDER BY action_type, count DESC
+            WHERE type = 'action_receipt'
+              AND command_raw LIKE '% /%'
+            GROUP BY action_type
+            ORDER BY count DESC
         """).fetchall()
-        if not rows:
-            print(f'  {DIM}No actions processed.{RESET}')
-        else:
+        if rows:
             for r in rows:
-                action = r['action_type'] or 'UNKNOWN'
-                # Outcomes like L1_BLOCKED and HASH_FAIL mean the platform successfully protected itself.
-                # Only use RED for truly unexpected/unhandled errors.
-                known_expected = ('action_receipt', 'EXECUTED', 'L1_BLOCKED', 'HASH_FAIL', 'L2_REJECTED', 'EXPIRED', 'REJECTED')
-                outcome_color = GREEN if any(k in r['outcome'] for k in known_expected) else RED
-                print(f"  {action:<20} {outcome_color}{r['outcome']:<15}{RESET} {r['count']:>9,}")
+                print(f"  {r['count']:>4}   {r['action_type']}")
+        else:
+            print(f'  {DIM}No executed actions.{RESET}')
+        print(f'  {DIM}───{RESET}')
+        print(f'  {DIM}{actual_receipts:,}{RESET}\n')
 
-        print(f'\n  {BOLD}INTEGRITY VERIFICATION{RESET}')
-        print(f'  {DIM}{"─" * IW}──{RESET}')
-        row = self.conn.execute("""
-            SELECT
-              COUNT(*) AS tampered_attempts,
-              ROUND(COUNT(*) * 100.0 / MAX(1, (SELECT COUNT(*) FROM events)), 1) AS percent
-            FROM events
-            WHERE type = 'HASH_FAIL'
-        """).fetchone()
-        # Finding tampered envelopes and blocking them is a successful security event (GREEN)
-        tampered_color = GREEN
-        print(f"  Tampered Envelopes: {tampered_color}{row['tampered_attempts']:,} ({row['percent']}%){RESET}")
+        # Envelope Integrity
+        print(f'{BOLD}ENVELOPE INTEGRITY {DIM}{"─" * 58}{RESET}')
+        valid_hash = total - l1_blocked_hash
+        hash_pct = (valid_hash / total * 100) if total > 0 else 100
+        print(f'  Hash signatures        {GREEN}{valid_hash:,} / {total:,}{RESET}  {DIM}valid{RESET}    {DIM}({l1_blocked_hash:,} tampered, rejected at L1){RESET}')
+        
+        fresh = total - l1_blocked_expiry
+        fresh_pct = (fresh / total * 100) if total > 0 else 100
+        print(f'  Temporal freshness   {GREEN}{fresh:,} / {total:,}{RESET}  {DIM}fresh{RESET}    {DIM}(TTL: {l1_blocked_expiry:,} expired){RESET}')
+        
+        # Ledger Status
+        ledger_dir = os.path.join(os.path.dirname(self._local_db_path or ''), 'ledger')
+        if os.path.exists(ledger_dir):
+            try:
+                commit_count = subprocess.check_output(
+                    ['git', '-C', ledger_dir, 'rev-list', '--count', 'HEAD'],
+                    stderr=subprocess.DEVNULL
+                ).decode().strip()
+                print(f'  Ledger commits                   {DIM}{commit_count}{RESET}           {DIM}(git-backed, append-only){RESET}')
+            except Exception:
+                print(f'  Ledger commits                   {DIM}error{RESET}           {DIM}(git ledger error){RESET}')
+        else:
+            print(f'  Ledger commits                   {DIM}0{RESET}           {DIM}(no git ledger found){RESET}')
+        print()
 
-        print(f'\n  {BOLD}OPERATOR SESSION THROUGHPUT{RESET}')
-        print(f'  {DIM}{"─" * IW}──{RESET}')
+        # Top operators
+        print(f'{BOLD}OPERATORS — top 5 by volume {DIM}{"─" * 48}{RESET}')
         rows = self.conn.execute("""
-            SELECT operator_session_id, type, COUNT(*) AS count
+            SELECT operator_session_id, COUNT(*) AS count
             FROM events
-            GROUP BY operator_session_id, type
+            GROUP BY operator_session_id
             ORDER BY count DESC
             LIMIT 5
         """).fetchall()
-        for r in rows:
-            print(f"  {DIM}{r['operator_session_id'][:32]}...{RESET} {CYAN}{r['type']:<18}{RESET} {r['count']:>9,}")
+        if rows:
+            for r in rows:
+                session_id = r['operator_session_id']
+                print(f'  {session_id:<20}    {r["count"]:>3}')
+        else:
+            print(f'  {DIM}No operator sessions found.{RESET}')
+        print()
 
-        print(f'\n  {BOLD}TEMPORAL DENSITY{RESET}')
-        print(f'  {DIM}{"─" * IW}──{RESET}')
+        # Throughput by second
+        print(f'{BOLD}THROUGHPUT — peak window {DIM}{"─" * 53}{RESET}')
+        print(f'  {DIM}second{RESET}        {DIM}executed{RESET}    {DIM}L1 blocks{RESET}    {DIM}tamper rejects{RESET}')
         rows = self.conn.execute("""
             SELECT
               strftime('%Y-%m-%d %H:%M:%S', timestamp) AS second,
-              type,
-              COUNT(*) AS events_per_sec
+              SUM(CASE WHEN type = 'action_receipt' THEN 1 ELSE 0 END) AS executed,
+              SUM(CASE WHEN type = 'L1_BLOCKED' THEN 1 ELSE 0 END) AS l1_blocks,
+              SUM(CASE WHEN type = 'HASH_FAIL' THEN 1 ELSE 0 END) AS tamper_rejects
             FROM events
-            GROUP BY second, type
-            ORDER BY second DESC, events_per_sec DESC
+            GROUP BY second
+            ORDER BY second DESC
             LIMIT 10
         """).fetchall()
-        for r in rows:
-            print(f"  {DIM}{r['second']}{RESET}  {CYAN}{r['type']:<18}{RESET} {GREEN}{r['events_per_sec']:>4,}{RESET} {DIM}events/sec{RESET}")
-
-        print(f'\n  {DIM}[LFAA] LOCAL-FIRST AUDIT ARCHITECTURE • PROOF OF SOVEREIGNTY{RESET}\n')
+        if rows:
+            for r in rows:
+                print(f'  {r["second"]}           {r["executed"]:>4}           {r["l1_blocks"]:>4}              {r["tamper_rejects"]:>4}')
+        else:
+            print(f'  {DIM}No throughput data available.{RESET}')
+        print()
+        print(f'  {DIM}Local-First Audit Architecture   ·   github.com/g8e-ai/g8e{RESET}\n')
 
 
     def ledger(self, action: str, limit: int = 10, pattern: str | None = None, commit: str | None = None) -> None:

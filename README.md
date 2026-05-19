@@ -56,8 +56,10 @@ graph TD
     Start --> L1
 ```
 
-*   **The Operator (Substrate)**: The host-resident binary (`g8eo`) running in `--listen` mode. It is the fail-closed execution boundary. It rejects commands lacking L2 structural consensus or L3 human authorization, enforces L1 hard-gates, and writes an immutable audit ledger (LFAA).
-*   **The Engine (Optional App)**: A reference AI engine (`g8ee`) or any BYO agentic system consumes the protocol to articulate intent and produce verifiable transactions. It fulfills intent via a ReAct loop.
+The **Operator (`g8eo`)** is the host-resident execution boundary. It enforces a **hard admission gate** where only strictly compliant `UniversalEnvelope` (protojson) events are allowed to pass. Any malformed JSON, missing signatures, or unauthorized payloads are rejected before dispatch, ensuring the host remains insulated from unverified intent.
+
+### g8ee: A Reference Agentic System
+**g8ee** is our reference implementation of an agentic system with structural reasoning built on the g8e protocol. It translates high-level user intent into verifiable protocol transactions, utilizing a multi-layered hierarchy and a continuous **ReAct loop** to decompose requests into atomic actions. It functions as a **protocol-native producer**, generating the cryptographic proofs (L2 signatures) required to clear the operator's fail-closed gates.
 
 ```mermaid
 graph TD
@@ -95,14 +97,14 @@ graph TD
 ```
 
 ### Agentic Hierarchy & Fault Tolerance
-The AI Engine employs a multi-layered agentic hierarchy to ensure high-fidelity intent translation and execution:
+The AI Engine employs a multi-layered agentic hierarchy to ensure high-fidelity intent translation:
 
-- **Triage & Dash:** Specialized agents for routing, posture assessment, and high-speed trivial responses.
-- **Sage (Reasoning Engine):** Primary interpreter of user intent. Sage stakes reputation on proposals but **cannot execute**; it must submit intent to the Tribunal.
-- **Tribunal (Consensus):** Isolated agents generating command proposals from unique perspectives. Requires consensus (2/5 or 5/5) to proceed. If consensus fails, it loops back to Sage for refinement.
-- **Warden (Circuit Breaker):** Heuristic blocker that rejects "off-the-wall" proposals. Rejections trigger a loop back to Sage to improve intent translation.
-- **Auditor (History & Grounding):** Final verification layer. Reviews the full investigation history to ensure progressive accuracy before signing the protocol envelope.
-- **Nemesis (Adversary):** Embedded adversary designed to keep the hierarchy honest. Nemesis proposals are auto-recorded for audit but never executed; they are presented to the user for manual approval.
+- **Triage & Dash:** Agents for routing, posture assessment, and high-speed responses.
+- **Sage:** Primary interpreter of user intent. Sage stakes reputation on proposals but **cannot execute**; it must submit intent to the Tribunal.
+- **Tribunal:** Isolated agents generating command proposals. Requires consensus (2/5 or 5/5) to proceed. If consensus fails, it loops back to Sage for refinement.
+- **Warden:** Heuristic blocker that rejects unsafe proposals. Rejections trigger a loop back to Sage to improve intent translation.
+- **Auditor:** Final verification layer. Reviews the investigation history to ensure accuracy before signing the protocol envelope.
+- **Nemesis:** Adversary designed to test the hierarchy. Nemesis proposals are recorded for audit but never executed; they are presented to the user for manual approval.
 
 *   **The Principal (Intent)**: The entity requesting the action (e.g., a human via WebAuthn/Passkey or an upstream AI agent).
 
