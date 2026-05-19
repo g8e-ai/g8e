@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import json
-from typing import TypeVar, Type
+from typing import TypeVar
 from app.constants.paths import PATHS
 from app.constants.models import CollectionsConstants, DocumentIdsConstants
 
@@ -20,7 +20,7 @@ _PROTOCOL_DIR = PATHS["infra"]["protocol_constants_dir"]
 
 T = TypeVar("T")
 
-def _load(filename: str, model_cls: Type[T]) -> T:
+def _load(filename: str, model_cls: type[T]) -> T:
     path = _PROTOCOL_DIR + "/" + filename
     try:
         with open(path) as f:

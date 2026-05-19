@@ -14,14 +14,13 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, TypeVar, Type
+from typing import Any, TypeVar
 
 from app.constants.models import (
     AgentsConstants,
     ChannelsConstants,
     CollectionsConstants,
     DocumentIdsConstants,
-    ErrorsConstants,
     EventsConstants,
     HeadersConstants,
     IntentsConstants,
@@ -42,7 +41,7 @@ T = TypeVar("T")
 
 _PROTOCOL_DIR = Path(__file__).parent.parent.parent.parent.parent / "protocol" / "constants"
 
-def _load_protocol_json(filename: str, model_cls: Type[T] | None = None) -> Any:
+def _load_protocol_json(filename: str, model_cls: type[T] | None = None) -> Any:
     path = _PROTOCOL_DIR / filename
     if not path.exists():
         # Fallback for containerized environments where the path might differ

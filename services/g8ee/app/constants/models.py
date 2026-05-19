@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Any
+from typing import Any
 from pydantic import BaseModel, Field, ConfigDict
 
 class G8eBaseModel(BaseModel):
@@ -29,18 +29,18 @@ class ProtocolConstantValue(G8eBaseModel):
 
 class CollectionsConstants(G8eBaseModel):
     """Canonical database collection names."""
-    collections: Dict[str, ProtocolConstantValue]
+    collections: dict[str, ProtocolConstantValue]
 
 class DocumentIdsConstants(G8eBaseModel):
     """Canonical document IDs and sentinel IDs."""
-    document_ids: Dict[str, ProtocolConstantValue]
-    sentinel_id: Dict[str, ProtocolConstantValue]
+    document_ids: dict[str, ProtocolConstantValue]
+    sentinel_id: dict[str, ProtocolConstantValue]
 
 class ApiPathsConstants(G8eBaseModel):
     """Internal API paths for g8ee and client."""
     internal_prefix: str
-    g8ee: Dict[str, str]
-    client: Dict[str, str]
+    g8ee: dict[str, str]
+    client: dict[str, str]
 
 class StatusConstants(G8eBaseModel):
     """Canonical status values."""
@@ -91,15 +91,15 @@ class SendersConstants(G8eBaseModel):
 class KVKeysConstants(G8eBaseModel):
     """Canonical KV key schema."""
     cache_prefix: str = Field(alias="cache.prefix")
-    key_schema: Dict[str, str] = Field(alias="key.schema")
-    session_type: Dict[str, str] = Field(alias="session.type")
+    key_schema: dict[str, str] = Field(alias="key.schema")
+    session_type: dict[str, str] = Field(alias="session.type")
 
 class SecurityConstraintsConstants(G8eBaseModel):
     """Canonical security constraints model."""
-    system_path_prefixes: Dict[str, Any] = Field(default_factory=dict)
-    high_risk_system_files: Dict[str, Any] = Field(default_factory=dict)
-    forbidden_directories: Dict[str, Any] = Field(default_factory=dict)
-    forbidden_command_patterns: Dict[str, Any] = Field(default_factory=dict)
+    system_path_prefixes: dict[str, Any] = Field(default_factory=dict)
+    high_risk_system_files: dict[str, Any] = Field(default_factory=dict)
+    forbidden_directories: dict[str, Any] = Field(default_factory=dict)
+    forbidden_command_patterns: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
     def get_default_forbidden_patterns(cls) -> list[str]:
@@ -179,10 +179,10 @@ class G8eePaths(G8eBaseModel):
     config_dir: str | None = None
     tests_dir: str | None = None
     cert_name: str
-    evals: Dict[str, str] | None = None
+    evals: dict[str, str] | None = None
 
 class PathsConstants(G8eBaseModel):
     """Complete paths configuration from paths.json."""
     infra: InfraPaths
     g8ee: G8eePaths
-    ports: Dict[str, int] | None = None
+    ports: dict[str, int] | None = None
