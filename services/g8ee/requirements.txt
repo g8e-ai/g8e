@@ -48,4 +48,3 @@ ruff==0.15.12
 
 # Type stubs for better pyright support
 types-cryptography==3.3.23.2
-types-pydantic==2.10.0.20241221
