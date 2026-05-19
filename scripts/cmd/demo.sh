@@ -68,7 +68,7 @@ fi
 
 case "$SUB" in
     -h|--help|"")
-        help_file="$SCRIPT_DIR/docs/general/cli_help.md"
+        help_file="$SCRIPT_DIR/docs/cli_help.md"
         if [[ -f "$help_file" ]]; then
             awk '/^### demo/,/^### evals/' "$help_file" | head -n -1
         else

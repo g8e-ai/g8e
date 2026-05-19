@@ -437,7 +437,7 @@ _ensure_authenticated() {
 }
 
 _help() {
-    local help_file="$SCRIPT_DIR/docs/general/cli_help.md"
+    local help_file="$SCRIPT_DIR/docs/cli_help.md"
     if [[ -f "$help_file" ]]; then
         cat "$help_file"
     else

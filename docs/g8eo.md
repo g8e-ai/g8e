@@ -1,16 +1,6 @@
----
-title: Operator
-parent: Architecture
----
+# g8eo — Reference Operator
 
-# g8e Operator
-
-Last Updated: 2026-05-18
-Version: v0.3.0
-
-The **Operator** is a role defined by the g8e Protocol: a host-side implementation that receives signed transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a local ledger. It is the data plane, execution engine, and persistence layer for the platform.
-
-This document describes **`g8eo`**, the reference Operator implementation: a statically compiled Go binary that functions as both the protocol hub (Listen Mode) and the execution agent (Standard Mode). Any conforming implementation can replace it; the protocol invariants below are mandatory, the specific binary is not.
+**g8eo** is the reference Go implementation of the **Operator** role defined by the g8e Protocol. It is a sovereign, single-binary execution boundary that enforces the protocol's 3-layer governance hierarchy.
 
 ## Core Principles
 
@@ -21,6 +11,8 @@ This document describes **`g8eo`**, the reference Operator implementation: a sta
 - **3-Layer Governance**: Hard gates at the bedrock (L1), consensus in the middle (L2), and human authorization at the top (L3).
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
 - **Protocol vs Implementation**: The protocol is the substrate. The reference Operator is one implementation of the protocol's Operator role; the reference Engine is one example of an application built on top of it.
+- **Sovereign Authority (PKI)**: The Operator is the only entity permitted to sign certificates. It maintains a multi-layer hierarchy with intermediate CAs for isolation.
+- **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR). Long-lived API keys are deprecated for identity; the platform relies on short-lived, session-bound certificates.
 
 ## Architecture Overview
 
@@ -66,7 +58,7 @@ flowchart TD
 
 ## Operating Modes
 
-The reference Operator (`g8eo`) supports the following modes. A BYO Operator may shape its lifecycle differently as long as it preserves the protocol's verification and audit invariants.
+A single `g8eo` binary runs in one of several primary roles:
 
 ### 1. Listen Mode (Hub)
 Transforms the reference Operator into the platform's backbone. Started with the `--listen` flag.
@@ -154,13 +146,88 @@ The g8e Protocol enforces strict separation between disjoint session types to pr
 - **Identity Binding**: CLI and Operator sessions are cryptographically bound to their respective mTLS certificates via SPIFFE URI SANs.
 - **No Conflation**: The substrate refuses to "fallback" to a single session ID; every request must explicitly declare which session context it is operating within.
 
-## Local Storage & Persistence (LFAA)
+## PKI & Identity
 
-When local storage is enabled (`-s`), the Operator maintains a **Local-First Audit Architecture** in the `.g8e` directory:
+The **g8eo Operator** owns the platform's Public Key Infrastructure (PKI). It acts as the sovereign root Certificate Authority (CA) for all platform participants, enforcing strict mutual TLS (mTLS) for all control-plane communication.
 
-- **Audit Vault (`g8e.db`)**: An append-only, tamper-evident ledger. Every UAP transaction result is recorded with its associated proof. The vault is **fail-closed** for writes; it rejects events with missing or unknown operator_session_id.
-- **Encryption**: Sensitive data is encrypted at rest using the DEK retrieved from the Encryption Vault.
-- **File Ledger**: A git-backed versioning system tracks exact file mutations, allowing for cryptographic verification and point-in-time restoration.
+### PKI Hierarchy
+
+The Operator manages a structured hierarchy in `.g8e/pki` to ensure isolation between different participants:
+
+- **Root CA**: The foundational trust anchor, used only to sign intermediate CAs.
+  - Path: `.g8e/pki/root/root_ca.crt`
+- **Intermediate CAs**: Scoped authorities that sign leaf certificates.
+  - **Hub CA**: Signs service certificates for the Operator itself (e.g., `operator-listen`).
+  - **Operator CA**: Signs certificates for Satellite operators during enrollment.
+  - **Bootstrap CA**: Signs temporary certificates used during the initial discovery phase.
+- **Trust Bundles**: Combinations of root and intermediate certificates used for verification.
+  - Path: `.g8e/pki/trust/hub-bundle.pem` (Root + Hub Intermediate)
+
+### Identity Schemes (SPIFFE)
+
+Client identities follow the SPIFFE URI scheme, encoded in the certificate's URI SAN. These are generated using the `protocol.WorkloadIdentity` helper:
+
+| Role | URI SAN Pattern |
+|---|---|
+| **Operator (Satellite)** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` |
+| **CLI (BYO Client)** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` |
+| **Application (Agent)** | `spiffe://g8e.local/app/<operator_id>` |
+| **Hub (Operator Listen)** | `spiffe://g8e.local/hub/operator-listen` |
+
+### Enrollment Lifecycle
+
+The enrollment process transitions a participant from "untrusted" to "mTLS-verified":
+
+1.  **Trust Verification**: The enrolling client fetches the Hub's root CA fingerprint from `GET /.well-known/pki/fingerprint` to verify the Hub's identity.
+2.  **Registration Request**: The client presents a one-time device-link token and a locally generated `system_fingerprint` to the **Bootstrap Port (9003)**.
+3.  **CSR Submission**: The client generates **two private keys** (Operator and CLI) and submits **two CSRs** (`csr_pem` for Operator, `cli_csr_pem` for CLI).
+4.  **Issuance**: The Hub verifies the token and fingerprint, signs both CSRs using the **Operator Intermediate CA** (with role-specific URI SANs), and returns both certificate chains (`operator_cert` and `cli_cert`).
+5.  **Steady State**: The client uses the `cli_cert` for CLI-based operations and the `operator_cert` for host-side agent operations.
+
+### Warden Public Key Export
+
+The **Warden** signs all mutation receipts with an Ed25519 key. For external verification, the Warden's public key is exported at Operator bootstrap in listen mode to:
+- **PEM format**: `.g8e/pki/warden_pub.pem`
+- **JSON format**: `.g8e/pki/warden_pub.json`
+
+## Storage & Persistence (LFAA)
+
+`g8eo` implements the **Local-First Audit Architecture (LFAA)** to ensure data sovereignty and tamper-evident auditing on managed hosts.
+
+### Storage Tiers
+
+1.  **Coordination Store (Platform Hub)**: Shared state for users, sessions, operators, cases, and configuration. Centralized persistence for stateless components.
+2.  **LFAA Vaults (Managed Hosts)**:
+    *   **Audit Vault**: Cryptographically signed, append-only record of all session activity (encrypted at rest).
+    *   **Scrubbed Vault**: Sentinel-processed output for AI context and platform-side reporting.
+    *   **Raw Vault**: Unscrubbed command output for deep forensic analysis (customer-access only).
+3.  **The Ledger (Managed Hosts)**: Multi-Ledger Architecture — a fleet of per-session isolated git repositories providing cryptographic history and instant rollback. Each operator session owns its own git repo under `.g8e/data/ledger/sessions/<operator_session_id>/`.
+
+### Coordination Store (g8eo --listen)
+
+The Coordination Store is the platform's central coordination point, implemented in the `g8eo` binary when running in `--listen` mode.
+
+- **Document Store**: Unified storage for JSON documents using a collection/ID pattern.
+- **KV Store**: High-speed ephemeral data and read cache. Supports TTL, `GLOB` pattern matching, and cursor-based scanning.
+- **Blob Store**: Binary storage for investigation attachments, large objects, and certificate material.
+- **SSE Buffer**: A per-session ring buffer for Server-Sent Events, ensuring clients can catch up after disconnects.
+- **State Root Provider**: Calculates and maintains the platform-wide Merkle state root, binding all Hub data into a single verifiable hash.
+- **Nonce Manager**: Prevents transaction replay by tracking used nonces with sliding-window expiration.
+
+### The Ledger (Multi-Ledger Architecture)
+
+The Ledger uses a **Multi-Ledger Architecture**: each operator session owns an isolated git repository under `.g8e/data/ledger/sessions/<operator_session_id>/`.
+
+- **Session Isolation**: Each session ledger is initialized lazily on first file mutation. Concurrent sessions never share a git working tree.
+- **Two-Phase Commit**: Every mutation captures `LedgerHashBefore` (pre-mutation git commit) and `LedgerHashAfter` (post-mutation git commit).
+- **Tamper Evidence**: Git's Merkle tree guarantees history integrity.
+- **Rollback**: Any file can be restored to any prior state within its session ledger.
+
+### Sentinel Defense & Scrubbing
+
+Sentinel protects data privacy in two phases:
+1. **Defense (Pre-Execution)**: Analyzes commands and file edits *before* they occur, blocking threat patterns.
+2. **Scrubbing (Post-Execution)**: Removes sensitive data (API keys, PII) from output before it is stored in the Scrubbed Vault or sent to the platform.
 
 ## CLI Reference
 
@@ -182,32 +249,44 @@ When local storage is enabled (`-s`), the Operator maintains a **Local-First Aud
 | `--working-dir` | Anchor for all commands and storage (default: launch dir). |
 | `--log` | Log level: info, error, debug (default: info). |
 
-
 ## Exit Codes
-
-On a fatal condition g8eo self-terminates with a stable exit code so launcher scripts and supervisors can act precisely. Codes are defined in `internal/constants/exit_codes.go`.
 
 | Code | Meaning | Action |
 |---|---|---|
 | **0** | Success | — |
 | **1** | General error | Inspect logs under `.g8e/logs/` |
-| **2** | Auth failure | Verify device-link token or API key; re-enroll if needed |
+| **2** | Auth failure | Verify device-link token or API key |
 | **3** | Permission denied | Check filesystem permissions on `.g8e/` |
 | **4** | Network error | Check Hub reachability and DNS |
 | **5** | Config error | Validate CLI flags / environment |
 | **6** | Storage error | Inspect SQLite vaults and git ledger init |
-| **7** | TLS / cert trust failure | Refresh the Hub trust bundle; re-enroll if pinning failed |
+| **7** | TLS / cert trust failure | Refresh the Hub trust bundle |
 | **10** | **Vault Error** | Failed to unlock or initialize the local audit vault. |
 
 ## Canonical Truths
 
-The wire contract lives in `protocol/proto/`; the shared JSON registries in `protocol/constants/` remain the source for event names, status values, and channel prefixes. g8eo mirrors them as compile-time Go constants so drift fails at build time, not at runtime.
+The wire contract lives in `protocol/proto/`; the shared JSON registries in `protocol/constants/` remain the source for event names, status values, and channel prefixes.
 
-- **Protocol**: Generated Go artifacts under `internal/protocol/proto/` mirror `protocol/proto/common.proto`, `protocol/proto/operator.proto`, and `protocol/proto/pubsub.proto`.
-- **Wire format**: Canonical JSON (protojson) on all client-facing surfaces (HTTP, pub/sub, receipts, audit exports). Protobuf bytes are an internal storage detail only.
-- **Signing basis**: A deterministic `transaction_hash` is computed from normalized envelope fields; signatures are over the hash, so wire encoding is irrelevant to the security invariant.
-- **Events / Status / Channels**: `internal/constants/events.go`, `status.go`, and `channels.go` mirror their JSON counterparts under `protocol/constants/`.
+- **Wire format**: Canonical JSON (protojson) on all client-facing surfaces (HTTP, pub/sub, receipts, audit exports).
+- **Signing basis**: A deterministic `transaction_hash` is computed from normalized envelope fields.
+- **Events / Status / Channels**: Mirrored as compile-time Go constants from `protocol/constants/`.
 
----
+## Canonical Collections
 
-*For detailed security specifications, see [Security Architecture](security.md).*
+| Collection | Description |
+|---|---|
+| **Authentication & Sessions** | `users`, `web_sessions`, `operator_sessions`, `cli_sessions`, `bound_sessions`, `api_keys`, `passkey_challenges` |
+| **Organizations & Tenants** | `organizations` |
+| **Audit & Security** | `login_audit`, `auth_admin_audit`, `account_locks`, `console_audit`, `revoked_certificates` |
+| **Operators & Usage** | `operators`, `operator_usage` |
+| **Cases & Investigations** | `cases`, `investigations`, `tasks` |
+| **Governance & Reputation** | `tribunal_commands`, `reputation_state`, `reputation_commitments`, `stake_resolutions` |
+| **AI & Context** | `memories`, `agent_activity_metadata` |
+| **Configuration** | `settings` |
+
+## Related Documentation
+
+- [**g8e Protocol**](protocol.md) — The wire contract and governance hierarchy.
+- [**Security Architecture**](protocol.md#host-sovereignty--audit) — mTLS, Sentinel, and host sovereignty.
+- [**Developer Guide**](developer.md) — Build instructions and testing standards.
+- [**g8ee Engine**](g8ee.md) — Reference AI reasoning application.

@@ -58,10 +58,10 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 
 ## Documentation
 
-*   [**Protocol Substrate**](docs/protocol/README.md): Wire format, transaction hashes, and L1/L2/L3 definitions.
-*   [**Operator (g8eo)**](docs/g8eo/README.md): Execution boundary, listener modes, and host storage.
-*   [**Engine (g8ee)**](docs/g8ee/README.md): Reference AI application and agentic orchestration.
-*   [**Developer Guide**](docs/developer/README.md): Build instructions and testing workflows.
+*   [**Protocol Substrate**](docs/protocol.md): Wire format, transaction hashes, and L1/L2/L3 definitions.
+*   [**Operator (g8eo)**](docs/g8eo.md): Execution boundary, listener modes, and host storage.
+*   [**Engine (g8ee)**](docs/g8ee.md): Reference AI application and agentic orchestration.
+*   [**Developer Guide**](docs/developer.md): Build instructions and testing workflows.
 
 **License**: Apache 2.0
 **Built by**: [Lateralus Labs](https://lateraluslabs.com)
