@@ -145,6 +145,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 *   [**Protocol Substrate**](docs/protocol.md): Wire format, transaction hashes, and L1/L2/L3 definitions.
 *   [**Operator (g8eo)**](docs/g8eo.md): Execution boundary, listener modes, and host storage.
 *   [**Engine (g8ee)**](docs/g8ee.md): Reference AI application and agentic orchestration.
+*   [**Developer Troubleshooting**](docs/developer/troubleshooting.md): Common setup failures and recovery checks.
 *   [**Contribution Guide**](CONTRIBUTING.md): Build instructions, testing workflows, and standards.
 
 ### Implementation Reference
