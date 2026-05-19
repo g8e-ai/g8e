@@ -7,7 +7,7 @@
 
 The industry is rapidly converging on standardized data pipes and routing protocols - such as Anthropic’s Model Context Protocol (MCP) and open Agent-to-Agent (A2A) standards - to connect Large Language Models (LLMs) to production environments. However, treating infrastructure mutation as a simple JSON-RPC tool call is operational malpractice. Autonomous systems are inherently vulnerable to auto-regressive collapse, hallucination, and sycophancy. In high-stakes environments, agentic execution is not a prompt engineering challenge; it is a Byzantine Fault Tolerance (BFT) problem.
 
-This paper outlines a mutual-adversary governance architecture. We propose a strict physical separation between intent generation, communication protocols, and host execution. By forcing all state-changing payloads into a cryptographically signed, state-bound `GovernanceEnvelope`, we ensure that no autonomous system can access reality without structural consensus, host-local verification, and explicit, hardware-bound human authorization.
+This paper outlines a multi-layered governance architecture. We propose a strict physical separation between intent generation, communication protocols, and host execution. By forcing all state-changing payloads into a cryptographically signed, state-bound `GovernanceEnvelope`, we ensure that no autonomous system can access host resources without structural consensus, host-local verification, and explicit, hardware-bound human authorization.
 
 ---
 
@@ -21,9 +21,9 @@ A single LLM is a non-deterministic probabilistic text generator. If it hallucin
 
 Furthermore, protocols like MCP and A2A are designed to standardize the *payload* (the context fetch or the tool execution). They do not provide execution governance. If an architecture pipes unstructured JSON-RPC directly into a root shell or a cloud API, it is operating entirely on implicit trust.
 
-### 2. A Mutual-Adversary Architecture
+### 2. Zero-Trust Architecture
 
-To safely deploy autonomous agents, we must discard implicit trust. The system must operate on a **mutual-adversary model**, assuming that the AI control plane is compromised by default, that human operators are prone to fatigue, and that the execution environment must fail-closed.
+To safely deploy autonomous agents, we must discard implicit trust. The system must operate on a **zero-trust model**, assuming that the AI control plane is compromised by default, that human operators are prone to fatigue, and that the execution environment must fail-closed.
 
 #### 2.1 Mutual-Distrust Boundaries
 
@@ -67,7 +67,7 @@ The governance boundary. The protocol is not a data pipe; it is an armored trans
 * **The vulnerability:** Raw tool calls lack state awareness and cryptographic proof.
 * **The constraint:** The protocol binds the typed payload to a deterministic transaction hash, the L1/L2/L3 signatures, and the `state_merkle_root` of the target host.
 
-**IV. The Operator (The Reality Portal)**
+**IV. The Operator (The Execution Boundary)**
 The host-side binary. The Operator is the sovereign system of record and the physical execution boundary.
 
 * **The vulnerability:** Upstream AI or compromised transit networks injecting malicious payloads.
