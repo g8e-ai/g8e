@@ -27,6 +27,12 @@ OPERATOR_URL := https://localhost:9000
 ARCHS := amd64 arm64 386
 
 # =============================================================================
+# TOOLS
+# =============================================================================
+GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null || ([ -f "$$(go env GOPATH)/bin/golangci-lint" ] && echo "$$(go env GOPATH)/bin/golangci-lint") || ([ -f "./bin/golangci-lint" ] && echo "./bin/golangci-lint"))
+GOVULNCHECK := $(shell command -v govulncheck 2>/dev/null || ([ -f "$$(go env GOPATH)/bin/govulncheck" ] && echo "$$(go env GOPATH)/bin/govulncheck"))
+
+# =============================================================================
 # HELP
 # =============================================================================
 .PHONY: help
@@ -50,7 +56,11 @@ help:
 	@echo "  fmt           Format code"
 	@echo "  vet           Run go vet"
 	@echo "  lint          Run golangci-lint"
-	@echo "  check         Run fmt, vet, lint, test"
+	@echo "  vulncheck     Run govulncheck"
+	@echo "  check         Run fmt, vet, lint, vulncheck, test"
+	@echo ""
+	@echo "Tool Install:"
+	@echo "  install-tools  Install golangci-lint and govulncheck"
 	@echo ""
 	@echo "Utility:"
 	@echo "  clean            Clean build artifacts"
@@ -180,15 +190,39 @@ vet:
 
 .PHONY: lint
 lint:
-	@if command -v golangci-lint >/dev/null; then \
-		golangci-lint run; \
-	else \
-		echo "golangci-lint not found"; \
+	@if [ -z "$(GOLANGCI_LINT)" ]; then \
+		echo "golangci-lint not found. Run 'make install-tools' to install it locally."; \
 		exit 1; \
 	fi
+	@$(GOLANGCI_LINT) run
+
+.PHONY: vulncheck
+vulncheck:
+	@if [ -z "$(GOVULNCHECK)" ]; then \
+		echo "govulncheck not found. Run 'make install-tools' to install it."; \
+		exit 1; \
+	fi
+	@$(GOVULNCHECK) ./...
 
 .PHONY: check
-check: fmt vet lint test
+check: fmt vet lint vulncheck test
+
+# =============================================================================
+# TOOL INSTALL
+# =============================================================================
+.PHONY: install-tools
+install-tools:
+	@echo "Installing development tools..."
+	@mkdir -p bin
+	@if [ -z "$$(command -v golangci-lint)" ] && [ ! -f "./bin/golangci-lint" ]; then \
+		echo "Installing golangci-lint..."; \
+		$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0; \
+	fi
+	@if [ -z "$$(command -v govulncheck)" ]; then \
+		echo "Installing govulncheck..."; \
+		$(GO) install golang.org/x/vuln/cmd/govulncheck@latest; \
+	fi
+	@echo "Tools installed successfully."
 
 # =============================================================================
 # UTILITY

@@ -79,44 +79,168 @@ class ComponentName(StrEnum):
     OPERATOR = "g8eo" # Alias
 
 
-# Error enums - generated from protocol/constants/errors.json
-def _create_enum_from_json(enum_name: str, json_data: dict[str, Any]) -> StrEnum:
-    """Create a StrEnum class from JSON data."""
-    enum_dict = json_data.get(enum_name, {})
-    return StrEnum(enum_name, enum_dict)
+class ErrorCategory(StrEnum):
+    NETWORK = "network"
+    DATABASE = "database"
+    PUBSUB = "pubsub"
+    STORAGE = "storage"
+    AUTH = "auth"
+    VALIDATION = "validation"
+    BUSINESS_LOGIC = "business_logic"
+    RESOURCE_NOT_FOUND = "resource_not_found"
+    PERMISSION = "permission"
+    INTERNAL = "internal"
+    CONFIGURATION = "configuration"
+    DEPENDENCY = "dependency"
+    CONFLICT = "conflict"
+    RATE_LIMIT = "rate_limit"
+    SERVICE_UNAVAILABLE = "service_unavailable"
+    EXTERNAL_SERVICE = "external_service"
+    TIMEOUT = "timeout"
 
 
-def _flatten_nested_dict(nested: dict[str, Any], prefix: str = "", separator: str = ".") -> dict[str, str]:
-    """Flatten a nested dictionary into dot-separated keys."""
-    result = {}
-    for key, value in nested.items():
-        new_key = f"{prefix}{separator}{key}" if prefix else key
-        if isinstance(value, dict):
-            result.update(_flatten_nested_dict(value, new_key, separator))
-        else:
-            result[new_key] = value
-    return result
+class ErrorSeverity(StrEnum):
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INFO = "info"
 
 
-ErrorCategory = _create_enum_from_json("ErrorCategory", ERRORS)
-ErrorSeverity = _create_enum_from_json("ErrorSeverity", ERRORS)
-ErrorCode = _create_enum_from_json("ErrorCode", ERRORS)
+class ErrorCode(StrEnum):
+    GENERIC_ERROR = "G8E-1000"
+    UNEXPECTED_ERROR = "G8E-1001"
+    NOT_IMPLEMENTED = "G8E-1002"
+    CONFIG_ERROR = "G8E-1100"
+    MISSING_ENV_VAR = "G8E-1101"
+    INVALID_SETTINGS = "G8E-1102"
+    SERVICE_INIT_ERROR = "G8E-1103"
+    AUTH_ERROR = "G8E-1200"
+    TOKEN_EXPIRED = "G8E-1201"
+    INVALID_TOKEN = "G8E-1202"
+    INSUFFICIENT_PERMISSIONS = "G8E-1203"
+    DB_CONNECTION_ERROR = "G8E-1300"
+    DB_QUERY_ERROR = "G8E-1301"
+    DB_DOCUMENT_NOT_FOUND = "G8E-1302"
+    DB_WRITE_ERROR = "G8E-1303"
+    DB_TRANSACTION_ERROR = "G8E-1304"
+    PUBSUB_CONNECTION_ERROR = "G8E-1400"
+    PUBSUB_PUBLISH_ERROR = "G8E-1401"
+    PUBSUB_SUBSCRIBE_ERROR = "G8E-1402"
+    PUBSUB_TOPIC_ERROR = "G8E-1403"
+    STORAGE_CONNECTION_ERROR = "G8E-1500"
+    STORAGE_READ_ERROR = "G8E-1501"
+    STORAGE_WRITE_ERROR = "G8E-1502"
+    STORAGE_DELETE_ERROR = "G8E-1503"
+    API_CONNECTION_ERROR = "G8E-1600"
+    API_TIMEOUT_ERROR = "G8E-1601"
+    API_RESPONSE_ERROR = "G8E-1602"
+    API_REQUEST_ERROR = "G8E-1603"
+    API_RATE_LIMIT_ERROR = "G8E-1604"
+    GENERIC_NOT_FOUND = "G8E-1605"
+    EXTERNAL_SERVICE_ERROR = "G8E-1607"
+    VALIDATION_ERROR = "G8E-1700"
+    MISSING_REQUIRED_FIELD = "G8E-1701"
+    INVALID_FIELD_FORMAT = "G8E-1702"
+    INVALID_FIELD_VALUE = "G8E-1703"
+    INVALID_FIELD_TYPE = "G8E-1704"
+    SCHEMA_VALIDATION_FAILED = "G8E-1705"
+    SCHEMA_NOT_FOUND = "G8E-1706"
+    BUSINESS_LOGIC_ERROR = "G8E-1800"
+    WORKFLOW_ERROR = "G8E-1801"
+    STATE_TRANSITION_ERROR = "G8E-1802"
+    RESOURCE_CONFLICT = "G8E-1803"
+    TASK_CREATION_FAILED = "G8E-1804"
+    OPERATION_FAILED = "G8E-1805"
+    SERVICE_UNAVAILABLE_ERROR = "G8E-1900"
 
-# Prompt enums - generated from protocol/constants/prompts.json
-# AgentMode maps from the JSON keys
-_agent_mode_data = PROMPTS.get("agent.mode", {})
-AgentMode = StrEnum("AgentMode", {k.upper().replace(".", "_"): k for k in _agent_mode_data.keys()})
 
-# PromptSection maps from the JSON keys
-_prompt_section_data = PROMPTS.get("prompt.section", {})
-PromptSection = StrEnum("PromptSection", {k.upper().replace(".", "_"): k for k in _prompt_section_data.keys()})
+class AgentMode(StrEnum):
+    OPERATOR_BOUND = "operator.bound"
+    OPERATOR_NOT_BOUND = "operator.not.bound"
+    CLOUD_OPERATOR_BOUND = "cloud.operator.bound"
 
-# PromptFile needs to be flattened from nested structure
-_prompt_file_nested = PROMPTS.get("prompt.file", {})
-_prompt_file_flat = _flatten_nested_dict(_prompt_file_nested, separator="_")
-# Convert keys to uppercase enum names matching g8ee conventions
-# Replace dots with underscores in keys to avoid invalid enum names
-PromptFile = StrEnum("PromptFile", {k.upper().replace(".", "_"): v for k, v in _prompt_file_flat.items()})
+
+class PromptSection(StrEnum):
+    CAPABILITIES = "capabilities"
+    EXECUTION = "execution"
+    TOOLS = "tools"
+    CONSTRAINTS = "constraints"
+
+
+class PromptFile(StrEnum):
+    MODES_OPERATOR_BOUND_CAPABILITIES = "modes/operator.bound/capabilities.md"
+    MODES_OPERATOR_BOUND_EXECUTION = "modes/operator.bound/execution.md"
+    MODES_OPERATOR_BOUND_TOOLS = "modes/operator.bound/tools.md"
+    MODES_OPERATOR_NOT_BOUND_CAPABILITIES = "modes/operator.not.bound/capabilities.md"
+    MODES_OPERATOR_NOT_BOUND_EXECUTION = "modes/operator.not.bound/execution.md"
+    MODES_OPERATOR_NOT_BOUND_TOOLS = "modes/operator.not.bound/tools.md"
+    MODES_CLOUD_OPERATOR_BOUND_CAPABILITIES = "modes/cloud.operator.bound/capabilities.md"
+    MODES_CLOUD_OPERATOR_BOUND_EXECUTION = "modes/cloud.operator.bound/execution.md"
+    MODES_CLOUD_OPERATOR_BOUND_TOOLS = "modes/cloud.operator.bound/tools.md"
+    CORE_BASE_INSTRUCTIONS = "core/base_instructions.md"
+    CORE_ERROR_RECOVERY = "core/error_recovery.md"
+    CORE_GOVERNANCE_POSTURE = "core/governance_posture.md"
+    CORE_OUTPUT_FORMATTING = "core/output_formatting.md"
+    CORE_TOOL_USAGE_GUIDELINES = "core/tool_usage_guidelines.md"
+    COMPONENTS_AUDITOR_VERDICT = "components/auditor/verdict.md"
+    COMPONENTS_AUDITOR_REASONING = "components/auditor/reasoning.md"
+    COMPONENTS_TRIAGE_INTENT = "components/triage/intent.md"
+    COMPONENTS_TRIAGE_COMPLEXITY = "components/triage/complexity.md"
+    COMPONENTS_TRIAGE_POSTURE = "components/triage/posture.md"
+
+
+class ReasoningAgent(StrEnum):
+    SAGE = "sage"
+    DASH = "dash"
+
+
+class TriageComplexityClassification(StrEnum):
+    SIMPLE = "simple"
+    COMPLEX = "complex"
+
+
+class TriageConfidence(StrEnum):
+    HIGH = "high"
+    LOW = "low"
+
+
+class TriageIntentClassification(StrEnum):
+    INFORMATION = "information"
+    ACTION = "action"
+    UNKNOWN = "unknown"
+
+
+class TriageRequestPosture(StrEnum):
+    NORMAL = "normal"
+    ESCALATED = "escalated"
+    ADVERSARIAL = "adversarial"
+    CONFUSED = "confused"
+
+
+class TribunalMember(StrEnum):
+    AXIOM = "axiom"
+    CONCORD = "concord"
+    VARIANCE = "variance"
+    PRAGMA = "pragma"
+    NEMESIS = "nemesis"
+
+
+class AuditorReason(StrEnum):
+    OK = "ok"
+    REVISED = "revised"
+    EMPTY_RESPONSE = "empty_response"
+    NO_VALID_REVISION = "no_valid_revision"
+    AUDITOR_ERROR = "auditor_error"
+    SWAPPED_TO_DISSENTER = "swapped_to_dissenter"
+    REVISED_FROM_DISSENT = "revised_from_dissent"
+    WHITELIST_VIOLATION = "whitelist_violation"
+
+
+class TieBreakReason(StrEnum):
+    SHORTEST = "shortest"
+    EXCLUDED_NEMESIS = "excluded_nemesis"
+    ALPHABETICAL = "alphabetical"
 
 # HTTP headers - loaded from JSON (protocol/constants/headers.json)
 # Use HEADERS dict directly or access via these convenience constants

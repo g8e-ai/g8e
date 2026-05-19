@@ -13,7 +13,6 @@
 
 from enum import StrEnum
 
-# Prompt enums sourced from protocol/constants/prompts.json (single source of truth)
 from g8e_protocol.constants import AgentMode, PromptFile, PromptSection
 
 

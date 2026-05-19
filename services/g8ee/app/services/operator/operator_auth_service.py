@@ -175,7 +175,7 @@ class OperatorAuthService:
                 # Issue API key (canonical)
                 # Note: This uses api_key_service which is already in __init__
                 await self._api_key_service.issue_key(
-                    api_key=api_key,
+                    raw_key=api_key,
                     user_id=user_id,
                     organization_id=organization_id,
                     operator_id=operator_id,
@@ -268,7 +268,7 @@ class OperatorAuthService:
 
         # Validate api_key
         success, key_doc, error = await self._api_key_service.validate_key(api_key, system_fingerprint)
-        if not success:
+        if not success or key_doc is None:
             return {"success": False, "error": error or "Invalid API key"}
 
         await self._api_key_service.record_usage(api_key, system_fingerprint)

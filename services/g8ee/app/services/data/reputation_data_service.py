@@ -39,7 +39,7 @@ from app.constants import (
 from app.errors import DatabaseError, ValidationError
 from app.models.cache import FieldFilter
 from app.models.reputation import ReputationCommitment, ReputationState
-from app.services.cache.cache_aside import CacheAsideService
+from app.services.protocols import DocumentServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,11 @@ class ReputationDataService:
     commitments.
     """
 
-    def __init__(self, cache: CacheAsideService) -> None:
+    cache: DocumentServiceProtocol
+    state_collection: str
+    commitments_collection: str
+
+    def __init__(self, cache: DocumentServiceProtocol) -> None:
         self.cache = cache
         self.state_collection = DB_COLLECTION_REPUTATION_STATE
         self.commitments_collection = DB_COLLECTION_REPUTATION_COMMITMENTS

@@ -290,7 +290,7 @@ class OperatorCommandService:
         except (ValidationError, BusinessLogicError, ValueError) as e:
             logger.error("[COMMAND] Operator resolution failed: %s", e, exc_info=True)
             return CommandExecutionResult(
-                success=False, error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.", error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
+                success=False, error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.", error_type=CommandErrorType.G8E_RESOLUTION_ERROR,
             )
 
         # All resolved operators must have a live session.

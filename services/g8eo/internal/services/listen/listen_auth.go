@@ -309,15 +309,54 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				wid := protocol.NewWorkloadIdentity()
 				cert := r.TLS.PeerCertificates[0]
 
-				// We need the UserID for the CLI session ID verification.
-				// For now we trust the mTLS certificate if it matches the CLI session ID.
-				// In a real flow, we would look up the CLI session to get the UserID.
-				// Since we don't have a CLISession lookup here yet, we use a looser check
-				// or assume we need to add CLISession lookup.
-				// [TODO] Add CLISession lookup to AuthService to get UserID.
+				// [PIVOT] Verify CLI session and lookup UserID (Plan §4.6)
+				cliDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+				if err != nil {
+					s.logger.Error("failed to load CLI session", "cli_session_id", cliSessionID, "error", err)
+					s.jsonError(w, http.StatusInternalServerError, "failed to load session")
+					return
+				}
+				if cliDoc == nil {
+					s.logger.Warn("CLI session not found", "cli_session_id", cliSessionID)
+					s.jsonError(w, http.StatusUnauthorized, "invalid CLI session")
+					return
+				}
+
+				var cliSession models.CLISession
+				b, _ := json.Marshal(cliDoc.Data)
+				if err := json.Unmarshal(b, &cliSession); err != nil {
+					s.logger.Error("failed to parse CLI session", "cli_session_id", cliSessionID, "error", err)
+					s.jsonError(w, http.StatusInternalServerError, "failed to parse session")
+					return
+				}
+
+				// Check expiry
+				if !cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(time.Now()) {
+					s.logger.Warn("CLI session expired", "cli_session_id", cliSessionID)
+					s.jsonError(w, http.StatusUnauthorized, "CLI session expired")
+					return
+				}
+
+				// Check if the linked user is active
+				if s.userSvc != nil && cliSession.UserID != "" {
+					user, err := s.userSvc.GetByID(cliSession.UserID)
+					if err != nil {
+						s.logger.Error("failed to load user for CLI session", "user_id", cliSession.UserID, "error", err)
+						s.jsonError(w, http.StatusInternalServerError, "identity validation failed")
+						return
+					}
+					if user != nil && !user.IsActive() {
+						s.logger.Warn("CLI session identity disabled", "user_id", cliSession.UserID)
+						s.jsonError(w, http.StatusForbidden, "identity disabled")
+						return
+					}
+				}
+
+				// Verify the CLI certificate matches the CLI session ID
+				// SPIFFE ID format: protocol.WorkloadIdentity.CLISPIFFEID()
 				match := false
 				for _, uri := range cert.URIs {
-					if wid.MatchesCLISessionOnly(uri.String(), cliSessionID) {
+					if wid.MatchesCLI(uri.String(), cliSession.UserID, cliSessionID) {
 						match = true
 						break
 					}

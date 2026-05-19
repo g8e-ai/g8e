@@ -24,6 +24,8 @@ help:
 	@echo "Services:"
 	@echo "  build-g8eo    Build the Operator service"
 	@echo "  test-g8eo     Run Operator tests"
+	@echo "  lint-g8eo     Run Operator linters (golangci-lint)"
+	@echo "  vulncheck-g8eo Run Operator vulnerability check"
 	@echo "  test-g8ee     Run Engine tests"
 
 # =============================================================================
@@ -76,6 +78,14 @@ build-g8eo:
 .PHONY: test-g8eo
 test-g8eo:
 	@$(MAKE) -C services/g8eo test
+
+.PHONY: lint-g8eo
+lint-g8eo:
+	@$(MAKE) -C services/g8eo lint
+
+.PHONY: vulncheck-g8eo
+vulncheck-g8eo:
+	@$(MAKE) -C services/g8eo vulncheck
 
 .PHONY: test-g8ee
 test-g8ee:

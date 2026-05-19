@@ -17,7 +17,7 @@ import logging
 
 from app.constants import EventType
 from app.models.events import BackgroundEvent, SessionEvent
-from app.services.protocols import EventServiceProtocol
+from app.services.protocols import EventServiceProtocol, G8eClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class EventService(EventServiceProtocol):
     """Event service for publishing session and background events."""
 
-    def __init__(self, internal_http_client: object):
+    def __init__(self, internal_http_client: G8eClientProtocol):
         self._internal_http_client = internal_http_client
 
     async def publish(self, event: SessionEvent | BackgroundEvent) -> str:
