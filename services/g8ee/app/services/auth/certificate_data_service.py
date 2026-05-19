@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.constants.collections import DB_COLLECTION_REVOKED_CERTS
 from app.errors import ExternalServiceError
@@ -30,7 +30,7 @@ class CertificateDataService:
         self.cache = cache
         self.collection = DB_COLLECTION_REVOKED_CERTS
 
-    async def get_all_revocations(self) -> list[dict]:
+    async def get_all_revocations(self) -> list[dict[str, Any]]:
         """Get all revoked certificate records."""
         try:
             # query_documents handles cache-aside internally

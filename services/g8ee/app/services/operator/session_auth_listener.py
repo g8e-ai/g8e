@@ -44,7 +44,7 @@ class SessionAuthListener:
         self.session_service = session_service
         self.operator_data_service = operator_data_service
         self._active_listeners = {}
-        self._background_tasks: set[asyncio.Task] = set()
+        self._background_tasks: set[asyncio.Task[None]] = set()
 
     async def listen(self, operator_session_id: str, operator_id: str, user_id: str, organization_id: str | None):
         """

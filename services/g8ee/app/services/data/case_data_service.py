@@ -262,7 +262,7 @@ class CaseDataService:
                     details={"case_id": case_id},
                     component=ComponentName.G8EE
                 )
-            key = self.cache._make_key(self.cases_collection, case_id)
+            key = self.cache.make_key(self.cases_collection, case_id)
             await self.cache.kv.delete(key)
             await self.cache.invalidate_query_cache(self.cases_collection)
             logger.info("Case deleted: %s", case_id, extra={"case_id": case_id})

@@ -173,7 +173,7 @@ class HeartbeatSnapshotService:
     async def _on_heartbeat_message(self, channel: str, data: str | bytes | dict[str, object]) -> None:
         try:
             try:
-                prefix, operator_id, operator_session_id = OperatorChannel.parse(channel)
+                _, operator_id, operator_session_id = OperatorChannel.parse(channel)
             except ValueError as e:
                 logger.warning("[HEARTBEAT] Invalid channel format: %s - %s", channel, e)
                 return

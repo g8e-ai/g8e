@@ -21,6 +21,7 @@ authority for shell command generation.
 import logging
 from typing import Any
 
+from app.errors import ConfigurationError
 from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
 from app.models.agent import OperatorContext
@@ -74,8 +75,8 @@ from app.services.ai.tribunal.stages.generation import (
 from app.services.ai.tribunal.stages.voting import _run_voting_stage
 from app.services.ai.tribunal.stages.warden import _run_warden_stage
 from app.services.ai.tribunal.utils import (
-    _member_for_pass,
-    _resolve_model,
+    member_for_pass,
+    resolve_model,
 )
 
 logger = logging.getLogger(__name__)
@@ -217,8 +218,8 @@ async def generate_command(
         raise TribunalDisabledError(request=request)
 
     try:
-        generation_model = _resolve_model(settings.llm, tier="lite", request=request)
-        auditor_model = _resolve_model(settings.llm, tier="primary", request=request)
+        generation_model = resolve_model(settings.llm, tier="lite", request=request)
+        auditor_model = resolve_model(settings.llm, tier="primary", request=request)
     except TribunalModelNotConfiguredError as exc:
         await emitter.emit(
             EventType.AI_TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
@@ -231,7 +232,7 @@ async def generate_command(
         raise
 
     num_passes = max(1, settings.llm.llm_command_gen_passes)
-    members = [_member_for_pass(i) for i in range(num_passes)]
+    members = [member_for_pass(i) for i in range(num_passes)]
 
     await emitter.emit(
         EventType.AI_TRIBUNAL_SESSION_STARTED,

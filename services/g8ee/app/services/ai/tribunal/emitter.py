@@ -36,8 +36,8 @@ class TribunalEmitter:
 
     def __init__(
         self,
-        event_service: EventServiceProtocol,
-        g8e_context: G8eHttpContext,
+        event_service: EventServiceProtocol | None,
+        g8e_context: G8eHttpContext | None,
         correlation_id: str | None = None,
     ):
         self.event_service = event_service

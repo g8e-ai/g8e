@@ -823,7 +823,8 @@ async def delete_case(
     # Delete all investigations for this case - SCOPED BY USER for security
     investigations = await investigation_service.investigation_data_service.get_case_investigations(
         case_id=case_id,
-        user_id=case_user_id
+        user_id=case_user_id,
+        context=RequestContext.from_app_context(g8e_context),
     )
     for investigation in investigations:
         logger.info(

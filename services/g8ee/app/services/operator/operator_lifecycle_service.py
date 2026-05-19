@@ -223,12 +223,9 @@ class OperatorLifecycleService:
         if not operator_id:
             raise ValidationError("operator_id is required")
 
-        now_timestamp = now()
         updates: dict[str, object] = {
             "status": status,
         }
-
-        operator = await self.operator_data_service.get_operator(operator_id)
 
         result = await self._cache.update_document(
             collection=self.operator_data_service.collection,

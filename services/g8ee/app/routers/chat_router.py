@@ -37,12 +37,11 @@ from app.dependencies import (
     get_g8ee_settings_service,
 )
 from app.services.investigation.investigation_service import InvestigationService
-from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.services.data.case_data_service import CaseDataService
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.services.infra.settings_service import SettingsService
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -202,7 +201,7 @@ async def timeout_triage_questions(
 async def get_chat_session(
     web_session_id: str,
     request: Request,
-    investigation_service: InvestigationDataService = Depends(get_g8ee_investigation_service),
+    investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ) -> ChatSessionResponse:
     """
@@ -240,7 +239,7 @@ async def get_latest_chat_session_for_case(
     case_id: str,
     request: Request,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
-    investigation_service: InvestigationDataService = Depends(get_g8ee_investigation_service),
+    investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ) -> LatestChatSessionResponse:
     """
@@ -265,7 +264,8 @@ async def get_latest_chat_session_for_case(
 
     raw_investigations = await investigation_service.investigation_data_service.get_case_investigations(
         case_id=case_id,
-        user_id=authenticated_user_id
+        user_id=authenticated_user_id,
+        context=RequestContext.from_app_context(g8e_context),
     )
 
     latest_investigation: InvestigationModel | None = None

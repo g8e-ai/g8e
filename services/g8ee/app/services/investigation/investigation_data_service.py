@@ -158,7 +158,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
     async def get_case_investigations(
         self,
         case_id: str,
-        user_id: str,
+        user_id: str | None,
         context: RequestContext,
     ) -> list[InvestigationModel]:
         """Convenience query for all investigations associated with a case."""
@@ -178,7 +178,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
                 details={"investigation_id": investigation_id},
                 component=ComponentName.G8EE
             )
-        key = self.cache._make_key(self.collection, investigation_id)
+        key = self.cache.make_key(self.collection, investigation_id)
         await self.cache.kv.delete(key)
         await self.cache.invalidate_query_cache(self.collection)
         logger.info("Deleted investigation %s", investigation_id)

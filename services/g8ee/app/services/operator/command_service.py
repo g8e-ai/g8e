@@ -506,11 +506,16 @@ class OperatorCommandService:
                 )
 
                 try:
-                    internal_result, envelope = await self._execution_service.execute(
+                    internal_result, _ = await self._execution_service.execute(
                         g8e_message=g8e_message,
                         g8e_context=g8e_context,
                         timeout_seconds=args.timeout_seconds,
                     )
+                    if internal_result is None:
+                        raise BusinessLogicError(
+                            "Execution service returned None for internal_result",
+                            component="g8ee"
+                        )
                 except Exception as e:
                     logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, e)
                     if fail_fast:

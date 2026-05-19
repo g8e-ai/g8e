@@ -27,7 +27,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import aiohttp
+    import aiohttp  # type: ignore
 
 from app.clients.http_client import HTTPClient
 from app.models.infra import HTTPClientStatus

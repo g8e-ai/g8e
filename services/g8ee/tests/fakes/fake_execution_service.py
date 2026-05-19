@@ -19,7 +19,7 @@ from app.constants.status import ExecutionStatus
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import DirectCommandResult, OperatorDocument, TargetSystem
-from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
+from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope, ExecutionResultsPayload, PortCheckResultPayload
 from app.models.tool_results import CommandInternalResult
 from app.services.protocols import ExecutionServiceProtocol
 from app.utils.blacklist_validator import CommandBlacklistValidator
@@ -86,6 +86,31 @@ class FakeExecutionService:
                 operator_session_id=g8e_message.operator_session_id,
                 command_data=g8e_message,
             )
+        
+        # If an envelope was provided, try to extract a result from it
+        if self._envelope and hasattr(self._envelope, "payload"):
+            if isinstance(self._envelope.payload, ExecutionResultsPayload):
+                payload = self._envelope.payload
+                return CommandInternalResult(
+                    execution_id=payload.execution_id,
+                    status=payload.status or ExecutionStatus.COMPLETED,
+                    output=payload.stdout or "",
+                    stderr=payload.stderr or "",
+                    error=payload.error or payload.error_message or "",
+                    exit_code=payload.return_code,
+                    execution_time_seconds=payload.duration_seconds or 0,
+                    operator_id=self._envelope.operator_id,
+                    completed_at=payload.completed_at,
+                ), self._envelope
+            elif isinstance(self._envelope.payload, PortCheckResultPayload):
+                # For PortCheckResultPayload, we just return the envelope
+                # CommandPortService handles it directly if it's the right payload type
+                return CommandInternalResult(
+                    status=ExecutionStatus.COMPLETED,
+                    output="Port check completed",
+                    operator_id=self._envelope.operator_id,
+                ), self._envelope
+
         return CommandInternalResult(
             exit_code=self._exit_code,
             output=self._output,

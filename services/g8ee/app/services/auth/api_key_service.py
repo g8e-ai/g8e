@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import secrets
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.constants import DB_COLLECTION_API_KEYS, ApiKeyStatus
 from app.models.api_keys import ApiKeyDocument
@@ -237,7 +237,7 @@ class ApiKeyService:
                 return
 
             doc = ApiKeyDocument.model_validate(data)
-            updates = {"last_used_at": now()}
+            updates: dict[str, Any] = {"last_used_at": now()}
 
             # Establish fingerprint if not already set (immutable thereafter)
             if not doc.system_fingerprint and system_fingerprint:

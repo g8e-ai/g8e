@@ -68,9 +68,9 @@ from app.models.tool_results import (
 from app.services.ai.generator import (
     TribunalEmitter,
     _build_and_emit_result,
-    _member_for_pass,
     generate_command,
 )
+from app.services.ai.tribunal.utils import member_for_pass
 from app.services.ai.tribunal.stages.generation import _run_generation_pass
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 from app.services.ai.tribunal.stages.warden import _run_warden_stage
@@ -1342,7 +1342,7 @@ class TestGenerateCommandHappyPath:
         for i, c in enumerate(result.candidates):
             assert c.command == "ls -la /tmp"
             assert c.pass_index == i
-            assert c.member == _member_for_pass(i)
+            assert c.member == member_for_pass(i)
         assert result.vote_winner == "ls -la /tmp"
         assert result.vote_score is not None
         assert 0.0 <= result.vote_score <= 1.0
@@ -1877,17 +1877,17 @@ class TestTribunalMemberCycling:
     """Tribunal member assignment cycles correctly through AXIOM, CONCORD, VARIANCE, PRAGMA, NEMESIS."""
 
     def test_member_for_pass_cycles_correctly(self):
-        """_member_for_pass returns members in order: AXIOM (0), CONCORD (1), VARIANCE (2), PRAGMA (3), NEMESIS (4), then repeats."""
-        assert _member_for_pass(0) == TribunalMember.AXIOM
-        assert _member_for_pass(1) == TribunalMember.CONCORD
-        assert _member_for_pass(2) == TribunalMember.VARIANCE
-        assert _member_for_pass(3) == TribunalMember.PRAGMA
-        assert _member_for_pass(4) == TribunalMember.NEMESIS
-        assert _member_for_pass(5) == TribunalMember.AXIOM
-        assert _member_for_pass(6) == TribunalMember.CONCORD
-        assert _member_for_pass(7) == TribunalMember.VARIANCE
-        assert _member_for_pass(8) == TribunalMember.PRAGMA
-        assert _member_for_pass(9) == TribunalMember.NEMESIS
+        """member_for_pass returns members in order: AXIOM (0), CONCORD (1), VARIANCE (2), PRAGMA (3), NEMESIS (4), then repeats."""
+        assert member_for_pass(0) == TribunalMember.AXIOM
+        assert member_for_pass(1) == TribunalMember.CONCORD
+        assert member_for_pass(2) == TribunalMember.VARIANCE
+        assert member_for_pass(3) == TribunalMember.PRAGMA
+        assert member_for_pass(4) == TribunalMember.NEMESIS
+        assert member_for_pass(5) == TribunalMember.AXIOM
+        assert member_for_pass(6) == TribunalMember.CONCORD
+        assert member_for_pass(7) == TribunalMember.VARIANCE
+        assert member_for_pass(8) == TribunalMember.PRAGMA
+        assert member_for_pass(9) == TribunalMember.NEMESIS
 
 
 class TestTribunalEmitter:
@@ -2089,7 +2089,7 @@ class TestDefaultConfigCoversAllMembers:
         default_passes = default_settings.llm_command_gen_passes
 
         # Get the member assigned to each pass index at default config
-        members_for_passes = [_member_for_pass(i) for i in range(default_passes)]
+        members_for_passes = [member_for_pass(i) for i in range(default_passes)]
 
         # Verify we have exactly 5 passes (the new default)
         assert default_passes == 5, f"Default llm_command_gen_passes should be 5, got {default_passes}"

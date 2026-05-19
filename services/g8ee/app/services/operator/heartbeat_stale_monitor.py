@@ -85,7 +85,7 @@ class HeartbeatStaleMonitorService:
         self._event_service = event_service
         self._threshold_seconds = threshold_seconds
         self._interval_seconds = interval_seconds
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
         self._ticking = False
 
     async def start(self) -> None:
