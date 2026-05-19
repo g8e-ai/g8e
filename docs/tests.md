@@ -139,4 +139,4 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 - **`test-g8eo`** (blocking) — Installs Go, starts the platform, runs `./g8e test`.
 - **`apps-g8ee`** (non-blocking, `continue-on-error: true`) — Installs Python, starts g8ee, runs its suite.
 
-See also: [Evals](evals.md), [Scripts](scripts.md), [Developer](developer.md).
+See also: [Evals](evals.md), [Scripts](scripts.md), [Contribution Guide](../CONTRIBUTING.md).

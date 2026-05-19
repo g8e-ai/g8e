@@ -22,7 +22,7 @@ The platform operates on a strict zero-trust model where components distrust eac
 g8e does not replace tool-calling protocols like Anthropic's Model Context Protocol (MCP) or A2A standards; it provides the mandatory security perimeter for them.
 
 *   **MCP is the Payload**: Defines *what* the tool call or context fetch is.
-*   **g8e is the Envelope**: Wraps the MCP JSON-RPC payload in a BFT `GovernanceEnvelope`.
+*   **g8e is the Admission Gate**: The Operator ingests the MCP JSON-RPC payload at its execution boundary and admits it only after the surrounding `GovernanceEnvelope` clears every conformance gate — envelope integrity, hash binding (`id == transaction_hash == SHA256(canonical_fields)`), expiry, nonce/replay, host state-root match, typed-payload decode, L1 forbidden patterns, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the substrate boundary: they never reach the application layer (no Warden execution, no handler dispatch) and they never touch the host.
 
 Any MCP application can be integrated; g8e forces it to become Byzantine Fault Tolerant by requiring external validation before execution.
 
@@ -61,7 +61,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 *   [**Protocol Substrate**](docs/protocol.md): Wire format, transaction hashes, and L1/L2/L3 definitions.
 *   [**Operator (g8eo)**](docs/g8eo.md): Execution boundary, listener modes, and host storage.
 *   [**Engine (g8ee)**](docs/g8ee.md): Reference AI application and agentic orchestration.
-*   [**Developer Guide**](docs/developer.md): Build instructions and testing workflows.
+*   [**Contribution Guide**](CONTRIBUTING.md): Build instructions, testing workflows, and standards.
 
 **License**: Apache 2.0
 **Built by**: [Lateralus Labs](https://lateraluslabs.com)

@@ -1,80 +1,95 @@
 
+# g8e Architecture & Protocol Visualization
+
+This document provides a visual mapping of the g8e platform, highlighting the protocol substrate as the foundational mandatory layer.
+
+## 1. The g8e Protocol (Foundational Substrate)
+The g8e protocol is a typed, signed, state-bound transaction layer. It is the single source of truth for all system mutations and the only mandatory component for interoperability.
+
+```mermaid
+graph LR
+    Start["Original MCP / A2A / User Message<br/>(Interpreted Intent)"]
+
+    subgraph Verification ["Operator Verification - protocol-mandated"]
+        direction LR
+        L1{"L1: Technical Bedrock<br/>Forbidden Patterns?"}
+        L2{"L2: Consensus<br/>Tribunal Signature?"}
+        L3{"L3: Authorization<br/>Human Presence?"}
+        State{"State Check<br/>Merkle Root Fresh?"}
+        
+        FailClosed["Fail Closed<br/>Error + Audit Entry"]
+        Warden["Signed Action Receipt<br/>Audit Commitment"]
+        LocalVault([Local Vault])
+
+        L1 -- "Passed" --> L2
+        L1 -- "Violated" ----> FailClosed
+        
+        L2 -- "Passed" --> L3
+        L2 -- "Invalid/Missing" ---> FailClosed
+        
+        L3 -- "Authorized" --> State
+        L3 -- "Denied" --> FailClosed
+        
+        State -- "Fresh" --> Warden
+        State -- "Stale" --> FailClosed
+
+        Warden --> LocalVault
+        FailClosed --> LocalVault
+    end
+
+    LocalVault --> Destination["Original MCP / A2A / User Message<br/>(Audited, Signed, Recorded)"]
+
+    Start --> L1
+```
+
+## 2. AI Reasoning Engine (Using the Protocol)
+The reference AI engine (g8ee) or any BYO agentic system consumes the protocol to articulate intent and produce verifiable transactions.
+
 ```mermaid
 graph TD
-    classDef human fill:#f9d0c4,stroke:#333,stroke-width:2px,color:#000;
+    classDef principal fill:#f9d0c4,stroke:#333,stroke-width:2px,color:#000;
     classDef engine fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#000;
-    classDef hub fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000;
-    classDef operator fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000;
-    classDef vault fill:#eceff1,stroke:#607d8b,stroke-width:2px,stroke-dasharray: 5 5,color:#000;
-    classDef critical fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:#000;
+    classDef protocol fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000;
 
-    %% PRINCIPAL
-    Human(("🧑‍💻 Human Principal<br/>(L3 Authorization / Intent)")):::human
+    Principal(("Principal (Human / Agent)")):::principal
 
-    %% ENGINE (g8ee)
-    subgraph Engine["🧠 Application Layer: AI Engine (g8ee)"]
+    subgraph Engine ["g8ee AI Engine (Application Layer)"]
         direction TB
-        Triage{"🚦 Triage Agent<br/>(Intent & Posture)"}:::engine
-        Dash("⚡ Dash<br/>(Fast-Path)"):::engine
-        Sage("🧙‍♂️ Sage<br/>(ReAct Reasoner)"):::engine
-
-        subgraph Tribunal["⚖️ The Tribunal (L2 Consensus Producer)"]
-            direction LR
-            Axiom("📐 Axiom"):::engine
-            Concord("🛡️ Concord"):::engine
-            Variance("🌀 Variance"):::engine
-            Pragma("📘 Pragma"):::engine
-            Nemesis("😈 Nemesis"):::engine
-            Auditor{"🔍 Auditor<br/>(Verifier)"}:::engine
+        Triage["Triage Agent (Intent & Posture)"]:::engine
+        Reasoner["Sage / Dash (Reasoning Path)"]:::engine
+        
+        subgraph Tribunal ["Tribunal (L2 Producer)"]
+            direction TB
+            Panel["5-Member Agent Panel"]:::engine
+            Warden["Warden (Two-Strike Circuit Breaker)"]:::engine
+            Auditor["Auditor (L2 Verifier)"]:::engine
+            
+            Panel --> Warden
+            Warden --> Auditor
         end
+        
+        Triage --> Reasoner
+        Reasoner --> Panel
+        
+        %% Short Circuits (Feedback Loops)
+        Warden -. "Risk Feedback (Short Circuit)" .-> Reasoner
+        Auditor -. "Rejection / Revision (Short Circuit)" .-> Reasoner
     end
 
-    %% PLATFORM HUB
-    subgraph Hub["🌐 Platform Hub (g8eo --listen)"]
-        direction TB
-        PubSub["📡 Pub/Sub Transport<br/>(WSS / mTLS Backbone)"]:::hub
-        CoordStore[("🗄️ Coordination Store<br/>(Docs, KV, Blob, SSE)")]:::hub
-    end
-
-    %% OPERATOR (g8eo)
-    subgraph Operator["🛡️ Operator Substrate (g8eo Satellite) - Host Sovereignty"]
-        direction TB
-        Verifier{"🔐 Transaction Verifier<br/>(L1 / L2 / L3 BFT Checks)"}:::critical
-        Sentinel{"🕵️ Sentinel Guard<br/>(Pre-exec Defense & Post-exec Scrubbing)"}:::operator
-        Warden["🛑 Warden<br/>(Execution Boundary / Circuit Breaker)"]:::critical
-        HostShell["💻 Host OS / Shell"]:::operator
-
-        subgraph Storage["LFAA Storage Vaults & Ledgers"]
-            direction LR
-            AuditVault[("🔒 Audit Vault<br/>(Encrypted Log)")]:::vault
-            ScrubVault[("🧹 Scrubbed Vault<br/>(AI Context)")]:::vault
-            RawVault[("⚠️ Raw Vault<br/>(Forensics)")]:::vault
-            Ledger[("📚 Multi-Ledger<br/>(Git Commits)")]:::vault
-        end
-    end
-
-    %% DATA FLOWS (Logical Intent & Execution)
-    Human -- "1. Natural Language Intent" --> Triage
-    Triage -- "2a. Simple Route" --> Dash
-    Triage -- "2b. Complex Route" --> Sage
-    Dash & Sage -- "3. Articulate Intent" --> Tribunal
-    
-    Axiom & Concord & Variance & Pragma & Nemesis -. "Blind Candidate Commands" .-> Auditor
-    Auditor -- "4. L2 Validated Payload" --> Human
-    
-    Human -- "5. Proof of Human Presence (WebAuthn)" --> PubSub
-    PubSub -- "6. GovernanceEnvelope (UAP JSON)" --> Verifier
-
-    Verifier -- "7. Verify Signatures & State Root" --> Sentinel
-    Sentinel -- "8. Threat Analysis (MITRE)" --> Warden
-    Warden -- "9. Execute Validated Command" --> HostShell
-
-    HostShell -- "10. Raw Execution Data" --> Sentinel
-    Sentinel -- "11a. Scrubbed Diffs" --> ScrubVault
-    Sentinel -- "11b. Raw Forensics" --> RawVault
-    HostShell -- "11c. Encrypted Append" --> AuditVault
-    HostShell -- "11d. Two-Phase Commit" --> Ledger
-
-    ScrubVault -. "12. State/Context Sync" .-> PubSub
-    PubSub -. "13. Global State Persistence" .-> CoordStore
+    Principal -- "Initiates Intent" --> Triage
+    Auditor -- "Produces L2 Signed Intent" --> Protocol["g8e Protocol Envelope"]:::protocol
 ```
+
+### 3-Layer Governance Summary
+Every mutation must pass all three layers in sequence at the substrate boundary.
+
+| Layer | Name | Mechanism | Responsibility |
+|---|---|---|---|
+| **L1** | **Technical Bedrock** | Static Analysis / Reflection | Forbidden patterns, regex threat matching, and policy enforcement. |
+| **L2** | **Consensus** | Ed25519 Signatures | Cryptographic proof that an independent ensemble (Tribunal) co-validated the intent. |
+| **L3** | **Authorization** | WebAuthn / FIDO2 | Hardware-bound proof of human presence for mutations. |
+
+### Implementation Reference
+- **Protocol Schemas**: `protocol/proto/*.proto`
+- **Governance Logic**: `services/g8eo/internal/services/governance/`
+- **Audit Storage**: `services/g8eo/internal/services/storage/audit_vault.go`

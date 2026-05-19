@@ -2,6 +2,8 @@ module github.com/g8e-ai/g8e/services/g8eo
 
 go 1.25.0
 
+toolchain go1.25.9
+
 replace github.com/g8e-ai/g8e/protocol => ../../protocol
 
 require (

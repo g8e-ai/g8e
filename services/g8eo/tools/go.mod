@@ -1,6 +1,8 @@
 module github.com/g8e-ai/g8e/services/g8eo/tools
 
-go 1.26
+go 1.25
+
+toolchain go1.25.9
 
 require gotest.tools/gotestsum v1.13.0
 

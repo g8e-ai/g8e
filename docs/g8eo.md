@@ -64,21 +64,28 @@ A single `g8eo` binary runs in one of several primary roles:
 Transforms the reference Operator into the platform's backbone. Started with the `--listen` flag.
 
 - **Role**: Reference hub for the bundled deployment.
-- **Persistence**: Document-store and TTL-aware KV store backed by SQLite. Supports an optional **Write-Only** read policy for application-layer adapters to ensure fresh reads from the authoritative database.
-- **Messaging**: High-performance WebSocket Pub/Sub broker using UAP JSON `GovernanceEnvelope` messages. Wire format is strictly canonical JSON (protojson) for all client-facing surfaces.
-- **Identity (PKI)**: Acts as the platform's root Certificate Authority, issuing mTLS certificates via CSR-based enrollment.
-- **Security**: Manages the platform's Encryption Vault and secret rotation.
-- **Gateway**: Provides the public Operator HTTP/WSS protocol surface for all clients.
+- **Capabilities**:
+    - **Substrate API** — `POST /api/governance/envelope` is the only customer-facing mutation entry point.
+    - **Document Store** — JSON document CRUD on a Collection/ID pattern with `json_extract` query support.
+    - **KV Store** — TTL-aware ephemeral state with `GLOB` pattern scanning and cursor-based `KVScan`. Supports a Write-Only cache policy.
+    - **Blob Store** — Binary persistence for attachments, large objects, and certificate material.
+    - **Pub/Sub Broker** — High-performance WebSocket fan-out. Mutation channels (`cmd:*`) are governed.
+    - **SSE Buffer** — Per-session ring buffer for Server-Sent Events reconnection replay.
+    - **State Root Provider** — Deterministic Merkle state root across all authoritative Hub data.
+    - **Nonce Manager** — Sliding-window replay protection for governance transactions.
+    - **Root CA / PKI** — Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
+    - **Secrets Vault** — Tamper-evident bootstrap secrets with a `bootstrap_digest.json` manifest.
+    - **Audit Authority** — Append-only encrypted log of every event and signed `ActionReceipt`.
 
 #### Four-Port Contract
 Listen Mode exposes four distinct ports for different protocol surfaces:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **Bootstrap / Trust Portal** | `9002` (HTTP) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
-| **Public browser / BYO** | `9003` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery. |
-| **mTLS API** | `9000` | mTLS + SPIFFE URI SAN | `/api/governance/envelope`, `/db/*` (read/query plus bootstrap writes only), `/kv/*` (KV with TTL), `/blob/*`, `/pubsub/publish` (non-mutation fan-out only), `/api/operators/*`, `/api/device-links/*`, `/api/pki/{sign-csr,revoke,revocation-bundle}`, `/api/auth/passkey/*`. |
-| **Pub/Sub** | `9001` (mTLS WSS) | mTLS + SPIFFE URI SAN | `/ws/pubsub` real-time fan-out to Satellites and clients. |
+| **Bootstrap** | `9002` (HTTP) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
+| **Public Port** | `9003` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
+| **mTLS API** | `9000` | mTLS + URI SAN | `/api/governance/envelope`, `/db/*` (reads + bootstrap writes), `/kv/*`, `/blob/*`, `/pubsub/publish`, `/api/operators/*`, `/api/device-links/*`, `/api/pki/{sign-csr,revoke,revocation-bundle}`, `/api/auth/passkey/*`. |
+| **Pub/Sub** | `9001` (mTLS WSS) | mTLS + URI SAN | `/ws/pubsub` real-time fan-out. |
 
 - **mTLS Ports (WSS, mTLS API)**: Require valid operator certificates with URI SAN binding to operator session IDs. Used for substrate operations and command dispatch.
 - **Public Ports (Bootstrap, Public)**: The **Public Port (9003)** is a plain TLS endpoint for browser-based flows. The **Bootstrap Port (9002)** is a plain HTTP endpoint used to download the initial trust bundle and bootstrap enrollment. These are the sovereign entry points for new operators and BYO clients.
@@ -167,12 +174,21 @@ The Operator manages a structured hierarchy in `.g8e/pki` to ensure isolation be
 
 Client identities follow the SPIFFE URI scheme, encoded in the certificate's URI SAN. These are generated using the `protocol.WorkloadIdentity` helper:
 
-| Role | URI SAN Pattern |
-|---|---|
-| **Operator (Satellite)** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` |
-| **CLI (BYO Client)** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` |
-| **Application (Agent)** | `spiffe://g8e.local/app/<operator_id>` |
-| **Hub (Operator Listen)** | `spiffe://g8e.local/hub/operator-listen` |
+| Role | Helper | URI SAN Pattern |
+|---|---|---|
+| **Operator (Satellite)** | `OperatorSPIFFEID()` | `spiffe://g8e.local/operator/<org>/<op>/<session>` |
+| **CLI (BYO Client)** | `CLISPIFFEID()` | `spiffe://g8e.local/cli/<user>/<session>` |
+| **Application (Agent)** | `AppSPIFFEID()` | `spiffe://g8e.local/app/<operator>` |
+| **Hub (Operator Listen)** | `HubSPIFFEID()` | `spiffe://g8e.local/hub/operator-listen` |
+
+### CLI vs Operator separation
+
+CLI and Operator are cryptographically distinct principals with separate keys, separate CSRs, and separate certificates:
+
+- **Operator certificates** — Bound to `operator_session_id`. Authorize host-side mutations.
+- **CLI certificates** — Bound to `cli_session_id`. Authorize BYO/CLI clients to issue commands and receive SSE.
+
+This means CLI sessions cannot impersonate operator agents and operator sessions cannot drain another client's event stream. SSE routes are bound to CLI sessions specifically.
 
 ### Enrollment Lifecycle
 
@@ -205,14 +221,25 @@ The **Warden** signs all mutation receipts with an Ed25519 key. For external ver
 
 ### Coordination Store (g8eo --listen)
 
-The Coordination Store is the platform's central coordination point, implemented in the `g8eo` binary when running in `--listen` mode.
+The Coordination Store is the platform's central coordination point, implemented in the `g8eo` binary when running in `--listen` mode. All Hub state lives in a single SQLite database at `.g8e/data/g8e.db`.
 
-- **Document Store**: Unified storage for JSON documents using a collection/ID pattern.
-- **KV Store**: High-speed ephemeral data and read cache. Supports TTL, `GLOB` pattern matching, and cursor-based scanning.
-- **Blob Store**: Binary storage for investigation attachments, large objects, and certificate material.
-- **SSE Buffer**: A per-session ring buffer for Server-Sent Events, ensuring clients can catch up after disconnects.
-- **State Root Provider**: Calculates and maintains the platform-wide Merkle state root, binding all Hub data into a single verifiable hash.
-- **Nonce Manager**: Prevents transaction replay by tracking used nonces with sliding-window expiration.
+#### State Merkle Root Invariant
+Hub state is anchored by a Merkle state root computed deterministically across all documents, active KV entries, and blobs. Every governance transaction carries `state_merkle_root`; the Operator rejects any transaction whose root does not match the current authoritative state. This makes it impossible for an agent to act on stale reality.
+
+#### Cache-Aside read/write contract
+- **Writes** — Always go to the authoritative DB first, then invalidate the cache key.
+- **Reads** — `get_document` checks the KV cache; on miss it fetches from the DB and warms the cache. `query_documents` hashes query parameters for result caching.
+- **Atomic array ops** — `arrayUnion`/`arrayRemove` operate on the DB and invalidate the cache.
+- **Write-Only mode** — Application adapters set `enable_cache_read: false`, ensuring every read is satisfied by the authoritative database while still populating the cache for ecosystem consumers.
+
+#### PKI and Secrets directories (root of trust)
+- **.g8e/pki/** stores the CA hierarchy and trust bundles:
+    - **Root CA** — `root/root_ca.crt`
+    - **Intermediate CAs** — Hub CA, Operator CA, Bootstrap CA.
+    - **Trust Bundles** — `trust/hub-bundle.pem` (Root + Hub Intermediate).
+- **.g8e/secrets/** stores tamper-evident bootstrap material:
+    - `session_encryption_key`, `warden_signing_key`, `warden_key_id`.
+    - `bootstrap_digest.json` — SHA-256 digests of every secret. Mismatch fails startup hard.
 
 ### The Ledger (Multi-Ledger Architecture)
 
@@ -228,6 +255,42 @@ The Ledger uses a **Multi-Ledger Architecture**: each operator session owns an i
 Sentinel protects data privacy in two phases:
 1. **Defense (Pre-Execution)**: Analyzes commands and file edits *before* they occur, blocking threat patterns.
 2. **Scrubbing (Post-Execution)**: Removes sensitive data (API keys, PII) from output before it is stored in the Scrubbed Vault or sent to the platform.
+
+## Pub/Sub Broker
+
+The Hub is the WSS broker and governance gate for all real-time traffic.
+
+- **Channel format** — `{prefix}:{operator_id}:{operator_session_id}`. Always parse with a bounded split.
+- **Mutation channels** — `cmd:*` and `auditor:*` only accept envelopes via `POST /api/governance/envelope`.
+- **Non-mutation channels** — `heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*` flow through `/pubsub/publish`.
+- **Fail-closed** — Missing `message_id` or `operator_session_id` → reject. Unknown `event_type` → drop.
+- **Subscribe-and-wait** — Subscribers must wait for the broker's `{"type":"subscribed","channel":"..."}` ack before publishing or dispatching commands.
+
+## Audit Vault (Hub side)
+
+The Hub keeps an authoritative encrypted audit vault keyed by `transaction_hash` for every governed mutation. ActionReceipts are queryable via the protected audit API. Audit writes are fail-closed: events with missing or unknown `operator_session_id` are rejected.
+
+## Lifecycle
+
+1. **Bootstrap (first boot)** — Hub generates CA hierarchy, trust bundles, and bootstrap secrets. Server certs are issued.
+2. **Identity bootstrap (zero-touch)** — `./g8e platform start -a` creates a local superadmin and loopback CLI cert. The first real login retires the bootstrap user.
+3. **Steady state** — The Hub serves the four ports, dispatches governed envelopes, and fans results back via pub/sub and SSE.
+4. **Reset/wipe** — `wipe` clears app data; `reset` deletes data + secrets; `clean` destructive removal of `.g8e/`.
+
+## Implementation Reference
+
+| Concern | File |
+|---|---|
+| Listen mode entry | `services/g8eo/cmd/g8eo/main.go` |
+| Coordination Store | `services/g8eo/internal/services/storage/` |
+| Pub/Sub broker | `services/g8eo/internal/services/pubsub/` |
+| State Root provider | `services/g8eo/internal/services/listen/listen_db.go` |
+| Nonce / replay store | `services/g8eo/internal/services/storage/replay_store.go` |
+| PKI / CertStore | `services/g8eo/internal/services/listen/listen_certs.go` |
+| Secret Manager | `services/g8eo/internal/services/listen/secret_manager.go` |
+| Audit Vault | `services/g8eo/internal/services/storage/audit_vault.go` |
+| Workload identity | `protocol/workload_identity.go` |
+| Collections registry | `protocol/constants/collections.json` |
 
 ## CLI Reference
 
@@ -288,5 +351,5 @@ The wire contract lives in `protocol/proto/`; the shared JSON registries in `pro
 
 - [**g8e Protocol**](protocol.md) — The wire contract and governance hierarchy.
 - [**Security Architecture**](protocol.md#host-sovereignty--audit) — mTLS, Sentinel, and host sovereignty.
-- [**Developer Guide**](developer.md) — Build instructions and testing standards.
+- [**Contribution Guide**](../CONTRIBUTING.md) — Build instructions and testing standards.
 - [**g8ee Engine**](g8ee.md) — Reference AI reasoning application.

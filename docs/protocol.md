@@ -6,7 +6,7 @@ title: g8e Protocol
 
 Last Updated: 2026-05-18
 
-The **g8e Protocol** is a governance and compliance standard. It envelopes payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) into cryptographically provable audit trails that govern remote execution, and it provides a deep local-first audit trail at the site of execution.
+The **g8e Protocol** is a governance and compliance standard. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) at the Operator's admission boundary and forces them through a fail-closed verification gauntlet — envelope integrity, typed-payload decode, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the substrate boundary: they never reach the application layer (Warden, execution handlers) and they never touch the host. Admitted payloads produce a cryptographically provable audit trail with a deep local-first record at the site of execution.
 
 The protocol is the only mandatory layer of g8e. Any conforming implementation — Operator, client, or BYO frontend — interoperates by speaking this contract. The reference Operator (`g8eo`) and reference Engine (`g8ee`) are interchangeable with anything that produces and verifies the same envelopes.
 
@@ -92,6 +92,7 @@ A cryptographic proof that an independent ensemble agreed on the instruction.
 - **Mechanism** — Ed25519 signature over `transaction_hash | decision`.
 - **Trust** — The Operator maintains an Operator-owned `SignerStore`; missing or unknown keys cause rejection.
 - **Producer** — Any conforming L2 producer (the bundled Engine, a BYO multi-agent system, or a single signer for low-stakes flows).
+- **Reference Engine producer** — g8ee runs its own internal Byzantine cascade upstream of the L2 signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Warden risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Engine signs only after Auditor passes. The Operator does not assume any of this; it re-runs every gate below independently. See [g8ee Governance & Safety](g8ee.md) and [position paper §2.3](position_paper.md).
 
 ### L3: Authorization (Human)
 
@@ -107,7 +108,7 @@ Hardware-bound proof of human presence, except where policy explicitly permits a
 ### Request Phase (Client → Operator)
 
 1. Client builds a typed protobuf payload (e.g., `CommandRequested`).
-2. Client wraps the payload in a `GovernanceEnvelope`, populating `nonce`, `expires_at`, and `state_merkle_root`.
+2. Client embeds the payload in a `GovernanceEnvelope`, populating `nonce`, `expires_at`, and `state_merkle_root`.
 3. The L2 producer computes `transaction_hash` and attaches a Tribunal signature.
 4. The L3 actor (human) signs the same hash via WebAuthn.
 5. Client submits canonical-JSON envelope over mTLS to the Operator.

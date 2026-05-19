@@ -77,13 +77,23 @@ If Dash or Sage encounters ambiguity, they must use the Interrogation Protocol:
 - Questions must be strictly binary to maximize information gain.
 - The `<interrogation>` block must be the entire response; tool execution is suppressed until the user answers.
 
-### 4. Governance & Safety
-Every gated operation is verified through multiple layers:
-- **Sentinel**: Scrubs sensitive data (PII, secrets) from inputs and outputs.
-- **Tribunal**: An ensemble of five independent agents that translates intent into hardened shell commands.
-- **Warden**: A defensive coordinator that performs pre-execution risk assessment and enforces the Two-Strike Circuit Breaker.
-- **Auditor**: A high-reasoning agent that performs the final consistency check and Merkle commitment once the Warden has cleared the command.
-- **Approval Pipeline**: State-changing operations trigger an `OPERATOR_COMMAND_APPROVAL_REQUESTED` event, halting execution until a human approves via the UI.
+### 4. Governance & Safety — The Engine-Internal Byzantine Cascade
+
+Every host-mutating tool call flows through an ordered cascade. Each stage is independently configurable across providers/models so a single compromised model cannot drive a mutation end-to-end. The cascade is implemented in `services/g8ee/app/services/ai/` and orchestrated by `generator.py:generate_command`.
+
+1. **Sentinel ingress scrub**: PII, credentials, and tokens are stripped from every byte of operator output before any AI sees it.
+2. **Tribunal generation**: Sage's intent is dispatched in isolation to five members — Axiom (composition), Concord (safety), Variance (edge cases), Pragma (convention), Nemesis (calibrated adversary). The *Amnesia Principle* means no member sees another's candidate and no member knows which seat Nemesis occupies. Each emits exactly one shell command string and stakes reputation on it.
+3. **Tribunal voting (Round 1)**: Uniform 1-vote-per-member weighting. Minimum consensus is 2 votes (default 5 members). Tie-breaks apply in order: shortest command, non-Nemesis cluster wins over Nemesis-including cluster, alphabetical. Nemesis votes are *not* auto-discarded — they only lose tie-breaks; reputation slashing applies if Nemesis raised a false flag or abstained on a real flaw.
+4. **Round 2 (only on R1 consensus failure)**: Members re-emit with anonymized R1 clusters as peer-review context. If R2 also fails, `TribunalConsensusFailedError` is raised back to Sage so it can re-articulate intent.
+5. **Warden risk analysis (runs *before* Auditor)**: The Warden coordinator orchestrates command-risk / error / file-risk sub-agents and classifies the winner LOW / MEDIUM / HIGH. The **Two-Strike Circuit Breaker**: a first HIGH returns contextual feedback to Sage so it can propose a safer alternative; a second HIGH in the same investigation raises `AGENT_CONFLICT_DETECTED` and forces human intervention. Successful execution resets the strike counter.
+6. **Auditor verification**: If Warden clears the command, the Auditor (primary tier) sees the request, the operator context, and the anonymized candidate clusters — *not* full conversation history. Verdicts are `ok`, `swap:<cluster_id>` (promote a dissenter), or `revised:<command>`. On pass, the verdict is bound to a SHA-256 **Merkle commitment** over the agent reputation scoreboard, chained by `prev_root` HMAC-SHA256. Reputation-commitment failure is fatal — the verdict cannot proceed.
+7. **L1 re-validation**: Any command produced via swap or revision is re-checked against `validate_command_safety` (forbidden patterns, blacklist, whitelist) before it can leave the Engine.
+8. **L2/L3 envelope wrap**: The verified command is packaged as a typed `CommandRequested` payload inside a `GovernanceEnvelope`, signed by the L2 Tribunal key.
+9. **Approval Pipeline**: State-changing operations trigger an `OPERATOR_COMMAND_APPROVAL_REQUESTED` event, halting execution until a human approves via the UI (or `auto_approved.json` policy applies). L3 auto-approval never bypasses L1 or L2.
+10. **Substrate admission gauntlet**: The signed envelope is submitted over mTLS to the Operator, which independently re-runs the entire fail-closed gauntlet (envelope integrity → typed payload → L1 reflected forbidden patterns → hash binding → freshness → state root → L2 trusted-signer → L3 WebAuthn). The Engine has no privileged channel.
+11. **Sentinel egress scrub**: After execution the Operator scrubs every byte of stdout/stderr before publishing the result envelope back to the Engine.
+
+**Failure routing**: Tribunal consensus failure (after R2) and Warden first-strike both feed back to Sage to re-articulate intent. Warden second-strike and Auditor catastrophic failure both surface as agent-conflict events that demand human intervention.
 
 ### 5. Streaming & Delivery
 Responses are delivered via **Server-Sent Events (SSE)**:
@@ -207,7 +217,7 @@ flowchart LR
 ```
 
 ### The Tribunal (Ensemble Command Generation)
-The Tribunal is a five-member panel that converts Sage's intent into executable commands. The Tribunal uses a ranked-vote system to select a winner. The **Warden** then performs a safety analysis; only once cleared does the **Auditor** perform the final consistency check and Merkle commitment.
+The Tribunal is a five-member panel that converts Sage's intent into executable commands. The Tribunal uses uniform 1-vote-per-member weighting (minimum consensus 2 of 5) with a deterministic tie-break ladder (shortest → exclude-Nemesis cluster → alphabetical). On consensus failure a Round 2 anonymized peer review runs before the pipeline gives up and routes back to Sage. **Warden** runs *before* Auditor: only commands cleared by Warden risk analysis reach the Auditor for the final consistency check and Merkle commitment.
 
 ### LFAA (Local-First Audit Architecture)
 `OperatorLFAAService` ensures every action taken by the AI is recorded on the target system. This provides an immutable audit trail that persists even if the control plane is compromised or inaccessible.

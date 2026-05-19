@@ -49,7 +49,7 @@ An embedded SQLite database (`./.g8e/data/g8e.db`) that stores all operator sess
 
 ## Auditor
 
-A verifier persona within the g8ee Tribunal stage (L2 Governance). The Auditor evaluates the consensus command winner against the user's original intent. If verified, the Auditor signs a **Merkle Commitment** that binds the current **Reputation Scoreboard** state to the verdict, creating a tamper-evident cryptographic chain of all agent actions. Performs the final consistency check before a command proceeds to user approval.
+A verifier persona within the g8ee Tribunal stage (L2 Governance). The Auditor evaluates the consensus command winner against the original intent **after** the Warden has cleared it for risk; if Warden blocks, the Auditor never runs. The Auditor sees the request, operator context, and anonymized candidate clusters (not full conversation history). Verdicts are `ok`, `swap:<cluster_id>` to promote a dissenting cluster, or `revised:<command>`. On pass, the Auditor binds the verdict to a SHA-256 **Merkle Commitment** over the **Reputation Scoreboard**, chained via `prev_root` HMAC-SHA256 — a tamper-evident cryptographic chain of agent performance. Reputation-commitment failure is fatal: the verdict cannot proceed.
 
 ---
 
@@ -301,7 +301,7 @@ The first and foundation layer of g8e governance. It implements hard-coded techn
 
 ## L2 Consensus (Tribunal)
 
-The second layer of g8e governance. A heterogeneous multi-model ensemble of 5 independent agents (Axiom, Concord, Variance, Pragma, Nemesis) that produces and votes on command candidates. Includes the **Warden** for risk analysis and the **Auditor** for final verification. L2 ensures that every command executed is the result of a rigorous consensus process rather than a single model's output.
+The second layer of g8e governance. A heterogeneous multi-model ensemble of 5 independent agents (Axiom, Concord, Variance, Pragma, Nemesis) that produces and votes on command candidates. The ordered cascade is: **Generation → Voting (R1) → [R2 anonymized peer review on consensus failure] → Warden risk analysis → Auditor verification → Merkle commitment**. Warden runs *before* Auditor; if Warden classifies HIGH risk, Auditor never runs (first strike returns to Sage; second strike forces human intervention). Voting uses uniform 1-vote-per-member weighting with a minimum consensus of 2; tie-breaks apply in order shortest → exclude-Nemesis-cluster → alphabetical. Nemesis votes are *not* auto-discarded — they only lose tie-breaks. L2 ensures that every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output.
 
 ---
 
@@ -535,6 +535,19 @@ The execution pattern used by g8ee where the AI generates tool calls to interact
 ## Tribunal
 
 See **L2 Consensus (Tribunal)**.
+
+---
+
+## Mutual-Distrust Boundaries
+
+The core trust model of g8e. Every component treats every other component as a potential adversary; no component holds implicit trust. The boundaries:
+
+- **The Principal (User)** does not trust any single AI provider/model (heterogeneous tiering across reasoning agents) or any host running an Operator (mTLS, fingerprinting, device-link tokens, slot accounting, key rotation, revocation).
+- **The Engine (g8ee)** does not trust the user (L1 forbidden patterns block dangerous instructions before any model sees them) or the Operator (Sentinel ingress scrubbing of PII/credentials, scoped sessions, mTLS).
+- **The Operator (g8eo)** does not trust the user or the AI (full fail-closed admission gauntlet on every inbound mutation: envelope integrity, typed payload, L1 reflected forbidden patterns, hash binding, freshness, state-root match, L2 trusted signer, L3 WebAuthn).
+- **The Engine's internal pipeline** does not trust itself (the Byzantine cascade in `services/g8ee/app/services/ai/generator.py` runs Triage → Dash/Sage → Tribunal generation → voting → Warden → Auditor before a command is even *eligible* for the protocol gauntlet).
+
+See `docs/position_paper.md` §2.1 and `docs/g8ee.md` "Governance & Safety — The Engine-Internal Byzantine Cascade".
 
 ---
 
