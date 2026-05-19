@@ -153,6 +153,15 @@ When no operator is connected:
 - `passkeys`: Manage FIDO2/WebAuthn credentials
 - `mtls-test`: Verify mTLS connectivity
 
+### mcp
+Generates configs for and interacts with the Operator MCP translation gateway.
+
+Usage:
+  `./g8e mcp config`      - Generate an IDE-compatible mcpServers configuration block
+  `./g8e mcp status`      - Check the health of the MCP gateway
+  `./g8e mcp test`        - Run test tools/list and tools/call requests against the operator
+  `./g8e mcp serve`       - Start the MCP stdio listener (placeholder)
+
 ### data
 - `users|operators`: Query or modify user and operator documents
 - `store <collection> list|get`: Access the SQLite-based blob store
