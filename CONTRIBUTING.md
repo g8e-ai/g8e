@@ -26,6 +26,6 @@ General questions should go to danny@g8e.ai.
 
 ## Contributing code
 
-Please read the [Developer Guidelines](docs/developer/devs.md) before sending patches.
+Please read the [Developer Guidelines](docs/devs.md) before sending patches.
 
 Unless otherwise noted, the g8e source files are distributed under the Apache 2.0 license found in the LICENSE file.
