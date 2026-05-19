@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.6] - 2026-05-19
+
+### Added
+- **Intent Classification:** Revived intent classification to be a first-class citizen in the architecture.
+- **SPIFFE URI SAN:** Refactored SPIFFE URI SAN logic to strengthen mTLS and workload identity.
+
+### Changed
+- **CLI & UX Improvements:** Improved login UX, operator-side UX, and trust script stability. Enhanced build output for Mac and Linux.
+- **Protocol Refinement:** Ripped out legacy protobuf definitions, refined boundary structures, and decoupled operator auth from the app layer.
+- **Session Isolation:** Improved session typing and untangled CLI chat sessions to better separate the substrate and app layer.
+- **Code Quality & Linting:** Comprehensive code quality passes including Go critic/lint fixes, Ruff, and Pyright typing improvements.
+- **Eval & Testing:** Refactored the eval harness and bench tests. Improved chaos testing with better audit summaries, L1 reporting, and correct DB location.
+- **Documentation:** Reorganized and updated documentation including improved diagrams and README updates.
+
+### Fixed
+- **SSL Configuration:** Addressed SSL fix.
+- **Test Stability:** Fixed test stability issues including `g8ee` test fixes and model configuration improvements for tests.
+
 ## [0.2.5] - 2026-05-16
 
 ### Added

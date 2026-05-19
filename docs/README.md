@@ -6,8 +6,8 @@ permalink: /docs/
 
 # g8e Documentation Index
 
-Last Updated: 2026-05-16
-Version: v0.2.5
+Last Updated: 2026-05-19
+Version: v0.2.6
 
 The documentation is organized by service and role, separating the mandatory protocol substrate from the optional application-layer components.
 

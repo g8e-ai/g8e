@@ -5,7 +5,7 @@ title: Glossary
 # g8e Glossary
 
 Last Updated: 2026-05-11
-Version: v0.2.5
+Version: v0.2.6
 
 Essential terminology for understanding the g8e platform. Terms are organized alphabetically.
 
