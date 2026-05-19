@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  metadata-server:
+    container_name: pnfs-metadata-server
+    image: debian:bookworm-slim
+    privileged: true
+    command: >
+      sh -c "apt-get update && apt-get install -y nfs-kernel-server &&
+             mkdir -p /data/pnfs/metadata &&
+             echo '/data/pnfs *(rw,sync,no_subtree_check,no_root_squash)' >> /etc/exports &&
+             /usr/sbin/rpcbind &&
+             /usr/sbin/rpc.nfsd &&
+             /usr/sbin/exportfs -ra &&
+             /usr/sbin/rpc.mountd -F"
+    healthcheck:
+      test: ["CMD", "rpcinfo", "-p"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      demo.service: pnfs-node
+
+  data-server:
+    container_name: pnfs-data-server
+    image: debian:bookworm-slim
+    privileged: true
+    command: >
+      sh -c "apt-get update && apt-get install -y nfs-kernel-server &&
+             mkdir -p /data/pnfs/data &&
+             echo 'SENSITIVE DATA - GOVERNED BY G8E' > /data/pnfs/data/secrets.txt &&
+             mkdir -p /data/pnfs/data/private &&
+             echo 'RESTRICTED - L1 BLOCK' > /data/pnfs/data/private/top-secret.txt &&
+             echo '/data/pnfs *(rw,sync,no_subtree_check,no_root_squash)' >> /etc/exports &&
+             /usr/sbin/rpcbind &&
+             /usr/sbin/rpc.nfsd &&
+             /usr/sbin/exportfs -ra &&
+             /usr/sbin/rpc.mountd -F"
+    labels:
+      demo.service: pnfs-node
+
+  client-node:
+    container_name: pnfs-client-node
+    image: debian:bookworm-slim
+    privileged: true
+    environment:
+      - DEVICE_NAME=client-node
+      - DEVICE_ROLE=governance-tester
+    command: >
+      sh -c "apt-get update && apt-get install -y nfs-common curl sudo procps psmisc &&
+             mkdir -p /mnt/pnfs &&
+             # Wait for servers and mount
+             sleep 10 &&
+             mount -t nfs metadata-server:/data/pnfs /mnt/pnfs &&
+             echo 'pNFS client ready.' &&
+             tail -f /dev/null"
+    labels:
+      demo.service: pnfs-node
+    depends_on:
+      - metadata-server
+      - data-server

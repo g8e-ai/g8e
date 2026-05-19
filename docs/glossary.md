@@ -173,9 +173,9 @@ The platform name. g8e is an open-source, air-gapped capable AI governance platf
 
 ---
 
-## 
+## g8ed (Dashboard)
 
-The Node.js/Express web frontend component. Handles user authentication (passkey/FIDO2/WebAuthn), web session management, the chat interface, Operator Panel, and SSE streaming to browsers. Routes messages between users and g8ee.
+The web frontend component. Handles user authentication (passkey/FIDO2/WebAuthn), web session management, the chat interface, Operator Panel, and SSE streaming to browsers. Routes messages between users and g8ee.
 
 ---
 

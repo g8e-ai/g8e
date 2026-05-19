@@ -5,8 +5,8 @@ SHELL := /bin/bash
 
 # =============================================================================
 # =============================================================================
-# Use go1.24 if available (local dev), otherwise fall back to system go (Docker/CI)
-GO := $(shell command -v go1.24 2>/dev/null || ([ -x "$$(go env GOPATH)/bin/go1.24" ] && echo "$$(go env GOPATH)/bin/go1.24") || command -v go 2>/dev/null || echo "go")
+# Use go1.26 if available (local dev), otherwise fall back to system go (Docker/CI)
+GO := $(shell command -v go1.26 2>/dev/null || ([ -x "$$(go env GOPATH)/bin/go1.26" ] && echo "$$(go env GOPATH)/bin/go1.26") || command -v go 2>/dev/null || echo "go")
 
 # =============================================================================
 # VERSION

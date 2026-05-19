@@ -38,6 +38,7 @@ type EnvelopeProcessor interface {
 // /api/governance/envelope. Calling with nil disables the endpoint.
 func (ls *ListenService) SetEnvelopeProcessor(p EnvelopeProcessor) {
 	ls.handler.envProc = p
+	// Dependencies are now set via SetDependencies in runListenMode or similar
 }
 
 // handleGovernanceEnvelope is the canonical synchronous mutation entry point

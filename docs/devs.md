@@ -15,9 +15,8 @@ Components run host-native. **Do not use Docker for primary component developmen
 
 ### Setup
 
-- **Go 1.26.3+** (required, for `g8eo`).
-- **Python 3.12+** (only when developing the optional `g8ee` adapter).
-- **Node 22** (only when developing optional Dashboard/GUI).
+- **Go 1.26+** (required, for `g8eo`).
+- **Python 3.14+** (only when developing the optional `g8ee` adapter).
 
 ### Common Commands
 
@@ -94,6 +93,37 @@ AI agents tend to wrap poorly understood code in new abstractions. This is stric
 1. **Rip and replace.** When existing code violates contracts or is structurally unsound, replace it correctly. Do not route around it with a wrapper. **No backwards compatibility** is maintained for broken data structures or legacy shims.
 2. **Prohibited patterns.** `ensure*()`, `getOrCreate*()`, `Any` in type signatures, and `map[string]interface{}` for known shapes are hard stops. Functions do exactly one thing: reads read, writes write.
 3. **No defensive guards.** Never add defensive code at the call site to handle unexpected values. Hunt down the root cause and fix it at the source.
+
+## Code Quality Standards
+
+### General Principles
+- **Industry Standards**: We adhere to modern, strict industry standards for every language we use.
+- **Latest Versions**: Always use the latest stable versions of languages (Go 1.26+, Python 3.14+), libraries, and update methods. Avoid deprecated APIs and legacy patterns.
+- **Fail-Closed**: If a security check, validation, or critical dependency fails, the system must halt immediately.
+- **Explicit over Implicit**: No magic, no hidden side effects, and no "guessing" user intent.
+- **Zero Tech Debt**: Every PR must leave the codebase cleaner than it was found.
+
+### Go (`g8eo`)
+- **Tooling**: `gofmt`, `goimports`, and `golangci-lint` are mandatory and must pass in CI.
+- **Error Handling**: Always check errors. Wrap errors with context (e.g., `fmt.Errorf("failed to do x: %w", err)`) to provide a clear trace.
+- **No Panics**: Never use `panic` in production paths. Return errors instead.
+- **Concurrency**: Goroutines must be managed with `context.Context` for cancellation and `sync.WaitGroup` or channels for synchronization. No orphan goroutines.
+- **Testing**: Table-driven tests are the standard for unit testing. Use `testify/assert` for readability.
+- **Formatting**: Group imports into three blocks: standard library, external, and internal (`g8e/g8eo/...`).
+
+### Python (`g8ee`)
+- **Tooling**: `ruff` is the unified linter and formatter. `mypy --strict` is mandatory for type checking.
+- **Type Hints**: Mandatory for all function arguments and return types. No `Any`.
+- **Async Discipline**: Never perform blocking I/O inside an `async def` function. Use `anyio` or `asyncio` equivalents.
+- **Models**: All data structures must use Pydantic `G8eBaseModel` with `extra="forbid"`.
+- **Docstrings**: Use Google-style docstrings for non-trivial logic.
+
+### Bash Scripts
+- **Safety**: Every script must start with `set -euo pipefail`.
+- **Linting**: `shellcheck` is mandatory. Avoid `shellcheck disable` unless absolutely necessary for infrastructure constraints.
+- **Variables**: Use `local` for all variables inside functions. Use uppercase for exported environment variables and lowercase for local ones.
+- **Syntax**: Use `[[ ... ]]` for tests and `$( ... )` for command substitution. Avoid backticks.
+- **Path Resolution**: Scripts must be location-independent, resolving `G8E_PROJECT_ROOT` relative to `$(dirname "${BASH_SOURCE[0]}")`.
 
 ## Application Boundary and State Management
 
