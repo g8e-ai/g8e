@@ -32,6 +32,7 @@ Optional components demonstrating the protocol in action.
 Guides for setting up, testing, and contributing to the platform.
 
 - [**Contribution Guide**](../CONTRIBUTING.md) - Environment setup, development workflows, and testing standards.
+- [**Developer Troubleshooting**](developer/troubleshooting.md) - Common setup failures and recovery checks.
 - [**CLI Reference**](cli_help.md) - Help for the `./g8e` management tool.
 
 ## 5. General Reference
