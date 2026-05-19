@@ -1,8 +1,16 @@
 # Contributing to g8e
 
-g8e is an open source project.
+g8e is an open source project. We welcome contributions from the community!
 
-We appreciate your help!
+## Finding Work
+
+If you're looking for a place to start, we maintain a list of "good first issues" directly in the codebase using `TODO` comments. You can find these by running:
+
+```bash
+make first-issues
+```
+
+This will show you a list of pending tasks, improvements, and architectural migrations that are ready for a fresh set of eyes.
 
 ## Filing issues
 
