@@ -65,13 +65,13 @@ jobs:
       - name: Run golangci-lint (g8eo)
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.62.0
+          version: latest
           working-directory: services/g8eo
 
       - name: Run golangci-lint (protocol)
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.62.0
+          version: latest
           working-directory: protocol
 
   vulncheck-g8eo:
