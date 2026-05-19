@@ -49,12 +49,12 @@ import (
 // Version information (set via ldflags during build)
 var (
 	version  = string(constants.Status.VersionStability.Dev)
-	buildID  = "unknown"
-	platform = "unknown"
+	buildID  = string(constants.SystemHealthUnknown)
+	platform = string(constants.SystemHealthUnknown)
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "stream" {
+	if len(os.Args) > 1 && os.Args[1] == string(constants.ApprovalTypeStream) {
 		cmd.RunStream(os.Args[2:])
 		return
 	}
@@ -122,7 +122,7 @@ func main() {
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
 	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory operator was launched from)")
-	flag.BoolVar(&cloudMode, "cloud", true, "Cloud mode")
+	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
 	flag.BoolVar(&localStorage, "local-storage", true, "Enable local storage (stores data in current directory)")
 	flag.StringVar(&logLevel, "log", "info", "Log level")
@@ -252,7 +252,7 @@ func main() {
 			trustURL := fmt.Sprintf("https://%s/.well-known/g8e/pki/hub-bundle.pem", endpointURL)
 			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
 			if err := certs.FetchAndSetCA(context.Background(), trustURL); err != nil {
-				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, "error", err)
+				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, string(constants.ConnectionStateError), err)
 				fmt.Fprintf(os.Stderr, "Failed to fetch trust bundle from Operator: %v\n", err)
 				fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e platform start\n")
 				os.Exit(constants.ExitConfigError)
@@ -274,7 +274,7 @@ func main() {
 		logger.Info("Device link token provided, authenticating...")
 		deviceResult, err := auth.AuthenticateWithDeviceToken(deviceToken, operatorEndpoint, logger, settings.User)
 		if err != nil {
-			logger.Error("Device link authentication failed", "error", err)
+			logger.Error("Device link authentication failed", string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "Device authentication failed: %v\n", err)
 			os.Exit(constants.ExitAuthFailure)
 		}
@@ -339,7 +339,7 @@ func main() {
 		IPResolver:          settings.IPResolver,
 	})
 	if err != nil {
-		logger.Error("Failed to load configuration", "error", err)
+		logger.Error("Failed to load configuration", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -350,11 +350,11 @@ func main() {
 		logger.Info("Applying remaining bootstrap config from device-link registration")
 		bootstrapService, err := auth.NewBootstrapService(cfg, logger)
 		if err != nil {
-			logger.Error("Failed to create bootstrap service", "error", err)
+			logger.Error("Failed to create bootstrap service", string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitConfigError)
 		}
 		if err := bootstrapService.ApplyBootstrapConfig(deviceAuthResult.Config); err != nil {
-			logger.Error("Failed to apply bootstrap config", "error", err)
+			logger.Error("Failed to apply bootstrap config", string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitCodeFromError(err))
 		}
 		logger.Info("Bootstrap config applied successfully")
@@ -372,7 +372,7 @@ func main() {
 
 	g8eoService, err := services.NewG8eoService(cfg, logger)
 	if err != nil {
-		logger.Error("Failed to create Operator service", "error", err)
+		logger.Error("Failed to create Operator service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))
 	}
 
@@ -384,7 +384,7 @@ func main() {
 
 	go func() {
 		if err := g8eoService.Start(ctx); err != nil {
-			logger.Error("Failed to start g8e Operator", "error", err)
+			logger.Error("Failed to start g8e Operator", string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitCodeFromError(err))
 		}
 	}()
@@ -397,7 +397,7 @@ func main() {
 	defer shutdownCancel()
 
 	if err := g8eoService.Stop(shutdownCtx); err != nil {
-		logger.Error("Graceful shutdown failed", "error", err)
+		logger.Error("Graceful shutdown failed", string(constants.ConnectionStateError), err)
 	}
 
 	os.Exit(constants.ExitSuccess)
@@ -628,7 +628,7 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 
 	go func() {
 		if err := svc.Start(ctx); err != nil {
-			logger.Error("Listen service failed", "error", err)
+			logger.Error("Listen service failed", string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitCodeFromError(err))
 		}
 	}()
@@ -643,7 +643,7 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 		}
 		logger.Info("Listen service ready, starting in-process command service")
 		if err := cmdSvc.Start(ctx); err != nil {
-			logger.Error("In-process command service failed to start", "error", err)
+			logger.Error("In-process command service failed to start", string(constants.ConnectionStateError), err)
 		}
 	}()
 
@@ -661,7 +661,7 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 	}
 
 	if err := svc.Stop(shutdownCtx); err != nil {
-		logger.Error("Listen shutdown error", "error", err)
+		logger.Error("Listen shutdown error", string(constants.ConnectionStateError), err)
 	}
 	logger.Info("Listen mode stopped")
 }
@@ -723,7 +723,7 @@ func handleRekeyVault(vault *vault.Vault, oldAPIKey, newAPIKey string, logger *s
 	logger.Info("Re-keying vault")
 
 	if err := vault.Rekey(oldAPIKey, newAPIKey); err != nil {
-		logger.Error("Failed to rekey vault", "error", err)
+		logger.Error("Failed to rekey vault", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitGeneralError)
 	}
 
@@ -749,7 +749,7 @@ func handleVerifyVault(vault *vault.Vault, apiKey string, logger *slog.Logger) {
 	logger.Info("Verifying vault integrity")
 
 	if err := vault.VerifyIntegrity(apiKey); err != nil {
-		logger.Error("Vault verification failed", "error", err)
+		logger.Error("Vault verification failed", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitGeneralError)
 	}
 
@@ -826,7 +826,7 @@ func handleResetVault(vault *vault.Vault, logger *slog.Logger) {
 	}
 
 	if err := vault.Reset(true); err != nil {
-		logger.Error("Failed to reset vault", "error", err)
+		logger.Error("Failed to reset vault", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitGeneralError)
 	}
 

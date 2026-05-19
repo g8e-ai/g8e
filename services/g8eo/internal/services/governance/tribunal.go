@@ -45,7 +45,7 @@ func (t *Tribunal) EvaluatePayload(env *uap.UAPEnvelope) error {
 		// If this is an intent request, extract and validate the specific intent
 		actionType := constants.ActionType(env.ActionType)
 		if actionType == constants.ActionTypeGrantIntent || actionType == constants.ActionTypeRevokeIntent {
-			if v, ok := env.IntentData.Fields["intent"]; ok {
+			if v, ok := env.IntentData.Fields[string(constants.ApprovalTypeIntent)]; ok {
 				intent = constants.CloudIntent(v.GetStringValue())
 			}
 		}

@@ -69,7 +69,7 @@ func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg in
 		var err error
 		stateBefore, err = w.StateRootProvider.GetCurrentStateRoot()
 		if err != nil {
-			w.Logger.Warn("Failed to get state root before execution", "error", err)
+			w.Logger.Warn("Failed to get state root before execution", string(constants.ConnectionStateError), err)
 		}
 	}
 
@@ -95,14 +95,14 @@ func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg in
 	// 2. Sign the initial receipt (intent to execute)
 	sig, signErr := w.signReceipt(receipt)
 	if signErr != nil {
-		w.Logger.Error("Fail-closed: Failed to sign initial action receipt", "error", signErr, "message_id", vt.Envelope.Id)
+		w.Logger.Error("Fail-closed: Failed to sign initial action receipt", string(constants.ConnectionStateError), signErr, "message_id", vt.Envelope.Id)
 		return nil, fmt.Errorf("failed to sign initial action receipt: %w", signErr)
 	}
 	receipt.Signature = sig
 
 	// 3. Log intent to execute (Audit before execution)
 	if err := w.LogReceipt(vt.Envelope, receipt); err != nil {
-		w.Logger.Error("Fail-closed: Failed to log initial action receipt", "error", err, "message_id", vt.Envelope.Id)
+		w.Logger.Error("Fail-closed: Failed to log initial action receipt", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
 		return nil, fmt.Errorf("failed to log initial action receipt: %w", err)
 	}
 
@@ -124,7 +124,7 @@ func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg in
 		var stateErr error
 		stateAfter, stateErr = w.StateRootProvider.GetCurrentStateRoot()
 		if stateErr != nil {
-			w.Logger.Warn("Failed to get state root after execution", "error", stateErr)
+			w.Logger.Warn("Failed to get state root after execution", string(constants.ConnectionStateError), stateErr)
 		}
 	}
 
@@ -136,7 +136,7 @@ func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg in
 	// 6. Sign the final receipt
 	finalSig, signErr := w.signReceipt(receipt)
 	if signErr != nil {
-		w.Logger.Error("Failed to sign final action receipt - returning EXECUTING receipt as evidence", "error", signErr, "message_id", vt.Envelope.Id)
+		w.Logger.Error("Failed to sign final action receipt - returning EXECUTING receipt as evidence", string(constants.ConnectionStateError), signErr, "message_id", vt.Envelope.Id)
 		// Return the EXECUTING receipt with signature from step 2 as evidence
 		// The mutation already executed, so we must preserve evidence of execution attempt
 		return receipt, fmt.Errorf("execution completed but final receipt signing failed: %w", signErr)
@@ -145,7 +145,7 @@ func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg in
 
 	// 7. Log final result (best-effort - mutation already executed)
 	if logErr := w.LogReceipt(vt.Envelope, receipt); logErr != nil {
-		w.Logger.Error("Failed to log final action receipt - mutation already executed", "error", logErr, "message_id", vt.Envelope.Id)
+		w.Logger.Error("Failed to log final action receipt - mutation already executed", string(constants.ConnectionStateError), logErr, "message_id", vt.Envelope.Id)
 		// Return receipt anyway - mutation already happened, evidence must be preserved
 		return receipt, fmt.Errorf("execution completed but final audit logging failed: %w", logErr)
 	}
@@ -216,7 +216,7 @@ func (w *Warden) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) e
 
 	if err := w.AuditVault.RecordActionReceipt(&record); err != nil {
 		if w.Logger != nil {
-			w.Logger.Error("Failed to record ActionReceipt in audit vault", "error", err)
+			w.Logger.Error("Failed to record ActionReceipt in audit vault", string(constants.ConnectionStateError), err)
 		}
 		if docErr != nil {
 			return fmt.Errorf("audit vault error: %v, doc store error: %v", err, docErr)
@@ -252,14 +252,14 @@ func (w *Warden) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionRe
 	body, err := json.Marshal(record)
 	if err != nil {
 		if w.Logger != nil {
-			w.Logger.Error("Failed to marshal action receipt record", "error", err, "message_id", r.TransactionId)
+			w.Logger.Error("Failed to marshal action receipt record", string(constants.ConnectionStateError), err, "message_id", r.TransactionId)
 		}
 		return err
 	}
 
 	if err := w.AuditStore.DocSet(marshaler.CollectionName(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {
 		if w.Logger != nil {
-			w.Logger.Error("Failed to record action receipt document", "error", err, "message_id", r.TransactionId)
+			w.Logger.Error("Failed to record action receipt document", string(constants.ConnectionStateError), err, "message_id", r.TransactionId)
 		}
 		return err
 	}

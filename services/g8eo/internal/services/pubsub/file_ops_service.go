@@ -64,7 +64,7 @@ func NewFileOpsService(cfg *config.Config, logger *slog.Logger, fileEditSvc *exe
 func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubCommandMessage) {
 	var protoEdit operatorv1.FileEditRequested
 	if err := proto.Unmarshal(msg.Payload, &protoEdit); err != nil {
-		fs.logger.Error("Failed to decode file edit payload as protobuf FileEditRequested", "error", err)
+		fs.logger.Error("Failed to decode file edit payload as protobuf FileEditRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 
@@ -83,7 +83,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 
 	editReq, err := payloadToFileEditRequest(msg)
 	if err != nil {
-		fs.logger.Error("Failed to create file edit request", "error", err)
+		fs.logger.Error("Failed to create file edit request", string(constants.ConnectionStateError), err)
 		return
 	}
 
@@ -116,7 +116,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 					CommandExitCode:   &exitCode,
 					CommandStderr:     fmt.Sprintf("Blocked by sentinel.Sentinel: %s", analysis.BlockReason),
 				}); err != nil {
-					fs.logger.Warn("Failed to record sentinel blocked file op in audit vault", "error", err)
+					fs.logger.Warn("Failed to record sentinel blocked file op in audit vault", string(constants.ConnectionStateError), err)
 				}
 			}
 
@@ -130,7 +130,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 					ErrorType:    "sentinel_blocked",
 				}
 				if err := fs.results.PublishFileEditResult(ctx, protoResult, msg); err != nil {
-					fs.logger.Error("Failed to publish blocked file edit result", "error", err)
+					fs.logger.Error("Failed to publish blocked file edit result", string(constants.ConnectionStateError), err)
 				}
 			}
 			return
@@ -239,7 +239,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 
 		eventID, err := fs.auditVault.RecordEvent(event)
 		if err != nil {
-			fs.logger.Warn("Failed to record file mutation event in audit vault", "error", err)
+			fs.logger.Warn("Failed to record file mutation event in audit vault", string(constants.ConnectionStateError), err)
 		} else {
 			fs.logger.Info("File mutation event recorded in audit vault (LFAA)",
 				"event_id", eventID,
@@ -264,7 +264,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 				}
 
 				if err := fs.auditVault.RecordFileMutation(mutation); err != nil {
-					fs.logger.Warn("Failed to record file mutation in audit log", "error", err)
+					fs.logger.Warn("Failed to record file mutation in audit log", string(constants.ConnectionStateError), err)
 				}
 
 				if fs.vaultWriter != nil {
@@ -317,7 +317,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 		}
 
 		if err := fs.results.PublishFileEditResult(ctx, protoResult, msg); err != nil {
-			fs.logger.Error("Failed to publish file edit result", "error", err)
+			fs.logger.Error("Failed to publish file edit result", string(constants.ConnectionStateError), err)
 		}
 	}
 }
@@ -326,7 +326,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg PubSubCommandMessage) {
 	var protoList operatorv1.FsListRequested
 	if err := proto.Unmarshal(msg.Payload, &protoList); err != nil {
-		fs.logger.Error("Failed to decode fs list payload as protobuf FsListRequested", "error", err)
+		fs.logger.Error("Failed to decode fs list payload as protobuf FsListRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 
@@ -344,7 +344,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg PubSubCom
 
 	fsListReq, err := payloadToFsListRequest(msg)
 	if err != nil {
-		fs.logger.Error("Failed to create fs list request", "error", err)
+		fs.logger.Error("Failed to create fs list request", string(constants.ConnectionStateError), err)
 		return
 	}
 
@@ -440,7 +440,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg PubSubCom
 		}
 
 		if err := fs.results.PublishFsListResult(ctx, protoResult, msg); err != nil {
-			fs.logger.Error("Failed to publish fs list result", "error", err)
+			fs.logger.Error("Failed to publish fs list result", string(constants.ConnectionStateError), err)
 		}
 	}
 }
@@ -449,7 +449,7 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg PubSubCom
 func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCommandMessage) {
 	var protoGrep operatorv1.FsGrepRequested
 	if err := proto.Unmarshal(msg.Payload, &protoGrep); err != nil {
-		fs.logger.Error("Failed to decode fs grep payload as protobuf FsGrepRequested", "error", err)
+		fs.logger.Error("Failed to decode fs grep payload as protobuf FsGrepRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 
@@ -467,7 +467,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCom
 
 	fsGrepReq, err := payloadToFsGrepRequest(msg)
 	if err != nil {
-		fs.logger.Error("Failed to create fs grep request", "error", err)
+		fs.logger.Error("Failed to create fs grep request", string(constants.ConnectionStateError), err)
 		return
 	}
 
@@ -563,7 +563,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCom
 		}
 
 		if err := fs.results.PublishFsGrepResult(ctx, protoResult, msg); err != nil {
-			fs.logger.Error("Failed to publish fs grep result", "error", err)
+			fs.logger.Error("Failed to publish fs grep result", string(constants.ConnectionStateError), err)
 		}
 	}
 }
@@ -572,7 +572,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCom
 func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCommandMessage) {
 	var protoRead operatorv1.FsReadRequested
 	if err := proto.Unmarshal(msg.Payload, &protoRead); err != nil {
-		fs.logger.Error("Failed to decode fs read payload as protobuf FsReadRequested", "error", err)
+		fs.logger.Error("Failed to decode fs read payload as protobuf FsReadRequested", string(constants.ConnectionStateError), err)
 		fs.publishLFAAError(ctx, msg, constants.Event.Operator.FsRead.Failed, "invalid request payload")
 		return
 	}

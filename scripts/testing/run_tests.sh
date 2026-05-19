@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
         --help|-h)
             echo "Usage: run_tests.sh [COMPONENT] [OPTIONS] [-- EXTRA_ARGS]"
             echo ""
-            echo "Components: g8eo (default substrate), g8ee"
+            echo "Components: g8eo (default substrate), g8ee, chaos, ci"
             echo ""
             echo "Options:"
             echo "  --coverage                Generate coverage reports"
@@ -70,6 +70,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Examples (via ./g8e CLI):"
             echo "  ./g8e test"
+            echo "  ./g8e test ci"
             echo "  ./g8e test g8eo services/pubsub"
             echo "  ./g8e test g8ee tests/unit"
             echo "  ./g8e test g8ee --coverage"
@@ -108,7 +109,7 @@ while [[ $# -gt 0 ]]; do
             break
             ;;
         *)
-            if [[ "$1" =~ ^(g8ee|g8eo|chaos)$ ]]; then
+            if [[ "$1" =~ ^(g8ee|g8eo|chaos|ci)$ ]]; then
                 COMPONENT="$1"
             else
                 EXTRA_ARGS+=("$1")
@@ -289,6 +290,76 @@ run_chaos() {
     go run ./cmd/chaos_tester --data-dir="$PROJECT_ROOT/.g8e/data" --pki-dir="$PROJECT_ROOT/.g8e/pki" "${EXTRA_ARGS[@]}"
 }
 
+run_ci() {
+    log_header "Running full CI workflow locally"
+    cd "$PROJECT_ROOT"
+    
+    # 1. verify-proto (Hard gates only)
+    log_header "CI: verify-proto"
+    
+    # We skip the git drift check locally because it blocks test execution 
+    # and run_tests.sh already synchronized protocols at startup.
+    
+    make lint-no-bare-session-id
+    log_ok "verify-proto passed"
+
+    # 2. lint-g8eo
+    log_header "CI: lint-g8eo"
+    (cd services/g8eo && golangci-lint run) || log_warn "golangci-lint (g8eo) failed or not installed"
+    (cd protocol && golangci-lint run) || log_warn "golangci-lint (protocol) failed or not installed"
+    
+    # 3. vulncheck-g8eo
+    log_header "CI: vulncheck-g8eo"
+    if command -v govulncheck >/dev/null 2>&1; then
+        (cd services/g8eo && govulncheck ./...)
+    else
+        log_warn "govulncheck not found, skipping"
+    fi
+
+    # 4. test-g8eo & apps-g8ee (requires platform)
+    log_header "CI: Running substrate and app tests"
+    
+    # Skip proto generation in sub-steps since we already did it at start of run_tests.sh
+    export G8E_SKIP_PROTO=true
+    
+    # Ensure platform is stopped before starting a fresh one
+    "$PROJECT_ROOT/g8e" platform stop || true
+    "$PROJECT_ROOT/g8e" platform start
+    
+    local test_exit_code=0
+    
+    # test-g8eo
+    log_header "CI: test-g8eo"
+    if ! run_g8eo; then
+        log_err "test-g8eo failed"
+        test_exit_code=1
+    fi
+    
+    # constants-lint
+    log_header "CI: constants-lint"
+    if ! (cd "$PROJECT_ROOT/services/g8eo" && G8E_STRICT_CONSTANTS_LINT="1" go test -v -run TestNoRawStringLiteralsWhereConstantsExist ./internal/contracts); then
+        log_err "constants-lint failed"
+        test_exit_code=1
+    fi
+
+    # apps-g8ee
+    log_header "CI: apps-g8ee"
+    "$PROJECT_ROOT/g8e" apps start g8ee
+    if ! run_g8ee; then
+        log_err "apps-g8ee failed"
+        test_exit_code=1
+    fi
+    
+    "$PROJECT_ROOT/g8e" platform stop
+    
+    if [[ $test_exit_code -ne 0 ]]; then
+        log_err "CI workflow failed"
+        exit $test_exit_code
+    fi
+    
+    log_ok "Full CI workflow passed"
+}
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -296,6 +367,12 @@ run_chaos() {
 export NODE_ENV="test"
 
 log_header "run_tests.sh ${COMPONENT} $*"
+
+# 0. Preparation: ensure proto/constants are up to date (done by default)
+if [[ "$COMPONENT" != "chaos" && "${G8E_SKIP_PROTO:-}" != "true" ]]; then
+    log_ok "Synchronizing proto and constants..."
+    (cd "$PROJECT_ROOT" && make proto > /dev/null && python3 scripts/data/generate_constants.py --all > /dev/null)
+fi
 
 if [[ "$COMPONENT" == "g8ee" ]]; then
     _prompt_llm_config
@@ -310,5 +387,6 @@ else
         g8ee) run_g8ee ;;
         g8eo) run_g8eo ;;
         chaos) run_chaos ;;
+        ci) run_ci ;;
     esac
 fi

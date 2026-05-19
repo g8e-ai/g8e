@@ -115,7 +115,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 	}
 	var protoCmd operatorv1.CommandRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
-		cs.logger.Error("Failed to decode command payload as protobuf CommandRequested", "error", err)
+		cs.logger.Error("Failed to decode command payload as protobuf CommandRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 	if protoCmd.Command == "" {
@@ -137,20 +137,20 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 	}
 
 	cs.logger.Info("Command execution requested",
-		"command", command,
+		string(constants.ApprovalTypeCommand), command,
 		"justification", justification,
 		"sentinel_mode", vaultMode)
 
 	execReq, err := payloadToExecutionRequest(msg)
 	if err != nil {
-		cs.logger.Error("Failed to create execution request", "error", err)
+		cs.logger.Error("Failed to create execution request", string(constants.ConnectionStateError), err)
 		return
 	}
 
 	if verdict := cs.runSentinelGuard(execReq); verdict.blocked {
 		if verdict.blockedEvent != nil && cs.auditVault != nil && cs.auditVault.IsEnabled() {
 			if _, err := cs.auditVault.RecordEvent(verdict.blockedEvent); err != nil {
-				cs.logger.Warn("Failed to record sentinel blocked event in audit vault", "error", err)
+				cs.logger.Warn("Failed to record sentinel blocked event in audit vault", string(constants.ConnectionStateError), err)
 			}
 		}
 		if cs.results != nil {
@@ -162,7 +162,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 				ReturnCode:  int32(*verdict.blockedResult.ReturnCode),
 			}
 			if err := cs.results.PublishExecutionResult(ctx, protoResult, msg); err != nil {
-				cs.logger.Error("Failed to publish blocked result", "error", err)
+				cs.logger.Error("Failed to publish blocked result", string(constants.ConnectionStateError), err)
 			}
 		}
 		return
@@ -207,7 +207,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		}
 	} else {
 		cs.logger.Info("Command execution completed",
-			"command", command,
+			string(constants.ApprovalTypeCommand), command,
 			"status", result.Status,
 			"status_updates", statusUpdateCount,
 			"total_elapsed", fmt.Sprintf("%.1fs", time.Since(startTime).Seconds()))
@@ -264,7 +264,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		}
 
 		if _, err := cs.auditVault.RecordEvent(event); err != nil {
-			cs.logger.Warn("Failed to record command event in audit vault", "error", err)
+			cs.logger.Warn("Failed to record command event in audit vault", string(constants.ConnectionStateError), err)
 		} else {
 			cs.logger.Info("Scrubbed command event recorded in audit vault (LFAA)",
 				"execution_id", result.ExecutionID,
@@ -294,7 +294,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		}
 
 		if err := cs.results.PublishExecutionResult(ctx, protoResult, msg); err != nil {
-			cs.logger.Error("Failed to publish execution result", "error", err)
+			cs.logger.Error("Failed to publish execution result", string(constants.ConnectionStateError), err)
 		}
 	}
 }
@@ -313,7 +313,7 @@ func (cs *CommandService) runSentinelGuard(execReq *models.ExecutionRequestPaylo
 	if execReq.Intent != "" {
 		if !cs.sentinel.ValidateIntent(constants.CloudIntent(execReq.Intent)) {
 			cs.logger.Error("SENTINEL BLOCKED: Unauthorized intent requested",
-				"intent", execReq.Intent,
+				string(constants.ApprovalTypeIntent), execReq.Intent,
 				"execution_id", execReq.ExecutionID)
 
 			exitCode := 126
@@ -426,7 +426,7 @@ func (cs *CommandService) runStatusTicker(
 					Message:        fmt.Sprintf("Command still executing (%.0fs elapsed)", elapsed),
 				}
 				if err := cs.results.PublishExecutionStatus(ctx, statusUpdate, msg); err != nil {
-					cs.logger.Warn("Failed to publish status update", "error", err)
+					cs.logger.Warn("Failed to publish status update", string(constants.ConnectionStateError), err)
 				} else {
 					cs.logger.Info("Execution status update sent",
 						"execution_id", execReq.ExecutionID,
@@ -450,7 +450,7 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 	}
 	var protoCancel operatorv1.CommandCancelRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCancel); err != nil {
-		cs.logger.Error("Failed to decode cancel payload as protobuf CommandCancelRequested", "error", err)
+		cs.logger.Error("Failed to decode cancel payload as protobuf CommandCancelRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 	if protoCancel.ExecutionId == "" {
@@ -469,7 +469,7 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 	var result *models.ExecutionResultsPayload
 
 	if err != nil {
-		cs.logger.Warn("Failed to cancel execution (may have already completed)", "error", err)
+		cs.logger.Warn("Failed to cancel execution (may have already completed)", string(constants.ConnectionStateError), err)
 		result = &models.ExecutionResultsPayload{
 			ExecutionID:  executionID,
 			CaseID:       msg.CaseID,
@@ -503,7 +503,7 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 		}
 
 		if err := cs.results.PublishCancellationResult(ctx, protoResult, msg); err != nil {
-			cs.logger.Error("Failed to publish cancellation result", "error", err)
+			cs.logger.Error("Failed to publish cancellation result", string(constants.ConnectionStateError), err)
 		}
 	}
 }

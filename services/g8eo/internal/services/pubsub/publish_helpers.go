@@ -78,19 +78,19 @@ func publishLFAATypedResponseTo(
 
 	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
 	if err != nil {
-		logger.Error("Failed to build LFAA typed response Governance Envelope", "error", err)
+		logger.Error("Failed to build LFAA typed response Governance Envelope", string(constants.ConnectionStateError), err)
 		return
 	}
 
 	data, err := json.Marshal(env)
 	if err != nil {
-		logger.Error("Failed to marshal LFAA typed response Governance Envelope", "error", err)
+		logger.Error("Failed to marshal LFAA typed response Governance Envelope", string(constants.ConnectionStateError), err)
 		return
 	}
 
 	channelName := constants.ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
-		logger.Error("Failed to publish LFAA typed response Universal", "error", err)
+		logger.Error("Failed to publish LFAA typed response Universal", string(constants.ConnectionStateError), err)
 		return
 	}
 
@@ -118,18 +118,18 @@ func publishLFAAErrorTo(
 
 	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
 	if err != nil {
-		logger.Error("Failed to build LFAA error Governance Envelope", "error", err)
+		logger.Error("Failed to build LFAA error Governance Envelope", string(constants.ConnectionStateError), err)
 		return
 	}
 
 	data, err := json.Marshal(env)
 	if err != nil {
-		logger.Error("Failed to marshal LFAA error Governance Envelope", "error", err)
+		logger.Error("Failed to marshal LFAA error Governance Envelope", string(constants.ConnectionStateError), err)
 		return
 	}
 
 	channelName := constants.ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
-		logger.Error("Failed to publish LFAA error Universal", "error", err)
+		logger.Error("Failed to publish LFAA error Universal", string(constants.ConnectionStateError), err)
 	}
 }

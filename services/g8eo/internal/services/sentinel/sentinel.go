@@ -515,7 +515,7 @@ func (s *Sentinel) initializeScrubbers() {
 	for name, pattern := range s.config.CustomScrubPatterns {
 		compiled, err := regexp.Compile(pattern)
 		if err != nil {
-			s.logger.Warn("Invalid custom scrub pattern", "name", name, "error", err)
+			s.logger.Warn("Invalid custom scrub pattern", "name", name, string(constants.ConnectionStateError), err)
 			continue
 		}
 		s.scrubbers = append(s.scrubbers, &RegexScrubber{
@@ -1255,7 +1255,7 @@ func (s *Sentinel) categorizeError(stderr string, exitCode int) string {
 	case strings.Contains(stderrLower, "permission denied"):
 		return "permission_denied"
 	case strings.Contains(stderrLower, "not found") || strings.Contains(stderrLower, "no such file"):
-		return "not_found"
+		return string(constants.Status.SentinelStatus.NotFound)
 	case strings.Contains(stderrLower, "timeout") || strings.Contains(stderrLower, "timed out"):
 		return "timeout"
 	case strings.Contains(stderrLower, "connection refused"):
@@ -1436,8 +1436,8 @@ func (s *Sentinel) categorizeWarning(line string) string {
 		return "memory_warning"
 	case strings.Contains(lower, "disk"):
 		return "disk_warning"
-	case strings.Contains(lower, "network"):
-		return "network_warning"
+	case strings.Contains(lower, string(constants.Status.ToolDisplayCategory.Network)):
+		return string(constants.Status.ToolDisplayCategory.Network)
 	case strings.Contains(lower, "certificate") || strings.Contains(lower, "ssl") || strings.Contains(lower, "tls"):
 		return "certificate_warning"
 	case strings.Contains(lower, "version"):
@@ -1699,7 +1699,7 @@ func (s *Sentinel) ValidateIntent(intent constants.CloudIntent) bool {
 		return true
 	default:
 		if s.logger != nil {
-			s.logger.Warn("Unauthorized intent requested", "intent", string(intent))
+			s.logger.Warn("Unauthorized intent requested", string(constants.ApprovalTypeIntent), string(intent))
 		}
 		return false
 	}

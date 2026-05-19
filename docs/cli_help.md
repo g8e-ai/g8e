@@ -145,6 +145,7 @@ When no operator is connected:
 ### test
 - `g8eo [path]`: Go Operator substrate tests with race detection. This is the default when no component is provided.
 - `g8ee [path]`: Optional Python Engine adapter tests with LLM provider support.
+- `ci`: Run all CI workflow steps locally (proto verify, lint, vulncheck, substrate tests, app tests).
 - `chaos [options]`: Run the g8eo Chaos Tester against the local audit stack (e.g., `--count=100`).
 
 ### security

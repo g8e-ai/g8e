@@ -270,7 +270,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 	if err != nil {
-		h.logger.Error("Health check failed to query platform_settings", "error", err)
+		h.logger.Error("Health check failed to query platform_settings", string(constants.ConnectionStateError), err)
 		jsonError(w, http.StatusServiceUnavailable, "platform_settings not ready")
 		return
 	}
@@ -282,7 +282,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	root, err := h.db.GetCurrentStateRoot()
 	if err != nil {
-		h.logger.Error("Health check failed to get state root", "error", err)
+		h.logger.Error("Health check failed to get state root", string(constants.ConnectionStateError), err)
 	}
 
 	jsonResponse(w, http.StatusOK, models.HealthResponse{
@@ -663,6 +663,18 @@ func (h *HTTPHandler) handleTrustScript(w http.ResponseWriter, r *http.Request) 
 	if host == "" {
 		host = "localhost"
 	}
+
+	ua := r.Header.Get("User-Agent")
+	if strings.Contains(ua, "Windows") || strings.Contains(ua, "PowerShell") {
+		script := WindowsPowerShellTrustScript(host, h.cfg.Listen.BootstrapPort)
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(script))
+		return
+	}
+
 	script := UniversalTrustScript(host, h.cfg.Listen.BootstrapPort)
 	w.Header().Set("Content-Type", "text/x-shellscript")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -884,8 +896,8 @@ func (h *HTTPHandler) handleReauth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":  true,
-		"operator": op,
+		string(constants.AuthAuditResultSuccess): true,
+		string(constants.SessionTypeOperator):    op,
 	})
 }
 
@@ -1268,11 +1280,11 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	}
 	_ = json.Unmarshal(p.Event, &inner)
 	if inner.Type == "" {
-		inner.Type = "unknown"
+		inner.Type = string(constants.SystemHealthUnknown)
 	}
 
 	if err := h.db.SSEEventsAppend(route, inner.Type, string(body)); err != nil {
-		h.logger.Error("SSE push: failed to append event", "error", err, "type", inner.Type)
+		h.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
 		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -1997,7 +2009,7 @@ func (h *HTTPHandler) handlePasskeyRegisterChallenge(w http.ResponseWriter, r *h
 
 	options, err := h.passkey.GenerateRegistrationChallenge(req.UserID, req.Email, req.UserName)
 	if err != nil {
-		h.logger.Warn("Passkey register challenge failed", "error", err, "userID", req.UserID)
+		h.logger.Warn("Passkey register challenge failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
 		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -2046,10 +2058,10 @@ func (h *HTTPHandler) handlePasskeyRegisterVerify(w http.ResponseWriter, r *http
 
 	cred, err := h.passkey.VerifyRegistration(req.UserID, r)
 	if err != nil {
-		h.logger.Warn("Passkey register verify failed", "error", err, "userID", req.UserID)
+		h.logger.Warn("Passkey register verify failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
+			string(constants.AuthAuditResultSuccess): false,
+			string(constants.ConnectionStateError):   err.Error(),
 		})
 		return
 	}
@@ -2098,11 +2110,11 @@ func (h *HTTPHandler) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.
 
 	options, err := h.passkey.GenerateAuthenticationChallenge(userID)
 	if err != nil {
-		h.logger.Warn("Passkey auth challenge failed", "error", err, "userID", userID)
+		h.logger.Warn("Passkey auth challenge failed", string(constants.ConnectionStateError), err, "userID", userID)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"success":     false,
-			"error":       err.Error(),
-			"needs_setup": err.Error() == "no passkeys registered",
+			string(constants.AuthAuditResultSuccess): false,
+			string(constants.ConnectionStateError):   err.Error(),
+			"needs_setup":                            err.Error() == "no passkeys registered",
 		})
 		return
 	}
@@ -2152,29 +2164,29 @@ func (h *HTTPHandler) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Req
 
 	cred, err := h.passkey.VerifyAuthentication(userID, r)
 	if err != nil {
-		h.logger.Warn("Passkey auth verify failed", "error", err, "userID", userID)
+		h.logger.Warn("Passkey auth verify failed", string(constants.ConnectionStateError), err, "userID", userID)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
+			string(constants.AuthAuditResultSuccess): false,
+			string(constants.ConnectionStateError):   err.Error(),
 		})
 		return
 	}
 
 	webSession, err := h.passkey.CreateWebSession(userID)
 	if err != nil {
-		h.logger.Error("Failed to create web session after auth", "error", err, "userID", userID)
+		h.logger.Error("Failed to create web session after auth", string(constants.ConnectionStateError), err, "userID", userID)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"success": false,
-			"error":   "authentication succeeded but session creation failed",
+			string(constants.AuthAuditResultSuccess): false,
+			string(constants.ConnectionStateError):   "authentication succeeded but session creation failed",
 		})
 		return
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":    true,
-		"user_id":    userID,
-		"credential": cred,
-		"web_session": map[string]interface{}{
+		string(constants.AuthAuditResultSuccess): true,
+		"user_id":                                userID,
+		"credential":                             cred,
+		string(constants.SessionKeyPrefixWeb): map[string]interface{}{
 			"id":                 webSession.ID,
 			"expires_at_unix_ms": webSession.ExpiresAtUnixMs,
 		},
@@ -2196,7 +2208,7 @@ func (h *HTTPHandler) handlePasskeyCredentials(w http.ResponseWriter, r *http.Re
 
 	creds, err := h.passkey.ListCredentials(userID)
 	if err != nil {
-		h.logger.Error("Failed to list credentials", "error", err, "userID", userID)
+		h.logger.Error("Failed to list credentials", string(constants.ConnectionStateError), err, "userID", userID)
 		jsonError(w, http.StatusInternalServerError, "failed to list credentials")
 		return
 	}
@@ -2228,7 +2240,7 @@ func (h *HTTPHandler) handlePasskeyRevokeCredential(w http.ResponseWriter, r *ht
 
 	found, remaining, err := h.passkey.RevokeCredential(userID, path)
 	if err != nil {
-		h.logger.Error("Failed to revoke credential", "error", err, "userID", userID)
+		h.logger.Error("Failed to revoke credential", string(constants.ConnectionStateError), err, "userID", userID)
 		jsonError(w, http.StatusInternalServerError, "failed to revoke credential")
 		return
 	}
@@ -2270,7 +2282,7 @@ func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.userSvc.CreateUser(req.Email, req.Name)
 	if err != nil {
-		h.logger.Warn("Failed to create user", "error", err, "email", req.Email)
+		h.logger.Warn("Failed to create user", string(constants.ConnectionStateError), err, "email", req.Email)
 		jsonError(w, http.StatusConflict, err.Error())
 		return
 	}
@@ -2323,9 +2335,9 @@ func (h *HTTPHandler) handleAuthLoginChallenge(w http.ResponseWriter, r *http.Re
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"user_id": user.ID,
-		"options": options,
+		string(constants.AuthAuditResultSuccess): true,
+		"user_id":                                user.ID,
+		"options":                                options,
 	})
 }
 
@@ -2375,9 +2387,9 @@ func (h *HTTPHandler) handleAuthLoginVerify(w http.ResponseWriter, r *http.Reque
 	})
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":     true,
-		"user_id":     req.UserID,
-		"web_session": webSession,
+		string(constants.AuthAuditResultSuccess): true,
+		"user_id":                                req.UserID,
+		string(constants.SessionKeyPrefixWeb):    webSession,
 	})
 }
 
@@ -2400,7 +2412,7 @@ func (h *HTTPHandler) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{"success": true})
+	jsonResponse(w, http.StatusOK, map[string]interface{}{string(constants.AuthAuditResultSuccess): true})
 }
 
 // handleBootstrap creates the first user in the system and optionally issues a CLI mTLS cert.
@@ -2481,7 +2493,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		// only run on a genuinely empty system.
 		hasUsers, err := h.userSvc.HasAnyUsers()
 		if err != nil {
-			h.logger.Error("Failed to check for existing users during bootstrap", "error", err)
+			h.logger.Error("Failed to check for existing users during bootstrap", string(constants.ConnectionStateError), err)
 			jsonError(w, http.StatusInternalServerError, "bootstrap check failed")
 			return
 		}
@@ -2494,7 +2506,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		// Create the bootstrap user
 		user, err = h.userSvc.CreateBootstrapUser(req.Email, req.Name)
 		if err != nil {
-			h.logger.Error("Failed to create bootstrap user", "error", err, "email", req.Email)
+			h.logger.Error("Failed to create bootstrap user", string(constants.ConnectionStateError), err, "email", req.Email)
 			jsonError(w, http.StatusInternalServerError, "failed to create user")
 			return
 		}
@@ -2503,7 +2515,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	// Issue a web session cookie for passkey registration
 	webSession, err := h.passkey.CreateWebSession(user.ID)
 	if err != nil {
-		h.logger.Error("Failed to create web session for bootstrap user", "error", err, "user_id", user.ID)
+		h.logger.Error("Failed to create web session for bootstrap user", string(constants.ConnectionStateError), err, "user_id", user.ID)
 		jsonError(w, http.StatusInternalServerError, "user created but web session failed")
 		return
 	}
@@ -2519,9 +2531,9 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	})
 
 	response := map[string]interface{}{
-		"success":     true,
-		"user":        user,
-		"web_session": webSession,
+		string(constants.AuthAuditResultSuccess): true,
+		"user":                                   user,
+		string(constants.SessionKeyPrefixWeb):    webSession,
 	}
 
 	// If CSR is requested and loopback, sign and return cert (plan §4.2)
@@ -2552,7 +2564,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		// Sign the CSR
 		certPEM, chainPEM, err := h.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, sessionID)
 		if err != nil {
-			h.logger.Error("Failed to sign bootstrap CSR", "error", err, "user_id", user.ID)
+			h.logger.Error("Failed to sign bootstrap CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
 			jsonError(w, http.StatusInternalServerError, "failed to sign CSR")
 			return
 		}
@@ -2564,7 +2576,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		if req.CLICSRPEM != "" {
 			cliCertPEM, cliCertChainPEM, err = h.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID)
 			if err != nil {
-				h.logger.Error("Failed to sign bootstrap CLI CSR", "error", err, "user_id", user.ID)
+				h.logger.Error("Failed to sign bootstrap CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
 				jsonError(w, http.StatusInternalServerError, "failed to sign CLI CSR")
 				return
 			}
@@ -2579,12 +2591,12 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		// Persist operator document
 		opBytes, err := json.Marshal(operator)
 		if err != nil {
-			h.logger.Error("Failed to marshal operator document", "error", err)
+			h.logger.Error("Failed to marshal operator document", string(constants.ConnectionStateError), err)
 			jsonError(w, http.StatusInternalServerError, "failed to create operator")
 			return
 		}
 		if err := h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
-			h.logger.Error("Failed to persist operator document", "error", err)
+			h.logger.Error("Failed to persist operator document", string(constants.ConnectionStateError), err)
 			jsonError(w, http.StatusInternalServerError, "failed to create operator")
 			return
 		}
@@ -2592,7 +2604,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		// Fetch trust bundle
 		hubBundle, err := h.pki.HubTrustBundle()
 		if err != nil {
-			h.logger.Warn("Failed to fetch hub trust bundle", "error", err)
+			h.logger.Warn("Failed to fetch hub trust bundle", string(constants.ConnectionStateError), err)
 			// Non-fatal - continue without bundle
 		}
 
@@ -2616,7 +2628,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		}
 		cliSessionBytes, _ := json.Marshal(cliSession)
 		if err := h.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
-			h.logger.Error("Failed to persist CLI session during bootstrap", "error", err)
+			h.logger.Error("Failed to persist CLI session during bootstrap", string(constants.ConnectionStateError), err)
 			jsonError(w, http.StatusInternalServerError, "failed to bind CLI session")
 			return
 		}
@@ -2647,7 +2659,7 @@ func (h *HTTPHandler) handleBootstrapStatus(w http.ResponseWriter, r *http.Reque
 
 	hasUsers, err := h.userSvc.HasAnyUsers()
 	if err != nil {
-		h.logger.Error("Failed to check for existing users", "error", err)
+		h.logger.Error("Failed to check for existing users", string(constants.ConnectionStateError), err)
 		jsonError(w, http.StatusInternalServerError, "status check failed")
 		return
 	}
@@ -2676,8 +2688,8 @@ func (h *HTTPHandler) handleUserMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"user":    user,
+		string(constants.AuthAuditResultSuccess): true,
+		"user":                                   user,
 	})
 }
 
@@ -2696,8 +2708,8 @@ func (h *HTTPHandler) handleWebSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":        true,
-		"user_id":        userID,
-		"web_session_id": webSessionID,
+		string(constants.AuthAuditResultSuccess): true,
+		"user_id":                                userID,
+		string(constants.SessionKeyPrefixWeb):    webSessionID,
 	})
 }

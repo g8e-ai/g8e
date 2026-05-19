@@ -282,6 +282,7 @@ async def user_settings(cache_aside_service, test_settings):
     """
     from app.llm.factory import get_llm_settings, get_search_settings
     from app.services.infra.settings_service import SettingsService
+    from app.models.settings import LLMSettings
 
     # Use TEST_LLM settings if available
     llm = get_llm_settings()
@@ -290,5 +291,12 @@ async def user_settings(cache_aside_service, test_settings):
         return G8eeUserSettings(llm=llm, search=search or test_settings.search)
 
     # Otherwise load from operator
-    settings_service = SettingsService(cache_aside_service=cache_aside_service)
-    return await settings_service.get_user_settings("test-user-id")
+    if globals().get("_OPERATOR_ONLINE", False):
+        settings_service = SettingsService(cache_aside_service=cache_aside_service)
+        try:
+            return await settings_service.get_user_settings("test-user-id")
+        except Exception as e:
+            logger.warning(f"Failed to load user settings from operator: {e}")
+
+    # Fallback to mock settings if operator is offline or connection fails
+    return G8eeUserSettings(llm=llm or LLMSettings(), search=search or test_settings.search)

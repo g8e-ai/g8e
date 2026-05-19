@@ -386,11 +386,11 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 			attempts++
 			if attempts >= maxReconnectAttempts {
 				rs.logger.Error("[RECONNECT] Max reconnection attempts reached, giving up",
-					"attempts", attempts, "error", err)
+					"attempts", attempts, string(constants.ConnectionStateError), err)
 				return
 			}
 			rs.logger.Warn("[RECONNECT] Failed to connect, will retry...",
-				"attempt", attempts, "max", maxReconnectAttempts, "error", err)
+				"attempt", attempts, "max", maxReconnectAttempts, string(constants.ConnectionStateError), err)
 			time.Sleep(reconnectDelay)
 			reconnectDelay = min(reconnectDelay*2, maxReconnectDelay)
 			continue
@@ -463,7 +463,7 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 	envelope := &uap.UAPEnvelope{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, (*commonv1.GovernanceEnvelope)(envelope)); err != nil {
 		rs.logger.Error("envelope: non-JSON payload rejected",
-			"error", err,
+			string(constants.ConnectionStateError), err,
 			"action", "use canonical JSON (protojson) GovernanceEnvelope")
 		return
 	}
@@ -539,7 +539,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		verified, err = rs.transactionVerifier.VerifyEnvelope(env)
 		if err != nil {
 			rs.logger.Error("Transaction verification failed - command rejected",
-				"error", err,
+				string(constants.ConnectionStateError), err,
 				"message_id", env.Id)
 			// Log blocked transaction to audit vault
 			rs.logBlockedTransaction(env, err)
@@ -581,7 +581,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		receipt, err := rs.warden.Execute(rs.ctx, verified, cmdMsg)
 		if err != nil {
 			rs.logger.Error("Warden execution failed",
-				"error", err,
+				string(constants.ConnectionStateError), err,
 				"message_id", env.Id,
 				"receipt_status", receipt.Status.String())
 			return
@@ -636,7 +636,7 @@ func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) 
 
 	req, err := unmarshalPayload(msg.EventType, msg.Payload)
 	if err != nil {
-		rs.logger.Error("Failed to unmarshal shutdown request", "error", err)
+		rs.logger.Error("Failed to unmarshal shutdown request", string(constants.ConnectionStateError), err)
 		return
 	}
 
@@ -663,7 +663,7 @@ func (rs *PubSubCommandService) handleEvalAnswerRequestSync(ctx context.Context,
 
 	req, err := unmarshalPayload(msg.EventType, msg.Payload)
 	if err != nil {
-		rs.logger.Error("Failed to unmarshal eval answer request", "error", err)
+		rs.logger.Error("Failed to unmarshal eval answer request", string(constants.ConnectionStateError), err)
 		return "", err
 	}
 
@@ -720,6 +720,6 @@ func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, reje
 
 	// Log to audit vault using canonical RecordActionReceipt for unified query experience
 	if err := rs.audit.auditVault.RecordActionReceipt(&record); err != nil {
-		rs.logger.Error("Failed to record blocked transaction in audit vault", "error", err, "message_id", env.Id)
+		rs.logger.Error("Failed to record blocked transaction in audit vault", string(constants.ConnectionStateError), err, "message_id", env.Id)
 	}
 }

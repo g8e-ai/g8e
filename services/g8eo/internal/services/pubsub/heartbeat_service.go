@@ -260,7 +260,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg PubSubCommandMessage) {
 	var protoReq operatorv1.HeartbeatRequested
 	if err := proto.Unmarshal(msg.Payload, &protoReq); err != nil {
-		hs.logger.Error("[HEARTBEAT] Failed to decode heartbeat request payload as protobuf HeartbeatRequested", "error", err)
+		hs.logger.Error("[HEARTBEAT] Failed to decode heartbeat request payload as protobuf HeartbeatRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 
@@ -274,7 +274,7 @@ func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg PubSubCommand
 	if hs.results != nil {
 		protoHeartbeat := hs.buildProtoHeartbeat(heartbeat)
 		if err := hs.results.PublishHeartbeat(ctx, protoHeartbeat); err != nil {
-			hs.logger.Error("[HEARTBEAT] Failed to send requested heartbeat", "error", err)
+			hs.logger.Error("[HEARTBEAT] Failed to send requested heartbeat", string(constants.ConnectionStateError), err)
 		} else {
 			hs.logger.Info("[HEARTBEAT] Requested heartbeat sent successfully")
 		}
@@ -294,7 +294,7 @@ func (hs *HeartbeatService) SendAutomatic() {
 	if hs.results != nil {
 		protoHeartbeat := hs.buildProtoHeartbeat(heartbeat)
 		if err := hs.results.PublishHeartbeat(hs.ctx, protoHeartbeat); err != nil {
-			hs.logger.Error("[HEARTBEAT] Failed to send automatic heartbeat", "error", err)
+			hs.logger.Error("[HEARTBEAT] Failed to send automatic heartbeat", string(constants.ConnectionStateError), err)
 		} else {
 			hs.logger.Info("[HEARTBEAT] Automatic heartbeat sent successfully")
 		}

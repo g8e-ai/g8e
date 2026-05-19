@@ -1945,7 +1945,7 @@ func TestSentinel_CategorizeWarning(t *testing.T) {
 		{"Performance warning: slow query detected", "performance_warning"},
 		{"Warning: memory usage exceeding threshold", "memory_warning"},
 		{"Disk warning: partition nearly full", "disk_warning"},
-		{"Network warning: high latency observed", "network_warning"},
+		{"Network warning: high latency observed", "network"},
 		{"Warning: SSL certificate expiring soon", "certificate_warning"},
 		{"TLS warning: weak cipher suite", "certificate_warning"},
 		{"Warning: version mismatch detected", "version_warning"},

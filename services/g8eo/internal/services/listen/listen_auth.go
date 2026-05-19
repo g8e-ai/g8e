@@ -263,7 +263,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		// [PIVOT] Verify certificate revocation status (Phase 6)
 		if s.pki != nil {
 			if err := s.pki.VerifyCertificate(r.TLS.PeerCertificates[0]); err != nil {
-				s.logger.Warn("mTLS client certificate revoked or invalid", "path", r.URL.Path, "error", err)
+				s.logger.Warn("mTLS client certificate revoked or invalid", "path", r.URL.Path, string(constants.ConnectionStateError), err)
 				s.jsonError(w, http.StatusUnauthorized, "mTLS client certificate revoked or invalid")
 				return
 			}
@@ -301,7 +301,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			s.logger.Warn("Invalid operator session attempt", "operator_session_id", operatorSessionID[:8]+"...", "error", err)
+			s.logger.Warn("Invalid operator session attempt", "operator_session_id", operatorSessionID[:8]+"...", string(constants.ConnectionStateError), err)
 
 			// If it's a structured AuthError, return it properly
 			if ae, ok := err.(*AuthError); ok {
@@ -319,7 +319,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				// [PIVOT] Verify CLI session and lookup UserID (Plan §4.6)
 				cliDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 				if err != nil {
-					s.logger.Error("failed to load CLI session", "cli_session_id", cliSessionID, "error", err)
+					s.logger.Error("failed to load CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
 					s.jsonError(w, http.StatusInternalServerError, "failed to load session")
 					return
 				}
@@ -332,7 +332,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				var cliSession models.CLISession
 				b, _ := json.Marshal(cliDoc.Data)
 				if err := json.Unmarshal(b, &cliSession); err != nil {
-					s.logger.Error("failed to parse CLI session", "cli_session_id", cliSessionID, "error", err)
+					s.logger.Error("failed to parse CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
 					s.jsonError(w, http.StatusInternalServerError, "failed to parse session")
 					return
 				}
@@ -348,7 +348,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				if s.userSvc != nil && cliSession.UserID != "" {
 					user, err := s.userSvc.GetByID(cliSession.UserID)
 					if err != nil {
-						s.logger.Error("failed to load user for CLI session", "user_id", cliSession.UserID, "error", err)
+						s.logger.Error("failed to load user for CLI session", "user_id", cliSession.UserID, string(constants.ConnectionStateError), err)
 						s.jsonError(w, http.StatusInternalServerError, "identity validation failed")
 						return
 					}

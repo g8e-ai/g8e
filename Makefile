@@ -46,6 +46,20 @@ proto: buf-install
 	@find evals/g8e_evals/proto -name "*_pb2*.py" -exec sed -i 's/^import \(.*_pb2\)/from . import \1/' {} +
 	@echo "Protobuf generation complete."
 
+.PHONY: proto-force
+proto-force: buf-install
+	@echo "Force generating Protobuf code with Buf..."
+	@$(BUF) generate protocol/proto
+	@echo "Post-processing Python code..."
+	@touch services/g8ee/app/proto/__init__.py
+	@find services/g8ee/app/proto -name "*_pb2*.py" -exec sed -i 's/^import \(.*_pb2\)/from . import \1/' {} +
+	@# Also generate for the evals harness
+	@mkdir -p evals/g8e_evals/proto
+	@cp services/g8ee/app/proto/*_pb2*.py evals/g8e_evals/proto/
+	@touch evals/g8e_evals/proto/__init__.py
+	@find evals/g8e_evals/proto -name "*_pb2*.py" -exec sed -i 's/^import \(.*_pb2\)/from . import \1/' {} +
+	@echo "Protobuf generation complete."
+
 .PHONY: buf-install
 buf-install:
 	@if ! command -v buf &> /dev/null && [ ! -f "./buf" ]; then \

@@ -227,7 +227,7 @@ func (avs *AuditVaultService) verifyWritePermissions() error {
 	}
 
 	if err := os.Remove(testFile); err != nil {
-		avs.logger.Warn("Failed to remove write test file", "path", testFile, "error", err)
+		avs.logger.Warn("Failed to remove write test file", "path", testFile, string(constants.ConnectionStateError), err)
 	}
 
 	avs.logger.Info("Write permissions verified", "path", avs.config.DataDir)
@@ -803,7 +803,7 @@ func (avs *AuditVaultService) ListActionReceipts(operatorSessionID string, limit
 			&r.SignerKeyID, &r.Signature, &timestampStr,
 		)
 		if err != nil {
-			avs.logger.Warn("Failed to scan receipt row", "error", err)
+			avs.logger.Warn("Failed to scan receipt row", string(constants.ConnectionStateError), err)
 			continue
 		}
 
@@ -854,7 +854,7 @@ func (avs *AuditVaultService) ListActionReceiptsSince(since time.Time, limit int
 			&r.SignerKeyID, &r.Signature, &timestampStr,
 		)
 		if err != nil {
-			avs.logger.Warn("Failed to scan receipt row", "error", err)
+			avs.logger.Warn("Failed to scan receipt row", string(constants.ConnectionStateError), err)
 			continue
 		}
 
@@ -941,7 +941,7 @@ func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset 
 			&encryptedFlag,
 		)
 		if err != nil {
-			avs.logger.Warn("Failed to scan event row", "error", err)
+			avs.logger.Warn("Failed to scan event row", string(constants.ConnectionStateError), err)
 			continue
 		}
 
@@ -951,7 +951,7 @@ func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset 
 			if len(contentTextBytes) > 0 {
 				decrypted, err := avs.decryptContent(contentTextBytes)
 				if err != nil {
-					avs.logger.Warn("Failed to decrypt content_text", "event_id", event.ID, "error", err)
+					avs.logger.Warn("Failed to decrypt content_text", "event_id", event.ID, string(constants.ConnectionStateError), err)
 				} else {
 					event.ContentText = decrypted
 				}
@@ -959,7 +959,7 @@ func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset 
 			if len(commandStdoutBytes) > 0 {
 				decrypted, err := avs.decryptContent(commandStdoutBytes)
 				if err != nil {
-					avs.logger.Warn("Failed to decrypt stdout", "event_id", event.ID, "error", err)
+					avs.logger.Warn("Failed to decrypt stdout", "event_id", event.ID, string(constants.ConnectionStateError), err)
 				} else {
 					event.CommandStdout = decrypted
 				}
@@ -967,7 +967,7 @@ func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset 
 			if len(commandStderrBytes) > 0 {
 				decrypted, err := avs.decryptContent(commandStderrBytes)
 				if err != nil {
-					avs.logger.Warn("Failed to decrypt stderr", "event_id", event.ID, "error", err)
+					avs.logger.Warn("Failed to decrypt stderr", "event_id", event.ID, string(constants.ConnectionStateError), err)
 				} else {
 					event.CommandStderr = decrypted
 				}
@@ -1066,7 +1066,7 @@ func (avs *AuditVaultService) GetFileMutations(eventID int64) ([]*FileMutationLo
 			&diffStat,
 		)
 		if err != nil {
-			avs.logger.Warn("Failed to scan file mutation row", "error", err)
+			avs.logger.Warn("Failed to scan file mutation row", string(constants.ConnectionStateError), err)
 			continue
 		}
 
@@ -1152,13 +1152,13 @@ func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
 			WHERE event_id IN (SELECT id FROM events WHERE timestamp < ?)
 		`, cutoff)
 		if err != nil {
-			logger.Error("Failed to prune old file mutations", "error", err)
+			logger.Error("Failed to prune old file mutations", string(constants.ConnectionStateError), err)
 		}
 
 		// 2. Delete events older than retention period
 		result, err := db.Exec("DELETE FROM events WHERE timestamp < ?", cutoff)
 		if err != nil {
-			logger.Error("Failed to prune old events", "error", err)
+			logger.Error("Failed to prune old events", string(constants.ConnectionStateError), err)
 			return
 		}
 
@@ -1170,7 +1170,7 @@ func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
 		// 3. Delete receipts older than retention period
 		result, err = db.Exec("DELETE FROM receipts WHERE timestamp < ?", cutoff)
 		if err != nil {
-			logger.Error("Failed to prune old receipts", "error", err)
+			logger.Error("Failed to prune old receipts", string(constants.ConnectionStateError), err)
 		} else {
 			rowsDeleted, _ = result.RowsAffected()
 			if rowsDeleted > 0 {
@@ -1185,11 +1185,11 @@ func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
 			AND id NOT IN (SELECT DISTINCT operator_session_id FROM receipts WHERE operator_session_id IS NOT NULL)
 		`)
 		if err != nil {
-			logger.Warn("Failed to prune orphaned sessions", "error", err)
+			logger.Warn("Failed to prune orphaned sessions", string(constants.ConnectionStateError), err)
 		}
 
 		if err := db.RunIncrementalVacuum(1000); err != nil {
-			logger.Info("Failed to run incremental vacuum", "error", err)
+			logger.Info("Failed to run incremental vacuum", string(constants.ConnectionStateError), err)
 		}
 	}
 }

@@ -1,5 +1,5 @@
 module github.com/g8e-ai/g8e/protocol
 
-go 1.25
+go 1.26
 
-toolchain go1.25.9
+toolchain go1.26.3

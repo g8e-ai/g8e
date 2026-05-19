@@ -19,7 +19,7 @@ Components run host-native. **Do not use Docker for primary component developmen
 
 ### Setup
 
-- **Go 1.22+** (required, for `g8eo`).
+- **Go 1.26.3+** (required, for `g8eo`).
 - **Python 3.12+** (only when developing the optional `g8ee` adapter).
 - **Node 22** (only when developing optional Dashboard/GUI).
 

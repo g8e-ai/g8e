@@ -35,7 +35,7 @@ import (
 // mapProtoToPayloadType maps a protobuf message to its canonical g8e payload type string.
 // This ensures synchronization with g8ee Pydantic models (services/g8ee/app/models/pubsub_messages.py).
 func mapProtoToPayloadType(msg proto.Message) string {
-	switch msg.(type) {
+	switch m := msg.(type) {
 	case *operatorv1.CommandResult:
 		return "execution_result"
 	case *operatorv1.ExecutionStatusUpdate:
@@ -51,42 +51,37 @@ func mapProtoToPayloadType(msg proto.Message) string {
 	case *operatorv1.PortCheckResult:
 		return "port_check_result"
 	case *operatorv1.FetchLogsResult:
-		res := msg.(*operatorv1.FetchLogsResult)
-		if res.Error != "" {
+		if m.Error != "" {
 			return "fetch_logs_error"
 		}
 		return "fetch_logs_result"
 	case *operatorv1.FetchHistoryResult:
-		res := msg.(*operatorv1.FetchHistoryResult)
-		if !res.Success {
+		if !m.Success {
 			return "fetch_history_error"
 		}
 		return "fetch_history_success"
 	case *operatorv1.FetchFileHistoryResult:
-		res := msg.(*operatorv1.FetchFileHistoryResult)
-		if !res.Success {
+		if !m.Success {
 			return "fetch_file_history_error"
 		}
 		return "fetch_file_history_success"
 	case *operatorv1.RestoreFileResult:
-		res := msg.(*operatorv1.RestoreFileResult)
-		if !res.Success {
+		if !m.Success {
 			return "restore_file_error"
 		}
 		return "restore_file_success"
 	case *operatorv1.FetchFileDiffResult:
-		res := msg.(*operatorv1.FetchFileDiffResult)
-		if !res.Success {
+		if !m.Success {
 			return "fetch_file_diff_error"
 		}
-		if res.Diff != nil {
+		if m.Diff != nil {
 			return "fetch_file_diff_by_id_success"
 		}
 		return "fetch_file_diff_by_session_success"
 	case *operatorv1.HeartbeatResult:
 		return "heartbeat"
 	default:
-		return "unknown"
+		return string(constants.SystemHealthUnknown)
 	}
 }
 

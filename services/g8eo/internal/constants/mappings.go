@@ -153,3 +153,4 @@ func ProtoToExecutionStatus(status operatorv1.ExecutionStatus) ExecutionStatus {
 		return ExecutionStatusPending
 	}
 }
+

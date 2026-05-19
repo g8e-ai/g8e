@@ -216,7 +216,7 @@ install-tools:
 	@echo "Installing development tools..."
 	@mkdir -p bin
 	@if [ -z "$$(command -v golangci-lint)" ] && [ ! -f "./bin/golangci-lint" ]; then \
-		echo "Installing golangci-lint (building from source for Go 1.25 compatibility)..."; \
+		echo "Installing golangci-lint (building from source for Go 1.26 compatibility)..."; \
 		$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.0; \
 	fi
 	@if [ -z "$$(command -v govulncheck)" ]; then \

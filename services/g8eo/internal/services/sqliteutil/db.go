@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	_ "modernc.org/sqlite"
 )
 
@@ -94,13 +95,13 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 	}
 	for _, pragma := range pragmas {
 		if _, err := sqlDB.Exec(pragma); err != nil {
-			logger.Warn("Failed to set pragma", "pragma", pragma, "error", err)
+			logger.Warn("Failed to set pragma", "pragma", pragma, string(constants.ConnectionStateError), err)
 		}
 	}
 
 	if cfg.SetFilePermissions {
 		if err := os.Chmod(cfg.Path, 0600); err != nil {
-			logger.Warn("Failed to set database file permissions", "path", cfg.Path, "error", err)
+			logger.Warn("Failed to set database file permissions", "path", cfg.Path, string(constants.ConnectionStateError), err)
 		}
 	}
 

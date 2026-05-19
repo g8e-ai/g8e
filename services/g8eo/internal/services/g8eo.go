@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/auth"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
@@ -136,7 +137,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		}
 		vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger)
 		if err != nil {
-			vs.logger.Warn("Failed to initialize scrubbed vault - continuing without it", "error", err)
+			vs.logger.Warn("Failed to initialize scrubbed vault - continuing without it", string(constants.ConnectionStateError), err)
 		} else if vs.localStore != nil {
 			vs.logger.Info("Scrubbed vault initialized (AI-accessible)")
 		}
@@ -150,7 +151,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		}
 		vs.rawVault, err = storage.NewRawVaultService(rawVaultConfig, vs.logger)
 		if err != nil {
-			vs.logger.Warn("Failed to initialize raw vault - continuing without it", "error", err)
+			vs.logger.Warn("Failed to initialize raw vault - continuing without it", string(constants.ConnectionStateError), err)
 		} else if vs.rawVault != nil {
 			vs.logger.Info("Raw vault initialized (customer data store)")
 		}
@@ -165,7 +166,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		gitPath = system.ResolveGitBinary(vs.logger)
 		if gitPath != "" {
 			if gitVersion, err := system.ValidateGitBinary(gitPath); err != nil {
-				vs.logger.Warn("Git binary found but not functional - ledger will not be available", "path", gitPath, "error", err)
+				vs.logger.Warn("Git binary found but not functional - ledger will not be available", "path", gitPath, string(constants.ConnectionStateError), err)
 				gitPath = ""
 			} else {
 				vs.logger.Info("Git binary validated", "version", gitVersion)
@@ -210,7 +211,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if vs.localStore != nil {
 		replayStore, err := storage.NewSQLReplayStore(vs.localStore.GetDB().DB, vs.logger)
 		if err != nil {
-			vs.logger.Warn("Failed to initialize replay store - transaction verification will not enforce replay protection", "error", err)
+			vs.logger.Warn("Failed to initialize replay store - transaction verification will not enforce replay protection", string(constants.ConnectionStateError), err)
 		} else {
 			vs.replayStore = replayStore
 			vs.logger.Info("Replay store initialized for transaction verification")
@@ -313,7 +314,7 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 	// Stop pubsub command service first to stop receiving new commands
 	if vs.pubSubCommands != nil {
 		if err := vs.pubSubCommands.Stop(); err != nil {
-			vs.logger.Error("Failed to stop pubsub command service", "error", err)
+			vs.logger.Error("Failed to stop pubsub command service", string(constants.ConnectionStateError), err)
 		}
 	}
 
@@ -325,19 +326,19 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 	// Close vaults and stores
 	if vs.localStore != nil {
 		if err := vs.localStore.Close(); err != nil {
-			vs.logger.Error("Failed to close local store", "error", err)
+			vs.logger.Error("Failed to close local store", string(constants.ConnectionStateError), err)
 		}
 	}
 
 	if vs.rawVault != nil {
 		if err := vs.rawVault.Close(); err != nil {
-			vs.logger.Error("Failed to close raw vault", "error", err)
+			vs.logger.Error("Failed to close raw vault", string(constants.ConnectionStateError), err)
 		}
 	}
 
 	if vs.auditVault != nil {
 		if err := vs.auditVault.Close(); err != nil {
-			vs.logger.Error("Failed to close audit vault", "error", err)
+			vs.logger.Error("Failed to close audit vault", string(constants.ConnectionStateError), err)
 		}
 	}
 

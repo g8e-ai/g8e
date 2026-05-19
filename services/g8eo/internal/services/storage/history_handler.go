@@ -128,7 +128,7 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*operatorv1.Fe
 		if event.Type == constants.Event.Operator.FileEdit.Completed {
 			mutations, err := hh.auditVault.GetFileMutations(event.ID)
 			if err != nil {
-				hh.logger.Warn("Failed to get file mutations", "event_id", event.ID, "error", err)
+				hh.logger.Warn("Failed to get file mutations", "event_id", event.ID, string(constants.ConnectionStateError), err)
 			} else {
 				for _, m := range mutations {
 					auditEvent.FileMutations = append(auditEvent.FileMutations, &operatorv1.AuditFileMutation{

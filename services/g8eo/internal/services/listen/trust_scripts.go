@@ -64,9 +64,7 @@ if exist "%temp%\getadmin.vbs" ( del "%temp%\getadmin.vbs" )
 set HOST={{.Host}}
 
 echo Removing any existing g8e certificates...
-for /f "tokens=2 delims==" %%s in ('certutil -store Root ^| findstr /i "g8e"') do (
-    certutil -delstore Root "%%s" >nul 2>&1
-)
+certutil -delstore Root g8e >nul 2>&1
 
 echo Downloading g8e CA Certificate...
 curl -sSf -L -o "%temp%\g8e-ca.crt" {{.URL}}
@@ -74,6 +72,16 @@ if %errorlevel% NEQ 0 (
     echo.
     echo ERROR: Failed to download CA certificate from {{.URL}}
     echo Make sure the g8e platform is running and reachable on port {{.Port}}.
+    pause
+    exit /B 1
+)
+
+:: Validate certificate before installing
+certutil -dump "%temp%\g8e-ca.crt" >nul 2>&1
+if %errorlevel% NEQ 0 (
+    del /f /q "%temp%\g8e-ca.crt" >nul 2>&1
+    echo.
+    echo ERROR: Downloaded file is not a valid certificate.
     pause
     exit /B 1
 )
@@ -130,89 +138,58 @@ URL="{{.URL}}"
 CERT_FILE="/tmp/g8e-ca.crt"
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo ""
     echo "ERROR: This script must run as root."
     echo "Usage: curl -fsSL http://${HOST}{{.PortSuffix}}/trust | sudo sh"
-    echo ""
+    exit 1
+fi
+
+if ! curl -fsSL -o "$CERT_FILE" "$URL"; then
+    echo "ERROR: Failed to download CA certificate from $URL"
     exit 1
 fi
 
 _OS="$(uname -s)"
-
-echo "Downloading g8e CA certificate..."
-if ! curl -fsSL -o "$CERT_FILE" "$URL"; then
-    echo ""
-    echo "ERROR: Failed to download CA certificate from $URL"
-    echo "Make sure the g8e platform is running and reachable on port {{.Port}}."
-    exit 1
-fi
-
 case "$_OS" in
   Darwin)
     KEYCHAIN="/Library/Keychains/System.keychain"
-
-    echo "Removing any existing g8e certificates..."
     security find-certificate -a -Z "$KEYCHAIN" 2>/dev/null \
-        | awk '/^SHA-1/{sha=$NF} /"alis"/{gsub(/.*"alis"<blob>="|"$/, ""); if (tolower($0) ~ /g8e/) print $0}' \
+        | awk '/^SHA-1/{sha=$NF} /"alis"|<blob>="g8e/ { 
+            if ($0 ~ /"alis"/) {
+                gsub(/.*"alis"<blob>="|"$/, "");
+                print $0
+            } else if ($0 ~ /"cn  "/) {
+                gsub(/.*"cn  "<blob>="|"$/, "");
+                print $0
+            }
+          }' \
+        | sort -u \
         | while IFS= read -r name; do
             [ -z "$name" ] && continue
-            security delete-certificate -c "$name" "$KEYCHAIN" 2>/dev/null && \
-                echo "  Removed: $name" || true
+            security delete-certificate -c "$name" "$KEYCHAIN" 2>/dev/null || true
           done
-
-    echo "Trusting g8e CA certificate..."
     security add-trusted-cert -d -r trustRoot -k "$KEYCHAIN" "$CERT_FILE"
     ;;
 
   Linux)
-    echo "Removing any existing g8e certificates..."
-    find /usr/local/share/ca-certificates/ -iname 'g8e*' -delete 2>/dev/null || true
-    find /usr/share/ca-certificates/ -iname 'g8e*' -delete 2>/dev/null || true
+    find /usr/local/share/ca-certificates/ -iname '*g8e*' -delete 2>/dev/null || true
+    find /etc/pki/ca-trust/source/anchors/ -iname '*g8e*' -delete 2>/dev/null || true
 
-    if command -v certutil >/dev/null 2>&1; then
-        for db in "$HOME/.pki/nssdb" "/etc/pki/nssdb"; do
-            [ -d "$db" ] || continue
-            certutil -L -d "sql:$db" 2>/dev/null \
-                | awk '/[Gg]8[Ee]/{print $1}' \
-                | while IFS= read -r nick; do
-                    certutil -D -d "sql:$db" -n "$nick" 2>/dev/null && \
-                        echo "  Removed NSS cert: $nick" || true
-                  done
-        done
+    if [ -d /usr/local/share/ca-certificates/ ]; then
+        cp "$CERT_FILE" /usr/local/share/ca-certificates/g8e-ca.crt
+        update-ca-certificates
+    elif [ -d /etc/pki/ca-trust/source/anchors/ ]; then
+        cp "$CERT_FILE" /etc/pki/ca-trust/source/anchors/g8e-ca.crt
+        update-ca-trust extract
     fi
-
-    echo "Trusting g8e CA certificate..."
-    cp "$CERT_FILE" /usr/local/share/ca-certificates/g8e-ca.crt
-    chmod 644 /usr/local/share/ca-certificates/g8e-ca.crt
-    update-ca-certificates
-    ;;
-
-  *)
-    echo "Unsupported OS: $_OS"
-    rm -f "$CERT_FILE"
-    exit 1
     ;;
 esac
 
 rm -f "$CERT_FILE"
-echo ""
-echo "g8e CA certificate trusted successfully."
-
 if echo "$HOST" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
-    if command -v host >/dev/null 2>&1; then
-        RESOLVED_HOST=$(host "$HOST" 2>/dev/null | awk '/pointer/ {print $NF}' | sed 's/\.$//')
-        if [ -n "$RESOLVED_HOST" ]; then
-            echo "Resolved $HOST to $RESOLVED_HOST"
-            HOST="$RESOLVED_HOST"
-        else
-            echo "Could not resolve hostname for $HOST, using IP address"
-        fi
-    else
-        echo "host command not available, using IP address"
-    fi
+    RESOLVED_HOST=$(host "$HOST" 2>/dev/null | awk '/pointer/ {print $NF}' | sed 's/\.$//' || echo "")
+    [ -n "$RESOLVED_HOST" ] && HOST="$RESOLVED_HOST"
 fi
-
-echo "Restart your browser and navigate to https://$HOST/"
+echo "g8e CA trusted. Restart your browser and navigate to https://$HOST/"
 `
 	return executeTemplate("universal", tmpl, map[string]interface{}{
 		"Host":       host,
@@ -334,6 +311,16 @@ _log "Fetching platform CA certificate..."
 if ! _fetch "$G8E_HTTP_URL/ca.crt" "$_ca"; then
   _die "Failed to fetch CA certificate. Ensure the platform is running and port {{.HttpPort}} is reachable."
 fi
+
+# Validate certificate before use
+if command -v openssl >/dev/null 2>&1; then
+  if ! openssl x509 -in "$_ca" -noout >/dev/null 2>&1; then
+    _die "Downloaded file is not a valid X.509 certificate."
+  fi
+elif ! grep -q "BEGIN CERTIFICATE" "$_ca"; then
+  _die "Downloaded file does not appear to be a valid PEM certificate."
+fi
+
 _ok "CA certificate ready"
 
 # Step 2: Download operator binary (HTTPS with platform CA + bearer auth)
@@ -381,41 +368,31 @@ $url = "{{.URL}}"
 $certFile = Join-Path $env:TEMP "g8e-ca.crt"
 $g8eHost = "{{.Host}}"
 
-Write-Host "Removing any existing g8e certificates..."
-Get-ChildItem Cert:\LocalMachine\Root | Where-Object { $_.Subject -like "*g8e*" -or $_.FriendlyName -like "*g8e*" } | Remove-Item -Force -ErrorAction SilentlyContinue
+# Remove existing certificates quietly
+Get-ChildItem Cert:\LocalMachine\Root | Where-Object { 
+    $_.Subject -like "*g8e*" -or 
+    $_.FriendlyName -like "*g8e*" -or
+    $_.Issuer -like "*g8e*"
+} | ForEach-Object {
+    $_ | Remove-Item -Force -ErrorAction SilentlyContinue
+}
 
-Write-Host "Downloading g8e CA certificate..."
 try {
     Invoke-WebRequest -Uri $url -OutFile $certFile -UseBasicParsing
-} catch {
-    Write-Error "Failed to download CA certificate from $url. Make sure the g8e platform is running and reachable on port {{.Port}}."
-    exit 1
-}
-
-Write-Host "Trusting g8e CA certificate..."
-certutil -addstore -f "Root" $certFile | Out-Null
-if ($LASTEXITCODE -ne 0) {
+    certutil -addstore -f "Root" $certFile | Out-Null
     Remove-Item $certFile -Force -ErrorAction SilentlyContinue
-    Write-Error "Failed to trust the certificate. Run this in an elevated PowerShell terminal."
+    
+    $ipRegex = "^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
+    if ($g8eHost -match $ipRegex) {
+        try {
+            $g8eHost = [System.Net.Dns]::GetHostEntry($g8eHost).HostName
+        } catch {}
+    }
+    Write-Host "g8e CA trusted. Restart your browser and navigate to https://$g8eHost/"
+} catch {
+    Write-Error "Failed to trust g8e CA certificate: $_"
     exit 1
 }
-Remove-Item $certFile -Force -ErrorAction SilentlyContinue
-
-Write-Host ""
-Write-Host "g8e CA certificate trusted successfully."
-
-$ipRegex = "^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
-if ($g8eHost -match $ipRegex) {
-    try {
-        $hostname = [System.Net.Dns]::GetHostEntry($g8eHost).HostName
-        Write-Host "Resolved $g8eHost to $hostname"
-        $g8eHost = $hostname
-    } catch {
-        Write-Host "Could not resolve hostname for $g8eHost, using IP address"
-    }
-}
-
-Write-Host "Restart your browser and navigate to https://$g8eHost/"
 `
 	return executeTemplate("powershell", tmpl, map[string]interface{}{
 		"URL":  url,

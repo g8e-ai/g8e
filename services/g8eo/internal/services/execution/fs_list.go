@@ -24,6 +24,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/security"
@@ -175,7 +176,7 @@ func (s *FsListService) listDirectory(ctx context.Context, dirPath string, maxDe
 			if fi.IsDir() && currentDepth < maxDepth {
 				subEntries, subTruncated, err := s.listDirectory(ctx, entryPath, maxDepth, maxEntries-len(entries), currentDepth+1)
 				if err != nil {
-					s.logger.Warn("Failed to list subdirectory", "error", err, "path", entryPath)
+					s.logger.Warn("Failed to list subdirectory", string(constants.ConnectionStateError), err, "path", entryPath)
 					continue
 				}
 				entries = append(entries, subEntries...)

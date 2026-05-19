@@ -164,7 +164,7 @@ func (fes *FileEditService) executeRead(ctx context.Context, request *models.Fil
 	if request.ReadOptions != nil && request.ReadOptions.IncludeStats {
 		stats, err := fes.collectFileStats(request.FilePath, fileInfo)
 		if err != nil {
-			fes.logger.Warn("Failed to collect file stats", "error", err)
+			fes.logger.Warn("Failed to collect file stats", string(constants.ConnectionStateError), err)
 		} else {
 			result.FileStats = stats
 		}

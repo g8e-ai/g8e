@@ -493,7 +493,7 @@ _print_platform_info() {
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  Windows Trust (Run in Elevated PowerShell)"
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  iex (iwr http://${HOST_IPS%%,*}:$OPERATOR_LISTEN_BOOTSTRAP_PORT/trust.ps1 -UseBasicParsing).Content"
+    echo "  irm http://${HOST_IPS%%,*}:$OPERATOR_LISTEN_BOOTSTRAP_PORT/trust | iex"
     echo ""
     if _g8ee_running; then
         echo "  Optional apps:          running (see ./g8e platform status)"

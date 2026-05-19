@@ -167,7 +167,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 	}
 	decodedPayload, err := tv.decodePayloadForAction(actionType, envelope.Payload)
 	if err != nil {
-		tv.logger.Error("Failed to decode typed payload", "action_type", envelope.ActionType, "error", err)
+		tv.logger.Error("Failed to decode typed payload", "action_type", envelope.ActionType, string(constants.ConnectionStateError), err)
 		return nil, ErrPayloadDecodeFailed
 	}
 	if violations := tv.validateL1Governance(decodedPayload); len(violations) > 0 {
@@ -228,7 +228,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 	}
 	currentRoot, err := tv.stateRootProvider.GetCurrentStateRoot()
 	if err != nil {
-		tv.logger.Error("Failed to get current state root", "error", err)
+		tv.logger.Error("Failed to get current state root", string(constants.ConnectionStateError), err)
 		return nil, fmt.Errorf("failed to get current state root: %w", err)
 	}
 	if currentRoot == "" {
@@ -256,7 +256,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 	}
 	pubKey, err := tv.signerStore.GetTrustedSigner(envelope.Governance.L2.KeyId)
 	if err != nil {
-		tv.logger.Error("Failed to load trusted signer", "key_id", envelope.Governance.L2.KeyId, "error", err)
+		tv.logger.Error("Failed to load trusted signer", "key_id", envelope.Governance.L2.KeyId, string(constants.ConnectionStateError), err)
 		return nil, ErrL2KeyNotConfigured
 	}
 	if pubKey == nil {
@@ -280,7 +280,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 			envelope.Governance.L3.Proof,
 		)
 		if err != nil || !ok {
-			tv.logger.Error("L3 verification failed", "error", err)
+			tv.logger.Error("L3 verification failed", string(constants.ConnectionStateError), err)
 			return nil, ErrL3ProofInvalid
 		}
 	}

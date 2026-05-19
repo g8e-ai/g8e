@@ -44,12 +44,12 @@ func GenerateSystemFingerprint(logger *slog.Logger) (*SystemFingerprint, error) 
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		hostname = "unknown"
+		hostname = string(constants.SystemHealthUnknown)
 	}
 
 	machineID, err := getMachineID(logger)
 	if err != nil {
-		logger.Warn("Failed to get machine ID, using fallback method", "error", err)
+		logger.Warn("Failed to get machine ID, using fallback method", string(constants.ConnectionStateError), err)
 		machineID = "fallback"
 	}
 

@@ -210,7 +210,7 @@ func (pki *PKIAuthority) ensureRootCA() error {
 	needRoot := !fileExists(rootKeyPath) || !fileExists(rootCertPath)
 	if !needRoot {
 		if err := pki.loadCertificatePair(rootCertPath, rootKeyPath, &pki.rootCert, &pki.rootKey); err != nil {
-			pki.logger.Warn("[PKI] Failed to load root CA, regenerating", "error", err)
+			pki.logger.Warn("[PKI] Failed to load root CA, regenerating", string(constants.ConnectionStateError), err)
 			needRoot = true
 		}
 	}
@@ -232,7 +232,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	needHub := !fileExists(hubKeyPath) || !fileExists(hubCertPath)
 	if !needHub {
 		if err := pki.loadCertificatePair(hubCertPath, hubKeyPath, &pki.hubCert, &pki.hubKey); err != nil {
-			pki.logger.Warn("[PKI] Failed to load hub CA, regenerating", "error", err)
+			pki.logger.Warn("[PKI] Failed to load hub CA, regenerating", string(constants.ConnectionStateError), err)
 			needHub = true
 		}
 	}
@@ -249,7 +249,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	needOperator := !fileExists(operatorKeyPath) || !fileExists(operatorCertPath)
 	if !needOperator {
 		if err := pki.loadCertificatePair(operatorCertPath, operatorKeyPath, &pki.operatorCert, &pki.operatorKey); err != nil {
-			pki.logger.Warn("[PKI] Failed to load operator CA, regenerating", "error", err)
+			pki.logger.Warn("[PKI] Failed to load operator CA, regenerating", string(constants.ConnectionStateError), err)
 			needOperator = true
 		}
 	}
@@ -266,7 +266,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	needBootstrap := !fileExists(bootstrapKeyPath) || !fileExists(bootstrapCertPath)
 	if !needBootstrap {
 		if err := pki.loadCertificatePair(bootstrapCertPath, bootstrapKeyPath, &pki.bootstrapCert, &pki.bootstrapKey); err != nil {
-			pki.logger.Warn("[PKI] Failed to load bootstrap CA, regenerating", "error", err)
+			pki.logger.Warn("[PKI] Failed to load bootstrap CA, regenerating", string(constants.ConnectionStateError), err)
 			needBootstrap = true
 		}
 	}
@@ -288,7 +288,7 @@ func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
 	if !needService {
 		tlsCert, err := tls.LoadX509KeyPair(serviceCertPath, serviceKeyPath)
 		if err != nil {
-			pki.logger.Warn("[PKI] Failed to load service cert, regenerating", "error", err)
+			pki.logger.Warn("[PKI] Failed to load service cert, regenerating", string(constants.ConnectionStateError), err)
 			needService = true
 		} else {
 			if isExpiringSoon(tlsCert) {
@@ -530,9 +530,9 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 	wid := protocol.NewWorkloadIdentity()
 	var uriURL *url.URL
 	switch leafType {
-	case "operator":
+	case string(constants.SessionTypeOperator):
 		uriURL, _ = wid.OperatorSPIFFEURL(organizationID, operatorID, sessionID)
-	case "cli":
+	case string(constants.SessionTypeCLI):
 		uriURL, _ = wid.CLISPIFFEURL(userID, sessionID)
 	case "app":
 		uriURL, _ = wid.AppSPIFFEURL(operatorID)
@@ -807,7 +807,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 		return err
 	}
 
-	dnsNames := []string{"localhost", "g8e.local", "operator", marshaler.Status(constants.Status.ComponentName.G8EE)}
+	dnsNames := []string{"localhost", "g8e.local", string(constants.SessionTypeOperator), marshaler.Status(constants.Status.ComponentName.G8EE)}
 	ipAddresses := append([]net.IP{net.ParseIP("127.0.0.1")}, extraIPs...)
 
 	// Add URI SAN for workload identity

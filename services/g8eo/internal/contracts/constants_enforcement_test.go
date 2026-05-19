@@ -313,6 +313,11 @@ func findViolationsInFile(filePath string, enforced map[string]constantInfo) ([]
 	}
 
 	ast.Inspect(node, func(n ast.Node) bool {
+		// Skip imports
+		if _, ok := n.(*ast.ImportSpec); ok {
+			return false
+		}
+
 		basicLit, ok := n.(*ast.BasicLit)
 		if !ok || basicLit.Kind != token.STRING {
 			return true

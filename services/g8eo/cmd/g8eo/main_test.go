@@ -418,7 +418,7 @@ func TestHandleResetVault_Initialized_ResetDestroysData(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRunOpenClawMode_EmptyURL_ConfigError(t *testing.T) {
-	// config.LoadOpenClaw returns an error when gatewayURL is empty —
+	// config.LoadOpenClaw returns an error when gatewayURL is empty  -
 	// this is the first gate inside runOpenClawMode before any dial.
 	_, err := configureLogger("info")
 	require.NoError(t, err)

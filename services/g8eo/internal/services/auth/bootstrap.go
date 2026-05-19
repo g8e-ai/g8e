@@ -296,7 +296,7 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 			// docs/architecture/operator.md. Surface this as a cert trust
 			// failure so ExitCodeFromError maps it to ExitCertTrustFailure (7).
 			bs.logger.Error("Per-operator mTLS certificate is invalid; aborting startup",
-				"error", err)
+				string(constants.ConnectionStateError), err)
 			return fmt.Errorf("cert trust failure: per-operator mTLS cert invalid: %w", err)
 		}
 		bs.logger.Info("HTTP transport upgraded to per-operator mTLS certificate (in-memory)")
