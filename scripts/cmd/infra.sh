@@ -23,14 +23,14 @@ case "$TOP" in
         i=0
         while [[ $i -lt ${#_args[@]} ]]; do
             case "${_args[$i]}" in
-                --email)   ((i++)); _login_email="${_args[$i]}" ;;
+                --email)   i=$((i+1)); _login_email="${_args[$i]}" ;;
                 --email=*) _login_email="${_args[$i]#--email=}" ;;
-                --count)   ((i++)); _dl_count="${_args[$i]}" ;;
+                --count)   i=$((i+1)); _dl_count="${_args[$i]}" ;;
                 --count=*) _dl_count="${_args[$i]#--count=}" ;;
-                --ttl)     ((i++)); _dl_ttl="${_args[$i]}" ;;
+                --ttl)     i=$((i+1)); _dl_ttl="${_args[$i]}" ;;
                 --ttl=*)   _dl_ttl="${_args[$i]#--ttl=}" ;;
             esac
-            ((i++))
+            i=$((i+1))
         done
 
         if [[ -z "$_login_email" ]]; then
@@ -39,8 +39,8 @@ case "$TOP" in
         fi
 
         _trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
-        _bootstrap_port="${OPERATOR_LISTEN_PUBLIC_PORT:-$G8E_PORT_OPERATOR_PUBLIC}"
-        _bootstrap_url="${G8E_BOOTSTRAP_URL:-https://localhost:$_bootstrap_port}"
+        _bootstrap_port="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$G8E_PORT_OPERATOR_BOOTSTRAP}"
+        _bootstrap_url="${G8E_BOOTSTRAP_URL:-http://localhost:$_bootstrap_port}"
 
         if [[ ! -f "$_trust_bundle" ]]; then
             echo "[g8e] Trust bundle not found at $_trust_bundle - start the platform first: ./g8e platform start" >&2
@@ -48,23 +48,28 @@ case "$TOP" in
         fi
 
         # 1. Request a device-link token via bootstrap port (unauthenticated)
-        echo "[g8e] Requesting device-link token..."
+        echo "  Requesting device-link token..."
         _fingerprint=$(echo "g8e-cli-$(hostname)-$(whoami)" | sha256sum | awk '{print $1}')
-        _dl_body=$(python3 -c "import json,sys; print(json.dumps({'email':sys.argv[1],'name':'cli-'+__import__('socket').gethostname(),'max_uses':int(sys.argv[2]),'ttl_seconds':int(sys.argv[3])}))" "$_login_email" "$_dl_count" "$_dl_ttl")
-        _dl_resp=$( curl -sS --cacert "$_trust_bundle" \
-            -X POST -H "${G8E_HEADER_CONTENT_TYPE}: application/json" \
+        _dl_body=$(jq -n \
+            --arg email "$_login_email" \
+            --arg name "cli-$(hostname)" \
+            --argjson count "$_dl_count" \
+            --argjson ttl "$_dl_ttl" \
+            '{email: $email, name: $name, max_uses: $count, ttl_seconds: $ttl}')
+        _dl_resp=$( curl -sS \
+            -X POST -H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json" \
             -d "$_dl_body" \
             "$_bootstrap_url/api/auth/device-link/request" 2>&1 )
-        _dl_token=$(echo "$_dl_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('token',''))" 2>/dev/null)
-        _login_user_id=$(echo "$_dl_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('user_id',''))" 2>/dev/null)
+        _dl_token=$(echo "$_dl_resp" | jq -r '.token // ""' 2>/dev/null)
+        _login_user_id=$(echo "$_dl_resp" | jq -r '.user_id // ""' 2>/dev/null)
         if [[ -z "$_dl_token" ]]; then
             echo "[g8e] Failed to create device-link: $_dl_resp" >&2
             exit 1
         fi
-        echo "[g8e] Device-link token obtained: $_dl_token (count=$_dl_count, ttl=$_dl_ttl s)"
+        echo "  Device-link token obtained: ${_dl_token:0:12}... (count=$_dl_count, ttl=$_dl_ttl s)"
 
         # 3. Generate ECDSA private keys + CSRs
-        echo "[g8e] Generating keys and CSRs..."
+        echo "  Generating keys and CSRs..."
         _tmp_dir=$(mktemp -d)
         trap 'rm -rf "$_tmp_dir"' EXIT
         if ! _generate_workload_csrs "$_tmp_dir"; then
@@ -73,25 +78,29 @@ case "$TOP" in
         fi
 
         # 4. Register via bootstrap port (no mTLS required on this route)
-        echo "[g8e] Registering with operator..."
-        _reg_body=$(python3 -c "
-import json, socket, os
-print(json.dumps({
-    'system_fingerprint': '${_fingerprint}',
-    'hostname': socket.gethostname(),
-    'os': 'linux',
-    'arch': os.uname().machine,
-    'username': os.environ.get('USER', os.environ.get('LOGNAME', 'unknown')),
-    'csr_pem': $(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$_op_csr_pem"),
-    'cli_csr_pem': $(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$_cli_csr_pem"),
-}))")
-        _reg_resp=$( curl -sS --cacert "$_trust_bundle" \
-            -X POST -H "${G8E_HEADER_CONTENT_TYPE}: application/json" \
-            -H "${G8E_HEADER_DEVICE_TOKEN}: $_dl_token" \
+        echo "  Registering with operator..."
+        _reg_body=$(jq -n \
+            --arg fingerprint "$_fingerprint" \
+            --arg hostname "$(hostname)" \
+            --arg username "${USER:-$LOGNAME}" \
+            --arg op_csr "$_op_csr_pem" \
+            --arg cli_csr "$_cli_csr_pem" \
+            '{
+                system_fingerprint: $fingerprint,
+                hostname: $hostname,
+                os: "linux",
+                arch: "'$(uname -m)'",
+                username: $username,
+                csr_pem: $op_csr,
+                cli_csr_pem: $cli_csr
+            }')
+        _reg_resp=$( curl -sS \
+            -X POST -H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json" \
+            -H "${G8E_HEADER_DEVICE_TOKEN_HEADER}: $_dl_token" \
             -d "$_reg_body" \
             "$_bootstrap_url/api/auth/device-link/register" 2>&1 )
 
-        _reg_error=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('error',''))" 2>/dev/null)
+        _reg_error=$(echo "$_reg_resp" | jq -r '.error // ""' 2>/dev/null)
         if [[ -n "$_reg_error" ]]; then
             echo "[g8e] Registration failed: $_reg_error" >&2
             exit 1
@@ -102,14 +111,14 @@ print(json.dumps({
         # login alongside operator_session_id. The CLI must NEVER reuse the
         # operator_session_id as a cli session - those are first-class disjoint
         # session types.
-        _session_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_session_id',''))" 2>/dev/null)
-        _cli_session_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('cli_session_id',''))" 2>/dev/null)
-        _operator_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_id',''))" 2>/dev/null)
-        _op_cert_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_cert',''))" 2>/dev/null)
-        _op_chain_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_cert_chain',''))" 2>/dev/null)
-        _cli_cert_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('cli_cert',''))" 2>/dev/null)
-        _cli_chain_pem=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('cli_cert_chain',''))" 2>/dev/null)
-        _hub_bundle=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('hub_trust_bundle',''))" 2>/dev/null)
+        _session_id=$(echo "$_reg_resp" | jq -r '.operator_session_id // ""' 2>/dev/null)
+        _cli_session_id=$(echo "$_reg_resp" | jq -r '.cli_session_id // ""' 2>/dev/null)
+        _operator_id=$(echo "$_reg_resp" | jq -r '.operator_id // ""' 2>/dev/null)
+        _op_cert_pem=$(echo "$_reg_resp" | jq -r '.operator_cert // ""' 2>/dev/null)
+        _op_chain_pem=$(echo "$_reg_resp" | jq -r '.operator_cert_chain // ""' 2>/dev/null)
+        _cli_cert_pem=$(echo "$_reg_resp" | jq -r '.cli_cert // ""' 2>/dev/null)
+        _cli_chain_pem=$(echo "$_reg_resp" | jq -r '.cli_cert_chain // ""' 2>/dev/null)
+        _hub_bundle=$(echo "$_reg_resp" | jq -r '.hub_trust_bundle // ""' 2>/dev/null)
 
         if [[ -z "$_session_id" || -z "$_operator_id" || -z "$_op_cert_pem" || -z "$_cli_session_id" || -z "$_cli_cert_pem" ]]; then
             echo "[g8e] Unexpected registration response (missing operator_session_id, cli_session_id, operator_id, operator_cert, or cli_cert): $_reg_resp" >&2
@@ -145,8 +154,24 @@ print(json.dumps({
         fi
 
         _save_credentials "$_session_id" "$_login_user_id" "$_operator_id" "$_cli_session_id"
-        echo "[g8e] Authenticated - operator_id=$_operator_id operator_session=${_session_id:0:8}... cli_session=${_cli_session_id:0:8}..."
-        echo "[g8e] Credentials saved to $G8E_CREDENTIALS_FILE"
+
+        echo -e "\n\033[1;32mAuthenticated successfully!\033[0m"
+        echo -e "  Operator ID: \033[1m$_operator_id\033[0m"
+        echo -e "  Sessions:    operator=${_session_id:0:8}..., cli=${_cli_session_id:0:8}..."
+
+        echo -e "\n\033[1mOperator Binaries:\033[0m"
+        echo -e "  linux/amd64: \033[1m$G8E_PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.operator\033[0m (default/built)"
+        echo -e "  linux/arm64: [requires \033[1;34m./g8e operator build-all\033[0m]"
+        echo -e "  linux/386:   [requires \033[1;34m./g8e operator build-all\033[0m]"
+
+        echo -e "\n\033[1mDeploy to Remote Host:\033[0m"
+        echo -e "  Run this to deploy and connect a new sovereign agent:"
+        echo -e "  \033[1;34m./g8e operator deploy <user@host> --endpoint $(hostname -I | awk '{print $1}') --device-token $_dl_token\033[0m"
+
+        echo -e "\n\033[1mNext steps:\033[0m"
+        echo -e "  - Start chatting:         \033[1;34m./g8e chat\033[0m"
+        echo -e "  - Check platform status:  \033[1;34m./g8e platform status\033[0m"
+        echo -e "  - Explore CLI help:       \033[1;34m./g8e --help\033[0m"
         exit 0 ;;
 
     logout)
