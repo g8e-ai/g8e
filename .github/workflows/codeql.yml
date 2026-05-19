@@ -53,6 +53,13 @@ jobs:
       run: |
         cd services/g8eo
         make build
+        go test -run=^$ ./...
+        cd tools
+        go build ./...
+        cd ../../../protocol
+        go build ./...
+        cd ../scripts/data
+        go build test_root.go
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
