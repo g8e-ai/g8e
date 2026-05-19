@@ -62,17 +62,16 @@ jobs:
           go-version-file: services/g8eo/go.mod
           cache-dependency-path: services/g8eo/go.sum
 
+      - name: Install golangci-lint from source
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
       - name: Run golangci-lint (g8eo)
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          working-directory: services/g8eo
+        run: golangci-lint run --path-prefix=services/g8eo
+        working-directory: services/g8eo
 
       - name: Run golangci-lint (protocol)
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          working-directory: protocol
+        run: golangci-lint run
+        working-directory: protocol
 
   vulncheck-g8eo:
     runs-on: ubuntu-latest
