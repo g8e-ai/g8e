@@ -77,7 +77,8 @@ class TestBatchRunner:
                 success=True,
             )
 
-        execution_id_generator = lambda: f"exec_{len(lifecycle.started_calls)}"
+        def execution_id_generator():
+            return f"exec_{len(lifecycle.started_calls)}"
 
         result = await runner.run(
             targets=targets,
@@ -117,7 +118,8 @@ class TestBatchRunner:
                 success=True,
             )
 
-        execution_id_generator = lambda: f"exec_{len(lifecycle.started_calls)}"
+        def execution_id_generator():
+            return f"exec_{len(lifecycle.started_calls)}"
 
         result = await runner.run(
             targets=targets,
@@ -172,7 +174,8 @@ class TestBatchRunner:
                 error=error_msg,
             )
 
-        execution_id_generator = lambda: f"exec_{len(lifecycle.started_calls)}"
+        def execution_id_generator():
+            return f"exec_{len(lifecycle.started_calls)}"
 
         result = await runner.run(
             targets=targets,
@@ -232,7 +235,8 @@ class TestBatchRunner:
                 success=True,
             )
 
-        execution_id_generator = lambda: f"exec_{len(lifecycle.started_calls)}"
+        def execution_id_generator():
+            return f"exec_{len(lifecycle.started_calls)}"
 
         await runner.run(
             targets=targets,

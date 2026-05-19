@@ -117,7 +117,7 @@ class OperatorDocument(G8eIdentifiableModel):
     Maps to operator_status_info in protocol/models/operator_document.json.
     Populated from operator KV cache keyed by KVKey.doc(Collections.OPERATORS, id) or
     GET /api/internal/operators/:id/status.
-    client is the authority — g8ee only reads this document.
+    client is the authority - g8ee only reads this document.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -138,6 +138,14 @@ class OperatorDocument(G8eIdentifiableModel):
     api_key: str | None = Field(default=None, description="Operator API key (authority: g8ee)")
     is_active: bool = Field(default=False, description="Whether Operator is in active status")
     operator_type: OperatorType = Field(default=OperatorType.SYSTEM, description="Operator deployment type")
+
+    @field_validator("operator_type", mode="before")
+    @classmethod
+    def coerce_operator_type(cls, v: object) -> OperatorType:
+        if v == "" or v is None:
+            return OperatorType.SYSTEM
+        return OperatorType(v)
+
     granted_intents: list[str] | None = Field(default=None, description="Granted intent permissions (cloud operators)")
     cloud_subtype: CloudSubtype | None = Field(default=None, description="Cloud provider subtype")
     current_hostname: str | None = Field(default=None, description="Denormalized hostname from latest_heartbeat_snapshot for quick access")
@@ -294,7 +302,7 @@ def _coerce_heartbeat_type(value: object) -> HeartbeatType:
     try:
         return HeartbeatType(value)
     except (ValueError, KeyError):
-        logger.warning("Unknown HeartbeatType value %r — defaulting to AUTOMATIC", value)
+        logger.warning("Unknown HeartbeatType value %r - defaulting to AUTOMATIC", value)
         return HeartbeatType.AUTOMATIC
 
 
@@ -308,15 +316,15 @@ class HeartbeatVersionInfo(G8eBaseModel):
 class HeartbeatSnapshot(G8eBaseModel):
     """
     Clean, normalized heartbeat data structure.
-    
+
     This is the canonical representation of Operator heartbeat data.
     g8eo sends heartbeats every 30 seconds with system telemetry.
-    
+
     Storage:
     - Stored in database Operator document (heartbeat_history array, max 10)
     - Sent to client via SSE for real-time UI updates
     - NOT stored in operator cache
-    
+
     Usage:
     - AI context for understanding Operator system state
     - UI display of Operator health metrics
@@ -528,7 +536,7 @@ class PendingApproval(G8eBaseModel):
     # Response state
     response_received: bool = Field(default=False)
     approved: bool | None = Field(default=None)
-    reason: str = Field(default="")
+    reason: str | None = Field(default=None)
     responded_at: UTCDatetime | None = Field(default=None)
     feedback: bool = Field(default=False)
 
@@ -539,7 +547,7 @@ class PendingApproval(G8eBaseModel):
         self,
         *,
         approved: bool,
-        reason: str = "",
+        reason: str | None = None,
         responded_at: UTCDatetime | None = None,
         operator_session_id: str | None = None,
         operator_id: str | None = None,
@@ -581,7 +589,7 @@ class TargetSystem(G8eBaseModel):
     hostname: str = Field(description="Operator hostname")
     operator_id: str = Field(description="Operator identifier")
     operator_type: OperatorType = Field(description="Operator deployment type")
-    operator_session_id: str = Field(default="", description="Operator session identifier")
+    operator_session_id: str | None = Field(default=None, description="Operator session identifier")
 
 
 class ApprovalRequestBase(G8eBaseModel):
@@ -736,7 +744,7 @@ class IntentApprovalEvent(ApprovalContext):
 class TruncatedOutput(G8eBaseModel):
     """
     Output that has been truncated for storage efficiency.
-    
+
     Keeps first and last N lines (default 20 each) for AI context.
     This allows the AI to see the beginning (headers, initial output)
     and end (final results, errors) of command output without storing
@@ -752,11 +760,11 @@ class TruncatedOutput(G8eBaseModel):
     def from_output(cls, output: str, limit: int = 20) -> TruncatedOutput:
         """
         Create TruncatedOutput from raw output string.
-        
+
         Args:
             output: Raw output string (stdout/stderr)
             limit: Number of lines to keep from start and end
-            
+
         Returns:
             TruncatedOutput with first/last lines preserved
         """
@@ -809,7 +817,7 @@ class HeartbeatSSEEnvelope(G8eBaseModel):
 
     Authorship boundary: g8ee owns `operator_id` and `status` (the authoritative value from
     OperatorDocument); `metrics` carries the g8eo-authored HeartbeatSnapshot
-    snapshot verbatim (defined in protocol/proto/operator.proto) —
+    snapshot verbatim (defined in protocol/proto/operator.proto)  - 
     the same instance persisted as `latest_heartbeat_snapshot` on the operator
     document. There is no flat projection: wire, persistence, and browser
     all see the identical nested shape. Callers must never mutate fields
@@ -857,7 +865,7 @@ class OperatorStatusUpdatedPayload(G8eBaseModel):
 # BROADCAST EVENT MODELS
 # =============================================================================
 # Typed payloads for _broadcast_command_event calls. Replaces raw dicts.
-# All timestamp fields use datetime (not str) — serialized to ISO on the wire.
+# All timestamp fields use datetime (not str) - serialized to ISO on the wire.
 # =============================================================================
 
 class CommandFailedBroadcastEvent(G8eBaseModel):

@@ -99,7 +99,7 @@ STANZA
     fi
 
     if [[ "$_force" != "true" ]] && grep -qF "$_marker" "$_config_file" 2>/dev/null; then
-        echo "g8e stanza already present in ${_config_file} — skipping (use --force to override)"
+        echo "g8e stanza already present in ${_config_file} - skipping (use --force to override)"
         echo
         echo "Current stanza:"
         sed -n "/^# BEGIN g8e operator-stream config/,/^# END g8e operator-stream config/p" "$_config_file"

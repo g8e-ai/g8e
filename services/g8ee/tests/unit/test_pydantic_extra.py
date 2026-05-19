@@ -29,9 +29,11 @@ def test_operator_authenticate_request_succeeds_with_auth():
     payload = {
         "context": _ctx(),
         "authorization": "Bearer some_key",
+        "operator_session_id": "session-uuid-123",
     }
     model = InternalOperatorAuthCall(**payload)
     assert model.authorization == "Bearer some_key"
+    assert model.operator_session_id == "session-uuid-123"
     assert model.context.source_component == ComponentName.CLIENT
 
 

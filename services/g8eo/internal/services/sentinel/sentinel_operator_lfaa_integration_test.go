@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	execution "github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
@@ -97,7 +98,7 @@ func TestSentinelScrubbing_Integration(t *testing.T) {
 
 		scrubbed := sentinel.ScrubForCloudAI(result)
 
-		assert.Equal(t, "success", scrubbed.Status)
+		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
 		assert.Equal(t, 0, scrubbed.ExitCode)
 		assert.NotContains(t, scrubbed.Summary, "admin@corp.com")
 		assert.NotContains(t, scrubbed.Summary, "bcrypt")
@@ -115,7 +116,7 @@ func TestSentinelScrubbing_Integration(t *testing.T) {
 
 		scrubbed := sentinel.ScrubForCloudAI(result)
 
-		assert.Equal(t, "success", scrubbed.Status)
+		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
 		assert.NotContains(t, scrubbed.Summary, "192.168")
 		assert.NotContains(t, scrubbed.Summary, "172.16")
 		assert.NotContains(t, scrubbed.Summary, "10.0.0")
@@ -136,7 +137,7 @@ func TestSentinelScrubbing_Integration(t *testing.T) {
 
 		scrubbed := sentinel.ScrubForCloudAI(result)
 
-		assert.Equal(t, "success", scrubbed.Status)
+		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
 		assert.NotContains(t, scrubbed.Summary, "supersecret")
 		assert.NotContains(t, scrubbed.Summary, "00AbCdEf")
 		assert.NotContains(t, scrubbed.Summary, "db.internal")
@@ -153,7 +154,7 @@ func TestSentinelScrubbing_Integration(t *testing.T) {
 
 		scrubbed := sentinel.ScrubForCloudAI(result)
 
-		assert.Equal(t, "failure", scrubbed.Status)
+		assert.Equal(t, constants.SentinelStatusFailure, scrubbed.Status)
 		assert.Equal(t, "permission_denied", scrubbed.ErrorType)
 		assert.Contains(t, scrubbed.Summary, "/home/admin/.ssh/id_rsa")
 	})
@@ -169,7 +170,7 @@ func TestSentinelScrubbing_Integration(t *testing.T) {
 
 		scrubbed := sentinel.ScrubForCloudAI(result)
 
-		assert.Equal(t, "success", scrubbed.Status)
+		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
 		assert.Equal(t, 0, scrubbed.ExitCode)
 		assert.Equal(t, int64(25), scrubbed.DurationMs)
 		assert.Greater(t, scrubbed.OutputLines, 0)
@@ -196,7 +197,7 @@ func TestSentinelWithExecutionService_Integration(t *testing.T) {
 		scrubbed := sentinel.ScrubForCloudAI(cmdResult)
 
 		// Verify sensitive data is scrubbed
-		assert.Equal(t, "success", scrubbed.Status)
+		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
 		assert.NotContains(t, scrubbed.Summary, "user@example.com")
 		assert.NotContains(t, scrubbed.Summary, "192.168.1.1")
 		assert.NotContains(t, scrubbed.Summary, "secret123")
@@ -217,7 +218,7 @@ connection_string=postgres://user:pass@db.internal.net:5432/prod`,
 
 		scrubbed := sentinel.ScrubForCloudAI(cmdResult)
 
-		assert.Equal(t, "success", scrubbed.Status)
+		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
 		assert.NotContains(t, scrubbed.Summary, "10.0.0.50")
 		assert.NotContains(t, scrubbed.Summary, "00AbCdEf")
 		assert.NotContains(t, scrubbed.Summary, "admin@internal.corp")
@@ -263,7 +264,7 @@ func TestSentinelAuditIntegration(t *testing.T) {
 		scrubbed := sentinel.ScrubForCloudAI(cmdResult)
 
 		// Verify scrubbing - emails and SSNs are scrubbed, hostnames are preserved
-		assert.Equal(t, "success", scrubbed.Status)
+		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
 		assert.NotContains(t, scrubbed.Summary, "admin@corp.com")
 		assert.NotContains(t, scrubbed.Summary, "123-45-6789")
 
@@ -380,7 +381,7 @@ func TestSentinelDisabled(t *testing.T) {
 
 		scrubbed := sentinel.ScrubCommandResult(cmdResult)
 
-		assert.Equal(t, "success", scrubbed.Status)
+		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
 		assert.Equal(t, 0, scrubbed.ExitCode)
 		assert.Contains(t, scrubbed.Summary, "output suppressed")
 	})

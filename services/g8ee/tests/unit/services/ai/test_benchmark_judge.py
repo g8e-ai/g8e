@@ -124,12 +124,12 @@ class TestMatchPayload:
 
     def test_non_string_value_converted(self):
         matchers = [PayloadMatcher(field="timeout", pattern=r"300")]
-        passed, failures = _match_payload({"timeout": 300}, matchers)
+        passed, _failures = _match_payload({"timeout": 300}, matchers)
         assert passed == 1
 
     def test_failure_includes_description(self):
         matchers = [PayloadMatcher(field="command", pattern=r"nonexistent", description="must have flag X")]
-        passed, failures = _match_payload({"command": "ls"}, matchers)
+        _passed, failures = _match_payload({"command": "ls"}, matchers)
         assert "must have flag X" in failures[0]
 
 

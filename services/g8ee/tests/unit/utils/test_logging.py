@@ -353,7 +353,7 @@ class TestComponentFormatter:
 
 
 # ---------------------------------------------------------------------------
-# setup_logging — logging enabled
+# setup_logging - logging enabled
 # ---------------------------------------------------------------------------
 
 @pytest.mark.unit
@@ -414,7 +414,7 @@ class TestSetupLoggingEnabled:
 
 
 # ---------------------------------------------------------------------------
-# setup_logging — logging disabled
+# setup_logging - logging disabled
 # ---------------------------------------------------------------------------
 
 @pytest.mark.unit

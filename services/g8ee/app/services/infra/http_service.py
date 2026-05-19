@@ -27,7 +27,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import aiohttp
+    import aiohttp  # type: ignore
 
 from app.clients.http_client import HTTPClient
 from app.models.infra import HTTPClientStatus
@@ -59,7 +59,7 @@ class HTTPService:
 
     def set_http_client(self, client: HTTPClient, service_name: str) -> None:
         """Set an HTTP client for a specific service.
-        
+
         Args:
             client: The HTTP client instance
             service_name: Unique name for the service (e.g., "client", "external_api")
@@ -74,10 +74,10 @@ class HTTPService:
 
     def get_client(self, service_name: str) -> HTTPClient | None:
         """Get an HTTP client by service name.
-        
+
         Args:
             service_name: The name of the service whose client to retrieve
-            
+
         Returns:
             The HTTP client if found, None otherwise
         """
@@ -110,7 +110,7 @@ class HTTPService:
 
     async def register_service_client(self, service_name: str, client: HTTPClient) -> None:
         """Register a new HTTP client for a service.
-        
+
         Args:
             service_name: Unique name for the service
             client: The HTTP client instance
@@ -128,7 +128,7 @@ class HTTPService:
 
     async def deregister_service_client(self, service_name: str) -> None:
         """Deregister and close an HTTP client for a service.
-        
+
         Args:
             service_name: The name of the service to deregister
         """
@@ -145,7 +145,7 @@ class HTTPService:
 
     def list_active_clients(self) -> list[str]:
         """List all currently active service client names.
-        
+
         Returns:
             List of service names with registered HTTP clients
         """
@@ -169,7 +169,7 @@ class HTTPService:
 
     def get_client_status(self) -> dict[str, HTTPClientStatus]:
         """Get status information for all registered clients.
-        
+
         Returns:
             Dictionary mapping service names to their client status
         """

@@ -44,12 +44,12 @@ class ConversationMessageMetadata(G8eBaseModel):
     """Base typed metadata for a conversation message.
 
     Use a typed subclass when the message category is known:
-    - UserChatMetadata       — EventType.EVENT_SOURCE_USER_CHAT messages
-    - AIResponseMetadata     — EventType.EVENT_SOURCE_AI_PRIMARY / EventType.EVENT_SOURCE_AI_ASSISTANT messages
-    - OperatorCommandMetadata — EventType.EVENT_SOURCE_USER_TERMINAL command execution messages
-    - ApprovalMetadata       — approval request/response messages
-    - FileEditMetadata       — file edit operation messages
-    - SystemMetadata         — EventType.EVENT_SOURCE_SYSTEM / system notification messages
+    - UserChatMetadata       - EventType.SOURCE_USER_CHAT messages
+    - AIResponseMetadata     - EventType.SOURCE_AI_PRIMARY / EventType.SOURCE_AI_ASSISTANT messages
+    - OperatorCommandMetadata - EventType.SOURCE_USER_TERMINAL command execution messages
+    - ApprovalMetadata       - approval request/response messages
+    - FileEditMetadata       - file edit operation messages
+    - SystemMetadata         - EventType.SOURCE_SYSTEM / system notification messages
 
     The base class is kept for backward compat and for cases where the category
     cannot be statically determined (e.g. deserialization from DB).
@@ -103,10 +103,10 @@ class ConversationMessageMetadata(G8eBaseModel):
 
 
 class UserChatMetadata(ConversationMessageMetadata):
-    """Metadata for user-entered chat messages (EventType.EVENT_SOURCE_USER_CHAT).
+    """Metadata for user-entered chat messages (EventType.SOURCE_USER_CHAT).
 
     User chat is the source of truth for what the user typed. It must never
-    carry execution IDs, commands, or AI-routing fields — those belong to
+    carry execution IDs, commands, or AI-routing fields - those belong to
     OperatorCommandMetadata or AIResponseMetadata respectively.
     """
     sentinel_mode: bool | None = Field(default=None, description="Sentinel mode active when message was sent")
@@ -114,10 +114,10 @@ class UserChatMetadata(ConversationMessageMetadata):
 
 
 class AIResponseMetadata(ConversationMessageMetadata):
-    """Metadata for AI-generated response messages (EventType.EVENT_SOURCE_AI_PRIMARY / EVENT_SOURCE_AI_ASSISTANT).
+    """Metadata for AI-generated response messages (EventType.SOURCE_AI_PRIMARY / EVENT_SOURCE_AI_ASSISTANT).
 
-    The `source` field here uses EventType.SOURCE_* — the attribution of which AI
-    system produced the response. 
+    The `source` field here uses EventType.SOURCE_* - the attribution of which AI
+    system produced the response.
     """
     source: EventType | None = Field(default=None, description="AI response attribution (source_ai, source_tool_call)")
     response_source: EventType | None = Field(default=None, description="Source of the AI response")
@@ -136,14 +136,14 @@ class OperatorCommandMetadata(ConversationMessageMetadata):
     These are commands dispatched by the AI agent, not entered by the user.
     For user-entered terminal commands, use UserRunCommandMetadata.
 
-    The command source is implied by EventType.EVENT_SOURCE_USER_TERMINAL + direct_execution=False.
+    The command source is implied by EventType.SOURCE_USER_TERMINAL + direct_execution=False.
     """
     execution_id: str | None = Field(default=None, description="Operator execution ID")
     command: str | None = Field(default=None, description="Operator command string")
     status: ExecutionStatus | None = Field(default=None, description="Execution status")
     exit_code: int | None = Field(default=None, description="Command exit code")
     hostname: str | None = Field(default=None, description="Operator hostname")
-    direct_execution: bool | None = Field(default=False, description="Always False — AI-initiated, not user-entered")
+    direct_execution: bool | None = Field(default=False, description="Always False - AI-initiated, not user-entered")
     approval_id: str | None = Field(default=None, description="Approval ID if approval was required")
     justification: str | None = Field(default=None, description="AI justification for this command")
     execution_time_seconds: float | None = Field(default=None, description="Command execution duration in seconds")
@@ -442,10 +442,10 @@ class InvestigationModel(G8eIdentifiableModel):
         self.status = new_status
 
         _status_event = {
-            InvestigationStatus.OPEN:      EventType.INVESTIGATION_STATUS_UPDATED_OPEN,
-            InvestigationStatus.CLOSED:    EventType.INVESTIGATION_STATUS_UPDATED_CLOSED,
-            InvestigationStatus.ESCALATED: EventType.INVESTIGATION_STATUS_UPDATED_ESCALATED,
-            InvestigationStatus.RESOLVED:  EventType.INVESTIGATION_STATUS_UPDATED_RESOLVED,
+            InvestigationStatus.OPEN:      EventType.APP_INVESTIGATION_STATUS_UPDATED_OPEN,
+            InvestigationStatus.CLOSED:    EventType.APP_INVESTIGATION_STATUS_UPDATED_CLOSED,
+            InvestigationStatus.ESCALATED: EventType.APP_INVESTIGATION_STATUS_UPDATED_ESCALATED,
+            InvestigationStatus.RESOLVED:  EventType.APP_INVESTIGATION_STATUS_UPDATED_RESOLVED,
         }
 
         self.add_history_entry(

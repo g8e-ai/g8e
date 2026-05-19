@@ -17,7 +17,7 @@ import logging
 
 from app.constants import EventType
 from app.models.events import BackgroundEvent, SessionEvent
-from app.services.protocols import EventServiceProtocol
+from app.services.protocols import EventServiceProtocol, G8eClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class EventService(EventServiceProtocol):
     """Event service for publishing session and background events."""
 
-    def __init__(self, internal_http_client: object):
+    def __init__(self, internal_http_client: G8eClientProtocol):
         self._internal_http_client = internal_http_client
 
     async def publish(self, event: SessionEvent | BackgroundEvent) -> str:
@@ -60,9 +60,11 @@ class EventService(EventServiceProtocol):
         investigation_id: str,
         event_type: EventType,
         payload: object,
-        web_session_id: str,
+        web_session_id: str | None,
         case_id: str,
         user_id: str,
+        *,
+        cli_session_id: str | None = None,
     ) -> None:
         """Publish an investigation-related event."""
         from app.models.events import SessionEvent
@@ -70,6 +72,7 @@ class EventService(EventServiceProtocol):
             event_type=event_type,
             payload=payload,
             web_session_id=web_session_id,
+            cli_session_id=cli_session_id,
             investigation_id=investigation_id,
             case_id=case_id,
             user_id=user_id,

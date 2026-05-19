@@ -46,11 +46,10 @@ if [[ -z "${DEVICE_TOKEN:-}" ]]; then
     exit $?
 fi
 
-CURL_OPTS="-fsSL"
-if [[ -f /operator/ca.crt ]]; then
-    CURL_OPTS="$CURL_OPTS --cacert /operator/ca.crt"
-else
-    CURL_OPTS="$CURL_OPTS -k"
+CURL_OPTS="-fsSL --cacert /operator/ca.crt"
+if [[ ! -f /operator/ca.crt ]]; then
+    echo "$_operator_prefix CRITICAL: /operator/ca.crt missing; PKI enforcement requires CA cert"
+    exit 1
 fi
 
 attempt=0
@@ -60,7 +59,7 @@ while [[ ! -x "$_operator_binary" ]]; do
     if curl $CURL_OPTS \
             -H "Authorization: Bearer $DEVICE_TOKEN" \
             -o "$_operator_binary" \
-            "https://$_operator_endpoint/operator/download/linux/amd64" 2>/dev/null; then
+            "https://$_operator_endpoint/blob/operator-binary/linux-amd64" 2>/dev/null; then
         chmod +x "$_operator_binary"
         echo "$_operator_prefix binary ready"
     else

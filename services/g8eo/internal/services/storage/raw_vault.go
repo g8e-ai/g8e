@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 )
 
@@ -334,7 +335,7 @@ func (rv *RawVaultService) GetRawExecution(executionID string) (*RawExecutionRec
 	if len(record.StdoutCompressed) > 0 {
 		decompressed, err := sqliteutil.Decompress(record.StdoutCompressed)
 		if err != nil {
-			rv.logger.Warn("Failed to decompress raw stdout", "error", err)
+			rv.logger.Warn("Failed to decompress raw stdout", string(constants.ConnectionStateError), err)
 		} else {
 			record.StdoutCompressed = decompressed
 		}
@@ -343,7 +344,7 @@ func (rv *RawVaultService) GetRawExecution(executionID string) (*RawExecutionRec
 	if len(record.StderrCompressed) > 0 {
 		decompressed, err := sqliteutil.Decompress(record.StderrCompressed)
 		if err != nil {
-			rv.logger.Warn("Failed to decompress raw stderr", "error", err)
+			rv.logger.Warn("Failed to decompress raw stderr", string(constants.ConnectionStateError), err)
 		} else {
 			record.StderrCompressed = decompressed
 		}
@@ -363,7 +364,7 @@ func rawVaultPrune(config *RawVaultConfig) sqliteutil.PruneFunc {
 
 		result, err := db.Exec("DELETE FROM raw_execution_log WHERE timestamp_utc < ?", cutoff)
 		if err != nil {
-			logger.Error("Failed to prune old raw vault records", "error", err)
+			logger.Error("Failed to prune old raw vault records", string(constants.ConnectionStateError), err)
 			return
 		}
 		rowsDeleted, _ := result.RowsAffected()
@@ -373,7 +374,7 @@ func rawVaultPrune(config *RawVaultConfig) sqliteutil.PruneFunc {
 
 		diffResult, err := db.Exec("DELETE FROM raw_file_diff_log WHERE timestamp_utc < ?", cutoff)
 		if err != nil {
-			logger.Error("Failed to prune old raw file diff records", "error", err)
+			logger.Error("Failed to prune old raw file diff records", string(constants.ConnectionStateError), err)
 		} else {
 			diffRowsDeleted, _ := diffResult.RowsAffected()
 			if diffRowsDeleted > 0 {
@@ -383,7 +384,7 @@ func rawVaultPrune(config *RawVaultConfig) sqliteutil.PruneFunc {
 
 		dbSizeBytes, err := db.GetSizeBytes()
 		if err != nil {
-			logger.Warn("Failed to get database size", "error", err)
+			logger.Warn("Failed to get database size", string(constants.ConnectionStateError), err)
 		}
 		maxSizeBytes := config.MaxDBSizeMB * 1024 * 1024
 
@@ -397,7 +398,7 @@ func rawVaultPrune(config *RawVaultConfig) sqliteutil.PruneFunc {
 				)
 			`)
 			if err != nil {
-				logger.Error("Failed to prune raw_execution_log for size limit", "error", err)
+				logger.Error("Failed to prune raw_execution_log for size limit", string(constants.ConnectionStateError), err)
 			}
 
 			_, err = db.Exec(`
@@ -409,14 +410,14 @@ func rawVaultPrune(config *RawVaultConfig) sqliteutil.PruneFunc {
 				)
 			`)
 			if err != nil {
-				logger.Error("Failed to prune raw_file_diff_log for size limit", "error", err)
+				logger.Error("Failed to prune raw_file_diff_log for size limit", string(constants.ConnectionStateError), err)
 			}
 
 			logger.Info("Pruned raw vault for size limit", "db_size_mb", dbSizeBytes/(1024*1024))
 		}
 
 		if err := db.RunIncrementalVacuum(1000); err != nil {
-			logger.Info("Failed to run incremental vacuum", "error", err)
+			logger.Info("Failed to run incremental vacuum", string(constants.ConnectionStateError), err)
 		}
 	}
 }
@@ -549,7 +550,7 @@ func (rv *RawVaultService) GetRawFileDiff(diffID string) (*RawFileDiffRecord, er
 	if len(record.DiffCompressed) > 0 {
 		decompressed, err := sqliteutil.Decompress(record.DiffCompressed)
 		if err != nil {
-			rv.logger.Warn("Failed to decompress raw file diff", "error", err)
+			rv.logger.Warn("Failed to decompress raw file diff", string(constants.ConnectionStateError), err)
 		} else {
 			record.DiffCompressed = decompressed
 		}
@@ -606,7 +607,7 @@ func (rv *RawVaultService) GetRawFileDiffsBySession(operatorSessionID string, li
 			&record.OperatorID,
 		)
 		if err != nil {
-			rv.logger.Warn("Failed to scan raw file diff row", "error", err)
+			rv.logger.Warn("Failed to scan raw file diff row", string(constants.ConnectionStateError), err)
 			continue
 		}
 

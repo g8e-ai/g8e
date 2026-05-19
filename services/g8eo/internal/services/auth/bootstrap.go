@@ -88,8 +88,9 @@ func NewBootstrapService(cfg *config.Config, logger *slog.Logger) (*BootstrapSer
 }
 
 // AuthServicesResponse represents the response from Auth Services Operator authentication.
-// Error is json.RawMessage so the decoder tolerates both legacy bare-string
-// errors and the standard client error envelope object {code, message, ...}.
+// Error is json.RawMessage so the decoder accepts both the bare-string and the
+// standard client error envelope object {code, message, ...} forms; both are
+// normalized through httpclient.ExtractErrorMessage.
 type AuthServicesResponse struct {
 	Success           bool             `json:"success"`
 	OperatorSessionId string           `json:"operator_session_id"`
@@ -202,7 +203,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		}
 
 		// Handle non-200 status codes. The server may reply with either a bare
-		// string error or the standard client error envelope object — decode into
+		// string error or the standard client error envelope object - decode into
 		// json.RawMessage and normalize via httpclient.ExtractErrorMessage so we
 		// never produce a confusing "cannot unmarshal object into string" failure.
 		if resp.StatusCode != http.StatusOK {
@@ -295,7 +296,7 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 			// docs/architecture/operator.md. Surface this as a cert trust
 			// failure so ExitCodeFromError maps it to ExitCertTrustFailure (7).
 			bs.logger.Error("Per-operator mTLS certificate is invalid; aborting startup",
-				"error", err)
+				string(constants.ConnectionStateError), err)
 			return fmt.Errorf("cert trust failure: per-operator mTLS cert invalid: %w", err)
 		}
 		bs.logger.Info("HTTP transport upgraded to per-operator mTLS certificate (in-memory)")

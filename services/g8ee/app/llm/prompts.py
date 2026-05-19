@@ -158,7 +158,7 @@ def build_command_constraints_message(
     blacklisted_commands: list[dict[str, str]] | None,
 ) -> str:
     """Generate a human-readable message describing active command constraints.
-    
+
     Args:
         whitelisting_enabled: Whether whitelist enforcement is active
         blacklisting_enabled: Whether blacklist enforcement is active
@@ -206,7 +206,7 @@ def build_command_constraints_message(
 
 def build_forbidden_patterns_message() -> str:
     """Generate a message listing all forbidden command patterns."""
-    patterns = sorted(list(FORBIDDEN_COMMAND_PATTERNS))
+    patterns = sorted(FORBIDDEN_COMMAND_PATTERNS)
     return f"The following patterns are FORBIDDEN and will be rejected: {', '.join(patterns)}"
 
 
@@ -258,7 +258,7 @@ def build_tribunal_prompt_fields(
     default_working_directory: str,
 ) -> dict[str, str]:
     """Build the common template kwargs used by every Tribunal persona prompt.
-    
+
     Returns a dict with keys: os, shell, working_directory, user_context,
     operator_context, forbidden_patterns_message, request, guidelines.
     """
@@ -292,7 +292,7 @@ def build_tribunal_auditor_context(
     clusters: list[dict[str, Any]],
 ) -> str:
     """Build the mode-specific context for the auditor prompt.
-    
+
     Args:
         mode: "unanimous", "majority", or "tied"
         winner: The winning command string
@@ -350,7 +350,7 @@ def build_tribunal_generator_prompt(
     member: str | None = None,
 ) -> str:
     """Build the prompt for a Tribunal generation pass.
-    
+
     Args:
         member: Tribunal member id (e.g., "axiom", "concord", etc.) for persona-specific R2 prompts.
     """
@@ -507,8 +507,8 @@ def build_modular_system_prompt(
     (`.local.dev/dev/tribunal-game.md` §14.1), the GDD's interrogator
     role ("Dash" in the doc) maps to the **triage** agent, not to the
     code's `dash` agent. The code's `dash` is the fast-path responder
-    that plays the same game as Sage — same safety / loyalty / dissent
-    / mode / tools stack — just on the assistant model tier when triage
+    that plays the same game as Sage - same safety / loyalty / dissent
+    / mode / tools stack - just on the assistant model tier when triage
     routes simple work to it. Only the persona block differs between
     Sage and Dash.
 
@@ -518,12 +518,12 @@ def build_modular_system_prompt(
     that uses the same mode. The agent-specific persona follows, and
     per-turn dynamic context is appended last.
 
-      1. safety     — absolute forbidden operations (static, shared)
-      2. loyalty    — mission-over-moment doctrine (static, shared)
-      3. dissent    — warning protocol, denial memory, escalation (static, shared)
-      4. capabilities / execution / tools — mode-dependent (static per mode)
+      1. safety     - absolute forbidden operations (static, shared)
+      2. loyalty    - mission-over-moment doctrine (static, shared)
+      3. dissent    - warning protocol, denial memory, escalation (static, shared)
+      4. capabilities / execution / tools - mode-dependent (static per mode)
       5. response_constraints (static, shared)
-      6. identity / persona — per-agent (static per agent)
+      6. identity / persona - per-agent (static per agent)
       7. system_context (dynamic)
       8. sentinel_mode (dynamic)
       9. triage_context (dynamic)
@@ -655,12 +655,12 @@ def build_modular_system_prompt(
         "[PROMPT] sections=%d total_chars=%d operator_bound=%s sections=[%s]",
         len(sections), len(full_prompt), operator_bound, ", ".join(section_labels)
     )
-    for label, section in zip(section_labels, sections):
+    for label, section in zip(section_labels, sections, strict=False):
         logger.info("[PROMPT] section=%-24s chars=%d", label, len(section))
     logger.info("[PROMPT] full_prompt:\n%s", full_prompt)
 
     context_sizes = {
-        label: len(section) for label, section in zip(section_labels, sections)
+        label: len(section) for label, section in zip(section_labels, sections, strict=False)
     }
     context_sizes["total"] = len(full_prompt)
 

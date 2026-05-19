@@ -32,10 +32,11 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 )
 
 // ────────────────────────────────────────────────────────────────
-// Wire types — mirror OpenClaw's Gateway Protocol JSON shapes
+// Wire types - mirror OpenClaw's Gateway Protocol JSON shapes
 // ────────────────────────────────────────────────────────────────
 
 type ocFrame struct {
@@ -131,7 +132,7 @@ const (
 
 // OpenClawNodeService connects the g8e Operator binary to an OpenClaw Gateway
 // as a Node Host. It advertises system.run and system.which, executes shell
-// commands on request, and streams results back — with no g8e infrastructure
+// commands on request, and streams results back - with no g8e infrastructure
 // dependency (no g8ee, no client, no pub/sub, no auth bootstrap).
 type OpenClawNodeService struct {
 	gatewayURL  string
@@ -202,7 +203,7 @@ func (s *OpenClawNodeService) Start(ctx context.Context) error {
 
 		if err := s.runSession(s.ctx); err != nil {
 			s.logger.Warn("OperatorSession ended, reconnecting",
-				"error", err,
+				string(constants.ConnectionStateError), err,
 				"backoff", backoff)
 		}
 
@@ -319,7 +320,7 @@ func (s *OpenClawNodeService) handshake(ctx context.Context, conn *websocket.Con
 			},
 			Role:     "node",
 			Scopes:   []string{},
-			Caps:     []string{constants.Status.OperatorType.System},
+			Caps:     []string{marshaler.OperatorType(constants.Status.OperatorType.System)},
 			Commands: []string{"system.run", "system.which"},
 			PathEnv:  s.pathEnv,
 			Auth:     auth,
@@ -373,20 +374,20 @@ func (s *OpenClawNodeService) readLoop(ctx context.Context, conn *websocket.Conn
 func (s *OpenClawNodeService) handleInvokeEvent(ctx context.Context, rawParams interface{}) {
 	data, err := json.Marshal(rawParams)
 	if err != nil {
-		s.logger.Warn("Failed to marshal invoke payload", "error", err)
+		s.logger.Warn("Failed to marshal invoke payload", string(constants.ConnectionStateError), err)
 		return
 	}
 
 	var req ocNodeInvokeRequest
 	if err := json.Unmarshal(data, &req); err != nil {
-		s.logger.Warn("Failed to parse node.invoke.request", "error", err)
+		s.logger.Warn("Failed to parse node.invoke.request", string(constants.ConnectionStateError), err)
 		return
 	}
 
 	s.logger.Info("Invoke request received", "command", req.Command, "id", req.ID)
 
 	switch req.Command {
-	case "system.run":
+	case string(constants.ApprovalTypeCommand):
 		s.handleSystemRun(ctx, req)
 	case "system.which":
 		s.handleSystemWhich(ctx, req)
@@ -446,7 +447,7 @@ func (s *OpenClawNodeService) handleSystemRun(ctx context.Context, req ocNodeInv
 
 	s.logger.Info("system.run complete",
 		"id", req.ID,
-		"success", payload.Success,
+		string(constants.AuthAuditResultSuccess), payload.Success,
 		"exit_code", exitCode,
 		"timed_out", timedOut)
 
@@ -486,7 +487,7 @@ func (s *OpenClawNodeService) handleSystemWhich(ctx context.Context, req ocNodeI
 func (s *OpenClawNodeService) sendInvokeResult(req ocNodeInvokeRequest, payload interface{}) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		s.logger.Error("Failed to marshal invoke result payload", "error", err)
+		s.logger.Error("Failed to marshal invoke result payload", string(constants.ConnectionStateError), err)
 		s.sendInvokeError(req, "INTERNAL", "failed to marshal result")
 		return
 	}
@@ -505,7 +506,7 @@ func (s *OpenClawNodeService) sendInvokeResult(req ocNodeInvokeRequest, payload 
 		Params: resultParams,
 	}
 	if err := s.sendFrame(frame); err != nil {
-		s.logger.Warn("Failed to send invoke result", "id", req.ID, "error", err)
+		s.logger.Warn("Failed to send invoke result", "id", req.ID, string(constants.ConnectionStateError), err)
 	}
 }
 
@@ -523,7 +524,7 @@ func (s *OpenClawNodeService) sendInvokeError(req ocNodeInvokeRequest, code, mes
 		Params: resultParams,
 	}
 	if err := s.sendFrame(frame); err != nil {
-		s.logger.Warn("Failed to send invoke error", "id", req.ID, "code", code, "error", err)
+		s.logger.Warn("Failed to send invoke error", "id", req.ID, "code", code, string(constants.ConnectionStateError), err)
 	}
 }
 

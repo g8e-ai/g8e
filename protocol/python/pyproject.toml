@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "g8e-protocol"
+version = "0.3.0"
+description = "g8e Protocol Constants and Models"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["g8e_protocol*"]
+
+[tool.setuptools.package-data]
+g8e_protocol = []

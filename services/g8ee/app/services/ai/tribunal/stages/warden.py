@@ -147,7 +147,7 @@ async def _run_warden_stage(
     logger.info("[TRIBUNAL-WARDEN] Feedback for Sage: %s", feedback_msg)
 
     await emitter.emit(
-        EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED,
+        EventType.AI_TRIBUNAL_SESSION_WARDEN_BLOCKED,
         TribunalWardenBlockedPayload(
             request=request,
             command=vote_winner,

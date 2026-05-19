@@ -38,7 +38,7 @@ func TestBuildHostKeyCallback(t *testing.T) {
 		require.NoError(t, os.MkdirAll(sshDir, 0700))
 		khPath := filepath.Join(sshDir, "known_hosts")
 
-		// Empty known_hosts is valid — knownhosts.New handles it. Any host attempt
+		// Empty known_hosts is valid - knownhosts.New handles it. Any host attempt
 		// against the returned callback will fail with an unknown-host error,
 		// which is exactly the strict semantic we want.
 		require.NoError(t, os.WriteFile(khPath, []byte(""), 0600))

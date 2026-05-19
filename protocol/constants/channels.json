@@ -1,24 +1,74 @@
 {
   "_comment": "Canonical pub/sub channel prefixes and KV binding key patterns shared across g8ee (Python), g8eo (Go), and . Channel format: {prefix}:{operator.id}:{operator.session.id}",
-
+  "_meta": {
+    "naming": "Each entry MUST specify 'value', '_go_const', and '_python_const' fields. No fallback or auto-generation is supported."
+  },
   "pubsub": {
     "separator": ":",
     "segment_count": 3,
     "prefixes": {
-      "cmd": "cmd",
-      "results": "results",
-      "heartbeat": "heartbeat",
-      "g8eo_results": "g8eo_results",
-      "operator_heartbeats": "operator_heartbeats",
-      "sse_events": "sse_events",
-      "system_events": "system_events"
+      "cmd": {
+        "value": "cmd",
+        "_go_const": "Cmd",
+        "_python_const": "CMD"
+      },
+      "results": {
+        "value": "results",
+        "_go_const": "Results",
+        "_python_const": "RESULTS"
+      },
+      "heartbeat": {
+        "value": "heartbeat",
+        "_go_const": "Heartbeat",
+        "_python_const": "HEARTBEAT"
+      },
+      "g8eo_results": {
+        "value": "g8eo_results",
+        "_go_const": "G8eoResults",
+        "_python_const": "G8EO_RESULTS"
+      },
+      "operator_heartbeats": {
+        "value": "operator_heartbeats",
+        "_go_const": "OperatorHeartbeats",
+        "_python_const": "OPERATOR_HEARTBEATS"
+      },
+      "sse_events": {
+        "value": "sse_events",
+        "_go_const": "SseEvents",
+        "_python_const": "SSE_EVENTS"
+      },
+      "system_events": {
+        "value": "system_events",
+        "_go_const": "SystemEvents",
+        "_python_const": "SYSTEM_EVENTS"
+      }
     },
     "auth": {
-      "publish.prefix": "auth.publish:",
-      "publish.session.prefix": "auth.publish:session:",
-      "response.prefix": "auth.response:",
-      "response.session.prefix": "auth.response:session:",
-      "session.prefix": "auth.session:"
+      "publish.prefix": {
+        "value": "auth.publish:",
+        "_go_const": "AuthPublishPrefix",
+        "_python_const": "AUTH_PUBLISH_PREFIX"
+      },
+      "publish.session.prefix": {
+        "value": "auth.publish:session:",
+        "_go_const": "AuthPublishSessionPrefix",
+        "_python_const": "AUTH_PUBLISH_SESSION_PREFIX"
+      },
+      "response.prefix": {
+        "value": "auth.response:",
+        "_go_const": "AuthResponsePrefix",
+        "_python_const": "AUTH_RESPONSE_PREFIX"
+      },
+      "response.session.prefix": {
+        "value": "auth.response:session:",
+        "_go_const": "AuthResponseSessionPrefix",
+        "_python_const": "AUTH_RESPONSE_SESSION_PREFIX"
+      },
+      "session.prefix": {
+        "value": "auth.session:",
+        "_go_const": "AuthSessionPrefix",
+        "_python_const": "AUTH_SESSION_PREFIX"
+      }
     }
   }
 }

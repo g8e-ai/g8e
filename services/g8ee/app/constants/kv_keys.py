@@ -12,23 +12,31 @@
 # limitations under the License.
 
 import json
+from typing import TypeVar
 from app.constants.paths import PATHS
+from app.constants.models import KVKeysConstants
 
 _PROTOCOL_DIR = PATHS["infra"]["protocol_constants_dir"]
 
-def _load(filename: str) -> dict[str, object]:
+T = TypeVar("T")
+
+def _load[T](filename: str, model_cls: type[T]) -> T:
     path = _PROTOCOL_DIR + "/" + filename
     try:
         with open(path) as f:
-            return json.load(f)
+            data = json.load(f)
+            # Use Pydantic to validate and parse the JSON data
+            if hasattr(model_cls, "model_validate"):
+                return model_cls.model_validate(data)
+            return model_cls(**data)
     except FileNotFoundError as e:
         raise RuntimeError(f"Protocol constants file not found: {path}") from e
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"Invalid JSON in protocol constants file {path}: {e}") from e
+    except (json.JSONDecodeError, Exception) as e:
+        raise RuntimeError(f"Failed to load/validate protocol constants file {path}: {e}") from e
 
-_KV: dict[str, object] = _load("kv_keys.json")
+_KV_DATA = _load("kv_keys.json", KVKeysConstants)
 
-CACHE_PREFIX = _KV["cache.prefix"]
+CACHE_PREFIX = _KV_DATA.cache_prefix
 
 class KVKey:
     """Canonical KV store keys. All keys use the version prefix from protocol constants."""
@@ -44,9 +52,19 @@ class KVKey:
         return f"{CACHE_PREFIX}:cache:query:{collection}:{query_hash}"
 
     @classmethod
-    def session(cls, session_type: str, session_id: str) -> str:
-        """g8e:session:{session.type}:{session.id}"""
-        return f"{CACHE_PREFIX}:session:{session_type}:{session_id}"
+    def operator_session(cls, operator_session_id: str) -> str:
+        """g8e:session:operator:{operator_session_id}"""
+        return f"{CACHE_PREFIX}:session:operator:{operator_session_id}"
+
+    @classmethod
+    def web_session(cls, web_session_id: str) -> str:
+        """g8e:session:web:{web_session_id}"""
+        return f"{CACHE_PREFIX}:session:web:{web_session_id}"
+
+    @classmethod
+    def cli_session(cls, cli_session_id: str) -> str:
+        """g8e:session:cli:{cli_session_id}"""
+        return f"{CACHE_PREFIX}:session:cli:{cli_session_id}"
 
     @classmethod
     def session_operator_bind(cls, operator_session_id: str) -> str:

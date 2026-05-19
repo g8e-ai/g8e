@@ -24,8 +24,7 @@ import (
 // Broker is the interface for the PubSubBroker to avoid import cycles.
 type Broker interface {
 	Publish(channel string, data []byte) int
-	RegisterHandler(channel string, handler func(string, []byte)) bool
-	UnregisterHandler(channel string)
+	RegisterHandler(channel string, handler func(string, []byte)) func()
 }
 
 // InProcessPubSubClient implements PubSubClient for in-process communication
@@ -63,7 +62,7 @@ func (c *InProcessPubSubClient) Subscribe(ctx context.Context, channel string) (
 	c.subs[channel] = ch
 
 	// Register in-process handler with the broker
-	success := c.broker.RegisterHandler(channel, func(chName string, data []byte) {
+	unregister := c.broker.RegisterHandler(channel, func(chName string, data []byte) {
 		c.mu.Lock()
 		targetCh, ok := c.subs[chName]
 		closed := c.closed
@@ -80,17 +79,12 @@ func (c *InProcessPubSubClient) Subscribe(ctx context.Context, channel string) (
 		}
 	})
 
-	if !success {
-		delete(c.subs, channel)
-		return nil, fmt.Errorf("failed to register handler for channel %s (already registered)", channel)
-	}
-
 	// Unregister on context cancellation
 	go func() {
 		<-ctx.Done()
 		c.mu.Lock()
 		if !c.closed {
-			c.broker.UnregisterHandler(channel)
+			unregister()
 			if ch, ok := c.subs[channel]; ok {
 				close(ch)
 				delete(c.subs, channel)
@@ -123,10 +117,8 @@ func (c *InProcessPubSubClient) Close() {
 		return
 	}
 
-	for channel, ch := range c.subs {
-		c.broker.UnregisterHandler(channel)
-		close(ch)
-	}
+	// NOTE: Individual subscriptions are unregistered via their own context cancellation.
+	// We clear the map to stop receiving.
 	c.subs = make(map[string]chan []byte)
 	c.closed = true
 }

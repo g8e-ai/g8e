@@ -100,7 +100,7 @@ def _is_retryable(exc: BaseException) -> bool:
 class EvalJudgeError(Exception):
     """Raised when the judge cannot produce a valid grade due to a system error.
 
-    This is distinct from a low score — it means the evaluation itself failed
+    This is distinct from a low score - it means the evaluation itself failed
     (LLM unreachable, invalid response after retries, etc.).
     """
 

@@ -17,16 +17,17 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestLoadSettings_OperatorFields(t *testing.T) {
-	t.Setenv(string(constants.EnvVar.OperatorAPIKey), "test-api-key")
-	t.Setenv(string(constants.EnvVar.OperatorEndpoint), "10.0.0.1")
-	t.Setenv(string(constants.EnvVar.OperatorSessionID), "sess-abc123")
-	t.Setenv(string(constants.EnvVar.DeviceToken), "dtok_xyz")
-	t.Setenv(string(constants.EnvVar.LogLevel), "debug")
-	t.Setenv(string(constants.EnvVar.DataDir), "/custom/data")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorAPIKey), "test-api-key")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "10.0.0.1")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "sess-abc123")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.DeviceToken), "dtok_xyz")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogLevel), "debug")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "/custom/data")
 
 	s := LoadSettings()
 
@@ -39,8 +40,8 @@ func TestLoadSettings_OperatorFields(t *testing.T) {
 }
 
 func TestLoadSettings_IPFields(t *testing.T) {
-	t.Setenv(string(constants.EnvVar.IPService), "https://example.com/ip")
-	t.Setenv(string(constants.EnvVar.IPResolver), "1.1.1.1:80")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPService), "https://example.com/ip")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPResolver), "1.1.1.1:80")
 
 	s := LoadSettings()
 
@@ -49,7 +50,7 @@ func TestLoadSettings_IPFields(t *testing.T) {
 }
 
 func TestLoadSettings_OpenClaw(t *testing.T) {
-	t.Setenv(string(constants.EnvVar.OpenClawGatewayToken), "oc-token-secret")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.OpenClawGatewayToken), "oc-token-secret")
 
 	s := LoadSettings()
 
@@ -57,12 +58,12 @@ func TestLoadSettings_OpenClaw(t *testing.T) {
 }
 
 func TestLoadSettings_SystemEnvVars(t *testing.T) {
-	t.Setenv(string(constants.EnvVar.Shell), "/bin/zsh")
-	t.Setenv(string(constants.EnvVar.Lang), "en_US.UTF-8")
-	t.Setenv(string(constants.EnvVar.Term), "xterm-256color")
-	t.Setenv(string(constants.EnvVar.Path), "/usr/local/bin:/usr/bin")
-	t.Setenv(string(constants.EnvVar.SSHAuthSock), "/tmp/ssh-agent.sock")
-	t.Setenv(string(constants.EnvVar.LogName), "alice")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.Shell), "/bin/zsh")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.Lang), "en_US.UTF-8")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.Term), "xterm-256color")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.Path), "/usr/local/bin:/usr/bin")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.SSHAuthSock), "/tmp/ssh-agent.sock")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogName), "alice")
 
 	s := LoadSettings()
 
@@ -75,8 +76,8 @@ func TestLoadSettings_SystemEnvVars(t *testing.T) {
 }
 
 func TestLoadSettings_User_FromUSER(t *testing.T) {
-	t.Setenv(string(constants.EnvVar.User), "admin")
-	t.Setenv(string(constants.EnvVar.Username), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.User), "admin")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.Username), "")
 
 	s := LoadSettings()
 
@@ -84,8 +85,8 @@ func TestLoadSettings_User_FromUSER(t *testing.T) {
 }
 
 func TestLoadSettings_User_FallsBackToUSERNAME(t *testing.T) {
-	t.Setenv(string(constants.EnvVar.User), "")
-	t.Setenv(string(constants.EnvVar.Username), "carol")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.User), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.Username), "carol")
 
 	s := LoadSettings()
 
@@ -93,8 +94,8 @@ func TestLoadSettings_User_FallsBackToUSERNAME(t *testing.T) {
 }
 
 func TestLoadSettings_User_USERTakesPriorityOverUSERNAME(t *testing.T) {
-	t.Setenv(string(constants.EnvVar.User), "primary")
-	t.Setenv(string(constants.EnvVar.Username), "secondary")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.User), "primary")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.Username), "secondary")
 
 	s := LoadSettings()
 
@@ -102,15 +103,15 @@ func TestLoadSettings_User_USERTakesPriorityOverUSERNAME(t *testing.T) {
 }
 
 func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
-	t.Setenv(string(constants.EnvVar.OperatorAPIKey), "")
-	t.Setenv(string(constants.EnvVar.OperatorEndpoint), "")
-	t.Setenv(string(constants.EnvVar.OperatorSessionID), "")
-	t.Setenv(string(constants.EnvVar.DeviceToken), "")
-	t.Setenv(string(constants.EnvVar.LogLevel), "")
-	t.Setenv(string(constants.EnvVar.DataDir), "")
-	t.Setenv(string(constants.EnvVar.IPService), "")
-	t.Setenv(string(constants.EnvVar.IPResolver), "")
-	t.Setenv(string(constants.EnvVar.OpenClawGatewayToken), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorAPIKey), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.DeviceToken), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogLevel), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPService), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPResolver), "")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.OpenClawGatewayToken), "")
 
 	s := LoadSettings()
 
@@ -126,22 +127,22 @@ func TestLoadSettings_EmptyWhenEnvNotSet(t *testing.T) {
 }
 
 func TestLoadSettings_AllFieldsPresent(t *testing.T) {
-	t.Setenv(string(constants.EnvVar.OperatorAPIKey), "k")
-	t.Setenv(string(constants.EnvVar.OperatorEndpoint), "e")
-	t.Setenv(string(constants.EnvVar.OperatorSessionID), "s")
-	t.Setenv(string(constants.EnvVar.DeviceToken), "d")
-	t.Setenv(string(constants.EnvVar.LogLevel), "info")
-	t.Setenv(string(constants.EnvVar.DataDir), "/data")
-	t.Setenv(string(constants.EnvVar.IPService), "https://ip.svc")
-	t.Setenv(string(constants.EnvVar.IPResolver), "8.8.8.8:80")
-	t.Setenv(string(constants.EnvVar.OpenClawGatewayToken), "oc")
-	t.Setenv(string(constants.EnvVar.Shell), "/bin/bash")
-	t.Setenv(string(constants.EnvVar.Lang), "C")
-	t.Setenv(string(constants.EnvVar.Term), "dumb")
-	t.Setenv(string(constants.EnvVar.Path), "/bin")
-	t.Setenv(string(constants.EnvVar.SSHAuthSock), "/run/sock")
-	t.Setenv(string(constants.EnvVar.User), "root")
-	t.Setenv(string(constants.EnvVar.LogName), "root")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorAPIKey), "k")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorEndpoint), "e")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.OperatorSessionID), "s")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.DeviceToken), "d")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogLevel), "info")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.DataDir), "/data")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPService), "https://ip.svc")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.IPResolver), "8.8.8.8:80")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.OpenClawGatewayToken), "oc")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.Shell), "/bin/bash")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.Lang), "C")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.Term), "dumb")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.Path), "/bin")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.SSHAuthSock), "/run/sock")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.User), "root")
+	t.Setenv(marshaler.EnvVar(constants.EnvVar.LogName), "root")
 
 	s := LoadSettings()
 

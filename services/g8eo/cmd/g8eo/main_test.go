@@ -307,7 +307,7 @@ func TestHandleResetVault_RequiresInitializedVault(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runListenMode — invalid log level path (does not bind any port)
+// runListenMode - invalid log level path (does not bind any port)
 // ---------------------------------------------------------------------------
 
 func TestRunListenMode_InvalidLogLevel_ExitsConfigError(t *testing.T) {
@@ -320,7 +320,7 @@ func TestRunListenMode_InvalidLogLevel_ExitsConfigError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleVaultCommand — log level gate
+// handleVaultCommand - log level gate
 // ---------------------------------------------------------------------------
 
 func TestHandleVaultCommand_InvalidLogLevel_ConfigureLoggerErrors(t *testing.T) {
@@ -331,7 +331,7 @@ func TestHandleVaultCommand_InvalidLogLevel_ConfigureLoggerErrors(t *testing.T) 
 }
 
 // ---------------------------------------------------------------------------
-// handleRekeyVault — missing old key
+// handleRekeyVault - missing old key
 // ---------------------------------------------------------------------------
 
 func TestHandleRekeyVault_MissingOldKey_PrintsError(t *testing.T) {
@@ -342,13 +342,13 @@ func TestHandleRekeyVault_MissingOldKey_PrintsError(t *testing.T) {
 	require.NoError(t, err)
 	defer v.Close()
 
-	// Rekey without initializing vault — must return error
+	// Rekey without initializing vault - must return error
 	err = v.Rekey("", "new-key")
 	require.Error(t, err)
 }
 
 // ---------------------------------------------------------------------------
-// handleVerifyVault — not initialized path
+// handleVerifyVault - not initialized path
 // ---------------------------------------------------------------------------
 
 func TestHandleVerifyVault_VaultNotInitialized(t *testing.T) {
@@ -382,7 +382,7 @@ func TestHandleVerifyVault_MissingAPIKey_VaultInitialized(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleResetVault — not initialized path
+// handleResetVault - not initialized path
 // ---------------------------------------------------------------------------
 
 func TestHandleResetVault_VaultNotInitialized_NoOp(t *testing.T) {
@@ -414,11 +414,11 @@ func TestHandleResetVault_Initialized_ResetDestroysData(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runOpenClawMode — config validation gate
+// runOpenClawMode - config validation gate
 // ---------------------------------------------------------------------------
 
 func TestRunOpenClawMode_EmptyURL_ConfigError(t *testing.T) {
-	// config.LoadOpenClaw returns an error when gatewayURL is empty —
+	// config.LoadOpenClaw returns an error when gatewayURL is empty  -
 	// this is the first gate inside runOpenClawMode before any dial.
 	_, err := configureLogger("info")
 	require.NoError(t, err)

@@ -186,11 +186,17 @@ async def test_tick_recovers_offline_to_active():
     )
 
 @pytest.mark.asyncio
-async def test_tick_transitions_missing_heartbeat_to_stale():
+async def test_tick_skips_operator_with_no_heartbeat_snapshot():
+    """Operators that have never reported a heartbeat must NOT be flipped.
+
+    This regression test pins the rule that the monitor distinguishes "never
+    connected yet" (silence) from "stopped connecting" (stale). Conflating the
+    two breaks fresh-install flows where the local CLI bootstrap operator owns
+    the listener it would otherwise heartbeat against.
+    """
     operator_data_service = AsyncMock()
     event_service = AsyncMock()
 
-    # Operator is BOUND with no heartbeat - should transition immediately to STALE
     op = make_operator(status=OperatorStatus.BOUND, latest_heartbeat_snapshot=None)
     operator_data_service.query_operators.return_value = [op]
     operator_data_service.update_operator_status.return_value = True
@@ -203,10 +209,7 @@ async def test_tick_transitions_missing_heartbeat_to_stale():
 
     await service.tick()
 
-    operator_data_service.update_operator_status.assert_called_once_with(
-        operator_id="op-1",
-        status=OperatorStatus.STALE
-    )
+    operator_data_service.update_operator_status.assert_not_called()
 
 @pytest.mark.asyncio
 async def test_tick_ignores_non_monitored_statuses():

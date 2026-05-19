@@ -43,5 +43,5 @@ func TestEnvVarConstants_SystemEnvVars(t *testing.T) {
 	assert.Equal(t, "USER", string(EnvVar.User))
 	assert.Equal(t, "USERNAME", string(EnvVar.Username))
 	assert.Equal(t, "LOGNAME", string(EnvVar.LogName))
-	assert.Equal(t, "OPENCLAW_GATEWAY_TOKEN", string(EnvVar.OpenClawGatewayToken))
+	assert.Equal(t, "G8E_OPENCLAW_GATEWAY_TOKEN", string(EnvVar.OpenClawGatewayToken))
 }

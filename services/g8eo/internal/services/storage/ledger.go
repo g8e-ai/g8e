@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	vault "github.com/g8e-ai/g8e/services/g8eo/internal/services/vault"
 )
 
@@ -114,7 +115,7 @@ func (lms *LedgerService) LedgerFileWrite(operatorSessionID, filePath string) (*
 
 	hashBefore, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Pre-mutation backup: %s", filePath))
 	if err != nil {
-		lms.logger.Warn("Failed to snapshot pre-mutation state", "error", err)
+		lms.logger.Warn("Failed to snapshot pre-mutation state", string(constants.ConnectionStateError), err)
 	}
 	result.LedgerHashBefore = hashBefore
 
@@ -143,7 +144,7 @@ func (lms *LedgerService) CompleteMirrorWrite(result *LedgerResult, operatorSess
 
 	hashAfter, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Post-mutation: %s via OperatorSession %s", result.FilePath, operatorSessionID))
 	if err != nil {
-		lms.logger.Warn("Failed to snapshot post-mutation state", "error", err)
+		lms.logger.Warn("Failed to snapshot post-mutation state", string(constants.ConnectionStateError), err)
 	}
 	result.LedgerHashAfter = hashAfter
 
@@ -151,7 +152,7 @@ func (lms *LedgerService) CompleteMirrorWrite(result *LedgerResult, operatorSess
 	result.DiffContent = lms.calculateDiffContent(ledgerDir, result.LedgerHashBefore, result.LedgerHashAfter)
 
 	lms.logger.Info("File mutation mirrored",
-		"file", result.FilePath,
+		string(constants.ToolDisplayCategoryFile), result.FilePath,
 		"hash_before", truncateHash(result.LedgerHashBefore),
 		"hash_after", truncateHash(result.LedgerHashAfter),
 		"diff_stat", result.DiffStat,
@@ -184,13 +185,13 @@ func (lms *LedgerService) MirrorFileDelete(operatorSessionID, filePath string) (
 
 	if _, err := os.Stat(filePath); err == nil {
 		if err := lms.copyToLedger(filePath, ledgerPath); err != nil {
-			lms.logger.Warn("Failed to backup file before deletion", "file", filePath, "error", err)
+			lms.logger.Warn("Failed to backup file before deletion", string(constants.ToolDisplayCategoryFile), filePath, string(constants.ConnectionStateError), err)
 		}
 	}
 
 	hashBefore, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Pre-deletion backup: %s", filePath))
 	if err != nil {
-		lms.logger.Warn("Failed to snapshot pre-deletion state", "error", err)
+		lms.logger.Warn("Failed to snapshot pre-deletion state", string(constants.ConnectionStateError), err)
 	}
 	result.LedgerHashBefore = hashBefore
 
@@ -213,12 +214,12 @@ func (lms *LedgerService) CompleteMirrorDelete(result *LedgerResult, operatorSes
 	defer lms.mu.Unlock()
 
 	if err := os.Remove(result.LedgerPath); err != nil && !os.IsNotExist(err) {
-		lms.logger.Warn("Failed to remove mirror file", "path", result.LedgerPath, "error", err)
+		lms.logger.Warn("Failed to remove mirror file", "path", result.LedgerPath, string(constants.ConnectionStateError), err)
 	}
 
 	hashAfter, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Post-deletion: %s via OperatorSession %s", result.FilePath, operatorSessionID))
 	if err != nil {
-		lms.logger.Warn("Failed to snapshot post-deletion state", "error", err)
+		lms.logger.Warn("Failed to snapshot post-deletion state", string(constants.ConnectionStateError), err)
 	}
 	result.LedgerHashAfter = hashAfter
 
@@ -226,7 +227,7 @@ func (lms *LedgerService) CompleteMirrorDelete(result *LedgerResult, operatorSes
 	result.DiffContent = lms.calculateDiffContent(ledgerDir, result.LedgerHashBefore, result.LedgerHashAfter)
 
 	lms.logger.Info("File deletion mirrored",
-		"file", result.FilePath,
+		string(constants.ToolDisplayCategoryFile), result.FilePath,
 		"hash_before", truncateHash(result.LedgerHashBefore),
 		"hash_after", truncateHash(result.LedgerHashAfter),
 		"diff_size", len(result.DiffContent))
@@ -258,7 +259,7 @@ func (lms *LedgerService) MirrorFileCreate(operatorSessionID, filePath string) (
 
 	hashBefore, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Pre-creation state for: %s", filePath))
 	if err != nil {
-		lms.logger.Warn("Failed to snapshot pre-creation state", "error", err)
+		lms.logger.Warn("Failed to snapshot pre-creation state", string(constants.ConnectionStateError), err)
 	}
 	result.LedgerHashBefore = hashBefore
 
@@ -287,7 +288,7 @@ func (lms *LedgerService) CompleteMirrorCreate(result *LedgerResult, operatorSes
 
 	hashAfter, err := lms.snapshotLedger(ledgerDir, fmt.Sprintf("Post-creation: %s via OperatorSession %s", result.FilePath, operatorSessionID))
 	if err != nil {
-		lms.logger.Warn("Failed to snapshot post-creation state", "error", err)
+		lms.logger.Warn("Failed to snapshot post-creation state", string(constants.ConnectionStateError), err)
 	}
 	result.LedgerHashAfter = hashAfter
 
@@ -299,7 +300,7 @@ func (lms *LedgerService) CompleteMirrorCreate(result *LedgerResult, operatorSes
 	result.DiffContent = lms.calculateDiffContent(ledgerDir, result.LedgerHashBefore, result.LedgerHashAfter)
 
 	lms.logger.Info("File creation mirrored",
-		"file", result.FilePath,
+		string(constants.ToolDisplayCategoryFile), result.FilePath,
 		"hash_after", truncateHash(result.LedgerHashAfter),
 		"diff_stat", result.DiffStat,
 		"diff_size", len(result.DiffContent))
@@ -478,7 +479,7 @@ func (lms *LedgerService) calculateDiffContent(ledgerDir, hashBefore, hashAfter 
 
 	output, err := lms.gitOutput(ledgerDir, "diff", hashBefore, hashAfter)
 	if err != nil {
-		lms.logger.Warn("Failed to calculate diff content", "error", err)
+		lms.logger.Warn("Failed to calculate diff content", string(constants.ConnectionStateError), err)
 		return ""
 	}
 
@@ -492,7 +493,7 @@ func (lms *LedgerService) GetDiffContent(hashBefore, hashAfter string, operatorS
 	}
 	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
 	if err != nil {
-		lms.logger.Warn("Failed to get session ledger path for diff content", "error", err)
+		lms.logger.Warn("Failed to get session ledger path for diff content", string(constants.ConnectionStateError), err)
 		return ""
 	}
 	return lms.calculateDiffContent(ledgerDir, hashBefore, hashAfter)
@@ -505,7 +506,7 @@ func (lms *LedgerService) GetDiffStat(hashBefore, hashAfter string, operatorSess
 	}
 	ledgerDir, err := lms.auditVault.GetSessionLedgerPath(operatorSessionID)
 	if err != nil {
-		lms.logger.Warn("Failed to get session ledger path for diff stat", "error", err)
+		lms.logger.Warn("Failed to get session ledger path for diff stat", string(constants.ConnectionStateError), err)
 		return ""
 	}
 	return lms.calculateDiffStat(ledgerDir, hashBefore, hashAfter)
@@ -567,7 +568,7 @@ func (lms *LedgerService) GetFileHistory(filePath string, limit int, operatorSes
 
 		ts, err := time.Parse(time.RFC3339, parts[1])
 		if err != nil {
-			lms.logger.Warn("Failed to parse commit timestamp", "raw", parts[1], "error", err)
+			lms.logger.Warn("Failed to parse commit timestamp", "raw", parts[1], string(constants.ConnectionStateError), err)
 			ts = time.Time{}
 		}
 
@@ -669,7 +670,7 @@ func (lms *LedgerService) RestoreFileFromCommit(filePath, commitHash, operatorSe
 	ledgerPath := lms.getLedgerPath(ledgerDir, filePath)
 	if _, err := os.Stat(filePath); err == nil {
 		if err := lms.copyToLedger(filePath, ledgerPath); err != nil {
-			lms.logger.Warn("Failed to backup current state before restoration", "error", err)
+			lms.logger.Warn("Failed to backup current state before restoration", string(constants.ConnectionStateError), err)
 		}
 	}
 
@@ -680,15 +681,15 @@ func (lms *LedgerService) RestoreFileFromCommit(filePath, commitHash, operatorSe
 	}
 
 	if err := lms.copyToLedger(filePath, ledgerPath); err != nil {
-		lms.logger.Warn("Failed to mirror restored file", "error", err)
+		lms.logger.Warn("Failed to mirror restored file", string(constants.ConnectionStateError), err)
 	}
 
 	_, _ = lms.snapshotLedger(ledgerDir, fmt.Sprintf("Restored: %s to commit %s via OperatorSession %s", filePath, truncateHash(commitHash), operatorSessionID))
 
 	lms.logger.Info("File restored from commit",
-		"file", filePath,
+		string(constants.ToolDisplayCategoryFile), filePath,
 		"commit", truncateHash(commitHash),
-		"operator_session", operatorSessionID)
+		string(constants.SessionKeyPrefixOperator), operatorSessionID)
 
 	return nil
 }

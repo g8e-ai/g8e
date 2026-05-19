@@ -380,7 +380,7 @@ class TestCoerceHeartbeatType:
 
 
 # =============================================================================
-# HeartbeatSnapshot.from_wire — full round-trip
+# HeartbeatSnapshot.from_wire - full round-trip
 # =============================================================================
 
 class TestHeartbeatSnapshotFromWireFull:
@@ -537,7 +537,7 @@ class TestHeartbeatSnapshotFromWireFull:
 
 
 # =============================================================================
-# HeartbeatSSEEnvelope.from_heartbeat — domain/wire boundary
+# HeartbeatSSEEnvelope.from_heartbeat - domain/wire boundary
 # =============================================================================
 
 class TestHeartbeatSSEEnvelope:

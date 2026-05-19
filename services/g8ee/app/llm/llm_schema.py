@@ -98,7 +98,7 @@ def schema_from_model(model_cls: type, required_override: list[str] | None = Non
     """Derive a types.Schema from a G8eBaseModel subclass.
 
     Uses model_json_schema() as the source of truth. Field descriptions come
-    from Field(description=...) on the model — no inline redeclaration needed.
+    from Field(description=...) on the model - no inline redeclaration needed.
 
     Args:
         model_cls: A G8eBaseModel subclass.

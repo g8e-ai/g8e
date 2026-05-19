@@ -130,8 +130,8 @@ def load_mode_prompts(
     section_files = dict(AGENT_MODE_PROMPT_FILES[mode])
 
     if mode == AgentMode.OPERATOR_NOT_BOUND and not g8e_web_search_available:
-        section_files[PromptSection.CAPABILITIES] = PromptFile.MODE_OPERATOR_NOT_BOUND_CAPABILITIES_NO_SEARCH
-        section_files[PromptSection.EXECUTION] = PromptFile.MODE_OPERATOR_NOT_BOUND_EXECUTION_NO_SEARCH
+        section_files[PromptSection.CAPABILITIES] = PromptFile.MODES_OPERATOR_NOT_BOUND_CAPABILITIES_NO_SEARCH
+        section_files[PromptSection.EXECUTION] = PromptFile.MODES_OPERATOR_NOT_BOUND_EXECUTION_NO_SEARCH
 
     prompts: dict[str, str] = {}
 

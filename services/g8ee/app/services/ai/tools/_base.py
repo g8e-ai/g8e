@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-def convert_args_to_payload(
+def convert_args_to_payload[T](
     args_dict: dict[str, object],
     payload_cls: type[T],
     execution_id: str,

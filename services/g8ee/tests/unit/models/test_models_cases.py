@@ -44,19 +44,19 @@ class TestHistoryEntry:
     def test_instantiation_with_required_fields(self):
         entry = HistoryEntry(
             timestamp=_TS,
-            event_type=EventType.CASE_CREATED,
+            event_type=EventType.APP_CASE_CREATED,
             source_component=ComponentName.G8EE,
             summary="Case was created",
         )
         assert entry.timestamp == _TS
-        assert entry.event_type == EventType.CASE_CREATED
+        assert entry.event_type == EventType.APP_CASE_CREATED
         assert entry.source_component == ComponentName.G8EE
         assert entry.summary == "Case was created"
 
     def test_timestamp_is_datetime_not_str(self):
         entry = HistoryEntry(
             timestamp=_TS,
-            event_type=EventType.CASE_CREATED,
+            event_type=EventType.APP_CASE_CREATED,
             source_component=ComponentName.G8EE,
             summary="test",
         )
@@ -65,16 +65,16 @@ class TestHistoryEntry:
     def test_event_type_is_enum(self):
         entry = HistoryEntry(
             timestamp=_TS,
-            event_type=EventType.CASE_CREATED,
+            event_type=EventType.APP_CASE_CREATED,
             source_component=ComponentName.G8EE,
             summary="test",
         )
-        assert entry.event_type == EventType.CASE_CREATED
+        assert entry.event_type == EventType.APP_CASE_CREATED
 
     def test_source_component_is_enum(self):
         entry = HistoryEntry(
             timestamp=_TS,
-            event_type=EventType.CASE_CREATED,
+            event_type=EventType.APP_CASE_CREATED,
             source_component=ComponentName.CLIENT,
             summary="test",
         )
@@ -83,7 +83,7 @@ class TestHistoryEntry:
     def test_optional_fields_default_to_none(self):
         entry = HistoryEntry(
             timestamp=_TS,
-            event_type=EventType.CASE_CREATED,
+            event_type=EventType.APP_CASE_CREATED,
             source_component=ComponentName.G8EE,
             summary="test",
         )
@@ -94,7 +94,7 @@ class TestHistoryEntry:
     def test_optional_fields_can_be_set(self):
         entry = HistoryEntry(
             timestamp=_TS,
-            event_type=EventType.CASE_CREATED,
+            event_type=EventType.APP_CASE_CREATED,
             source_component=ComponentName.G8EE,
             summary="test",
             actor_id="user-123",
@@ -108,7 +108,7 @@ class TestHistoryEntry:
     def test_model_dump_serializes_enum_values(self):
         entry = HistoryEntry(
             timestamp=_TS,
-            event_type=EventType.CASE_CREATED,
+            event_type=EventType.APP_CASE_CREATED,
             source_component=ComponentName.G8EE,
             summary="test",
         )
@@ -119,7 +119,7 @@ class TestHistoryEntry:
     def test_model_dump_excludes_none_by_default(self):
         entry = HistoryEntry(
             timestamp=_TS,
-            event_type=EventType.CASE_CREATED,
+            event_type=EventType.APP_CASE_CREATED,
             source_component=ComponentName.G8EE,
             summary="test",
         )
@@ -132,7 +132,7 @@ class TestHistoryEntry:
         for component in ComponentName:
             entry = HistoryEntry(
                 timestamp=_TS,
-                event_type=EventType.CASE_CREATED,
+                event_type=EventType.APP_CASE_CREATED,
                 source_component=component,
                 summary="test",
             )
@@ -144,10 +144,10 @@ class TestHistoryEntry:
 class TestCaseModel:
 
     def _make_case(self, **overrides):
-        defaults = dict(
-            title="Database connectivity issue",
-            description="Cannot connect to the primary database",
-        )
+        defaults = {
+            "title": "Database connectivity issue",
+            "description": "Cannot connect to the primary database",
+        }
         defaults.update(overrides)
         return CaseModel(**defaults)
 
@@ -202,13 +202,13 @@ class TestCaseModel:
     def test_history_trail_accepts_history_entries(self):
         entry = HistoryEntry(
             timestamp=_TS,
-            event_type=EventType.CASE_CREATED,
+            event_type=EventType.APP_CASE_CREATED,
             source_component=ComponentName.G8EE,
             summary="Case opened",
         )
         case = self._make_case(history_trail=[entry])
         assert len(case.history_trail) == 1
-        assert case.history_trail[0].event_type == EventType.CASE_CREATED
+        assert case.history_trail[0].event_type == EventType.APP_CASE_CREATED
 
     def test_timestamps_are_set_on_instantiation(self):
         case = self._make_case()
@@ -264,11 +264,11 @@ class TestCaseModel:
 class TestCaseCreateRequest:
 
     def _make_request(self, **overrides):
-        defaults = dict(
-            initial_message="Nginx is returning 502 on all endpoints",
-            user_id="user-abc",
-            web_session_id="sess-xyz",
-        )
+        defaults = {
+            "initial_message": "Nginx is returning 502 on all endpoints",
+            "user_id": "user-abc",
+            "web_session_id": "sess-xyz",
+        }
         defaults.update(overrides)
         return CaseCreateRequest(**defaults)
 

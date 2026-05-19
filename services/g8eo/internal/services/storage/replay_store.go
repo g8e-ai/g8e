@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 )
 
@@ -66,7 +67,7 @@ func (rs *SQLReplayStore) initSchema() error {
 func (rs *SQLReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
 	// First, clean up expired nonces
 	if err := rs.cleanupExpiredNonces(); err != nil {
-		rs.logger.Warn("Failed to cleanup expired nonces", "error", err)
+		rs.logger.Warn("Failed to cleanup expired nonces", string(constants.ConnectionStateError), err)
 	}
 
 	// Check if nonce exists

@@ -17,7 +17,7 @@ CACHE_DIR="/var/lib/device/cache"
 mkdir -p "$LOG_DIR" "$CACHE_DIR"
 
 # ---------------------------------------------------------------------------
-# Config parsing. Simple flat YAML — extract "leaf: value" under any section.
+# Config parsing. Simple flat YAML - extract "leaf: value" under any section.
 # ---------------------------------------------------------------------------
 cfg() {
     local key="$1" default="${2:-}"
@@ -56,7 +56,7 @@ log() {
 }
 
 # ---------------------------------------------------------------------------
-# Function-specific "activity" phrases — makes logs feel purposeful and
+# Function-specific "activity" phrases - makes logs feel purposeful and
 # helps the AI recognise each device's role from its output alone.
 # ---------------------------------------------------------------------------
 activity() {
@@ -78,7 +78,7 @@ activity() {
 }
 
 # ---------------------------------------------------------------------------
-# Metrics writer — a single JSON object refreshed on each tick.
+# Metrics writer - a single JSON object refreshed on each tick.
 # ---------------------------------------------------------------------------
 write_metrics() {
     local uptime mem_mb disk_pct
@@ -123,14 +123,14 @@ if [[ -r "$CERT_FILE" ]]; then
         exp_epoch=$(date -d "$not_after" +%s 2>/dev/null || echo 0)
         now_epoch=$(date +%s)
         if (( exp_epoch > 0 && exp_epoch < now_epoch )); then
-            log ERROR "TLS client cert expired at $not_after — upstream sync will fail until cert is rotated (/opt/device/rotate-cert.sh)"
+            log ERROR "TLS client cert expired at $not_after - upstream sync will fail until cert is rotated (/opt/device/rotate-cert.sh)"
         fi
     fi
 fi
 
 if [[ "$STUCK_LOOP" == "true" ]]; then
     log WARN "stuck_loop=true in config; entering no-op wait. Flip to false and restart to recover."
-    # Block forever until killed — a classic hung service.
+    # Block forever until killed - a classic hung service.
     while true; do sleep 3600; done
 fi
 
@@ -146,7 +146,7 @@ while true; do
     # --- Disk-full watch (fires if staging.bin is lurking)
     if [[ -f "$CACHE_DIR/staging.bin" ]]; then
         size_mb=$(du -m "$CACHE_DIR/staging.bin" 2>/dev/null | awk '{print $1}')
-        log ERROR "cache disk pressure: $CACHE_DIR/staging.bin is ${size_mb}MB — cannot flush telemetry"
+        log ERROR "cache disk pressure: $CACHE_DIR/staging.bin is ${size_mb}MB - cannot flush telemetry"
     fi
 
     # --- Upstream sync (simulated; detect configured-but-bogus endpoints)

@@ -22,7 +22,7 @@ Thought signatures (Gemini 3+ strict):
   - SHOULD be returned on all other Part types for best reasoning quality.
   - NEVER merge a Part that has a signature with one that does not.
   - NEVER merge two Parts that both have signatures.
-  - Signature-only Parts (no text, no FC): emit as empty-text Parts — valid
+  - Signature-only Parts (no text, no FC): emit as empty-text Parts - valid
     per the streaming spec ("may arrive in a final chunk with an empty text
     part").
   - Canonical Part.thought_signature is stored as a base64 string; pass it
@@ -276,10 +276,10 @@ def _parts_from_sdk_candidate(candidate) -> list[Part]:
     """Convert SDK Candidate content parts to canonical Part objects.
 
     Ordering per Gemini 3 spec (thought signatures guide):
-    1. thought parts (thought=True) — always carry a signature if thinking is on
-    2. tool_call parts — signature is REQUIRED; carry it through
-    3. text parts — may carry a signature; carry it through
-    4. signature-only parts — no text, no FC, but signature present
+    1. thought parts (thought=True) - always carry a signature if thinking is on
+    2. tool_call parts - signature is REQUIRED; carry it through
+    3. text parts - may carry a signature; carry it through
+    4. signature-only parts - no text, no FC, but signature present
     """
     parts: list[Part] = []
     if not (candidate.content and candidate.content.parts):
@@ -368,7 +368,7 @@ class GeminiProvider(LLMProvider):
         translate_for_gemini so it stays consistent across providers.
         Returns a tuple ``(sdk_thinking_config, translation)`` so the caller
         can log the clamped (post-translation) values rather than the raw
-        requested level — which would be misleading when the model's
+        requested level - which would be misleading when the model's
         supported_thinking_levels force a clamp (e.g. HIGH -> MEDIUM).
         ``sdk_thinking_config`` is None when thinking is OFF and no thoughts
         are requested, which signals the caller to omit the key entirely.
@@ -410,8 +410,8 @@ class GeminiProvider(LLMProvider):
                     )
                 )
 
-            # Log the clamped (post-translation) thinking level — which is what
-            # actually goes out on the wire — rather than the raw requested
+            # Log the clamped (post-translation) thinking level - which is what
+            # actually goes out on the wire - rather than the raw requested
             # value, so debug traces match what Gemini sees.
             logged_thinking_level = (
                 thinking_translation.thinking_level if thinking_translation and thinking_translation.enabled else None
@@ -426,7 +426,7 @@ class GeminiProvider(LLMProvider):
             if settings.top_k_filtering is not None:
                 log_parts.append(f"top_k={settings.top_k_filtering}")
             log_parts.extend([
-                f"system_instructions_len={len(settings.system_instructions)}",
+                f"system_instructions_len={len(settings.system_instructions) if settings.system_instructions is not None else 0}",
                 f"tools_count={len(genai_tools) if genai_tools else 0}",
                 f"thinking_level={logged_thinking_level}",
                 f"include_thoughts={logged_include_thoughts}",
@@ -477,7 +477,7 @@ class GeminiProvider(LLMProvider):
 
         Processes parts in the order the SDK returns them. Per Gemini 3 streaming
         spec, a signature-only chunk (empty text + thought_signature) may arrive
-        as the final chunk of a turn — it is captured and forwarded.
+        as the final chunk of a turn - it is captured and forwarded.
         """
         result: list[StreamChunkFromModel] = []
 
@@ -619,7 +619,7 @@ class GeminiProvider(LLMProvider):
             primary_llm_settings.max_output_tokens,
             primary_llm_settings.top_k_filtering if primary_llm_settings.top_k_filtering is not None else "None",
             primary_llm_settings.top_p_nucleus_sampling if primary_llm_settings.top_p_nucleus_sampling is not None else "None",
-            len(primary_llm_settings.system_instructions),
+            len(primary_llm_settings.system_instructions) if primary_llm_settings.system_instructions is not None else 0,
             len(primary_llm_settings.tools) if primary_llm_settings.tools else 0,
         )
 

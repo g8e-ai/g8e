@@ -38,7 +38,7 @@ class TestG8eeSettingsOverlayIntegration:
 
     async def test_get_platform_settings_loads_from_operator(self, settings_service, cache_service):
         """Verify platform settings are loaded from the correct operator collection/ID.
-        
+
         G8eePlatformSettings no longer carries LLM config. LLM settings are
         accessed via get_user_settings() which falls back to platform data
         when no user document exists.
@@ -79,7 +79,7 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "component_urls": {
                     "g8ee_url": "https://localhost:8443",
-                    "client_url": "https://localhost:443"
+                    "client_url": "https://localhost:9000"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
@@ -161,7 +161,7 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "component_urls": {
                     "g8ee_url": "https://localhost:8443",
-                    "client_url": "https://localhost:443"
+                    "client_url": "https://localhost:9000"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
@@ -317,7 +317,7 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "component_urls": {
                     "g8ee_url": "https://localhost:8443",
-                    "client_url": "https://localhost:443"
+                    "client_url": "https://localhost:9000"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
@@ -368,7 +368,7 @@ class TestG8eeSettingsOverlayIntegration:
     async def test_overlay_auth_merge_is_model_driven(self, cache_service):
         """Every ``AuthSettings`` field present in the platform DB document
         and absent from local bootstrap settings must overlay onto the merged
-        object — without ``overlay_platform_data`` having to hand-list it.
+        object - without ``overlay_platform_data`` having to hand-list it.
 
         This locks in the structural fix for a recurring class of bugs where
         adding a new auth token (e.g. ``auditor_hmac_key``) silently failed

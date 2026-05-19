@@ -11,7 +11,7 @@ ALWAYS use list_files_and_directories_with_detailed_metadata BEFORE this tool to
 <optional>
 - create_if_missing: Create file if it doesn't exist (default: false)
 - create_backup: Backup before overwriting (default: true)
-- target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
+- target_operator: operator_id or hostname - REQUIRED when multiple operators bound (prefer hostname when available)
 </optional>
 </parameters>
 

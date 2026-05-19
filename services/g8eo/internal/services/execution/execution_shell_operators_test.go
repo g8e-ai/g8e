@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,7 +49,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "1")
 	})
 
@@ -70,7 +70,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.FileExists(t, outputFile)
 	})
 
@@ -92,7 +92,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "input content")
 	})
 
@@ -113,7 +113,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 
 		data, _ := os.ReadFile(outputFile)
 		assert.Contains(t, string(data), "line1")
@@ -134,7 +134,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "success")
 	})
 
@@ -152,7 +152,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "fallback")
 	})
 
@@ -170,7 +170,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "first")
 		assert.Contains(t, result.Stdout, "second")
 	})
@@ -192,7 +192,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 	})
 
 	t.Run("simple command with spaces no operators", func(t *testing.T) {
@@ -209,7 +209,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "hello world")
 	})
 }
@@ -330,7 +330,7 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 
 		count := 0
 		for result := range results {
-			assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+			assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 			count++
 		}
 		assert.Equal(t, maxConcurrent, count)
@@ -432,7 +432,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusFailed, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
 	})
 
 	t.Run("whitespace only command", func(t *testing.T) {
@@ -448,7 +448,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusFailed, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
 	})
 
 	t.Run("nonexistent working directory", func(t *testing.T) {
@@ -466,7 +466,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusFailed, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
 	})
 
 	t.Run("permission denied exit code 126", func(t *testing.T) {
@@ -489,7 +489,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusFailed, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
 		assert.Equal(t, 126, *result.ReturnCode)
 	})
 
@@ -507,7 +507,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusFailed, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
 		assert.Equal(t, 127, *result.ReturnCode)
 		assert.NotNil(t, result.ErrorMessage)
 	})
@@ -525,7 +525,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusTimeout, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT, result.Status)
 		assert.Equal(t, 124, *result.ReturnCode)
 		assert.NotNil(t, result.ErrorMessage)
 		assert.Contains(t, *result.ErrorMessage, "timed out")
@@ -544,7 +544,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.NotNil(t, result.TerminalOutput)
 
 		if result.TerminalOutput.TruncatedStdout {
@@ -566,7 +566,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "out1")
 		assert.Contains(t, result.Stdout, "out2")
 		assert.Contains(t, result.Stderr, "err1")
@@ -592,7 +592,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "1")
 	})
 
@@ -609,7 +609,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "nested")
 	})
 
@@ -626,7 +626,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "backtick")
 	})
 
@@ -646,7 +646,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "stdout")
 		assert.FileExists(t, errFile)
 	})
@@ -668,7 +668,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.FileExists(t, outFile)
 		assert.FileExists(t, errFile)
 	})
@@ -689,7 +689,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "prefix_EXPANDED_suffix")
 	})
 
@@ -720,7 +720,7 @@ exit 0
 
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "Start")
 		assert.Contains(t, result.Stdout, "Middle")
 		assert.Contains(t, result.Stdout, "End")

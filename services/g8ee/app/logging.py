@@ -102,11 +102,11 @@ def redact_message(message: str) -> str:
     return EMAIL_REGEX.sub(lambda m: redact_email(m.group(0)), message)
 
 try:
-    from uvicorn.logging import AccessFormatter as AccessFormatter
+    from uvicorn.logging import AccessFormatter
     HAS_UVICORN = True
 except ImportError:
     HAS_UVICORN = False
-    AccessFormatter  # type: ignore[assignment,misc]
+    AccessFormatter = object  # type: ignore[assignment,misc]
 
 COMPONENT_PATTERN = re.compile(
     r"(?:"

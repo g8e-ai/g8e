@@ -32,12 +32,11 @@ def blob_client(mock_listen_settings):
         mock_svc = mock_svc_cls.return_value
         mock_svc.get_local_settings.return_value.operator_session_id = "test-session"
 
-        client = BlobClient(
+        return BlobClient(
             ca_cert_path="/path/to/ca.crt",
             operator_session_id="test-session",
             listen_settings=mock_listen_settings
         )
-        return client
 
 @pytest.mark.asyncio
 class TestBlobClient:

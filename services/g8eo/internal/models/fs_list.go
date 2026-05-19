@@ -16,7 +16,7 @@ package models
 import (
 	"time"
 
-	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 )
 
 // FsListRequest represents a request to list directory contents
@@ -51,11 +51,11 @@ type FsListEntry struct {
 
 // FsListResult represents the result of a directory listing operation
 type FsListResult struct {
-	ExecutionID     string                    `json:"execution_id"`
-	CaseID          string                    `json:"case_id"`
-	TaskID          *string                   `json:"task_id,omitempty"`
-	InvestigationID string                    `json:"investigation_id"`
-	Status          constants.ExecutionStatus `json:"status"`
+	ExecutionID     string                     `json:"execution_id"`
+	CaseID          string                     `json:"case_id"`
+	TaskID          *string                    `json:"task_id,omitempty"`
+	InvestigationID string                     `json:"investigation_id"`
+	Status          operatorv1.ExecutionStatus `json:"status"`
 
 	Path       string        `json:"path"`
 	Entries    []FsListEntry `json:"entries"`

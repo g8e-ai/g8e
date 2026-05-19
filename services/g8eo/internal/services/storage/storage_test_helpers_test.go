@@ -28,7 +28,7 @@ func testGitPath(t *testing.T) string {
 	t.Helper()
 	gitPath, err := exec.LookPath("git")
 	if err != nil {
-		t.Skip("git not available — skipping git-dependent test")
+		t.Skip("git not available - skipping git-dependent test")
 	}
 	return gitPath
 }

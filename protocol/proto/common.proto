@@ -66,6 +66,7 @@ message GovernanceEnvelope {
   string operator_id = 5;
   string operator_session_id = 6;
   string web_session_id = 7;
+  string cli_session_id = 22;
 
   // Intent & Payload
   string event_type = 8;

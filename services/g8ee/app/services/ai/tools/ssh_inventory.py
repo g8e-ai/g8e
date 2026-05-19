@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``list_ssh_inventory`` tool — read-only enumeration of the SSH fleet."""
+"""``list_ssh_inventory`` tool - read-only enumeration of the SSH fleet."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 def build() -> types.ToolDeclaration:
     return types.ToolDeclaration(
         name=OperatorToolName.SSH_INVENTORY,
-        description=load_prompt(PromptFile.TOOL_SSH_INVENTORY),
+        description=load_prompt(PromptFile.TOOLS_SSH_INVENTORY),
         parameters=schema_from_model(SshInventoryArgs),
     )
 

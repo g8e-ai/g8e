@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/security"
 )
 
@@ -70,14 +71,14 @@ func (fes *FileEditService) ExecuteFileEdit(ctx context.Context, request *models
 		InvestigationID: request.InvestigationID,
 		Operation:       request.Operation,
 		FilePath:        request.FilePath,
-		Status:          constants.ExecutionStatusExecuting,
+		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 		StartTime:       &startTime,
 	}
 
 	// Validate file path (security check)
 	absPath, err := security.ValidatePath(request.FilePath, fes.config.WorkDir)
 	if err != nil {
-		result.Status = constants.ExecutionStatusFailed
+		result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 		errMsg := fmt.Sprintf("Invalid file path: %v", err)
 		result.ErrorMessage = &errMsg
 		errType := "validation_error"
@@ -89,32 +90,32 @@ func (fes *FileEditService) ExecuteFileEdit(ctx context.Context, request *models
 
 	// Execute operation based on type
 	switch request.Operation {
-	case models.FileEditOperationRead:
+	case constants.FileOperationRead:
 		err = fes.executeRead(ctx, request, result)
-	case models.FileEditOperationWrite:
+	case constants.FileOperationWrite:
 		err = fes.executeWrite(ctx, request, result)
-	case models.FileEditOperationReplace:
+	case constants.FileOperationReplace:
 		err = fes.executeReplace(ctx, request, result)
-	case models.FileEditOperationInsert:
+	case constants.FileOperationInsert:
 		err = fes.executeInsert(ctx, request, result)
-	case models.FileEditOperationDelete:
+	case constants.FileOperationDelete:
 		err = fes.executeDelete(ctx, request, result)
-	case models.FileEditOperationPatch:
+	case constants.FileOperationPatch:
 		err = fes.executePatch(ctx, request, result)
 	default:
 		err = fmt.Errorf("unsupported operation: %s", request.Operation)
 	}
 
 	if err != nil {
-		if result.Status == constants.ExecutionStatusExecuting {
-			result.Status = constants.ExecutionStatusFailed
+		if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING {
+			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 			errMsg := err.Error()
 			result.ErrorMessage = &errMsg
 			errType := "execution_error"
 			result.ErrorType = &errType
 		}
 	} else {
-		result.Status = constants.ExecutionStatusCompleted
+		result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 	}
 
 	// Finalize result
@@ -163,7 +164,7 @@ func (fes *FileEditService) executeRead(ctx context.Context, request *models.Fil
 	if request.ReadOptions != nil && request.ReadOptions.IncludeStats {
 		stats, err := fes.collectFileStats(request.FilePath, fileInfo)
 		if err != nil {
-			fes.logger.Warn("Failed to collect file stats", "error", err)
+			fes.logger.Warn("Failed to collect file stats", string(constants.ConnectionStateError), err)
 		} else {
 			result.FileStats = stats
 		}

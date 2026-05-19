@@ -28,12 +28,12 @@ and are kept aligned via the contract test in
 
 from __future__ import annotations
 
-from enum import IntEnum
 
 from typing import Self
 from pydantic import Field, model_validator
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
+from app.constants.status import SlashTier
 
 __all__ = [
     "GENESIS_PREV_ROOT",
@@ -48,22 +48,6 @@ __all__ = [
 ]
 
 
-class SlashTier(IntEnum):
-    """Slash tiers per GDD §6.
-
-    TIER_1: correlated / catastrophic (50-100% stake; destructive outcomes)
-    TIER_2: provable faults (5-20% stake; verifier/auditor objective failures)
-    TIER_3: liveness (0.1-1% stake; missed passes, ignored questions)
-
-    Int values are preserved in the `stake_resolution.slash_tier` column and
-    mirror the literal values in the shared schema enum.
-    """
-
-    TIER_1 = 1
-    TIER_2 = 2
-    TIER_3 = 3
-
-
 # Sentinel `prev_root` used by the genesis commitment in a deployment.
 # Any 64-char hex value distinguishable from a valid root works; we use all
 # zeros which matches the canonical "no parent" convention used in similar
@@ -75,7 +59,7 @@ class ReputationState(G8eBaseModel):
     """Per-agent reputation scalar maintained as an EMA across conversations.
 
     One row per persona id (axiom, concord, variance, pragma, nemesis, sage,
-    triage, auditor). Scalar only — never history (GDD §5). The document id
+    triage, auditor). Scalar only - never history (GDD §5). The document id
     in the `reputation_state` collection is the `agent_id`.
 
     Read by: `auditor_service` (cross-chain memory, sole reader); the Phase 3
@@ -144,7 +128,7 @@ class ReputationCommitment(G8eIdentifiableModel):
     signature without the Auditor's cooperation, given the HMAC key.
 
     Inherits ``id``, ``created_at``, ``updated_at`` from
-    ``G8eIdentifiableModel`` (note: ``updated_at`` is unused — commitments
+    ``G8eIdentifiableModel`` (note: ``updated_at`` is unused - commitments
     are never revised).
     """
 
@@ -200,7 +184,7 @@ class ReputationCommitmentCreatedPayload(G8eBaseModel):
 class ReputationCommitmentFailedPayload(G8eBaseModel):
     """SSE payload for `REPUTATION_COMMITMENT_FAILED` events.
 
-    Commitment failures are non-fatal in Phase 2 — the verdict still stands.
+    Commitment failures are non-fatal in Phase 2 - the verdict still stands.
     This payload surfaces the failure so ops can observe commitment-chain
     gaps without needing to scrape logs.
     """

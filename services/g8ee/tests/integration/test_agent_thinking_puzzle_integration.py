@@ -38,7 +38,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.s
 async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_services):
     """
     Verify that the AI agent uses the thinking model correctly when solving a puzzle.
-    
+
     This test presents a logic puzzle to the agent and checks that:
     1. The model emits THINKING SSE events with proper action types (START/UPDATE/END).
     2. Thinking content is delivered via LLM_CHAT_ITERATION_THINKING_STARTED events.
@@ -52,14 +52,12 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         pytest.skip("LLM provider is not configured")
 
     model_name = llm.primary_model  # Use primary model with thinking support
-    config = get_model_config(model_name)
+    get_model_config(model_name)
     # Note: Let the test fail naturally if model doesn't support thinking chunks
     # This will provide better error information than skipping
 
     # Get real services from all_services fixture
     event_service = all_services.event_service
-    operator_command_service = all_services.operator_command_service
-    tool_service = all_services.tool_service
     agent = all_services.g8e_agent
 
     puzzle_text = (
@@ -131,10 +129,12 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         web_session_id,
         case_id,
         user_id,
+        *,
+        cli_session_id=None,
     ):
         # Construct a mock event object with the structure the test expects
         from collections import namedtuple
-        MockEvent = namedtuple('MockEvent', ['event_type', 'payload'])
+        MockEvent = namedtuple("MockEvent", ["event_type", "payload"])
         event = MockEvent(event_type=event_type, payload=payload)
         published_events.append(event)
         # Return success without calling real publish
@@ -154,7 +154,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     events = published_events
 
     # Check for thinking events
-    thinking_events = [e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_THINKING_STARTED]
+    thinking_events = [e for e in events if e.event_type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED]
     assert len(thinking_events) > 0, "Expected at least one thinking event"
 
     # Verify thinking event structure and action types
@@ -173,7 +173,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
             assert len(event.payload.thinking.strip()) > 0, "Thinking content should not be empty"
 
     # Check for text events
-    text_events = [e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
+    text_events = [e for e in events if e.event_type == EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
     assert len(text_events) > 0, "Expected at least one text chunk event"
 
     full_text = "".join(e.payload.content for e in text_events if e.payload.content)
@@ -185,13 +185,13 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     assert len(found_keywords) >= 2, f"Expected answer to contain puzzle solution concepts, got: {full_text}"
 
     # Verify event ordering: thinking should come before text
-    thinking_indices = [i for i, e in enumerate(events) if e.event_type == EventType.LLM_CHAT_ITERATION_THINKING_STARTED]
-    text_indices = [i for i, e in enumerate(events) if e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
+    thinking_indices = [i for i, e in enumerate(events) if e.event_type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED]
+    text_indices = [i for i, e in enumerate(events) if e.event_type == EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
 
     if thinking_indices and text_indices:
         first_text_index = min(text_indices)
         last_thinking_end_index = max([i for i, e in enumerate(events)
-                                      if e.event_type == EventType.LLM_CHAT_ITERATION_THINKING_STARTED
+                                      if e.event_type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
                                       and e.payload.action_type == "end"])
 
         # Thinking END should come before first TEXT chunk

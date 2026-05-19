@@ -22,6 +22,7 @@ from app.constants import EventType, OperatorStatus
 from app.models.investigations import ConversationMessageMetadata
 from app.errors import ExternalServiceError, ValidationError
 from app.models.cache import CacheOperationResult
+from app.models.sessions import CliSessionDocument
 from app.models.operators import (
     CommandResultRecord,
     OperatorDocument,
@@ -71,6 +72,54 @@ class TestOperatorDataService:
         with pytest.raises(ValidationError, match="operator_id is required"):
             await service.get_operator("")
 
+    async def test_get_cli_session_success(self, service, mock_cache):
+        cli_session_id = "cli-123"
+        mock_cache.get_document_with_cache.return_value = {
+            "id": cli_session_id,
+            "session_type": "cli",
+            "user_id": "user-test",
+            "operator_session_id": "op-sess-123",
+            "absolute_expires_at": "2026-05-17T00:00:00Z",
+            "idle_expires_at": "2026-05-17T00:00:00Z",
+        }
+
+        result = await service.get_cli_session(cli_session_id)
+
+        assert result is not None
+        assert isinstance(result, CliSessionDocument)
+        assert result.id == cli_session_id
+        assert result.operator_session_id == "op-sess-123"
+        mock_cache.get_document_with_cache.assert_called_once()
+
+    async def test_validate_cli_session_ownership_success(self, service, mock_cache):
+        cli_session_id = "cli-123"
+        operator_session_id = "op-sess-123"
+        mock_cache.get_document_with_cache.return_value = {
+            "id": cli_session_id,
+            "session_type": "cli",
+            "user_id": "user-test",
+            "operator_session_id": operator_session_id,
+            "absolute_expires_at": "2026-05-17T00:00:00Z",
+            "idle_expires_at": "2026-05-17T00:00:00Z",
+        }
+
+        is_owned = await service.validate_cli_session_ownership(cli_session_id, operator_session_id)
+        assert is_owned is True
+
+    async def test_validate_cli_session_ownership_mismatch(self, service, mock_cache):
+        cli_session_id = "cli-123"
+        operator_session_id = "op-sess-wrong"
+        mock_cache.get_document_with_cache.return_value = {
+            "id": cli_session_id,
+            "session_type": "cli",
+            "user_id": "user-test",
+            "operator_session_id": "op-sess-correct",
+            "absolute_expires_at": "2026-05-17T00:00:00Z",
+            "idle_expires_at": "2026-05-17T00:00:00Z",
+        }
+
+        is_owned = await service.validate_cli_session_ownership(cli_session_id, operator_session_id)
+        assert is_owned is False
 
     async def test_update_operator_heartbeat_success(self, service, mock_cache):
         operator_id = "op-123"

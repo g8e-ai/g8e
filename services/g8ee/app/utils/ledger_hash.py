@@ -18,14 +18,14 @@ from datetime import datetime
 
 def canonical_json(obj: dict) -> bytes:
     """Convert object to canonical JSON bytes (sorted keys, no whitespace, UTF-8).
-    
+
     This ensures deterministic serialization for hash computation regardless
     of key order or formatting differences. Handles datetime objects by converting
     them to ISO format strings.
-    
+
     Args:
         obj: Dictionary to serialize
-        
+
     Returns:
         UTF-8 encoded JSON bytes with sorted keys and no whitespace
     """
@@ -47,14 +47,14 @@ def canonical_json(obj: dict) -> bytes:
 
 def compute_entry_hash(entry: dict, prev_hash: str | None) -> str:
     """Compute the hash for a ledger entry.
-    
+
     The hash is computed from the entry content (excluding prev_hash and entry_hash
     fields themselves) concatenated with the previous entry's hash, forming a chain.
-    
+
     Args:
         entry: Dictionary representing the ledger entry
         prev_hash: Hash of the previous entry in the chain (None for genesis)
-        
+
     Returns:
         Hexadecimal SHA256 hash string (64 characters)
     """
@@ -72,14 +72,14 @@ def compute_entry_hash(entry: dict, prev_hash: str | None) -> str:
 
 def genesis_hash(investigation_id: str, created_at: str) -> str:
     """Compute the genesis hash for a new investigation chain.
-    
+
     The genesis hash is the starting point of the hash chain, derived from
     the investigation's identity and creation timestamp.
-    
+
     Args:
         investigation_id: UUID of the investigation
         created_at: ISO 8601 timestamp string
-        
+
     Returns:
         Hexadecimal SHA256 hash string (64 characters)
     """
@@ -94,15 +94,15 @@ def verify_chain(
     created_at: str,
 ) -> tuple[bool, int | None]:
     """Verify the integrity of a hash chain.
-    
+
     Checks that each entry's hash correctly chains to the previous entry,
     starting from the genesis hash.
-    
+
     Args:
         entries: List of ledger entries in order
         investigation_id: Investigation UUID for genesis computation
         created_at: Investigation creation timestamp for genesis computation
-        
+
     Returns:
         Tuple of (is_valid, first_bad_index):
         - is_valid: True if chain is valid, False otherwise

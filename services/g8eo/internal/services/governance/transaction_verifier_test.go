@@ -27,6 +27,8 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 )
 
 type mockReplayStore struct {
@@ -73,20 +75,20 @@ func newStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvider 
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
 		l3Verifier,
-		[]string{"EXECUTE_BASH", "FS_LIST"},
+		[]constants.ActionType{constants.ActionTypeExecuteBash, constants.ActionTypeFsList},
 	), privKey
 }
 
-func typedPayload(t *testing.T, actionType string) []byte {
+func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 	t.Helper()
 	var msg proto.Message
 	switch actionType {
-	case "EXECUTE_BASH":
+	case constants.ActionTypeExecuteBash:
 		msg = &operatorv1.CommandRequested{Command: "uptime", ExecutionId: "exec-1", Justification: "test"}
-	case "FS_LIST":
+	case constants.ActionTypeFsList:
 		msg = &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
 	default:
-		t.Fatalf("unsupported action type: %s", actionType)
+		t.Fatalf("unsupported action type: %v", actionType)
 	}
 	payload, err := proto.Marshal(msg)
 	if err != nil {
@@ -95,7 +97,7 @@ func typedPayload(t *testing.T, actionType string) []byte {
 	return payload
 }
 
-func signedEnvelope(t *testing.T, actionType string, payload []byte, privKey ed25519.PrivateKey) *uap.UAPEnvelope {
+func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey) *uap.UAPEnvelope {
 	t.Helper()
 	env := &uap.UAPEnvelope{
 		ProtocolVersion:   "1.0",
@@ -103,12 +105,12 @@ func signedEnvelope(t *testing.T, actionType string, payload []byte, privKey ed2
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
 		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
 		OperatorId:        "operator-1",
-		OperatorSessionId: "session-1",
-		ActionType:        actionType,
+		OperatorSessionId: "operator-session-1",
+		ActionType:        string(actionType),
 		TargetResource:    "localhost",
 		Payload:           payload,
 		StateMerkleRoot:   "root-1",
-		Nonce:             "nonce-" + actionType + "-" + hex.EncodeToString(payload[:4]),
+		Nonce:             "nonce-" + string(actionType) + "-" + hex.EncodeToString(payload[:4]),
 	}
 	hash, err := uap.GenerateMessageID(env)
 	if err != nil {
@@ -122,7 +124,7 @@ func signedEnvelope(t *testing.T, actionType string, payload []byte, privKey ed2
 			TribunalSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
 		},
 	}
-	if actionType == "EXECUTE_BASH" {
+	if actionType == constants.ActionTypeExecuteBash {
 		env.Governance.L3 = &commonv1.L3Metadata{
 			Proof: &commonv1.L3Proof{
 				Signature: "human-proof",
@@ -134,20 +136,20 @@ func signedEnvelope(t *testing.T, actionType string, payload []byte, privKey ed2
 
 func TestTransactionVerifier_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
 	verifier, privKey := newStrictVerifier(t, newMockReplayStore(), &mockStateRootProvider{root: "root-1"}, &mockL3Verifier{shouldPass: true})
-	env := signedEnvelope(t, "FS_LIST", typedPayload(t, "FS_LIST"), privKey)
+	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 
 	verified, err := verifier.VerifyEnvelope(env)
 	if err != nil {
 		t.Fatalf("expected verification to pass, got %v", err)
 	}
-	if verified.DecodedPayload == nil || verified.ActionType != "FS_LIST" {
+	if verified.DecodedPayload == nil || verified.ActionType != constants.ActionTypeFsList {
 		t.Fatalf("verified transaction missing decoded payload or action: %#v", verified)
 	}
 }
 
 func TestTransactionVerifier_AcceptsValidMutationUAPEnvelopeWithL3(t *testing.T) {
 	verifier, privKey := newStrictVerifier(t, newMockReplayStore(), &mockStateRootProvider{root: "root-1"}, &mockL3Verifier{shouldPass: true})
-	env := signedEnvelope(t, "EXECUTE_BASH", typedPayload(t, "EXECUTE_BASH"), privKey)
+	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 
 	_, err := verifier.VerifyEnvelope(env)
 	if err != nil {
@@ -182,7 +184,7 @@ func TestTransactionVerifier_FailClosedProofs(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			verifier, privKey := newStrictVerifier(t, newMockReplayStore(), &mockStateRootProvider{root: "root-1"}, &mockL3Verifier{shouldPass: true})
-			env := signedEnvelope(t, "EXECUTE_BASH", typedPayload(t, "EXECUTE_BASH"), privKey)
+			env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 			tc.mutate(env)
 
 			_, err := verifier.VerifyEnvelope(env)
@@ -197,7 +199,7 @@ func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
 	t.Run("replayed nonce", func(t *testing.T) {
 		replayStore := newMockReplayStore()
 		verifier, privKey := newStrictVerifier(t, replayStore, &mockStateRootProvider{root: "root-1"}, &mockL3Verifier{shouldPass: true})
-		env := signedEnvelope(t, "FS_LIST", typedPayload(t, "FS_LIST"), privKey)
+		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 		if _, err := verifier.VerifyEnvelope(env); err != nil {
 			t.Fatalf("first verification failed: %v", err)
 		}
@@ -209,7 +211,7 @@ func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
 
 	t.Run("state root mismatch", func(t *testing.T) {
 		verifier, privKey := newStrictVerifier(t, newMockReplayStore(), &mockStateRootProvider{root: "other-root"}, &mockL3Verifier{shouldPass: true})
-		env := signedEnvelope(t, "FS_LIST", typedPayload(t, "FS_LIST"), privKey)
+		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 		_, err := verifier.VerifyEnvelope(env)
 		if !errors.Is(err, ErrStateRootMismatch) {
 			t.Fatalf("expected state root mismatch, got %v", err)
@@ -220,7 +222,7 @@ func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
 func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 	t.Run("missing replay store", func(t *testing.T) {
 		verifier, privKey := newStrictVerifier(t, nil, &mockStateRootProvider{root: "root-1"}, &mockL3Verifier{shouldPass: true})
-		env := signedEnvelope(t, "FS_LIST", typedPayload(t, "FS_LIST"), privKey)
+		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 		_, err := verifier.VerifyEnvelope(env)
 		if !errors.Is(err, ErrReplayStoreMissing) {
 			t.Fatalf("expected replay store rejection, got %v", err)
@@ -229,7 +231,7 @@ func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 
 	t.Run("missing state root provider", func(t *testing.T) {
 		verifier, privKey := newStrictVerifier(t, newMockReplayStore(), nil, &mockL3Verifier{shouldPass: true})
-		env := signedEnvelope(t, "FS_LIST", typedPayload(t, "FS_LIST"), privKey)
+		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 		_, err := verifier.VerifyEnvelope(env)
 		if !errors.Is(err, ErrStateRootMissing) {
 			t.Fatalf("expected state root provider rejection, got %v", err)
@@ -238,7 +240,7 @@ func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 
 	t.Run("missing l3 verifier", func(t *testing.T) {
 		verifier, privKey := newStrictVerifier(t, newMockReplayStore(), &mockStateRootProvider{root: "root-1"}, nil)
-		env := signedEnvelope(t, "EXECUTE_BASH", typedPayload(t, "EXECUTE_BASH"), privKey)
+		env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 		_, err := verifier.VerifyEnvelope(env)
 		if !errors.Is(err, ErrL3VerifierNotConfigured) {
 			t.Fatalf("expected l3 verifier rejection, got %v", err)

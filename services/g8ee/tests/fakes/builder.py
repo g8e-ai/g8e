@@ -42,7 +42,7 @@ from .fake_investigation_service import FakeInvestigationService
 
 def create_pure_mock_cache_aside():
     """Returns a MagicMock spec'd to CacheAsideService with AsyncMock methods.
-    
+
     Use this for pure unit tests of services that depend on CacheAsideService
     where you only want to assert on the service-level interface calls.
     """
@@ -135,7 +135,7 @@ def build_command_service(
 ) -> OperatorCommandService:
     """Build an OperatorCommandService with typed fakes for all dependencies.
 
-    All parameters are optional — provide only the fakes you need to configure
+    All parameters are optional - provide only the fakes you need to configure
     or assert on. Omitted deps default to a fresh fake with sensible defaults.
     """
     cache_aside_service = create_mock_cache_aside_service()

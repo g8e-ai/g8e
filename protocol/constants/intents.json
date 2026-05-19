@@ -1,58 +1,516 @@
 {
   "_comment": "Canonical AWS intent names for Cloud Operator IAM policy management. Shared across g8ee (Python), . Must stay in sync with CloudFormation managed policies (ami/cloudformation/cloud-operator.yaml Intent-* resources).",
-
+  "_meta": {
+    "naming": "Each entry MUST specify 'value', '_go_const', and '_python_const' fields. No fallback or auto-generation is supported."
+  },
   "intents": {
-    "ec2_discovery":              { "category": "compute",           "question": "Should I be able to see other EC2 instances in your account?",                              "verification_action": "ec2:DescribeInstances",                       "dependencies": [] },
-    "ec2_management":             { "category": "compute",           "question": "Should I be able to start, stop, and manage EC2 instances?",                               "verification_action": "ec2:StartInstances",                          "dependencies": ["ec2_discovery"] },
-    "ec2_snapshot_management":    { "category": "compute",           "question": "Should I be able to create and manage EC2/EBS snapshots and AMIs?",                        "verification_action": "ec2:CreateSnapshot",                          "dependencies": ["ec2_discovery"] },
-    "s3_read":                    { "category": "storage",           "question": "Should I be able to read files from S3 buckets?",                                          "verification_action": "s3:GetObject",                               "dependencies": [] },
-    "s3_write":                   { "category": "storage",           "question": "Should I be able to write files to S3 buckets?",                                           "verification_action": "s3:PutObject",                               "dependencies": ["s3_read"] },
-    "s3_bucket_discovery":        { "category": "storage",           "question": "Should I be able to list and view S3 bucket configurations?",                              "verification_action": "s3:ListAllMyBuckets",                        "dependencies": [] },
-    "s3_delete":                  { "category": "storage",           "question": "Should I be able to delete objects from S3 buckets?",                                      "verification_action": "s3:DeleteObject",                            "dependencies": ["s3_read"] },
-    "terraform_state":            { "category": "iac",               "question": "Should I be able to manage Terraform state in S3 and DynamoDB?",                          "verification_action": "s3:GetObject",                               "dependencies": [] },
-    "cloudformation_deployment":  { "category": "iac",               "question": "Should I be able to create and update CloudFormation stacks?",                             "verification_action": "cloudformation:CreateStack",                  "dependencies": [] },
-    "cloudwatch_logs":            { "category": "logging",           "question": "Should I be able to view and write CloudWatch Logs?",                                      "verification_action": "logs:DescribeLogGroups",                      "dependencies": [] },
-    "secrets_read":               { "category": "logging",           "question": "Should I be able to read secrets from Secrets Manager?",                                  "verification_action": "secretsmanager:GetSecretValue",              "dependencies": [] },
-    "lambda_discovery":           { "category": "lambda",            "question": "Should I be able to see Lambda functions?",                                                "verification_action": "lambda:ListFunctions",                        "dependencies": [] },
-    "lambda_invoke":              { "category": "lambda",            "question": "Should I be able to invoke Lambda functions?",                                             "verification_action": "lambda:InvokeFunction",                       "dependencies": ["lambda_discovery"] },
-    "rds_discovery":              { "category": "rds",               "question": "Should I be able to see RDS databases?",                                                   "verification_action": "rds:DescribeDBInstances",                     "dependencies": [] },
-    "rds_management":             { "category": "rds",               "question": "Should I be able to start, stop, and reboot RDS databases?",                              "verification_action": "rds:StartDBInstance",                         "dependencies": ["rds_discovery"] },
-    "rds_snapshot_management":    { "category": "rds",               "question": "Should I be able to create and manage RDS snapshots?",                                    "verification_action": "rds:CreateDBSnapshot",                        "dependencies": ["rds_discovery"] },
-    "aurora_cluster_management":  { "category": "aurora",            "question": "Should I be able to manage Aurora clusters (failover, modify, add/remove instances)?",    "verification_action": "rds:DescribeDBClusters",                      "dependencies": ["rds_discovery"] },
-    "aurora_scaling":             { "category": "aurora",            "question": "Should I be able to manage Aurora Serverless v2 scaling and capacity?",                   "verification_action": "rds:DescribeDBClusterEndpoints",              "dependencies": ["rds_discovery"] },
-    "aurora_cloning":             { "category": "aurora",            "question": "Should I be able to clone Aurora clusters?",                                               "verification_action": "rds:RestoreDBClusterToPointInTime",           "dependencies": ["rds_discovery"] },
-    "aurora_global_database":     { "category": "aurora",            "question": "Should I be able to manage Aurora Global Database operations?",                            "verification_action": "rds:DescribeGlobalClusters",                  "dependencies": ["rds_discovery"] },
-    "ecs_discovery":              { "category": "containers",        "question": "Should I be able to see ECS clusters and services?",                                       "verification_action": "ecs:ListClusters",                            "dependencies": [] },
-    "ecs_management":             { "category": "containers",        "question": "Should I be able to update and manage ECS services?",                                      "verification_action": "ecs:UpdateService",                           "dependencies": ["ecs_discovery"] },
-    "eks_discovery":              { "category": "containers",        "question": "Should I be able to see EKS clusters?",                                                    "verification_action": "eks:ListClusters",                            "dependencies": [] },
-    "vpc_discovery":              { "category": "networking",        "question": "Should I be able to see VPCs, subnets, and security groups?",                              "verification_action": "ec2:DescribeVpcs",                            "dependencies": [] },
-    "elb_discovery":              { "category": "networking",        "question": "Should I be able to see load balancers?",                                                  "verification_action": "elasticloadbalancing:DescribeLoadBalancers",  "dependencies": [] },
-    "route53_discovery":          { "category": "networking",        "question": "Should I be able to see Route 53 hosted zones and DNS records?",                           "verification_action": "route53:ListHostedZones",                     "dependencies": [] },
-    "route53_management":         { "category": "networking",        "question": "Should I be able to create and modify Route 53 DNS records?",                              "verification_action": "route53:ChangeResourceRecordSets",            "dependencies": ["route53_discovery"] },
-    "autoscaling_discovery":      { "category": "autoscaling",       "question": "Should I be able to see Auto Scaling groups?",                                             "verification_action": "autoscaling:DescribeAutoScalingGroups",       "dependencies": [] },
-    "autoscaling_management":     { "category": "autoscaling",       "question": "Should I be able to adjust Auto Scaling group capacity?",                                  "verification_action": "autoscaling:SetDesiredCapacity",              "dependencies": ["autoscaling_discovery"] },
-    "cloudwatch_metrics":         { "category": "monitoring",        "question": "Should I be able to read CloudWatch metrics?",                                             "verification_action": "cloudwatch:GetMetricData",                    "dependencies": [] },
-    "sns_discovery":              { "category": "monitoring",        "question": "Should I be able to see SNS topics?",                                                      "verification_action": "sns:ListTopics",                              "dependencies": [] },
-    "sns_publish":                { "category": "monitoring",        "question": "Should I be able to publish messages to SNS topics?",                                      "verification_action": "sns:Publish",                                 "dependencies": ["sns_discovery"] },
-    "sqs_discovery":              { "category": "monitoring",        "question": "Should I be able to see SQS queues?",                                                      "verification_action": "sqs:ListQueues",                              "dependencies": [] },
-    "sqs_management":             { "category": "monitoring",        "question": "Should I be able to send and manage messages in SQS queues?",                              "verification_action": "sqs:SendMessage",                             "dependencies": ["sqs_discovery"] },
-    "eventbridge_discovery":      { "category": "monitoring",        "question": "Should I be able to see EventBridge rules and event buses?",                               "verification_action": "events:ListRules",                            "dependencies": [] },
-    "dynamodb_discovery":         { "category": "data",              "question": "Should I be able to see DynamoDB tables?",                                                 "verification_action": "dynamodb:ListTables",                         "dependencies": [] },
-    "dynamodb_read":              { "category": "data",              "question": "Should I be able to read items from DynamoDB tables?",                                     "verification_action": "dynamodb:GetItem",                            "dependencies": [] },
-    "dynamodb_write":             { "category": "data",              "question": "Should I be able to write items to DynamoDB tables?",                                      "verification_action": "dynamodb:PutItem",                            "dependencies": ["dynamodb_read"] },
-    "elasticache_discovery":      { "category": "data",              "question": "Should I be able to see ElastiCache clusters?",                                            "verification_action": "elasticache:DescribeCacheClusters",           "dependencies": [] },
-    "kms_discovery":              { "category": "security",          "question": "Should I be able to see KMS keys?",                                                        "verification_action": "kms:ListKeys",                                "dependencies": [] },
-    "kms_crypto":                 { "category": "security",          "question": "Should I be able to encrypt and decrypt data using KMS keys?",                             "verification_action": "kms:Encrypt",                                 "dependencies": ["kms_discovery"] },
-    "iam_discovery":              { "category": "security",          "question": "Should I be able to see IAM roles and policies?",                                          "verification_action": "iam:ListRoles",                               "dependencies": [] },
-    "acm_discovery":              { "category": "security",          "question": "Should I be able to see ACM certificates?",                                                "verification_action": "acm:ListCertificates",                        "dependencies": [] },
-    "apigateway_discovery":       { "category": "serverless",        "question": "Should I be able to see API Gateway APIs?",                                                "verification_action": "apigateway:GET",                              "dependencies": [] },
-    "stepfunctions_discovery":    { "category": "serverless",        "question": "Should I be able to see Step Functions state machines?",                                   "verification_action": "states:ListStateMachines",                    "dependencies": [] },
-    "stepfunctions_execution":    { "category": "serverless",        "question": "Should I be able to start and stop Step Functions executions?",                            "verification_action": "states:StartExecution",                       "dependencies": ["stepfunctions_discovery"] },
-    "athena_discovery":           { "category": "analytics",         "question": "Should I be able to see Athena workgroups and queries?",                                   "verification_action": "athena:ListWorkGroups",                       "dependencies": [] },
-    "athena_query_execution":     { "category": "analytics",         "question": "Should I be able to execute Athena queries?",                                              "verification_action": "athena:StartQueryExecution",                  "dependencies": ["athena_discovery"] },
-    "glue_discovery":             { "category": "analytics",         "question": "Should I be able to see Glue databases and crawlers?",                                     "verification_action": "glue:GetDatabases",                           "dependencies": [] },
-    "cloudfront_discovery":       { "category": "other",             "question": "Should I be able to see CloudFront distributions?",                                        "verification_action": "cloudfront:ListDistributions",                "dependencies": [] },
-    "codedeploy_discovery":       { "category": "other",             "question": "Should I be able to see CodeDeploy applications and deployments?",                         "verification_action": "codedeploy:ListApplications",                 "dependencies": [] },
-    "cost_explorer":              { "category": "other",             "question": "Should I be able to read AWS cost and usage data?",                                        "verification_action": "ce:GetCostAndUsage",                          "dependencies": [] }
+    "ec2_discovery": {
+      "category": "compute",
+      "question": "Should I be able to see other EC2 instances in your account?",
+      "verification_action": "ec2:DescribeInstances",
+      "dependencies": [],
+      "value": "ec2_discovery",
+      "_go_const": "Ec2Discovery",
+      "_python_const": "EC2_DISCOVERY"
+    },
+    "ec2_management": {
+      "category": "compute",
+      "question": "Should I be able to start, stop, and manage EC2 instances?",
+      "verification_action": "ec2:StartInstances",
+      "dependencies": [
+        "ec2_discovery"
+      ],
+      "value": "ec2_management",
+      "_go_const": "Ec2Management",
+      "_python_const": "EC2_MANAGEMENT"
+    },
+    "ec2_snapshot_management": {
+      "category": "compute",
+      "question": "Should I be able to create and manage EC2/EBS snapshots and AMIs?",
+      "verification_action": "ec2:CreateSnapshot",
+      "dependencies": [
+        "ec2_discovery"
+      ],
+      "value": "ec2_snapshot_management",
+      "_go_const": "Ec2SnapshotManagement",
+      "_python_const": "EC2_SNAPSHOT_MANAGEMENT"
+    },
+    "s3_read": {
+      "category": "storage",
+      "question": "Should I be able to read files from S3 buckets?",
+      "verification_action": "s3:GetObject",
+      "dependencies": [],
+      "value": "s3_read",
+      "_go_const": "S3Read",
+      "_python_const": "S3_READ"
+    },
+    "s3_write": {
+      "category": "storage",
+      "question": "Should I be able to write files to S3 buckets?",
+      "verification_action": "s3:PutObject",
+      "dependencies": [
+        "s3_read"
+      ],
+      "value": "s3_write",
+      "_go_const": "S3Write",
+      "_python_const": "S3_WRITE"
+    },
+    "s3_bucket_discovery": {
+      "category": "storage",
+      "question": "Should I be able to list and view S3 bucket configurations?",
+      "verification_action": "s3:ListAllMyBuckets",
+      "dependencies": [],
+      "value": "s3_bucket_discovery",
+      "_go_const": "S3BucketDiscovery",
+      "_python_const": "S3_BUCKET_DISCOVERY"
+    },
+    "s3_delete": {
+      "category": "storage",
+      "question": "Should I be able to delete objects from S3 buckets?",
+      "verification_action": "s3:DeleteObject",
+      "dependencies": [
+        "s3_read"
+      ],
+      "value": "s3_delete",
+      "_go_const": "S3Delete",
+      "_python_const": "S3_DELETE"
+    },
+    "terraform_state": {
+      "category": "iac",
+      "question": "Should I be able to manage Terraform state in S3 and DynamoDB?",
+      "verification_action": "s3:GetObject",
+      "dependencies": [],
+      "value": "terraform_state",
+      "_go_const": "TerraformState",
+      "_python_const": "TERRAFORM_STATE"
+    },
+    "cloudformation_deployment": {
+      "category": "iac",
+      "question": "Should I be able to create and update CloudFormation stacks?",
+      "verification_action": "cloudformation:CreateStack",
+      "dependencies": [],
+      "value": "cloudformation_deployment",
+      "_go_const": "CloudformationDeployment",
+      "_python_const": "CLOUDFORMATION_DEPLOYMENT"
+    },
+    "cloudwatch_logs": {
+      "category": "logging",
+      "question": "Should I be able to view and write CloudWatch Logs?",
+      "verification_action": "logs:DescribeLogGroups",
+      "dependencies": [],
+      "value": "cloudwatch_logs",
+      "_go_const": "CloudwatchLogs",
+      "_python_const": "CLOUDWATCH_LOGS"
+    },
+    "secrets_read": {
+      "category": "logging",
+      "question": "Should I be able to read secrets from Secrets Manager?",
+      "verification_action": "secretsmanager:GetSecretValue",
+      "dependencies": [],
+      "value": "secrets_read",
+      "_go_const": "SecretsRead",
+      "_python_const": "SECRETS_READ"
+    },
+    "lambda_discovery": {
+      "category": "lambda",
+      "question": "Should I be able to see Lambda functions?",
+      "verification_action": "lambda:ListFunctions",
+      "dependencies": [],
+      "value": "lambda_discovery",
+      "_go_const": "LambdaDiscovery",
+      "_python_const": "LAMBDA_DISCOVERY"
+    },
+    "lambda_invoke": {
+      "category": "lambda",
+      "question": "Should I be able to invoke Lambda functions?",
+      "verification_action": "lambda:InvokeFunction",
+      "dependencies": [
+        "lambda_discovery"
+      ],
+      "value": "lambda_invoke",
+      "_go_const": "LambdaInvoke",
+      "_python_const": "LAMBDA_INVOKE"
+    },
+    "rds_discovery": {
+      "category": "rds",
+      "question": "Should I be able to see RDS databases?",
+      "verification_action": "rds:DescribeDBInstances",
+      "dependencies": [],
+      "value": "rds_discovery",
+      "_go_const": "RdsDiscovery",
+      "_python_const": "RDS_DISCOVERY"
+    },
+    "rds_management": {
+      "category": "rds",
+      "question": "Should I be able to start, stop, and reboot RDS databases?",
+      "verification_action": "rds:StartDBInstance",
+      "dependencies": [
+        "rds_discovery"
+      ],
+      "value": "rds_management",
+      "_go_const": "RdsManagement",
+      "_python_const": "RDS_MANAGEMENT"
+    },
+    "rds_snapshot_management": {
+      "category": "rds",
+      "question": "Should I be able to create and manage RDS snapshots?",
+      "verification_action": "rds:CreateDBSnapshot",
+      "dependencies": [
+        "rds_discovery"
+      ],
+      "value": "rds_snapshot_management",
+      "_go_const": "RdsSnapshotManagement",
+      "_python_const": "RDS_SNAPSHOT_MANAGEMENT"
+    },
+    "aurora_cluster_management": {
+      "category": "aurora",
+      "question": "Should I be able to manage Aurora clusters (failover, modify, add/remove instances)?",
+      "verification_action": "rds:DescribeDBClusters",
+      "dependencies": [
+        "rds_discovery"
+      ],
+      "value": "aurora_cluster_management",
+      "_go_const": "AuroraClusterManagement",
+      "_python_const": "AURORA_CLUSTER_MANAGEMENT"
+    },
+    "aurora_scaling": {
+      "category": "aurora",
+      "question": "Should I be able to manage Aurora Serverless v2 scaling and capacity?",
+      "verification_action": "rds:DescribeDBClusterEndpoints",
+      "dependencies": [
+        "rds_discovery"
+      ],
+      "value": "aurora_scaling",
+      "_go_const": "AuroraScaling",
+      "_python_const": "AURORA_SCALING"
+    },
+    "aurora_cloning": {
+      "category": "aurora",
+      "question": "Should I be able to clone Aurora clusters?",
+      "verification_action": "rds:RestoreDBClusterToPointInTime",
+      "dependencies": [
+        "rds_discovery"
+      ],
+      "value": "aurora_cloning",
+      "_go_const": "AuroraCloning",
+      "_python_const": "AURORA_CLONING"
+    },
+    "aurora_global_database": {
+      "category": "aurora",
+      "question": "Should I be able to manage Aurora Global Database operations?",
+      "verification_action": "rds:DescribeGlobalClusters",
+      "dependencies": [
+        "rds_discovery"
+      ],
+      "value": "aurora_global_database",
+      "_go_const": "AuroraGlobalDatabase",
+      "_python_const": "AURORA_GLOBAL_DATABASE"
+    },
+    "ecs_discovery": {
+      "category": "containers",
+      "question": "Should I be able to see ECS clusters and services?",
+      "verification_action": "ecs:ListClusters",
+      "dependencies": [],
+      "value": "ecs_discovery",
+      "_go_const": "EcsDiscovery",
+      "_python_const": "ECS_DISCOVERY"
+    },
+    "ecs_management": {
+      "category": "containers",
+      "question": "Should I be able to update and manage ECS services?",
+      "verification_action": "ecs:UpdateService",
+      "dependencies": [
+        "ecs_discovery"
+      ],
+      "value": "ecs_management",
+      "_go_const": "EcsManagement",
+      "_python_const": "ECS_MANAGEMENT"
+    },
+    "eks_discovery": {
+      "category": "containers",
+      "question": "Should I be able to see EKS clusters?",
+      "verification_action": "eks:ListClusters",
+      "dependencies": [],
+      "value": "eks_discovery",
+      "_go_const": "EksDiscovery",
+      "_python_const": "EKS_DISCOVERY"
+    },
+    "vpc_discovery": {
+      "category": "networking",
+      "question": "Should I be able to see VPCs, subnets, and security groups?",
+      "verification_action": "ec2:DescribeVpcs",
+      "dependencies": [],
+      "value": "vpc_discovery",
+      "_go_const": "VpcDiscovery",
+      "_python_const": "VPC_DISCOVERY"
+    },
+    "elb_discovery": {
+      "category": "networking",
+      "question": "Should I be able to see load balancers?",
+      "verification_action": "elasticloadbalancing:DescribeLoadBalancers",
+      "dependencies": [],
+      "value": "elb_discovery",
+      "_go_const": "ElbDiscovery",
+      "_python_const": "ELB_DISCOVERY"
+    },
+    "route53_discovery": {
+      "category": "networking",
+      "question": "Should I be able to see Route 53 hosted zones and DNS records?",
+      "verification_action": "route53:ListHostedZones",
+      "dependencies": [],
+      "value": "route53_discovery",
+      "_go_const": "Route53Discovery",
+      "_python_const": "ROUTE53_DISCOVERY"
+    },
+    "route53_management": {
+      "category": "networking",
+      "question": "Should I be able to create and modify Route 53 DNS records?",
+      "verification_action": "route53:ChangeResourceRecordSets",
+      "dependencies": [
+        "route53_discovery"
+      ],
+      "value": "route53_management",
+      "_go_const": "Route53Management",
+      "_python_const": "ROUTE53_MANAGEMENT"
+    },
+    "autoscaling_discovery": {
+      "category": "autoscaling",
+      "question": "Should I be able to see Auto Scaling groups?",
+      "verification_action": "autoscaling:DescribeAutoScalingGroups",
+      "dependencies": [],
+      "value": "autoscaling_discovery",
+      "_go_const": "AutoscalingDiscovery",
+      "_python_const": "AUTOSCALING_DISCOVERY"
+    },
+    "autoscaling_management": {
+      "category": "autoscaling",
+      "question": "Should I be able to adjust Auto Scaling group capacity?",
+      "verification_action": "autoscaling:SetDesiredCapacity",
+      "dependencies": [
+        "autoscaling_discovery"
+      ],
+      "value": "autoscaling_management",
+      "_go_const": "AutoscalingManagement",
+      "_python_const": "AUTOSCALING_MANAGEMENT"
+    },
+    "cloudwatch_metrics": {
+      "category": "monitoring",
+      "question": "Should I be able to read CloudWatch metrics?",
+      "verification_action": "cloudwatch:GetMetricData",
+      "dependencies": [],
+      "value": "cloudwatch_metrics",
+      "_go_const": "CloudwatchMetrics",
+      "_python_const": "CLOUDWATCH_METRICS"
+    },
+    "sns_discovery": {
+      "category": "monitoring",
+      "question": "Should I be able to see SNS topics?",
+      "verification_action": "sns:ListTopics",
+      "dependencies": [],
+      "value": "sns_discovery",
+      "_go_const": "SnsDiscovery",
+      "_python_const": "SNS_DISCOVERY"
+    },
+    "sns_publish": {
+      "category": "monitoring",
+      "question": "Should I be able to publish messages to SNS topics?",
+      "verification_action": "sns:Publish",
+      "dependencies": [
+        "sns_discovery"
+      ],
+      "value": "sns_publish",
+      "_go_const": "SnsPublish",
+      "_python_const": "SNS_PUBLISH"
+    },
+    "sqs_discovery": {
+      "category": "monitoring",
+      "question": "Should I be able to see SQS queues?",
+      "verification_action": "sqs:ListQueues",
+      "dependencies": [],
+      "value": "sqs_discovery",
+      "_go_const": "SqsDiscovery",
+      "_python_const": "SQS_DISCOVERY"
+    },
+    "sqs_management": {
+      "category": "monitoring",
+      "question": "Should I be able to send and manage messages in SQS queues?",
+      "verification_action": "sqs:SendMessage",
+      "dependencies": [
+        "sqs_discovery"
+      ],
+      "value": "sqs_management",
+      "_go_const": "SqsManagement",
+      "_python_const": "SQS_MANAGEMENT"
+    },
+    "eventbridge_discovery": {
+      "category": "monitoring",
+      "question": "Should I be able to see EventBridge rules and event buses?",
+      "verification_action": "events:ListRules",
+      "dependencies": [],
+      "value": "eventbridge_discovery",
+      "_go_const": "EventbridgeDiscovery",
+      "_python_const": "EVENTBRIDGE_DISCOVERY"
+    },
+    "dynamodb_discovery": {
+      "category": "data",
+      "question": "Should I be able to see DynamoDB tables?",
+      "verification_action": "dynamodb:ListTables",
+      "dependencies": [],
+      "value": "dynamodb_discovery",
+      "_go_const": "DynamodbDiscovery",
+      "_python_const": "DYNAMODB_DISCOVERY"
+    },
+    "dynamodb_read": {
+      "category": "data",
+      "question": "Should I be able to read items from DynamoDB tables?",
+      "verification_action": "dynamodb:GetItem",
+      "dependencies": [],
+      "value": "dynamodb_read",
+      "_go_const": "DynamodbRead",
+      "_python_const": "DYNAMODB_READ"
+    },
+    "dynamodb_write": {
+      "category": "data",
+      "question": "Should I be able to write items to DynamoDB tables?",
+      "verification_action": "dynamodb:PutItem",
+      "dependencies": [
+        "dynamodb_read"
+      ],
+      "value": "dynamodb_write",
+      "_go_const": "DynamodbWrite",
+      "_python_const": "DYNAMODB_WRITE"
+    },
+    "elasticache_discovery": {
+      "category": "data",
+      "question": "Should I be able to see ElastiCache clusters?",
+      "verification_action": "elasticache:DescribeCacheClusters",
+      "dependencies": [],
+      "value": "elasticache_discovery",
+      "_go_const": "ElasticacheDiscovery",
+      "_python_const": "ELASTICACHE_DISCOVERY"
+    },
+    "kms_discovery": {
+      "category": "security",
+      "question": "Should I be able to see KMS keys?",
+      "verification_action": "kms:ListKeys",
+      "dependencies": [],
+      "value": "kms_discovery",
+      "_go_const": "KmsDiscovery",
+      "_python_const": "KMS_DISCOVERY"
+    },
+    "kms_crypto": {
+      "category": "security",
+      "question": "Should I be able to encrypt and decrypt data using KMS keys?",
+      "verification_action": "kms:Encrypt",
+      "dependencies": [
+        "kms_discovery"
+      ],
+      "value": "kms_crypto",
+      "_go_const": "KmsCrypto",
+      "_python_const": "KMS_CRYPTO"
+    },
+    "iam_discovery": {
+      "category": "security",
+      "question": "Should I be able to see IAM roles and policies?",
+      "verification_action": "iam:ListRoles",
+      "dependencies": [],
+      "value": "iam_discovery",
+      "_go_const": "IamDiscovery",
+      "_python_const": "IAM_DISCOVERY"
+    },
+    "acm_discovery": {
+      "category": "security",
+      "question": "Should I be able to see ACM certificates?",
+      "verification_action": "acm:ListCertificates",
+      "dependencies": [],
+      "value": "acm_discovery",
+      "_go_const": "AcmDiscovery",
+      "_python_const": "ACM_DISCOVERY"
+    },
+    "apigateway_discovery": {
+      "category": "serverless",
+      "question": "Should I be able to see API Gateway APIs?",
+      "verification_action": "apigateway:GET",
+      "dependencies": [],
+      "value": "apigateway_discovery",
+      "_go_const": "ApigatewayDiscovery",
+      "_python_const": "APIGATEWAY_DISCOVERY"
+    },
+    "stepfunctions_discovery": {
+      "category": "serverless",
+      "question": "Should I be able to see Step Functions state machines?",
+      "verification_action": "states:ListStateMachines",
+      "dependencies": [],
+      "value": "stepfunctions_discovery",
+      "_go_const": "StepfunctionsDiscovery",
+      "_python_const": "STEPFUNCTIONS_DISCOVERY"
+    },
+    "stepfunctions_execution": {
+      "category": "serverless",
+      "question": "Should I be able to start and stop Step Functions executions?",
+      "verification_action": "states:StartExecution",
+      "dependencies": [
+        "stepfunctions_discovery"
+      ],
+      "value": "stepfunctions_execution",
+      "_go_const": "StepfunctionsExecution",
+      "_python_const": "STEPFUNCTIONS_EXECUTION"
+    },
+    "athena_discovery": {
+      "category": "analytics",
+      "question": "Should I be able to see Athena workgroups and queries?",
+      "verification_action": "athena:ListWorkGroups",
+      "dependencies": [],
+      "value": "athena_discovery",
+      "_go_const": "AthenaDiscovery",
+      "_python_const": "ATHENA_DISCOVERY"
+    },
+    "athena_query_execution": {
+      "category": "analytics",
+      "question": "Should I be able to execute Athena queries?",
+      "verification_action": "athena:StartQueryExecution",
+      "dependencies": [
+        "athena_discovery"
+      ],
+      "value": "athena_query_execution",
+      "_go_const": "AthenaQueryExecution",
+      "_python_const": "ATHENA_QUERY_EXECUTION"
+    },
+    "glue_discovery": {
+      "category": "analytics",
+      "question": "Should I be able to see Glue databases and crawlers?",
+      "verification_action": "glue:GetDatabases",
+      "dependencies": [],
+      "value": "glue_discovery",
+      "_go_const": "GlueDiscovery",
+      "_python_const": "GLUE_DISCOVERY"
+    },
+    "cloudfront_discovery": {
+      "category": "other",
+      "question": "Should I be able to see CloudFront distributions?",
+      "verification_action": "cloudfront:ListDistributions",
+      "dependencies": [],
+      "value": "cloudfront_discovery",
+      "_go_const": "CloudfrontDiscovery",
+      "_python_const": "CLOUDFRONT_DISCOVERY"
+    },
+    "codedeploy_discovery": {
+      "category": "other",
+      "question": "Should I be able to see CodeDeploy applications and deployments?",
+      "verification_action": "codedeploy:ListApplications",
+      "dependencies": [],
+      "value": "codedeploy_discovery",
+      "_go_const": "CodedeployDiscovery",
+      "_python_const": "CODEDEPLOY_DISCOVERY"
+    },
+    "cost_explorer": {
+      "category": "other",
+      "question": "Should I be able to read AWS cost and usage data?",
+      "verification_action": "ce:GetCostAndUsage",
+      "dependencies": [],
+      "value": "cost_explorer",
+      "_go_const": "CostExplorer",
+      "_python_const": "COST_EXPLORER"
+    }
   }
 }

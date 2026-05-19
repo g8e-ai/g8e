@@ -30,7 +30,7 @@ from urllib.parse import quote
 
 import aiohttp
 
-from app.constants import OPERATOR_SESSION_ID_HEADER, OPERATOR_API_KEY_HEADER
+from app.constants import OPERATOR_API_KEY_HEADER, HTTP_AUTHORIZATION_HEADER, HTTP_BEARER_PREFIX
 from app.errors import DatabaseError, ErrorCode, NetworkError
 from app.models.settings import ListenSettings
 from app.services.infra.settings_service import SettingsService
@@ -46,7 +46,7 @@ class BlobClient:
 
     def __init__(
         self,
-        ca_cert_path: str,
+        ca_cert_path: str | None = None,
         operator_session_id: str | None = None,
         operator_api_key: str | None = None,
         listen_settings: ListenSettings | None = None,
@@ -69,7 +69,7 @@ class BlobClient:
         headers = {}
         # Priority: operator_session_id > operator_api_key
         if self._operator_session_id:
-            headers[OPERATOR_SESSION_ID_HEADER] = self._operator_session_id
+            headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX}{self._operator_session_id}"
         elif self._operator_api_key:
             headers[OPERATOR_API_KEY_HEADER] = self._operator_api_key
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+from app.models.pubsub_messages import ExecutionResultsPayload
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +22,6 @@ g8e_context.execution_id (which is the HTTP request id and has a different
 lifetime). See the docstring on G8eoResultEnvelope.id.
 """
 
-from __future__ import annotations
 
 import asyncio
 
@@ -32,7 +33,7 @@ from app.models.command_request_payloads import CommandRequestPayload
 from app.models.pubsub_messages import G8eMessage
 from app.services.operator.execution_service import OperatorExecutionService
 from app.services.operator.pubsub_service import OperatorPubSubService
-from tests.fakes.factories import build_g8e_http_context
+from tests.fakes.factories import build_g8e_http_context, build_g8eo_result_envelope
 from tests.fakes.fake_operator_clients import FakePubSubClient
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
@@ -97,20 +98,20 @@ class TestDispatchCommandCorrelation:
         await asyncio.sleep(0)
         await asyncio.sleep(0)
 
-        await pubsub_service._handle_pubsub_result_message(
-            "op-1",
-            "sess-1",
-            {
-                "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
-                "payload": {
-                    "payload_type": "execution_result",
-                    "execution_id": per_message_exec_id,
-                    "status": ExecutionStatus.COMPLETED,
-                    "stdout": "hi",
-                    "return_code": 0,
-                },
-            },
+        envelope = build_g8eo_result_envelope(
+            event_type=EventType.OPERATOR_COMMAND_COMPLETED,
+            payload=ExecutionResultsPayload(
+                payload_type="execution_result",
+                execution_id=per_message_exec_id,
+                status=ExecutionStatus.COMPLETED,
+                stdout="hi",
+                stderr="",
+                return_code=0,
+            ),
+            operator_id="op-1",
+            operator_session_id="sess-1",
         )
+        await pubsub_service._handle_pubsub_result_message(envelope)
 
         internal_result, envelope = await asyncio.wait_for(dispatch_task, timeout=5)
         assert internal_result.status == ExecutionStatus.COMPLETED

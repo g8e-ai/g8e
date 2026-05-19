@@ -38,19 +38,12 @@ sensitive data from reaching the cloud AI.
 
 import logging
 import re
-from enum import IntEnum
 
+from app.constants.status import ScrubberPriority
 from app.models.base import G8eBaseModel
 
 logger = logging.getLogger(__name__)
 
-
-
-class ScrubberPriority(IntEnum):
-    EXACT_CREDENTIAL = 10
-    URL_OR_CONNECTION = 20
-    CONTEXTUAL_CREDENTIAL = 30
-    GENERIC_PII = 40
 
 
 class SentinelConfig(G8eBaseModel):
@@ -86,7 +79,7 @@ class RegexScrubber:
 class SentinelScrubber:
     """
     Zero-trust data scrubber for user chat messages.
-    
+
     Applies regex-based scrubbing to remove sensitive data before
     messages are sent to the cloud AI.
     """
@@ -145,10 +138,10 @@ class SentinelScrubber:
     def scrub_text(self, text: str) -> str:
         """
         Scrub sensitive data from text.
-        
+
         Args:
             text: Input text to scrub
-            
+
         Returns:
             Scrubbed text with sensitive data replaced by placeholders
         """
@@ -158,10 +151,10 @@ class SentinelScrubber:
     def scrub(self, text: str) -> ScrubResult:
         """
         Scrub sensitive data from text with detailed result.
-        
+
         Args:
             text: Input text to scrub
-            
+
         Returns:
             ScrubResult with scrubbed text and metadata
         """

@@ -16,7 +16,7 @@
 Tests that exercise code paths containing ``async for`` must provide iterators
 that correctly implement the async iterator protocol (``__aiter__`` returning
 an object with ``__anext__``). ``MagicMock(return_value=iter([...]))`` does
-not satisfy this — a plain ``list_iterator`` lacks ``__anext__`` and
+not satisfy this - a plain ``list_iterator`` lacks ``__anext__`` and
 ``async for`` raises ``TypeError`` before any loop body executes.
 
 Use ``async_iter(...)`` to wrap a sequence of frames in a real async
@@ -30,7 +30,7 @@ from typing import TypeVar
 T = TypeVar("T")
 
 
-def async_iter(frames: Iterable[T]) -> AsyncIterator[T]:
+def async_iter[T](frames: Iterable[T]) -> AsyncIterator[T]:
     """Return an async iterator over ``frames`` suitable for ``async for``."""
 
     async def _gen() -> AsyncIterator[T]:

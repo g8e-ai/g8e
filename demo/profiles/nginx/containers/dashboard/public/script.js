@@ -10,7 +10,7 @@ const PROFILE_LABELS = {
 };
 
 function fmt(n) {
-  if (n == null) return '—';
+  if (n == null) return ' - ';
   return n.toLocaleString();
 }
 
@@ -41,7 +41,7 @@ function renderCard(node) {
           </div>
           <span class="profile-badge ${badgeClass}">${label}</span>
           <div class="metrics">
-            <span><span>HTTP Status</span><span class="val">${esc(node.http_status) || '—'}</span></span>
+            <span><span>HTTP Status</span><span class="val">${esc(node.http_status) || ' - '}</span></span>
             <span><span>App Status</span><span class="val">${esc(node.app_status)}</span></span>
             <span><span>Nginx Running</span><span class="val">${node.nginx_running ? 'Yes' : 'No'}</span></span>
             <span><span>Latency</span><span class="val">${esc(node.latency_ms)}ms</span></span>

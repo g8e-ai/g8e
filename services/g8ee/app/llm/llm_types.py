@@ -107,7 +107,7 @@ class ThinkingConfig:
     """Canonical thinking/reasoning effort request.
 
     thinking_level is always a ThinkingLevel (never None). ThinkingLevel.OFF
-    means "do not enable thinking for this call" — providers translate OFF
+    means "do not enable thinking for this call" - providers translate OFF
     to the appropriate per-provider omission (no thinking_config key for
     Gemini, no thinking dict for Anthropic, think=False for Ollama, no
     reasoning key for OpenAI).
@@ -142,7 +142,7 @@ class PrimaryLLMSettings:
     stop_sequences: list[str] | None = None
     response_modalities: list[str] = field(default_factory=lambda: list(_DEFAULT_RESPONSE_MODALITIES))
     tools: list[ToolGroup] = field(default_factory=list)
-    system_instructions: str = ""
+    system_instructions: str | None = None
     thinking_config: ThinkingConfig = field(default_factory=ThinkingConfig)
     tool_config: ToolConfig = field(default_factory=ToolConfig)
 
@@ -159,7 +159,7 @@ class AssistantLLMSettings:
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
     stop_sequences: list[str] | None = None
-    system_instructions: str = ""
+    system_instructions: str | None = None
     response_format: ResponseFormat | None = None
 
 
@@ -175,14 +175,14 @@ class LiteLLMSettings:
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
     stop_sequences: list[str] | None = None
-    system_instructions: str = ""
+    system_instructions: str | None = None
     response_format: ResponseFormat | None = None
 
 
 @dataclass
 class GenerateContentConfig:
     max_output_tokens: int
-    system_instructions: str
+    system_instructions: str | None = None
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
     stop_sequences: list[str] | None = None

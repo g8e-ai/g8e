@@ -18,7 +18,7 @@ Owns the complete approval lifecycle for all three approval types:
   - File edit approval
   - Intent (IAM) approval
 
-_pending_approvals is instance state — not a module-level global — making
+_pending_approvals is instance state - not a module-level global - making
 this service injectable, testable, and horizontally scalable (with a
 persistent backing store, pod-restart safe).
 """
@@ -126,7 +126,7 @@ class OperatorApprovalService:
             )
         except Exception as e:
             raise ExternalServiceError(
-                "[APPROVAL-HTTP] Failed to process approval response for %s" % response.approval_id,
+                f"[APPROVAL-HTTP] Failed to process approval response for {response.approval_id}",
                 service_name="approval_service",
                 component="g8ee",
             ) from e

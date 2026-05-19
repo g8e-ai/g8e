@@ -28,13 +28,14 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 )
 
 // listenSchema is the canonical operator SQLite schema, embedded at compile time
-// from `schema.sql`. That file is the single source of truth — do not inline
+// from `schema.sql`. That file is the single source of truth - do not inline
 // CREATE TABLE statements in Go code.
 //
 //go:embed schema.sql
@@ -282,7 +283,7 @@ func (s *ListenDBService) Close() error {
 }
 
 // =============================================================================
-// Document Store — collection/id based CRUD
+// Document Store - collection/id based CRUD
 // =============================================================================
 
 // DocGet retrieves a document by collection and id.
@@ -304,7 +305,7 @@ func (s *ListenDBService) DocGet(collection, id string) (*models.Document, error
 }
 
 // DocSet creates or replaces a document. data must be valid JSON.
-// Timestamps are managed by the service — created_at is set once on insert and
+// Timestamps are managed by the service - created_at is set once on insert and
 // never overwritten. updated_at is refreshed on every upsert.
 func (s *ListenDBService) DocSet(collection, id string, data json.RawMessage) error {
 	var userDoc map[string]json.RawMessage
@@ -524,7 +525,7 @@ func (s *ListenDBService) DocQuery(collection string, filters []models.DocFilter
 // GetTrustedSigner retrieves an L2 signer public key from the database.
 // Implements governance.SignerStore.
 func (s *ListenDBService) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
-	doc, err := s.DocGet(string(constants.CollectionTrustedSigners), keyID)
+	doc, err := s.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get trusted signer %s: %w", keyID, err)
 	}
@@ -576,12 +577,12 @@ func (s *ListenDBService) AddTrustedSigner(signer models.TrustedSigner) error {
 		return err
 	}
 
-	return s.DocSet(string(constants.CollectionTrustedSigners), signer.ID, data)
+	return s.DocSet(marshaler.CollectionName(constants.CollectionTrustedSigners), signer.ID, data)
 }
 
 // ListTrustedSigners returns all trusted L2 signers in the database.
 func (s *ListenDBService) ListTrustedSigners() ([]models.TrustedSigner, error) {
-	docs, err := s.DocQuery(string(constants.CollectionTrustedSigners), nil, "id", 0)
+	docs, err := s.DocQuery(marshaler.CollectionName(constants.CollectionTrustedSigners), nil, "id", 0)
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +606,7 @@ func (s *ListenDBService) ListTrustedSigners() ([]models.TrustedSigner, error) {
 
 // DeleteTrustedSigner removes a trusted L2 signer from the database.
 func (s *ListenDBService) DeleteTrustedSigner(keyID string) (bool, error) {
-	return s.DocDelete(string(constants.CollectionTrustedSigners), keyID)
+	return s.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
 }
 
 // HasTrustedSigners returns true if at least one trusted L2 signer is provisioned in the database.
@@ -613,7 +614,7 @@ func (s *ListenDBService) HasTrustedSigners() (bool, error) {
 	filters := []models.DocFilter{
 		{Field: "enabled", Op: "==", Value: json.RawMessage("true")},
 	}
-	docs, err := s.DocQuery(string(constants.CollectionTrustedSigners), filters, "", 1)
+	docs, err := s.DocQuery(marshaler.CollectionName(constants.CollectionTrustedSigners), filters, "", 1)
 	if err != nil {
 		return false, err
 	}
@@ -799,14 +800,61 @@ func (s *ListenDBService) KVExpire(key string, ttlSeconds int) bool {
 	return n > 0
 }
 
-// SSEEventsAppend inserts a row into the sse_events table.
-func (s *ListenDBService) SSEEventsAppend(sessionKey, eventType, payload string) error {
+// SSERoute is the routing target for an SSE event row. Exactly one of the
+// three id fields MUST be non-empty. The substrate refuses to talk about a
+// bare session id - every routing key is tagged at the type level so a
+// web_session_id can never be mis-delivered as a cli_session_id (or vice
+// versa) and a user_id (background fan-out) can never be mistaken for a
+// per-session id.
+type SSERoute struct {
+	WebSessionID string
+	CLISessionID string
+	UserID       string
+}
+
+// validate ensures exactly one routing id is set.
+func (r SSERoute) validate() error {
+	n := 0
+	if r.WebSessionID != "" {
+		n++
+	}
+	if r.CLISessionID != "" {
+		n++
+	}
+	if r.UserID != "" {
+		n++
+	}
+	switch n {
+	case 0:
+		return fmt.Errorf("sse route requires exactly one of web_session_id, cli_session_id, user_id")
+	case 1:
+		return nil
+	default:
+		return fmt.Errorf("sse route is mutually-exclusive: set exactly one of web_session_id, cli_session_id, user_id")
+	}
+}
+
+// SSEEventsAppend inserts a row into the sse_events table. The route MUST set
+// exactly one of WebSessionID, CLISessionID, UserID.
+func (s *ListenDBService) SSEEventsAppend(route SSERoute, eventType, payload string) error {
+	if err := route.validate(); err != nil {
+		return err
+	}
 	now := sqliteutil.NowTimestamp()
 	_, err := s.db.Exec(
-		"INSERT INTO sse_events (session_key, event_type, payload, created_at) VALUES (?, ?, ?, ?)",
-		sessionKey, eventType, payload, now,
+		"INSERT INTO sse_events (web_session_id, cli_session_id, user_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		nullIfEmpty(route.WebSessionID), nullIfEmpty(route.CLISessionID), nullIfEmpty(route.UserID), eventType, payload, now,
 	)
 	return err
+}
+
+// nullIfEmpty returns sql.NullString{Valid: false} for empty strings so the
+// CHECK constraint on sse_events sees a NULL rather than an empty string.
+func nullIfEmpty(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // SSEEventsWipe deletes all rows from the sse_events table. Returns the number of rows deleted.
@@ -825,19 +873,25 @@ func (s *ListenDBService) SSEEventsCount() (int64, error) {
 	return count, err
 }
 
-// SSEEventRow is a single row from the sse_events table.
+// SSEEventRow is a single row from the sse_events table. Exactly one of the
+// three routing id fields will be populated per row.
 type SSEEventRow struct {
-	ID         int64  `json:"id"`
-	SessionKey string `json:"session_key"`
-	EventType  string `json:"event_type"`
-	Payload    string `json:"payload"`
-	CreatedAt  string `json:"created_at"`
+	ID           int64  `json:"id"`
+	WebSessionID string `json:"web_session_id,omitempty"`
+	CLISessionID string `json:"cli_session_id,omitempty"`
+	UserID       string `json:"user_id,omitempty"`
+	EventType    string `json:"event_type"`
+	Payload      string `json:"payload"`
+	CreatedAt    string `json:"created_at"`
 }
 
-// SSEEventsListSince returns up to `limit` events for the given session key
-// with id > sinceID, ordered by id ascending. If sessionKey is empty, returns
-// events across all sessions (admin/debug use).
-func (s *ListenDBService) SSEEventsListSince(sessionKey string, sinceID int64, limit int) ([]SSEEventRow, error) {
+// SSEEventsListSince returns up to `limit` events with id > sinceID, ordered by
+// id ascending. The route MUST set exactly one of WebSessionID, CLISessionID,
+// UserID. SSEEventsListAllSince is the admin-only "all routes" variant.
+func (s *ListenDBService) SSEEventsListSince(route SSERoute, sinceID int64, limit int) ([]SSEEventRow, error) {
+	if err := route.validate(); err != nil {
+		return nil, err
+	}
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
@@ -845,27 +899,59 @@ func (s *ListenDBService) SSEEventsListSince(sessionKey string, sinceID int64, l
 		rows *sql.Rows
 		err  error
 	)
-	if sessionKey == "" {
+	switch {
+	case route.WebSessionID != "":
 		rows, err = s.db.Query(
-			"SELECT id, session_key, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
-			sinceID, limit,
+			"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE web_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
+			route.WebSessionID, sinceID, limit,
 		)
-	} else {
+	case route.CLISessionID != "":
 		rows, err = s.db.Query(
-			"SELECT id, session_key, event_type, payload, created_at FROM sse_events WHERE session_key = ? AND id > ? ORDER BY id ASC LIMIT ?",
-			sessionKey, sinceID, limit,
+			"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE cli_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
+			route.CLISessionID, sinceID, limit,
+		)
+	default:
+		rows, err = s.db.Query(
+			"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
+			route.UserID, sinceID, limit,
 		)
 	}
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	return scanSSEEventRows(rows)
+}
+
+// SSEEventsListAllSince is an admin/debug helper that returns events across
+// every routing target with id > sinceID. Production paths MUST use
+// SSEEventsListSince with a typed route.
+func (s *ListenDBService) SSEEventsListAllSince(sinceID int64, limit int) ([]SSEEventRow, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	rows, err := s.db.Query(
+		"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
+		sinceID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanSSEEventRows(rows)
+}
+
+func scanSSEEventRows(rows *sql.Rows) ([]SSEEventRow, error) {
 	out := make([]SSEEventRow, 0)
 	for rows.Next() {
 		var r SSEEventRow
-		if err := rows.Scan(&r.ID, &r.SessionKey, &r.EventType, &r.Payload, &r.CreatedAt); err != nil {
+		var web, cli, user sql.NullString
+		if err := rows.Scan(&r.ID, &web, &cli, &user, &r.EventType, &r.Payload, &r.CreatedAt); err != nil {
 			return nil, err
 		}
+		r.WebSessionID = web.String
+		r.CLISessionID = cli.String
+		r.UserID = user.String
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -889,7 +975,7 @@ func (s *ListenDBService) RunTTLCleanup(ctx context.Context) {
 }
 
 // =============================================================================
-// Blob Store — raw binary storage keyed by namespace + id
+// Blob Store - raw binary storage keyed by namespace + id
 // =============================================================================
 
 // BlobRecord is the metadata returned for a stored blob (data excluded).

@@ -6,7 +6,7 @@ SUB="${1:-}"
 
 case "$SUB" in
     -h|--help|"")
-        help_file="$SCRIPT_DIR/docs/general/cli_help.md"
+        help_file="$SCRIPT_DIR/docs/cli_help.md"
         if [[ -f "$help_file" ]]; then
             awk '/^### operator/,/^### test/' "$help_file" | head -n -1
         else
@@ -79,14 +79,14 @@ case "$SUB" in
         [[ "$(basename "${_DEPLOY_DEST}")" != "g8e.operator" ]] && _REMOTE_EXEC="${_DEPLOY_DEST%/}/g8e.operator"
         trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
         if [[ ! -f "$trust_bundle" ]]; then
-            echo "[g8e] Operator trust bundle not found at $trust_bundle — recreate runtime PKI with ./g8e platform clean && ./g8e platform start" >&2
+            echo "[g8e] Operator trust bundle not found at $trust_bundle - recreate runtime PKI with ./g8e platform clean && ./g8e platform start" >&2
             exit 1
         fi
         echo "Fetching linux/${_DEPLOY_ARCH} operator from host Operator blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
         curl -sf \
-            -H "X-G8E-Operator-Session-ID: ${OPERATOR_SESSION_ID}" \
+            -H "Authorization: Bearer ${G8E_OPERATOR_SESSION_ID}" \
             --cacert "$trust_bundle" \
-            "$OPERATOR_HTTP_URL/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
+            "${OPERATOR_HTTP_URL}/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
             | ssh "${_DEPLOY_TARGET}" "cat > ${_DEPLOY_DEST} && chmod +x ${_DEPLOY_DEST}"
         echo "  Done."
         if [[ -n "$_DEPLOY_ENDPOINT" ]]; then
@@ -99,7 +99,17 @@ case "$SUB" in
             _REMOTE_CMD+=" > ./g8e.operator.log 2>&1 &"
             echo "Starting operator on ${_DEPLOY_TARGET}..."
             ssh "${_DEPLOY_TARGET}" "${_REMOTE_CMD}"
-            echo "  Operator started. Logs: ./g8e.operator.log"
+            
+            echo -e "\n\033[1;32mDeployed successfully!\033[0m"
+            echo -e "  Target:      \033[1m${_DEPLOY_TARGET}\033[0m"
+            echo -e "  Binary:      \033[1m${_DEPLOY_DEST}\033[0m"
+            echo -e "  Endpoint:    \033[1m${_DEPLOY_ENDPOINT:-[none]}\033[0m"
+            echo -e "  Logs:        \033[1m./g8e.operator.log\033[0m (remote)"
+
+            echo -e "\n\033[1mNext steps:\033[0m"
+            echo -e "  - Start chatting:         \033[1;34m./g8e chat\033[0m"
+            echo -e "  - Check platform status:  \033[1;34m./g8e platform status\033[0m"
+            echo -e "  - Explore CLI help:       \033[1;34m./g8e --help\033[0m"
         fi
         exit 0 ;;
     stream)

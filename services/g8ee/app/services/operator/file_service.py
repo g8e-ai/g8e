@@ -170,7 +170,7 @@ class OperatorFileService:
                 return FileEditResult(
                     success=False,
                     error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
-                    error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
+                    error_type=CommandErrorType.G8E_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
             operator_id = resolved_operator.id
@@ -353,7 +353,7 @@ class OperatorFileService:
                 return FetchFileHistoryToolResult(
                     success=False,
                     error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
-                    error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
+                    error_type=CommandErrorType.G8E_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
             operator_id = resolved_operator.id
@@ -465,7 +465,7 @@ class OperatorFileService:
                 return FetchFileDiffToolResult(
                     success=False,
                     error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
-                    error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
+                    error_type=CommandErrorType.G8E_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
             operator_id = resolved_operator.id

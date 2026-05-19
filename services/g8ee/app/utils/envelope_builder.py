@@ -28,24 +28,24 @@ import logging
 import json
 from datetime import datetime, timedelta, UTC
 
-from app.constants import ExecutionStatus, EventType
+from typing import Any
+from pydantic import ValidationError as PydanticValidationError
+
+from app.constants.proto_mappings import protobuf_execution_status_to_python
 from app.constants.action_type_mappings import map_event_type_to_action_type
-from app.models.pubsub_messages import G8eMessage
+from app.errors import ValidationError
+from app.models.pubsub_messages import (
+    G8eMessage,
+    G8eoResultEnvelope,
+    G8eoResultPayload,
+    G8eoResultPayloadAdapter,
+    G8eoHeartbeatPayload,
+)
 from app.models.uap import UAPEnvelope
-from app.proto import operator_pb2, common_pb2
+from app.proto import common_pb2
 from google.protobuf.json_format import MessageToDict, ParseDict
 
 logger = logging.getLogger(__name__)
-
-
-_PROTOBUF_EXECUTION_STATUS_TO_PYTHON: dict[int, ExecutionStatus] = {
-    operator_pb2.EXECUTION_STATUS_UNSPECIFIED: ExecutionStatus.PENDING,
-    operator_pb2.EXECUTION_STATUS_EXECUTING: ExecutionStatus.EXECUTING,
-    operator_pb2.EXECUTION_STATUS_COMPLETED: ExecutionStatus.COMPLETED,
-    operator_pb2.EXECUTION_STATUS_FAILED: ExecutionStatus.FAILED,
-    operator_pb2.EXECUTION_STATUS_CANCELLED: ExecutionStatus.CANCELLED,
-    operator_pb2.EXECUTION_STATUS_TIMEOUT: ExecutionStatus.TIMEOUT,
-}
 
 
 def sign_l2_tribunal(event_type: str, payload_bytes: bytes, hmac_key: str) -> str:
@@ -53,7 +53,7 @@ def sign_l2_tribunal(event_type: str, payload_bytes: bytes, hmac_key: str) -> st
 
     The signature binds the event_type to its payload bytes using
     HMAC-SHA256 with the shared auditor key. The canonical material is
-    ``event_type + "\\n" + payload_bytes`` — both sides MUST compute
+    ``event_type + "\\n" + payload_bytes`` - both sides MUST compute
     the signature over the identical byte sequence.
 
     Returns the hex-encoded digest. Never returns an empty string on
@@ -80,7 +80,8 @@ def build_uap_envelope(
     if message.payload is None:
         raise ValueError("G8eMessage.payload is required to build UAPEnvelope")
 
-    # Serialize to bytes for legacy payload and L2 signature
+    # Serialize the protobuf payload to bytes for the envelope's payload field
+    # and as the canonical material for L2 Tribunal signing.
     proto_payload = message.payload.to_protobuf()
     payload_bytes = proto_payload.SerializeToString()
     payload_dict = message.payload.model_dump(mode="json")
@@ -100,6 +101,8 @@ def build_uap_envelope(
         target_resource="localhost",
         operator_id=message.operator_id or "",
         operator_session_id=message.operator_session_id or "",
+        web_session_id=message.web_session_id or "",
+        cli_session_id=message.cli_session_id or "",
         state_merkle_root=state_merkle_root,
         intent_data=payload_dict,
         case_id=message.case_id,
@@ -136,43 +139,11 @@ def build_uap_envelope_json(
     return envelope.model_dump_json(exclude_none=True)
 
 
-def build_universal_envelope_bytes(
-    message: G8eMessage,
-    *,
-    auditor_hmac_key: str,
-    agent_ids: list[str] | None = None,
-    state_merkle_root: str = "",
-    system_fingerprint: str = "",
-) -> bytes:
-    """DEPRECATED: Use build_uap_envelope_json. Returns UAP JSON as bytes."""
-    return build_uap_envelope_json(
-        message,
-        auditor_hmac_key=auditor_hmac_key,
-        agent_ids=agent_ids,
-        state_merkle_root=state_merkle_root,
-    ).encode("utf-8")
-
-
-def protobuf_execution_status_to_python(status_int: int) -> ExecutionStatus:
-    """Convert protobuf ExecutionStatus enum value to Python ExecutionStatus string."""
-    if status_int not in _PROTOBUF_EXECUTION_STATUS_TO_PYTHON:
-        raise ValueError(
-            f"Unknown protobuf ExecutionStatus value: {status_int}. "
-            f"Valid values: {list(_PROTOBUF_EXECUTION_STATUS_TO_PYTHON.keys())}"
-        )
-    return _PROTOBUF_EXECUTION_STATUS_TO_PYTHON[status_int]
-
-
-def decode_uap_envelope(data: bytes | str) -> Dict[str, Any]:
+def decode_uap_envelope(data: bytes | str) -> dict[str, Any]:
     """Decode UAP JSON envelope from g8eo."""
     if isinstance(data, bytes):
         data = data.decode("utf-8")
     return json.loads(data)
-
-
-def decode_universal_envelope(envelope_bytes: bytes) -> Dict[str, Any]:
-    """DEPRECATED: Use decode_uap_envelope. Decodes UAP JSON from bytes."""
-    return decode_uap_envelope(envelope_bytes)
 
 
 def _convert_value(value: Any) -> Any:
@@ -184,10 +155,10 @@ def _convert_value(value: Any) -> Any:
     return value
 
 
-def decode_g8eo_result_envelope(envelope_data: bytes | str | Dict[str, Any]) -> Dict[str, Any]:
+def decode_g8eo_result_envelope(envelope_data: bytes | str | dict[str, Any]) -> dict[str, Any]:
     """Decode a g8eo result GovernanceEnvelope (JSON or bytes) and convert to a Pydantic-compatible dict.
-    
-    This is the strict protojson unmarshaling path that replaces legacy dictionary fallback logic.
+
+    Strict protojson unmarshaling: the input must be a valid GovernanceEnvelope.
     """
     if isinstance(envelope_data, (bytes, str)):
         raw_json = envelope_data.decode("utf-8") if isinstance(envelope_data, bytes) else envelope_data
@@ -205,6 +176,8 @@ def decode_g8eo_result_envelope(envelope_data: bytes | str | Dict[str, Any]) -> 
         "event_type": envelope.event_type,
         "operator_id": envelope.operator_id,
         "operator_session_id": envelope.operator_session_id,
+        "web_session_id": envelope.web_session_id,
+        "cli_session_id": envelope.cli_session_id,
         "case_id": envelope.case_id,
         "investigation_id": envelope.investigation_id,
         "task_id": envelope.task_id,
@@ -213,36 +186,128 @@ def decode_g8eo_result_envelope(envelope_data: bytes | str | Dict[str, Any]) -> 
     # 3. Extract and normalize payload from intent_data
     payload_dict = MessageToDict(envelope.intent_data, preserving_proto_field_name=True)
 
-    # 4. Canonical payload_type check
-    # We prefer the 'payload_type' field injected by g8eo for strict discriminator-based parsing.
-    # Fallback to manual mapping only if missing (legacy or non-g8eo sources).
-    if "payload_type" not in payload_dict:
-        action_type = envelope.action_type or envelope.event_type or ""
-
-        if "EXECUTE_BASH_RESULT" in action_type or EventType.OPERATOR_COMMAND_RESULT in action_type:
-            payload_dict["payload_type"] = "execution_result"
-        elif "EXECUTE_BASH_CANCELLED" in action_type or EventType.OPERATOR_COMMAND_CANCELLED in action_type:
-            payload_dict["payload_type"] = "cancellation_result"
-        elif "EXECUTE_STATUS_UPDATE" in action_type or EventType.OPERATOR_COMMAND_STATUS_UPDATED in action_type:
-            payload_dict["payload_type"] = "execution_status"
-        elif "FILE_EDIT_RESULT" in action_type or EventType.OPERATOR_FILE_EDIT_COMPLETED in action_type:
-            payload_dict["payload_type"] = "file_edit_result"
-        elif "FS_LIST_RESULT" in action_type or EventType.OPERATOR_FS_LIST_COMPLETED in action_type:
-            payload_dict["payload_type"] = "fs_list_result"
-        elif "FS_GREP_RESULT" in action_type or EventType.OPERATOR_FS_GREP_COMPLETED in action_type:
-            payload_dict["payload_type"] = "fs_grep_result"
-        elif "FS_READ_RESULT" in action_type or EventType.OPERATOR_FS_READ_COMPLETED in action_type:
-            payload_dict["payload_type"] = "fs_read_result"
-        elif "PORT_CHECK_RESULT" in action_type or EventType.OPERATOR_PORT_CHECK_COMPLETED in action_type:
-            payload_dict["payload_type"] = "port_check_result"
-        elif "HEARTBEAT" in action_type or EventType.OPERATOR_HEARTBEAT_RECEIVED in action_type:
-            payload_dict["payload_type"] = "heartbeat"
-        else:
-            payload_dict["payload_type"] = "unknown"
-
-    # 5. Handle numeric enum status from g8eo
+    # 4. Handle numeric enum status from g8eo
     if "status" in payload_dict and isinstance(payload_dict["status"], (int, float)):
         payload_dict["status"] = protobuf_execution_status_to_python(int(payload_dict["status"])).value
 
     result["payload"] = _convert_value(payload_dict)
     return result
+
+
+def parse_inbound_g8eo_payload(payload_raw: dict[str, object]) -> G8eoResultPayload:
+    """Parse inbound g8eo payload using discriminator-based union parsing.
+
+    The payload models use a 'payload_type' discriminator field that Pydantic uses
+    to automatically determine the correct model class. This matches the wire
+    deserialization pattern used for outbound payloads.
+
+    Args:
+        payload_raw: The raw payload dict from the pub/sub message
+
+    Returns:
+        A validated G8eoResultPayload instance
+
+    Raises:
+        ValidationError: If the payload_type is invalid or payload validation fails
+    """
+    try:
+        return G8eoResultPayloadAdapter.validate_python(payload_raw)
+    except PydanticValidationError as e:
+        raise ValidationError(
+            f"Invalid g8eo result payload: {e}",
+            component="g8ee",
+        ) from e
+
+
+def decode_and_validate_uap_result(
+    data: str | bytes | dict[str, object],
+    operator_id: str,
+    operator_session_id: str,
+) -> G8eoResultEnvelope:
+    """Decode and validate a UAP result envelope from g8eo.
+
+    Args:
+        data: Raw envelope data (JSON string, bytes, or dict)
+        operator_id: Operator ID from channel routing
+        operator_session_id: Operator session ID from channel routing
+
+    Returns:
+        A validated G8eoResultEnvelope instance
+
+    Raises:
+        ValidationError: If decoding or validation fails
+    """
+    try:
+        raw = decode_g8eo_result_envelope(data)
+    except (ValueError, TypeError) as e:
+        raise ValidationError(f"Failed to decode UAP envelope: {e}", component="g8ee") from e
+
+    event_type_raw = raw.get("event_type")
+    if not event_type_raw:
+        raise ValidationError("Received message without event_type", component="g8ee")
+
+    _raw_payload = raw.get("payload")
+    payload_raw: dict[str, object] = _raw_payload if isinstance(_raw_payload, dict) else {}
+
+    # Propagate IDs from payload to envelope when the envelope omits them.
+    for id_field in ("case_id", "investigation_id", "task_id"):
+        if not raw.get(id_field) and payload_raw.get(id_field):
+            raw[id_field] = payload_raw[id_field]
+
+    payload = parse_inbound_g8eo_payload(payload_raw)
+
+    try:
+        return G8eoResultEnvelope.model_validate({
+            **raw,
+            "operator_id": operator_id,
+            "operator_session_id": operator_session_id,
+            "payload": payload,
+        })
+    except PydanticValidationError as e:
+        raise ValidationError(f"Invalid G8eoResultEnvelope: {e}", component="g8ee") from e
+
+
+def decode_and_validate_uap_heartbeat(
+    data: str | bytes | dict[str, object],
+    operator_id: str,
+    operator_session_id: str,
+) -> G8eoHeartbeatPayload:
+    """Decode and validate a UAP heartbeat envelope from g8eo.
+
+    Args:
+        data: Raw envelope data (JSON string, bytes, or dict)
+        operator_id: Operator ID from channel routing
+        operator_session_id: Operator session ID from channel routing
+
+    Returns:
+        A validated G8eoHeartbeatPayload instance
+
+    Raises:
+        ValidationError: If decoding or validation fails
+    """
+    if not isinstance(data, (str, bytes, dict)):
+        raise ValidationError("Heartbeat must be a UAP envelope (string, bytes, or dict)", component="g8ee")
+
+    try:
+        envelope_dict = decode_g8eo_result_envelope(data)
+    except (ValueError, TypeError) as e:
+        raise ValidationError(f"Failed to decode UAP heartbeat envelope: {e}", component="g8ee") from e
+
+    raw = envelope_dict.get("payload", {})
+    if not isinstance(raw, dict):
+        raw = {}
+
+    # Ensure identity fields from envelope are present in payload
+    if not raw.get("operator_id"):
+        raw["operator_id"] = envelope_dict.get("operator_id") or operator_id
+    if not raw.get("operator_session_id"):
+        raw["operator_session_id"] = envelope_dict.get("operator_session_id") or operator_session_id
+    if not raw.get("event_type"):
+        raw["event_type"] = str(envelope_dict.get("event_type", ""))
+    if not raw.get("timestamp"):
+        raw["timestamp"] = envelope_dict.get("timestamp")
+
+    try:
+        return G8eoHeartbeatPayload.model_validate(raw)
+    except PydanticValidationError as e:
+        raise ValidationError(f"Invalid G8eoHeartbeatPayload: {e}", component="g8ee") from e

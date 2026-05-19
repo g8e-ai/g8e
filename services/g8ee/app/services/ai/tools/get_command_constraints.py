@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``get_command_constraints`` tool — surface active whitelist/blacklist state to the LLM."""
+"""``get_command_constraints`` tool - surface active whitelist/blacklist state to the LLM."""
 
 from __future__ import annotations
 
@@ -41,12 +41,11 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.GET_COMMAND_CONSTRAINTS,
-        description=load_prompt(PromptFile.TOOL_GET_COMMAND_CONSTRAINTS),
+        description=load_prompt(PromptFile.TOOLS_GET_COMMAND_CONSTRAINTS),
         parameters=types.Schema(type=types.Type.OBJECT, properties={}, required=None),
     )
-    return declaration
 
 
 async def handle(
@@ -156,7 +155,7 @@ async def handle(
                     source_breakdown = f" ({user_count} user-configured)"
                 parts.append(
                     f"Auto-approve ENABLED: the {len(auto_approved_commands)} listed base commands "
-                    f"{source_breakdown} ({', '.join(auto_approved_commands)}) skip the human approval prompt — the user has "
+                    f"{source_breakdown} ({', '.join(auto_approved_commands)}) skip the human approval prompt - the user has "
                     "rubber-stamped them as benign. All other commands still require human approval. "
                     "Auto-approve does NOT widen the whitelist or bypass the blacklist."
                 )

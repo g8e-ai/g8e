@@ -44,7 +44,7 @@ from app.utils.json_utils import extract_json_from_text
 from app.utils.command import normalise_command
 from app.utils.safety import validate_command_safety
 from app.services.ai.tribunal.emitter import TribunalEmitter
-from app.services.ai.tribunal.utils import _is_system_error, _member_for_pass
+from app.services.ai.tribunal.utils import is_system_error, member_for_pass
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ async def _run_generation_pass(
     r1_clusters: list[Any] | None = None,
 ) -> str | None:
     """Run a single Tribunal generation pass."""
-    member = _member_for_pass(pass_index)
+    member = member_for_pass(pass_index)
     member_persona = get_agent_persona(member.value)
     fields = build_tribunal_prompt_fields(
         operator_context,
@@ -163,7 +163,7 @@ async def _run_generation_pass(
         )
 
         await emitter.emit(
-            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
+            EventType.AI_TRIBUNAL_VOTING_PASS_COMPLETED,
             TribunalPassCompletedPayload(
                 pass_index=pass_index,
                 member=member,
@@ -249,7 +249,7 @@ async def _run_generation_stage(
     ]
     raw_results = await asyncio.gather(*pass_tasks, return_exceptions=False)
     candidates = [
-        CandidateCommand(command=res, pass_index=i, member=_member_for_pass(i))
+        CandidateCommand(command=res, pass_index=i, member=member_for_pass(i))
         for i, res in enumerate(raw_results) if res
     ]
 
@@ -258,13 +258,13 @@ async def _run_generation_stage(
             raise AssertionError(
                 "Tribunal invariant violated: all generation passes returned None but pass_errors is empty"
             )
-        if all(_is_system_error(e) for e in pass_errors):
+        if all(is_system_error(e) for e in pass_errors):
             logger.error(
                 "[TRIBUNAL] All %d generation passes failed due to system errors: %s",
                 num_passes, pass_errors,
             )
             await emitter.emit(
-                EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
+                EventType.AI_TRIBUNAL_SESSION_SYSTEM_ERROR,
                 TribunalSessionSystemErrorPayload(
                     request=request,
                     pass_errors=pass_errors,
@@ -274,7 +274,7 @@ async def _run_generation_stage(
 
         logger.error("[TRIBUNAL] All generation passes failed for non-system reasons; halting execution")
         await emitter.emit(
-            EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
+            EventType.AI_TRIBUNAL_SESSION_GENERATION_FAILED,
             TribunalSessionGenerationFailedPayload(
                 request=request,
                 pass_errors=pass_errors,

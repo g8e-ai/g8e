@@ -11,29 +11,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 from pathlib import Path
-from typing import Union
 
-def validate_safe_path(path: Union[str, Path], root: Union[str, Path]) -> Path:
+def validate_safe_path(path: str | Path, root: str | Path) -> Path:
     """
     Ensures a path is safe and stays within the specified root directory.
-    
+
     Args:
         path: The path to validate (absolute or relative)
         root: The allowed root directory
-        
+
     Returns:
         The resolved absolute Path object
-        
+
     Raises:
         ValueError: If the path is invalid or attempts traversal outside the root
     """
     if not path:
         raise ValueError("Empty path provided")
-    
+
     root_path = Path(root).resolve()
-    
+
     # Clean and resolve the target path
     # Path.resolve() handles '..' segments and redundant slashes
     try:
@@ -43,14 +41,14 @@ def validate_safe_path(path: Union[str, Path], root: Union[str, Path]) -> Path:
             target_path = (root_path / path).resolve()
     except Exception as e:
         raise ValueError(f"Invalid path format: {e}")
-    
+
     # Security check: Ensure target_path is within root_path
     try:
         # relative_to raises ValueError if target_path is not under root_path
         target_path.relative_to(root_path)
     except ValueError:
         raise ValueError(f"Path traversal detected: {path} is outside of {root}")
-    
+
     return target_path
 
 def is_shell_required(command: str) -> bool:

@@ -16,7 +16,7 @@ from .base import AgentPersonaModel
 
 class TriagePersona(AgentPersonaModel):
     """Triage: The Interrogator/Classifier.
-    
+
     Classifies incoming messages by complexity, intent, and user posture.
     Aligned with position_paper.md: "Triage classifies the message: complex, action-oriented, posture cautious. Routes to Sage."
     """
@@ -26,14 +26,14 @@ class TriagePersona(AgentPersonaModel):
             id="triage",
             display_name="Triage",
             icon="manage_search",
-            description="Classifies incoming messages by complexity, intent, and user posture — the first read of the room.",
+            description="Classifies incoming messages by complexity, intent, and user posture - the first read of the room.",
             role="classifier",
             model_tier="lite",
             tools=[],
             identity=self._get_identity(),
-            purpose="Emit TriageResult: complexity, intent, request_posture, intent_summary, plus confidences. Pipeline uses complexity to pick model tier, intent to shape tools, posture to calibrate downstream agent behavior. request_posture is most load-bearing — flag adversarial only when conversation history shows a prior denial. First-turn messages CANNOT be adversarial.",
+            purpose="Emit TriageResult: complexity, intent, request_posture, intent_summary, plus confidences. Pipeline uses complexity to pick model tier, intent to shape tools, posture to calibrate downstream agent behavior. request_posture is most load-bearing - flag adversarial only when conversation history shows a prior denial. First-turn messages CANNOT be adversarial.",
             autonomy="Your classification is final. No reviewer revises it. Read, decide, commit.",
-            output_contract="Emit a JSON object with the TriageResult schema: complexity (simple/complex), complexity_confidence (high/low), intent (information/action/unknown), intent_confidence (high/low), intent_summary (string), request_posture (normal/escalated/adversarial/confused), posture_confidence (high/low). NO QUESTIONS — Triage is a classifier only; interrogation is handled by reasoning agents. Output only the JSON object — no XML tags, no markdown fences, no explanatory prose."
+            output_contract="Emit a JSON object with the TriageResult schema: complexity (simple/complex), complexity_confidence (high/low), intent (information/action/unknown), intent_confidence (high/low), intent_summary (string), request_posture (normal/escalated/adversarial/confused), posture_confidence (high/low). NO QUESTIONS - Triage is a classifier only; interrogation is handled by reasoning agents. Output only the JSON object - no XML tags, no markdown fences, no explanatory prose."
         )
 
     def _get_identity(self) -> str:

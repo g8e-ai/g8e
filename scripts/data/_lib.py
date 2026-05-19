@@ -30,7 +30,44 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent.absolute()
+def resolve_project_root() -> Path:
+    """
+    Resolves the project root directory.
+    This is the canonical root detection heuristic - all languages must match this logic.
+    Priority:
+    1. G8E_PROJECT_ROOT environment variable
+    2. Walk up from current directory looking for marker: services/ directory AND g8e file
+    3. If in services/g8eo, walk up 2 levels to root
+    4. If in services/g8ee, walk up 2 levels to root
+    5. Fallback to current directory
+    """
+    env_root = os.environ.get('G8E_PROJECT_ROOT')
+    if env_root:
+        return Path(env_root).resolve()
+
+    cwd = Path.cwd()
+
+    # Try to find root by looking for the marker: services/ directory AND g8e file
+    for parent in [cwd] + list(cwd.parents):
+        if (parent / "services").exists() and (parent / "g8e").exists():
+            return parent.resolve()
+
+    # If in services/g8eo, walk up 2 levels to root
+    if "services/g8eo" in str(cwd):
+        for parent in [cwd] + list(cwd.parents):
+            if parent.name == "g8eo" and parent.parent.name == "services":
+                return parent.parent.parent.resolve()
+
+    # If in services/g8ee, walk up 2 levels to root
+    if "services/g8ee" in str(cwd):
+        for parent in [cwd] + list(cwd.parents):
+            if parent.name == "g8ee" and parent.parent.name == "services":
+                return parent.parent.parent.resolve()
+
+    # Fallback to current directory
+    return cwd.resolve()
+
+PROJECT_ROOT = resolve_project_root()
 _PROTOCOL_CONSTANTS = PROJECT_ROOT / 'protocol' / 'constants'
 
 with open(_PROTOCOL_CONSTANTS / 'collections.json') as _f:
@@ -41,7 +78,7 @@ _DEFAULT_SECRETS_DIR = str(PROJECT_ROOT / '.g8e' / 'secrets')
 _DEFAULT_CREDENTIALS_DIR = str(Path.home() / '.g8e')
 
 OPERATOR_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', 'https://localhost:9000')
-COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
+COLLECTIONS: List[str] = sorted([v['value'] for v in _COLLECTIONS_DATA['collections'].values()])
 PRESERVE_COLLECTIONS = {'settings'}
 
 PKI_DIR = Path(os.environ.get('G8E_PKI_DIR', _DEFAULT_PKI_DIR))
@@ -123,7 +160,7 @@ def get_auditor_hmac_key() -> str:
 
 
 # =============================================================================
-# Operator HTTP client — direct DB/KV access
+# Operator HTTP client - direct DB/KV access
 # =============================================================================
 
 def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
@@ -133,7 +170,7 @@ def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
 
     session_token = get_auth_token()
     if session_token:
-        headers['X-G8E-Operator-Session-ID'] = session_token
+        headers['Authorization'] = f'Bearer {session_token}'
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     ctx = _create_ssl_context()
@@ -189,7 +226,7 @@ def kv_delete_pattern(pattern: str) -> int:
 
 
 # =============================================================================
-# Operator API client — for resource management (users, operators, etc.)
+# Operator API client - for resource management (users, operators, etc.)
 # =============================================================================
 
 def resolve_user_id(user_id: str | None, email: str | None) -> str | None:

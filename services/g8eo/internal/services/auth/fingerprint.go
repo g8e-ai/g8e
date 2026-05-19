@@ -44,12 +44,12 @@ func GenerateSystemFingerprint(logger *slog.Logger) (*SystemFingerprint, error) 
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		hostname = "unknown"
+		hostname = string(constants.SystemHealthUnknown)
 	}
 
 	machineID, err := getMachineID(logger)
 	if err != nil {
-		logger.Warn("Failed to get machine ID, using fallback method", "error", err)
+		logger.Warn("Failed to get machine ID, using fallback method", string(constants.ConnectionStateError), err)
 		machineID = "fallback"
 	}
 
@@ -87,7 +87,7 @@ func GenerateSystemFingerprint(logger *slog.Logger) (*SystemFingerprint, error) 
 
 // getMachineID retrieves a stable machine identifier based on the OS
 func getMachineID(logger *slog.Logger) (string, error) {
-	switch runtime.GOOS {
+	switch constants.Platform(runtime.GOOS) {
 	case constants.Status.Platform.Linux:
 		return getLinuxMachineID(logger)
 	case constants.Status.Platform.Darwin:

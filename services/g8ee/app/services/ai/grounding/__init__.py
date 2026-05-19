@@ -22,10 +22,10 @@ Grounding is any external context injected to anchor AI responses to reality:
   - Provider-native: SDK-level grounding metadata (e.g. Gemini Search grounding)
 
 Service hierarchy:
-  GroundingService            — converts provider-native SDK grounding data
+  GroundingService            - converts provider-native SDK grounding data
                                 (SdkGroundingRawData) into canonical GroundingMetadata
-  AttachmentGroundingProvider — formats attachment files as typed LLM Parts
-  WebSearchProvider           — executes web search queries via Google Custom Search
+  AttachmentGroundingProvider - formats attachment files as typed LLM Parts
+  WebSearchProvider           - executes web search queries via Google Custom Search
                                 and owns citation processing (source info extraction,
                                 inline citation insertion, citation number normalisation)
 """

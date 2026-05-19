@@ -66,7 +66,7 @@ def _make_service(operator_data_service=None, event_service=None):
 
 
 class TestSetPubsubClient:
-    """set_pubsub_client — configuration guard and assignment."""
+    """set_pubsub_client - configuration guard and assignment."""
 
     @pytest.fixture
     def service(self):
@@ -87,7 +87,7 @@ class TestSetPubsubClient:
 
 
 class TestHeartbeatServiceLifecycle:
-    """start() and stop() — lifecycle management."""
+    """start() and stop() - lifecycle management."""
 
     @pytest.fixture
     def service(self):
@@ -154,7 +154,7 @@ class TestHeartbeatServiceLifecycle:
 
 
 class TestRegisterDeregisterSession:
-    """register_operator_session / deregister_operator_session — bookkeeping only.
+    """register_operator_session / deregister_operator_session - bookkeeping only.
 
     Heartbeat subscription is set up once via a protocol ``heartbeat:*`` pattern
     in ``start()``. These methods only track which (operator, session) pairs
@@ -209,8 +209,19 @@ class TestRegisterDeregisterSession:
         assert service.active_sessions == set()
 
 
+def _make_envelope(payload_dict: dict) -> dict:
+    return {
+        "id": "msg-1",
+        "event_type": EventType.OPERATOR_HEARTBEAT_SENT,
+        "operator_id": payload_dict.get("operator_id"),
+        "operator_session_id": payload_dict.get("operator_session_id"),
+        "timestamp": payload_dict.get("timestamp"),
+        "intent_data": payload_dict
+    }
+
+
 class TestOnHeartbeatMessage:
-    """_on_heartbeat_message — channel routing, data parsing, session auto-register, exception guard."""
+    """_on_heartbeat_message - channel routing, data parsing, session auto-register, exception guard."""
 
     @pytest.fixture
     async def service(self):
@@ -220,7 +231,7 @@ class TestOnHeartbeatMessage:
 
     async def test_on_heartbeat_message_parses_dict_data_and_calls_process(self, service):
         payload = _make_payload()
-        data = payload.model_dump()
+        data = _make_envelope(payload.model_dump(mode="json"))
 
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)) as mock_proc:
             await service.on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
@@ -231,7 +242,8 @@ class TestOnHeartbeatMessage:
         assert call_args.args[1] == "op-session-111"
 
     async def test_on_heartbeat_message_parses_json_string_data(self, service):
-        data = json.dumps(_make_payload().model_dump(mode="json"))
+        payload = _make_payload()
+        data = json.dumps(_make_envelope(payload.model_dump(mode="json")))
 
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)) as mock_proc:
             await service.on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
@@ -243,7 +255,8 @@ class TestOnHeartbeatMessage:
         The handler must record the (operator, session) pair so subsequent
         bookkeeping (e.g. liveness queries) sees it as active.
         """
-        data = _make_payload().model_dump()
+        payload = _make_payload(operator_id="op-new", operator_session_id="op-session-new")
+        data = _make_envelope(payload.model_dump(mode="json"))
 
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)):
             await service.on_heartbeat_message(PubSubChannel.heartbeat("op-new", "op-session-new"), data)
@@ -252,7 +265,8 @@ class TestOnHeartbeatMessage:
 
     async def test_on_pattern_heartbeat_message_dispatches_by_channel(self, service):
         channel = PubSubChannel.heartbeat("op-333", "op-session-444")
-        data = _make_payload(operator_id="op-333", operator_session_id="op-session-444").model_dump()
+        payload = _make_payload(operator_id="op-333", operator_session_id="op-session-444")
+        data = _make_envelope(payload.model_dump(mode="json"))
 
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)) as mock_proc:
             await service.on_pattern_heartbeat_message("heartbeat:*", channel, data)
@@ -261,12 +275,14 @@ class TestOnHeartbeatMessage:
         assert ("op-333", "op-session-444") in service.active_sessions
 
     async def test_on_heartbeat_message_swallows_exceptions_silently(self, service):
+        payload = _make_payload()
+        data = _make_envelope(payload.model_dump(mode="json"))
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(side_effect=RuntimeError("boom"))):
-            await service.on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), _make_payload().model_dump())
+            await service.on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
 
 
 class TestHeartbeatSnapshotServiceIdentity:
-    """_validate_operator_identity — channel vs wire claim cross-check."""
+    """_validate_operator_identity - channel vs wire claim cross-check."""
 
     @pytest.fixture
     def service(self):
@@ -286,7 +302,7 @@ class TestHeartbeatSnapshotServiceIdentity:
 
 
 class TestHeartbeatSnapshotServiceOperatorValidation:
-    """_get_and_validate_operator — data service lookup and status gating."""
+    """_get_and_validate_operator - data service lookup and status gating."""
 
     @pytest.fixture
     def mock_operator_data_service(self):
@@ -319,7 +335,7 @@ class TestHeartbeatSnapshotServiceOperatorValidation:
 
         The operator's status is a property of the operator doc itself; it is not
         a gate for receiving heartbeats. Unknown operators (None) are still rejected
-        upstream via API-key validation — see test_cache_miss_returns_none.
+        upstream via API-key validation - see test_cache_miss_returns_none.
         """
         for status in OperatorStatus:
             operator = OperatorDocument(id="op-222", status=status, user_id="user-1", bound_web_session_id="ws-1")
@@ -332,7 +348,7 @@ class TestHeartbeatSnapshotServiceOperatorValidation:
 
 
 class TestHeartbeatSnapshotServiceProcessMessage:
-    """process_heartbeat_message — full pipeline using G8eoHeartbeatPayload directly."""
+    """process_heartbeat_message - full pipeline using G8eoHeartbeatPayload directly."""
 
     @pytest.fixture
     def mock_operator_data_service(self):
@@ -450,7 +466,7 @@ class TestHeartbeatSnapshotServiceProcessMessage:
 
         That event's shape is the full operator list (delivered via keepalive).
         Publishing a sparse per-heartbeat payload under the same event type
-        causes the frontend to wipe its operator list — regression guard.
+        causes the frontend to wipe its operator list - regression guard.
         """
         mock_operator_data_service.get_operator.return_value = bound_operator
 
@@ -476,7 +492,7 @@ class TestHeartbeatSnapshotServiceProcessMessage:
 
 
 class TestPushHeartbeatSSE:
-    """_push_heartbeat_sse — EventService.publish paths and no-web-session guard."""
+    """_push_heartbeat_sse - EventService.publish paths and no-web-session guard."""
 
     @pytest.fixture
     def mock_event_service(self):
@@ -569,7 +585,7 @@ class TestPushHeartbeatSSE:
         )
         mock_event_service.publish.side_effect = Exception("network down")
 
-        await service._push_heartbeat_sse(envelope, _make_payload(), operator)  # noqa: SLF001
+        await service._push_heartbeat_sse(envelope, _make_payload(), operator)
 
     async def test_sse_exception_is_logged_with_traceback(
         self, service, mock_event_service, caplog
@@ -606,7 +622,7 @@ class TestPushHeartbeatSSE:
 
 
 class TestValidateHeartbeatTimestamp:
-    """_validate_heartbeat_timestamp — reads timestamp directly from G8eoHeartbeatPayload."""
+    """_validate_heartbeat_timestamp - reads timestamp directly from G8eoHeartbeatPayload."""
 
     @pytest.fixture
     def service(self):
@@ -629,7 +645,7 @@ class TestValidateHeartbeatTimestamp:
 
 
 class TestWsDisconnectHandler:
-    """_on_ws_disconnect — resets ready state and clears active sessions."""
+    """_on_ws_disconnect - resets ready state and clears active sessions."""
 
     @pytest.fixture
     def service(self):
@@ -647,7 +663,7 @@ class TestWsDisconnectHandler:
 
     async def test_disconnect_preserves_active_sessions(self, service):
         """Disconnect should preserve active sessions for observability across
-        reconnect — the protocol heartbeat:* pattern subscription is restored
+        reconnect - the protocol heartbeat:* pattern subscription is restored
         independently by the pubsub client's reconnect logic."""
         await service.start()
         await service.register_operator_session("op-1", "sess-1")
@@ -664,7 +680,7 @@ class TestWsDisconnectHandler:
 
         service.set_pubsub_client(client)
 
-        client.on_disconnect.assert_called_once_with(service._on_ws_disconnect)  # noqa: SLF001
+        client.on_disconnect.assert_called_once_with(service._on_ws_disconnect)
 
     async def test_start_resets_ready_after_disconnect(self, service):
         client = _make_mock_pubsub_client()
@@ -702,7 +718,7 @@ class TestWsDisconnectHandler:
 
 
 class TestG8eoHeartbeatPayloadApiKey:
-    """G8eoHeartbeatPayload — api_key field acceptance and default."""
+    """G8eoHeartbeatPayload - api_key field acceptance and default."""
 
     def test_api_key_field_accepted(self):
         payload = _make_payload(api_key="g8e_abc123")
@@ -718,7 +734,7 @@ class TestG8eoHeartbeatPayloadApiKey:
 
 
 class TestHeartbeatServiceConstruction:
-    """Direct construction via __init__ — dependency injection contract."""
+    """Direct construction via __init__ - dependency injection contract."""
 
     async def test_constructs_with_required_dependencies(self):
         svc = HeartbeatSnapshotService(
@@ -726,7 +742,7 @@ class TestHeartbeatServiceConstruction:
             event_service=MagicMock(),
         )
         assert svc.is_ready is False
-        assert svc._pubsub_client is None  # noqa: SLF001
+        assert svc._pubsub_client is None
         assert len(svc.active_sessions) == 0
 
     async def test_distinct_instances_are_independent(self):

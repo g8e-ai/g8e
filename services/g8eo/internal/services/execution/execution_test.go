@@ -21,6 +21,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,7 +47,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Equal(t, 0, *result.ReturnCode)
 		assert.Contains(t, result.Stdout, "hello world")
 		assert.Empty(t, result.Stderr)
@@ -71,7 +72,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Equal(t, 42, *result.ReturnCode)
 	})
 
@@ -91,7 +92,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.Equal(t, constants.ExecutionStatusFailed, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
 		assert.Equal(t, 127, *result.ReturnCode)
 		assert.Equal(t, "command_not_found", *result.ErrorType)
 		assert.Contains(t, result.Stderr, "not found")
@@ -112,7 +113,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.Equal(t, constants.ExecutionStatusTimeout, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT, result.Status)
 		assert.Equal(t, 124, *result.ReturnCode)
 		assert.NotNil(t, result.ErrorMessage)
 		assert.Contains(t, *result.ErrorMessage, "timed out")
@@ -135,7 +136,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, workDir)
 	})
 
@@ -157,7 +158,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "test_value")
 	})
 
@@ -176,7 +177,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Contains(t, result.Stdout, "hello")
 	})
 
@@ -463,7 +464,7 @@ func TestExecutionService_CancelExecution_DoesNotSetCancelledStatus(t *testing.T
 	// Regression: CancelExecution previously wrote ExecutionStatusCancelled after
 	// unlocking the mutex, creating a window where it raced with
 	// executeCommandInternal's authoritative status write. The dead write was
-	// removed — verify it no longer appears in the result.
+	// removed - verify it no longer appears in the result.
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
@@ -497,7 +498,7 @@ func TestExecutionService_CancelExecution_DoesNotSetCancelledStatus(t *testing.T
 	// The only invariant guaranteed after cancel: status is never Cancelled,
 	// because CancelExecution no longer writes that value. The kill path in
 	// executeCommandInternal is the sole status writer.
-	assert.NotEqual(t, constants.ExecutionStatusCancelled, result.Status,
+	assert.NotEqual(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED, result.Status,
 		"CancelExecution must not inject ExecutionStatusCancelled into the result")
 }
 
@@ -533,7 +534,7 @@ func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
 			select {
 			case <-execDone:
 			case <-time.After(5 * time.Second):
-				t.Errorf("execution %s did not complete — possible deadlock", id)
+				t.Errorf("execution %s did not complete - possible deadlock", id)
 			}
 		}(reqID)
 	}
@@ -542,7 +543,7 @@ func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
 		select {
 		case <-done:
 		case <-time.After(15 * time.Second):
-			t.Fatal("workers did not finish — deadlock suspected")
+			t.Fatal("workers did not finish - deadlock suspected")
 		}
 	}
 }
@@ -569,7 +570,7 @@ func TestExecutionService_CollectEnvironmentInfo(t *testing.T) {
 	info := svc.collectEnvironmentInfo()
 
 	assert.NotNil(t, info)
-	assert.Equal(t, "g8eo", info.ComponentName)
+	assert.Equal(t, constants.Status.ComponentName.G8EO, info.ComponentName)
 	assert.Equal(t, "test-project", info.ProjectID)
 }
 
@@ -583,7 +584,7 @@ func TestExecutionService_FinalizeResult(t *testing.T) {
 		ExecutionID: "test-req",
 		CaseID:      "test-case",
 		Command:     "echo",
-		Status:      constants.ExecutionStatusCompleted,
+		Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		StartTime:   &startTime,
 	}
 

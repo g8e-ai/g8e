@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 class SafetyValidationResult:
     """Structured result from command safety validation.
-    
+
     Replaces raw (bool, str) tuple with typed fields for better error type resolution.
     """
     def __init__(
@@ -48,12 +48,12 @@ class SafetyValidationResult:
 
 def map_os_string_to_platform(os_name: str | None) -> Platform:
     """Convert OS string to Platform enum.
-    
+
     Centralized mapping to eliminate repetitive if/elif blocks across the codebase.
-    
+
     Args:
         os_name: OS string (e.g., "linux", "windows", "darwin", "macos")
-        
+
     Returns:
         Platform enum value, defaults to LINUX if unknown
     """
@@ -63,7 +63,7 @@ def map_os_string_to_platform(os_name: str | None) -> Platform:
     os_lower = os_name.lower()
     if os_lower == "windows":
         return Platform.WINDOWS
-    if os_lower == "darwin" or os_lower == "macos":
+    if os_lower in {"darwin", "macos"}:
         return Platform.DARWIN
     return Platform.LINUX
 

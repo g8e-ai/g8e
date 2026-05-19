@@ -20,9 +20,10 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -53,7 +54,7 @@ func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg PubSubComman
 
 	var protoMsg operatorv1.AuditMsgRequested
 	if err := proto.Unmarshal(msg.Payload, &protoMsg); err != nil {
-		as.logger.Error("Failed to decode audit user msg payload as protobuf AuditMsgRequested", "error", err)
+		as.logger.Error("Failed to decode audit user msg payload as protobuf AuditMsgRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 	content := protoMsg.Content
@@ -65,12 +66,12 @@ func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg PubSubComman
 	event := &storage.Event{
 		OperatorSessionID: as.config.OperatorSessionId,
 		Timestamp:         time.Now().UTC(),
-		Type:              storage.EventTypeUserMsg,
+		Type:              constants.Event.Operator.Audit.UserMsg,
 		ContentText:       content,
 	}
 
 	if _, err := as.auditVault.RecordEvent(event); err != nil {
-		as.logger.Warn("Failed to record user message in audit vault", "error", err)
+		as.logger.Warn("Failed to record user message in audit vault", string(constants.ConnectionStateError), err)
 	} else {
 		as.logger.Info("User message recorded in audit vault (LFAA)",
 			"operator_session_id", as.config.OperatorSessionId,
@@ -89,7 +90,7 @@ func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg PubSubCommandM
 
 	var protoMsg operatorv1.AuditMsgRequested
 	if err := proto.Unmarshal(msg.Payload, &protoMsg); err != nil {
-		as.logger.Error("Failed to decode audit AI msg payload as protobuf AuditMsgRequested", "error", err)
+		as.logger.Error("Failed to decode audit AI msg payload as protobuf AuditMsgRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 	content := protoMsg.Content
@@ -101,12 +102,12 @@ func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg PubSubCommandM
 	event := &storage.Event{
 		OperatorSessionID: as.config.OperatorSessionId,
 		Timestamp:         time.Now().UTC(),
-		Type:              storage.EventTypeAIMsg,
+		Type:              constants.Event.Operator.Audit.AIMsg,
 		ContentText:       content,
 	}
 
 	if _, err := as.auditVault.RecordEvent(event); err != nil {
-		as.logger.Warn("Failed to record AI message in audit vault", "error", err)
+		as.logger.Warn("Failed to record AI message in audit vault", string(constants.ConnectionStateError), err)
 	} else {
 		as.logger.Info("AI message recorded in audit vault (LFAA)",
 			"operator_session_id", as.config.OperatorSessionId,
@@ -125,7 +126,7 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg PubSubComm
 
 	var protoCmd operatorv1.DirectCommandAuditRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
-		as.logger.Error("Failed to decode audit direct cmd payload as protobuf DirectCommandAuditRequested", "error", err)
+		as.logger.Error("Failed to decode audit direct cmd payload as protobuf DirectCommandAuditRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 	if protoCmd.Command == "" {
@@ -136,13 +137,13 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg PubSubComm
 	event := &storage.Event{
 		OperatorSessionID: as.config.OperatorSessionId,
 		Timestamp:         time.Now().UTC(),
-		Type:              storage.EventTypeCmdExec,
-		ContentText:       constants.Status.AISource.TerminalDirect,
+		Type:              constants.Event.Operator.Audit.Command,
+		ContentText:       marshaler.Status(constants.Status.AiSource.TerminalDirect),
 		CommandRaw:        protoCmd.Command,
 	}
 
 	if _, err := as.auditVault.RecordEvent(event); err != nil {
-		as.logger.Warn("Failed to record direct command in audit vault", "error", err)
+		as.logger.Warn("Failed to record direct command in audit vault", string(constants.ConnectionStateError), err)
 	} else {
 		as.logger.Info("Direct terminal command recorded in audit vault (LFAA)",
 			"operator_session_id", as.config.OperatorSessionId,
@@ -161,7 +162,7 @@ func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg PubS
 
 	var protoResult operatorv1.DirectCommandResultAuditRequested
 	if err := proto.Unmarshal(msg.Payload, &protoResult); err != nil {
-		as.logger.Error("Failed to decode audit direct cmd result payload as protobuf DirectCommandResultAuditRequested", "error", err)
+		as.logger.Error("Failed to decode audit direct cmd result payload as protobuf DirectCommandResultAuditRequested", string(constants.ConnectionStateError), err)
 		return
 	}
 	if protoResult.Command == "" {
@@ -172,8 +173,8 @@ func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg PubS
 	event := &storage.Event{
 		OperatorSessionID:   as.config.OperatorSessionId,
 		Timestamp:           time.Now().UTC(),
-		Type:                storage.EventTypeCmdExec,
-		ContentText:         constants.Status.AISource.TerminalDirect,
+		Type:                constants.Event.Operator.Audit.Command,
+		ContentText:         marshaler.Status(constants.Status.AiSource.TerminalDirect),
 		CommandRaw:          protoResult.Command,
 		CommandExitCode:     system.IntPtr(int(protoResult.ExitCode)),
 		CommandStdout:       protoResult.Output,
@@ -182,7 +183,7 @@ func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg PubS
 	}
 
 	if _, err := as.auditVault.RecordEvent(event); err != nil {
-		as.logger.Warn("Failed to record direct command result in audit vault", "error", err)
+		as.logger.Warn("Failed to record direct command result in audit vault", string(constants.ConnectionStateError), err)
 	} else {
 		as.logger.Info("Direct terminal command result recorded in audit vault (LFAA)",
 			"operator_session_id", as.config.OperatorSessionId,

@@ -136,7 +136,7 @@ def test_load_auditor_hmac_key_reads_file_and_caches(volume: Path, bootstrap: Bo
     assert bootstrap.load_auditor_hmac_key() == "hmac-value"
 
     # Mutating the file after the first successful load must not affect
-    # subsequent reads — the cache is the whole point of the loader (one
+    # subsequent reads - the cache is the whole point of the loader (one
     # value per process lifetime; rotation requires restart, mirrored on
     # the g8eo side).
     (volume / "auditor_hmac_key").write_text("rotated")
@@ -148,7 +148,7 @@ def test_load_auditor_hmac_key_returns_none_when_missing(volume: Path, bootstrap
 
 
 def test_is_available_true_when_only_auditor_hmac_key_present(volume: Path, bootstrap: BootstrapService) -> None:
-    # Reputation-only Phase 2 deployments that boot without legacy auth
-    # secrets must still be reported as bootstrap-available.
+    # Reputation-only Phase 2 deployments that boot with only the auditor
+    # HMAC key (no API key) must still be reported as bootstrap-available.
     (volume / "auditor_hmac_key").write_text("h")
     assert bootstrap.is_available() is True

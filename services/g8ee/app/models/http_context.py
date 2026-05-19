@@ -14,24 +14,20 @@
 import json
 from typing import Any
 
-from fastapi import Request
 
 from app.constants import (
     ComponentName,
     OperatorStatus,
-    G8eHeaders,
-    InternalApiPaths,
 )
 from app.utils.ids import generate_execution_id
 from app.utils.timestamp import now
-from app.logging import get_logger
 
 from .base import Field, G8eBaseModel, UTCDatetime, field_validator, model_validator
 
 
 class BoundOperator(G8eBaseModel):
     """Represents a bound operator in the HTTP context.
-    
+
     Internal g8ee-client contract for bound operator context.
     """
     operator_id: str = Field(..., description="Unique operator identifier")
@@ -42,7 +38,7 @@ class BoundOperator(G8eBaseModel):
 
 class RequestContext(G8eBaseModel):
     """Request context embedded in request bodies instead of headers.
-    
+
     This eliminates the fragile header-as-state pattern that forced every client
     (CLI, BYO, tests, evals) to re-implement the same header assembly.
     Context is now passed in the request body as a typed field.
@@ -107,7 +103,6 @@ class RequestContext(G8eBaseModel):
             source_component=context.source_component,
             system_fingerprint=context.system_fingerprint,
         )
-
 
 class G8eHttpContext(G8eBaseModel):
     """Standard context object for all internal HTTP requests."""
@@ -179,23 +174,90 @@ class G8eHttpContext(G8eBaseModel):
 
     @model_validator(mode="after")
     def validate_session_or_operator_auth(self):
-        """Ensure either a session context (web_session_id or cli_session_id + user_id) or operator auth (null values with CLIENT source + exempt path)."""
-        # If no session ID and no user_id, this must be operator auth relay from client on an exempt path
-        if not self.web_session_id and not self.cli_session_id and not self.user_id:
-            if not self.is_operator_auth_relay or self.source_component != ComponentName.CLIENT:
-                raise ValueError(
-                    "web_session_id, cli_session_id or user_id are required unless source_component is CLIENT and path is exempted (operator auth relay)"
-                )
+        """Ensure strict separation of session types and validate required context.
+
+        Rules:
+        1. For CLIENT source:
+           - MUST have either web_session_id OR cli_session_id (mutually exclusive).
+           - MUST NOT have both.
+           - MUST have user_id.
+        2. For non-CLIENT source:
+           - MUST have either web_session_id, cli_session_id, or user_id (not anonymous).
+        3. For operator auth relay (exempt paths):
+           - Can have null sessions if source is CLIENT.
+        4. If operators are bound:
+           - Every bound operator MUST have an operator_session_id.
+        """
+        if self.is_operator_auth_relay and self.source_component == ComponentName.CLIENT:
+            # Exempt paths (bootstrap) allowed to have no session for CLIENT
+            return self
+
+        # 1. Mutual Exclusivity and Presence for CLIENT source
+        if self.source_component == ComponentName.CLIENT:
+            if self.web_session_id and self.cli_session_id:
+                raise ValueError("Context cannot have both web_session_id and cli_session_id")
+
+            if not self.web_session_id and not self.cli_session_id:
+                raise ValueError("Context must have either web_session_id or cli_session_id for CLIENT source")
+
+            if not self.user_id:
+                raise ValueError("user_id is required for CLIENT source")
+        # 2. Minimum identity requirement for non-CLIENT sources
+        elif not self.web_session_id and not self.cli_session_id and not self.user_id:
+            raise ValueError("web_session_id, cli_session_id or user_id are required")
+
+        # 3. Operator Session Validation
+        if self.bound_operators:
+            for op in self.bound_operators:
+                if op.status == OperatorStatus.BOUND and not op.operator_session_id:
+                    raise ValueError(f"Operator {op.operator_id} is BOUND but missing operator_session_id")
+
         return self
 
     def has_bound_operator(self) -> bool:
         """Returns True if at least one operator has status bound."""
         return any(op.status == OperatorStatus.BOUND for op in self.bound_operators)
 
+    def validate_against_user(self, user: Any):
+        """Verify that session IDs in context match the authenticated user's sessions.
+
+        Args:
+            user: AuthenticatedUser object (from headers).
+        """
+        # 1. User ID must match
+        if self.user_id and self.user_id != user.uid:
+             from app.errors import AuthenticationError
+             raise AuthenticationError(f"User ID mismatch: context={self.user_id}, auth={user.uid}")
+
+        # 2. Web session validation
+        if self.web_session_id:
+            if not user.web_session_id:
+                 from app.errors import AuthenticationError
+                 raise AuthenticationError("Web session context provided but not authenticated as a web session")
+            if self.web_session_id != user.web_session_id:
+                 from app.errors import AuthenticationError
+                 raise AuthenticationError(f"Web session ID mismatch: context={self.web_session_id}, auth={user.web_session_id}")
+
+        # 3. CLI session validation
+        if self.cli_session_id:
+            if not user.cli_session_id:
+                 from app.errors import AuthenticationError
+                 raise AuthenticationError("CLI session context provided but not authenticated as a CLI session")
+            if self.cli_session_id != user.cli_session_id:
+                 from app.errors import AuthenticationError
+                 raise AuthenticationError(f"CLI session ID mismatch: context={self.cli_session_id}, auth={user.cli_session_id}")
+
+        # 4. Operator session check for bound operators
+        if self.bound_operators and user.operator_session_id:
+            for op in self.bound_operators:
+                if op.operator_session_id and op.operator_session_id != user.operator_session_id:
+                    from app.errors import AuthenticationError
+                    raise AuthenticationError(f"Operator session ID mismatch for operator {op.operator_id}")
+
     @classmethod
     def from_request_context(cls, request_context: RequestContext, is_exempt_path: bool = False) -> "G8eHttpContext":
         """Create G8eHttpContext from RequestContext (extracted from request body).
-        
+
         This is the new preferred method for context extraction, eliminating
         the fragile header-as-state pattern.
         """

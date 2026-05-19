@@ -46,7 +46,7 @@ func NewPortService(cfg *config.Config, logger *slog.Logger, client PubSubClient
 func (ps *PortService) HandlePortCheckRequest(ctx context.Context, msg PubSubCommandMessage) {
 	var protoPort operatorv1.CheckPortRequested
 	if err := proto.Unmarshal(msg.Payload, &protoPort); err != nil {
-		ps.logger.Error("Failed to decode port check payload as protobuf CheckPortRequested", "error", err)
+		ps.logger.Error("Failed to decode port check payload as protobuf CheckPortRequested", string(constants.ConnectionStateError), err)
 		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "invalid request payload")
 		return
 	}
@@ -63,7 +63,7 @@ func (ps *PortService) HandlePortCheckRequest(ctx context.Context, msg PubSubCom
 	}
 	protocol := protoPort.Protocol
 	if protocol == "" {
-		protocol = "tcp"
+		protocol = string(constants.NetworkProtocolTCP)
 	}
 
 	executionID := executionIDFromMessage(msg)
@@ -89,7 +89,7 @@ func (ps *PortService) HandlePortCheckRequest(ctx context.Context, msg PubSubCom
 
 	payload := &operatorv1.PortCheckResult{
 		ExecutionId: executionID,
-		Status:      protoExecutionStatus(constants.ExecutionStatusCompleted),
+		Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		Results:     []*operatorv1.PortCheckEntry{entry},
 	}
 	publishLFAATypedResponseTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Completed, payload)

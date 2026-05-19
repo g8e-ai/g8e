@@ -125,7 +125,7 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 		}
 		c.logger.Error("operator pub/sub WebSocket dial failed",
 			"url", wsURL,
-			"error", err,
+			string(constants.ConnectionStateError), err,
 			"http_status", statusCode,
 			"tls_enabled", c.tlsConfig != nil)
 		return nil, fmt.Errorf("failed to connect to operator pub/sub (http_status=%d): %w", statusCode, err)
@@ -184,7 +184,7 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 
 			var event pubsubv1.PubSubEvent
 			if err := proto.Unmarshal(raw, &event); err != nil {
-				c.logger.Warn("Failed to parse pub/sub event", "error", err)
+				c.logger.Warn("Failed to parse pub/sub event", string(constants.ConnectionStateError), err)
 				continue
 			}
 
@@ -329,12 +329,12 @@ func (c *OperatorPubSubClient) checkTLSConnectivity(ctx context.Context) error {
 
 	ws, resp, err := dialer.DialContext(ctx, wsURL, nil)
 	if err == nil {
-		// Unexpected: proxy accepted a sessionless connection — close it cleanly
+		// Unexpected: proxy accepted a sessionless connection - close it cleanly
 		ws.Close()
 		return nil
 	}
 
-	// A non-nil HTTP response means the server replied — TCP and TLS are healthy.
+	// A non-nil HTTP response means the server replied - TCP and TLS are healthy.
 	// The specific status code is irrelevant; what matters is that it responded.
 	if resp != nil {
 		return nil

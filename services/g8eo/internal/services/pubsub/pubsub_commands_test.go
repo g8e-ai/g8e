@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 	"github.com/stretchr/testify/assert"
@@ -74,7 +74,7 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *uap.UA
 		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
 		OperatorId:        "operator-1",
 		OperatorSessionId: "session-1",
-		ActionType:        "FS_LIST",
+		ActionType:        string(constants.ActionTypeFsList),
 		TargetResource:    "localhost",
 		Payload:           payload,
 		StateMerkleRoot:   "test-state-root",

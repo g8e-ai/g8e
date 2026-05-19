@@ -50,7 +50,7 @@ class CommandBlacklistValidator:
         return resolve_config_path("blacklist.json")
 
     def _load(self, path: Path) -> None:
-        cfg_file = str(path)
+        str(path)
         logger.info("Loading command blacklist")
         data = load_json_config(path, config_name="command blacklist")
 

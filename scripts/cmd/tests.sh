@@ -8,7 +8,7 @@ if [[ -z "$_TEST_COMPONENT" || "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" 
         _TEST_COMPONENT="g8eo"
         set -- "$_TEST_COMPONENT" "${@:2}"
     else
-        help_file="$SCRIPT_DIR/docs/general/cli_help.md"
+        help_file="$SCRIPT_DIR/docs/cli_help.md"
         if [[ -f "$help_file" ]]; then
             awk '/^### test/,/^### security/' "$help_file" | head -n -1
         else
@@ -19,7 +19,7 @@ if [[ -z "$_TEST_COMPONENT" || "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" 
     fi
 fi
 if [[ "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" == "--help" ]]; then
-    help_file="$SCRIPT_DIR/docs/general/cli_help.md"
+    help_file="$SCRIPT_DIR/docs/cli_help.md"
     if [[ -f "$help_file" ]]; then
         awk '/^### test/,/^### security/' "$help_file" | head -n -1
     else
@@ -28,9 +28,9 @@ if [[ "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" == "--help" ]]; then
     fi
     exit 0
 fi
-if [[ "$_TEST_COMPONENT" != "g8ee" && "$_TEST_COMPONENT" != "g8eo" && "$_TEST_COMPONENT" != "chaos" ]]; then
+if [[ "$_TEST_COMPONENT" != "g8ee" && "$_TEST_COMPONENT" != "g8eo" && "$_TEST_COMPONENT" != "chaos" && "$_TEST_COMPONENT" != "ci" ]]; then
     echo "[g8e] Unknown test component: '$_TEST_COMPONENT'" >&2
-    echo "  Valid: g8ee, g8eo, chaos" >&2
+    echo "  Valid: g8ee, g8eo, chaos, ci" >&2
     exit 1
 fi
 

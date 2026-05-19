@@ -65,16 +65,6 @@ func DefaultAuditVaultConfig() *AuditVaultConfig {
 	}
 }
 
-// EventType represents the type of event in the audit log
-type EventType string
-
-const (
-	EventTypeUserMsg      EventType = "USER_MSG"
-	EventTypeAIMsg        EventType = "AI_MSG"
-	EventTypeCmdExec      EventType = "CMD_EXEC"
-	EventTypeFileMutation EventType = "FILE_MUTATION"
-)
-
 var (
 	ErrAuditEventNil       = errors.New("AUDIT_EVENT_INVALID: event required")
 	ErrAuditSessionMissing = errors.New("AUDIT_SESSION_MISSING: operator_session_id required")
@@ -103,7 +93,7 @@ type Event struct {
 	ID                  int64
 	OperatorSessionID   string
 	Timestamp           time.Time
-	Type                EventType
+	Type                constants.EventType
 	ContentText         string
 	CommandRaw          string
 	CommandExitCode     *int
@@ -198,7 +188,7 @@ func (avs *AuditVaultService) bootstrap() error {
 			return fmt.Errorf("failed to initialize ledger git repository: %w", err)
 		}
 	} else {
-		avs.logger.Warn("Git not available — ledger git repository will not be initialized")
+		avs.logger.Warn("Git not available - ledger git repository will not be initialized")
 	}
 
 	if err := avs.initDatabase(); err != nil {
@@ -237,7 +227,7 @@ func (avs *AuditVaultService) verifyWritePermissions() error {
 	}
 
 	if err := os.Remove(testFile); err != nil {
-		avs.logger.Warn("Failed to remove write test file", "path", testFile, "error", err)
+		avs.logger.Warn("Failed to remove write test file", "path", testFile, string(constants.ConnectionStateError), err)
 	}
 
 	avs.logger.Info("Write permissions verified", "path", avs.config.DataDir)
@@ -245,12 +235,12 @@ func (avs *AuditVaultService) verifyWritePermissions() error {
 }
 
 // GetSessionLedgerPath returns the ledger path for a specific session, initializing it if needed.
-func (avs *AuditVaultService) GetSessionLedgerPath(sessionID string) (string, error) {
-	if sessionID == "" {
+func (avs *AuditVaultService) GetSessionLedgerPath(operatorSessionID string) (string, error) {
+	if operatorSessionID == "" {
 		return avs.ledgerPath, nil
 	}
 
-	sessionPath := filepath.Join(avs.sessionsRoot, sessionID)
+	sessionPath := filepath.Join(avs.sessionsRoot, operatorSessionID)
 
 	avs.mu.RLock()
 	_, err := os.Stat(filepath.Join(sessionPath, ".git"))
@@ -270,14 +260,14 @@ func (avs *AuditVaultService) GetSessionLedgerPath(sessionID string) (string, er
 	}
 
 	if err := os.MkdirAll(sessionPath, 0755); err != nil {
-		return "", fmt.Errorf("failed to create session ledger directory: %w", err)
+		return "", fmt.Errorf("failed to create operator session ledger directory: %w", err)
 	}
 
 	if err := avs.initGitRepo(sessionPath); err != nil {
-		return "", fmt.Errorf("failed to initialize session git repo: %w", err)
+		return "", fmt.Errorf("failed to initialize operator session git repo: %w", err)
 	}
 
-	avs.logger.Info("Initialized new session ledger", "session_id", sessionID, "path", sessionPath)
+	avs.logger.Info("Initialized new session ledger", "operator_session_id", operatorSessionID, "path", sessionPath)
 	return sessionPath, nil
 }
 
@@ -445,7 +435,7 @@ func (avs *AuditVaultService) CreateSession(id, title, userIdentity string) erro
 	query := `INSERT INTO sessions (id, title, user_identity) VALUES (?, ?, ?)`
 	_, err := avs.db.Exec(query, id, title, userIdentity)
 	if err != nil {
-		return fmt.Errorf("failed to create session: %w", err)
+		return fmt.Errorf("failed to create operator session: %w", err)
 	}
 
 	avs.logger.Info("OperatorSession created", "operator_session_id", id, "title", title)
@@ -565,7 +555,7 @@ func (avs *AuditVaultService) RecordEvents(events []*Event) error {
 		_, err = stmt.Exec(
 			event.OperatorSessionID,
 			sqliteutil.FormatTimestamp(event.Timestamp),
-			string(event.Type),
+			event.Type,
 			contentTextBytes,
 			event.CommandRaw,
 			event.CommandExitCode,
@@ -647,7 +637,7 @@ func (avs *AuditVaultService) RecordEvent(event *Event) (int64, error) {
 	result, err := tx.Exec(query,
 		event.OperatorSessionID,
 		sqliteutil.FormatTimestamp(event.Timestamp),
-		string(event.Type),
+		event.Type,
 		contentTextBytes,
 		event.CommandRaw,
 		event.CommandExitCode,
@@ -768,7 +758,7 @@ func (avs *AuditVaultService) GetActionReceipt(transactionID string) (*models.Ac
 }
 
 // ListActionReceipts retrieves action receipts with optional filtering and pagination.
-func (avs *AuditVaultService) ListActionReceipts(sessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error) {
+func (avs *AuditVaultService) ListActionReceipts(operatorSessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error) {
 	if avs == nil || avs.db == nil {
 		return nil, fmt.Errorf("audit vault is disabled")
 	}
@@ -787,9 +777,9 @@ func (avs *AuditVaultService) ListActionReceipts(sessionID string, limit, offset
 	`)
 
 	args := []interface{}{}
-	if sessionID != "" {
+	if operatorSessionID != "" {
 		query.WriteString(" WHERE operator_session_id = ?")
-		args = append(args, sessionID)
+		args = append(args, operatorSessionID)
 	}
 
 	query.WriteString(" ORDER BY timestamp DESC LIMIT ? OFFSET ?")
@@ -813,7 +803,7 @@ func (avs *AuditVaultService) ListActionReceipts(sessionID string, limit, offset
 			&r.SignerKeyID, &r.Signature, &timestampStr,
 		)
 		if err != nil {
-			avs.logger.Warn("Failed to scan receipt row", "error", err)
+			avs.logger.Warn("Failed to scan receipt row", string(constants.ConnectionStateError), err)
 			continue
 		}
 
@@ -864,7 +854,7 @@ func (avs *AuditVaultService) ListActionReceiptsSince(since time.Time, limit int
 			&r.SignerKeyID, &r.Signature, &timestampStr,
 		)
 		if err != nil {
-			avs.logger.Warn("Failed to scan receipt row", "error", err)
+			avs.logger.Warn("Failed to scan receipt row", string(constants.ConnectionStateError), err)
 			continue
 		}
 
@@ -951,7 +941,7 @@ func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset 
 			&encryptedFlag,
 		)
 		if err != nil {
-			avs.logger.Warn("Failed to scan event row", "error", err)
+			avs.logger.Warn("Failed to scan event row", string(constants.ConnectionStateError), err)
 			continue
 		}
 
@@ -961,7 +951,7 @@ func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset 
 			if len(contentTextBytes) > 0 {
 				decrypted, err := avs.decryptContent(contentTextBytes)
 				if err != nil {
-					avs.logger.Warn("Failed to decrypt content_text", "event_id", event.ID, "error", err)
+					avs.logger.Warn("Failed to decrypt content_text", "event_id", event.ID, string(constants.ConnectionStateError), err)
 				} else {
 					event.ContentText = decrypted
 				}
@@ -969,7 +959,7 @@ func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset 
 			if len(commandStdoutBytes) > 0 {
 				decrypted, err := avs.decryptContent(commandStdoutBytes)
 				if err != nil {
-					avs.logger.Warn("Failed to decrypt stdout", "event_id", event.ID, "error", err)
+					avs.logger.Warn("Failed to decrypt stdout", "event_id", event.ID, string(constants.ConnectionStateError), err)
 				} else {
 					event.CommandStdout = decrypted
 				}
@@ -977,7 +967,7 @@ func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset 
 			if len(commandStderrBytes) > 0 {
 				decrypted, err := avs.decryptContent(commandStderrBytes)
 				if err != nil {
-					avs.logger.Warn("Failed to decrypt stderr", "event_id", event.ID, "error", err)
+					avs.logger.Warn("Failed to decrypt stderr", "event_id", event.ID, string(constants.ConnectionStateError), err)
 				} else {
 					event.CommandStderr = decrypted
 				}
@@ -1076,7 +1066,7 @@ func (avs *AuditVaultService) GetFileMutations(eventID int64) ([]*FileMutationLo
 			&diffStat,
 		)
 		if err != nil {
-			avs.logger.Warn("Failed to scan file mutation row", "error", err)
+			avs.logger.Warn("Failed to scan file mutation row", string(constants.ConnectionStateError), err)
 			continue
 		}
 
@@ -1162,13 +1152,13 @@ func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
 			WHERE event_id IN (SELECT id FROM events WHERE timestamp < ?)
 		`, cutoff)
 		if err != nil {
-			logger.Error("Failed to prune old file mutations", "error", err)
+			logger.Error("Failed to prune old file mutations", string(constants.ConnectionStateError), err)
 		}
 
 		// 2. Delete events older than retention period
 		result, err := db.Exec("DELETE FROM events WHERE timestamp < ?", cutoff)
 		if err != nil {
-			logger.Error("Failed to prune old events", "error", err)
+			logger.Error("Failed to prune old events", string(constants.ConnectionStateError), err)
 			return
 		}
 
@@ -1180,7 +1170,7 @@ func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
 		// 3. Delete receipts older than retention period
 		result, err = db.Exec("DELETE FROM receipts WHERE timestamp < ?", cutoff)
 		if err != nil {
-			logger.Error("Failed to prune old receipts", "error", err)
+			logger.Error("Failed to prune old receipts", string(constants.ConnectionStateError), err)
 		} else {
 			rowsDeleted, _ = result.RowsAffected()
 			if rowsDeleted > 0 {
@@ -1195,11 +1185,11 @@ func auditVaultPrune(config *AuditVaultConfig) sqliteutil.PruneFunc {
 			AND id NOT IN (SELECT DISTINCT operator_session_id FROM receipts WHERE operator_session_id IS NOT NULL)
 		`)
 		if err != nil {
-			logger.Warn("Failed to prune orphaned sessions", "error", err)
+			logger.Warn("Failed to prune orphaned sessions", string(constants.ConnectionStateError), err)
 		}
 
 		if err := db.RunIncrementalVacuum(1000); err != nil {
-			logger.Info("Failed to run incremental vacuum", "error", err)
+			logger.Info("Failed to run incremental vacuum", string(constants.ConnectionStateError), err)
 		}
 	}
 }

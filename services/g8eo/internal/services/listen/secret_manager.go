@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 )
@@ -69,7 +70,7 @@ func (m *SecretManager) InitPlatformSettings() error {
 	}
 
 	if err := m.cleanupStalePlatformSettings(); err != nil {
-		m.logger.Warn("[SecretManager] Failed to cleanup stale platform settings", "error", err)
+		m.logger.Warn("[SecretManager] Failed to cleanup stale platform settings", string(constants.ConnectionStateError), err)
 	}
 
 	return m.validatePlatformSettings()
@@ -308,13 +309,13 @@ func (m *SecretManager) writeDigestManifest(secrets map[string]string, now time.
 	tmpPath := finalPath + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		m.logger.Error("[SecretManager] Failed to write bootstrap digest manifest",
-			"path", tmpPath, "error", err)
+			"path", tmpPath, string(constants.ConnectionStateError), err)
 		return fmt.Errorf("write bootstrap digest manifest %s: %w", tmpPath, err)
 	}
 	if err := os.Rename(tmpPath, finalPath); err != nil {
 		_ = os.Remove(tmpPath)
 		m.logger.Error("[SecretManager] Failed to rename bootstrap digest manifest",
-			"from", tmpPath, "to", finalPath, "error", err)
+			"from", tmpPath, "to", finalPath, string(constants.ConnectionStateError), err)
 		return fmt.Errorf("rename bootstrap digest manifest to %s: %w", finalPath, err)
 	}
 	m.logger.Info("[SecretManager] Bootstrap digest manifest written",
@@ -368,7 +369,7 @@ func (m *SecretManager) warmPlatformSettingsCache(dataJSON string, now time.Time
 		cacheKey, dataJSON, nowStr, sqliteutil.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
 	)
 	if err != nil {
-		m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings", "error", err)
+		m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings", string(constants.ConnectionStateError), err)
 	} else {
 		m.logger.Info("[SecretManager] platform_settings cache warmed", "key", cacheKey, "ttl", cacheTTL)
 	}
@@ -395,7 +396,7 @@ func (m *SecretManager) readRequiredSecretFile(name string) (string, error) {
 func (m *SecretManager) writeSecretFile(path, value, name string) error {
 	if err := os.WriteFile(path, []byte(value), 0600); err != nil {
 		m.logger.Error("[SecretManager] Failed to write bootstrap secret",
-			"name", name, "path", path, "error", err)
+			"name", name, "path", path, string(constants.ConnectionStateError), err)
 		return fmt.Errorf("write bootstrap secret %s to %s: %w", name, path, err)
 	}
 	return nil

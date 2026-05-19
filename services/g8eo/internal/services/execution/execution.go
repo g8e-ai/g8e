@@ -29,7 +29,9 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/security"
 	system "github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
 )
@@ -49,6 +51,7 @@ type ExecutionService struct {
 	activeExecutions map[string]*ExecutionContext
 	executionsMutex  sync.RWMutex
 	semaphore        chan struct{} // Concurrency control
+	wg               sync.WaitGroup
 }
 
 func (es *ExecutionService) BuildCommandString(command string, args []string) string {
@@ -144,7 +147,7 @@ func (sw *streamingWriter) logLines(p []byte) {
 		// Trim the newline and log the complete line
 		line = strings.TrimRight(line, "\n\r")
 		if line != "" {
-			sw.logger.Info(line, "execution_id", sw.executionID, "stream", sw.prefix)
+			sw.logger.Info(line, "execution_id", sw.executionID, string(constants.ApprovalTypeStream), sw.prefix)
 		}
 	}
 }
@@ -157,7 +160,7 @@ func (sw *streamingWriter) Flush() {
 	if sw.lineBuffer.Len() > 0 {
 		line := strings.TrimSpace(sw.lineBuffer.String())
 		if line != "" {
-			sw.logger.Info(line, "execution_id", sw.executionID, "stream", sw.prefix)
+			sw.logger.Info(line, "execution_id", sw.executionID, string(constants.ApprovalTypeStream), sw.prefix)
 		}
 		sw.lineBuffer.Reset()
 	}
@@ -182,13 +185,13 @@ func NewExecutionService(cfg *config.Config, logger *slog.Logger) *ExecutionServ
 // cloudCLICommands lists commands that require --cloud flag to execute
 var cloudCLICommands = map[string]bool{
 	// Cloud provider CLIs
-	constants.Status.CloudSubtype.AWS: true,
-	"gcloud":                          true,
-	"az":                              true,
-	"gsutil":                          true,
-	"bq":                              true, // BigQuery CLI (part of gcloud)
-	"cbt":                             true, // Cloud Bigtable CLI
-	"azcopy":                          true, // Azure storage copy tool
+	marshaler.Status(constants.Status.CloudSubtype.AWS): true,
+	"gcloud": true,
+	"az":     true,
+	"gsutil": true,
+	"bq":     true, // BigQuery CLI (part of gcloud)
+	"cbt":    true, // Cloud Bigtable CLI
+	"azcopy": true, // Azure storage copy tool
 	// Infrastructure as Code tools
 	"terraform": true,
 	"kubectl":   true,
@@ -233,10 +236,13 @@ func isCloudCLICommand(command string, args []string) (bool, string) {
 
 // ExecuteCommand executes a command with security controls and resource limits
 func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.ExecutionRequestPayload) (*models.ExecutionResultsPayload, error) {
+	es.wg.Add(1)
+	defer es.wg.Done()
+
 	es.logger.Info("Executing command",
 		"execution_id", request.ExecutionID,
 		"case_id", request.CaseID,
-		"command", request.Command,
+		string(constants.ApprovalTypeCommand), request.Command,
 		"args", request.Args)
 
 	// SECURITY: Block cloud CLI commands unless --cloud flag is set
@@ -244,7 +250,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		if isCloud, cloudCmd := isCloudCLICommand(request.Command, request.Args); isCloud {
 			es.logger.Warn("Cloud CLI command blocked - Operator not started with --cloud flag",
 				"execution_id", request.ExecutionID,
-				"command", request.Command,
+				string(constants.ApprovalTypeCommand), request.Command,
 				"blocked_tool", cloudCmd,
 				"cloud_mode", es.config.CloudMode)
 
@@ -256,7 +262,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 				InvestigationID: request.InvestigationID,
 				Command:         request.Command,
 				Args:            request.Args,
-				Status:          constants.ExecutionStatusFailed,
+				Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 				StartTime:       &now,
 				ReturnCode:      system.IntPtr(126), // Command invoked cannot execute
 				Stdout:          "",
@@ -295,7 +301,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		InvestigationID: request.InvestigationID,
 		Command:         request.Command,
 		Args:            request.Args,
-		Status:          constants.ExecutionStatusExecuting,
+		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 		StartTime:       &execCtx.StartTime,
 	}
 
@@ -325,8 +331,8 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	err := es.executeCommandInternal(cmdCtx, execCtx)
 	if err != nil {
 		execCtx.mu.Lock()
-		if result.Status == constants.ExecutionStatusExecuting {
-			result.Status = constants.ExecutionStatusFailed
+		if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING {
+			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 			result.ErrorMessage = system.StringPtr(err.Error())
 			result.ErrorType = system.StringPtr("execution_error")
 			result.ReturnCode = system.IntPtr(es.errorToReturnCode(err))
@@ -350,7 +356,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	es.logger.Info("Command execution completed",
 		"execution_id", request.ExecutionID,
 		"case_id", request.CaseID,
-		"command", request.Command,
+		string(constants.ApprovalTypeCommand), request.Command,
 		"status", result.Status,
 		"duration_seconds", result.DurationSeconds,
 		"return_code", system.IntPtrValue(result.ReturnCode),
@@ -409,7 +415,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		}
 
 		es.logger.Info("Executing command via shell",
-			"command", shellScript,
+			string(constants.ApprovalTypeCommand), shellScript,
 			"execution_type", "shell")
 
 		// Use /bin/bash -c for shell execution.
@@ -517,7 +523,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		execCtx.mu.Lock()
 		result.EndTime = &endTime
 		result.DurationSeconds = duration.Seconds()
-		result.Status = constants.ExecutionStatusFailed
+		result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 		result.ErrorMessage = system.StringPtr(err.Error())
 		result.ErrorType = system.StringPtr("start_error")
 		result.ReturnCode = system.IntPtr(es.errorToReturnCode(err))
@@ -569,7 +575,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			result.Status = constants.ExecutionStatusTimeout
+			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT
 			result.ErrorMessage = system.StringPtr("Command execution timed out")
 			result.ErrorType = system.StringPtr("timeout")
 			result.ReturnCode = system.IntPtr(124)
@@ -589,39 +595,39 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 					strings.Contains(stderrLower, "not executable") ||
 					strings.Contains(stderrLower, "cannot execute")) {
 					// Actual permission denied error from shell
-					result.Status = constants.ExecutionStatusFailed
+					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 					result.ErrorMessage = system.StringPtr("Permission denied: command is not executable")
 					result.ErrorType = system.StringPtr("permission_denied")
 				} else if exitCode == 127 && (strings.Contains(stderrLower, "not found") ||
 					strings.Contains(stderrLower, "no such file") ||
 					strings.Contains(stderrLower, "command not found")) {
 					// Actual command not found error from shell
-					result.Status = constants.ExecutionStatusFailed
+					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 					result.ErrorMessage = system.StringPtr("Command not found")
 					result.ErrorType = system.StringPtr("command_not_found")
 				} else {
 					// All other non-zero exit codes (including deliberate exit 126/127) are normal completion
 					// The command executed and returned an exit code - that's a successful execution
-					result.Status = constants.ExecutionStatusCompleted
+					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 				}
 			} else {
 				// Non-Unix system or wait status unavailable - treat as completed with exit code
-				result.Status = constants.ExecutionStatusCompleted
+				result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 			}
 		} else if strings.Contains(err.Error(), "signal: killed") {
 			// Process was killed (by us on timeout/cancel, or externally)
-			result.Status = constants.ExecutionStatusFailed
+			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 			result.ErrorMessage = system.StringPtr("Command was terminated")
-			result.ErrorType = system.StringPtr("killed")
+			result.ErrorType = system.StringPtr(string(constants.SentinelStatusKilled))
 			result.ReturnCode = system.IntPtr(137)
 		} else {
-			result.Status = constants.ExecutionStatusFailed
+			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 			result.ErrorMessage = system.StringPtr(err.Error())
 			result.ErrorType = system.StringPtr("execution_error")
 			result.ReturnCode = system.IntPtr(es.errorToReturnCode(err))
 		}
 	} else {
-		result.Status = constants.ExecutionStatusCompleted
+		result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 		returnCode := 0
 		result.ReturnCode = &returnCode
 	}
@@ -713,7 +719,7 @@ func (es *ExecutionService) errorToReturnCode(err error) int {
 func (es *ExecutionService) collectSystemInfo() *models.ExecutionSystemInfo {
 	info := &models.ExecutionSystemInfo{
 		Hostname:     system.GetHostname(),
-		OS:           runtime.GOOS,
+		OS:           constants.Platform(runtime.GOOS),
 		Architecture: runtime.GOARCH,
 		NumCPU:       runtime.NumCPU(),
 		GoVersion:    runtime.Version(),
@@ -727,21 +733,21 @@ func (es *ExecutionService) collectSystemInfo() *models.ExecutionSystemInfo {
 		"num_cpu", info.NumCPU,
 		"current_user", info.CurrentUser)
 
-	if runtime.GOOS == constants.Status.Platform.Linux {
+	if constants.Platform(runtime.GOOS) == constants.Status.Platform.Linux {
 		es.logger.Info("Linux detected - collecting extended system metrics")
 
 		if loadavg, err := getLoadAverage(); err == nil {
 			info.LoadAverage = loadavg
 			es.logger.Info("Load average collected", "load_average", loadavg)
 		} else {
-			es.logger.Info("Failed to collect load average", "error", err)
+			es.logger.Info("Failed to collect load average", string(constants.ConnectionStateError), err)
 		}
 
 		if memInfo, err := getMemoryInfo(); err == nil {
 			info.Memory = memInfo
 			es.logger.Info("Memory information collected", "memory_info", memInfo)
 		} else {
-			es.logger.Info("Failed to collect memory information", "error", err)
+			es.logger.Info("Failed to collect memory information", string(constants.ConnectionStateError), err)
 		}
 	} else {
 		es.logger.Info("Non-Linux OS - skipping extended system metrics", "os", runtime.GOOS)
@@ -775,12 +781,12 @@ func (es *ExecutionService) finalizeResult(result *models.ExecutionResultsPayloa
 	}
 }
 
-// Stop cancels all active executions and releases resources
+// Stop cancels all active executions and releases resources.
+// It blocks until all active executions have completed their cleanup.
 func (es *ExecutionService) Stop() {
 	es.executionsMutex.Lock()
-	defer es.executionsMutex.Unlock()
-
 	if len(es.activeExecutions) == 0 {
+		es.executionsMutex.Unlock()
 		return
 	}
 
@@ -802,9 +808,10 @@ func (es *ExecutionService) Stop() {
 		}
 		execCtx.mu.Unlock()
 	}
+	es.executionsMutex.Unlock()
 
-	// Clear the map
-	es.activeExecutions = make(map[string]*ExecutionContext)
+	// Wait for all goroutines to finish their cleanup (removing themselves from activeExecutions and releasing semaphore)
+	es.wg.Wait()
 }
 
 // GetActiveExecutions returns the currently active executions

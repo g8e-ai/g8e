@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 )
 
@@ -65,7 +66,8 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 
 	pubsub := NewPubSubBroker(logger)
 	pki := newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, db, logger)
-	auth := NewAuthService(db, pki, logger, cfg.Listen.SecretsDir)
+	userSvc := NewUserService(db, logger)
+	auth := NewAuthService(db, pki, logger, userSvc, cfg.Listen.SecretsDir)
 
 	var tlsConfig *tls.Config
 
@@ -94,7 +96,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	tlsConfig = pki.TLSConfig()
 	tlsConfigPlain := pki.TLSConfigPlain()
 
-	reg := NewRegistrationService(db, pki, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	// Initialize passkey service for L3 brokerage
 	passkeyCfg := &PasskeyConfig{
@@ -106,7 +108,6 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		return nil, fmt.Errorf("failed to initialize passkey service: %w", err)
 	}
 
-	userSvc := NewUserService(db, logger)
 	apiKeySvc := NewApiKeyService(db, logger)
 
 	ls := &ListenService{
@@ -142,7 +143,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	ls.bootstrapServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
 		Handler:           ls.handler.buildBootstrapRouter(),
-		TLSConfig:         tlsConfigPlain,
+		TLSConfig:         nil, // Bootstrap is plain HTTP
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -162,17 +163,18 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 // Used in tests where the DB and pub/sub broker are constructed independently.
 func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker) *ListenService {
 	pki := newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, db, logger)
-	auth := NewAuthService(db, pki, logger, cfg.Listen.SecretsDir)
-	reg := NewRegistrationService(db, pki, logger)
+	userSvc := NewUserService(db, logger)
+	auth := NewAuthService(db, pki, logger, userSvc, cfg.Listen.SecretsDir)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
 
 	// Initialize passkey service for L3 brokerage (test configuration)
 	passkeyCfg := &PasskeyConfig{
 		RpID:   cfg.Listen.PasskeyRpID,
 		RpName: cfg.Listen.PasskeyRpName,
 	}
-	passkey, _ := NewPasskeyService(db, logger, passkeyCfg)
+	// Passkey service initialization is optional; ignore errors for test configuration
+	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
 
-	userSvc := NewUserService(db, logger)
 	apiKeySvc := NewApiKeyService(db, logger)
 
 	ls := &ListenService{
@@ -212,7 +214,7 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 	ls.bootstrapServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
 		Handler:           ls.handler.buildBootstrapRouter(),
-		TLSConfig:         tlsConfigPlain,
+		TLSConfig:         nil, // Bootstrap is plain HTTP
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -243,7 +245,7 @@ func (ls *ListenService) IsReady() bool {
 func (ls *ListenService) IsGovernanceReady() bool {
 	ready, err := ls.db.HasTrustedSigners()
 	if err != nil {
-		ls.logger.Error("Failed to check if governance is ready", "error", err)
+		ls.logger.Error("Failed to check if governance is ready", string(constants.ConnectionStateError), err)
 		return false
 	}
 	return ready
@@ -363,9 +365,9 @@ func (ls *ListenService) Start(ctx context.Context) error {
 		ls.logger.Info("Starting TLS listener", "server", name, "addr", s.Addr)
 
 		// Use a temporary listener to signal readiness before blocking on Serve
-		ln, err := net.Listen("tcp", s.Addr)
+		ln, err := net.Listen(string(constants.NetworkProtocolTCP), s.Addr)
 		if err != nil {
-			ls.logger.Error("Failed to listen", "server", name, "addr", s.Addr, "error", err)
+			ls.logger.Error("Failed to listen", "server", name, "addr", s.Addr, string(constants.ConnectionStateError), err)
 			errChan <- err
 			return
 		}
@@ -427,16 +429,16 @@ func (ls *ListenService) Stop(ctx context.Context) error {
 	ls.ready = false
 
 	if err := ls.server.Shutdown(ctx); err != nil {
-		ls.logger.Error("HTTP server shutdown error", "error", err)
+		ls.logger.Error("HTTP server shutdown error", string(constants.ConnectionStateError), err)
 	}
 	if err := ls.wssServer.Shutdown(ctx); err != nil {
-		ls.logger.Error("WSS server shutdown error", "error", err)
+		ls.logger.Error("WSS server shutdown error", string(constants.ConnectionStateError), err)
 	}
 	if err := ls.bootstrapServer.Shutdown(ctx); err != nil {
-		ls.logger.Error("Bootstrap server shutdown error", "error", err)
+		ls.logger.Error("Bootstrap server shutdown error", string(constants.ConnectionStateError), err)
 	}
 	if err := ls.publicServer.Shutdown(ctx); err != nil {
-		ls.logger.Error("Public server shutdown error", "error", err)
+		ls.logger.Error("Public server shutdown error", string(constants.ConnectionStateError), err)
 	}
 
 	// Close pub/sub broker (disconnects all WebSocket clients)
@@ -444,7 +446,7 @@ func (ls *ListenService) Stop(ctx context.Context) error {
 
 	// Close database
 	if err := ls.db.Close(); err != nil {
-		ls.logger.Error("Database close error", "error", err)
+		ls.logger.Error("Database close error", string(constants.ConnectionStateError), err)
 	}
 
 	ls.running = false

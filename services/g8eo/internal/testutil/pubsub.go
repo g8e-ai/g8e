@@ -28,7 +28,7 @@ import (
 )
 
 // TestPubSubAvailable checks if the client pub/sub gateway is reachable.
-// Fatally fails the test when client is unavailable — all callers are integration
+// Fatally fails the test when client is unavailable - all callers are integration
 // tests that require a live stack.
 func TestPubSubAvailable(t *testing.T) {
 	t.Helper()
@@ -45,7 +45,7 @@ func TestPubSubAvailable(t *testing.T) {
 }
 
 // SubscribeToChannel subscribes to a operator pub/sub channel and returns a channel for receiving raw bytes from the Data field.
-// baseURL is accepted for API compatibility but ignored — subscriptions always go to the
+// baseURL is accepted for API compatibility but ignored - subscriptions always go to the
 // operator pub/sub endpoint at GetTestOperatorDirectURL() using the TLS-aware dialer.
 // The subscription runs until the test ends (via t.Cleanup).
 func SubscribeToChannel(t *testing.T, _ string, channel string) <-chan []byte {
@@ -108,7 +108,7 @@ func SubscribeToChannel(t *testing.T, _ string, channel string) <-chan []byte {
 }
 
 // PublishTestMessage publishes a message to a pub/sub channel via the client WebSocket gateway.
-// client is the single external entry point — operator is not directly accessible from outside
+// client is the single external entry point - operator is not directly accessible from outside
 // the docker network. baseURL is accepted for API compatibility but ignored; all publishes
 // go through GetTestOperatorDirectURL() (client:443) which proxies to operator internally.
 func PublishTestMessage(t *testing.T, _ string, channel string, message string) {

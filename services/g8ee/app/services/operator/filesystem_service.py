@@ -137,7 +137,7 @@ class OperatorFilesystemService:
             CommandResultBroadcastEvent(
                 execution_id=exec_id,
                 command=f"ls {args.path}",
-                status=status if status is not None else ExecutionStatus.FAILED,
+                status=status,
                 output=output,
                 error=error,
                 operator_id=resolved_operator.id,
@@ -229,7 +229,7 @@ class OperatorFilesystemService:
             CommandResultBroadcastEvent(
                 execution_id=exec_id,
                 command=f"grep -r {args.pattern} {args.path}",
-                status=status if status is not None else ExecutionStatus.FAILED,
+                status=status,
                 output=output,
                 error=error,
                 operator_id=resolved_operator.id,
@@ -320,7 +320,7 @@ class OperatorFilesystemService:
             CommandResultBroadcastEvent(
                 execution_id=exec_id,
                 command=f"cat {args.path}",
-                status=status if status is not None else ExecutionStatus.FAILED,
+                status=status,
                 output=output,
                 error=error,
                 operator_id=resolved_operator.id,

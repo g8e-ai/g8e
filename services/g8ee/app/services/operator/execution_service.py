@@ -79,7 +79,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         self._operator_data_service = operator_data_service
         self._ai_response_analyzer = ai_response_analyzer
         self._investigation_service = investigation_service
-        self._background_tasks: set[asyncio.Task] = set()
+        self._background_tasks: set[asyncio.Task[None]] = set()
 
         self.command_validator = OperatorCommandValidator(operator_data_service)
         self.whitelist_validator = get_whitelist_validator()

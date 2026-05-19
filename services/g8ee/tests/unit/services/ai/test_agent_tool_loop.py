@@ -331,7 +331,7 @@ class TestTribunalInvokerRun:
             "app.services.ai.agent_tool_loop.generate_command",
             return_value=mock_gen_result,
         ):
-            executor_args, gen_result = await TribunalInvoker.run(
+            executor_args, _gen_result = await TribunalInvoker.run(
                 sage_request=mock_sage_request,
                 investigation=mock_investigation,
                 g8e_context=mock_g8e_context,
@@ -381,7 +381,7 @@ class TestTribunalInvokerRun:
             "app.services.ai.agent_tool_loop.generate_command",
             return_value=mock_gen_result,
         ):
-            executor_args, gen_result = await TribunalInvoker.run(
+            executor_args, _gen_result = await TribunalInvoker.run(
                 sage_request=mock_sage_request,
                 investigation=mock_investigation,
                 g8e_context=mock_g8e_context,

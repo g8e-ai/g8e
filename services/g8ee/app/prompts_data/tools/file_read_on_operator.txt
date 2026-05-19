@@ -5,7 +5,7 @@ ALWAYS use list_files_and_directories_with_detailed_metadata BEFORE this tool to
 <parameters>
 - file_path, justification: REQUIRED
 - start_line, end_line, max_lines: for large files
-- target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
+- target_operator: operator_id or hostname - REQUIRED when multiple operators bound (prefer hostname when available)
 </parameters>
 
 <behavior>

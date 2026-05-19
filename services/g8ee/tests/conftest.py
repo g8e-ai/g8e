@@ -14,7 +14,7 @@
 """
 Pytest configuration for g8ee tests.
 
-Fixtures only — no factory functions or plain classes here.
+Fixtures only - no factory functions or plain classes here.
 Factory functions and mock classes live in tests/fixtures/mocks.py.
 Context/model builders live in tests/fixtures/investigations.py and
 tests/fixtures/operators.py.
@@ -49,6 +49,7 @@ from tests.fakes.builder import (
 from tests.fakes.factories import (
     build_enriched_context,
 )
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -167,31 +168,63 @@ def _llm_settings_from_env() -> LLMSettings | None:
         LLMProvider.OLLAMA: "ollama_endpoint",
         LLMProvider.LLAMACPP: "llamacpp_endpoint",
     }
+    _PROVIDER_MODEL_FIELD = {
+        LLMProvider.GEMINI: "gemini_model",
+        LLMProvider.OPENAI: "openai_model",
+        LLMProvider.ANTHROPIC: "anthropic_model",
+        LLMProvider.OLLAMA: "ollama_model",
+        LLMProvider.LLAMACPP: "llamacpp_model",
+    }
 
     if api_key:
-        field = _PROVIDER_KEY_FIELD.get(provider)
-        if field:
-            kwargs[field] = api_key
+        kwargs["primary_api_key"] = api_key
+        key_field = _PROVIDER_KEY_FIELD.get(provider)
+        if key_field:
+            kwargs[key_field] = api_key
+
     if endpoint:
-        field = _PROVIDER_ENDPOINT_FIELD.get(provider)
-        if field:
-            kwargs[field] = endpoint
+        kwargs["primary_endpoint"] = endpoint
+        end_field = _PROVIDER_ENDPOINT_FIELD.get(provider)
+        if end_field:
+            kwargs[end_field] = endpoint
+
+    if primary:
+        kwargs["primary_model"] = primary
+        mod_field = _PROVIDER_MODEL_FIELD.get(provider)
+        if mod_field:
+            kwargs[mod_field] = primary
 
     if assistant_api_key:
-        field = _PROVIDER_KEY_FIELD.get(assistant_provider)
-        if field:
-            kwargs[field] = assistant_api_key
+        kwargs["assistant_api_key"] = assistant_api_key
+        key_field = _PROVIDER_KEY_FIELD.get(assistant_provider)
+        if key_field:
+            kwargs[key_field] = assistant_api_key
+    elif api_key:
+        kwargs["assistant_api_key"] = api_key
+
     if assistant_endpoint:
-        field = _PROVIDER_ENDPOINT_FIELD.get(assistant_provider)
-        if field:
-            kwargs[field] = assistant_endpoint
+        kwargs["assistant_endpoint"] = assistant_endpoint
+        end_field = _PROVIDER_ENDPOINT_FIELD.get(assistant_provider)
+        if end_field:
+            kwargs[end_field] = assistant_endpoint
+
+    if assistant:
+        kwargs["assistant_model"] = assistant
+        mod_field = _PROVIDER_MODEL_FIELD.get(assistant_provider)
+        if mod_field:
+            kwargs[mod_field] = assistant
+
+    # Lite key/endpoint/model fallback
+    kwargs["lite_api_key"] = assistant_api_key or api_key
+    kwargs["lite_endpoint"] = assistant_endpoint or endpoint
+    kwargs["lite_model"] = lite or assistant or primary
 
     return LLMSettings(**kwargs)
 
 
 def _web_search_settings_from_env() -> SearchSettings | None:
     """Build SearchSettings from TEST_WEB_SEARCH_* env vars set by ./g8e test flags.
-    
+
     Returns None when no --web-search-* flags were supplied, which means
     requires_web_search tests should be skipped.
     """
@@ -313,7 +346,7 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     from app.llm.factory import get_llm_settings, get_search_settings, get_settings
-    settings = get_settings()
+    get_settings()
     llm = get_llm_settings()
     search_settings = get_search_settings()
 
@@ -368,7 +401,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 # ---------------------------------------------------------------------------
-# Unit test fixtures — mocks and fakes
+# Unit test fixtures - mocks and fakes
 # ---------------------------------------------------------------------------
 
 
@@ -446,10 +479,8 @@ class TaskTracker:
         import asyncio
         # 1. Close plain coroutines
         for coro in self._captured_coros:
-            try:
+            with contextlib.suppress(Exception):
                 coro.close()
-            except Exception:
-                pass
         self._captured_coros.clear()
 
         # 2. Cancel and await tasks
@@ -471,49 +502,49 @@ async def task_tracker():
     await tracker.cleanup()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def unique_investigation_id():
     """Generate unique investigation ID for test isolation."""
     import uuid
     return f"test-inv-{uuid.uuid4().hex[:8]}"
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def unique_user_id():
     """Generate unique user ID for test isolation."""
     import uuid
     return f"test-user-{uuid.uuid4().hex[:8]}"
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def unique_case_id():
     """Generate unique case ID for test isolation."""
     import uuid
     return f"test-case-{uuid.uuid4().hex[:8]}"
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def unique_operator_id():
     """Generate unique operator ID for test isolation."""
     import uuid
     return f"test-op-{uuid.uuid4().hex[:8]}"
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def unique_session_id():
     """Generate unique session ID for test isolation."""
     import uuid
     return f"test-sess-{uuid.uuid4().hex[:8]}"
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def unique_web_session_id():
     """Generate unique web session ID for test isolation."""
     import uuid
     return f"test-ws-{uuid.uuid4().hex[:8]}"
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def mock_operator_document():
     """Mock OperatorDocument for evaluation tests.
 
@@ -529,7 +560,7 @@ def mock_operator_document():
 @pytest.fixture(scope="session")
 def test_settings():
     """Returns the globally configured Settings object.
-    
+
     In a real test run, this is loaded from operator by pytest_sessionstart.
     If settings are not properly configured, returns a default G8eePlatformSettings.
     """
@@ -561,8 +592,7 @@ def mock_blob_service():
     from unittest.mock import MagicMock
 
     from app.db.blob_service import BlobService
-    mock = MagicMock(spec=BlobService)
-    return mock
+    return MagicMock(spec=BlobService)
 
 
 @pytest.fixture
@@ -596,7 +626,7 @@ def mock_db_service():
 
 
 # ---------------------------------------------------------------------------
-# Unit test fixtures — domain objects (using consolidated factories)
+# Unit test fixtures - domain objects (using consolidated factories)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
@@ -695,7 +725,7 @@ def multi_operator_investigation(cloud_operator_doc, binary_operator_doc):
 @pytest.fixture
 def provider_config():
     """GenerateContentConfig with default values for unit tests.
-    
+
     This follows the documented pattern in testing.md and provides
     a default configuration for isolated unit tests.
     """
@@ -803,13 +833,13 @@ async def db_service(test_settings, cache_aside_service):
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def llm_provider():
     """Returns a configured LLMProvider instance for the session."""
-    from app.llm.factory import get_llm_provider, get_llm_settings
+    from app.llm.factory import clear_provider_cache, get_llm_provider, get_llm_settings
     llm = get_llm_settings()
     if llm is None:
         pytest.skip("No LLM settings configured")
     provider = get_llm_provider(llm)
     yield provider
-    await provider.close()
+    await clear_provider_cache()
 
 
 @pytest.fixture(scope="session")

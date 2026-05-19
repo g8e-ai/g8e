@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -66,7 +67,7 @@ func TestHistoryHandler_FetchHistory(t *testing.T) {
 		event := &Event{
 			OperatorSessionID:   operatorSessionID,
 			Timestamp:           time.Now().UTC(),
-			Type:                EventTypeCmdExec,
+			Type:                constants.Event.Operator.Audit.Command,
 			ContentText:         "Test command",
 			CommandRaw:          "echo test",
 			CommandExitCode:     &exitCode,
@@ -144,7 +145,7 @@ func TestHistoryHandler_FetchHistoryWithFileMutations(t *testing.T) {
 	event := &Event{
 		OperatorSessionID:   operatorSessionID,
 		Timestamp:           time.Now().UTC(),
-		Type:                EventTypeFileMutation,
+		Type:                constants.Event.Operator.FileEdit.Completed,
 		ContentText:         "Write config",
 		CommandRaw:          "file_write /etc/config.yml",
 		CommandExitCode:     &exitCode,
@@ -175,7 +176,7 @@ func TestHistoryHandler_FetchHistoryWithFileMutations(t *testing.T) {
 	assert.Len(t, response.Events, 1)
 
 	historyEvent := response.Events[0]
-	assert.Equal(t, "FILE_MUTATION", historyEvent.Type)
+	assert.Equal(t, string(constants.Event.Operator.FileEdit.Completed), historyEvent.Type)
 	assert.Len(t, historyEvent.FileMutations, 1)
 	assert.Equal(t, "/etc/config.yml", historyEvent.FileMutations[0].Filepath)
 	assert.Equal(t, "WRITE", historyEvent.FileMutations[0].Operation)
@@ -195,7 +196,7 @@ func TestHistoryHandler_FetchHistoryPagination(t *testing.T) {
 		event := &Event{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         time.Now().UTC(),
-			Type:              EventTypeCmdExec,
+			Type:              constants.Event.Operator.Audit.Command,
 			ContentText:       "Test command",
 			CommandRaw:        "echo test",
 			CommandExitCode:   &exitCode,
@@ -239,7 +240,7 @@ func TestHistoryHandler_FetchHistoryDefaultLimit(t *testing.T) {
 		event := &Event{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         time.Now().UTC(),
-			Type:              EventTypeCmdExec,
+			Type:              constants.Event.Operator.Audit.Command,
 		}
 		_, err := avs.RecordEvent(event)
 		require.NoError(t, err)
@@ -496,11 +497,11 @@ func TestHistoryHandler_AllEventTypes(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create events of all types
-	eventTypes := []EventType{
-		EventTypeUserMsg,
-		EventTypeAIMsg,
-		EventTypeCmdExec,
-		EventTypeFileMutation,
+	eventTypes := []constants.EventType{
+		constants.Event.Operator.Audit.UserMsg,
+		constants.Event.Operator.Audit.AIMsg,
+		constants.Event.Operator.Audit.Command,
+		constants.Event.Operator.FileEdit.Completed,
 	}
 
 	exitCode := 0
@@ -573,7 +574,7 @@ func TestHistoryHandler_EventWithTruncatedOutput(t *testing.T) {
 	event := &Event{
 		OperatorSessionID: operatorSessionID,
 		Timestamp:         time.Now().UTC(),
-		Type:              EventTypeCmdExec,
+		Type:              constants.Event.Operator.Audit.Command,
 		CommandRaw:        "large_output_cmd",
 		CommandExitCode:   &exitCode,
 		CommandStdout:     string(largeOutput),
@@ -606,7 +607,7 @@ func TestHistoryHandler_MultipleFileMutationsInHistory(t *testing.T) {
 	event := &Event{
 		OperatorSessionID: operatorSessionID,
 		Timestamp:         time.Now().UTC(),
-		Type:              EventTypeFileMutation,
+		Type:              constants.Event.Operator.FileEdit.Completed,
 		ContentText:       "Batch file update",
 		CommandExitCode:   &exitCode,
 	}

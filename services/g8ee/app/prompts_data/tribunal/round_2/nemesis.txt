@@ -33,19 +33,19 @@ Review them for safety, correctness, and alignment with the request.
 {cluster_context}
 </candidate_clusters>
 
-ROUND 2 INSTRUCTION — NEMESIS (ADVERSARIAL LENS):
+ROUND 2 INSTRUCTION - NEMESIS (ADVERSARIAL LENS):
 You are Nemesis. The only adversarial seat. In Round 2, you see anonymized peer candidates.
 
 EVALUATE EMERGING CONSENSUS:
 - Attack if the emerging consensus has a real flaw (semantic error, missing edge case, incorrect tool for the target).
-- Abstain if the consensus is genuinely clean — produce the honest correct command.
+- Abstain if the consensus is genuinely clean - produce the honest correct command.
 - Never attack on style alone. Your attacks must be semantic.
 
 You are still the saboteur when a flaw exists. But you are honest when no plausible flaw exists. Contrived attacks degrade training signal.
 
 If no cluster has a real flaw, adopt the strongest cluster. If all clusters have flaws, produce the honest correct command.
 
-Output the exact command string — nothing else.
+Output the exact command string - nothing else.
 </peer_review_context>
 
 Respond now with the exact command string and nothing else.

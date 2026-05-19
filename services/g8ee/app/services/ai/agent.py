@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-g8e Agent — orchestrates the ReAct streaming loop.
+g8e Agent - orchestrates the ReAct streaming loop.
 
 Concerns handled here:
   - Retry loop with backoff around _stream_with_tool_loop
@@ -20,12 +20,12 @@ Concerns handled here:
   - SSE delivery via run_with_sse (delegates to agent_sse)
 
 All other concerns live in dedicated modules:
-  agent_turn.py          — thinking state machine, stream parsing, parts consolidation,
+  agent_turn.py          - thinking state machine, stream parsing, parts consolidation,
                            interrogation gate, finish reason normalization, retry classification
-  agent_tool_loop.py — tool call dispatch, sequential execution,
+  agent_tool_loop.py - tool call dispatch, sequential execution,
                            tool display metadata, grounding merge
-  agent_sse.py           — SSE translation and client event delivery
-  investigation_service.py — operator context extraction
+  agent_sse.py           - SSE translation and client event delivery
+  investigation_service.py - operator context extraction
 """
 
 import asyncio
@@ -77,7 +77,7 @@ logger = logging.getLogger(__name__)
 
 class g8eEngine:
     """
-    Unified g8e AI Agent — orchestrates the ReAct streaming loop.
+    Unified g8e AI Agent - orchestrates the ReAct streaming loop.
 
     Usage:
         async for chunk in agent.stream_response(contents, config, model, inputs, ...):
@@ -194,10 +194,10 @@ class g8eEngine:
         on_iteration_text: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         """
-        SSE chat path — runs stream_response and delivers events to the browser.
+        SSE chat path - runs stream_response and delivers events to the browser.
 
         All request-scoped data (contents, generation_config, model_to_use) is
-        read from ``inputs`` — it is redundant to pass them separately, and
+        read from ``inputs`` - it is redundant to pass them separately, and
         doing so creates drift risk where the caller's ``inputs.contents`` and
         the top-level ``contents`` argument could disagree.
 
@@ -246,10 +246,10 @@ class g8eEngine:
         ReAct function-calling loop.
 
         Each iteration:
-          1. Calls process_provider_turn — consumes one provider stream,
+          1. Calls process_provider_turn - consumes one provider stream,
              drives the thinking state machine, yields chunks, writes TurnResult.
           2. If the turn produced tool calls, calls execute_turn_tool_calls
-             — executes them sequentially, yields TOOL_CALL/TOOL_RESULT chunks.
+             - executes them sequentially, yields TOOL_CALL/TOOL_RESULT chunks.
           3. Appends model response + tool responses to contents and loops.
           4. Breaks when the turn produces no tool calls.
 
@@ -383,7 +383,7 @@ class g8eEngine:
                     types.Part.from_tool_response(
                         name=r.tool_name,
                         response=r.flattened_response,
-                        id=r.tool_call_id,
+                        call_id=r.tool_call_id,
                     )
                     for r in fc_responses
                 ]

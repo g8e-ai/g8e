@@ -142,7 +142,7 @@ class TestGetAgentPersona:
     def test_dash_system_prompt_is_fast_path_with_surgical_tool_use(self):
         """Dash is the fast-path responder. It carries the operator tool
         surface so it can make a single targeted call when a simple request
-        genuinely requires one — but its persona explicitly bounds tool use
+        genuinely requires one - but its persona explicitly bounds tool use
         ("one well-aimed call beats a chain"). Multi-step / dissent-bearing
         work still escalates to Sage. Both Dash and Sage carry tools; Dash's
         differentiation is latency and minimal reasoning overhead, not the
@@ -159,7 +159,7 @@ class TestGetAgentPersona:
             "single-call resolutions; an empty list breaks that contract."
         )
         assert len(sage.tools) > 0, "Sage remains the tool-bearing reasoning agent."
-        # Dash's persona must still bound tool use — surgical, not chained,
+        # Dash's persona must still bound tool use - surgical, not chained,
         # with multi-step work routed to Sage. If the role_boundary prose is
         # ever stripped, Dash silently becomes a second Sage.
         assert "Sage" in dash.identity, (
@@ -181,12 +181,12 @@ class TestPipelineTemplateContract:
     """Tribunal members and Auditor personas are consumed by command_generator
     as str.format() templates. If anyone removes the placeholders during a
     persona rewrite, the formatted prompt silently loses the user's intent,
-    os/shell context, or the candidate command — a hard-to-debug correctness
+    os/shell context, or the candidate command - a hard-to-debug correctness
     regression. These tests pin the contract explicitly.
     """
 
     def test_tribunal_member_system_prompts_are_pure_voice(self):
-        """Tribunal member system prompts must not carry scaffolding placeholders —
+        """Tribunal member system prompts must not carry scaffolding placeholders  - 
         scaffolding lives in TRIBUNAL_PROMPT_TEMPLATE in command_generator."""
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
             prompt_text = get_tribunal_member(member_id).get_system_prompt()
@@ -344,7 +344,7 @@ class TestSharpenedTribunalPersonas:
         nemesis = get_tribunal_member("nemesis")
         assert "The Adversary" in nemesis.description
         # Nemesis is the only member that should reference the adversarial
-        # request_posture signal — that coupling is part of the design.
+        # request_posture signal - that coupling is part of the design.
         assert "adversarial" in nemesis.identity.lower()
 
 

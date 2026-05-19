@@ -31,9 +31,13 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
+	"github.com/google/uuid"
 )
+
+const governanceEnvelopeRedirectError = "submit via POST /api/governance/envelope"
 
 func readBody(r *http.Request) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(r.Body, 50*1024*1024))
@@ -53,6 +57,11 @@ type HTTPHandler struct {
 	apiKey            *ApiKeyService
 	isReady           func() bool
 	isGovernanceReady func() bool
+	// envProc is the synchronous fail-closed substrate mutation gate. It is
+	// nil until SetEnvelopeProcessor is called by the boot sequence after
+	// the in-process command service has initialized the verifier and
+	// Warden. While nil, /api/governance/envelope returns 503.
+	envProc EnvelopeProcessor
 }
 
 func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, isReady func() bool, isGovernanceReady func() bool) *HTTPHandler {
@@ -113,14 +122,18 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/operators/target", h.handleSetTargetContext)
 	mux.HandleFunc("/api/governance/signers", h.handleTrustedSigners)
 	mux.HandleFunc("/api/governance/signers/", h.handleTrustedSignerByID)
+	// Canonical synchronous fail-closed mutation entry. BYO clients submit
+	// UAP JSON envelopes here to receive a signed ActionReceipt.
+	mux.HandleFunc("/api/governance/envelope", h.handleGovernanceEnvelope)
 	mux.HandleFunc("/api/audit/receipts", h.handleAuditReceipts)
 	mux.HandleFunc("/api/audit/receipts/export", h.handleAuditReceiptsExport)
 
 	// Internal SSE event bridge (used by g8ee Engine to publish typed events
 	// for browser/CLI subscribers to consume). Producers are authenticated by
-	// mTLS app identity; consumers poll /api/internal/sse/events.
+	// mTLS app identity; consumers poll /api/internal/sse/events or stream /api/internal/sse/stream.
 	mux.HandleFunc("/api/internal/sse/push", h.handleInternalSSEPush)
 	mux.HandleFunc("/api/internal/sse/events", h.handleInternalSSEEvents)
+	mux.HandleFunc("/api/internal/sse/stream", h.handleInternalSSEStream)
 	mux.HandleFunc("/db/", h.handleDB)
 	mux.HandleFunc("/kv/", h.handleKV)
 	mux.HandleFunc("/pubsub/publish", h.handlePubSubPublish)
@@ -150,6 +163,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	// Public auth routes (browser-reachable, no mTLS, uses session cookies)
+	mux.HandleFunc("/health", h.handleHealth)
 	mux.HandleFunc("/api/auth/login/challenge", h.handleAuthLoginChallenge)
 	mux.HandleFunc("/api/auth/login/verify", h.handleAuthLoginVerify)
 	mux.HandleFunc("/api/auth/logout", h.handleAuthLogout)
@@ -161,7 +175,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc("/.well-known/g8e/pki/hub-bundle.pem", h.handlePKIHubBundle)
 	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.handlePKIFingerprint)
 
-	// Browser-facing data routes (require session cookie)
+	// Browser-facing data routes (require web session cookie)
 	authedMux := http.NewServeMux()
 	authedMux.HandleFunc("/api/user/me", h.handleUserMe)
 	authedMux.HandleFunc("/api/auth/web-session", h.handleWebSession)
@@ -207,6 +221,32 @@ func containsTraversal(path string) bool {
 	return false
 }
 
+func isDirectDBMutationAllowed(collection string) bool {
+	switch constants.CollectionName(collection) {
+	case constants.CollectionSettings,
+		constants.CollectionUsers,
+		constants.CollectionOperators,
+		constants.CollectionOperatorSessions,
+		constants.CollectionBoundSessions,
+		constants.CollectionPasskeyChallenges,
+		constants.CollectionRevokedCertificates,
+		constants.CollectionTrustedSigners,
+		constants.CollectionConsoleAudit:
+		return true
+	default:
+		return false
+	}
+}
+
+func isMutationPubSubChannelAllowed(channel string) bool {
+	for _, prefix := range []string{"heartbeat:", "results:", "sse:", "ws_session:", "internal:"} {
+		if strings.HasPrefix(channel, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func jsonResponse(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set(constants.HeaderContentType, "application/json")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -228,9 +268,9 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, err := h.db.DocGet(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings))
+	doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 	if err != nil {
-		h.logger.Error("Health check failed to query platform_settings", "error", err)
+		h.logger.Error("Health check failed to query platform_settings", string(constants.ConnectionStateError), err)
 		jsonError(w, http.StatusServiceUnavailable, "platform_settings not ready")
 		return
 	}
@@ -242,7 +282,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	root, err := h.db.GetCurrentStateRoot()
 	if err != nil {
-		h.logger.Error("Health check failed to get state root", "error", err)
+		h.logger.Error("Health check failed to get state root", string(constants.ConnectionStateError), err)
 	}
 
 	jsonResponse(w, http.StatusOK, models.HealthResponse{
@@ -327,18 +367,19 @@ func (h *HTTPHandler) handlePKISignCSR(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		CSR            string `json:"csr_pem"`
-		LeafType       string `json:"leaf_type"`
-		OrganizationID string `json:"organization_id"`
-		OperatorID     string `json:"operator_id"`
-		SessionID      string `json:"session_id"`
+		CSR               string `json:"csr_pem"`
+		LeafType          string `json:"leaf_type"`
+		OrganizationID    string `json:"organization_id"`
+		OperatorID        string `json:"operator_id"`
+		UserID            string `json:"user_id"`
+		WorkloadSessionID string `json:"workload_session_id"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
-	certPEM, chainPEM, err := h.pki.SignCSR(req.CSR, req.LeafType, req.OrganizationID, req.OperatorID, req.SessionID)
+	certPEM, chainPEM, err := h.pki.SignCSR(req.CSR, req.LeafType, req.OrganizationID, req.OperatorID, req.UserID, req.WorkloadSessionID)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -472,7 +513,7 @@ func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Re
 }
 
 // =============================================================================
-// /db/{collection}/{id} — Document Store
+// /db/{collection}/{id} - Document Store
 //
 // GET    /db/{collection}/{id}       → get document
 // PUT    /db/{collection}/{id}       → set (create/replace) document
@@ -484,7 +525,7 @@ func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Re
 func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		doc, err := h.db.DocGet(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings))
+		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 		if err != nil {
 			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -502,9 +543,9 @@ func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		var err2 error
 		if r.Method == http.MethodPut {
-			err2 = h.db.DocSet(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings), json.RawMessage(body))
+			err2 = h.db.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		} else {
-			_, err2 = h.db.DocUpdate(string(constants.CollectionSettings), string(constants.DocIDPlatformSettings), json.RawMessage(body))
+			_, err2 = h.db.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		}
 		if err2 != nil {
 			jsonError(w, http.StatusInternalServerError, err2.Error())
@@ -622,6 +663,18 @@ func (h *HTTPHandler) handleTrustScript(w http.ResponseWriter, r *http.Request) 
 	if host == "" {
 		host = "localhost"
 	}
+
+	ua := r.Header.Get("User-Agent")
+	if strings.Contains(ua, "Windows") || strings.Contains(ua, "PowerShell") {
+		script := WindowsPowerShellTrustScript(host, h.cfg.Listen.BootstrapPort)
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(script))
+		return
+	}
+
 	script := UniversalTrustScript(host, h.cfg.Listen.BootstrapPort)
 	w.Header().Set("Content-Type", "text/x-shellscript")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -832,7 +885,7 @@ func (h *HTTPHandler) handleReauth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Reauth is basically a session refresh. For now, we validate the current session.
-	sessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+	sessionID := h.auth.ExtractOperatorSessionID(r)
 	if sessionID == "" {
 		jsonError(w, http.StatusUnauthorized, "missing session id")
 		return
@@ -843,8 +896,8 @@ func (h *HTTPHandler) handleReauth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":  true,
-		"operator": op,
+		string(constants.AuthAuditResultSuccess): true,
+		string(constants.SessionTypeOperator):    op,
 	})
 }
 
@@ -891,6 +944,10 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodPut:
+		if !isDirectDBMutationAllowed(collection) {
+			jsonError(w, http.StatusConflict, governanceEnvelopeRedirectError)
+			return
+		}
 		body, err := readBody(r)
 		if err != nil {
 			jsonError(w, http.StatusBadRequest, "invalid JSON body")
@@ -911,6 +968,10 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.ListenMode.StatusOK})
 
 	case http.MethodPatch:
+		if !isDirectDBMutationAllowed(collection) {
+			jsonError(w, http.StatusConflict, governanceEnvelopeRedirectError)
+			return
+		}
 		body, err := readBody(r)
 		if err != nil {
 			jsonError(w, http.StatusBadRequest, "invalid JSON body")
@@ -936,6 +997,10 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodDelete:
+		if !isDirectDBMutationAllowed(collection) {
+			jsonError(w, http.StatusConflict, governanceEnvelopeRedirectError)
+			return
+		}
 		deleted, err := h.db.DocDelete(collection, id)
 		if err != nil {
 			jsonError(w, http.StatusInternalServerError, err.Error())
@@ -953,7 +1018,7 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 }
 
 // =============================================================================
-// /db/_sse_events — SSE Event Buffer management
+// /db/_sse_events - SSE Event Buffer management
 //
 // DELETE /db/_sse_events         → wipe all SSE events
 // GET    /db/_sse_events/count   → count rows
@@ -980,7 +1045,7 @@ func (h *HTTPHandler) handleAuditReceipts(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	sessionID := r.URL.Query().Get("session_id")
+	operatorSessionID := r.URL.Query().Get("operator_session_id")
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
 
@@ -997,15 +1062,15 @@ func (h *HTTPHandler) handleAuditReceipts(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	receipts, err := h.db.AuditVault.ListActionReceipts(sessionID, limit, offset)
+	receipts, err := h.db.AuditVault.ListActionReceipts(operatorSessionID, limit, offset)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":  true,
-		"receipts": receipts,
+		string(constants.AuthAuditResultSuccess): true,
+		"receipts":                               receipts,
 	})
 }
 
@@ -1045,7 +1110,7 @@ func (h *HTTPHandler) handleAuditReceiptsExport(w http.ResponseWriter, r *http.R
 	encoder := json.NewEncoder(w)
 	for _, r := range receipts {
 		if err := encoder.Encode(r); err != nil {
-			h.logger.Error("Failed to encode audit receipt for export", "transaction_id", r.TransactionID, "error", err)
+			h.logger.Error("Failed to encode audit receipt for export", "transaction_id", r.TransactionID, string(constants.ConnectionStateError), err)
 			break
 		}
 	}
@@ -1060,8 +1125,8 @@ func (h *HTTPHandler) handleTrustedSigners(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"success": true,
-			"signers": signers,
+			string(constants.AuthAuditResultSuccess): true,
+			"signers":                                signers,
 		})
 
 	case http.MethodPost:
@@ -1109,7 +1174,7 @@ func (h *HTTPHandler) handleTrustedSignerByID(w http.ResponseWriter, r *http.Req
 			return
 		}
 		// Return metadata rather than raw bytes
-		doc, _ := h.db.DocGet(string(constants.CollectionTrustedSigners), id)
+		doc, _ := h.db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
 		jsonResponse(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodDelete:
@@ -1154,18 +1219,25 @@ func (h *HTTPHandler) handleSSEEvents(w http.ResponseWriter, r *http.Request, id
 }
 
 // =============================================================================
-// /api/internal/sse/push, /api/internal/sse/events — Internal SSE event bridge
+// /api/internal/sse/push, /api/internal/sse/events - Internal SSE event bridge
 //
-// POST /api/internal/sse/push     → Producer (g8ee Engine) appends an event
-// GET  /api/internal/sse/events   → Consumer (CLI / dashboard) polls events
-//                                   ?session_id=...&since_id=N&limit=K
+// POST /api/internal/sse/push     → Producer (g8ee Engine) appends an event.
+//                                   Body MUST set exactly one of
+//                                   web_session_id, cli_session_id, user_id.
+// GET  /api/internal/sse/events   → Consumer (CLI / dashboard) polls events.
+//                                   Query string MUST set exactly one of
+//                                   web_session_id, cli_session_id, user_id,
+//                                   plus since_id=N and limit=K.
+//
+// The substrate refuses to talk about a bare session id - every routing
+// target is tagged at the type level so a web_session_id can never be
+// mis-delivered as a cli_session_id (or vice versa).
 // =============================================================================
 
 // internalSSEPushPayload mirrors the wire shape produced by g8ee
-// (SessionEventWire | BackgroundEventWire). Both shapes carry an `event`
-// object with a discriminator `type` plus an opaque `data` blob; SessionEvent
-// also carries a top-level `web_session_id`. We persist the routing key as
-// `session_key` — for now, web_session_id is the routing key the CLI uses.
+// (SessionEventWire | BackgroundEventWire). Producers MUST set exactly one of
+// web_session_id (web UI session), cli_session_id (CLI / BYO session), or
+// user_id (background fan-out across every session a user owns).
 type internalSSEPushPayload struct {
 	WebSessionID string          `json:"web_session_id"`
 	CliSessionID string          `json:"cli_session_id"`
@@ -1196,17 +1268,10 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Routing key: prefer web_session_id, then cli_session_id, fallback to user_id.
-	sessionKey := strings.TrimSpace(p.WebSessionID)
-	if sessionKey == "" {
-		sessionKey = strings.TrimSpace(p.CliSessionID)
-	}
-	if sessionKey == "" {
-		sessionKey = strings.TrimSpace(p.UserID)
-	}
-	if sessionKey == "" {
-		jsonError(w, http.StatusBadRequest, "web_session_id, cli_session_id or user_id required")
-		return
+	route := SSERoute{
+		WebSessionID: strings.TrimSpace(p.WebSessionID),
+		CLISessionID: strings.TrimSpace(p.CliSessionID),
+		UserID:       strings.TrimSpace(p.UserID),
 	}
 
 	// Extract event.type for indexing/filtering. Store the full envelope as the payload.
@@ -1215,18 +1280,36 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	}
 	_ = json.Unmarshal(p.Event, &inner)
 	if inner.Type == "" {
-		inner.Type = "unknown"
+		inner.Type = string(constants.SystemHealthUnknown)
 	}
 
-	if err := h.db.SSEEventsAppend(sessionKey, inner.Type, string(body)); err != nil {
-		h.logger.Error("SSE push: failed to append event", "error", err, "type", inner.Type)
-		jsonError(w, http.StatusInternalServerError, "failed to persist event")
+	if err := h.db.SSEEventsAppend(route, inner.Type, string(body)); err != nil {
+		h.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
+		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
+	// Publish to pub/sub for real-time streaming
+	// We use the same routing logic: exactly one of web_session_id, cli_session_id, or user_id.
+	var channel string
+	switch {
+	case route.CLISessionID != "":
+		channel = "sse:cli:" + route.CLISessionID
+	case route.WebSessionID != "":
+		channel = "sse:web:" + route.WebSessionID
+	case route.UserID != "":
+		channel = "sse:user:" + route.UserID
+	}
+
+	if channel != "" {
+		// We publish the full body which is the internalSSEPushPayload JSON.
+		// The streamer will wrap this in SSE format.
+		h.pubsub.Publish(channel, body)
+	}
+
 	jsonResponse(w, http.StatusOK, map[string]any{
-		"success":   true,
-		"delivered": 1,
+		string(constants.AuthAuditResultSuccess): true,
+		"delivered":                              1,
 	})
 }
 
@@ -1236,19 +1319,221 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 		return
 	}
 	q := r.URL.Query()
-	sessionKey := q.Get("session_id")
+	route := SSERoute{
+		WebSessionID: strings.TrimSpace(q.Get("web_session_id")),
+		CLISessionID: strings.TrimSpace(q.Get("cli_session_id")),
+		UserID:       strings.TrimSpace(q.Get("user_id")),
+	}
 	sinceID, _ := strconv.ParseInt(q.Get("since_id"), 10, 64)
 	limit, _ := strconv.Atoi(q.Get("limit"))
 
-	rows, err := h.db.SSEEventsListSince(sessionKey, sinceID, limit)
+	// Authorization: ensure the authenticated operator session has the right
+	// to access the requested routing buffer. Without this check, any operator
+	// could drain any other client's event buffer, creating a multi-tenant
+	// data leak.
+	operatorSessionID := h.auth.ExtractOperatorSessionID(r)
+	if operatorSessionID == "" {
+		jsonError(w, http.StatusUnauthorized, "missing operator session id")
+		return
+	}
+
+	// Consumers MUST declare exactly one routing target. The substrate refuses
+	// to fall back to a single shared namespace because that is precisely the
+	// conflation we are eliminating.
+	switch {
+	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
+		// Verify operator_session_id is bound to this cli_session_id.
+		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		if err != nil {
+			h.logger.Error("Failed to fetch CLI session", string(constants.ConnectionStateError), err, "cli_session_id", route.CLISessionID)
+			jsonError(w, http.StatusInternalServerError, "failed to verify cli session")
+			return
+		}
+		if doc == nil {
+			jsonError(w, http.StatusForbidden, "cli session not found")
+			return
+		}
+		var cliSess models.CLISession
+		b, _ := json.Marshal(doc.ForWire())
+		if err := json.Unmarshal(b, &cliSess); err != nil {
+			h.logger.Error("Failed to unmarshal CLI session", string(constants.ConnectionStateError), err)
+			jsonError(w, http.StatusInternalServerError, "failed to verify cli session")
+			return
+		}
+		if cliSess.OperatorSessionID != operatorSessionID {
+			jsonError(w, http.StatusForbidden, "operator session does not own this cli session")
+			return
+		}
+	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
+		// Verify operator_session_id is bound to this web_session_id.
+		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
+		boundWebSessionID, found := h.db.KVGet(operatorBindKey)
+		if !found || boundWebSessionID != route.WebSessionID {
+			jsonError(w, http.StatusForbidden, "operator session does not own this web session")
+			return
+		}
+	case route.UserID != "" && route.WebSessionID == "" && route.CLISessionID == "":
+		// User-scoped events are accessible to any operator owned by that user.
+		op, err := h.auth.ValidateOperatorSession(operatorSessionID)
+		if err != nil {
+			jsonError(w, http.StatusUnauthorized, "invalid operator session")
+			return
+		}
+		if op.UserID != route.UserID {
+			jsonError(w, http.StatusForbidden, "operator does not belong to this user")
+			return
+		}
+	default:
+		jsonError(w, http.StatusBadRequest, "exactly one of web_session_id, cli_session_id, user_id is required")
+		return
+	}
+
+	rows, err := h.db.SSEEventsListSince(route, sinceID, limit)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]any{
 		"events": rows,
 		"count":  len(rows),
 	})
+}
+
+func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	q := r.URL.Query()
+	route := SSERoute{
+		WebSessionID: strings.TrimSpace(q.Get("web_session_id")),
+		CLISessionID: strings.TrimSpace(q.Get("cli_session_id")),
+		UserID:       strings.TrimSpace(q.Get("user_id")),
+	}
+	sinceID, _ := strconv.ParseInt(q.Get("since_id"), 10, 64)
+
+	// 1. Authorization (re-use logic from handleInternalSSEEvents)
+	operatorSessionID := h.auth.ExtractOperatorSessionID(r)
+	if operatorSessionID == "" {
+		jsonError(w, http.StatusUnauthorized, "missing operator session id")
+		return
+	}
+
+	var channel string
+	switch {
+	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
+		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		if err != nil || doc == nil {
+			jsonError(w, http.StatusForbidden, "not authorized for this cli session")
+			return
+		}
+		var cliSess models.CLISession
+		b, _ := json.Marshal(doc.ForWire())
+		if err := json.Unmarshal(b, &cliSess); err != nil {
+			jsonError(w, http.StatusInternalServerError, "failed to verify cli session")
+			return
+		}
+		if cliSess.OperatorSessionID != operatorSessionID {
+			jsonError(w, http.StatusForbidden, "not authorized for this cli session")
+			return
+		}
+		channel = "sse:cli:" + route.CLISessionID
+	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
+		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
+		boundWebSessionID, found := h.db.KVGet(operatorBindKey)
+		if !found || boundWebSessionID != route.WebSessionID {
+			jsonError(w, http.StatusForbidden, "not authorized for this web session")
+			return
+		}
+		channel = "sse:web:" + route.WebSessionID
+	case route.UserID != "" && route.WebSessionID == "" && route.CLISessionID == "":
+		op, err := h.auth.ValidateOperatorSession(operatorSessionID)
+		if err != nil || op.UserID != route.UserID {
+			jsonError(w, http.StatusForbidden, "not authorized for this user")
+			return
+		}
+		channel = "sse:user:" + route.UserID
+	default:
+		jsonError(w, http.StatusBadRequest, "exactly one routing target required")
+		return
+	}
+
+	// 2. Set SSE Headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Accel-Buffering", "no") // For Nginx
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Subscribe to real-time events FIRST to avoid missing any during replay
+	eventCh := make(chan []byte, 100)
+	unregister := h.pubsub.RegisterHandler(channel, func(ch string, data []byte) {
+		select {
+		case eventCh <- data:
+		default:
+			h.logger.Warn("SSE Stream: back-pressure dropping event", "channel", channel)
+		}
+	})
+	defer unregister()
+
+	// 4. Replay from DB if sinceID is provided
+	if sinceID > 0 {
+		rows, err := h.db.SSEEventsListSince(route, sinceID, 1000)
+		if err == nil {
+			for _, row := range rows {
+				fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", row.ID, row.EventType, row.Payload)
+			}
+			flusher.Flush()
+		}
+	}
+
+	// 5. Stream from pubsub
+	ctx := r.Context()
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	h.logger.Info("SSE Stream: client connected", "channel", channel, "operator_session_id", operatorSessionID)
+
+	for {
+		select {
+		case <-ctx.Done():
+			h.logger.Info("SSE Stream: client disconnected", "channel", channel)
+			return
+		case <-ticker.C:
+			// Heartbeat
+			fmt.Fprintf(w, ": heartbeat\n\n")
+			flusher.Flush()
+		case raw := <-eventCh:
+			// The raw data from internalSSEPush is the full JSON payload
+			var p internalSSEPushPayload
+			if err := json.Unmarshal(raw, &p); err == nil {
+				// We need the ID from the DB append, but we don't have it here easily
+				// without doing another query. For now, we use a 0 or skip ID for real-time.
+				// Actually, we can just omit 'id:' for real-time pushes and let the client
+				// rely on the sequence. Or we can have SSEEventsAppend return the ID and
+				// pass it through pubsub.
+
+				// Re-extract type
+				var inner struct {
+					Type string `json:"type"`
+				}
+				_ = json.Unmarshal(p.Event, &inner)
+				if inner.Type == "" {
+					inner.Type = string(constants.SystemHealthUnknown)
+				}
+
+				fmt.Fprintf(w, "event: %s\ndata: %s\n\n", inner.Type, string(raw))
+				flusher.Flush()
+			}
+		}
+	}
 }
 
 func (h *HTTPHandler) handleDBQuery(w http.ResponseWriter, r *http.Request, collection string) {
@@ -1279,7 +1564,7 @@ func (h *HTTPHandler) handleDBQuery(w http.ResponseWriter, r *http.Request, coll
 }
 
 // =============================================================================
-// /kv/{key} — KV Store
+// /kv/{key} - KV Store
 //
 // GET    /kv/{key}           → get value
 // PUT    /kv/{key}           → set value (body: {"value":"...", "ttl": seconds})
@@ -1463,9 +1748,9 @@ func (h *HTTPHandler) handleKVDeletePattern(w http.ResponseWriter, r *http.Reque
 }
 
 // =============================================================================
-// /blob/{namespace}/{id}      — Blob Store
-// /blob/{namespace}/{id}/meta — Blob metadata
-// /blob/{namespace}           — Namespace-level delete
+// /blob/{namespace}/{id}      - Blob Store
+// /blob/{namespace}/{id}/meta - Blob metadata
+// /blob/{namespace}           - Namespace-level delete
 //
 // PUT    /blob/{namespace}/{id}       → store blob (raw bytes, Content-Type header required, optional X-Blob-TTL seconds)
 // GET    /blob/{namespace}/{id}       → retrieve blob (streams raw bytes with original Content-Type)
@@ -1504,7 +1789,7 @@ func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// DELETE /blob/{namespace} — delete entire namespace
+	// DELETE /blob/{namespace} - delete entire namespace
 	if len(parts) == 1 {
 		if r.Method != http.MethodDelete {
 			jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1638,7 +1923,7 @@ func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 }
 
 // =============================================================================
-// /pubsub/publish — HTTP-based publish (for components that don't hold a WS)
+// /pubsub/publish - HTTP-based publish (for components that don't hold a WS)
 //
 // POST /pubsub/publish  body: {"channel":"...", "data": {...}}
 // =============================================================================
@@ -1661,6 +1946,10 @@ func (h *HTTPHandler) handlePubSubPublish(w http.ResponseWriter, r *http.Request
 	}
 	if req.Channel == "" {
 		jsonError(w, http.StatusBadRequest, "channel required")
+		return
+	}
+	if !isMutationPubSubChannelAllowed(req.Channel) {
+		jsonError(w, http.StatusConflict, governanceEnvelopeRedirectError)
 		return
 	}
 
@@ -1720,14 +2009,14 @@ func (h *HTTPHandler) handlePasskeyRegisterChallenge(w http.ResponseWriter, r *h
 
 	options, err := h.passkey.GenerateRegistrationChallenge(req.UserID, req.Email, req.UserName)
 	if err != nil {
-		h.logger.Warn("Passkey register challenge failed", "error", err, "userID", req.UserID)
+		h.logger.Warn("Passkey register challenge failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
 		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"options": options,
+		string(constants.AuthAuditResultSuccess): true,
+		"options":                                options,
 	})
 }
 
@@ -1769,17 +2058,17 @@ func (h *HTTPHandler) handlePasskeyRegisterVerify(w http.ResponseWriter, r *http
 
 	cred, err := h.passkey.VerifyRegistration(req.UserID, r)
 	if err != nil {
-		h.logger.Warn("Passkey register verify failed", "error", err, "userID", req.UserID)
+		h.logger.Warn("Passkey register verify failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
+			string(constants.AuthAuditResultSuccess): false,
+			string(constants.ConnectionStateError):   err.Error(),
 		})
 		return
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":    true,
-		"credential": cred,
+		string(constants.AuthAuditResultSuccess): true,
+		"credential":                             cred,
 	})
 }
 
@@ -1821,18 +2110,18 @@ func (h *HTTPHandler) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.
 
 	options, err := h.passkey.GenerateAuthenticationChallenge(userID)
 	if err != nil {
-		h.logger.Warn("Passkey auth challenge failed", "error", err, "userID", userID)
+		h.logger.Warn("Passkey auth challenge failed", string(constants.ConnectionStateError), err, "userID", userID)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"success":     false,
-			"error":       err.Error(),
-			"needs_setup": err.Error() == "no passkeys registered",
+			string(constants.AuthAuditResultSuccess): false,
+			string(constants.ConnectionStateError):   err.Error(),
+			"needs_setup":                            err.Error() == "no passkeys registered",
 		})
 		return
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"options": options,
+		string(constants.AuthAuditResultSuccess): true,
+		"options":                                options,
 	})
 }
 
@@ -1875,31 +2164,31 @@ func (h *HTTPHandler) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Req
 
 	cred, err := h.passkey.VerifyAuthentication(userID, r)
 	if err != nil {
-		h.logger.Warn("Passkey auth verify failed", "error", err, "userID", userID)
+		h.logger.Warn("Passkey auth verify failed", string(constants.ConnectionStateError), err, "userID", userID)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
+			string(constants.AuthAuditResultSuccess): false,
+			string(constants.ConnectionStateError):   err.Error(),
 		})
 		return
 	}
 
-	session, err := h.passkey.CreateSession(userID)
+	webSession, err := h.passkey.CreateWebSession(userID)
 	if err != nil {
-		h.logger.Error("Failed to create session after auth", "error", err, "userID", userID)
+		h.logger.Error("Failed to create web session after auth", string(constants.ConnectionStateError), err, "userID", userID)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			"success": false,
-			"error":   "authentication succeeded but session creation failed",
+			string(constants.AuthAuditResultSuccess): false,
+			string(constants.ConnectionStateError):   "authentication succeeded but session creation failed",
 		})
 		return
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":    true,
-		"user_id":    userID,
-		"credential": cred,
-		"session": map[string]interface{}{
-			"id":                 session.ID,
-			"expires_at_unix_ms": session.ExpiresAtUnixMs,
+		string(constants.AuthAuditResultSuccess): true,
+		"user_id":                                userID,
+		"credential":                             cred,
+		string(constants.SessionKeyPrefixWeb): map[string]interface{}{
+			"id":                 webSession.ID,
+			"expires_at_unix_ms": webSession.ExpiresAtUnixMs,
 		},
 	})
 }
@@ -1919,14 +2208,14 @@ func (h *HTTPHandler) handlePasskeyCredentials(w http.ResponseWriter, r *http.Re
 
 	creds, err := h.passkey.ListCredentials(userID)
 	if err != nil {
-		h.logger.Error("Failed to list credentials", "error", err, "userID", userID)
+		h.logger.Error("Failed to list credentials", string(constants.ConnectionStateError), err, "userID", userID)
 		jsonError(w, http.StatusInternalServerError, "failed to list credentials")
 		return
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":     true,
-		"credentials": creds,
+		string(constants.AuthAuditResultSuccess): true,
+		"credentials":                            creds,
 	})
 }
 
@@ -1951,20 +2240,20 @@ func (h *HTTPHandler) handlePasskeyRevokeCredential(w http.ResponseWriter, r *ht
 
 	found, remaining, err := h.passkey.RevokeCredential(userID, path)
 	if err != nil {
-		h.logger.Error("Failed to revoke credential", "error", err, "userID", userID)
+		h.logger.Error("Failed to revoke credential", string(constants.ConnectionStateError), err, "userID", userID)
 		jsonError(w, http.StatusInternalServerError, "failed to revoke credential")
 		return
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":   true,
-		"found":     found,
-		"remaining": remaining,
+		string(constants.AuthAuditResultSuccess): true,
+		"found":                                  found,
+		"remaining":                              remaining,
 	})
 }
 
 // handleUsers handles user management (POST to create a user).
-// Requires mTLS — only CLI/internal callers with a signed certificate can create users.
+// Requires mTLS - only CLI/internal callers with a signed certificate can create users.
 func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1993,14 +2282,14 @@ func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.userSvc.CreateUser(req.Email, req.Name)
 	if err != nil {
-		h.logger.Warn("Failed to create user", "error", err, "email", req.Email)
+		h.logger.Warn("Failed to create user", string(constants.ConnectionStateError), err, "email", req.Email)
 		jsonError(w, http.StatusConflict, err.Error())
 		return
 	}
 
 	jsonResponse(w, http.StatusCreated, map[string]interface{}{
-		"success": true,
-		"user":    user,
+		string(constants.AuthAuditResultSuccess): true,
+		string(constants.HistoryActorUser):       user,
 	})
 }
 
@@ -2046,13 +2335,13 @@ func (h *HTTPHandler) handleAuthLoginChallenge(w http.ResponseWriter, r *http.Re
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"user_id": user.ID,
-		"options": options,
+		string(constants.AuthAuditResultSuccess): true,
+		"user_id":                                user.ID,
+		"options":                                options,
 	})
 }
 
-// handleAuthLoginVerify verifies an auth assertion and sets a session cookie.
+// handleAuthLoginVerify verifies an auth assertion and sets a web session cookie.
 func (h *HTTPHandler) handleAuthLoginVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -2080,36 +2369,36 @@ func (h *HTTPHandler) handleAuthLoginVerify(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	session, err := h.passkey.CreateSession(req.UserID)
+	webSession, err := h.passkey.CreateWebSession(req.UserID)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, "failed to create session")
+		jsonError(w, http.StatusInternalServerError, "failed to create web session")
 		return
 	}
 
 	// Set HttpOnly Secure SameSite=Lax cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "g8e_session",
-		Value:    session.ID,
+		Value:    webSession.ID,
 		Path:     "/",
-		Expires:  time.Unix(session.ExpiresAtUnixMs/1000, 0),
+		Expires:  time.Unix(webSession.ExpiresAtUnixMs/1000, 0),
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"user_id": req.UserID,
-		"session": session,
+		string(constants.AuthAuditResultSuccess): true,
+		"user_id":                                req.UserID,
+		string(constants.SessionKeyPrefixWeb):    webSession,
 	})
 }
 
-// handleAuthLogout clears the session cookie and deletes the session.
+// handleAuthLogout clears the web session cookie and deletes the web session.
 func (h *HTTPHandler) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("g8e_session")
 	if err == nil {
-		// Best effort delete session from DB
-		_, _ = h.db.DocDelete(string(constants.CollectionWebSessions), cookie.Value)
+		// Best effort delete web session from DB
+		_, _ = h.db.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value)
 	}
 
 	// Clear cookie
@@ -2123,27 +2412,14 @@ func (h *HTTPHandler) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{"success": true})
+	jsonResponse(w, http.StatusOK, map[string]interface{}{string(constants.AuthAuditResultSuccess): true})
 }
 
-// handleBootstrap creates the first user in the system.
-// Rejects with 403 Forbidden if any users already exist.
+// handleBootstrap creates the first user in the system and optionally issues a CLI mTLS cert.
+// Rejects with 403 Forbidden if any users already exist (unless rotating an active bootstrap user over loopback).
 func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	// 1. Safety check: Fail closed if users already exist
-	hasUsers, err := h.userSvc.HasAnyUsers()
-	if err != nil {
-		h.logger.Error("Failed to check for existing users during bootstrap", "error", err)
-		jsonError(w, http.StatusInternalServerError, "bootstrap check failed")
-		return
-	}
-	if hasUsers {
-		h.logger.Warn("Bootstrap attempted on non-empty system", "remote_addr", r.RemoteAddr)
-		jsonError(w, http.StatusForbidden, "bootstrap only available for initial setup")
 		return
 	}
 
@@ -2154,8 +2430,11 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
+		Email             string `json:"email"`
+		Name              string `json:"name"`
+		CSRPEM            string `json:"csr_pem"`
+		CLICSRPEM         string `json:"cli_csr_pem,omitempty"`
+		SystemFingerprint string `json:"system_fingerprint"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid JSON")
@@ -2167,39 +2446,208 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Create the first user
-	user, err := h.userSvc.CreateUser(req.Email, req.Name)
+	// Check if CSR signing is requested
+	csrRequested := req.CSRPEM != ""
+
+	// If CSR is requested, enforce loopback gate (plan §4.2)
+	if csrRequested {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
+		ip := net.ParseIP(host)
+		if ip == nil || !ip.IsLoopback() {
+			h.logger.Warn("Bootstrap CSR request rejected: not from loopback", "remote_addr", r.RemoteAddr)
+			jsonError(w, http.StatusForbidden, "CSR auto-issue only available over loopback")
+			return
+		}
+	}
+
+	// Check for existing bootstrap user (plan §4.2, §9.1 rotation carve-out)
+	bootstrapUser, err := h.userSvc.FindBootstrapUser()
 	if err != nil {
-		h.logger.Error("Failed to create bootstrap user", "error", err, "email", req.Email)
-		jsonError(w, http.StatusInternalServerError, "failed to create user")
+		h.logger.Error("Failed to check for existing bootstrap user", string(constants.ConnectionStateError), err)
+		jsonError(w, http.StatusInternalServerError, "bootstrap check failed")
 		return
 	}
 
-	// 3. Immediately issue a session cookie so they can register a passkey
-	session, err := h.passkey.CreateSession(user.ID)
+	var user *models.User
+	if bootstrapUser != nil {
+		// Bootstrap user exists - check if rotation is allowed
+		if !bootstrapUser.IsActive() {
+			h.logger.Warn("Bootstrap user is disabled, refusing rotation", "user_id", bootstrapUser.ID)
+			jsonError(w, http.StatusConflict, "bootstrap user is disabled, cannot rotate")
+			return
+		}
+		if !csrRequested {
+			h.logger.Warn("Bootstrap user exists but no CSR requested", "user_id", bootstrapUser.ID)
+			jsonError(w, http.StatusForbidden, "bootstrap already exists, CSR required for rotation")
+			return
+		}
+		// Rotation allowed: active bootstrap user + CSR + loopback
+		user = bootstrapUser
+		h.logger.Info("[BOOTSTRAP] Rotating existing bootstrap user", "user_id", user.ID, "email", user.Email)
+	} else {
+		// No bootstrap user exists - create one.
+		// Defense-in-depth: refuse if any user already exists, so bootstrap can
+		// only run on a genuinely empty system.
+		hasUsers, err := h.userSvc.HasAnyUsers()
+		if err != nil {
+			h.logger.Error("Failed to check for existing users during bootstrap", string(constants.ConnectionStateError), err)
+			jsonError(w, http.StatusInternalServerError, "bootstrap check failed")
+			return
+		}
+		if hasUsers {
+			h.logger.Warn("Bootstrap attempted on non-empty system", "remote_addr", r.RemoteAddr)
+			jsonError(w, http.StatusForbidden, "bootstrap only available for initial setup")
+			return
+		}
+
+		// Create the bootstrap user
+		user, err = h.userSvc.CreateBootstrapUser(req.Email, req.Name)
+		if err != nil {
+			h.logger.Error("Failed to create bootstrap user", string(constants.ConnectionStateError), err, "email", req.Email)
+			jsonError(w, http.StatusInternalServerError, "failed to create user")
+			return
+		}
+	}
+
+	// Issue a web session cookie for passkey registration
+	webSession, err := h.passkey.CreateWebSession(user.ID)
 	if err != nil {
-		h.logger.Error("Failed to create session for bootstrap user", "error", err, "user_id", user.ID)
-		jsonError(w, http.StatusInternalServerError, "user created but session failed")
+		h.logger.Error("Failed to create web session for bootstrap user", string(constants.ConnectionStateError), err, "user_id", user.ID)
+		jsonError(w, http.StatusInternalServerError, "user created but web session failed")
 		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "g8e_session",
-		Value:    session.ID,
+		Value:    webSession.ID,
 		Path:     "/",
-		Expires:  time.Unix(session.ExpiresAtUnixMs/1000, 0),
+		Expires:  time.Unix(webSession.ExpiresAtUnixMs/1000, 0),
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	h.logger.Info("[BOOTSTRAP] System initialized with first user", "user_id", user.ID, "email", user.Email)
+	response := map[string]interface{}{
+		string(constants.AuthAuditResultSuccess): true,
+		string(constants.HistoryActorUser):       user,
+		string(constants.SessionKeyPrefixWeb):    webSession,
+	}
 
-	jsonResponse(w, http.StatusCreated, map[string]interface{}{
-		"success": true,
-		"user":    user,
-		"session": session,
-	})
+	// If CSR is requested and loopback, sign and return cert (plan §4.2)
+	if csrRequested {
+		// Create operator slot for the bootstrap user
+		operatorID := uuid.NewString()
+		sessionID := uuid.NewString()
+		cliSessionID := uuid.NewString()
+		orgID := user.ID // Use user ID as org ID for bootstrap
+		now := time.Now().UTC()
+
+		operator := &models.OperatorDocumentGo{
+			ID:                operatorID,
+			UserID:            user.ID,
+			OrganizationID:    orgID,
+			Component:         constants.Status.ComponentName.G8EO,
+			Name:              "bootstrap-operator",
+			Status:            constants.Status.OperatorStatus.Active,
+			OperatorSessionID: sessionID,
+			OperatorType:      constants.Status.OperatorType.System,
+			SystemFingerprint: req.SystemFingerprint,
+			Claimed:           true,
+			ClaimedAt:         &now,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+
+		// Sign the CSR
+		certPEM, chainPEM, err := h.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, sessionID)
+		if err != nil {
+			h.logger.Error("Failed to sign bootstrap CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
+			jsonError(w, http.StatusInternalServerError, "failed to sign CSR")
+			return
+		}
+
+		operator.OperatorCert = certPEM
+
+		// CLI certificate generation (optional)
+		var cliCertPEM, cliCertChainPEM string
+		if req.CLICSRPEM != "" {
+			cliCertPEM, cliCertChainPEM, err = h.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID)
+			if err != nil {
+				h.logger.Error("Failed to sign bootstrap CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
+				jsonError(w, http.StatusInternalServerError, "failed to sign CLI CSR")
+				return
+			}
+		} else {
+			// [SPIFFE-DRIFT] Fallback: If no CLI CSR provided, the CLI cert returned MUST be
+			// the operator cert for backwards compatibility with older binaries, even though
+			// they will fail modern /cli/ path checks.
+			cliCertPEM = certPEM
+			cliCertChainPEM = chainPEM
+		}
+
+		// Persist operator document
+		opBytes, err := json.Marshal(operator)
+		if err != nil {
+			h.logger.Error("Failed to marshal operator document", string(constants.ConnectionStateError), err)
+			jsonError(w, http.StatusInternalServerError, "failed to create operator")
+			return
+		}
+		if err := h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+			h.logger.Error("Failed to persist operator document", string(constants.ConnectionStateError), err)
+			jsonError(w, http.StatusInternalServerError, "failed to create operator")
+			return
+		}
+
+		// Fetch trust bundle
+		hubBundle, err := h.pki.HubTrustBundle()
+		if err != nil {
+			h.logger.Warn("Failed to fetch hub trust bundle", string(constants.ConnectionStateError), err)
+			// Non-fatal - continue without bundle
+		}
+
+		// CLI session id is a first-class session type, strictly disjoint from
+		// operator_session_id. The operator_session_id authenticates the host
+		// agent (mTLS URI SAN); the cli_session_id is the routing namespace
+		// the BYO/CLI client uses to receive SessionEvents (SSE) and embed in
+		// outbound request bodies. Conflating the two would let an operator
+		// session drain another client's event stream - and vice versa.
+
+		// Store the binding between operator_session_id and cli_session_id in a first-class
+		// collection to support metadata, expiry, and revocation. Without this binding,
+		// any authenticated operator could drain any cli_session_id's event buffer.
+		cliSession := models.CLISession{
+			ID:                cliSessionID,
+			UserID:            user.ID,
+			OperatorSessionID: sessionID,
+			SystemFingerprint: req.SystemFingerprint,
+			CreatedAt:         time.Now().UTC(),
+			ExpiresAt:         time.Now().UTC().Add(24 * time.Hour), // Match operator session expiry
+		}
+		cliSessionBytes, _ := json.Marshal(cliSession)
+		if err := h.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
+			h.logger.Error("Failed to persist CLI session during bootstrap", string(constants.ConnectionStateError), err)
+			jsonError(w, http.StatusInternalServerError, "failed to bind CLI session")
+			return
+		}
+
+		response["operator_cert"] = certPEM
+		response["operator_cert_chain"] = chainPEM
+		response["hub_trust_bundle"] = string(hubBundle)
+		response["operator_session_id"] = sessionID
+		response["operator_id"] = operatorID
+		response["cli_session_id"] = cliSessionID
+		response["cli_cert"] = cliCertPEM
+		response["cli_cert_chain"] = cliCertChainPEM
+
+		h.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI cert", "user_id", user.ID, "email", user.Email, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
+	} else {
+		h.logger.Info("[BOOTSTRAP] System initialized with bootstrap user (no CSR)", "user_id", user.ID, "email", user.Email)
+	}
+
+	jsonResponse(w, http.StatusCreated, response)
 }
 
 // handleBootstrapStatus returns whether the system has been bootstrapped (at least one user exists).
@@ -2211,7 +2659,7 @@ func (h *HTTPHandler) handleBootstrapStatus(w http.ResponseWriter, r *http.Reque
 
 	hasUsers, err := h.userSvc.HasAnyUsers()
 	if err != nil {
-		h.logger.Error("Failed to check for existing users", "error", err)
+		h.logger.Error("Failed to check for existing users", string(constants.ConnectionStateError), err)
 		jsonError(w, http.StatusInternalServerError, "status check failed")
 		return
 	}
@@ -2240,8 +2688,8 @@ func (h *HTTPHandler) handleUserMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"user":    user,
+		string(constants.AuthAuditResultSuccess): true,
+		string(constants.HistoryActorUser):       user,
 	})
 }
 
@@ -2254,14 +2702,14 @@ func (h *HTTPHandler) handleWebSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cookie, _ := r.Cookie("g8e_session")
-	sessionID := ""
+	webSessionID := ""
 	if cookie != nil {
-		sessionID = cookie.Value
+		webSessionID = cookie.Value
 	}
 
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":    true,
-		"user_id":    userID,
-		"session_id": sessionID,
+		string(constants.AuthAuditResultSuccess): true,
+		"user_id":                                userID,
+		string(constants.SessionKeyPrefixWeb):    webSessionID,
 	})
 }

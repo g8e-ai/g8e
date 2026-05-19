@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``grant_intent_permission`` tool — request human approval for an AWS intent."""
+"""``grant_intent_permission`` tool - request human approval for an AWS intent."""
 
 from __future__ import annotations
 
@@ -36,12 +36,11 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.GRANT_INTENT,
-        description=load_prompt(PromptFile.TOOL_GRANT_INTENT),
+        description=load_prompt(PromptFile.TOOLS_GRANT_INTENT),
         parameters=schema_from_model(GrantIntentArgs),
     )
-    return declaration
 
 
 async def handle(

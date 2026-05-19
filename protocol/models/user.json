@@ -1,9 +1,9 @@
 {
-  "_comment": "Canonical User document shape. client is the authority — it creates and owns this document in SQLite. g8ee reads it via operator KV cache (cache-aside) for auth context. A field mismatch breaks authentication, session validation, and API key checks.",
+  "_comment": "Canonical User document shape. client is the authority - it creates and owns this document in SQLite. g8ee reads it via operator KV cache (cache-aside) for auth context. A field mismatch breaks authentication, web session validation, and API key checks.",
 
   "_authority": "client (SQLite)",
-  "_consumers": ["g8ee (Python — reads user context from X-G8E-* headers that client populates from this document)", "client internal services (auth, session, API key validation)"],
-  "_cache_aside": "operator KV — keyed by g8e:doc:users:{user_id}. Write-through on every user write. SQLite is source of truth.",
+  "_consumers": ["g8ee (Python - reads user context from X-G8E-* headers that client populates from this document)", "client internal services (auth, web session, API key validation)"],
+  "_cache_aside": "operator KV - keyed by g8e:doc:users:{user_id}. Write-through on every user write. SQLite is source of truth.",
 
   "user": {
     "_description": "Full user document as stored in client SQLite.",
@@ -111,7 +111,7 @@
         "type": "array",
         "required": false,
         "default": [],
-        "description": "Active session tokens. Managed by client session service."
+        "description": "Active web session tokens. Managed by client web session service."
       }
     },
 

@@ -51,7 +51,7 @@ Profiles are stored in `demo/profiles/`. You can list and switch between them us
 | :--- | :--- |
 | **acme-corp** | **(Default)** Realistic enterprise taxonomy, 100-1000 nodes, mixed failure modes. |
 | **fleet** | Minimalist simulator optimized for high-density testing (up to 2000+ nodes). |
-| **nginx** | **(Legacy)** Original 10-node "Broken Web App" demo. |
+| **nginx** | Original 10-node "Broken Web App" demo. |
 
 ## Operational Commands
 

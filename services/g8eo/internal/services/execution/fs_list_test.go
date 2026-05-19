@@ -26,8 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 )
 
 func TestFsListService_ExecuteFsList(t *testing.T) {
@@ -47,7 +47,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 
 		result, err := service.ExecuteFsList(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.NotEmpty(t, result.Path)
 		assert.NotEmpty(t, result.Entries)
 		assert.Greater(t, result.TotalCount, 0)
@@ -76,7 +76,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 
 		result, err := service.ExecuteFsList(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Equal(t, tmpDir, result.Path)
 		assert.Equal(t, 2, result.TotalCount) // test.txt and subdir
 
@@ -120,7 +120,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 
 		result, err := service.ExecuteFsList(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusCompleted, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Equal(t, 5, result.TotalCount)
 		assert.True(t, result.Truncated)
 	})
@@ -174,7 +174,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 
 		result, err := service.ExecuteFsList(context.Background(), req)
 		require.NoError(t, err) // Returns result with error, not Go error
-		assert.Equal(t, constants.ExecutionStatusFailed, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
 		assert.NotNil(t, result.ErrorType)
 		assert.Equal(t, "path_not_found", *result.ErrorType)
 	})
@@ -195,7 +195,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 
 		result, err := service.ExecuteFsList(context.Background(), req)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ExecutionStatusFailed, result.Status)
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
 		assert.NotNil(t, result.ErrorType)
 		assert.Equal(t, "not_a_directory", *result.ErrorType)
 	})

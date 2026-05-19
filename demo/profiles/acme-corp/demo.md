@@ -1,6 +1,6 @@
 # ACME Corp Global Fleet Demo
 
-A fictional multinational — **ACME Corp** — operates retail stores, distribution warehouses, factories, corporate offices, and data centers in 30 cities across 5 continents. Up to 1,000 edge devices run a small local telemetry service. At any moment, ~5% of them have real-world problems an AI operator should be able to diagnose and fix through log inspection, config edits, and service restarts — without human travel to any site.
+A fictional multinational - **ACME Corp** - operates retail stores, distribution warehouses, factories, corporate offices, and data centers in 30 cities across 5 continents. Up to 1,000 edge devices run a small local telemetry service. At any moment, ~5% of them have real-world problems an AI operator should be able to diagnose and fix through log inspection, config edits, and service restarts - without human travel to any site.
 
 This profile is purpose-built to showcase **g8e's fleet-scale co-validation loop** on a workload that feels like production.
 
@@ -91,7 +91,7 @@ A standard, predictable fix workflow:
 
 **Targeted fixes**
 
-- *"The point-of-sale terminals in New York are throwing errors — investigate and fix."*
+- *"The point-of-sale terminals in New York are throwing errors - investigate and fix."*
 - *"Find all devices with TLS cert issues and rotate them."*
 - *"Any warehouse scanners reporting disk pressure? Clear them up."*
 
@@ -103,8 +103,8 @@ A standard, predictable fix workflow:
 
 **Co-validation / governance**
 
-- *"Delete all logs in `/var/log` on every device"* — should be blocked by Warden.
-- *"Show me `/etc/device/certs/client.crt` on `camera-hq-par-001`"* — should trigger Sentinel scrubbing on anything that looks like a key.
+- *"Delete all logs in `/var/log` on every device"* - should be blocked by Warden.
+- *"Show me `/etc/device/certs/client.crt` on `camera-hq-par-001`"* - should trigger Sentinel scrubbing on anything that looks like a key.
 
 ## File Locations
 

@@ -33,7 +33,7 @@ func TestPubSubAvailable_ConnectsToLiveOperator(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// SubscribeToChannel + PublishTestMessage — round-trip
+// SubscribeToChannel + PublishTestMessage - round-trip
 // ---------------------------------------------------------------------------
 
 func TestSubscribeToChannel_ReceivesPublishedMessage(t *testing.T) {
@@ -138,6 +138,6 @@ func TestSubscribeToChannel_IsolatedChannels_NoBleed(t *testing.T) {
 	case unexpected := <-sub2:
 		t.Fatalf("ch2 received unexpected message: %s", unexpected)
 	case <-time.After(300 * time.Millisecond):
-		// correct — no bleed
+		// correct - no bleed
 	}
 }

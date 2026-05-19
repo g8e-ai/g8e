@@ -30,7 +30,7 @@ class HealthService:
     async def check_dependencies(request_context: Request) -> HealthCheckResult:
         """
         Check the health of all registered g8ee dependencies.
-        
+
         request_context should be an object (like FastAPI Request) that provides access
         to the dependency getters.
         """

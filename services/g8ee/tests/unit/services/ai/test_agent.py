@@ -419,8 +419,10 @@ class TestStreamWithToolLoop:
 
     async def test_loop_continues_when_tool_calls_present(self):
         from app.llm.llm_types import ToolCall
+        from unittest.mock import AsyncMock
 
         tool_executor = MagicMock()
+        tool_executor.execute_tool_call = AsyncMock()
         provider = MagicMock()
 
         call_count = 0
@@ -460,7 +462,9 @@ class TestStreamWithToolLoop:
         assert call_count == 2
 
     async def test_uses_provided_llm_provider(self):
+        from unittest.mock import AsyncMock
         tool_executor = MagicMock()
+        tool_executor.execute_tool_call = AsyncMock()
         provider = MagicMock()
 
         def stream(**kwargs):
@@ -522,7 +526,7 @@ class TestMaxTurnLimitApproval:
 
         agent = make_g8e_agent(approval_service=approval_service)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
+        make_gen_config()
         event_service = make_event_service()
 
         with patch("app.services.ai.agent.AGENT_MAX_TOOL_TURNS", 2), \
@@ -531,7 +535,7 @@ class TestMaxTurnLimitApproval:
                 result_out.append([])
                 if False:
                     yield  # make async generator
-            mock_exec.side_effect = lambda **kw: _fake_exec(**kw)
+            mock_exec.side_effect = _fake_exec
 
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
@@ -561,7 +565,7 @@ class TestMaxTurnLimitApproval:
 
         agent = make_g8e_agent(approval_service=approval_service)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
+        make_gen_config()
         event_service = make_event_service()
 
         with patch("app.services.ai.agent.AGENT_MAX_TOOL_TURNS", 2), \
@@ -570,7 +574,7 @@ class TestMaxTurnLimitApproval:
                 result_out.append([])
                 if False:
                     yield
-            mock_exec.side_effect = lambda **kw: _fake_exec(**kw)
+            mock_exec.side_effect = _fake_exec
 
             call_budget = {"n": 0}
             original_side_effect = provider.generate_content_stream_primary.side_effect
@@ -604,7 +608,7 @@ class TestMaxTurnLimitApproval:
 
         agent = make_g8e_agent(approval_service=None)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
+        make_gen_config()
         event_service = make_event_service()
 
         with patch("app.services.ai.agent.AGENT_MAX_TOOL_TURNS", 2), \
@@ -613,7 +617,7 @@ class TestMaxTurnLimitApproval:
                 result_out.append([])
                 if False:
                     yield
-            mock_exec.side_effect = lambda **kw: _fake_exec(**kw)
+            mock_exec.side_effect = _fake_exec
 
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
@@ -667,7 +671,7 @@ class TestTokenAccumulation:
         ):
             chunks.append(chunk)
 
-        complete_chunk = [c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE][0]
+        complete_chunk = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
         assert complete_chunk.data.token_usage is not None
         assert complete_chunk.data.token_usage.input_tokens == 10
         assert complete_chunk.data.token_usage.output_tokens == 5
@@ -700,7 +704,7 @@ class TestTokenAccumulation:
         ):
             chunks.append(chunk)
 
-        complete_chunk = [c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE][0]
+        complete_chunk = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
         assert complete_chunk.data.token_usage is None
 
 
@@ -738,7 +742,7 @@ class TestGroundingMetadata:
 
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
+        make_gen_config()
         event_service = make_event_service()
 
         async def mock_execute(**kwargs):
@@ -844,7 +848,7 @@ class TestInterrogationGate:
                 result_out.append([])
                 if False:
                     yield
-            mock_exec.side_effect = lambda **kw: _fake_exec(**kw)
+            mock_exec.side_effect = _fake_exec
 
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
@@ -915,7 +919,7 @@ class TestInterrogationGate:
                 result_out.append([])
                 if False:
                     yield
-            mock_exec.side_effect = lambda **kw: _fake_exec(**kw)
+            mock_exec.side_effect = _fake_exec
 
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
@@ -967,7 +971,7 @@ class TestCompleteEmission:
         ):
             chunks.append(chunk)
 
-        complete_chunk = [c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE][0]
+        complete_chunk = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
         assert complete_chunk.data.finish_reason == "STOP"
 
     async def test_emits_complete_with_default_finish_reason_when_none(self):
@@ -997,5 +1001,5 @@ class TestCompleteEmission:
         ):
             chunks.append(chunk)
 
-        complete_chunk = [c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE][0]
+        complete_chunk = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
         assert complete_chunk.data.finish_reason == DEFAULT_FINISH_REASON

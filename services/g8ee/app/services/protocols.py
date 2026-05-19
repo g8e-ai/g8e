@@ -47,7 +47,13 @@ from app.models.investigations import (
     InvestigationUpdateRequest,
 )
 from app.models.memory import InvestigationMemory
-from app.models.internal_api import OperatorApprovalResponse
+from app.models.sessions import CliSessionDocument
+from app.models.internal_api import (
+    DirectCommandRequest,
+    IntentOperationResult,
+    OperatorApprovalResponse,
+    SSEPushResponse,
+)
 from app.models.operators import (
     AgentContinueApprovalRequest,
     ApprovalResult,
@@ -62,7 +68,6 @@ from app.models.operators import (
     StreamApprovalRequest,
     TargetSystem,
 )
-from app.models.internal_api import DirectCommandRequest
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.models.tool_results import (
     CommandInternalResult,
@@ -75,6 +80,7 @@ from app.models.tool_results import (
     FileOperationRiskAnalysis,
     FileOperationRiskContext,
     FileEditResult,
+    FsGrepToolResult,
     FsListToolResult,
     FsReadToolResult,
     PortCheckToolResult,
@@ -82,9 +88,10 @@ from app.models.tool_results import (
 )
 from app.models.tool_args import GrantIntentArgs, RevokeIntentArgs
 from app.models.command_request_payloads import (
-    FileEditRequestPayload,
     FetchFileDiffRequestPayload,
     FetchFileHistoryRequestPayload,
+    FileEditRequestPayload,
+    FsGrepRequestPayload,
     FsListRequestPayload,
     FsReadRequestPayload,
     CheckPortRequestPayload,
@@ -142,9 +149,11 @@ class EventServiceProtocol(Protocol):
         investigation_id: str,
         event_type: EventType,
         payload: G8eBaseModel,
-        web_session_id: str,
+        web_session_id: str | None,
         case_id: str,
         user_id: str,
+        *,
+        cli_session_id: str | None = None,
     ) -> None:
         """Publish an investigation-related event."""
         raise NotImplementedError
@@ -186,6 +195,14 @@ class KVServiceProtocol(Protocol):
         """Retrieve a range of elements from a list."""
         raise NotImplementedError
 
+    async def incr(self, key: str, amount: int = 1) -> int:
+        """Increment a key's value."""
+        raise NotImplementedError
+
+    async def decr(self, key: str, amount: int = 1) -> int:
+        """Decrement a key's value."""
+        raise NotImplementedError
+
     def is_healthy(self) -> bool:
         """Check if the service is healthy."""
         raise NotImplementedError
@@ -214,7 +231,7 @@ class DocumentServiceProtocol(Protocol):
         self,
         collection: str,
         document_id: str,
-        data: dict[str, object] | G8eBaseModel,
+        data: dict[str, Any] | G8eBaseModel,
         ttl: int | None = None,
     ) -> CacheOperationResult:
         """Create a new document in a collection with optional cache TTL."""
@@ -224,7 +241,7 @@ class DocumentServiceProtocol(Protocol):
         self,
         collection: str,
         document_id: str,
-        data: dict[str, object] | G8eBaseModel,
+        data: dict[str, Any] | G8eBaseModel,
         merge: bool = True,
         ttl: int | None = None,
     ) -> CacheOperationResult:
@@ -256,14 +273,50 @@ class DocumentServiceProtocol(Protocol):
         collection: str,
         document_id: str,
         array_field: str,
-        items_to_add: list[object],
-        additional_updates: dict[str, object],
+        items_to_add: list[Any],
+        additional_updates: dict[str, Any],
     ) -> CacheOperationResult:
         """Atomically append items to an array field with cache invalidation."""
         raise NotImplementedError
 
     async def batch_write(self, operations: list[BatchWriteOperation]) -> CacheOperationResult:
         """Perform multiple write operations in batch with cache invalidation."""
+        raise NotImplementedError
+
+    async def get_document_with_cache(
+        self,
+        collection: str,
+        document_id: str
+    ) -> dict[str, Any] | None:
+        """Get document with cache-aside pattern."""
+        raise NotImplementedError
+
+    async def query_documents(
+        self,
+        collection: str,
+        field_filters: list[dict[str, Any]],
+        order_by: dict[str, str] | None = None,
+        limit: int = 100,
+        select_fields: list[str] | None = None,
+        ttl: int | None = 300,
+        bypass_cache: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Query documents returning a list of dicts."""
+        raise NotImplementedError
+
+    async def append_to_array(
+        self,
+        collection: str,
+        document_id: str,
+        array_field: str,
+        items_to_add: list[Any],
+        additional_updates: dict[str, Any],
+    ) -> CacheOperationResult:
+        """Convenience method to append to an array field."""
+        raise NotImplementedError
+
+    async def invalidate_query_cache(self, collection: str) -> int:
+        """Invalidate the query cache for a collection."""
         raise NotImplementedError
 
     async def close(self) -> None:
@@ -280,6 +333,14 @@ class OperatorDataServiceProtocol(Protocol):
 
     async def get_operator(self, operator_id: str) -> OperatorDocument | None:
         """Retrieve operator metadata."""
+        raise NotImplementedError
+
+    async def get_cli_session(self, cli_session_id: str) -> CliSessionDocument | None:
+        """Retrieve CLI session metadata."""
+        raise NotImplementedError
+
+    async def validate_cli_session_ownership(self, cli_session_id: str, operator_session_id: str) -> bool:
+        """Verify that the given cli_session_id is owned by the given operator_session_id."""
         raise NotImplementedError
 
     async def query_operators(
@@ -709,6 +770,8 @@ class FilesystemServiceProtocol(Protocol):
     async def execute_fs_list(self, args: FsListRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult:
         raise NotImplementedError
     async def execute_file_read(self, args: FsReadRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult:
+        raise NotImplementedError
+    async def execute_fs_grep(self, args: FsGrepRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsGrepToolResult:
         raise NotImplementedError
 
 @runtime_checkable

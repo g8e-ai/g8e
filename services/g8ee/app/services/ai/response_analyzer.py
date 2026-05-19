@@ -48,8 +48,7 @@ def _load_security_constraints() -> dict:
     protocol_models_path = Path(protocol_models_dir) / "security_constraints.json"
     try:
         with open(protocol_models_path) as f:
-            constraints = json.load(f)
-        return constraints
+            return json.load(f)
     except Exception:
         return {}
 

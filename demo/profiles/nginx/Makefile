@@ -8,6 +8,10 @@ COMPOSE := docker compose
 CONTAINER_PREFIX := web-node
 SSH_USER := appuser
 
+# Platform endpoint for operators to connect back to.
+# Defaults to the standard Docker bridge gateway on Linux.
+G8E_ENDPOINT ?= 172.17.0.1
+
 help:
 	@echo "Broken Web App Fleet Demo"
 	@echo ""
@@ -183,13 +187,11 @@ deploy:
 	for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
 		echo "  Deploying to $$node..."; \
 		docker exec $$node sh -c "\
+			[ ! -f /operator/ca.crt ] && echo \"CRITICAL: /operator/ca.crt missing\" && exit 1; \
 			curl -fsSL --cacert /operator/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
-				-o g8e.operator \"https://172.17.0.1:443/operator/download/linux/amd64\" && \
-			curl -fsSL --cacert /operator/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
-				-o g8e.operator.sha256 \"https://172.17.0.1:443/operator/download/linux/amd64/sha256\" && \
-			sha256sum -c g8e.operator.sha256 && \
+				-o g8e.operator \"https://$(G8E_ENDPOINT)/blob/operator-binary/linux-amd64\" && \
 			chmod +x g8e.operator && \
-			nohup sudo ./g8e.operator --endpoint 172.17.0.1:9001 --working-dir /home/appuser --log info -D \"$$TOKEN\" < /dev/null > g8e.operator.log 2>&1 & \
+			nohup sudo ./g8e.operator --endpoint $(G8E_ENDPOINT) --working-dir /home/appuser --log info -D \"$$TOKEN\" < /dev/null > g8e.operator.log 2>&1 & \
 			PID=\$$!; \
 			echo \"    operator started (pid: \$$PID)\"" || true; \
 	done; \

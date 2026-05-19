@@ -58,7 +58,9 @@ class TestFieldFilter:
         f = FieldFilter(field="status", op="==", value=InvestigationStatus.OPEN)
         d = f.model_dump(mode="json")
         assert isinstance(d, dict)
-        assert "field" in d and "op" in d and "value" in d
+        assert "field" in d
+        assert "op" in d
+        assert "value" in d
 
 
 class TestQueryOrderBy:
@@ -89,7 +91,7 @@ class TestBatchWriteOpType:
         assert issubclass(BatchWriteOpType, str)
 
     def test_all_members_present(self):
-        members = {m for m in BatchWriteOpType}
+        members = set(BatchWriteOpType)
         assert members == {BatchWriteOpType.SET, BatchWriteOpType.UPDATE, BatchWriteOpType.DELETE}
 
 

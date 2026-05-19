@@ -48,12 +48,12 @@ func TestRegexScrubber_Name_DoesNotScrub(t *testing.T) {
 		pattern:     regexp.MustCompile(`secret`),
 		replacement: "[REDACTED]",
 	}
-	// Name() must not modify any state — calling it is idempotent
+	// Name() must not modify any state - calling it is idempotent
 	assert.Equal(t, s.Name(), s.Name())
 }
 
 // ---------------------------------------------------------------------------
-// RegexScrubber.Scrub — verify the Name() method integrates with Scrub()
+// RegexScrubber.Scrub - verify the Name() method integrates with Scrub()
 // ---------------------------------------------------------------------------
 
 func TestRegexScrubber_Scrub_RemovesPattern(t *testing.T) {

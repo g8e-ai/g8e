@@ -40,12 +40,12 @@ async def generate_case_title(
 ) -> CaseTitleResult:
     """
     Generate a concise case title from a description using the configured LLM.
-    
+
     Args:
         description: The case description or initial message
         max_length: Maximum title length in characters (default: 80)
         settings: Optional Settings object
-        
+
     Returns:
         CaseTitleResult containing generated title and fallback flag
     """
@@ -140,11 +140,11 @@ async def generate_case_title(
 def _create_fallback_title(description: str, max_length: int) -> str:
     """
     Create a fallback title from the description by extracting the first line.
-    
+
     Args:
         description: The case description
         max_length: Maximum title length
-        
+
     Returns:
         Fallback title string
     """

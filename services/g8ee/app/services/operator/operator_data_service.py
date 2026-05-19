@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from app.services.cache.cache_aside import CacheAsideService
 from app.constants.collections import (
     DB_COLLECTION_OPERATORS,
+    DB_COLLECTION_CLI_SESSIONS,
 )
 from app.constants.settings import (
     MAX_COMMAND_RESULTS_HISTORY,
@@ -34,6 +35,7 @@ from app.constants.status import (
 from app.constants.status import ComponentName
 from app.errors import ExternalServiceError, ValidationError
 from app.models.investigations import ConversationHistoryMessage, ConversationMessageMetadata
+from app.models.sessions import CliSessionDocument
 from app.models.operators import (
     CommandResultRecord,
     OperatorDocument,
@@ -70,6 +72,40 @@ class OperatorDataService(OperatorDataServiceProtocol):
             return None
 
         return OperatorDocument.model_validate(data)
+
+    async def get_cli_session(self, cli_session_id: str) -> CliSessionDocument | None:
+        """Get CLI session document using cache-aside pattern."""
+        if not cli_session_id:
+            raise ValidationError("cli_session_id is required")
+
+        data = await self.cache.get_document_with_cache(DB_COLLECTION_CLI_SESSIONS, cli_session_id)
+        if not data:
+            return None
+
+        return CliSessionDocument.model_validate(data)
+
+    async def validate_cli_session_ownership(self, cli_session_id: str, operator_session_id: str) -> bool:
+        """Verify that the given cli_session_id is owned by the given operator_session_id.
+
+        This prevents a malicious client with a valid operator session from draining
+        or publishing to someone else's CLI session.
+        """
+        if not cli_session_id or not operator_session_id:
+            return False
+
+        session = await self.get_cli_session(cli_session_id)
+        if not session:
+            logger.warning("[OPERATOR-DATA-SERVICE] CLI session not found: %s", cli_session_id)
+            return False
+
+        if session.operator_session_id != operator_session_id:
+            logger.warning(
+                "[OPERATOR-DATA-SERVICE] CLI session ownership mismatch: cli=%s, expected_op=%s, actual_op=%s",
+                cli_session_id, operator_session_id, session.operator_session_id
+            )
+            return False
+
+        return True
 
     async def query_operators(
         self,
@@ -316,7 +352,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         """Record an approval lifecycle event in the operator activity log."""
         return await self.add_operator_activity(
             operator_id=operator_id,
-            sender=EventType.EVENT_SOURCE_SYSTEM,
+            sender=EventType.SOURCE_SYSTEM,
             content=f"{event_type.value} ({metadata.approval_id})",
             metadata=metadata,
         )

@@ -62,4 +62,4 @@ class TestRunWardenStage:
             )
 
         assert investigation_state.warden_block_count == 1
-        emitter.emit.assert_called_with(EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED, ANY)
+        emitter.emit.assert_called_with(EventType.AI_TRIBUNAL_SESSION_WARDEN_BLOCKED, ANY)

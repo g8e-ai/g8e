@@ -71,7 +71,7 @@ TTL_STRATEGIES = {
     DB_COLLECTION_OPERATORS: CACHE_TTL_MEDIUM,
     # Reputation: state is read every Auditor verdict (cache it long); commitments are
     # append-only and consulted only by the Auditor's prev_root lookup and audit replay
-    # — the per-document cache adds no value, so use SHORT to keep stale reads bounded.
+    # - the per-document cache adds no value, so use SHORT to keep stale reads bounded.
     DB_COLLECTION_REPUTATION_STATE: CACHE_TTL_LONG,
     DB_COLLECTION_REPUTATION_COMMITMENTS: CACHE_TTL_SHORT,
 }
@@ -90,11 +90,13 @@ class CacheAsideService(DocumentServiceProtocol):
         db: DBService,
         component_name: ComponentName = ComponentName.G8EE,
         default_ttl: int = CACHE_TTL_DEFAULT,
+        read_enabled: bool = False,
     ):
         self._kv = kv
         self._db = db
         self.component_name = component_name
         self.default_ttl = default_ttl
+        self.read_enabled = read_enabled
 
         logger.info(
             f"[{component_name.upper()}-CACHE] Cache-aside service initialized",
@@ -124,7 +126,7 @@ class CacheAsideService(DocumentServiceProtocol):
         """Access the underlying DB service."""
         return cast(DocumentServiceProtocol, self._db)
 
-    def _make_key(self, collection: str, document_id: str) -> str:
+    def make_key(self, collection: str, document_id: str) -> str:
         return KVKey.doc(collection, document_id)
 
     def _get_ttl_for_collection(self, collection: str) -> int | None:
@@ -165,7 +167,7 @@ class CacheAsideService(DocumentServiceProtocol):
         )
 
         # Invalidate cache instead of populating it
-        key = self._make_key(collection, document_id)
+        key = self.make_key(collection, document_id)
         await self.kv.delete(key)
         await self.invalidate_query_cache(collection)
 
@@ -207,7 +209,7 @@ class CacheAsideService(DocumentServiceProtocol):
             extra={"collection": collection, "doc_id": document_id, "merge": merge}
         )
 
-        key = self._make_key(collection, document_id)
+        key = self.make_key(collection, document_id)
         await self.kv.delete(key)
         await self.invalidate_query_cache(collection)
 
@@ -231,7 +233,7 @@ class CacheAsideService(DocumentServiceProtocol):
         ttl: int | None = None,
     ) -> bool:
         """Write data directly to the KV cache without touching the DB."""
-        key = self._make_key(collection, document_id)
+        key = self.make_key(collection, document_id)
         resolved_ttl = ttl if ttl is not None else self._get_ttl_for_collection(collection)
         return await self.kv.set_json(key, data, ex=resolved_ttl)
 
@@ -241,20 +243,26 @@ class CacheAsideService(DocumentServiceProtocol):
         document_id: str
     ) -> dict[str, Any] | None:
         """Get document with cache-aside pattern (check cache first, then DB, warm cache on miss)."""
-        key = self._make_key(collection, document_id)
+        key = self.make_key(collection, document_id)
 
-        cached_data: object | None = await self.kv.get_json(key)
-        if isinstance(cached_data, dict):
+        if self.read_enabled:
+            cached_data: object | None = await self.kv.get_json(key)
+            if isinstance(cached_data, dict):
+                logger.info(
+                    f"[{self.component_name.upper()}-CACHE] Cache HIT",
+                    extra={"collection": collection, "doc_id": document_id}
+                )
+                return cast(dict[str, Any], cached_data)
+
             logger.info(
-                f"[{self.component_name.upper()}-CACHE] Cache HIT",
+                f"[{self.component_name.upper()}-CACHE] Cache MISS - reading from database",
                 extra={"collection": collection, "doc_id": document_id}
             )
-            return cast(dict[str, Any], cached_data)
-
-        logger.info(
-            f"[{self.component_name.upper()}-CACHE] Cache MISS - reading from database",
-            extra={"collection": collection, "doc_id": document_id}
-        )
+        else:
+            logger.info(
+                f"[{self.component_name.upper()}-CACHE] Cache read disabled - skipping KV lookup",
+                extra={"collection": collection, "doc_id": document_id}
+            )
 
         db_response = await self.db.get_document(
             collection=collection,
@@ -298,6 +306,9 @@ class CacheAsideService(DocumentServiceProtocol):
         query_params: dict[str, Any],
         ttl: int | None = CACHE_TTL_SHORT,
     ) -> list[dict[str, Any]] | None:
+        if not self.read_enabled:
+            return None
+
         query_str = json.dumps(query_params, sort_keys=True)
         filter_hash = hashlib.md5(query_str.encode()).hexdigest()
         key = KVKey.query(collection, filter_hash)
@@ -354,7 +365,7 @@ class CacheAsideService(DocumentServiceProtocol):
             "limit": limit,
             "select_fields": select_fields or [],
         }
-        if ttl is not None:
+        if ttl is not None and self.read_enabled:
             cached = await self.get_query_result(collection, query_params, ttl=ttl)
             if cached is not None:
                 return QueryResult(success=True, data=cached)
@@ -382,7 +393,7 @@ class CacheAsideService(DocumentServiceProtocol):
         collection: str,
         document_id: str
     ) -> bool:
-        key = self._make_key(collection, document_id)
+        key = self.make_key(collection, document_id)
         deleted = await self.kv.delete(key)
         if deleted:
             logger.info(
@@ -423,7 +434,7 @@ class CacheAsideService(DocumentServiceProtocol):
                 component=self.component_name,
             )
 
-        key = self._make_key(collection, document_id)
+        key = self.make_key(collection, document_id)
         await self.kv.delete(key)
         await self.invalidate_query_cache(collection)
 
@@ -448,7 +459,7 @@ class CacheAsideService(DocumentServiceProtocol):
                 component=self.component_name,
             )
 
-        key = self._make_key(collection, document_id)
+        key = self.make_key(collection, document_id)
         await self.kv.delete(key)
         await self.invalidate_query_cache(collection)
 
@@ -483,7 +494,7 @@ class CacheAsideService(DocumentServiceProtocol):
 
         collections_touched: set[str] = set()
         for op in operations:
-            key = self._make_key(op.collection, op.doc_id)
+            key = self.make_key(op.collection, op.doc_id)
             await self.kv.delete(key)
             collections_touched.add(op.collection)
 
@@ -518,7 +529,7 @@ class CacheAsideService(DocumentServiceProtocol):
             for op in operations
         ]
 
-        result = await self.batch_write(db_operations)
+        await self.batch_write(db_operations)
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Batch create completed",
@@ -572,6 +583,7 @@ class CacheAsideService(DocumentServiceProtocol):
             query_count = len(query_keys)
             return CacheStats(
                 enabled=True,
+                read_enabled=self.read_enabled,
                 healthy=self.kv.is_healthy(),
                 document_keys=doc_count,
                 query_keys=query_count,
@@ -581,6 +593,7 @@ class CacheAsideService(DocumentServiceProtocol):
         except Exception as exc:
             return CacheStats(
                 enabled=True,
+                read_enabled=self.read_enabled,
                 healthy=False,
                 default_ttl=self.default_ttl,
                 error=str(exc),

@@ -1,2 +1,2 @@
-# Copied from client/ssl at build time — do not commit
+# Copied from client/ssl at build time - do not commit
 server_ca.crt

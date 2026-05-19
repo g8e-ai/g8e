@@ -14,7 +14,7 @@
 """
 Unit tests for AttachmentGroundingProvider.
 
-Pure logic — no external I/O.
+Pure logic - no external I/O.
 - format_parts: PDF, image, text (pre-decoded), text (base64), OTHER, missing base64_data
 """
 

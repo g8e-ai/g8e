@@ -83,7 +83,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
         # Initial creation record is data-layer appropriate
         investigation.add_history_entry(
-            event_type=EventType.INVESTIGATION_CREATED,
+            event_type=EventType.APP_INVESTIGATION_CREATED,
             actor=ComponentName.G8EE,
             summary=f"Investigation created for case {request.case_id}",
         )
@@ -91,7 +91,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         await self.cache.create_document(
             collection=self.collection,
             document_id=investigation.id,
-            data=investigation.model_dump(),
+            data=investigation.model_dump(mode="json"),
         )
         logger.info("Created investigation %s for case %s", investigation.id, request.case_id)
         return investigation
@@ -158,7 +158,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
     async def get_case_investigations(
         self,
         case_id: str,
-        user_id: str,
+        user_id: str | None,
         context: RequestContext,
     ) -> list[InvestigationModel]:
         """Convenience query for all investigations associated with a case."""
@@ -178,7 +178,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
                 details={"investigation_id": investigation_id},
                 component=ComponentName.G8EE
             )
-        key = self.cache._make_key(self.collection, investigation_id)
+        key = self.cache.make_key(self.collection, investigation_id)
         await self.cache.kv.delete(key)
         await self.cache.invalidate_query_cache(self.collection)
         logger.info("Deleted investigation %s", investigation_id)
@@ -196,7 +196,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
         async with self._history_lock.acquire(investigation_id):
             # Get previous hash from last entry in conversation history.
-            # All entries must have entry_hash - no legacy data support.
+            # All entries must carry an entry_hash; missing hashes are a hard error.
             investigation = await self.get_investigation(investigation_id)
             if not investigation:
                 raise ValueError(f"Investigation {investigation_id} not found")

@@ -8,12 +8,11 @@
 """
 Integration test: outbound URL used by OllamaProvider.
 
-Regression test for the bug where a stored endpoint of
-`http://host:11434/v1` produced an outbound request to
-`http://host:11434/v1/api/chat`. The normalization layer strips the
-legacy `/v1` suffix; this test exercises the full construction path
-(OllamaProvider -> ollama.AsyncClient -> httpx.AsyncClient) and asserts
-the httpx request actually sent has path `/api/chat`.
+The Ollama native API lives at /api/chat. Endpoints containing `/v1`
+are rejected at construction time. This test exercises the full
+construction path (OllamaProvider -> ollama.AsyncClient -> httpx.AsyncClient)
+and asserts the httpx request actually sent has path `/api/chat` for
+all accepted endpoint shapes.
 
 Uses httpx.MockTransport to intercept traffic at the transport layer so
 the real ollama Python client and all of its request-building logic
@@ -47,13 +46,11 @@ def _install_mock_transport(provider: OllamaProvider, handler):
 
 @pytest.mark.parametrize("stored_endpoint", [
     "http://10.0.0.5:11434",
-    "http://10.0.0.5:11434/v1",            # legacy double-append source
-    "http://10.0.0.5:11434/v1/v1",         # paranoia: multiple /v1 strips
-    "10.0.0.5:11434",                      # bare host:port (new preferred form)
+    "10.0.0.5:11434",                      # bare host:port (preferred form)
 ])
 async def test_outbound_url_is_api_chat(stored_endpoint):
-    """Regardless of how the endpoint was stored historically, the actual
-    outbound request must hit /api/chat -- never /v1/api/chat."""
+    """For every accepted endpoint shape, the outbound request must hit
+    /api/chat -- never /v1/api/chat."""
     captured: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -109,7 +106,18 @@ async def test_outbound_url_is_api_chat(stored_endpoint):
         f"Outbound path must be /api/chat, got {req.url.path!r} "
         f"(full url: {req.url})"
     )
-    # Host must not retain /v1 in any form
-    assert "/v1" not in str(req.url), f"Legacy /v1 leaked into URL: {req.url}"
+    # Host must not contain /v1 in any form
+    assert "/v1" not in str(req.url), f"/v1 leaked into URL: {req.url}"
     assert req.url.host == "10.0.0.5"
     assert req.url.port == 11434
+
+
+@pytest.mark.parametrize("bad_endpoint", [
+    "http://10.0.0.5:11434/v1",
+    "http://10.0.0.5:11434/v1/v1",
+    "10.0.0.5:11434/v1",
+])
+async def test_endpoints_with_v1_are_rejected(bad_endpoint):
+    """Endpoints containing /v1 must fail fast at construction time."""
+    with pytest.raises(ValueError, match="/v1"):
+        OllamaProvider(endpoint=bad_endpoint, api_key="unused")

@@ -2,7 +2,12 @@ module github.com/g8e-ai/g8e/services/g8eo
 
 go 1.26
 
+toolchain go1.26.3
+
+replace github.com/g8e-ai/g8e/protocol => ../../protocol
+
 require (
+	github.com/g8e-ai/g8e/protocol v0.0.0-00010101000000-000000000000
 	github.com/go-webauthn/webauthn v0.17.3
 	github.com/gorilla/websocket v1.5.3
 	github.com/stretchr/testify v1.11.1

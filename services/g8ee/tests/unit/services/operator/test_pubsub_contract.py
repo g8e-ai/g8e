@@ -31,7 +31,7 @@ from app.models.pubsub_messages import (
     PortCheckResultPayload,
     RestoreFileSuccessPayload,
 )
-from app.services.operator.pubsub_service import parse_inbound_g8eo_payload
+from app.utils.envelope_builder import parse_inbound_g8eo_payload
 
 pytestmark = [pytest.mark.unit]
 
@@ -121,7 +121,7 @@ def test_discriminator_parsing_fs_read_empty_content():
     }
     result = parse_inbound_g8eo_payload(payload_raw)
     assert isinstance(result, FsReadResultPayload), (
-        f"Expected FsReadResultPayload, got {type(result).__name__} — "
+        f"Expected FsReadResultPayload, got {type(result).__name__} - "
         "empty content must not cause misidentification as FsListResultPayload"
     )
     assert result.content == ""

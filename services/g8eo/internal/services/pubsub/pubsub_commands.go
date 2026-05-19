@@ -25,14 +25,13 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/mappings"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	execution "github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
-	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -40,16 +39,18 @@ import (
 
 // PubSubCommandMessage is the inbound wire message received from operator pub/sub.
 type PubSubCommandMessage struct {
-	ID                string          `json:"id"`
-	EventType         string          `json:"event_type"`
-	CaseID            string          `json:"case_id"`
-	TaskID            *string         `json:"task_id"`
-	InvestigationID   string          `json:"investigation_id"`
-	OperatorSessionID string          `json:"operator_session_id"`
-	OperatorID        *string         `json:"operator_id"`
-	Payload           json.RawMessage `json:"payload"`
-	DecodedPayload    proto.Message   `json:"-"`
-	Timestamp         time.Time       `json:"timestamp"`
+	ID                string              `json:"id"`
+	EventType         constants.EventType `json:"event_type"`
+	CaseID            string              `json:"case_id"`
+	TaskID            *string             `json:"task_id"`
+	InvestigationID   string              `json:"investigation_id"`
+	WebSessionID      string              `json:"web_session_id"`
+	CLISessionID      string              `json:"cli_session_id"`
+	OperatorSessionID string              `json:"operator_session_id"`
+	OperatorID        *string             `json:"operator_id"`
+	Payload           json.RawMessage     `json:"payload"`
+	DecodedPayload    proto.Message       `json:"-"`
+	Timestamp         time.Time           `json:"timestamp"`
 }
 
 // PubSubCommandService manages the operator pub/sub connection and dispatches inbound
@@ -69,7 +70,7 @@ type PubSubCommandService struct {
 
 	ShutdownChan chan string
 
-	handlers map[string]func(context.Context, PubSubCommandMessage)
+	handlers map[constants.EventType]func(context.Context, PubSubCommandMessage)
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -219,16 +220,17 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 	}
 
 	// Initialize TransactionVerifier for strict pre-dispatch verification
-	knownActionTypes := []string{
-		"EXECUTE_BASH",
-		"FILE_EDIT",
-		"RESTORE_FILE",
-		"SHUTDOWN",
-		"FS_LIST",
-		"FS_READ",
-		"FS_GREP",
-		"PORT_CHECK",
-		"FETCH_LOGS",
+	knownActionTypes := []constants.ActionType{
+		constants.ActionTypeExecuteBash,
+		constants.ActionTypeFileEdit,
+		constants.ActionTypeRestoreFile,
+		constants.ActionTypeShutdown,
+		constants.ActionTypeFsList,
+		constants.ActionTypeFsRead,
+		constants.ActionTypeFsGrep,
+		constants.ActionTypePortCheck,
+		constants.ActionTypeFetchLogs,
+		constants.ActionTypeEvalAnswer,
 	}
 	rs.transactionVerifier = governance.NewTransactionVerifier(
 		c.Logger,
@@ -246,7 +248,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 }
 
 func (rs *PubSubCommandService) buildHandlers() {
-	rs.handlers = map[string]func(context.Context, PubSubCommandMessage){
+	rs.handlers = map[constants.EventType]func(context.Context, PubSubCommandMessage){
 		constants.Event.Operator.HeartbeatRequested:         rs.heartbeat.HandleRequest,
 		constants.Event.Operator.Command.Requested:          rs.commands.HandleExecutionRequest,
 		constants.Event.Operator.Command.CancelRequested:    rs.commands.HandleCancelRequest,
@@ -260,6 +262,7 @@ func (rs *PubSubCommandService) buildHandlers() {
 		constants.Event.Operator.FetchFileHistory.Requested: rs.history.HandleFetchFileHistoryRequest,
 		constants.Event.Operator.RestoreFile.Requested:      rs.history.HandleRestoreFileRequest,
 		constants.Event.Operator.ShutdownRequested:          func(ctx context.Context, msg PubSubCommandMessage) { rs.handleShutdownRequest(msg) },
+		constants.Event.Operator.Eval.AnswerRequested:       rs.handleEvalAnswerRequest,
 		constants.Event.Operator.Audit.UserMsg:              rs.audit.HandleUserMsgRequest,
 		constants.Event.Operator.Audit.AIMsg:                rs.audit.HandleAIMsgRequest,
 		constants.Event.Operator.Audit.DirectCmd:            rs.audit.HandleDirectCmdRequest,
@@ -383,11 +386,11 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 			attempts++
 			if attempts >= maxReconnectAttempts {
 				rs.logger.Error("[RECONNECT] Max reconnection attempts reached, giving up",
-					"attempts", attempts, "error", err)
+					"attempts", attempts, string(constants.ConnectionStateError), err)
 				return
 			}
 			rs.logger.Warn("[RECONNECT] Failed to connect, will retry...",
-				"attempt", attempts, "max", maxReconnectAttempts, "error", err)
+				"attempt", attempts, "max", maxReconnectAttempts, string(constants.ConnectionStateError), err)
 			time.Sleep(reconnectDelay)
 			reconnectDelay = min(reconnectDelay*2, maxReconnectDelay)
 			continue
@@ -460,7 +463,7 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 	envelope := &uap.UAPEnvelope{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, (*commonv1.GovernanceEnvelope)(envelope)); err != nil {
 		rs.logger.Error("envelope: non-JSON payload rejected",
-			"error", err,
+			string(constants.ConnectionStateError), err,
 			"action", "use canonical JSON (protojson) GovernanceEnvelope")
 		return
 	}
@@ -469,6 +472,61 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		"message_id", envelope.Id,
 		"protocol_version", envelope.ProtocolVersion)
 	rs.handleUAPEnvelope((*uap.UAPEnvelope)(envelope))
+}
+
+// ProcessEnvelope is the public, synchronous entry point for fail-closed
+// substrate transaction processing. It is used by the listen-mode HTTP surface
+// (POST /api/governance/envelope) to verify a UAP JSON envelope and execute it
+// through the Warden, returning the signed ActionReceipt or a verification
+// error.
+//
+// The receipt is returned even on execution failure (status=FAILED) so callers
+// receive cryptographic evidence of the attempt. A nil receipt is only
+// returned when verification fails before execution begins, in which case the
+// returned error wraps the corresponding governance.ErrXxx sentinel.
+func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
+	if len(payload) == 0 {
+		return nil, errors.New("empty payload")
+	}
+	if len(payload) > MaxPayloadSize {
+		return nil, fmt.Errorf("payload exceeds %d byte limit", MaxPayloadSize)
+	}
+
+	envelope := &uap.UAPEnvelope{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, (*commonv1.GovernanceEnvelope)(envelope)); err != nil {
+		return nil, fmt.Errorf("invalid UAP JSON envelope: %w", err)
+	}
+
+	if rs.transactionVerifier == nil {
+		return nil, errors.New("transaction verifier not configured")
+	}
+	verified, err := rs.transactionVerifier.VerifyEnvelope(envelope)
+	if err != nil {
+		rs.logBlockedTransaction(envelope, err)
+		return nil, err
+	}
+
+	if rs.warden == nil {
+		return nil, errors.New("warden not configured")
+	}
+
+	eventType := constants.MapActionTypeToEventType(verified.ActionType)
+	cmdMsg := PubSubCommandMessage{
+		ID:                envelope.Id,
+		EventType:         constants.EventType(eventType),
+		CaseID:            envelope.CaseId,
+		TaskID:            &envelope.TaskId,
+		InvestigationID:   envelope.InvestigationId,
+		WebSessionID:      envelope.WebSessionId,
+		CLISessionID:      envelope.CliSessionId,
+		OperatorSessionID: envelope.OperatorSessionId,
+		OperatorID:        &envelope.OperatorId,
+		Payload:           envelope.Payload,
+		Timestamp:         envelope.Timestamp.AsTime(),
+	}
+
+	receipt, execErr := rs.warden.Execute(ctx, verified, cmdMsg)
+	return receipt, execErr
 }
 
 // handleUAPEnvelope processes a UAPEnvelope using the TransactionVerifier, Tribunal and Warden services.
@@ -481,7 +539,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		verified, err = rs.transactionVerifier.VerifyEnvelope(env)
 		if err != nil {
 			rs.logger.Error("Transaction verification failed - command rejected",
-				"error", err,
+				string(constants.ConnectionStateError), err,
 				"message_id", env.Id)
 			// Log blocked transaction to audit vault
 			rs.logBlockedTransaction(env, err)
@@ -496,7 +554,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 
 	// Convert UAPEnvelope to PubSubCommandMessage for execution through Warden
 	// Map UAP action types back to protobuf event types for handler dispatch
-	eventType := mappings.MapActionTypeToEventType(env.ActionType)
+	eventType := constants.MapActionTypeToEventType(verified.ActionType)
 
 	payload := env.Payload
 	if len(payload) == 0 {
@@ -506,10 +564,12 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 
 	cmdMsg := PubSubCommandMessage{
 		ID:                env.Id,
-		EventType:         eventType,
+		EventType:         constants.EventType(eventType),
 		CaseID:            env.CaseId,
 		TaskID:            &env.TaskId,
 		InvestigationID:   env.InvestigationId,
+		WebSessionID:      env.WebSessionId,
+		CLISessionID:      env.CliSessionId,
 		OperatorSessionID: env.OperatorSessionId,
 		OperatorID:        &env.OperatorId,
 		Payload:           payload,
@@ -521,7 +581,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		receipt, err := rs.warden.Execute(rs.ctx, verified, cmdMsg)
 		if err != nil {
 			rs.logger.Error("Warden execution failed",
-				"error", err,
+				string(constants.ConnectionStateError), err,
 				"message_id", env.Id,
 				"receipt_status", receipt.Status.String())
 			return
@@ -546,23 +606,29 @@ func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
 
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler.
 // This is called by Warden to execute verified transactions, making Warden the execution boundary.
-func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) error {
+func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
 	handler, ok := rs.handlers[eventType]
 	if !ok {
-		rs.logger.Error("No handler registered for event type", "event_type", eventType)
-		return fmt.Errorf("no handler for event type: %s", eventType)
+		rs.logger.Error("No handler registered for event type", "event_type", string(eventType))
+		return "", fmt.Errorf("no handler for event type: %s", string(eventType))
 	}
 
 	// Type assert to PubSubCommandMessage
 	pubsubMsg, ok := cmdMsg.(PubSubCommandMessage)
 	if !ok {
 		rs.logger.Error("Invalid cmdMsg type", "expected", "PubSubCommandMessage", "got", fmt.Sprintf("%T", cmdMsg))
-		return fmt.Errorf("invalid cmdMsg type: %T", cmdMsg)
+		return "", fmt.Errorf("invalid cmdMsg type: %T", cmdMsg)
 	}
 
 	rs.logger.Info("Executing verified transaction through Warden", "event_type", eventType)
+
+	// Special case for EVAL_ANSWER which is synchronous and returns the answer as summary
+	if eventType == constants.Event.Operator.Eval.AnswerRequested {
+		return rs.handleEvalAnswerRequestSync(ctx, pubsubMsg)
+	}
+
 	handler(ctx, pubsubMsg)
-	return nil
+	return "", nil
 }
 
 func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {
@@ -570,7 +636,7 @@ func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) 
 
 	req, err := unmarshalPayload(msg.EventType, msg.Payload)
 	if err != nil {
-		rs.logger.Error("Failed to unmarshal shutdown request", "error", err)
+		rs.logger.Error("Failed to unmarshal shutdown request", string(constants.ConnectionStateError), err)
 		return
 	}
 
@@ -586,6 +652,40 @@ func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) 
 	}
 	rs.logger.Info("Shutting down operator (UAP)", "reason", reason)
 	rs.ShutdownChan <- reason
+}
+
+func (rs *PubSubCommandService) handleEvalAnswerRequest(ctx context.Context, msg PubSubCommandMessage) {
+	_, _ = rs.handleEvalAnswerRequestSync(ctx, msg)
+}
+
+func (rs *PubSubCommandService) handleEvalAnswerRequestSync(ctx context.Context, msg PubSubCommandMessage) (string, error) {
+	rs.logger.Info("Eval answer request received")
+
+	req, err := unmarshalPayload(msg.EventType, msg.Payload)
+	if err != nil {
+		rs.logger.Error("Failed to unmarshal eval answer request", string(constants.ConnectionStateError), err)
+		return "", err
+	}
+
+	evalReq, ok := req.(*operatorv1.EvalAnswerRequested)
+	if !ok {
+		rs.logger.Error("Invalid payload type for eval answer request", "got", fmt.Sprintf("%T", req))
+		return "", fmt.Errorf("invalid payload type: %T", req)
+	}
+
+	rs.logger.Info("Eval answer recorded",
+		"prompt_id", evalReq.PromptId,
+		"benchmark", evalReq.Benchmark,
+		"model", evalReq.Model,
+		"answer_length", len(evalReq.Answer))
+
+	// Truncate answer to sane bound for receipt (4 KiB per plan)
+	summary := evalReq.Answer
+	if len(summary) > 4096 {
+		summary = summary[:4096]
+	}
+
+	return summary, nil
 }
 
 // SendAutomaticHeartbeat publishes an automatic heartbeat immediately.
@@ -606,9 +706,9 @@ func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, reje
 		TransactionHash:   env.TransactionHash,
 		OperatorID:        env.OperatorId,
 		OperatorSessionID: env.OperatorSessionId,
-		ActionType:        env.ActionType,
+		ActionType:        constants.ActionType(env.ActionType),
 		TargetResource:    env.TargetResource,
-		Status:            "BLOCKED",
+		Status:            operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 		ResultSummary:     fmt.Sprintf("blocked: %v", rejectionReason),
 		StateRootBefore:   "", // Not available for blocked transactions
 		StateRootAfter:    "", // Not available for blocked transactions
@@ -620,6 +720,6 @@ func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, reje
 
 	// Log to audit vault using canonical RecordActionReceipt for unified query experience
 	if err := rs.audit.auditVault.RecordActionReceipt(&record); err != nil {
-		rs.logger.Error("Failed to record blocked transaction in audit vault", "error", err, "message_id", env.Id)
+		rs.logger.Error("Failed to record blocked transaction in audit vault", string(constants.ConnectionStateError), err, "message_id", env.Id)
 	}
 }

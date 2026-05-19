@@ -468,7 +468,7 @@ class TestAddInlineCitations:
         assert "[2]" in result
 
     def test_returns_original_text_on_exception(self, provider):
-        """On any error, returns the original text — never raises."""
+        """On any error, returns the original text - never raises."""
         original = "Safe fallback text."
 
         class BadMetadata:

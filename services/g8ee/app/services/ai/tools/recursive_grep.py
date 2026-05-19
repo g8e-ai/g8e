@@ -38,12 +38,11 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.RECURSIVE_GREP,
-        description=load_prompt(PromptFile.TOOL_RECURSIVE_GREP),
+        description=load_prompt(PromptFile.TOOLS_RECURSIVE_GREP),
         parameters=schema_from_model(RecursiveGrepArgs),
     )
-    return declaration
 
 
 async def handle(

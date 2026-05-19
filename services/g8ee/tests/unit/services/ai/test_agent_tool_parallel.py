@@ -50,7 +50,7 @@ async def test_execute_turn_tool_calls_parallel():
             result=MagicMock()
         )
 
-    with MagicMock() as mock_orchestrate_patch:
+    with MagicMock():
         import app.services.ai.agent_tool_loop
         app.services.ai.agent_tool_loop.orchestrate_tool_execution = mock_orchestrate
 

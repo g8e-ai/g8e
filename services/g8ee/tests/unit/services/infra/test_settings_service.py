@@ -70,43 +70,33 @@ class TestSettingsService:
             document_id=user_doc_id
         )
 
-    async def test_get_user_settings_missing_returns_empty_llm(self):
-        """Test that missing user settings returns empty LLMSettings (no platform fallback for LLM keys)."""
+    async def test_get_user_settings_missing_returns_empty_defaults(self):
+        """Missing user settings document yields empty defaults so request-scoped
+        LLM overrides (CLI/BYO) can populate validate_llm_config. Hard failure on
+        absent credentials is the responsibility of validate_llm_config, not this
+        dependency-injected loader."""
         cache_mock = MagicMock()
         cache_mock.get_document_with_cache = AsyncMock()
 
         user_id = "user_456"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
-        # Mock platform document (without LLM keys since they are user-specific only)
-        platform_settings = G8eePlatformSettings(
-            port=80
-        )
         platform_doc = PlatformSettingsDocument(
-            settings=platform_settings
+            settings=G8eePlatformSettings()
+        ).model_dump()
+
+        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
+            None if document_id == user_doc_id else platform_doc
         )
-
-        # Return None for user doc, valid for platform doc
-        def get_doc_mock(collection, document_id):
-            if document_id == user_doc_id:
-                return None
-            if document_id == PLATFORM_SETTINGS_DOC:
-                return platform_doc.model_dump()
-            return None
-
-        cache_mock.get_document_with_cache.side_effect = get_doc_mock
 
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
 
-        # LLM settings should be empty (no platform fallback)
+        assert isinstance(settings, G8eeUserSettings)
         assert settings.llm.primary_provider is None
-        assert settings.llm.openai_api_key is None
-        assert settings.llm.anthropic_api_key is None
-        assert settings.llm.gemini_api_key is None
-        assert settings.llm.ollama_api_key is None
+        assert settings.llm.primary_model is None
+        assert settings.llm.primary_api_key is None
 
-        # Verify both lookups happened
         cache_mock.get_document_with_cache.assert_any_call(
             collection=DB_COLLECTION_SETTINGS,
             document_id=user_doc_id
@@ -115,6 +105,7 @@ class TestSettingsService:
             collection=DB_COLLECTION_SETTINGS,
             document_id=PLATFORM_SETTINGS_DOC
         )
+        assert cache_mock.get_document_with_cache.call_count == 2
 
     async def test_llm_settings_no_overrides(self):
         """Test that llm_max_tokens is None if not provided in user settings."""

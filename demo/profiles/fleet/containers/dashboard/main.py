@@ -41,7 +41,9 @@ async def get_nodes():
             nodes.append(node_data)
             
     except Exception as e:
-        return {"error": str(e), "nodes": []}
+        # CodeQL: Don't return raw exception messages to the client
+        print(f"Error listing nodes: {e}")
+        return {"error": "Internal server error", "nodes": []}
     
     # Sort nodes by name
     nodes.sort(key=lambda x: x["name"])

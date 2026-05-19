@@ -45,3 +45,6 @@ pytest-xdist[psutil]==3.8.0
 mypy==1.20.0
 pyright==1.1.409
 ruff==0.15.12
+
+# Type stubs for better pyright support
+types-cryptography==3.3.23.2

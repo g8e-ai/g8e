@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``query_investigation_context`` tool — read-only inspection of investigation state."""
+"""``query_investigation_context`` tool - read-only inspection of investigation state."""
 
 from __future__ import annotations
 
@@ -37,12 +37,11 @@ logger = logging.getLogger(__name__)
 
 
 def build() -> types.ToolDeclaration:
-    declaration = types.ToolDeclaration(
+    return types.ToolDeclaration(
         name=OperatorToolName.QUERY_INVESTIGATION_CONTEXT,
-        description=load_prompt(PromptFile.TOOL_QUERY_INVESTIGATION_CONTEXT),
+        description=load_prompt(PromptFile.TOOLS_QUERY_INVESTIGATION_CONTEXT),
         parameters=schema_from_model(QueryInvestigationContextArgs),
     )
-    return declaration
 
 
 async def _get_investigation_or_error(
@@ -98,7 +97,7 @@ async def handle(
             data = [msg.model_dump() for msg in messages]
             item_count = len(messages)
 
-        elif args.data_type == "investigation_status" or args.data_type == "history_trail":
+        elif args.data_type in {"investigation_status", "history_trail"}:
             data, error_res = await _get_investigation_or_error(
                 investigation_service, investigation_id, args.data_type
             )

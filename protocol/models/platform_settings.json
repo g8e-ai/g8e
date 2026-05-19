@@ -3,8 +3,8 @@
 
   "_authority": "operator (Secrets) / client (Config)",
   "_consumers": [
-    "g8ee (Python — reads at startup and on cache miss to build base Settings)",
-    "client (JS — reads to serve internal settings API and UI dashboard)"
+    "g8ee (Python - reads at startup and on cache miss to build base Settings)",
+    "client (JS - reads to serve internal settings API and UI dashboard)"
   ],
   "_collection": "settings",
   "_document_id": "platform_settings",
@@ -16,17 +16,17 @@
       "operator_session_id": {
         "type": "string",
         "required": false,
-        "description": "Active session identifier for the operator component."
+        "description": "Active operator session identifier for the operator component."
       },
       "operator_api_key": {
         "type": "string",
         "required": false,
-        "description": "Long-lived API key for the operator component (fallback for session_id)."
+        "description": "Long-lived API key for the operator component (fallback for operator_session_id)."
       },
       "session_encryption_key": {
         "type": "string",
         "required": true,
-        "description": "Key used for encrypting session cookies and sensitive data at rest."
+        "description": "Key used for encrypting web session cookies and sensitive data at rest."
       },
       "llm_command_gen_enabled": {
         "type": "boolean",

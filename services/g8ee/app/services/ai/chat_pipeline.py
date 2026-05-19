@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-ChatPipelineService — internal chat pipeline coordinator.
+ChatPipelineService - internal chat pipeline coordinator.
 
 Owns:
 - Pre-flight context assembly (_prepare_chat_context)
@@ -60,7 +60,7 @@ from .agent import g8eEngine
 from app.services.investigation.investigation_service import extract_all_operators_context, InvestigationService
 from app.services.investigation.memory_data_service import MemoryDataService
 from .memory_generation_service import MemoryGenerationService
-from .chat_task_manager import BackgroundTaskManager as BackgroundTaskManager
+from .chat_task_manager import BackgroundTaskManager
 from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
 from app.services.data.agent_activity_data_service import AgentActivityDataService
@@ -77,7 +77,7 @@ logger = logging.getLogger(__name__)
 class ChatPipelineService:
     """Coordinates the full internal chat pipeline for browser sessions.
 
-    All dependencies are injected — nothing is constructed internally.
+    All dependencies are injected - nothing is constructed internally.
     """
 
     def __init__(
@@ -100,6 +100,130 @@ class ChatPipelineService:
         self.triage_agent = TriageAgent()
 
         logger.info("ChatPipelineService initialized")
+
+    def validate_llm_config(
+        self,
+        user_settings: G8eeUserSettings,
+        primary_model_override: str | None = None,
+        assistant_model_override: str | None = None,
+        lite_model_override: str | None = None,
+        primary_provider_override: str | None = None,
+        assistant_provider_override: str | None = None,
+        lite_provider_override: str | None = None,
+        primary_api_key_override: str | None = None,
+        primary_endpoint_override: str | None = None,
+        assistant_api_key_override: str | None = None,
+        assistant_endpoint_override: str | None = None,
+        lite_api_key_override: str | None = None,
+        lite_endpoint_override: str | None = None,
+    ) -> None:
+        """Synchronously validate that LLM models and their required credentials are configured.
+
+        This allows routers to fail-fast before starting long-running
+        background tasks if basic configuration is missing.
+        """
+        llm = user_settings.llm
+        primary = primary_model_override or llm.primary_model
+        assistant = assistant_model_override or llm.resolved_assistant_model
+        lite = lite_model_override or llm.resolved_lite_model
+
+        if not any([primary, assistant, lite]):
+            raise ConfigurationError(
+                "No LLM model configured. Set a primary_model and/or assistant_model in platform settings.",
+                remediation_steps=[
+                    "Check your platform settings in the dashboard or via API.",
+                    "Ensure G8E_PRIMARY_MODEL or G8E_ASSISTANT_MODEL env vars are set if using local config.",
+                    "Run './g8e platform status' to verify component health."
+                ]
+            )
+
+        # Validate credentials for each configured tier
+        validation_errors = []
+
+        def check_tier(tier_name: str, model: str | None, provider: str | None, api_key: str | None, endpoint: str | None):
+            if not model:
+                return
+
+            if not provider:
+                validation_errors.append(f"{tier_name.capitalize()} model '{model}' configured but no provider selected.")
+                return
+
+            p_val = provider
+
+            # Exhaustive provider validation
+            if p_val == LLMProvider.OPENAI.value:
+                if not api_key:
+                    validation_errors.append(f"{tier_name.capitalize()} provider 'openai' requires an API key.")
+                if not endpoint:
+                    validation_errors.append(f"{tier_name.capitalize()} provider 'openai' requires an endpoint URL.")
+
+            elif p_val == LLMProvider.ANTHROPIC.value:
+                if not api_key:
+                    validation_errors.append(f"{tier_name.capitalize()} provider 'anthropic' requires an API key.")
+                if not endpoint:
+                    validation_errors.append(f"{tier_name.capitalize()} provider 'anthropic' requires an endpoint URL.")
+
+            elif p_val == LLMProvider.GEMINI.value:
+                if not api_key:
+                    validation_errors.append(f"{tier_name.capitalize()} provider 'gemini' requires an API key.")
+
+            elif p_val == LLMProvider.OLLAMA.value:
+                if not endpoint:
+                    validation_errors.append(f"{tier_name.capitalize()} provider 'ollama' requires an endpoint URL.")
+
+            elif p_val == LLMProvider.LLAMACPP.value:
+                if not endpoint:
+                    validation_errors.append(f"{tier_name.capitalize()} provider 'llamacpp' requires an endpoint URL.")
+
+            else:
+                validation_errors.append(f"Unsupported {tier_name} provider '{p_val}'.")
+
+        # Resolve effective provider/key/endpoint per tier. When a request
+        # overrides the provider, credential and endpoint resolution must
+        # follow the override provider, not the stored one - otherwise the
+        # stored provider's (often None) credentials shadow the request and
+        # the request fails validation even though the user supplied a
+        # complete override.
+
+        # Check primary tier
+        if primary:
+            provider, api_key, endpoint, _ = llm.resolve(
+                "primary",
+                provider_override=primary_provider_override,
+                api_key_override=primary_api_key_override,
+                endpoint_override=primary_endpoint_override,
+            )
+            check_tier("primary", primary, provider, api_key, endpoint)
+
+        # Check assistant tier
+        if assistant:
+            provider, api_key, endpoint, _ = llm.resolve(
+                "assistant",
+                provider_override=assistant_provider_override,
+                api_key_override=assistant_api_key_override,
+                endpoint_override=assistant_endpoint_override,
+            )
+            check_tier("assistant", assistant, provider, api_key, endpoint)
+
+        # Check lite tier
+        if lite:
+            provider, api_key, endpoint, _ = llm.resolve(
+                "lite",
+                provider_override=lite_provider_override,
+                api_key_override=lite_api_key_override,
+                endpoint_override=lite_endpoint_override,
+            )
+            check_tier("lite", lite, provider, api_key, endpoint)
+
+        if validation_errors:
+            raise ConfigurationError(
+                "LLM configuration is incomplete: " + " ".join(validation_errors),
+                remediation_steps=[
+                    "Configure API keys and endpoints in your user settings document in the operator database.",
+                    "Or provide per-request overrides via the chat API.",
+                    "Verify your configuration with './g8e platform status'."
+                ]
+            )
 
     async def _prepare_chat_context(
         self,
@@ -197,7 +321,7 @@ class ChatPipelineService:
             primary_override=model_overrides.for_main_generation(needs_primary=True),
             assistant_override=model_overrides.for_main_generation(needs_primary=False),
             lite_override=None,
-            settings_primary_model=request_settings.llm.primary_model,
+            settings_primary_model=request_settings.llm.resolved_primary_model,
             settings_assistant_model=request_settings.llm.resolved_assistant_model,
             settings_lite_model=request_settings.llm.resolved_lite_model,
         )
@@ -333,7 +457,7 @@ class ChatPipelineService:
         logger.info(
             "[SSE-CHAT] _persist_ai_response started: investigation_id=%s response_len=%d",
             getattr(g8e_context, "investigation_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
-            len(state.response_text),
+            len(state.response_text) if state.response_text is not None else 0,
         )
 
         sender = inputs.message_sender
@@ -389,7 +513,8 @@ class ChatPipelineService:
                 request_posture=inputs.triage_result.request_posture if inputs.triage_result else "unknown",
                 posture_confidence=str(inputs.triage_result.posture_confidence) if inputs.triage_result else "0",
             ),
-            web_session_id=g8e_context.web_session_id or "",
+            web_session_id=g8e_context.web_session_id,
+            cli_session_id=g8e_context.cli_session_id,
             case_id=g8e_context.case_id or "",
             user_id=g8e_context.user_id or "",
         )
@@ -404,7 +529,7 @@ class ChatPipelineService:
         error: str | None = None,
     ) -> None:
         """Record agent activity metadata for data science analysis.
-        
+
         This is called after each chat turn completes to capture comprehensive
         telemetry including model usage, token consumption, tool execution,
         triage classification, and performance metrics.
@@ -448,7 +573,7 @@ class ChatPipelineService:
                 citation_count=state.grounding_metadata.citations_count if state.grounding_metadata else 0,
                 operator_bound=inputs.operator_bound,
                 bound_operator_count=len(inputs.g8e_context.bound_operators) if inputs.g8e_context.bound_operators else 0,
-                response_length=len(state.response_text),
+                response_length=len(state.response_text) if state.response_text is not None else 0,
                 context_sizes=context_sizes,
                 attachment_total_bytes=attachment_total_bytes if attachment_total_bytes > 0 else None,
                 tool_response_sizes=state.tool_response_sizes if state.tool_response_sizes else None,
@@ -478,7 +603,7 @@ class ChatPipelineService:
         """Schedule memory generation as a background task so it never blocks persistence.
 
         Note: ``conversation_history`` is a snapshot from ``_prepare_chat_context``
-        and does NOT include the final AI response row written above — any memory
+        and does NOT include the final AI response row written above - any memory
         generation that needs the very latest turn must re-read from the DB. The
         staleness is intentional: we trade a one-turn lag for keeping memory
         generation off the response path. See ``docs/architecture/ai_agents.md``.
@@ -543,9 +668,15 @@ class ChatPipelineService:
         llm_lite_model: str,
         _task_manager: BackgroundTaskManager,
         user_settings: G8eeUserSettings,
+        llm_primary_api_key: str | None = None,
+        llm_primary_endpoint: str | None = None,
+        llm_assistant_api_key: str | None = None,
+        llm_assistant_endpoint: str | None = None,
+        llm_lite_api_key: str | None = None,
+        llm_lite_endpoint: str | None = None,
         _track_task: bool = True,
     ) -> None:
-        """Non-streaming chat path — AI response delivered via SSE through client.
+        """Non-streaming chat path - AI response delivered via SSE through client.
 
         Optionally registers the current asyncio task with ChatTaskManager so it
         can be cancelled via the stop endpoint.
@@ -572,7 +703,14 @@ class ChatPipelineService:
         try:
             logger.info(
                 "[SSE-CHAT] About to call _run_chat_impl: message_len=%d sentinel_mode=%s primary_provider=%s assistant_provider=%s lite_provider=%s primary=%s assistant=%s lite=%s",
-                len(message), sentinel_mode, llm_primary_provider, llm_assistant_provider, llm_lite_provider, llm_primary_model, llm_assistant_model, llm_lite_model
+                len(message),
+                sentinel_mode,
+                llm_primary_provider if llm_primary_provider in [p.value for p in LLMProvider] else "REDACTED",
+                llm_assistant_provider if llm_assistant_provider in [p.value for p in LLMProvider] else "REDACTED",
+                llm_lite_provider if llm_lite_provider in [p.value for p in LLMProvider] else "REDACTED",
+                llm_primary_model,
+                llm_assistant_model,
+                llm_lite_model
             )
             await self._run_chat_impl(
                 message=message,
@@ -585,6 +723,12 @@ class ChatPipelineService:
                 llm_primary_model=llm_primary_model,
                 llm_assistant_model=llm_assistant_model,
                 llm_lite_model=llm_lite_model,
+                llm_primary_api_key=llm_primary_api_key,
+                llm_primary_endpoint=llm_primary_endpoint,
+                llm_assistant_api_key=llm_assistant_api_key,
+                llm_assistant_endpoint=llm_assistant_endpoint,
+                llm_lite_api_key=llm_lite_api_key,
+                llm_lite_endpoint=llm_lite_endpoint,
                 user_settings=user_settings,
                 task_manager=_task_manager,
             )
@@ -602,9 +746,10 @@ class ChatPipelineService:
             try:
                 await self.event_service.publish_investigation_event(
                     investigation_id=investigation_id,
-                    event_type=EventType.LLM_CHAT_ITERATION_FAILED,
+                    event_type=EventType.AI_LLM_CHAT_ITERATION_FAILED,
                     payload=ChatErrorPayload(error=str(e)),
-                    web_session_id=g8e_context.web_session_id or "",
+                    web_session_id=g8e_context.web_session_id,
+                    cli_session_id=g8e_context.cli_session_id,
                     case_id=g8e_context.case_id or "",
                     user_id=g8e_context.user_id or "",
                 )
@@ -629,6 +774,12 @@ class ChatPipelineService:
         llm_assistant_model: str,
         llm_lite_model: str,
         user_settings: G8eeUserSettings,
+        llm_primary_api_key: str | None = None,
+        llm_primary_endpoint: str | None = None,
+        llm_assistant_api_key: str | None = None,
+        llm_assistant_endpoint: str | None = None,
+        llm_lite_api_key: str | None = None,
+        llm_lite_endpoint: str | None = None,
         task_manager: BackgroundTaskManager | None = None,
     ) -> None:
         """Run the chat implementation - main logic flow."""
@@ -639,25 +790,62 @@ class ChatPipelineService:
             len(attachments) if attachments else 0
         )
 
-        # Coerce the raw HTTP string to LLMProvider explicitly —
-        # model_copy(update=...) skips validation and would leave a bare
-        # str in the enum-typed field.
+        # Resolve effective provider/key/endpoint per tier.
         resolved_settings = user_settings
-        if llm_primary_provider:
-            logger.info("[SSE-CHAT] Applying primary_provider override: %s", llm_primary_provider)
-            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_provider": LLMProvider(llm_primary_provider)})})
-        if llm_assistant_provider:
-            logger.info("[SSE-CHAT] Applying assistant_provider override: %s", llm_assistant_provider)
-            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_provider": LLMProvider(llm_assistant_provider)})})
-        if llm_lite_provider:
-            logger.info("[SSE-CHAT] Applying lite_provider override: %s", llm_lite_provider)
-            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_provider": LLMProvider(llm_lite_provider)})})
+
+        primary_provider, primary_api_key, primary_endpoint, primary_model = user_settings.llm.resolve(
+            "primary",
+            provider_override=llm_primary_provider,
+            api_key_override=llm_primary_api_key,
+            endpoint_override=llm_primary_endpoint,
+            model_override=llm_primary_model,
+        )
+        if primary_provider:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_provider": LLMProvider(primary_provider)})})
+        if primary_api_key:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_api_key": primary_api_key})})
+        if primary_endpoint:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_endpoint": primary_endpoint})})
+        if primary_model:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_model": primary_model})})
+
+        assistant_provider, assistant_api_key, assistant_endpoint, assistant_model = user_settings.llm.resolve(
+            "assistant",
+            provider_override=llm_assistant_provider,
+            api_key_override=llm_assistant_api_key,
+            endpoint_override=llm_assistant_endpoint,
+            model_override=llm_assistant_model,
+        )
+        if assistant_provider:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_provider": LLMProvider(assistant_provider)})})
+        if assistant_api_key:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_api_key": assistant_api_key})})
+        if assistant_endpoint:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_endpoint": assistant_endpoint})})
+        if assistant_model:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_model": assistant_model})})
+
+        lite_provider, lite_api_key, lite_endpoint, lite_model = user_settings.llm.resolve(
+            "lite",
+            provider_override=llm_lite_provider,
+            api_key_override=llm_lite_api_key,
+            endpoint_override=llm_lite_endpoint,
+            model_override=llm_lite_model,
+        )
+        if lite_provider:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_provider": LLMProvider(lite_provider)})})
+        if lite_api_key:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_api_key": lite_api_key})})
+        if lite_endpoint:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_endpoint": lite_endpoint})})
+        if lite_model:
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_model": lite_model})})
 
         logger.info("[SSE-CHAT] About to call _prepare_chat_context")
         model_overrides = ModelOverrideResolver(
-            primary_model=llm_primary_model,
-            assistant_model=llm_assistant_model,
-            lite_model=llm_lite_model,
+            primary_model=primary_model,
+            assistant_model=assistant_model,
+            lite_model=lite_model,
         )
         inputs = await self._prepare_chat_context(
             message=message,
@@ -732,5 +920,5 @@ class ChatPipelineService:
 
         logger.info(
             "[SSE-CHAT] Completed: %d chars",
-            len(state.response_text)
+            len(state.response_text) if state.response_text is not None else 0
         )

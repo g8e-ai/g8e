@@ -18,21 +18,21 @@ These tests verify AI tool call execution with deterministic payloads while mock
 to focus on payload handling rather than network communication.
 
 Tests cover all 16 AI tools:
-    Segment 1 — Command Execution Tools
+    Segment 1 - Command Execution Tools
       Test run_commands_with_operator tool payload handling
 
-    Segment 2 — File Operation Tools  
-      Test file_create_on_operator, file_write_on_operator, file_read_on_operator, 
+    Segment 2 - File Operation Tools
+      Test file_create_on_operator, file_write_on_operator, file_read_on_operator,
       file_update_on_operator tools payload handling
 
-    Segment 3 — File System Tools
+    Segment 3 - File System Tools
       Test list_files_and_directories_with_detailed_metadata, read_file_content,
       fetch_file_history, restore_file, fetch_file_diff tools payload handling
 
-    Segment 4 — Network & Search Tools
+    Segment 4 - Network & Search Tools
       Test check_port_status, g8e_web_search tools payload handling
 
-    Segment 5 — Permission & Session Tools
+    Segment 5 - Permission & Session Tools
       Test grant_intent_permission, revoke_intent_permission, fetch_execution_output,
       fetch_session_history tools payload handling
 
@@ -84,22 +84,19 @@ pytestmark = [pytest.mark.integration]
 @pytest.fixture
 def mock_operator_command_service():
     """Mock operator command service for deterministic testing."""
-    service = AsyncMock(spec=OperatorCommandService)
-    return service
+    return AsyncMock(spec=OperatorCommandService)
 
 
 @pytest.fixture
 def mock_investigation_service():
     """Mock investigation service for deterministic testing."""
-    service = AsyncMock(spec=InvestigationService)
-    return service
+    return AsyncMock(spec=InvestigationService)
 
 
 @pytest.fixture
 def mock_web_search_provider():
     """Mock web search provider for deterministic testing."""
-    provider = AsyncMock(spec=WebSearchProvider)
-    return provider
+    return AsyncMock(spec=WebSearchProvider)
 
 
 @pytest.fixture
@@ -179,7 +176,7 @@ def request_settings():
 
 
 # ---------------------------------------------------------------------------
-# Segment 1 — Command Execution Tools
+# Segment 1 - Command Execution Tools
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -296,7 +293,7 @@ class TestCommandExecutionTools:
 
 
 # ---------------------------------------------------------------------------
-# Segment 2 — File Operation Tools
+# Segment 2 - File Operation Tools
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -494,7 +491,7 @@ class TestFileOperationTools:
 
 
 # ---------------------------------------------------------------------------
-# Segment 3 — File System Tools
+# Segment 3 - File System Tools
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -813,7 +810,7 @@ class TestFileSystemTools:
 
 
 # ---------------------------------------------------------------------------
-# Segment 4 — Network & Search Tools
+# Segment 4 - Network & Search Tools
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -948,7 +945,7 @@ class TestNetworkSearchTools:
 
 
 # ---------------------------------------------------------------------------
-# Segment 5 — Permission & Session Tools
+# Segment 5 - Permission & Session Tools
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio(loop_scope="session")

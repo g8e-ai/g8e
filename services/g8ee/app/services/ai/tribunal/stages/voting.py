@@ -50,7 +50,7 @@ async def _run_voting_stage(
             for member, cmd in vote_breakdown.candidates_by_member.items():
                 logger.info("[TRIBUNAL-TELEMETRY]   %s: %s", member, cmd[:200] + "..." if len(cmd) > 200 else cmd)
 
-        event_type = EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED if is_final else EventType.TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED
+        event_type = EventType.AI_TRIBUNAL_VOTING_CONSENSUS_FAILED if is_final else EventType.AI_TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED
         await emitter.emit(
             event_type,
             TribunalConsensusFailedPayload(
@@ -60,7 +60,7 @@ async def _run_voting_stage(
         )
     else:
         await emitter.emit(
-            EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED,
+            EventType.AI_TRIBUNAL_VOTING_CONSENSUS_REACHED,
             TribunalVotingCompletedPayload(
                 vote_winner=vote_winner,
                 vote_score=vote_score,
@@ -72,7 +72,7 @@ async def _run_voting_stage(
 
         for cmd, members in vote_breakdown.dissenters_by_command.items():
             await emitter.emit(
-                EventType.TRIBUNAL_VOTING_DISSENT_RECORDED,
+                EventType.AI_TRIBUNAL_VOTING_DISSENT_RECORDED,
                 TribunalDissentRecordedPayload(
                     request=request,
                     losing_command=cmd,

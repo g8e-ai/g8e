@@ -62,23 +62,6 @@ func setExecutionIDOnPayload(payload proto.Message, executionID string) {
 	}
 }
 
-func protoExecutionStatus(status constants.ExecutionStatus) operatorv1.ExecutionStatus {
-	switch status {
-	case constants.ExecutionStatusExecuting:
-		return operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING
-	case constants.ExecutionStatusCompleted:
-		return operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
-	case constants.ExecutionStatusFailed:
-		return operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-	case constants.ExecutionStatusCancelled:
-		return operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED
-	case constants.ExecutionStatusTimeout:
-		return operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT
-	default:
-		return operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED
-	}
-}
-
 // publishLFAATypedResponseTo builds a UAPEnvelope from a typed payload and publishes it to the
 // results channel. Used by services that hold a PubSubClient directly.
 func publishLFAATypedResponseTo(
@@ -87,27 +70,27 @@ func publishLFAATypedResponseTo(
 	cfg *config.Config,
 	logger *slog.Logger,
 	msg PubSubCommandMessage,
-	eventType string,
+	eventType constants.EventType,
 	payload proto.Message,
 ) {
 	executionID := executionIDFromMessage(msg)
 	setExecutionIDOnPayload(payload, executionID)
 
-	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID)
+	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
 	if err != nil {
-		logger.Error("Failed to build LFAA typed response Governance Envelope", "error", err)
+		logger.Error("Failed to build LFAA typed response Governance Envelope", string(constants.ConnectionStateError), err)
 		return
 	}
 
 	data, err := json.Marshal(env)
 	if err != nil {
-		logger.Error("Failed to marshal LFAA typed response Governance Envelope", "error", err)
+		logger.Error("Failed to marshal LFAA typed response Governance Envelope", string(constants.ConnectionStateError), err)
 		return
 	}
 
 	channelName := constants.ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
-		logger.Error("Failed to publish LFAA typed response Universal", "error", err)
+		logger.Error("Failed to publish LFAA typed response Universal", string(constants.ConnectionStateError), err)
 		return
 	}
 
@@ -121,31 +104,32 @@ func publishLFAAErrorTo(
 	cfg *config.Config,
 	logger *slog.Logger,
 	msg PubSubCommandMessage,
-	eventType, errorMsg string,
+	eventType constants.EventType,
+	errorMsg string,
 ) {
 	executionID := executionIDFromMessage(msg)
 
 	// Use CommandResult as a generic error container
 	payload := &operatorv1.CommandResult{
 		ExecutionId: executionID,
-		Status:      protoExecutionStatus(constants.ExecutionStatusFailed),
+		Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 		Error:       errorMsg,
 	}
 
-	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID)
+	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID, msg.WebSessionID, msg.CLISessionID)
 	if err != nil {
-		logger.Error("Failed to build LFAA error Governance Envelope", "error", err)
+		logger.Error("Failed to build LFAA error Governance Envelope", string(constants.ConnectionStateError), err)
 		return
 	}
 
 	data, err := json.Marshal(env)
 	if err != nil {
-		logger.Error("Failed to marshal LFAA error Governance Envelope", "error", err)
+		logger.Error("Failed to marshal LFAA error Governance Envelope", string(constants.ConnectionStateError), err)
 		return
 	}
 
 	channelName := constants.ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
-		logger.Error("Failed to publish LFAA error Universal", "error", err)
+		logger.Error("Failed to publish LFAA error Universal", string(constants.ConnectionStateError), err)
 	}
 }

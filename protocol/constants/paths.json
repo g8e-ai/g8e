@@ -15,7 +15,8 @@
     "operator_http": 9000,
     "operator_wss": 9001,
     "operator_bootstrap": 9002,
-    "operator_public": 9003
+    "operator_public": 9003,
+    "g8ee_http": 8443
   },
   "g8ee": {
     "app_dir": "/app/services/g8ee",

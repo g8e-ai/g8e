@@ -118,7 +118,7 @@ class BackgroundTaskManager:
             try:
                 await event_service.publish(
                     SessionEvent(
-                        event_type=EventType.LLM_CHAT_ITERATION_STOPPED,
+                        event_type=EventType.AI_LLM_CHAT_ITERATION_STOPPED,
                         payload=AiProcessingStoppedPayload(
                             reason=reason,
                             timestamp=now(),

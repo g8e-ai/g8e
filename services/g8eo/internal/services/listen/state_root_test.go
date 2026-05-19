@@ -59,7 +59,7 @@ func TestStateRootSemantics(t *testing.T) {
 	assert.Equal(t, root5, root6, "Nonce insert must NOT alter state root")
 
 	// 7. SSE event insert does NOT alter root
-	err = db.SSEEventsAppend("session1", "type1", "payload1")
+	err = db.SSEEventsAppend(SSERoute{WebSessionID: "session1"}, "type1", "payload1")
 	require.NoError(t, err)
 	root7, err := db.GetCurrentStateRoot()
 	require.NoError(t, err)

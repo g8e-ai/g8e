@@ -140,7 +140,7 @@ def test_bare_value_refused_for_multi_required_schema():
 
 def test_bare_value_refused_for_nested_object_field():
     """Single required field whose type is a nested model must not be
-    coerced from a bare string — that would silently misrepresent data."""
+    coerced from a bare string - that would silently misrepresent data."""
     with pytest.raises(ValidationError):
         parse_structured_response("something", SingleNested)
 

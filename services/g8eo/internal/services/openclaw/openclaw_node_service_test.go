@@ -353,7 +353,7 @@ func TestSystemWhich_EmptyBins(t *testing.T) {
 
 func TestSystemRun_EchoCommand(t *testing.T) {
 	mg := newMockGateway(t)
-	mg.queueInvoke("sr-1", "test-node", "system.run", `{"command":["/bin/sh","-c","echo hello"]}`)
+	mg.queueInvoke("sr-1", "test-node", "command", `{"command":["/bin/sh","-c","echo hello"]}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -387,7 +387,7 @@ func TestSystemRun_EchoCommand(t *testing.T) {
 
 func TestSystemRun_NonZeroExit(t *testing.T) {
 	mg := newMockGateway(t)
-	mg.queueInvoke("sr-2", "test-node", "system.run", `{"command":["/bin/sh","-c","exit 42"]}`)
+	mg.queueInvoke("sr-2", "test-node", "command", `{"command":["/bin/sh","-c","exit 42"]}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -415,7 +415,7 @@ func TestSystemRun_NonZeroExit(t *testing.T) {
 
 func TestSystemRun_StderrCaptured(t *testing.T) {
 	mg := newMockGateway(t)
-	mg.queueInvoke("sr-3", "test-node", "system.run", `{"command":["/bin/sh","-c","echo err_msg >&2"]}`)
+	mg.queueInvoke("sr-3", "test-node", "command", `{"command":["/bin/sh","-c","echo err_msg >&2"]}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -440,7 +440,7 @@ func TestSystemRun_StderrCaptured(t *testing.T) {
 
 func TestSystemRun_WithCwd(t *testing.T) {
 	mg := newMockGateway(t)
-	mg.queueInvoke("sr-5", "test-node", "system.run", `{"command":["/bin/sh","-c","pwd"],"cwd":"/tmp"}`)
+	mg.queueInvoke("sr-5", "test-node", "command", `{"command":["/bin/sh","-c","pwd"],"cwd":"/tmp"}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -465,7 +465,7 @@ func TestSystemRun_WithCwd(t *testing.T) {
 
 func TestSystemRun_WithEnvVar(t *testing.T) {
 	mg := newMockGateway(t)
-	mg.queueInvoke("sr-6", "test-node", "system.run", `{"command":["/bin/sh","-c","echo $MY_OCT_VAR"],"env":{"MY_OCT_VAR":"from_test"}}`)
+	mg.queueInvoke("sr-6", "test-node", "command", `{"command":["/bin/sh","-c","echo $MY_OCT_VAR"],"env":{"MY_OCT_VAR":"from_test"}}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -490,7 +490,7 @@ func TestSystemRun_WithEnvVar(t *testing.T) {
 
 func TestSystemRun_EmptyCommandArray(t *testing.T) {
 	mg := newMockGateway(t)
-	mg.queueInvoke("sr-7", "test-node", "system.run", `{"command":[]}`)
+	mg.queueInvoke("sr-7", "test-node", "command", `{"command":[]}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -652,7 +652,7 @@ func TestStop_BeforeStart_DoesNotPanic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenClawNodeService: %v", err)
 	}
-	// Stop before Start — cancel is nil, must not panic
+	// Stop before Start - cancel is nil, must not panic
 	assert.NotPanics(t, func() { svc.Stop() })
 }
 

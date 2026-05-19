@@ -35,8 +35,8 @@ class TestCommandRiskContext:
 
     def test_defaults(self):
         ctx = CommandRiskContext()
-        assert ctx.working_directory == ""
-        assert ctx.git_status == ""
+        assert ctx.working_directory is None
+        assert ctx.git_status is None
 
     def test_explicit_values(self):
         ctx = CommandRiskContext(working_directory="/app", git_status="clean")
@@ -50,7 +50,7 @@ class TestCommandRiskContext:
     def test_partial_override_keeps_other_defaults(self):
         ctx = CommandRiskContext(working_directory="/srv")
         assert ctx.working_directory == "/srv"
-        assert ctx.git_status == ""
+        assert ctx.git_status is None
 
 
 class TestErrorAnalysisContext:
@@ -58,7 +58,7 @@ class TestErrorAnalysisContext:
     def test_defaults(self):
         ctx = ErrorAnalysisContext()
         assert ctx.retry_count == 0
-        assert ctx.working_directory == ""
+        assert ctx.working_directory is None
         assert ctx.execution_id is None
 
     def test_retry_count_set(self):
@@ -96,7 +96,7 @@ class TestFileOperationRiskContext:
 
     def test_defaults(self):
         ctx = FileOperationRiskContext()
-        assert ctx.git_status == ""
+        assert ctx.git_status is None
         assert ctx.backup_available is False
 
     def test_explicit_values(self):

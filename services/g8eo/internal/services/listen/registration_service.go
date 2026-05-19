@@ -26,6 +26,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 )
 
@@ -38,11 +39,11 @@ const (
 	maxDeviceLinkTTL               = 7 * 24 * time.Hour
 	defaultDeviceLinkMaxUses       = 1
 	maxDeviceLinkMaxUses           = 1000
-	deviceLinkStatusActive         = "active"
-	deviceLinkStatusPending        = "pending"
-	deviceLinkStatusRevoked        = "revoked"
-	deviceLinkStatusExpired        = "expired"
-	deviceLinkStatusExhausted      = "exhausted"
+	deviceLinkStatusActive         = constants.DeviceLinkStatusActive
+	deviceLinkStatusPending        = constants.DeviceLinkStatusPending
+	deviceLinkStatusRevoked        = constants.DeviceLinkStatusRevoked
+	deviceLinkStatusExpired        = constants.DeviceLinkStatusExpired
+	deviceLinkStatusExhausted      = constants.DeviceLinkStatusExhausted
 	lockTTL                        = 10 * time.Second
 	lockMaxRetries                 = 30
 	lockRetryDelay                 = 50 * time.Millisecond
@@ -50,23 +51,26 @@ const (
 	// Session binding KV prefixes
 	sessionWebBindPrefix      = "g8e:session:web:"
 	sessionOperatorBindPrefix = "g8e:session:operator:"
+	sessionCLIBindPrefix      = "g8e:session:cli:"
 	sessionBindSuffix         = ":bind"
 )
 
 // RegistrationService handles substrate-native device enrollment.
 // Ported from client/DeviceLinkService and g8ee/OperatorAuthService.
 type RegistrationService struct {
-	db     *ListenDBService
-	pki    *PKIAuthority
-	logger *slog.Logger
+	db      *ListenDBService
+	pki     *PKIAuthority
+	logger  *slog.Logger
+	userSvc *UserService
 }
 
 // NewRegistrationService creates a new RegistrationService.
-func NewRegistrationService(db *ListenDBService, pki *PKIAuthority, logger *slog.Logger) *RegistrationService {
+func NewRegistrationService(db *ListenDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService) *RegistrationService {
 	return &RegistrationService{
-		db:     db,
-		pki:    pki,
-		logger: logger,
+		db:      db,
+		pki:     pki,
+		logger:  logger,
+		userSvc: userSvc,
 	}
 }
 
@@ -88,6 +92,10 @@ func sessionWebBindKey(webSessionID string) string {
 
 func sessionOperatorBindKey(operatorSessionID string) string {
 	return sessionOperatorBindPrefix + operatorSessionID + sessionBindSuffix
+}
+
+func sessionCLIBindKey(cliSessionID string) string {
+	return sessionCLIBindPrefix + cliSessionID + sessionBindSuffix
 }
 
 func isValidDeviceLinkToken(token string) bool {
@@ -220,7 +228,7 @@ func (s *RegistrationService) releaseLock(lockKey, lockValue string) error {
 func (s *RegistrationService) CreateDeviceLink(req models.CreateDeviceLinkRequest) (*models.DeviceLinkResponse, error) {
 	if req.UserID == "" && req.Email != "" {
 		sanitized := strings.TrimSpace(strings.ToLower(req.Email))
-		docs, err := s.db.DocQuery(string(constants.CollectionUsers), []models.DocFilter{
+		docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{
 			{Field: "email", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitized))},
 		}, "", 1)
 		if err != nil {
@@ -249,7 +257,7 @@ func (s *RegistrationService) CreateDeviceLink(req models.CreateDeviceLinkReques
 		return nil, fmt.Errorf("ttl_seconds must be between %d and %d", int(minDeviceLinkTTL.Seconds()), int(maxDeviceLinkTTL.Seconds()))
 	}
 	if req.OperatorID != "" {
-		doc, err := s.db.DocGet(string(constants.CollectionOperators), req.OperatorID)
+		doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch operator: %w", err)
 		}
@@ -269,7 +277,7 @@ func (s *RegistrationService) CreateDeviceLink(req models.CreateDeviceLinkReques
 		return nil, fmt.Errorf("failed to generate device link token: %w", err)
 	}
 	now := time.Now().UTC()
-	status := deviceLinkStatusActive
+	var status constants.DeviceLinkStatus = deviceLinkStatusActive
 	if req.OperatorID != "" {
 		status = deviceLinkStatusPending
 	}
@@ -318,7 +326,7 @@ func (s *RegistrationService) ListDeviceLinks(userID string) ([]models.DeviceLin
 		if link.UserID != userID {
 			continue
 		}
-		status := link.Status
+		var status constants.DeviceLinkStatus = link.Status
 		if link.ExpiresAt.Before(time.Now()) {
 			status = deviceLinkStatusExpired
 		}
@@ -371,7 +379,7 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.Operato
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 		{Field: "is_slot", Op: "==", Value: json.RawMessage("true")},
 	}
-	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "slot_number", 0)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "slot_number", 0)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +398,7 @@ func (s *RegistrationService) RotateOperatorAPIKey(operatorID, userID string) er
 	if operatorID == "" {
 		return fmt.Errorf("operator_id is required")
 	}
-	doc, err := s.db.DocGet(string(constants.CollectionOperators), operatorID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
 	if err != nil {
 		return err
 	}
@@ -415,7 +423,7 @@ func (s *RegistrationService) RotateOperatorAPIKey(operatorID, userID string) er
 		"updated_at":       time.Now().UTC(),
 	}
 	updateBytes, _ := json.Marshal(update)
-	if _, err := s.db.DocUpdate(string(constants.CollectionOperators), operatorID, updateBytes); err != nil {
+	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
 		return err
 	}
 
@@ -430,7 +438,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return fmt.Errorf("user_id is required")
 	}
 
-	doc, err := s.db.DocGet(string(constants.CollectionOperators), operatorID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), operatorID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch operator: %w", err)
 	}
@@ -447,7 +455,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return fmt.Errorf("operator does not belong to user")
 	}
 
-	if op.Status == constants.Status.OperatorStatus.Terminated {
+	if op.Status == constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated)) {
 		return nil // Already terminated
 	}
 
@@ -460,7 +468,7 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		update["termination_reason"] = reason
 	}
 	updateBytes, _ := json.Marshal(update)
-	if _, err := s.db.DocUpdate(string(constants.CollectionOperators), operatorID, updateBytes); err != nil {
+	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operatorID, updateBytes); err != nil {
 		return fmt.Errorf("failed to update operator status: %w", err)
 	}
 
@@ -527,7 +535,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 		if linkData.OperatorID == "" {
 			return nil, fmt.Errorf("pending link missing operator_id")
 		}
-		doc, err := s.db.DocGet(string(constants.CollectionOperators), linkData.OperatorID)
+		doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), linkData.OperatorID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch operator: %w", err)
 		}
@@ -561,7 +569,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 	for _, claim := range linkData.Claims {
 		if claim.SystemFingerprint == sanitizedFingerprint {
 			// Device already claimed, reuse the same operator
-			doc, err := s.db.DocGet(string(constants.CollectionOperators), claim.OperatorID)
+			doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), claim.OperatorID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch operator: %w", err)
 			}
@@ -590,7 +598,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 				if json.Unmarshal([]byte(freshLinkRaw), &freshLink) == nil {
 					for _, claim := range freshLink.Claims {
 						if claim.SystemFingerprint == sanitizedFingerprint {
-							doc, err := s.db.DocGet(string(constants.CollectionOperators), claim.OperatorID)
+							doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), claim.OperatorID)
 							if err == nil && doc != nil {
 								operator, _ := s.toOperatorDoc(doc)
 								if operator != nil {
@@ -633,7 +641,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", linkData.UserID))},
 		{Field: "system_fingerprint", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitizedFingerprint))},
 	}
-	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err == nil && len(docs) > 0 {
 		operator, _ = s.toOperatorDoc(docs[0])
 	}
@@ -644,7 +652,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", linkData.UserID))},
 			{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.Status.OperatorStatus.Offline))},
 		}
-		docs, err = s.db.DocQuery(string(constants.CollectionOperators), filters, "", 1)
+		docs, err = s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 		if err == nil && len(docs) > 0 {
 			operator, _ = s.toOperatorDoc(docs[0])
 		}
@@ -671,12 +679,34 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 		return nil, err
 	}
 
-	// 8. Acquire lock to update linkData with claim
+	// 8. Retire bootstrap user if this is a real login (plan §4.5)
+	// Only retire if the new user is different from the bootstrap user
+	if s.userSvc != nil && linkData.UserID != "" {
+		bootstrapUser, err := s.userSvc.FindBootstrapUser()
+		if err != nil {
+			s.logger.Error("[REGISTRATION] Failed to check for bootstrap user", string(constants.ConnectionStateError), err)
+			// Non-fatal - continue with registration
+		} else if bootstrapUser != nil && bootstrapUser.ID != linkData.UserID {
+			// This is a real login by a different user - retire the bootstrap user
+			s.logger.Info("[REGISTRATION] Retiring bootstrap user on real login",
+				"bootstrap_user_id", bootstrapUser.ID,
+				"new_user_id", linkData.UserID,
+				"operator_id", operator.ID)
+			if err := s.userSvc.Disable(bootstrapUser.ID, "retired_by_real_login", linkData.UserID, operator.ID); err != nil {
+				s.logger.Error("[REGISTRATION] Failed to retire bootstrap user", string(constants.ConnectionStateError), err)
+				// Hard failure - no half-state (plan §4.5)
+				s.fingerprintSetRemove(token, sanitizedFingerprint)
+				return nil, fmt.Errorf("registration failed: bootstrap retirement failed: %w", err)
+			}
+		}
+	}
+
+	// 9. Acquire lock to update linkData with claim
 	lockKey := deviceLinkLockKey(token)
 	lockValue := uuid.NewString()
 	lockAcquired, err := s.acquireLock(lockKey)
 	if err != nil || !lockAcquired {
-		s.logger.Error("[REGISTRATION] Failed to acquire registration lock", "token", token, "error", err)
+		s.logger.Error("[REGISTRATION] Failed to acquire registration lock", "token", token, string(constants.ConnectionStateError), err)
 		return resp, nil // Registration succeeded, but claim update failed - device can retry
 	}
 	defer s.releaseLock(lockKey, lockValue)
@@ -723,22 +753,27 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 
 // completeRegistration performs the common registration logic after operator slot is resolved.
 func (s *RegistrationService) completeRegistration(operator *models.OperatorDocumentGo, linkData *models.DeviceLinkData, req models.OperatorRegistrationRequest, sanitizedFingerprint string) (*models.OperatorRegistrationResponse, error) {
-	// Create session
-	sessionID := uuid.NewString()
-	session := &models.SessionSummary{
-		ID:        sessionID,
-		CreatedAt: time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+	// Create operator session
+	operatorSessionID := uuid.NewString()
+	operatorSessionSummary := &models.SessionSummary{
+		OperatorSessionID: operatorSessionID,
+		CreatedAt:         time.Now().UTC(),
+		ExpiresAt:         time.Now().UTC().Add(24 * time.Hour),
 	}
 
 	// Update operator document
 	update := map[string]interface{}{
 		"status":              constants.Status.OperatorStatus.Active,
-		"operator_session_id": sessionID,
+		"operator_session_id": operatorSessionID,
 		"system_fingerprint":  sanitizedFingerprint,
-		"claimed":             true,
-		"claimed_at":          time.Now().UTC(),
+		string(constants.HistoryEventTypeClaimed): true,
+		"claimed_at": time.Now().UTC(),
 	}
+
+	// Mint a strictly-disjoint cli_session_id alongside the operator session.
+	// See OperatorRegistrationResponse doc: the two session types must never
+	// share an identifier.
+	cliSessionID := uuid.NewString()
 
 	// CSR-based enrollment
 	if req.CSR != "" {
@@ -748,7 +783,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 			return nil, fmt.Errorf("invalid CSR PEM format")
 		}
 
-		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, linkData.OrganizationID, operator.ID, sessionID)
+		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, linkData.OrganizationID, operator.ID, "", operatorSessionID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign operator CSR: %w", err)
 		}
@@ -759,8 +794,31 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		return nil, fmt.Errorf("CSR required for device registration")
 	}
 
+	// CLI certificate generation (optional for backwards compatibility)
+	// If the client provides a CLI CSR, generate a CLI certificate with distinct SPIFFE identity
+	var cliCertPEM, cliCertChainPEM string
+	if req.CLICSR != "" {
+		block, _ := pem.Decode([]byte(req.CLICSR))
+		if block == nil || block.Type != "CERTIFICATE REQUEST" {
+			return nil, fmt.Errorf("invalid CLI CSR PEM format")
+		}
+
+		var err error
+		cliCertPEM, cliCertChainPEM, err = s.pki.SignCSR(req.CLICSR, constants.LeafTypeCLI, "", "", linkData.UserID, cliSessionID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to sign CLI CSR: %w", err)
+		}
+	} else {
+		// [SPIFFE-DRIFT] Fallback: If no CLI CSR provided, the CLI cert returned MUST be
+		// the operator cert for backwards compatibility with older binaries, even though
+		// they will fail modern /cli/ path checks.
+		// NOTE: New protocol requires CLI CSR for distinct /cli/ SPIFFE ID.
+		cliCertPEM = update["operator_cert"].(string)
+		cliCertChainPEM = update["operator_cert_chain"].(string)
+	}
+
 	updateBytes, _ := json.Marshal(update)
-	_, err := s.db.DocUpdate(string(constants.CollectionOperators), operator.ID, updateBytes)
+	_, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), operator.ID, updateBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update operator status: %w", err)
 	}
@@ -772,14 +830,33 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	finalCertPEM := update["operator_cert"].(string)
 	finalChainPEM := update["operator_cert_chain"].(string)
 
+	// Store the binding between operator_session_id and cli_session_id in a first-class
+	// collection to support metadata, expiry, and revocation. Without this binding,
+	// any authenticated operator could drain any cli_session_id's event buffer.
+	cliSession := models.CLISession{
+		ID:                cliSessionID,
+		UserID:            linkData.UserID,
+		OperatorSessionID: operatorSessionID,
+		SystemFingerprint: sanitizedFingerprint,
+		CreatedAt:         time.Now().UTC(),
+		ExpiresAt:         time.Now().UTC().Add(24 * time.Hour), // Match operator session expiry
+	}
+	cliSessionBytes, _ := json.Marshal(cliSession)
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
+		return nil, fmt.Errorf("failed to persist CLI session: %w", err)
+	}
+
 	return &models.OperatorRegistrationResponse{
-		Success:           true,
-		OperatorID:        operator.ID,
-		OperatorSessionID: sessionID,
-		OperatorCert:      finalCertPEM,
-		OperatorCertChain: finalChainPEM,
-		HubTrustBundle:    string(hubBundle),
-		Session:           session,
+		Success:                true,
+		OperatorID:             operator.ID,
+		OperatorSessionID:      operatorSessionID,
+		CLISessionID:           cliSessionID,
+		OperatorCert:           finalCertPEM,
+		OperatorCertChain:      finalChainPEM,
+		CLICert:                cliCertPEM,
+		CLICertChain:           cliCertChainPEM,
+		HubTrustBundle:         string(hubBundle),
+		OperatorSessionSummary: operatorSessionSummary,
 	}, nil
 }
 
@@ -806,7 +883,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 	filters := []models.DocFilter{
 		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 	}
-	docs, err := s.db.DocQuery(string(constants.CollectionOperators), filters, "", 0)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 0)
 	if err == nil {
 		slotNumber = len(docs) + 1
 	}
@@ -815,9 +892,9 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 		ID:             id,
 		UserID:         userID,
 		OrganizationID: orgID,
-		Component:      constants.Status.ComponentName.G8EO,
+		Component:      constants.ComponentName(marshaler.Status(constants.Status.ComponentName.G8EO)),
 		Name:           fmt.Sprintf("operator-%d", slotNumber),
-		Status:         constants.Status.OperatorStatus.Offline,
+		Status:         constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Offline)),
 		SlotNumber:     slotNumber,
 		IsSlot:         true,
 		OperatorType:   constants.Status.OperatorType.System,
@@ -826,7 +903,7 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 	}
 
 	b, _ := json.Marshal(op)
-	if err := s.db.DocSet(string(constants.CollectionOperators), id, b); err != nil {
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), id, b); err != nil {
 		return nil, err
 	}
 
@@ -835,8 +912,8 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 
 // BindOperators binds one or more operators to a session.
 func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*models.BindOperatorsResponse, error) {
-	if req.SessionID == "" {
-		return nil, fmt.Errorf("session_id is required")
+	if req.WebSessionID == "" {
+		return nil, fmt.Errorf("web_session_id is required")
 	}
 	if req.UserID == "" {
 		return nil, fmt.Errorf("user_id is required")
@@ -850,7 +927,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 	var lastErr error
 
 	for _, opID := range req.OperatorIDs {
-		doc, err := s.db.DocGet(string(constants.CollectionOperators), opID)
+		doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), opID)
 		if err != nil {
 			failed = append(failed, opID)
 			lastErr = err
@@ -880,7 +957,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 
 		// 1. Update KV binding
 		// sessionBindOperators(operatorSessionId) -> webSessionId
-		if err := s.db.KVSet(sessionOperatorBindKey(op.OperatorSessionID), req.SessionID, 0); err != nil {
+		if err := s.db.KVSet(sessionOperatorBindKey(op.OperatorSessionID), req.WebSessionID, 0); err != nil {
 			failed = append(failed, opID)
 			lastErr = err
 			continue
@@ -888,7 +965,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 
 		// sessionWebBind(webSessionId) -> operatorSessionId (SET)
 		// We use a JSON array for the SET since our KV store is simple
-		webBindKey := sessionWebBindKey(req.SessionID)
+		webBindKey := sessionWebBindKey(req.WebSessionID)
 		raw, found := s.db.KVGet(webBindKey)
 		var sessionIDs []string
 		if found {
@@ -908,21 +985,21 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 		}
 
 		// 2. Update durability document
-		docID := req.SessionID
-		existingDoc, _ := s.db.DocGet(string(constants.CollectionBoundSessions), docID)
+		docID := req.WebSessionID
+		existingDoc, _ := s.db.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
 		if existingDoc == nil {
 			newDoc := models.BoundSessionsDocumentGo{
 				ID:                 docID,
-				WebSessionID:       req.SessionID,
+				WebSessionID:       req.WebSessionID,
 				UserID:             req.UserID,
 				OperatorSessionIDs: []string{op.OperatorSessionID},
 				OperatorIDs:        []string{opID},
 				BoundAt:            time.Now().UTC(),
 				LastUpdatedAt:      time.Now().UTC(),
-				Status:             constants.Status.OperatorStatus.Active,
+				Status:             constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Active)),
 			}
 			body, _ := json.Marshal(newDoc)
-			s.db.DocSet(string(constants.CollectionBoundSessions), docID, body)
+			s.db.DocSet(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
 		} else {
 			var bDoc models.BoundSessionsDocumentGo
 			b, _ := json.Marshal(existingDoc.ForWire())
@@ -939,14 +1016,14 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				bDoc.OperatorIDs = append(bDoc.OperatorIDs, opID)
 				bDoc.OperatorSessionIDs = append(bDoc.OperatorSessionIDs, op.OperatorSessionID)
 				bDoc.LastUpdatedAt = time.Now().UTC()
-				bDoc.Status = constants.Status.OperatorStatus.Active
+				bDoc.Status = constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Active))
 				body, _ := json.Marshal(bDoc)
-				s.db.DocUpdate(string(constants.CollectionBoundSessions), docID, body)
+				s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
 			}
 		}
 
 		// 3. Update operator document itself (for UI)
-		s.db.DocUpdate(string(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.SessionID)))
+		s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.WebSessionID)))
 
 		bound = append(bound, opID)
 	}
@@ -966,8 +1043,8 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 
 // UnbindOperators unbinds one or more operators from a session.
 func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest) (*models.UnbindOperatorsResponse, error) {
-	if req.SessionID == "" {
-		return nil, fmt.Errorf("session_id is required")
+	if req.WebSessionID == "" {
+		return nil, fmt.Errorf("web_session_id is required")
 	}
 	if req.UserID == "" {
 		return nil, fmt.Errorf("user_id is required")
@@ -978,7 +1055,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 	var lastErr error
 
 	for _, opID := range req.OperatorIDs {
-		doc, err := s.db.DocGet(string(constants.CollectionOperators), opID)
+		doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), opID)
 		if err != nil {
 			failed = append(failed, opID)
 			lastErr = err
@@ -1005,7 +1082,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 		if op.OperatorSessionID != "" {
 			s.db.KVDelete(sessionOperatorBindKey(op.OperatorSessionID))
 
-			webBindKey := sessionWebBindKey(req.SessionID)
+			webBindKey := sessionWebBindKey(req.WebSessionID)
 			raw, found := s.db.KVGet(webBindKey)
 			if found {
 				var sessionIDs []string
@@ -1026,8 +1103,8 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 		}
 
 		// 2. Update durability document
-		docID := req.SessionID
-		existingDoc, _ := s.db.DocGet(string(constants.CollectionBoundSessions), docID)
+		docID := req.WebSessionID
+		existingDoc, _ := s.db.DocGet(marshaler.CollectionName(constants.CollectionBoundSessions), docID)
 		if existingDoc != nil {
 			var bDoc models.BoundSessionsDocumentGo
 			b, _ := json.Marshal(existingDoc.ForWire())
@@ -1045,14 +1122,14 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 			bDoc.OperatorSessionIDs = newSessIDs
 			bDoc.LastUpdatedAt = time.Now().UTC()
 			if len(newOpIDs) == 0 {
-				bDoc.Status = "ended"
+				bDoc.Status = constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated))
 			}
 			body, _ := json.Marshal(bDoc)
-			s.db.DocUpdate(string(constants.CollectionBoundSessions), docID, body)
+			s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
 		}
 
 		// 3. Update operator document itself
-		s.db.DocUpdate(string(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`))
+		s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`))
 
 		unbound = append(unbound, opID)
 	}
@@ -1070,19 +1147,19 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 	return res, nil
 }
 
-// SetTargetContext sets the active target operator for a session.
+// SetTargetContext sets the active target operator for a web session.
 func (s *RegistrationService) SetTargetContext(req models.SetTargetContextRequest) (*models.SetTargetContextResponse, error) {
-	if req.SessionID == "" {
-		return nil, fmt.Errorf("session_id is required")
+	if req.WebSessionID == "" {
+		return nil, fmt.Errorf("web_session_id is required")
 	}
 	if req.UserID == "" {
 		return nil, fmt.Errorf("user_id is required")
 	}
 
-	// For now, "target context" is just making sure the operator is bound to the session.
-	// In the future, this might set a specific "active" flag in the session state.
+	// For now, "target context" is just making sure the operator is bound to the operator session.
+	// In the future, this might set a specific "active" flag in the operator session state.
 
-	doc, err := s.db.DocGet(string(constants.CollectionOperators), req.OperatorID)
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), req.OperatorID)
 	if err != nil {
 		return nil, err
 	}
@@ -1097,12 +1174,12 @@ func (s *RegistrationService) SetTargetContext(req models.SetTargetContextReques
 		return nil, fmt.Errorf("operator does not belong to user")
 	}
 
-	if op.BoundWebSessionID != req.SessionID {
+	if op.BoundWebSessionID != req.WebSessionID {
 		// Not bound, so bind it first
 		bindRes, err := s.BindOperators(models.BindOperatorsRequest{
-			OperatorIDs: []string{req.OperatorID},
-			UserID:      req.UserID,
-			SessionID:   req.SessionID,
+			OperatorIDs:  []string{req.OperatorID},
+			UserID:       req.UserID,
+			WebSessionID: req.WebSessionID,
 		})
 		if err != nil {
 			return nil, err

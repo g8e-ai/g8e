@@ -68,6 +68,36 @@ class FakeDBService:
     async def batch_write(self, operations) -> CacheOperationResult:
         return CacheOperationResult(success=True)
 
+    async def get_document_with_cache(
+        self, collection: str, document_id: str
+    ) -> dict | None:
+        return None
+
+    async def query_documents(
+        self,
+        collection: str,
+        field_filters,
+        order_by = None,
+        limit: int = 100,
+        select_fields = None,
+        ttl: int | None = 300,
+        bypass_cache: bool = False,
+    ) -> list[dict]:
+        return []
+
+    async def append_to_array(
+        self,
+        collection: str,
+        document_id: str,
+        array_field: str,
+        items_to_add: list[object],
+        additional_updates: dict[str, object],
+    ) -> CacheOperationResult:
+        return CacheOperationResult(success=True)
+
+    async def invalidate_query_cache(self, collection: str) -> int:
+        return 0
+
     async def close(self) -> None:
         pass
 

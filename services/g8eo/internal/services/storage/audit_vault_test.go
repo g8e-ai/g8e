@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/vault"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
@@ -147,7 +148,7 @@ func TestAuditVaultService_Event(t *testing.T) {
 	event := &Event{
 		OperatorSessionID:   operatorSessionID,
 		Timestamp:           time.Now().UTC(),
-		Type:                EventTypeCmdExec,
+		Type:                constants.Event.Operator.Audit.Command,
 		ContentText:         "List files",
 		CommandRaw:          "ls -la",
 		CommandExitCode:     &exitCode,
@@ -167,7 +168,7 @@ func TestAuditVaultService_Event(t *testing.T) {
 
 	retrievedEvent := events[0]
 	assert.Equal(t, operatorSessionID, retrievedEvent.OperatorSessionID)
-	assert.Equal(t, EventTypeCmdExec, retrievedEvent.Type)
+	assert.Equal(t, constants.Event.Operator.Audit.Command, retrievedEvent.Type)
 	assert.Equal(t, "ls -la", retrievedEvent.CommandRaw)
 	assert.Equal(t, "file1.txt\nfile2.txt", retrievedEvent.CommandStdout)
 }
@@ -196,7 +197,7 @@ func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
 	event := &Event{
 		OperatorSessionID:   operatorSessionID,
 		Timestamp:           time.Now().UTC(),
-		Type:                EventTypeCmdExec,
+		Type:                constants.Event.Operator.Audit.Command,
 		ContentText:         "direct terminal command",
 		CommandRaw:          "uptime",
 		CommandExitCode:     &exitCode,
@@ -235,7 +236,7 @@ func TestAuditVaultService_RecordEvent_RejectsMissingSession(t *testing.T) {
 
 	eventID, err := avs.RecordEvent(&Event{
 		Timestamp:   time.Now().UTC(),
-		Type:        EventTypeCmdExec,
+		Type:        constants.Event.Operator.Audit.Command,
 		ContentText: "missing session",
 		CommandRaw:  "uptime",
 	})
@@ -270,14 +271,14 @@ func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 		{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         time.Now().UTC(),
-			Type:              EventTypeCmdExec,
+			Type:              constants.Event.Operator.Audit.Command,
 			ContentText:       "valid event",
 			CommandRaw:        "uptime",
 		},
 		{
 			OperatorSessionID: "unknown-batch-session",
 			Timestamp:         time.Now().UTC(),
-			Type:              EventTypeCmdExec,
+			Type:              constants.Event.Operator.Audit.Command,
 			ContentText:       "invalid event",
 			CommandRaw:        "id",
 		},
@@ -316,13 +317,13 @@ func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.
 		{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         time.Now().UTC(),
-			Type:              EventTypeUserMsg,
+			Type:              constants.Event.Operator.Audit.UserMsg,
 			ContentText:       "hello",
 		},
 		{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         time.Now().UTC(),
-			Type:              EventTypeAIMsg,
+			Type:              constants.Event.Operator.Audit.AIMsg,
 			ContentText:       "world",
 		},
 	})
@@ -367,7 +368,7 @@ func TestAuditVaultService_OutputTruncation(t *testing.T) {
 	event := &Event{
 		OperatorSessionID:   operatorSessionID,
 		Timestamp:           time.Now().UTC(),
-		Type:                EventTypeCmdExec,
+		Type:                constants.Event.Operator.Audit.Command,
 		ContentText:         "Large output test",
 		CommandRaw:          "echo large",
 		CommandExitCode:     &exitCode,
@@ -419,7 +420,7 @@ func TestAuditVaultService_FileMutation(t *testing.T) {
 	event := &Event{
 		OperatorSessionID:   operatorSessionID,
 		Timestamp:           time.Now().UTC(),
-		Type:                EventTypeFileMutation,
+		Type:                constants.Event.Operator.FileEdit.Completed,
 		ContentText:         "Write config file",
 		CommandRaw:          "file_write /etc/nginx/nginx.conf",
 		CommandExitCode:     &exitCode,
@@ -539,7 +540,7 @@ func TestAuditVaultService_EventPagination(t *testing.T) {
 		event := &Event{
 			OperatorSessionID:   operatorSessionID,
 			Timestamp:           time.Now().UTC(),
-			Type:                EventTypeCmdExec,
+			Type:                constants.Event.Operator.Audit.Command,
 			ContentText:         fmt.Sprintf("Event %d", i),
 			CommandRaw:          fmt.Sprintf("echo %d", i),
 			CommandExitCode:     &exitCode,
@@ -605,7 +606,7 @@ func TestAuditVaultService_EventOrdering(t *testing.T) {
 		event := &Event{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         baseTime.Add(time.Duration(i) * time.Minute),
-			Type:              EventTypeCmdExec,
+			Type:              constants.Event.Operator.Audit.Command,
 			ContentText:       fmt.Sprintf("Event %d", i),
 		}
 		_, err := avs.RecordEvent(event)
@@ -652,7 +653,7 @@ func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
 	event := &Event{
 		OperatorSessionID: operatorSessionID,
 		Timestamp:         time.Now().UTC(),
-		Type:              EventTypeFileMutation,
+		Type:              constants.Event.Operator.FileEdit.Completed,
 		ContentText:       "Batch file operation",
 		CommandExitCode:   &exitCode,
 	}
@@ -713,7 +714,7 @@ func TestAuditVaultService_NullExitCode(t *testing.T) {
 	event := &Event{
 		OperatorSessionID: operatorSessionID,
 		Timestamp:         time.Now().UTC(),
-		Type:              EventTypeUserMsg,
+		Type:              constants.Event.Operator.Audit.UserMsg,
 		ContentText:       "User message without exit code",
 		CommandExitCode:   nil, // No exit code for user messages
 	}
@@ -751,11 +752,11 @@ func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
 	err = avs.CreateSession(operatorSessionID, "Event Types Test", "user@test.com")
 	require.NoError(t, err)
 
-	eventTypes := []EventType{
-		EventTypeUserMsg,
-		EventTypeAIMsg,
-		EventTypeCmdExec,
-		EventTypeFileMutation,
+	eventTypes := []constants.EventType{
+		constants.Event.Operator.Audit.UserMsg,
+		constants.Event.Operator.Audit.AIMsg,
+		constants.Event.Operator.Audit.Command,
+		constants.Event.Operator.FileEdit.Completed,
 	}
 
 	for _, eventType := range eventTypes {
@@ -774,7 +775,7 @@ func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
 	assert.Len(t, events, 4)
 
 	// Verify all event types are present
-	types := make(map[EventType]bool)
+	types := make(map[constants.EventType]bool)
 	for _, e := range events {
 		types[e.Type] = true
 	}
@@ -816,7 +817,7 @@ func TestAuditVaultService_StderrTruncation(t *testing.T) {
 	event := &Event{
 		OperatorSessionID: operatorSessionID,
 		Timestamp:         time.Now().UTC(),
-		Type:              EventTypeCmdExec,
+		Type:              constants.Event.Operator.Audit.Command,
 		CommandRaw:        "failing_command",
 		CommandExitCode:   &exitCode,
 		CommandStdout:     "small stdout",
@@ -1204,7 +1205,7 @@ func TestAuditVaultService_LongContentFields(t *testing.T) {
 	event := &Event{
 		OperatorSessionID: operatorSessionID,
 		Timestamp:         time.Now().UTC(),
-		Type:              EventTypeCmdExec,
+		Type:              constants.Event.Operator.Audit.Command,
 		ContentText:       string(longContent),
 		CommandRaw:        "cat large_file",
 		CommandExitCode:   &exitCode,
@@ -1257,7 +1258,7 @@ func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
 		event := &Event{
 			OperatorSessionID: operatorSessionID,
 			Timestamp:         time.Now().UTC(),
-			Type:              EventTypeFileMutation,
+			Type:              constants.Event.Operator.FileEdit.Completed,
 		}
 		eventID, err := avs.RecordEvent(event)
 		require.NoError(t, err)
@@ -1380,7 +1381,7 @@ func TestAuditVaultService_WithEncryption(t *testing.T) {
 	event := &Event{
 		OperatorSessionID: "encrypted-session-1",
 		Timestamp:         time.Now().UTC(),
-		Type:              EventTypeCmdExec,
+		Type:              constants.Event.Operator.Audit.Command,
 		ContentText:       "User message about secrets",
 		CommandRaw:        "echo secret",
 		CommandExitCode:   &exitCode,
@@ -1438,7 +1439,7 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 	_, err = avs1.RecordEvent(&Event{
 		OperatorSessionID: "locked-test-session",
 		Timestamp:         time.Now().UTC(),
-		Type:              EventTypeCmdExec,
+		Type:              constants.Event.Operator.Audit.Command,
 		CommandRaw:        "cat /etc/passwd",
 		CommandExitCode:   &exitCode,
 		CommandStdout:     secretData,
@@ -1515,7 +1516,7 @@ func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
 	_, err = avs.RecordEvent(&Event{
 		OperatorSessionID: "rekey-session",
 		Timestamp:         time.Now().UTC(),
-		Type:              EventTypeCmdExec,
+		Type:              constants.Event.Operator.Audit.Command,
 		CommandRaw:        "echo test",
 		CommandExitCode:   &exitCode,
 		CommandStdout:     originalData,
@@ -1589,7 +1590,7 @@ func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
 	_, err = avs1.RecordEvent(&Event{
 		OperatorSessionID: "mixed-session",
 		Timestamp:         time.Now().UTC(),
-		Type:              EventTypeCmdExec,
+		Type:              constants.Event.Operator.Audit.Command,
 		CommandRaw:        "echo plaintext",
 		CommandExitCode:   &exitCode,
 		CommandStdout:     unencryptedData,
@@ -1622,7 +1623,7 @@ func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
 	_, err = avs2.RecordEvent(&Event{
 		OperatorSessionID: "mixed-session",
 		Timestamp:         time.Now().UTC(),
-		Type:              EventTypeCmdExec,
+		Type:              constants.Event.Operator.Audit.Command,
 		CommandRaw:        "echo encrypted",
 		CommandExitCode:   &exitCode,
 		CommandStdout:     encryptedData,

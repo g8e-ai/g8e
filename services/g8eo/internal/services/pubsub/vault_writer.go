@@ -26,7 +26,7 @@ import (
 
 // VaultWriter owns dual-vault persistence for command executions and file diffs.
 // Raw vault receives unscrubbed data; scrubbed vault receives sentinel-processed data.
-// Both writes are best-effort — failures are logged but never propagate to callers.
+// Both writes are best-effort - failures are logged but never propagate to callers.
 type VaultWriter struct {
 	config     *config.Config
 	logger     *slog.Logger
@@ -35,7 +35,7 @@ type VaultWriter struct {
 	localStore *storage.LocalStoreService
 }
 
-// NewVaultWriter creates a VaultWriter. All service dependencies are optional — a nil
+// NewVaultWriter creates a VaultWriter. All service dependencies are optional - a nil
 // service is treated as disabled, matching the IsEnabled() pattern used elsewhere.
 func NewVaultWriter(
 	cfg *config.Config,
@@ -67,7 +67,7 @@ type executionWriteParams struct {
 	caseID          string
 	taskID          string
 	investigationID string
-	vaultMode       string
+	vaultMode       constants.VaultMode
 }
 
 // WriteExecution persists a command execution result to the dual vault.
@@ -93,7 +93,7 @@ func (vw *VaultWriter) WriteExecution(p executionWriteParams) {
 			OperatorID:       vw.config.OperatorID,
 		}
 		if err := vw.rawVault.StoreRawExecution(rawRecord); err != nil {
-			vw.logger.Warn("Failed to store raw execution in raw vault", "error", err)
+			vw.logger.Warn("Failed to store raw execution in raw vault", string(constants.ConnectionStateError), err)
 		} else {
 			vw.logger.Info("Raw execution stored in raw vault (customer data)",
 				"execution_id", p.id,
@@ -128,7 +128,7 @@ func (vw *VaultWriter) WriteExecution(p executionWriteParams) {
 			OperatorID:       vw.config.OperatorID,
 		}
 		if err := vw.localStore.StoreExecution(execRecord); err != nil {
-			vw.logger.Warn("Failed to store scrubbed execution in scrubbed vault", "error", err)
+			vw.logger.Warn("Failed to store scrubbed execution in scrubbed vault", string(constants.ConnectionStateError), err)
 		} else {
 			vw.logger.Info("Scrubbed execution stored in scrubbed vault (AI-accessible)",
 				"execution_id", p.id,
@@ -171,7 +171,7 @@ func (vw *VaultWriter) WriteFileDiff(p fileDiffWriteParams) {
 			OperatorID:        vw.config.OperatorID,
 		}
 		if err := vw.rawVault.StoreRawFileDiff(rawRecord); err != nil {
-			vw.logger.Warn("Failed to store raw file diff in raw vault", "error", err)
+			vw.logger.Warn("Failed to store raw file diff in raw vault", string(constants.ConnectionStateError), err)
 		} else {
 			vw.logger.Info("Raw file diff stored in raw vault (customer data)",
 				"diff_id", p.diffID,
@@ -201,7 +201,7 @@ func (vw *VaultWriter) WriteFileDiff(p fileDiffWriteParams) {
 			OperatorID:        vw.config.OperatorID,
 		}
 		if err := vw.localStore.StoreFileDiff(scrubbedRecord); err != nil {
-			vw.logger.Warn("Failed to store scrubbed file diff in scrubbed vault", "error", err)
+			vw.logger.Warn("Failed to store scrubbed file diff in scrubbed vault", string(constants.ConnectionStateError), err)
 		} else {
 			vw.logger.Info("Scrubbed file diff stored in scrubbed vault (AI-accessible)",
 				"diff_id", p.diffID,

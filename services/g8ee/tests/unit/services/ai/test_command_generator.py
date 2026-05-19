@@ -68,9 +68,9 @@ from app.models.tool_results import (
 from app.services.ai.generator import (
     TribunalEmitter,
     _build_and_emit_result,
-    _member_for_pass,
     generate_command,
 )
+from app.services.ai.tribunal.utils import member_for_pass
 from app.services.ai.tribunal.stages.generation import _run_generation_pass
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 from app.services.ai.tribunal.stages.warden import _run_warden_stage
@@ -242,7 +242,7 @@ class TestRoleImportRegression:
             command_constraints_message="No whitelist or blacklist constraints are active.",
             investigation_id="inv-test",
         )
-        final_cmd, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id = (
+        _final_cmd, _outcome, auditor_passed, auditor_revision, _auditor_reason, _commitment_id = (
             audit_result.final_command,
             audit_result.outcome,
             audit_result.passed,
@@ -594,9 +594,9 @@ class TestNewEnumValues:
 
     def test_tribunal_terminal_events_are_distinct(self):
         # Terminal states are distinguished by event type, not a reason enum.
-        assert EventType.TRIBUNAL_SESSION_SYSTEM_ERROR != EventType.TRIBUNAL_SESSION_GENERATION_FAILED
-        assert EventType.TRIBUNAL_SESSION_DISABLED != EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED
-        assert EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE != EventType.TRIBUNAL_SESSION_AUDITOR_FAILED
+        assert EventType.AI_TRIBUNAL_SESSION_SYSTEM_ERROR != EventType.AI_TRIBUNAL_SESSION_GENERATION_FAILED
+        assert EventType.AI_TRIBUNAL_SESSION_DISABLED != EventType.AI_TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED
+        assert EventType.AI_TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE != EventType.AI_TRIBUNAL_SESSION_AUDITOR_FAILED
 
 
 class TestTribunalProviderUnavailableError:
@@ -675,7 +675,7 @@ class TestTribunalModelNotConfiguredError:
             mock_event_service.publish.assert_called()
             call_args = mock_event_service.publish.call_args
             event = call_args[0][0]
-            assert event.event_type == EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED
+            assert event.event_type == EventType.AI_TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED
             assert event.payload.provider == "ollama"
             assert isinstance(event.payload, TribunalSessionModelNotConfiguredPayload)
 
@@ -905,11 +905,11 @@ class TestRunAuditStageWardenRiskAnalysis:
         analyzer.analyze_error_and_suggest_fix.assert_awaited_once()
 
         emitted_types = [call.args[0].event_type for call in mock_event_service.publish.call_args_list]
-        assert EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_WARDEN_BLOCKED in emitted_types
         warden_payloads = [
             call.args[0].payload
             for call in mock_event_service.publish.call_args_list
-            if call.args[0].event_type == EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED
+            if call.args[0].event_type == EventType.AI_TRIBUNAL_SESSION_WARDEN_BLOCKED
         ]
         assert len(warden_payloads) == 1
         payload = warden_payloads[0]
@@ -1030,7 +1030,7 @@ class TestGenerateCommandHappyPath:
         The first ``passes`` calls return ``generation_text`` (concurrent
         generation stage). Subsequent calls return ``auditor_text`` (or
         repeat ``generation_text`` when ``auditor_text`` is ``None``).
-        
+
         Auditor responses are automatically converted to JSON format.
         """
         call_count = 0
@@ -1095,11 +1095,11 @@ class TestGenerateCommandHappyPath:
             for call in mock_event_service.publish.call_args_list
         ]
         from app.constants import EventType
-        assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
-        assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 3
-        assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
-        assert EventType.TRIBUNAL_SESSION_COMPLETED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_AUDIT_STARTED not in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_STARTED in emitted_types
+        assert emitted_types.count(EventType.AI_TRIBUNAL_VOTING_PASS_COMPLETED) == 3
+        assert EventType.AI_TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_COMPLETED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_AUDIT_STARTED not in emitted_types
 
     @pytest.mark.asyncio
     async def test_verified_path_auditor_approves(self):
@@ -1139,12 +1139,12 @@ class TestGenerateCommandHappyPath:
             for call in mock_event_service.publish.call_args_list
         ]
         from app.constants import EventType
-        assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
-        assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 3
-        assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED in emitted_types
-        assert EventType.TRIBUNAL_SESSION_COMPLETED in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_STARTED in emitted_types
+        assert emitted_types.count(EventType.AI_TRIBUNAL_VOTING_PASS_COMPLETED) == 3
+        assert EventType.AI_TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_AUDIT_COMPLETED in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_COMPLETED in emitted_types
 
     @pytest.mark.asyncio
     async def test_verification_failed_path_auditor_revises(self):
@@ -1183,9 +1183,9 @@ class TestGenerateCommandHappyPath:
             for call in mock_event_service.publish.call_args_list
         ]
         from app.constants import EventType
-        assert EventType.TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED in emitted_types
-        assert EventType.TRIBUNAL_SESSION_COMPLETED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_AUDIT_COMPLETED in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_COMPLETED in emitted_types
 
     @pytest.mark.asyncio
     async def test_partial_failure_surviving_candidates_reach_consensus(self):
@@ -1296,12 +1296,12 @@ class TestGenerateCommandHappyPath:
             for call in mock_event_service.publish.call_args_list
         ]
 
-        started_idx = emitted_types.index(EventType.TRIBUNAL_SESSION_STARTED)
-        pass_indices = [i for i, t in enumerate(emitted_types) if t == EventType.TRIBUNAL_VOTING_PASS_COMPLETED]
-        consensus_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED)
-        review_started_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_AUDIT_STARTED)
-        review_completed_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED)
-        completed_idx = emitted_types.index(EventType.TRIBUNAL_SESSION_COMPLETED)
+        started_idx = emitted_types.index(EventType.AI_TRIBUNAL_SESSION_STARTED)
+        pass_indices = [i for i, t in enumerate(emitted_types) if t == EventType.AI_TRIBUNAL_VOTING_PASS_COMPLETED]
+        consensus_idx = emitted_types.index(EventType.AI_TRIBUNAL_VOTING_CONSENSUS_REACHED)
+        review_started_idx = emitted_types.index(EventType.AI_TRIBUNAL_VOTING_AUDIT_STARTED)
+        review_completed_idx = emitted_types.index(EventType.AI_TRIBUNAL_VOTING_AUDIT_COMPLETED)
+        completed_idx = emitted_types.index(EventType.AI_TRIBUNAL_SESSION_COMPLETED)
 
         assert started_idx < min(pass_indices)
         assert max(pass_indices) < consensus_idx
@@ -1342,7 +1342,7 @@ class TestGenerateCommandHappyPath:
         for i, c in enumerate(result.candidates):
             assert c.command == "ls -la /tmp"
             assert c.pass_index == i
-            assert c.member == _member_for_pass(i)
+            assert c.member == member_for_pass(i)
         assert result.vote_winner == "ls -la /tmp"
         assert result.vote_score is not None
         assert 0.0 <= result.vote_score <= 1.0
@@ -1381,7 +1381,7 @@ class TestGenerateCommandHappyPath:
         from app.constants import EventType
         completed_calls = [
             call for call in mock_event_service.publish.call_args_list
-            if call.args[0].event_type == EventType.TRIBUNAL_SESSION_COMPLETED
+            if call.args[0].event_type == EventType.AI_TRIBUNAL_SESSION_COMPLETED
         ]
         assert len(completed_calls) == 1
         payload = completed_calls[0].args[0].payload
@@ -1419,7 +1419,7 @@ class TestGenerateCommandHappyPath:
         from app.constants import EventType
         completed_calls = [
             call for call in mock_event_service.publish.call_args_list
-            if call.args[0].event_type == EventType.TRIBUNAL_SESSION_COMPLETED
+            if call.args[0].event_type == EventType.AI_TRIBUNAL_SESSION_COMPLETED
         ]
         assert len(completed_calls) == 1
         payload = completed_calls[0].args[0].payload
@@ -1464,7 +1464,7 @@ class TestGenerateCommandAuditorFailure:
 
         The first ``passes`` calls return ``generation_text`` (generation stage).
         Subsequent calls use ``auditor_side_effect`` or ``auditor_return``.
-        
+
         Auditor responses are automatically converted to JSON format if they are plain text.
         """
         call_count = 0
@@ -1533,13 +1533,13 @@ class TestGenerateCommandAuditorFailure:
             call.args[0].event_type
             for call in mock_event_service.publish.call_args_list
         ]
-        assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
-        assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 3
-        assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
-        assert EventType.TRIBUNAL_SESSION_AUDITOR_FAILED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED not in emitted_types
-        assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_STARTED in emitted_types
+        assert emitted_types.count(EventType.AI_TRIBUNAL_VOTING_PASS_COMPLETED) == 3
+        assert EventType.AI_TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_AUDITOR_FAILED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_AUDIT_COMPLETED not in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_COMPLETED not in emitted_types
 
     @pytest.mark.asyncio
     async def test_no_valid_revision_raises_through_generate_command(self):
@@ -1582,12 +1582,12 @@ class TestGenerateCommandAuditorFailure:
             call.args[0].event_type
             for call in mock_event_service.publish.call_args_list
         ]
-        assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
-        assert EventType.TRIBUNAL_SESSION_AUDITOR_FAILED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED not in emitted_types
-        assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_STARTED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_AUDITOR_FAILED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_AUDIT_COMPLETED not in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_COMPLETED not in emitted_types
 
     @pytest.mark.asyncio
     async def test_auditor_exception_raises_through_generate_command(self):
@@ -1627,12 +1627,12 @@ class TestGenerateCommandAuditorFailure:
             call.args[0].event_type
             for call in mock_event_service.publish.call_args_list
         ]
-        assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
-        assert EventType.TRIBUNAL_SESSION_AUDITOR_FAILED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED not in emitted_types
-        assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_STARTED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_AUDITOR_FAILED in emitted_types
+        assert EventType.AI_TRIBUNAL_VOTING_AUDIT_COMPLETED not in emitted_types
+        assert EventType.AI_TRIBUNAL_SESSION_COMPLETED not in emitted_types
 
     @pytest.mark.asyncio
     async def test_auditor_failure_preserves_request_from_vote_winner(self):
@@ -1708,7 +1708,7 @@ class TestGenerateCommandAuditorFailure:
             call.args[0].event_type
             for call in mock_event_service.publish.call_args_list
         ]
-        assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 2
+        assert emitted_types.count(EventType.AI_TRIBUNAL_VOTING_PASS_COMPLETED) == 2
 
 
 class TestForbiddenPatternsMessage:
@@ -1821,7 +1821,7 @@ class TestPromptFields:
         """Every Tribunal template (+ auditor) must render cleanly with _prompt_fields.
 
         After the scaffolding refactor, placeholders live in TRIBUNAL_PROMPT_TEMPLATE
-        and TRIBUNAL_AUDITOR_TEMPLATE — not in the persona text itself. This test
+        and TRIBUNAL_AUDITOR_TEMPLATE - not in the persona text itself. This test
         guards against drift in either the templates or _prompt_fields.
         """
         from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
@@ -1848,9 +1848,9 @@ class TestPromptFields:
             default_shell=DEFAULT_SHELL,
             default_working_directory=DEFAULT_WORKING_DIRECTORY,
         )
-        common = dict(
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-        )
+        common = {
+            "command_constraints_message": "No whitelist or blacklist constraints are active.",
+        }
 
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
             rendered = TRIBUNAL_PROMPT_TEMPLATE.format(
@@ -1863,7 +1863,7 @@ class TestPromptFields:
             assert "host1" in rendered, f"{member_id}: operator_context did not render"
             assert "FORBIDDEN" in rendered, f"{member_id}: forbidden_patterns missing"
 
-        auditor = get_agent_persona("auditor")
+        get_agent_persona("auditor")
         rendered = TRIBUNAL_AUDITOR_TEMPLATE.format(
             auditor_context="Auditor context placeholder",
             **common,
@@ -1877,17 +1877,17 @@ class TestTribunalMemberCycling:
     """Tribunal member assignment cycles correctly through AXIOM, CONCORD, VARIANCE, PRAGMA, NEMESIS."""
 
     def test_member_for_pass_cycles_correctly(self):
-        """_member_for_pass returns members in order: AXIOM (0), CONCORD (1), VARIANCE (2), PRAGMA (3), NEMESIS (4), then repeats."""
-        assert _member_for_pass(0) == TribunalMember.AXIOM
-        assert _member_for_pass(1) == TribunalMember.CONCORD
-        assert _member_for_pass(2) == TribunalMember.VARIANCE
-        assert _member_for_pass(3) == TribunalMember.PRAGMA
-        assert _member_for_pass(4) == TribunalMember.NEMESIS
-        assert _member_for_pass(5) == TribunalMember.AXIOM
-        assert _member_for_pass(6) == TribunalMember.CONCORD
-        assert _member_for_pass(7) == TribunalMember.VARIANCE
-        assert _member_for_pass(8) == TribunalMember.PRAGMA
-        assert _member_for_pass(9) == TribunalMember.NEMESIS
+        """member_for_pass returns members in order: AXIOM (0), CONCORD (1), VARIANCE (2), PRAGMA (3), NEMESIS (4), then repeats."""
+        assert member_for_pass(0) == TribunalMember.AXIOM
+        assert member_for_pass(1) == TribunalMember.CONCORD
+        assert member_for_pass(2) == TribunalMember.VARIANCE
+        assert member_for_pass(3) == TribunalMember.PRAGMA
+        assert member_for_pass(4) == TribunalMember.NEMESIS
+        assert member_for_pass(5) == TribunalMember.AXIOM
+        assert member_for_pass(6) == TribunalMember.CONCORD
+        assert member_for_pass(7) == TribunalMember.VARIANCE
+        assert member_for_pass(8) == TribunalMember.PRAGMA
+        assert member_for_pass(9) == TribunalMember.NEMESIS
 
 
 class TestTribunalEmitter:
@@ -1914,7 +1914,7 @@ class TestTribunalEmitter:
 
         with pytest.raises(RuntimeError, match="broker down"):
             await emitter.emit(
-                EventType.TRIBUNAL_SESSION_AUDITOR_FAILED,
+                EventType.AI_TRIBUNAL_SESSION_AUDITOR_FAILED,
                 TribunalSessionGenerationFailedPayload(request="test", pass_errors=["error"]),
             )
 
@@ -1939,7 +1939,7 @@ class TestTribunalEmitter:
         emitter = TribunalEmitter(event_service=mock_event_service, g8e_context=ctx)
 
         await emitter.emit(
-            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
+            EventType.AI_TRIBUNAL_VOTING_PASS_COMPLETED,
             TribunalPassCompletedPayload(
                 pass_index=0, member=TribunalMember.AXIOM, candidate="ls", success=True
             ),
@@ -2002,8 +2002,8 @@ class TestTribunalEmitter:
 
             # Verify event emissions for Round 2
             emitted_types = [args[0][0].event_type for args in mock_event_service.publish.call_args_list]
-            assert EventType.TRIBUNAL_VOTING_ROUND_2_STARTED in emitted_types
-            assert EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED in emitted_types
+            assert EventType.AI_TRIBUNAL_VOTING_ROUND_2_STARTED in emitted_types
+            assert EventType.AI_TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED in emitted_types
 
     @pytest.mark.asyncio
     async def test_all_terminal_events_raise_on_publish_failure(self):
@@ -2030,7 +2030,7 @@ class TestTribunalEmitter:
 
         terminal_events = [
             (
-                EventType.TRIBUNAL_SESSION_STARTED,
+                EventType.AI_TRIBUNAL_SESSION_STARTED,
                 TribunalSessionStartedPayload(
                     request="test",
                     model="gemma3:1b",
@@ -2040,7 +2040,7 @@ class TestTribunalEmitter:
                 ),
             ),
             (
-                EventType.TRIBUNAL_SESSION_COMPLETED,
+                EventType.AI_TRIBUNAL_SESSION_COMPLETED,
                 TribunalSessionCompletedPayload(
                     request="test",
                     final_command="test",
@@ -2048,25 +2048,25 @@ class TestTribunalEmitter:
                     vote_score=1.0,
                 ),
             ),
-            (EventType.TRIBUNAL_SESSION_DISABLED, TribunalSessionDisabledPayload(request="test")),
+            (EventType.AI_TRIBUNAL_SESSION_DISABLED, TribunalSessionDisabledPayload(request="test")),
             (
-                EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
+                EventType.AI_TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
                 TribunalSessionModelNotConfiguredPayload(request="test", provider="ollama", error="model not configured"),
             ),
             (
-                EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
+                EventType.AI_TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
                 TribunalSessionProviderUnavailablePayload(request="test", provider="ollama", error="provider unavailable"),
             ),
             (
-                EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
+                EventType.AI_TRIBUNAL_SESSION_SYSTEM_ERROR,
                 TribunalSessionSystemErrorPayload(request="test", pass_errors=["error"]),
             ),
             (
-                EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
+                EventType.AI_TRIBUNAL_SESSION_GENERATION_FAILED,
                 TribunalSessionGenerationFailedPayload(request="test", pass_errors=["error"]),
             ),
             (
-                EventType.TRIBUNAL_SESSION_AUDITOR_FAILED,
+                EventType.AI_TRIBUNAL_SESSION_AUDITOR_FAILED,
                 TribunalAuditorFailedPayload(
                     request="test", reason=AuditorReason.AUDITOR_ERROR, error="error", candidate_command="ls"
                 ),
@@ -2089,7 +2089,7 @@ class TestDefaultConfigCoversAllMembers:
         default_passes = default_settings.llm_command_gen_passes
 
         # Get the member assigned to each pass index at default config
-        members_for_passes = [_member_for_pass(i) for i in range(default_passes)]
+        members_for_passes = [member_for_pass(i) for i in range(default_passes)]
 
         # Verify we have exactly 5 passes (the new default)
         assert default_passes == 5, f"Default llm_command_gen_passes should be 5, got {default_passes}"

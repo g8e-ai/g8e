@@ -37,7 +37,7 @@ async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
     investigation = await investigation_data_service.create_investigation(request)
 
     # Simulate a chat turn: user message + AI response + system notification
-    user_metadata = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
+    user_metadata = ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER)
     await investigation_data_service.add_chat_message(
         investigation_id=investigation.id,
         sender="user.chat",
@@ -46,7 +46,7 @@ async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
     )
 
     ai_metadata = ConversationMessageMetadata(
-        event_type=EventType.INVESTIGATION_CHAT_MESSAGE_AI,
+        event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI,
         model="gpt-4",
         tokens=100,
     )
@@ -57,7 +57,7 @@ async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
         metadata=ai_metadata,
     )
 
-    system_metadata = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_STATUS_UPDATED_OPEN)
+    system_metadata = ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_STATUS_UPDATED_OPEN)
     await investigation_data_service.add_chat_message(
         investigation_id=investigation.id,
         sender="system",
@@ -89,7 +89,7 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
     investigation = await investigation_data_service.create_investigation(request)
 
     # Add chat message
-    chat_metadata = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
+    chat_metadata = ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER)
     await investigation_data_service.add_chat_message(
         investigation_id=investigation.id,
         sender="user.chat",
@@ -102,7 +102,7 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
     history_details = ConversationMessageMetadata()
     await investigation_data_service.add_history_entry(
         investigation_id=investigation.id,
-        event_type=EventType.INVESTIGATION_CREATED,
+        event_type=EventType.APP_INVESTIGATION_CREATED,
         actor=ComponentName.G8EE,
         summary="History entry",
         details=history_details,
@@ -113,7 +113,7 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
         investigation_id=investigation.id,
         sender="ai.primary",
         content="AI response",
-        metadata=ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_AI),
+        metadata=ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI),
     )
 
     # Verify conversation_history chain (primary ledger)
@@ -150,7 +150,7 @@ async def test_chain_persists_across_retrieval(fake_cache_aside_service):
             investigation_id=investigation.id,
             sender="user.chat",
             content=f"Message {i}",
-            metadata=ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER),
+            metadata=ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_USER),
         )
 
     # Retrieve and verify chain

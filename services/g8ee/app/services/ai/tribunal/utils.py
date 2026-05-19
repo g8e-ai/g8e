@@ -15,7 +15,7 @@ from app.constants import TribunalMember
 from app.models.settings import LLMSettings
 from app.models.agents.tribunal import TribunalModelNotConfiguredError
 
-def _is_system_error(error_message: str) -> bool:
+def is_system_error(error_message: str) -> bool:
     """Classify an error message as a system error vs. a model error."""
     error_lower = error_message.lower()
     if "safety validation failed" in error_lower:
@@ -29,7 +29,7 @@ def _is_system_error(error_message: str) -> bool:
     ]
     return any(indicator in error_lower for indicator in system_indicators)
 
-def _member_for_pass(pass_index: int) -> TribunalMember:
+def member_for_pass(pass_index: int) -> TribunalMember:
     """Map a pass index to a Tribunal member."""
     members = [
         TribunalMember.AXIOM,
@@ -40,7 +40,7 @@ def _member_for_pass(pass_index: int) -> TribunalMember:
     ]
     return members[pass_index % len(members)]
 
-def _resolve_model(llm_settings: LLMSettings, tier: str = "assistant", request: str = "") -> str:
+def resolve_model(llm_settings: LLMSettings, tier: str = "assistant", request: str = "") -> str:
     """Resolve the concrete model string from settings based on tier."""
     if tier == "lite":
         resolved = llm_settings.resolved_lite_model

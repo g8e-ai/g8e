@@ -17,7 +17,7 @@ import asyncio
 import hashlib
 import logging
 
-from app.constants.channels import PubSubChannel
+from app.constants.channels import PubSubAuthPrefix
 from app.clients.pubsub_client import PubSubClient
 from app.services.operator.operator_session_service import OperatorSessionService
 from app.services.operator.operator_data_service import OperatorDataService
@@ -44,7 +44,7 @@ class SessionAuthListener:
         self.session_service = session_service
         self.operator_data_service = operator_data_service
         self._active_listeners = {}
-        self._background_tasks: set[asyncio.Task] = set()
+        self._background_tasks: set[asyncio.Task[None]] = set()
 
     async def listen(self, operator_session_id: str, operator_id: str, user_id: str, organization_id: str | None):
         """
@@ -61,8 +61,8 @@ class SessionAuthListener:
         # authChannel     = `${PubSubChannel.AUTH_PUBLISH_SESSION_PREFIX}${sessionHash}`;
         # responseChannel = `${PubSubChannel.AUTH_RESPONSE_SESSION_PREFIX}${sessionHash}`;
 
-        auth_channel = f"{PubSubChannel.AUTH_PUBLISH_SESSION_PREFIX}{session_hash}"
-        response_channel = f"{PubSubChannel.AUTH_RESPONSE_SESSION_PREFIX}{session_hash}"
+        auth_channel = f"{PubSubAuthPrefix.AUTH_PUBLISH_SESSION_PREFIX}{session_hash}"
+        response_channel = f"{PubSubAuthPrefix.AUTH_RESPONSE_SESSION_PREFIX}{session_hash}"
 
         if auth_channel in self._active_listeners:
             return
@@ -72,7 +72,7 @@ class SessionAuthListener:
                 return
 
             try:
-                session = await self.session_service.validate_session(operator_session_id)
+                session = await self.session_service.validate_operator_session(operator_session_id)
                 if not session or not session.is_active:
                     await self.pubsub_client.publish(response_channel, {
                         "success": False,

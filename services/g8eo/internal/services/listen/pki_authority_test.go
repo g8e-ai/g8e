@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -169,10 +170,10 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		err := pki.EnsurePKI(nil)
 		require.NoError(t, err)
 
-		// Verify that ca.crt does NOT exist at the PKI root
-		legacyPath := filepath.Join(pkiDir, "ca.crt")
-		_, err = os.Stat(legacyPath)
-		assert.True(t, os.IsNotExist(err), "legacy ca.crt should not exist at PKI root")
+		// Verify that ca.crt does NOT exist at the PKI root.
+		rootCAPath := filepath.Join(pkiDir, "ca.crt")
+		_, err = os.Stat(rootCAPath)
+		assert.True(t, os.IsNotExist(err), "ca.crt must not exist at PKI root")
 	})
 }
 
@@ -292,8 +293,9 @@ func TestPKIAuthority_URISAN(t *testing.T) {
 		// Verify URI SANs exist
 		assert.NotEmpty(t, serviceCert.URIs)
 
-		// Verify SPIFFE workload identity
-		expectedURI := "spiffe://g8e.local/hub/operator-listen"
+		// Verify SPIFFE workload identity using protocol helper
+		wid := protocol.NewWorkloadIdentity()
+		expectedURI := wid.HubSPIFFEID()
 		found := false
 		for _, uri := range serviceCert.URIs {
 			if uri.String() == expectedURI {

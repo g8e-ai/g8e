@@ -22,7 +22,7 @@ in §14.5 of the GDD progress doc):
 - The Phase 3 `reputation_service` writes `reputation_state` after each
   execution result lands.
 
-No other agent persona may import this module — that boundary is what
+No other agent persona may import this module - that boundary is what
 keeps Information Isolation (GDD §3) intact.
 """
 
@@ -39,7 +39,7 @@ from app.constants import (
 from app.errors import DatabaseError, ValidationError
 from app.models.cache import FieldFilter
 from app.models.reputation import ReputationCommitment, ReputationState
-from app.services.cache.cache_aside import CacheAsideService
+from app.services.protocols import DocumentServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +49,15 @@ class ReputationDataService:
 
     `reputation_state` documents are keyed by ``agent_id`` (one row per
     persona). `reputation_commitment` documents are keyed by their UUID
-    ``id`` and are append-only — there is intentionally no ``update`` for
+    ``id`` and are append-only - there is intentionally no ``update`` for
     commitments.
     """
 
-    def __init__(self, cache: CacheAsideService) -> None:
+    cache: DocumentServiceProtocol
+    state_collection: str
+    commitments_collection: str
+
+    def __init__(self, cache: DocumentServiceProtocol) -> None:
         self.cache = cache
         self.state_collection = DB_COLLECTION_REPUTATION_STATE
         self.commitments_collection = DB_COLLECTION_REPUTATION_COMMITMENTS
@@ -209,7 +213,7 @@ class ReputationDataService:
         """Return the deployment's most recent commitment, or None at genesis.
 
         Used by the Auditor to populate `prev_root` on the next commitment
-        — the cross-chain spine in GDD §14.4.
+        - the cross-chain spine in GDD §14.4.
         """
         try:
             results = await self.cache.query_documents(

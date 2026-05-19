@@ -191,7 +191,7 @@ class TestCancelBehaviour:
         assert task.cancelled()
         event_service.publish.assert_called_once()
         event = event_service.publish.call_args[0][0]
-        assert event.event_type == EventType.LLM_CHAT_ITERATION_STOPPED
+        assert event.event_type == EventType.AI_LLM_CHAT_ITERATION_STOPPED
         assert event.payload.reason == "Test cancellation"
         from datetime import datetime
         assert isinstance(event.payload.timestamp, datetime)

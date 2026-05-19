@@ -52,10 +52,10 @@ FALLBACK_TEXT_LIMIT = 2000
 
 
 class MemoryGenerationService:
-    """AI-backed memory analysis — updates an InvestigationMemory from conversation history.
+    """AI-backed memory analysis - updates an InvestigationMemory from conversation history.
 
     Depends on MemoryDataService for all persistence. Does not touch the DB or KV
-    directly — all reads and writes are delegated to MemoryDataService.
+    directly - all reads and writes are delegated to MemoryDataService.
     """
 
     def __init__(self, memory_crud: MemoryDataServiceProtocol) -> None:
@@ -269,7 +269,7 @@ class MemoryGenerationService:
         matches = re.findall(json_pattern, text, re.DOTALL | re.IGNORECASE)
         for match in matches:
             stripped = match.strip()
-            if stripped.startswith("{") or stripped.startswith("["):
+            if stripped.startswith(("{", "[")):
                 return stripped
         return None
 
@@ -285,7 +285,7 @@ class MemoryGenerationService:
             line = line.strip()
             if not line:
                 continue
-            if line.startswith("#") or line.startswith("//") or line.startswith("/*"):
+            if line.startswith(("#", "//", "/*")):
                 continue
             # Look for key: value pattern, handling quoted keys like "key": "value"
             if ":" in line and not line.startswith("-"):

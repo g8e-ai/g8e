@@ -106,7 +106,7 @@ class TestOperatorAuthService:
         # Execute
         result = await auth_service.authenticate_operator(
             authorization_header=f"Bearer {api_key}",
-            body={},
+            body={"operator_session_id": "session-uuid-123"},
             request_context={}
         )
 
@@ -121,7 +121,7 @@ class TestOperatorAuthService:
     async def test_authenticate_via_api_key_missing_bearer(self, auth_service):
         result = await auth_service.authenticate_operator(
             authorization_header=None,
-            body={},
+            body={"operator_session_id": "session-uuid-123"},
             request_context={}
         )
         assert result["success"] is False
@@ -131,7 +131,7 @@ class TestOperatorAuthService:
         mock_api_key_service.validate_key.return_value = (False, None, "Invalid key")
         result = await auth_service.authenticate_operator(
             authorization_header="Bearer bad-key",
-            body={},
+            body={"operator_session_id": "session-uuid-123"},
             request_context={}
         )
         assert result["success"] is False
@@ -143,7 +143,7 @@ class TestOperatorAuthService:
 
         result = await auth_service.authenticate_operator(
             authorization_header="Bearer key",
-            body={},
+            body={"operator_session_id": "session-uuid-123"},
             request_context={}
         )
         assert result["success"] is False
@@ -155,7 +155,7 @@ class TestOperatorAuthService:
 
         result = await auth_service.authenticate_operator(
             authorization_header="Bearer key",
-            body={},
+            body={"operator_session_id": "session-uuid-123"},
             request_context={}
         )
         assert result["success"] is False

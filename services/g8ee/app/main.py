@@ -83,6 +83,7 @@ from .db.kv_service import KVService
 from .logging import setup_logging
 from .routers import chat_router, health_router
 from .routers.internal_router import router as internal_router
+from .middleware.exception_handlers import setup_exception_handlers
 from .services.cache.cache_aside import CacheAsideService
 from .services.infra.settings_service import SettingsService
 from .services.service_factory import ServiceFactory
@@ -187,6 +188,7 @@ async def lifespan(app: FastAPI):
             db=db_service,
             component_name=ComponentName.G8EE,
             default_ttl=settings.listen.default_ttl,
+            read_enabled=settings.listen.enable_cache_read,
         )
         settings_service._cache_aside = cache_aside_service
 
@@ -269,6 +271,8 @@ def _build_app() -> FastAPI:
         },
     )
 
+    setup_exception_handlers(application)
+
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[
@@ -288,8 +292,7 @@ def _build_app() -> FastAPI:
             HTTP_CONTENT_LANGUAGE_HEADER, HTTP_CONTENT_TYPE_HEADER,
             HTTP_AUTHORIZATION_HEADER, HTTP_API_KEY_HEADER,
             HTTP_REQUESTED_WITH_HEADER,
-            G8eHeaders.SERVICE, G8eHeaders.CLIENT, G8eHeaders.WEB_SESSION_ID,
-            G8eHeaders.OPERATOR_STATUS,
+            G8eHeaders.WEB_SESSION_ID,
             G8eHeaders.EXECUTION_ID, G8eHeaders.SOURCE_COMPONENT,
             HTTP_CACHE_CONTROL_HEADER, HTTP_PRAGMA_HEADER,
             HTTP_COOKIE_HEADER, HTTP_SET_COOKIE_HEADER,

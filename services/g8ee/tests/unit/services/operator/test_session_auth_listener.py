@@ -86,7 +86,7 @@ class TestSessionAuthListener:
         # Setup mocks
         mock_session = MagicMock()
         mock_session.is_active = True
-        mock_session_service.validate_session.return_value = mock_session
+        mock_session_service.validate_operator_session.return_value = mock_session
 
         mock_operator = MagicMock()
         mock_operator.api_key = api_key
@@ -102,7 +102,7 @@ class TestSessionAuthListener:
         await handler(auth_channel, {})
 
         # Assertions
-        mock_session_service.validate_session.assert_called_once_with(operator_session_id)
+        mock_session_service.validate_operator_session.assert_called_once_with(operator_session_id)
         mock_operator_data_service.get_operator.assert_called_once_with(operator_id)
 
         # Verify response published
@@ -123,9 +123,8 @@ class TestSessionAuthListener:
         operator_session_id = "ops_123"
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
         auth_channel = f"auth.publish:session:{session_hash}"
-        response_channel = f"auth.response:session:{session_hash}"
 
-        mock_session_service.validate_session.return_value = None
+        mock_session_service.validate_operator_session.return_value = None
 
         await listener.listen(operator_session_id, "op1", "u1", "org1")
         handler = mock_pubsub_client.on_channel_message.call_args[0][1]
@@ -140,9 +139,8 @@ class TestSessionAuthListener:
         operator_session_id = "ops_123"
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
         auth_channel = f"auth.publish:session:{session_hash}"
-        response_channel = f"auth.response:session:{session_hash}"
 
-        mock_session_service.validate_session.side_effect = Exception("boom")
+        mock_session_service.validate_operator_session.side_effect = Exception("boom")
 
         await listener.listen(operator_session_id, "op1", "u1", "org1")
         handler = mock_pubsub_client.on_channel_message.call_args[0][1]
@@ -158,7 +156,7 @@ class TestSessionAuthListener:
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
         auth_channel = f"auth.publish:session:{session_hash}"
 
-        with patch("asyncio.sleep", new=AsyncMock()) as mock_sleep:
+        with patch("asyncio.sleep", new=AsyncMock()):
             await listener.listen(operator_session_id, "op1", "u1", "org1")
 
             # Find the background task for auto_cleanup
@@ -183,7 +181,7 @@ class TestSessionAuthListener:
 
         await handler("wrong_channel", {})
 
-        mock_session_service.validate_session.assert_not_called()
+        mock_session_service.validate_operator_session.assert_not_called()
 
     async def test_cleanup_handles_missing_channel(self, listener, mock_pubsub_client):
         # Should not raise

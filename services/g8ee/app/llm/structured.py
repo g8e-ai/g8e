@@ -51,7 +51,7 @@ _PRIMITIVE_JSON_TYPES: frozenset[str] = frozenset({"string", "number", "integer"
 T = TypeVar("T", bound=G8eBaseModel)
 
 
-def parse_structured_response(
+def parse_structured_response[T: G8eBaseModel](
     response_text: str | None,
     response_model: type[T],
     *,
@@ -110,7 +110,7 @@ def parse_structured_response(
         raise first_error
 
 
-def _coerce_bare_value(text: str, response_model: type[T]) -> T | None:
+def _coerce_bare_value[T: G8eBaseModel](text: str, response_model: type[T]) -> T | None:
     """Wrap bare text into ``{field: text}`` when the schema permits.
 
     Only runs when the model has exactly one required field whose resolved

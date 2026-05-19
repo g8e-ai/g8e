@@ -34,12 +34,25 @@ Write-Host "----------------------------------------------------"
 Write-Host ""
 
 Write-Host "[1/3] Removing any existing g8e CA certificates..."
-$existing = @(Get-ChildItem Cert:\LocalMachine\Root |
-    Where-Object { $_.Subject -like $CertSubjectPattern })
+$stores = @("Cert:\LocalMachine\Root", "Cert:\CurrentUser\Root")
+$found = 0
+foreach ($storePath in $stores) {
+    if (Test-Path $storePath) {
+        $certs = Get-ChildItem $storePath | Where-Object { 
+            $_.Subject -like $CertSubjectPattern -or 
+            $_.FriendlyName -like $CertSubjectPattern -or
+            $_.Issuer -like $CertSubjectPattern
+        }
+        foreach ($cert in $certs) {
+            Write-Host "      Removing from $($storePath.Split(':')[-1]): $($cert.Subject)"
+            $cert | Remove-Item -Force
+            $found++
+        }
+    }
+}
 
-if ($existing.Count -gt 0) {
-    $existing | Remove-Item
-    Write-Host "      Removed $($existing.Count) existing certificate(s)."
+if ($found -gt 0) {
+    Write-Host "      Removed $found existing certificate(s)."
 } else {
     Write-Host "      None found."
 }
@@ -47,7 +60,7 @@ if ($existing.Count -gt 0) {
 Write-Host ""
 Write-Host "[2/3] Fetching CA cert from ${Url}..."
 $certUrl = "${Url}/.well-known/g8e/pki/root.pem"
-$certPem = curl -s $certUrl --insecure
+$certPem = curl -s $certUrl
 
 if (-not $certPem) {
     Write-Error "No certificate data received from ${certUrl}. Is the platform running?"

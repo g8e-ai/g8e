@@ -278,7 +278,7 @@ message ListOperatorSlotsResult {
 message BindOperatorsRequested {
   repeated string operator_ids = 1;
   string user_id = 2;
-  string session_id = 3; // The client/web session ID
+  string web_session_id = 3; // The client/web session ID
 }
 
 message BindOperatorsResult {
@@ -293,7 +293,7 @@ message BindOperatorsResult {
 message UnbindOperatorsRequested {
   repeated string operator_ids = 1;
   string user_id = 2;
-  string session_id = 3;
+  string web_session_id = 3;
 }
 
 message UnbindOperatorsResult {
@@ -308,7 +308,7 @@ message UnbindOperatorsResult {
 message SetTargetContextRequested {
   string operator_id = 1;
   string user_id = 2;
-  string session_id = 3;
+  string web_session_id = 3;
 }
 
 message SetTargetContextResult {
@@ -342,6 +342,20 @@ message OperatorDocument {
 
 message ShutdownRequested {
   string reason = 1;
+}
+
+message EvalAnswerRequested {
+  // Unique identifier for this prompt/task in the benchmark
+  string prompt_id = 1;
+
+  // Benchmark name (e.g., "ifeval", "simpleqa", "gpqa")
+  string benchmark = 2;
+
+  // The model's answer text (opaque to the substrate)
+  string answer = 3;
+
+  // Model identifier (provider:model format, e.g., "openai:gpt-4")
+  string model = 4;
 }
 
 // ActionReceipt is the signed proof of a completed or failed mutation.
@@ -633,6 +647,41 @@ message RestoreFileResult {
   string error = 5;
 }
 
+message GrantIntentRequested {
+  // Canonical intent name (e.g. "s3_read", "ec2_management")
+  string intent_name = 1;
+
+  // Optional target resource scope (e.g. "arn:aws:s3:::my-bucket/*")
+  string target_resource = 2;
+
+  // Unique execution identifier
+  string execution_id = 3;
+
+  // Justification for the grant
+  string justification = 4;
+}
+
+message GrantIntentResult {
+  bool success = 1;
+  string execution_id = 2;
+  string intent_name = 3;
+  string message = 4;
+  string error = 5;
+}
+
+message RevokeIntentRequested {
+  string intent_name = 1;
+  string execution_id = 2;
+  string justification = 3;
+}
+
+message RevokeIntentResult {
+  bool success = 1;
+  string execution_id = 2;
+  string intent_name = 3;
+  string error = 4;
+}
+
 message FileDiffEntry {
   string id = 1;
   string timestamp = 2;
@@ -900,7 +949,7 @@ message PasskeyAuthVerifyResult {
   bool success = 1;
   string error = 2;
   string user_id = 3;
-  string session_id = 4;
+  string web_session_id = 4;
   int64 session_expires_at_unix_ms = 5;
 }
 

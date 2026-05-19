@@ -135,11 +135,11 @@ class TestSafeWaitForMock:
         await side_effect(coro, 1.0)
 
         # The coroutine should be captured
-        assert len(mock_obj._captured_coros) == 1  # noqa: SLF001
+        assert len(mock_obj._captured_coros) == 1
 
         # Cleanup should close it
         mock_obj.cleanup()
-        assert len(mock_obj._captured_coros) == 0  # noqa: SLF001
+        assert len(mock_obj._captured_coros) == 0
 
 
 class TestAsyncMockContext:
@@ -179,10 +179,10 @@ class TestAsyncMockContext:
         side_effect = ctx.wait_for_mock.make_side_effect()
         await side_effect(test_coro(), 1.0)
 
-        assert len(ctx.wait_for_mock._captured_coros) == 1  # noqa: SLF001
+        assert len(ctx.wait_for_mock._captured_coros) == 1
 
         # Exit context should cleanup
         with ctx:
             pass
 
-        assert len(ctx.wait_for_mock._captured_coros) == 0  # noqa: SLF001
+        assert len(ctx.wait_for_mock._captured_coros) == 0

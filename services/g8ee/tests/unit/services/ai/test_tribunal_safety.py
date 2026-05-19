@@ -192,7 +192,7 @@ class TestGenerateCommandSafety:
         mock_settings.llm.llm_command_gen_passes = 1
 
         with patch("app.services.ai.generator.get_llm_provider", return_value=mock_provider), \
-             patch("app.services.ai.generator._resolve_model", return_value="test-model"), \
+             patch("app.services.ai.generator.resolve_model", return_value="test-model"), \
              patch("app.models.model_configs.get_model_config") as mock_config:
 
             mock_config.return_value.supports_structured_output = False

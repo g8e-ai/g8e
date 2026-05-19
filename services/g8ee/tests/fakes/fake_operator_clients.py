@@ -23,7 +23,7 @@ from app.models.cache import BatchWriteOperation, CacheOperationResult, Document
 
 class FakeKVClient:
     """In-memory fake for operator KV client.
-    
+
     Provides a real dict-backed store so tests can assert on actual stored
     values. Used by KVCacheClient.
     """
@@ -109,7 +109,7 @@ class FakeKVClient:
 
 class FakePubSubClient:
     """In-memory fake for operator Pub/Sub client.
-    
+
     Used by PubSubClient.
     """
 
@@ -176,9 +176,21 @@ class FakeDBClient:
         self._col(collection).pop(document_id, None)
         return CacheOperationResult(success=True, document_id=document_id)
 
-    async def _query_collection(self, collection: str, field_filters=None, **kwargs) -> QueryResult:
+    async def _query_collection(self, collection: str, field_filters=None, order_by=None, limit=100, select_fields=None, **kwargs) -> QueryResult:
         docs = list(self._col(collection).values())
-        # TODO: Implement basic filtering if needed
+        for raw_filter in field_filters or []:
+            field = raw_filter.get("field") if isinstance(raw_filter, dict) else getattr(raw_filter, "field", None)
+            op = raw_filter.get("op") if isinstance(raw_filter, dict) else getattr(raw_filter, "op", None)
+            value = raw_filter.get("value") if isinstance(raw_filter, dict) else getattr(raw_filter, "value", None)
+            if op == "==":
+                docs = [doc for doc in docs if doc.get(field) == value]
+        for field, direction in reversed(list((order_by or {}).items())):
+            reverse = str(direction).lower() == "desc"
+            docs.sort(key=lambda doc: doc.get(field) or "", reverse=reverse)
+        if limit:
+            docs = docs[:limit]
+        if select_fields:
+            docs = [{field: doc.get(field) for field in select_fields if field in doc} for doc in docs]
         return QueryResult(success=True, data=[dict(d) for d in docs])
 
     async def _update_with_array_union(self, collection: str, document_id: str, array_field: str, items_to_add: list, **kwargs) -> CacheOperationResult:

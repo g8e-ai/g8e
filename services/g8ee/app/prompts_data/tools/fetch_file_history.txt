@@ -1,8 +1,8 @@
 Retrieve git version history for a file from the Operator's Ledger. Only files modified by the Operator have history. Use commit hashes with restore_file to revert.
 
 <parameters>
-- file_path: REQUIRED — absolute path
-- limit: default 50 | target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
+- file_path: REQUIRED - absolute path
+- limit: default 50 | target_operator: operator_id or hostname - REQUIRED when multiple operators bound (prefer hostname when available)
 </parameters>
 
 <returns>

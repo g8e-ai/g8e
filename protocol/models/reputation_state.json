@@ -1,9 +1,9 @@
 {
   "_comment": "Canonical ReputationState document shape. Cross-chain agent reputation scoreboard. Owned exclusively by g8ee's Auditor (only writer + only reader): the data-access boundary in GDD §3 is enforced by keeping the only `reputation_state` reader inside `auditor_service.py` (and the post-execution writer `reputation_service.py` in Phase 3). A field mismatch breaks reputation persistence and Merkle root computation in `reputation_commitment`.",
-  "_authority": "g8ee (Python — ReputationState in app/models/reputation.py)",
+  "_authority": "g8ee (Python - ReputationState in app/models/reputation.py)",
   "_consumers": [
-    "g8ee (Auditor — reads via reputation_data_service to build per-verdict Merkle root)",
-    "g8ee (reputation_service — writes EMA updates post-execution; Phase 3)"
+    "g8ee (Auditor - reads via reputation_data_service to build per-verdict Merkle root)",
+    "g8ee (reputation_service - writes EMA updates post-execution; Phase 3)"
   ],
 
   "reputation_state": {

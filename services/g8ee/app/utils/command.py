@@ -43,10 +43,7 @@ def normalise_command(raw: str) -> str:
     # Strip shebang lines
     if raw.startswith("#!"):
         lines = raw.split("\n")
-        if len(lines) > 1:
-            raw = "\n".join(lines[1:]).strip()
-        else:
-            raw = ""
+        raw = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
 
     # Strip trailing semicolons
     raw = raw.rstrip(";").strip()
@@ -56,14 +53,14 @@ def normalise_command(raw: str) -> str:
     # We'll use shlex.split and join to be more robust if possible, but fallback to simple split
     try:
         parts = shlex.split(raw)
-        raw_collapsed = " ".join(parts)
+        " ".join(parts)
         # If shlex.split works, we still want to keep the original raw if it has multi-lines we want to preserve
         # but for the "simple" collapse, we can use it.
     except ValueError:
         # If shlex.split fails due to unbalanced quotes, we'll try to just collapse spaces normally
         # but we might be returning an invalid command anyway.
         parts = raw.split()
-        raw_collapsed = " ".join(parts)
+        " ".join(parts)
 
     # Strip trailing newlines
     raw = raw.rstrip("\n")

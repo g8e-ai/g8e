@@ -55,7 +55,7 @@ def test_conversation_history_message_round_trip_with_hashes():
     original = ConversationHistoryMessage(
         sender="ai.primary",
         content="AI response",
-        metadata=ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_AI),
+        metadata=ConversationMessageMetadata(event_type=EventType.APP_INVESTIGATION_CHAT_MESSAGE_AI),
         prev_hash="c" * 64,
         entry_hash="d" * 64,
     )
@@ -88,7 +88,7 @@ def test_investigation_history_entry_with_hash_fields():
     """InvestigationHistoryEntry accepts and serializes prev_hash and entry_hash."""
     entry = InvestigationHistoryEntry(
         attempt_number=1,
-        event_type=EventType.INVESTIGATION_CREATED,
+        event_type=EventType.APP_INVESTIGATION_CREATED,
         actor=ComponentName.G8EE,
         summary="Test entry",
         prev_hash="e" * 64,
@@ -111,7 +111,7 @@ def test_investigation_history_entry_without_hash_fields():
     with pytest.raises(ValueError, match="prev_hash|entry_hash"):
         InvestigationHistoryEntry(
             attempt_number=1,
-            event_type=EventType.INVESTIGATION_CREATED,
+            event_type=EventType.APP_INVESTIGATION_CREATED,
             actor=ComponentName.G8EE,
             summary="Test entry",
         )
@@ -121,7 +121,7 @@ def test_investigation_history_entry_round_trip_with_hashes():
     """InvestigationHistoryEntry round-trips correctly with hash fields."""
     original = InvestigationHistoryEntry(
         attempt_number=2,
-        event_type=EventType.INVESTIGATION_CREATED,
+        event_type=EventType.APP_INVESTIGATION_CREATED,
         actor=ComponentName.G8EE,
         summary="Test entry",
         details=ConversationMessageMetadata(),
@@ -145,7 +145,7 @@ def test_investigation_history_entry_round_trip_without_hashes():
     original_data = {
         "attempt_number": 1,
         "timestamp": "2024-01-01T00:00:00Z",
-        "event_type": EventType.INVESTIGATION_CREATED.value,
+        "event_type": EventType.APP_INVESTIGATION_CREATED.value,
         "actor": ComponentName.G8EE.value,
         "summary": "Old entry",
         "details": {},

@@ -147,7 +147,7 @@ class TestDefaultJsonFileLoads:
         # Reset singleton to force a fresh load from the default path.
         import app.utils.auto_approved_validator as module  # noqa: PLC0415
 
-        module._validator = None  # noqa: SLF001
+        module._validator = None
         validator = get_auto_approved_validator()
         # Default config ships with sensible benign defaults.
         assert "uptime" in validator.get_auto_approved_command_names()
