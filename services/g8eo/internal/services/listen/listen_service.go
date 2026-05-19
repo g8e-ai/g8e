@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/mcp"
 )
 
 // ListenService is the top-level orchestrator for --listen mode (operator).
@@ -123,7 +124,8 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		apiKeySvc: apiKeySvc,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.IsReady, ls.IsGovernanceReady)
+	mcpGateway := mcp.NewGatewayService()
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, mcpGateway, ls.IsReady, ls.IsGovernanceReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -190,7 +192,8 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		apiKeySvc: apiKeySvc,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.IsReady, ls.IsGovernanceReady)
+	mcpGateway := mcp.NewGatewayService()
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, mcpGateway, ls.IsReady, ls.IsGovernanceReady)
 
 	tlsConfig := pki.TLSConfig()
 	tlsConfigPlain := pki.TLSConfigPlain()

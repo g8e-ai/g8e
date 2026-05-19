@@ -34,6 +34,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/mcp"
 	"github.com/google/uuid"
 )
 
@@ -55,6 +56,7 @@ type HTTPHandler struct {
 	passkey           *PasskeyService
 	userSvc           *UserService
 	apiKey            *ApiKeyService
+	mcp               *mcp.GatewayService
 	isReady           func() bool
 	isGovernanceReady func() bool
 	// envProc is the synchronous fail-closed substrate mutation gate. It is
@@ -64,7 +66,7 @@ type HTTPHandler struct {
 	envProc EnvelopeProcessor
 }
 
-func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, isReady func() bool, isGovernanceReady func() bool) *HTTPHandler {
+func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, mcpGateway *mcp.GatewayService, isReady func() bool, isGovernanceReady func() bool) *HTTPHandler {
 	return &HTTPHandler{
 		cfg:               cfg,
 		logger:            logger,
@@ -76,6 +78,7 @@ func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService
 		passkey:           passkey,
 		userSvc:           userSvc,
 		apiKey:            apiKey,
+		mcp:               mcpGateway,
 		isReady:           isReady,
 		isGovernanceReady: isGovernanceReady,
 	}
@@ -128,7 +131,10 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/audit/receipts", h.handleAuditReceipts)
 	mux.HandleFunc("/api/audit/receipts/export", h.handleAuditReceiptsExport)
 
-	// Internal SSE event bridge (used by g8ee Engine to publish typed events
+	mux.HandleFunc("/api/mcp/v1/tools/list", h.mcp.HandleToolsList)
+mux.HandleFunc("/api/mcp/v1/tools/call", h.mcp.HandleToolsCall)
+
+// Internal SSE event bridge (used by g8ee Engine to publish typed events
 	// for browser/CLI subscribers to consume). Producers are authenticated by
 	// mTLS app identity; consumers poll /api/internal/sse/events or stream /api/internal/sse/stream.
 	mux.HandleFunc("/api/internal/sse/push", h.handleInternalSSEPush)

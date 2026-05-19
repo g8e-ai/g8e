@@ -316,8 +316,40 @@ case "$TOP" in
                     echo "[g8e] Help file not found: $help_file" >&2; exit 1
                 fi
                 [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
-            config|test|status)
-                _banner "mcp $SUB"; _ensure_operator; _moved_to_operator_protocol "mcp $SUB" ;;
+            config)
+                _banner "mcp $SUB"
+                echo "{
+  \"mcpServers\": {
+    \"g8e\": {
+      \"command\": \"$G8E_PROJECT_ROOT/g8e\",
+      \"args\": [\"mcp\", \"serve\"],
+      \"env\": {
+        \"G8E_OPERATOR_URL\": \"https://localhost:9000\"
+      }
+    }
+  }
+}"
+                ;;
+            status)
+                _banner "mcp $SUB"
+                _ensure_operator
+                _operator_curl GET /health
+                echo ""
+                ;;
+            test)
+                _banner "mcp $SUB tools/list"
+                _ensure_operator
+                _operator_curl POST /api/mcp/v1/tools/list "{}"
+                echo ""
+                _banner "mcp $SUB tools/call"
+                _operator_curl POST /api/mcp/v1/tools/call "{}"
+                echo ""
+                ;;
+            serve)
+                _banner "mcp $SUB"
+                echo "[g8e] MCP stdio gateway listening..."
+                # Real stdio stream handling will be implemented here
+                ;;
             *)
                 echo "[g8e] unknown mcp subcommand: '$SUB'" >&2; exit 1 ;;
         esac ;;
