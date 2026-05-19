@@ -14,15 +14,40 @@
 import json
 import os
 from pathlib import Path
+from typing import TypedDict, cast
 
 from app.constants.env_vars import EnvVar
 from app.utils.path import resolve_project_root
 
+
+class InfraPaths(TypedDict):
+    db_path: str
+    ca_cert_path: str
+    app_cert_dir: str
+    pki_dir: str
+    secrets_dir: str
+    docs_dir: str
+    protocol_dir: str
+    protocol_constants_dir: str
+    protocol_models_dir: str
+    ssh_config_path: str
+
+
+class G8eePaths(TypedDict):
+    cert_name: str
+    config_dir: str | None
+
+
+class PathsDict(TypedDict):
+    infra: InfraPaths
+    g8ee: G8eePaths
+
+
 # The bridge to protocol paths.
 # In container, this is always /app/protocol/constants/paths.json
 # On host, respect G8E_PROTOCOL_DIR environment variable
-_PROTOCOL_DIR = os.environ.get(EnvVar.PROTOCOL_DIR) or None
-if _PROTOCOL_DIR is None:
+_PROTOCOL_DIR: str = os.environ.get(EnvVar.PROTOCOL_DIR) or ""
+if not _PROTOCOL_DIR:
     # If not provided, try to resolve from project root
     try:
         _PROTOCOL_DIR = str(resolve_project_root() / "protocol")
@@ -53,7 +78,7 @@ def _host_runtime_paths() -> tuple[Path, Path]:
     )
     return pki_dir, secrets_dir
 
-def _load_paths() -> dict:
+def _load_paths() -> PathsDict:
     try:
         with Path(_PATH_FILE).open() as f:
             paths = json.load(f)
@@ -102,11 +127,18 @@ def _load_paths() -> dict:
         paths["infra"]["ca_cert_path"] = str(pki_path / "trust" / "hub-bundle.pem")
         paths["infra"]["app_cert_dir"] = str(pki_path / "issued" / "apps")
 
-    return paths
+    # Validate and normalize using Pydantic
+    from app.constants.models import PathsConstants
+    try:
+        validated = PathsConstants.model_validate(paths)
+        # Return as dict for compatibility with existing TypedDict usage
+        return cast(PathsDict, validated.model_dump())
+    except Exception as e:
+        raise RuntimeError(f"Failed to validate paths: {e}") from e
 
-PATHS = _load_paths()
+PATHS: PathsDict = _load_paths()
 
-def get_app_cert_paths(app_name: str = None) -> tuple[str, str]:
+def get_app_cert_paths(app_name: str | None = None) -> tuple[str, str]:
     if app_name is None:
         app_name = PATHS.get("g8ee", {}).get("cert_name", "g8ee")
     app_cert_dir = PATHS["infra"]["app_cert_dir"]

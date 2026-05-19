@@ -73,7 +73,7 @@ class KVCacheClient:
         self.http_url = (http_url or listen_settings.http_url).rstrip("/")
         self.component_name = component_name
         self._timeout = timeout
-        self._ca_cert_path = ca_cert_path
+        self._ca_cert_path: str | None = ca_cert_path
         self._client_cert_path = client_cert_path
         self._client_key_path = client_key_path
         self._operator_session_id = operator_session_id

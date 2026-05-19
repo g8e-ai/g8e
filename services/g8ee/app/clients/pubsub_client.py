@@ -688,10 +688,10 @@ class PubSubClient:
                 event_type=EventType.OPERATOR_HEARTBEAT_REQUESTED,
                 operator_id=operator_id,
                 operator_session_id=operator_session_id,
-                case_id="",
-                task_id="",
-                investigation_id="",
-                web_session_id="",
+                case_id=None,
+                task_id=None,
+                investigation_id=None,
+                web_session_id=None,
                 payload=HeartbeatRequestPayload(),
             )
 

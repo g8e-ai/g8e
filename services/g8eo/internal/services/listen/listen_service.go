@@ -171,7 +171,8 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		RpID:   cfg.Listen.PasskeyRpID,
 		RpName: cfg.Listen.PasskeyRpName,
 	}
-	passkey, _ := NewPasskeyService(db, logger, passkeyCfg)
+	// Passkey service initialization is optional; ignore errors for test configuration
+	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
 
 	apiKeySvc := NewApiKeyService(db, logger)
 

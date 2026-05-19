@@ -105,18 +105,6 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 				"operation", analysis.Operation,
 				"is_critical_file", analysis.IsCriticalSystemFile)
 
-			result = &models.FileEditResult{
-				ExecutionID:     editReq.ExecutionID,
-				CaseID:          editReq.CaseID,
-				TaskID:          editReq.TaskID,
-				InvestigationID: editReq.InvestigationID,
-				Operation:       editReq.Operation,
-				FilePath:        editReq.FilePath,
-				Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-				ErrorMessage:    system.StringPtr(fmt.Sprintf("File operation blocked by sentinel.Sentinel: %s", analysis.BlockReason)),
-				ErrorType:       system.StringPtr("sentinel_blocked"),
-			}
-
 			if fs.auditVault != nil && fs.auditVault.IsEnabled() {
 				exitCode := 126
 				if _, err := fs.auditVault.RecordEvent(&storage.Event{

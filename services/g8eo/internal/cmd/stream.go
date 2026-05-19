@@ -304,7 +304,9 @@ func collectHosts(positional []string, hostsFile string) ([]string, error) {
 			if err != nil {
 				return nil, fmt.Errorf("open hosts file: %w", err)
 			}
-			defer f.Close()
+			defer func() {
+				_ = f.Close()
+			}()
 			scanner = bufio.NewScanner(f)
 		}
 		for scanner.Scan() {
@@ -349,7 +351,11 @@ func shellQuote(s string) string {
 
 // emitJSON writes a StreamStatusEvent as a JSON line to stdout.
 func emitJSON(evt StreamStatusEvent) {
-	data, _ := json.Marshal(evt)
+	data, err := json.Marshal(evt)
+	if err != nil {
+		fmt.Printf(`{"error":"failed to marshal event","details":"%s"}\n`, err)
+		return
+	}
 	fmt.Println(string(data))
 }
 

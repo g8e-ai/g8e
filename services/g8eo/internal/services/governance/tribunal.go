@@ -36,7 +36,10 @@ func (t *Tribunal) EvaluatePayload(env *uap.UAPEnvelope) error {
 	var cmdData string
 	var intent constants.CloudIntent
 	if env.IntentData != nil && len(env.IntentData.Fields) > 0 {
-		jsonBytes, _ := env.IntentData.MarshalJSON()
+		jsonBytes, err := env.IntentData.MarshalJSON()
+		if err != nil {
+			return fmt.Errorf("failed to marshal intent data: %w", err)
+		}
 		cmdData = string(jsonBytes)
 
 		// If this is an intent request, extract and validate the specific intent

@@ -750,7 +750,10 @@ func (pki *PKIAuthority) generateAppCert(app, keyPath, certPath string) error {
 		return err
 	}
 
-	serial, _ := randomSerial()
+	serial, err := randomSerial()
+	if err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	wid := protocol.NewWorkloadIdentity()
 	appURI, _ := wid.AppSPIFFEURL(app)

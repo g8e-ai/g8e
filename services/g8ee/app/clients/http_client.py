@@ -233,10 +233,10 @@ class HTTPClient:
         timeout: float,
         retry_config: RetryConfig,
         circuit_breaker_config: CircuitBreakerConfig,
-        auth_token: str,
-        api_key: str,
-        headers: dict[str, str],
-        ca_cert_path: str,
+        auth_token: str | None = None,
+        api_key: str | None = None,
+        headers: dict[str, str] | None = None,
+        ca_cert_path: str | None = None,
         client_cert_path: str | None = None,
         client_key_path: str | None = None,
     ):
@@ -247,7 +247,7 @@ class HTTPClient:
         self.circuit_breaker_config = circuit_breaker_config
         self.auth_token = auth_token
         self.api_key = api_key
-        self.default_headers = headers
+        self.default_headers = headers or {}
         self._ca_cert_path = ca_cert_path
         self._client_cert_path = client_cert_path
         self._client_key_path = client_key_path
@@ -803,10 +803,10 @@ def get_service_client(
     source_service: str,
     base_url: str,
     timeout: float,
-    auth_token: str,
-    api_key: str = "",
+    auth_token: str | None = None,
+    api_key: str | None = None,
     headers: dict[str, str] | None = None,
-    ca_cert_path: str = "",
+    ca_cert_path: str | None = None,
     client_cert_path: str | None = None,
     client_key_path: str | None = None,
 ) -> HTTPClient:
@@ -840,7 +840,7 @@ def get_service_client(
         circuit_breaker_config=CircuitBreakerConfig(),
         auth_token=auth_token,
         api_key=api_key,
-        headers=headers or {},
+        headers=headers,
         ca_cert_path=ca_cert_path,
         client_cert_path=client_cert_path,
         client_key_path=client_key_path,

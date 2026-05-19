@@ -51,14 +51,6 @@ type Warden struct {
 	KeyID      string
 }
 
-// truncateHash safely truncates a hash for logging.
-func truncateHash(hash string) string {
-	if len(hash) >= 12 {
-		return hash[:12]
-	}
-	return hash
-}
-
 // Execute is the single execution boundary for all verified transactions.
 // It dispatches to the registered handler, captures status, writes a console_audit row,
 // signs and persists an ActionReceipt, and returns it.

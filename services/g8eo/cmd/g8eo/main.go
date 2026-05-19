@@ -847,7 +847,7 @@ func exportWardenPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string
 		Type:  "PUBLIC KEY",
 		Bytes: pubKey,
 	})
-	if err := os.WriteFile(pemPath, pemData, 0644); err != nil {
+	if err := os.WriteFile(pemPath, pemData, 0600); err != nil {
 		return fmt.Errorf("write warden_pub.pem: %w", err)
 	}
 	if logger != nil {
@@ -865,7 +865,7 @@ func exportWardenPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string
 	if err != nil {
 		return fmt.Errorf("marshal warden_pub.json: %w", err)
 	}
-	if err := os.WriteFile(jsonPath, jsonBytes, 0644); err != nil {
+	if err := os.WriteFile(jsonPath, jsonBytes, 0600); err != nil {
 		return fmt.Errorf("write warden_pub.json: %w", err)
 	}
 	if logger != nil {

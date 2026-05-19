@@ -61,7 +61,7 @@ class NonceCheckResult(G8eBaseModel):
     """Result of nonce check operation."""
     success: bool
     is_replay: bool = False
-    error: str = ""
+    error: str | None = None
     error_code: NonceErrorCode = NonceErrorCode.CHECK_FAILED
 
 

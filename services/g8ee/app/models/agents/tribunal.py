@@ -435,7 +435,7 @@ class TribunalAuditorCompletedPayload(G8eBaseModel):
 class TribunalSessionStartedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_SESSION_STARTED events."""
     request: str
-    guidelines: str = ""
+    guidelines: str | None = None
     model: str
     num_passes: int = Field(ge=1)
     members: list[TribunalMember]

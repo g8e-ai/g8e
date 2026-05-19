@@ -53,7 +53,7 @@ class DBClient:
 
     def __init__(
         self,
-        ca_cert_path: str,
+        ca_cert_path: str | None = None,
         operator_session_id: str | None = None,
         operator_api_key: str | None = None,
         listen_settings: ListenSettings | None = None,

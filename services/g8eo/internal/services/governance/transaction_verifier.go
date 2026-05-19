@@ -346,8 +346,8 @@ func (tv *TransactionVerifier) validateL1Governance(msg proto.Message) []string 
 		if opts == nil || !proto.HasExtension(opts, commonv1.E_ForbiddenPatterns) {
 			continue
 		}
-		patternsStr := proto.GetExtension(opts, commonv1.E_ForbiddenPatterns).(string)
-		if patternsStr == "" {
+		patternsStr, ok := proto.GetExtension(opts, commonv1.E_ForbiddenPatterns).(string)
+		if !ok || patternsStr == "" {
 			continue
 		}
 		val := msg.ProtoReflect().Get(fd)

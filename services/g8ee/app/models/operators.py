@@ -536,7 +536,7 @@ class PendingApproval(G8eBaseModel):
     # Response state
     response_received: bool = Field(default=False)
     approved: bool | None = Field(default=None)
-    reason: str = Field(default="")
+    reason: str | None = Field(default=None)
     responded_at: UTCDatetime | None = Field(default=None)
     feedback: bool = Field(default=False)
 
@@ -547,7 +547,7 @@ class PendingApproval(G8eBaseModel):
         self,
         *,
         approved: bool,
-        reason: str = "",
+        reason: str | None = None,
         responded_at: UTCDatetime | None = None,
         operator_session_id: str | None = None,
         operator_id: str | None = None,
@@ -589,7 +589,7 @@ class TargetSystem(G8eBaseModel):
     hostname: str = Field(description="Operator hostname")
     operator_id: str = Field(description="Operator identifier")
     operator_type: OperatorType = Field(description="Operator deployment type")
-    operator_session_id: str = Field(default="", description="Operator session identifier")
+    operator_session_id: str | None = Field(default=None, description="Operator session identifier")
 
 
 class ApprovalRequestBase(G8eBaseModel):

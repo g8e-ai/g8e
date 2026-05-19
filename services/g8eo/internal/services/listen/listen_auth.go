@@ -28,6 +28,13 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 )
 
+// contextKey is a custom type for context keys to avoid collisions.
+type contextKey string
+
+const (
+	userIDKey contextKey = "user_id"
+)
+
 // AuthError represents a structured authentication error.
 type AuthError struct {
 	Message string `json:"error"`
@@ -474,7 +481,7 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *ListenDBService) htt
 		}
 
 		// Stamp context with user_id
-		ctx := context.WithValue(r.Context(), "user_id", webSession.UserID)
+		ctx := context.WithValue(r.Context(), userIDKey, webSession.UserID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

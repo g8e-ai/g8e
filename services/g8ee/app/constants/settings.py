@@ -17,18 +17,19 @@ from pathlib import Path
 
 from app.constants.protocol import _AGENTS, _STATUS
 from app.constants.paths import PATHS
+from app.constants.models import SecurityConstraintsConstants
 
 
-def _load_security_constraints() -> dict:
+def _load_security_constraints() -> SecurityConstraintsConstants:
     """Load security constraints from protocol model."""
     protocol_models_dir = PATHS["infra"]["protocol_models_dir"]
     protocol_models_path = Path(protocol_models_dir) / "security_constraints.json"
     try:
         with open(protocol_models_path) as f:
             constraints = json.load(f)
-        return constraints
+        return SecurityConstraintsConstants.model_validate(constraints)
     except Exception:
-        return {}
+        return SecurityConstraintsConstants()
 
 
 _SECURITY_CONSTRAINTS = _load_security_constraints()
@@ -532,62 +533,10 @@ INVESTIGATION_LOOKUP_RETRY_DELAYS_MS = [100, 200, 300]
 DB_TIMESTAMP = "__SERVER_TIMESTAMP__"
 
 FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = tuple(
-    _SECURITY_CONSTRAINTS.get("forbidden_command_patterns", {}).get("patterns", [
-        "sudo",
-        "su ",
-        "su\t",
-        "su -",
-        "pkexec",
-        "doas",
-        "runas",
-        "chmod +s",
-        "chmod u+s",
-        "chmod g+s",
-        "setuid",
-        "setgid",
-        "eval ",
-        "exec ",
-        "$(",
-        "`",
-        "> /dev/sd",
-        "> /dev/nvme",
-        "> /dev/vd",
-        "dd if=",
-        "nsenter",
-        "unshare",
-        ":(){ :|:& };:",
-        "| bash",
-        "| sh",
-        "| zsh",
-        "| python",
-        "| perl",
-        "| php",
-        "| ruby",
-        "| node",
-        "base64 -d",
-        "base64 --decode",
-        "rm -rf /",
-        "rm -rf /etc",
-        "rm -rf /var",
-        "rm -rf /usr",
-        "rm -rf /bin",
-        "chmod 777",
-        "chmod -R 777",
-        "chmod a+rwx",
-        "chown -R",
-        "> /etc/passwd",
-        "> /etc/shadow",
-        "> /etc/sudoers",
-        ">> /etc/passwd",
-        ">> /etc/shadow",
-        ">> /etc/sudoers",
-        "iptables -F",
-        "ufw disable",
-        "history -c",
-        "unset HISTFILE",
-        "rm $0",
-        "rm $BASH_SOURCE",
-    ])
+    _SECURITY_CONSTRAINTS.forbidden_command_patterns.get(
+        "patterns",
+        SecurityConstraintsConstants.get_default_forbidden_patterns()
+    )
 )
 
 G8EE_APP_TITLE                       = "g8e Engine"

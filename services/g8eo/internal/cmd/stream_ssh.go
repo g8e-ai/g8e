@@ -18,8 +18,6 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 )
 
-const defaultSSHTimeout = 30 * time.Second
-
 // resolvedHost holds the SSH connection parameters for a single target.
 type resolvedHost struct {
 	original string
@@ -59,7 +57,9 @@ func parseSSHConfig(path string) map[string]*sshConfigBlock {
 	if err != nil {
 		return blocks
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	var current *sshConfigBlock
 	var currentPattern string
@@ -192,7 +192,13 @@ func resolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser strin
 	// Locate SSH config file
 	configPath := sshConfigPath
 	if configPath == "" {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			home = os.Getenv("HOME")
+			if home == "" {
+				home = "/root"
+			}
+		}
 		configPath = filepath.Join(home, ".ssh", "config")
 	}
 
@@ -230,7 +236,13 @@ func resolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser strin
 
 	// Fall back to standard key paths if none found in config
 	if len(r.keyFiles) == 0 {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			home = os.Getenv("HOME")
+			if home == "" {
+				home = "/root"
+			}
+		}
 		candidates := []string{
 			filepath.Join(home, ".ssh", "id_ed25519"),
 			filepath.Join(home, ".ssh", "id_ecdsa"),
@@ -388,14 +400,18 @@ func streamToHost(
 		}
 		client = result.client
 	}
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	session, err := client.NewSession()
 	if err != nil {
 		emit(constants.StreamStatusFailed, fmt.Sprintf("new session: %v", err))
 		return
 	}
-	defer session.Close()
+	defer func() {
+		_ = session.Close()
+	}()
 
 	// Wire binary data as the remote stdin.
 	session.Stdin = bytes.NewReader(binaryData)

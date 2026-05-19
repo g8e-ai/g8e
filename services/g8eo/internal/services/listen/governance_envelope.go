@@ -19,8 +19,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 )
 
 // EnvelopeProcessor verifies and executes UAP JSON envelopes synchronously,

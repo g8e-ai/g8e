@@ -19,7 +19,7 @@ from app.constants.events import EventType
 
 def map_event_type_to_action_type(event_type: str) -> str:
     """Map protobuf event types to UAP action types."""
-    mapping = {
+    mapping: dict[str, str] = {
         EventType.OPERATOR_EVAL_ANSWER_REQUESTED: "EVAL_ANSWER",
         EventType.OPERATOR_HEARTBEAT_REQUESTED: "HEARTBEAT",
         EventType.OPERATOR_SHUTDOWN_REQUESTED: "SHUTDOWN",
@@ -41,7 +41,7 @@ def map_event_type_to_action_type(event_type: str) -> str:
 
 def map_action_type_to_event_type(action_type: str) -> str:
     """Map UAP action types back to protobuf event types."""
-    mapping = {
+    mapping: dict[str, str] = {
         "EVAL_ANSWER": EventType.OPERATOR_EVAL_ANSWER_REQUESTED,
         "HEARTBEAT": EventType.OPERATOR_HEARTBEAT_REQUESTED,
         "SHUTDOWN": EventType.OPERATOR_SHUTDOWN_REQUESTED,
@@ -63,7 +63,7 @@ def map_action_type_to_event_type(action_type: str) -> str:
 
 def map_event_type_to_result_action_type(event_type: str) -> str:
     """Map protobuf event types to UAP result action types."""
-    mapping = {
+    mapping: dict[str, str] = {
         EventType.OPERATOR_HEARTBEAT_SENT: "HEARTBEAT_RESULT",
         EventType.OPERATOR_COMMAND_COMPLETED: "EXECUTE_BASH_RESULT",
         EventType.OPERATOR_COMMAND_FAILED: "EXECUTE_BASH_RESULT",

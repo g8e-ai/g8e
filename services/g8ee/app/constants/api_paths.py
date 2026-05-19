@@ -12,21 +12,30 @@
 # limitations under the License.
 
 import json
+from typing import TypeVar, Type
 from app.constants.paths import PATHS
+from app.constants.models import ApiPathsConstants
 
 _PROTOCOL_DIR = PATHS["infra"]["protocol_constants_dir"]
 
-def _load(filename: str) -> dict:
+T = TypeVar("T")
+
+def _load(filename: str, model_cls: Type[T]) -> T:
     path = _PROTOCOL_DIR + "/" + filename
     try:
         with open(path) as f:
-            return json.load(f)
+            data = json.load(f)
+            # Use Pydantic to validate and parse the JSON data
+            if hasattr(model_cls, "model_validate"):
+                return model_cls.model_validate(data)
+            return model_cls(**data)
     except FileNotFoundError as e:
         raise RuntimeError(f"Protocol constants file not found: {path}") from e
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"Invalid JSON in protocol constants file {path}: {e}") from e
+    except (json.JSONDecodeError, Exception) as e:
+        raise RuntimeError(f"Failed to load/validate protocol constants file {path}: {e}") from e
 
-API_PATHS = _load("api_paths.json")
+_API_PATHS_DATA = _load("api_paths.json", ApiPathsConstants)
+API_PATHS = _API_PATHS_DATA.model_dump()
 
 class _InternalApiPathsMeta(type):
     def __getattr__(cls, name: str) -> str:
@@ -42,24 +51,24 @@ class _InternalApiPathsMeta(type):
 
 class InternalApiPaths(metaclass=_InternalApiPathsMeta):
     """Internal API paths shared across g8ee and client."""
-    PREFIX: str = API_PATHS["internal_prefix"]
+    PREFIX: str = _API_PATHS_DATA.internal_prefix
 
-    _G8EE_PATHS: dict = API_PATHS["g8ee"]
-    _CLIENT_PATHS: dict = API_PATHS["client"]
+    _G8EE_PATHS: dict[str, str] = _API_PATHS_DATA.g8ee
+    _CLIENT_PATHS: dict[str, str] = _API_PATHS_DATA.client
 
 
 def validate_api_paths_sync() -> None:
     """Validate that all keys in api_paths.json are accessible via InternalApiPaths."""
     errors = []
 
-    for key in API_PATHS["g8ee"]:
+    for key in _API_PATHS_DATA.g8ee:
         attr_name = f"G8EE_{key.upper()}"
         try:
             getattr(InternalApiPaths, attr_name)
         except AttributeError:
             errors.append(f"g8ee key '{key}' not accessible as '{attr_name}'")
 
-    for key in API_PATHS["client"]:
+    for key in _API_PATHS_DATA.client:
         attr_name = f"CLIENT_{key.upper()}"
         try:
             getattr(InternalApiPaths, attr_name)

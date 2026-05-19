@@ -426,7 +426,7 @@ class GeminiProvider(LLMProvider):
             if settings.top_k_filtering is not None:
                 log_parts.append(f"top_k={settings.top_k_filtering}")
             log_parts.extend([
-                f"system_instructions_len={len(settings.system_instructions)}",
+                f"system_instructions_len={len(settings.system_instructions) if settings.system_instructions is not None else 0}",
                 f"tools_count={len(genai_tools) if genai_tools else 0}",
                 f"thinking_level={logged_thinking_level}",
                 f"include_thoughts={logged_include_thoughts}",
@@ -619,7 +619,7 @@ class GeminiProvider(LLMProvider):
             primary_llm_settings.max_output_tokens,
             primary_llm_settings.top_k_filtering if primary_llm_settings.top_k_filtering is not None else "None",
             primary_llm_settings.top_p_nucleus_sampling if primary_llm_settings.top_p_nucleus_sampling is not None else "None",
-            len(primary_llm_settings.system_instructions),
+            len(primary_llm_settings.system_instructions) if primary_llm_settings.system_instructions is not None else 0,
             len(primary_llm_settings.tools) if primary_llm_settings.tools else 0,
         )
 

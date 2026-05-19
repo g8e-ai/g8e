@@ -457,7 +457,7 @@ class ChatPipelineService:
         logger.info(
             "[SSE-CHAT] _persist_ai_response started: investigation_id=%s response_len=%d",
             getattr(g8e_context, "investigation_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
-            len(state.response_text),
+            len(state.response_text) if state.response_text is not None else 0,
         )
 
         sender = inputs.message_sender
@@ -573,7 +573,7 @@ class ChatPipelineService:
                 citation_count=state.grounding_metadata.citations_count if state.grounding_metadata else 0,
                 operator_bound=inputs.operator_bound,
                 bound_operator_count=len(inputs.g8e_context.bound_operators) if inputs.g8e_context.bound_operators else 0,
-                response_length=len(state.response_text),
+                response_length=len(state.response_text) if state.response_text is not None else 0,
                 context_sizes=context_sizes,
                 attachment_total_bytes=attachment_total_bytes if attachment_total_bytes > 0 else None,
                 tool_response_sizes=state.tool_response_sizes if state.tool_response_sizes else None,
@@ -971,5 +971,5 @@ class ChatPipelineService:
 
         logger.info(
             "[SSE-CHAT] Completed: %d chars",
-            len(state.response_text)
+            len(state.response_text) if state.response_text is not None else 0
         )

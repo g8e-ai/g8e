@@ -157,7 +157,7 @@ async def get_g8ee_case_data_service(request: Request) -> CaseDataService:
 
 async def get_g8ee_investigation_data_service(request: Request) -> InvestigationDataService:
     state = cast(G8eeAppState, request.app.state)
-    service = state.services.investigation_data_service
+    service = cast(InvestigationDataService, state.services.investigation_data_service)
     if not service:
         logger.error("Investigation Data Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Investigation Data Service not available")
@@ -167,7 +167,7 @@ async def get_g8ee_investigation_data_service(request: Request) -> Investigation
 
 async def get_g8ee_investigation_service(request: Request) -> InvestigationService:
     state = cast(G8eeAppState, request.app.state)
-    service = state.services.investigation_service
+    service = cast(InvestigationService, state.services.investigation_service)
     if not service:
         logger.error("Investigation Domain Service not found in app state")
         raise ServiceUnavailableError("Investigation Domain Service not available")
@@ -176,7 +176,7 @@ async def get_g8ee_investigation_service(request: Request) -> InvestigationServi
 
 async def get_g8ee_memory_service(request: Request) -> MemoryDataService:
     state = cast(G8eeAppState, request.app.state)
-    service = state.services.memory_data_service
+    service = cast(MemoryDataService, state.services.memory_data_service)
     if not service:
         logger.error("Memory Data service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Memory service not available")

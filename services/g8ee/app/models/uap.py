@@ -7,13 +7,13 @@ class L1Metadata(BaseModel):
     violations: list[str] = Field(default_factory=list)
 
 class L2Metadata(BaseModel):
-    tribunal_signature: str = ""
+    tribunal_signature: str | None = None
     agent_ids: list[str] = Field(default_factory=list)
-    key_id: str = ""
+    key_id: str | None = None
 
 class L3Metadata(BaseModel):
-    human_signature: str = ""
-    public_key: str = ""
+    human_signature: str | None = None
+    public_key: str | None = None
     auto_approved: bool = False
 
 class GovernanceMetadata(BaseModel):
@@ -24,7 +24,7 @@ class GovernanceMetadata(BaseModel):
 class Metadata(BaseModel):
     sender_id: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    signature: str = ""
+    signature: str | None = None
 
 class Intent(BaseModel):
     action_type: str
@@ -33,11 +33,11 @@ class Intent(BaseModel):
 class Context(BaseModel):
     data_format: str = "json"
     intent_data: dict[str, Any] = Field(default_factory=dict)
-    data_blob: str = ""
+    data_blob: str | None = None
 
 class UAPEnvelope(BaseModel):
     protocol_version: str = "1.0"
-    id: str = "" # Canonical GovernanceEnvelope ID
+    id: str | None = None # Canonical GovernanceEnvelope ID
     timestamp: datetime | str = Field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | str = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -50,16 +50,16 @@ class UAPEnvelope(BaseModel):
     event_type: str | None = None
     payload: bytes | None = None
     intent_data: dict[str, Any] = Field(default_factory=dict)
-    action_type: str = ""
+    action_type: str | None = None
     target_resource: str = "localhost"
 
-    state_merkle_root: str = ""
-    nonce: str = ""
-    transaction_hash: str = ""
+    state_merkle_root: str | None = None
+    nonce: str | None = None
+    transaction_hash: str | None = None
 
     governance: GovernanceMetadata = Field(default_factory=GovernanceMetadata)
 
     case_id: str | None = None
     investigation_id: str | None = None
     task_id: str | None = None
-    system_fingerprint: str = ""
+    system_fingerprint: str | None = None
