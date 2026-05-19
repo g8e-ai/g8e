@@ -495,6 +495,11 @@ _print_platform_info() {
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  irm http://${HOST_IPS%%,*}:$OPERATOR_LISTEN_BOOTSTRAP_PORT/trust | iex"
     echo ""
+    echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  macOS/Linux Trust (Run in Terminal)"
+    echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  curl -fsSL http://${HOST_IPS%%,*}:$OPERATOR_LISTEN_BOOTSTRAP_PORT/trust | sudo sh"
+    echo ""
     if _g8ee_running; then
         echo "  Optional apps:          running (see ./g8e platform status)"
     else
