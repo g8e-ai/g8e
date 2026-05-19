@@ -18,7 +18,7 @@ Owns the complete approval lifecycle for all three approval types:
   - File edit approval
   - Intent (IAM) approval
 
-_pending_approvals is instance state — not a module-level global — making
+_pending_approvals is instance state - not a module-level global - making
 this service injectable, testable, and horizontally scalable (with a
 persistent backing store, pod-restart safe).
 """

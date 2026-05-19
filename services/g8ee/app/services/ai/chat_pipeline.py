@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-ChatPipelineService — internal chat pipeline coordinator.
+ChatPipelineService - internal chat pipeline coordinator.
 
 Owns:
 - Pre-flight context assembly (_prepare_chat_context)
@@ -77,7 +77,7 @@ logger = logging.getLogger(__name__)
 class ChatPipelineService:
     """Coordinates the full internal chat pipeline for browser sessions.
 
-    All dependencies are injected — nothing is constructed internally.
+    All dependencies are injected - nothing is constructed internally.
     """
 
     def __init__(
@@ -180,7 +180,7 @@ class ChatPipelineService:
 
         # Resolve effective provider/key/endpoint per tier. When a request
         # overrides the provider, credential and endpoint resolution must
-        # follow the override provider, not the stored one — otherwise the
+        # follow the override provider, not the stored one - otherwise the
         # stored provider's (often None) credentials shadow the request and
         # the request fails validation even though the user supplied a
         # complete override.
@@ -603,7 +603,7 @@ class ChatPipelineService:
         """Schedule memory generation as a background task so it never blocks persistence.
 
         Note: ``conversation_history`` is a snapshot from ``_prepare_chat_context``
-        and does NOT include the final AI response row written above — any memory
+        and does NOT include the final AI response row written above - any memory
         generation that needs the very latest turn must re-read from the DB. The
         staleness is intentional: we trade a one-turn lag for keeping memory
         generation off the response path. See ``docs/architecture/ai_agents.md``.
@@ -676,7 +676,7 @@ class ChatPipelineService:
         llm_lite_endpoint: str | None = None,
         _track_task: bool = True,
     ) -> None:
-        """Non-streaming chat path — AI response delivered via SSE through client.
+        """Non-streaming chat path - AI response delivered via SSE through client.
 
         Optionally registers the current asyncio task with ChatTaskManager so it
         can be cancelled via the stop endpoint.

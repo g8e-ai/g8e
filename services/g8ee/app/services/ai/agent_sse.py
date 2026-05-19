@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-SSE delivery — translates StreamChunkFromModel events produced by the agent
+SSE delivery - translates StreamChunkFromModel events produced by the agent
 streaming loop into client EventService pub/sub calls for browser delivery.
 """
 

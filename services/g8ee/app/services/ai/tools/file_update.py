@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``file_update_on_operator`` tool — find-and-replace edit on the operator."""
+"""``file_update_on_operator`` tool - find-and-replace edit on the operator."""
 
 from __future__ import annotations
 

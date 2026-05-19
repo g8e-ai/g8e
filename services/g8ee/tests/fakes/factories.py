@@ -314,7 +314,7 @@ def build_production_operator_document(
     """Build a production-like OperatorDocument for evaluation and benchmark tests.
 
     Reflects a realistic production Operator environment where the binary
-    was started with ``sudo ./g8eo`` — root user, systemd init, bare-metal
+    was started with ``sudo ./g8eo`` - root user, systemd init, bare-metal
     Linux host.  This ensures accuracy tests exercise the agent's reasoning
     without colliding with the security layer that blocks ``sudo``.
     """

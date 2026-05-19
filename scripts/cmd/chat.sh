@@ -54,14 +54,14 @@ esac
 _ensure_authenticated
 
 if [[ -z "${G8E_CLI_SESSION_ID:-}" ]]; then
-    echo "[g8e] CLI_SESSION_ID is missing from credentials — re-run: ./g8e login" >&2
+    echo "[g8e] CLI_SESSION_ID is missing from credentials - re-run: ./g8e login" >&2
     echo "     (cli_session_id and operator_session_id are strictly disjoint session types;" >&2
     echo "      stale credentials from before the split must be re-issued)" >&2
     exit 1
 fi
 
 if ! _g8ee_running; then
-    echo "[g8e] g8ee Engine is not running — start it: ./g8e apps start g8ee" >&2
+    echo "[g8e] g8ee Engine is not running - start it: ./g8e apps start g8ee" >&2
     exit 1
 fi
 
@@ -206,7 +206,7 @@ _chat_stream_events() {
         local resp
         # CLI is a first-class BYO session type: poll only the cli namespace so
         # we never accidentally drain a colliding web session id. The substrate
-        # refuses to talk about a bare session id — every routing target is
+        # refuses to talk about a bare session id - every routing target is
         # tagged at the type level.
         if ! resp=$(curl "${args[@]}" "$OPERATOR_HTTP_URL/api/internal/sse/events?cli_session_id=${cli_session_id}&since_id=${last_id}&limit=200" 2>/dev/null); then
             # curl failed (network issue, or Operator down)
@@ -271,7 +271,7 @@ _chat_stream_events() {
             idle=$(awk -v i="$idle" -v step="$interval" 'BEGIN{printf "%.1f", i+step}')
             if [[ "$timeout" -gt 0 ]]; then
                 if awk -v i="$idle" -v t="$timeout" 'BEGIN{exit !(i+0 >= t+0)}'; then
-                    echo "[chat] no new events in ${timeout}s — stopping" >&2
+                    echo "[chat] no new events in ${timeout}s - stopping" >&2
                     return 0
                 fi
             fi
@@ -294,7 +294,7 @@ case "$SUB" in
         # Build full request body with resource_creation for new cases
         # Pass LLM overrides to g8ee
         # cli_session_id is the disjoint CLI routing namespace minted at login;
-        # NEVER use OPERATOR_SESSION_ID here — that authenticates the host
+        # NEVER use OPERATOR_SESSION_ID here - that authenticates the host
         # agent and conflating the two would let an operator session drain a
         # client's event stream.
         context_json="{\"cli_session_id\": \"${G8E_CLI_SESSION_ID:-}\", \"user_id\": \"${G8E_USER_ID:-}\", \"case_id\": \"${CASE_ID:-}\", \"investigation_id\": \"${INVESTIGATION_ID:-}\", \"source_component\": \"client\"}"

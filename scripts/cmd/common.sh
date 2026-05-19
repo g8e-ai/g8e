@@ -192,7 +192,7 @@ _operator_bootstrap() {
 
 _ensure_operator() {
     if ! _operator_running; then
-        echo "[g8e] Operator listen mode is not running — start the platform: ./g8e platform start" >&2
+        echo "[g8e] Operator listen mode is not running - start the platform: ./g8e platform start" >&2
         exit 1
     fi
 }
@@ -211,7 +211,7 @@ _operator_curl() {
     local method="$1" path="$2" body="${3:-}"
     local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
     if [[ ! -f "$trust_bundle" ]]; then
-        echo "[g8e] Operator trust bundle not found at $trust_bundle — recreate runtime PKI with ./g8e platform clean && ./g8e platform start" >&2
+        echo "[g8e] Operator trust bundle not found at $trust_bundle - recreate runtime PKI with ./g8e platform clean && ./g8e platform start" >&2
         return 1
     fi
     local args=(-sS --cacert "$trust_bundle" -X "$method")
@@ -227,7 +227,7 @@ _operator_curl() {
         if [[ -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" && -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key" ]]; then
             args+=(--cert "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" --key "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key")
         else
-            echo "[g8e] No mTLS client certificate available — run: ./g8e login" >&2
+            echo "[g8e] No mTLS client certificate available - run: ./g8e login" >&2
             return 1
         fi
     fi
@@ -254,7 +254,7 @@ _build_protocol_curl_args() {
     local _outvar="$1"
     local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
     if [[ ! -f "$trust_bundle" ]]; then
-        echo "[g8e] trust bundle not found at $trust_bundle — recreate runtime PKI: ./g8e platform clean && ./g8e platform start" >&2
+        echo "[g8e] trust bundle not found at $trust_bundle - recreate runtime PKI: ./g8e platform clean && ./g8e platform start" >&2
         return 1
     fi
     local _args=(-sS --cacert "$trust_bundle")
@@ -269,7 +269,7 @@ _build_protocol_curl_args() {
         if [[ -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" && -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key" ]]; then
             _args+=(--cert "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" --key "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key")
         else
-            echo "[g8e] no mTLS client certificate available — run: ./g8e login" >&2
+            echo "[g8e] no mTLS client certificate available - run: ./g8e login" >&2
             return 1
         fi
     fi
@@ -403,7 +403,7 @@ _ensure_authenticated() {
         # per-user credentials in $HOME/.g8e untouched, so without this check
         # the CLI presents a cert signed by a previous Root CA and every mTLS
         # handshake fails with `x509: ECDSA verification failure`. We refuse to
-        # paper over that — clear the stale credentials and require re-login so
+        # paper over that - clear the stale credentials and require re-login so
         # the cause is obvious.
         local trust_bundle="${G8E_TRUST_BUNDLE:-}"
         if [[ -z "$trust_bundle" ]]; then
@@ -416,11 +416,11 @@ _ensure_authenticated() {
         local cert_file="${G8E_CLI_CERT:-$G8E_CLI_CERT_FILE}"
         local key_file="${G8E_CLI_KEY:-$G8E_CLI_KEY_FILE}"
         if [[ ! -f "$trust_bundle" ]]; then
-            echo "[g8e] Trust bundle not found at $trust_bundle — start the platform first: ./g8e platform start" >&2
+            echo "[g8e] Trust bundle not found at $trust_bundle - start the platform first: ./g8e platform start" >&2
             exit 1
         fi
         if [[ ! -f "$cert_file" || ! -f "$key_file" ]]; then
-            echo "[g8e] CLI certificate is missing — re-authenticate: ./g8e login" >&2
+            echo "[g8e] CLI certificate is missing - re-authenticate: ./g8e login" >&2
             _clear_credentials
             exit 1
         fi

@@ -62,7 +62,7 @@ class ReceiptCollector:
                     # 404 == not yet committed; any other status falls through
                     # to the retry/backoff path.
                 except Exception:
-                    # Connection blip — keep polling until the deadline.
+                    # Connection blip - keep polling until the deadline.
                     pass
 
                 await asyncio.sleep(0.5)

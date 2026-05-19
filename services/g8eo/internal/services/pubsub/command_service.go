@@ -300,7 +300,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 }
 
 // runSentinelGuard performs pre-execution threat analysis on the command.
-// Returns a sentinelVerdict — if blocked is true the caller must publish the blocked result
+// Returns a sentinelVerdict - if blocked is true the caller must publish the blocked result
 // and audit event, then return without executing the command.
 func (cs *CommandService) runSentinelGuard(execReq *models.ExecutionRequestPayload) sentinelVerdict {
 	if cs.sentinel == nil {

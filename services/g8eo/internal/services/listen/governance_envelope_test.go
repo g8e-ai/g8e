@@ -201,7 +201,7 @@ func TestGovernanceEnvelope_FailedExecution_StillReturns200(t *testing.T) {
 	}
 	// Warden returns (receipt, execErr) when a handler fails. ProcessEnvelope
 	// propagates that pair. The HTTP layer treats a non-nil receipt as
-	// authoritative — execErr alone is not 5xx territory.
+	// authoritative - execErr alone is not 5xx territory.
 	proc := &fakeEnvelopeProcessor{receipt: receipt, err: nil}
 	h := newGovernanceEnvelopeHandler(t, proc)
 

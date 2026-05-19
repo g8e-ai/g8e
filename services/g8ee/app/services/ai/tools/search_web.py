@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``g8e_web_search`` tool — Vertex AI Search-backed web search."""
+"""``g8e_web_search`` tool - Vertex AI Search-backed web search."""
 
 from __future__ import annotations
 

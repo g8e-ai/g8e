@@ -49,7 +49,7 @@ An embedded SQLite database (`./.g8e/data/g8e.db`) that stores all operator sess
 
 ## Auditor
 
-A verifier persona within the g8ee Tribunal stage (L2 Governance). The Auditor evaluates the consensus command winner against the original intent **after** the Warden has cleared it for risk; if Warden blocks, the Auditor never runs. The Auditor sees the request, operator context, and anonymized candidate clusters (not full conversation history). Verdicts are `ok`, `swap:<cluster_id>` to promote a dissenting cluster, or `revised:<command>`. On pass, the Auditor binds the verdict to a SHA-256 **Merkle Commitment** over the **Reputation Scoreboard**, chained via `prev_root` HMAC-SHA256 — a tamper-evident cryptographic chain of agent performance. Reputation-commitment failure is fatal: the verdict cannot proceed.
+A verifier persona within the g8ee Tribunal stage (L2 Governance). The Auditor evaluates the consensus command winner against the original intent **after** the Warden has cleared it for risk; if Warden blocks, the Auditor never runs. The Auditor sees the request, operator context, and anonymized candidate clusters (not full conversation history). Verdicts are `ok`, `swap:<cluster_id>` to promote a dissenting cluster, or `revised:<command>`. On pass, the Auditor binds the verdict to a SHA-256 **Merkle Commitment** over the **Reputation Scoreboard**, chained via `prev_root` HMAC-SHA256 - a tamper-evident cryptographic chain of agent performance. Reputation-commitment failure is fatal: the verdict cannot proceed.
 
 ---
 
@@ -94,8 +94,8 @@ An Operator binary started with `--cloud` (which defaults to `true`). Unlocks cl
 An Operator started with `--cloud --provider aws` that implements **Zero Standing Privileges** and **Just-in-Time Access**. The Operator launches with zero AWS permissions beyond self-discovery and dynamically requests permissions through user-approved Intents via the Intent-Based Policy System. Features a two-role IAM separation of execution from authority (Operator Role + Escalation Role), 1-hour TTL on granted permissions, and instant revocation capability.
 
 Deployment targets:
-- **g8ep** (local dev) — always started as Cloud Operator for AWS; credentials from `~/.aws` mount
-- **EC2 in VPC** — credentials from EC2 instance profile (IMDS); two-role IAM setup via CloudFormation
+- **g8ep** (local dev) - always started as Cloud Operator for AWS; credentials from `~/.aws` mount
+- **EC2 in VPC** - credentials from EC2 instance profile (IMDS); two-role IAM setup via CloudFormation
 
 ---
 
@@ -113,7 +113,7 @@ The set of standards and regulations that g8e adheres to, including NSA ZIG alig
 
 ## Coordination Store (SQLite)
 
-The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. The Operator binary running in `--listen` mode is the single source of truth — a single SQLite database in WAL mode shared by all components via the Operator's document store, KV, and pub/sub APIs. g8ee and  are stateless with respect to persistence and access all data through the  HTTP API.
+The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. The Operator binary running in `--listen` mode is the single source of truth - a single SQLite database in WAL mode shared by all components via the Operator's document store, KV, and pub/sub APIs. g8ee and  are stateless with respect to persistence and access all data through the  HTTP API.
 
 ---
 
@@ -137,7 +137,7 @@ A security strategy that implements multiple layers of protection to ensure the 
 
 ## Device Link
 
-A pre-authorized deployment method for installing Operators on one or many systems from a single token. Users generate a Device Link from the Operator Panel with configurable `max_uses` (1–10,000, default 1) and expiry (1 minute to 7 days, default 1 hour). The token (`dlk_` prefix) is distributed via Ansible, SSH, or configuration management as `g8e.operator --device-token dlk_xxx`. Each system auto-registers: the platform claims an existing AVAILABLE Operator slot for that user, or creates one on demand if none exist. No browser approval required — the link itself is the authorization. Operator slots are the accounting unit — each registered device consumes one slot.
+A pre-authorized deployment method for installing Operators on one or many systems from a single token. Users generate a Device Link from the Operator Panel with configurable `max_uses` (1–10,000, default 1) and expiry (1 minute to 7 days, default 1 hour). The token (`dlk_` prefix) is distributed via Ansible, SSH, or configuration management as `g8e.operator --device-token dlk_xxx`. Each system auto-registers: the platform claims an existing AVAILABLE Operator slot for that user, or creates one on demand if none exist. No browser approval required - the link itself is the authorization. Operator slots are the accounting unit - each registered device consumes one slot.
 
 **Authority Split:**  is authoritative for device link documents (usage tracking, exhaustion checking, claims management); g8ee is authoritative for operator documents (slot management, lifecycle operations).
 
@@ -301,7 +301,7 @@ The first and foundation layer of g8e governance. It implements hard-coded techn
 
 ## L2 Consensus (Tribunal)
 
-The second layer of g8e governance. A heterogeneous multi-model ensemble of 5 independent agents (Axiom, Concord, Variance, Pragma, Nemesis) that produces and votes on command candidates. The ordered cascade is: **Generation → Voting (R1) → [R2 anonymized peer review on consensus failure] → Warden risk analysis → Auditor verification → Merkle commitment**. Warden runs *before* Auditor; if Warden classifies HIGH risk, Auditor never runs (first strike returns to Sage; second strike forces human intervention). Voting uses uniform 1-vote-per-member weighting with a minimum consensus of 2; tie-breaks apply in order shortest → exclude-Nemesis-cluster → alphabetical. Nemesis votes are *not* auto-discarded — they only lose tie-breaks. L2 ensures that every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output.
+The second layer of g8e governance. A heterogeneous multi-model ensemble of 5 independent agents (Axiom, Concord, Variance, Pragma, Nemesis) that produces and votes on command candidates. The ordered cascade is: **Generation → Voting (R1) → [R2 anonymized peer review on consensus failure] → Warden risk analysis → Auditor verification → Merkle commitment**. Warden runs *before* Auditor; if Warden classifies HIGH risk, Auditor never runs (first strike returns to Sage; second strike forces human intervention). Voting uses uniform 1-vote-per-member weighting with a minimum consensus of 2; tie-breaks apply in order shortest → exclude-Nemesis-cluster → alphabetical. Nemesis votes are *not* auto-discarded - they only lose tie-breaks. L2 ensures that every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output.
 
 ---
 
@@ -516,7 +516,7 @@ A unique identifier generated by each Operator based on system characteristics i
 
 ## System Operator
 
-The Operator binary started with `--cloud=false`. Standard shell and system operations only — cloud CLI tools are blocked at the execution layer.
+The Operator binary started with `--cloud=false`. Standard shell and system operations only - cloud CLI tools are blocked at the execution layer.
 
 ---
 
@@ -547,7 +547,7 @@ The core trust model of g8e. Every component treats every other component as a p
 - **The Operator (g8eo)** does not trust the user or the AI (full fail-closed admission gauntlet on every inbound mutation: envelope integrity, typed payload, L1 reflected forbidden patterns, hash binding, freshness, state-root match, L2 trusted signer, L3 WebAuthn).
 - **The Engine's internal pipeline** does not trust itself (the Byzantine cascade in `services/g8ee/app/services/ai/generator.py` runs Triage → Dash/Sage → Tribunal generation → voting → Warden → Auditor before a command is even *eligible* for the protocol gauntlet).
 
-See `docs/position_paper.md` §2.1 and `docs/g8ee.md` "Governance & Safety — The Engine-Internal Byzantine Cascade".
+See `docs/position_paper.md` §2.1 and `docs/g8ee.md` "Governance & Safety - The Engine-Internal Byzantine Cascade".
 
 ---
 

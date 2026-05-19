@@ -1,4 +1,4 @@
-"""G8eeChatSUT — drives the real g8ee chat pipeline end-to-end.
+"""G8eeChatSUT - drives the real g8ee chat pipeline end-to-end.
 
 This SUT submits every task as a real chat turn against the running g8ee
 Engine via POST /api/internal/chat (mTLS + g8e_session cookie), then streams
@@ -11,7 +11,7 @@ and per-event statistics, and a live callback streams each stage to the
 CLI as it fires.
 
 This is the gold-standard evaluation path: the model under test exercises
-the same code paths a real user hits via `./g8e chat send` — no shortcuts.
+the same code paths a real user hits via `./g8e chat send` - no shortcuts.
 
 Event Streaming
 ---------------
@@ -116,7 +116,7 @@ class G8eeChatSUT:
         self.config = config
         self.on_event = on_event
         self.idle_timeout_s = idle_timeout_s
-        # Canonical transport/auth wiring — single source of truth shared
+        # Canonical transport/auth wiring - single source of truth shared
         # with the shell-side helpers in scripts/cmd/common.sh. See
         # evals/tests/test_auth_wiring_parity.py for the contract test.
         self.env = AuthContext.from_env(
@@ -165,7 +165,7 @@ class G8eeChatSUT:
             #    only consume events produced by this turn.
             since_id = await self._current_cursor(client)
 
-            # 2. POST chat — creates a fresh case+investigation and fires
+            # 2. POST chat - creates a fresh case+investigation and fires
             #    run_chat as a g8ee background task.
             request = self._build_chat_request(task)
             try:
@@ -233,7 +233,7 @@ class G8eeChatSUT:
                 unbound_reason=f"chat terminated with {terminal_event}",
             )
 
-        # No terminal event observed within idle window — still surface what we got.
+        # No terminal event observed within idle window - still surface what we got.
         if terminal_event is None:
             return Response(
                 answer=answer_text,

@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-AttachmentGroundingProvider — attachment-based grounding context for the AI.
+AttachmentGroundingProvider - attachment-based grounding context for the AI.
 
 User-uploaded files (PDF, image, text) are a form of grounding: they anchor AI
 responses to concrete, user-provided data. This provider formats processed
@@ -40,14 +40,14 @@ logger = logging.getLogger(__name__)
 class AttachmentGroundingProvider:
     """Formats processed attachments into canonical LLM Part objects.
 
-    Stateless — all methods are pure functions operating on their arguments.
+    Stateless - all methods are pure functions operating on their arguments.
     Instantiated once at startup and injected where needed.
 
     Supported attachment types and their LLM encoding:
-      PDF   — inline binary data via Part.from_bytes()
-      IMAGE — inline binary data via Part.from_bytes()
-      TEXT  — plain text context injected via Part.from_text()
-      OTHER — skipped with a warning log
+      PDF   - inline binary data via Part.from_bytes()
+      IMAGE - inline binary data via Part.from_bytes()
+      TEXT  - plain text context injected via Part.from_text()
+      OTHER - skipped with a warning log
     """
 
     def format_parts(self, attachments: list[ProcessedAttachment] | None) -> list[types.Part]:

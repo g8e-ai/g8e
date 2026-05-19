@@ -81,7 +81,7 @@ class G8eBaseModel(BaseModel):
     statements on enum-typed fields work uniformly whether the object was
     constructed in memory or parsed from a wire payload.
 
-    Boundary serialization — use ``model.model_dump(mode="json")`` at all boundaries:
+    Boundary serialization - use ``model.model_dump(mode="json")`` at all boundaries:
     - Wire boundary (pubsub_client.publish, outbound HTTP POST): ``model.model_dump(mode="json")``
     - DB boundary (db_client.create_document / update_document): ``model.model_dump(mode="json")``
     - LLM boundary (before Part.from_tool_response in agent.py): ``model.model_dump(mode="json")``
@@ -135,7 +135,7 @@ class G8eIdentifiableModel(G8eTimestampedModel):
     and needs a stable, addressable ID. The ``id`` field defaults to a UUID4
     string via ``generate_id()``.
 
-    Do NOT use this for value objects, request DTOs, or config structs — those
+    Do NOT use this for value objects, request DTOs, or config structs - those
     belong on ``G8eBaseModel`` directly. Misusing this class as a generic base
     pollutes every payload with ``id``, ``created_at``, and ``updated_at`` fields
     that have no meaning for ephemeral objects.

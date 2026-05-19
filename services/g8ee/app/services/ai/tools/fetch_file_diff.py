@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``fetch_file_diff`` tool — return a diff between two operator-side file versions."""
+"""``fetch_file_diff`` tool - return a diff between two operator-side file versions."""
 
 from __future__ import annotations
 

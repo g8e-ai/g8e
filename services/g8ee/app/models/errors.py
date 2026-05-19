@@ -27,7 +27,7 @@ class ErrorCauseDetail(G8eBaseModel):
 
 
 class ErrorDetail(G8eBaseModel):
-    """Internal error detail — attached to every G8eError instance."""
+    """Internal error detail - attached to every G8eError instance."""
 
     code: ErrorCode
     message: str
@@ -52,7 +52,7 @@ class ErrorDetail(G8eBaseModel):
 
 
 class ErrorBody(G8eBaseModel):
-    """HTTP response body for a single error — included inside ErrorResponse."""
+    """HTTP response body for a single error - included inside ErrorResponse."""
 
     code: ErrorCode
     message: str

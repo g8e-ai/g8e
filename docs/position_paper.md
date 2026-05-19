@@ -5,7 +5,7 @@
 
 ### Abstract
 
-The industry is rapidly converging on standardized data pipes and routing protocols—such as Anthropic’s Model Context Protocol (MCP) and open Agent-to-Agent (A2A) standards—to connect Large Language Models (LLMs) to production environments. However, treating infrastructure mutation as a simple JSON-RPC tool call is operational malpractice. Autonomous systems are inherently vulnerable to auto-regressive collapse, hallucination, and sycophancy. In high-stakes environments, agentic execution is not a prompt engineering challenge; it is a Byzantine Fault Tolerance (BFT) problem.
+The industry is rapidly converging on standardized data pipes and routing protocols - such as Anthropic’s Model Context Protocol (MCP) and open Agent-to-Agent (A2A) standards - to connect Large Language Models (LLMs) to production environments. However, treating infrastructure mutation as a simple JSON-RPC tool call is operational malpractice. Autonomous systems are inherently vulnerable to auto-regressive collapse, hallucination, and sycophancy. In high-stakes environments, agentic execution is not a prompt engineering challenge; it is a Byzantine Fault Tolerance (BFT) problem.
 
 This paper outlines a mutual-adversary governance architecture. We propose a strict physical separation between intent generation, communication protocols, and host execution. By forcing all state-changing payloads into a cryptographically signed, state-bound `GovernanceEnvelope`, we ensure that no autonomous system can access reality without structural consensus, host-local verification, and explicit, hardware-bound human authorization.
 
@@ -37,7 +37,7 @@ Every component treats every other component as a potential adversary. There is 
 **The Engine (g8ee) does not trust:**
 
 - *The user.* L1 Technical Bedrock (forbidden patterns, blacklist, whitelist) blocks dangerous instructions before any model sees them. The Engine refuses to compromise infrastructure for any single user request regardless of the user's authority over the conversation.
-- *The Operator.* Operator output passes through Sentinel ingress scrubbing (PII, credentials, tokens) before any AI sees it. The Engine speaks to the Operator only over mTLS, only via scoped sessions (`web_session_id` / `cli_session_id` / `operator_session_id`), and never reads raw stdout/stderr — only the scrubbed projection.
+- *The Operator.* Operator output passes through Sentinel ingress scrubbing (PII, credentials, tokens) before any AI sees it. The Engine speaks to the Operator only over mTLS, only via scoped sessions (`web_session_id` / `cli_session_id` / `operator_session_id`), and never reads raw stdout/stderr - only the scrubbed projection.
 
 **The Operator (g8eo) does not trust:**
 
@@ -77,18 +77,18 @@ The host-side binary. The Operator is the sovereign system of record and the phy
 
 Within the Engine, every turn that could touch a host flows through a layered cascade of agents that are individually replaceable and pairwise distrusted. The cascade is implemented in `services/g8ee/app/services/ai/` and orchestrated by `generator.py`:
 
-1. **Triage** (lite tier, classifier only). Reads each user message and emits structured `complexity / intent / posture / confidence` metadata. Triage *cannot* execute, ask questions, or call tools — a confident error here only mis-routes the model tier; it cannot leak state.
+1. **Triage** (lite tier, classifier only). Reads each user message and emits structured `complexity / intent / posture / confidence` metadata. Triage *cannot* execute, ask questions, or call tools - a confident error here only mis-routes the model tier; it cannot leak state.
 2. **Dash** (assistant tier) handles `simple` turns directly. **Sage** (primary tier) handles `complex` turns. Either can pause the loop with an `<interrogation>` block of three binary YES/NO questions; tool execution is suppressed for that turn until the user answers. Sage never writes shell syntax; it articulates *intent*.
-3. **Tribunal generation.** When Sage (or Dash) calls a host-mutation tool, the call is intercepted and the natural-language intent is forwarded to a five-member ensemble: **Axiom** (composition), **Concord** (safety), **Variance** (edge cases), **Pragma** (convention), **Nemesis** (calibrated adversary). Each member runs in isolation — the *Amnesia Principle*: no member sees another's candidate, no member knows which seat Nemesis occupies. Each emits exactly one shell command string. Reputation is staked on every emission.
-4. **Tribunal voting.** Candidates are aggregated under uniform 1-vote-per-member weighting. Minimum consensus is 2 of N (default 5). If consensus is reached, the winner advances. Tie-breaks apply in order: shortest command, non-Nemesis cluster wins over Nemesis-including cluster, alphabetical fallback. **Note**: Nemesis votes are *not* auto-discarded — they only lose tie-breaks. Slashing applies if Nemesis raised a false flag or abstained on a real flaw.
+3. **Tribunal generation.** When Sage (or Dash) calls a host-mutation tool, the call is intercepted and the natural-language intent is forwarded to a five-member ensemble: **Axiom** (composition), **Concord** (safety), **Variance** (edge cases), **Pragma** (convention), **Nemesis** (calibrated adversary). Each member runs in isolation - the *Amnesia Principle*: no member sees another's candidate, no member knows which seat Nemesis occupies. Each emits exactly one shell command string. Reputation is staked on every emission.
+4. **Tribunal voting.** Candidates are aggregated under uniform 1-vote-per-member weighting. Minimum consensus is 2 of N (default 5). If consensus is reached, the winner advances. Tie-breaks apply in order: shortest command, non-Nemesis cluster wins over Nemesis-including cluster, alphabetical fallback. **Note**: Nemesis votes are *not* auto-discarded - they only lose tie-breaks. Slashing applies if Nemesis raised a false flag or abstained on a real flaw.
 5. **Round 2 (anonymized peer review)** runs only when Round 1 fails to reach consensus. Members see anonymized R1 clusters and re-emit. If R2 also fails, the pipeline raises `TribunalConsensusFailedError` and Sage is given the failure context to re-articulate intent.
 6. **Warden risk analysis** runs *before* Auditor. The Warden coordinator orchestrates specialized sub-agents (command-risk, error, file-risk) that classify the consensus winner as LOW / MEDIUM / HIGH. **Two-Strike Circuit Breaker**: a first HIGH classification is returned to Sage with contextual feedback so Sage can re-articulate; a second HIGH in the same investigation raises `AGENT_CONFLICT_DETECTED` and forces human intervention. Successful execution resets the strike counter.
-7. **Auditor verification.** If Warden clears the command, the Auditor (primary tier) sees the request, the operator context, and the anonymized candidate clusters. Auditor verdicts are `ok`, `swap:<cluster_id>` (promote a dissenter), or `revised:<command>`. Auditor's job is intent fidelity and syntactic integrity; it judges the command, not the source. On `ok` or `swap`, the verdict is bound to a SHA-256 **Merkle commitment** over the agent reputation scoreboard, chained via `prev_root` HMAC-SHA256 — a tamper-evident history of agent performance. Reputation-commitment failure is fatal; the verdict cannot proceed.
+7. **Auditor verification.** If Warden clears the command, the Auditor (primary tier) sees the request, the operator context, and the anonymized candidate clusters. Auditor verdicts are `ok`, `swap:<cluster_id>` (promote a dissenter), or `revised:<command>`. Auditor's job is intent fidelity and syntactic integrity; it judges the command, not the source. On `ok` or `swap`, the verdict is bound to a SHA-256 **Merkle commitment** over the agent reputation scoreboard, chained via `prev_root` HMAC-SHA256 - a tamper-evident history of agent performance. Reputation-commitment failure is fatal; the verdict cannot proceed.
 8. **L1/L2/L3 wrapping.** The Auditor-verified command is packaged as a typed `CommandRequested` payload inside a `GovernanceEnvelope`, signed by the L2 Tribunal key, and presented to the user for L3 WebAuthn approval (or auto-approval policy if the verb is in `auto_approved.json` and L1/L2 cleared).
 9. **Substrate admission gauntlet.** The signed envelope is submitted over mTLS to the Operator, which independently re-runs the entire fail-closed gauntlet (§3). The Engine has no privileged channel.
 10. **Warden execution + signed receipt.** Inside the Operator, the substrate Warden (distinct from the AI Warden) is the *only* execution boundary. It writes an executing-state `ActionReceipt` to the audit vault before dispatch and a final receipt with `state_root_after` after dispatch.
 
-**Key invariant.** Any single agent in this cascade can be replaced or removed for an experiment, but the *signed-envelope substrate gauntlet* (§3) is non-negotiable. If the Engine's internal cascade is compromised end-to-end — e.g. a single adversarial provider supplied every model tier — the Operator still rejects the resulting envelope at L1 (forbidden patterns) or at the state-root / freshness / signer-trust gates.
+**Key invariant.** Any single agent in this cascade can be replaced or removed for an experiment, but the *signed-envelope substrate gauntlet* (§3) is non-negotiable. If the Engine's internal cascade is compromised end-to-end - e.g. a single adversarial provider supplied every model tier - the Operator still rejects the resulting envelope at L1 (forbidden patterns) or at the state-root / freshness / signer-trust gates.
 
 ### 3. Payload vs. Envelope: Interoperability with MCP
 
@@ -96,20 +96,20 @@ This architecture does not replace context standards like MCP; it secures them.
 
 MCP is highly effective at standardizing *what* a tool call is. But an MCP server natively executing those calls possesses no structural defense against an AI logic failure.
 
-In a mutual-adversary architecture, MCP is treated strictly as the **Payload**, and the host Operator is the **admission boundary**. The execution substrate does not "wrap" the payload as a passive courier; it ingests the payload at its perimeter and refuses to let it cross into the application layer — much less the host — until the surrounding `GovernanceEnvelope` proves itself against every conformance gate.
+In a mutual-adversary architecture, MCP is treated strictly as the **Payload**, and the host Operator is the **admission boundary**. The execution substrate does not "wrap" the payload as a passive courier; it ingests the payload at its perimeter and refuses to let it cross into the application layer - much less the host - until the surrounding `GovernanceEnvelope` proves itself against every conformance gate.
 
 When an LLM client issues a standard MCP `call_tool` request, the gateway intercepts the JSON-RPC message, normalizes the arguments into a base64 Protobuf payload, and binds it to a `GovernanceEnvelope`. The Operator's `TransactionVerifier` then forces that envelope through an ordered, fail-closed gauntlet *before any application code runs*:
 
-1. **Envelope integrity** — the JSON envelope must decode; `id` and `action_type` must be present; `action_type` must be registered.
-2. **Typed payload binding** — `payload` must decode as the protobuf message declared by `action_type`. Untyped or shape-mismatched payloads are rejected.
-3. **L1 forbidden patterns** — reflected scan of the typed payload's fields against the L1 denylist (e.g., `sudo`, raw destructive verbs).
-4. **Hash binding** — `transaction_hash == SHA256(canonical_fields)` *and* `id == transaction_hash`. The signature basis is non-malleable.
-5. **Freshness** — `expires_at` not in the past; `nonce` not in the replay store. Both are required.
-6. **State binding** — `state_merkle_root` must match the Operator's current host state root. Stale-context transactions are rejected.
-7. **L2 Tribunal signature** — `key_id` must resolve to a key in the trusted `SignerStore`; the Ed25519 signature over `transaction_hash` must verify. Untrusted signers are rejected even if the signature is internally valid.
-8. **L3 human authorization** (mutations only) — a real WebAuthn `L3Proof` (clientDataJSON, authenticatorData, signature) using `transaction_hash` as the challenge must verify against a configured L3 verifier.
+1. **Envelope integrity** - the JSON envelope must decode; `id` and `action_type` must be present; `action_type` must be registered.
+2. **Typed payload binding** - `payload` must decode as the protobuf message declared by `action_type`. Untyped or shape-mismatched payloads are rejected.
+3. **L1 forbidden patterns** - reflected scan of the typed payload's fields against the L1 denylist (e.g., `sudo`, raw destructive verbs).
+4. **Hash binding** - `transaction_hash == SHA256(canonical_fields)` *and* `id == transaction_hash`. The signature basis is non-malleable.
+5. **Freshness** - `expires_at` not in the past; `nonce` not in the replay store. Both are required.
+6. **State binding** - `state_merkle_root` must match the Operator's current host state root. Stale-context transactions are rejected.
+7. **L2 Tribunal signature** - `key_id` must resolve to a key in the trusted `SignerStore`; the Ed25519 signature over `transaction_hash` must verify. Untrusted signers are rejected even if the signature is internally valid.
+8. **L3 human authorization** (mutations only) - a real WebAuthn `L3Proof` (clientDataJSON, authenticatorData, signature) using `transaction_hash` as the challenge must verify against a configured L3 verifier.
 
-Only after every gate clears does the Operator admit the MCP payload to the Warden for native execution. If any gate fails, the verifier returns a typed `TX_*` sentinel, the substrate logs a blocked-transaction record to the audit vault, and the payload is dropped at the boundary. **The application layer (Warden, execution handlers, downstream subsystems) is never invoked, and the host is never touched.** Conformance is the price of entry — there is no permissive path.
+Only after every gate clears does the Operator admit the MCP payload to the Warden for native execution. If any gate fails, the verifier returns a typed `TX_*` sentinel, the substrate logs a blocked-transaction record to the audit vault, and the payload is dropped at the boundary. **The application layer (Warden, execution handlers, downstream subsystems) is never invoked, and the host is never touched.** Conformance is the price of entry - there is no permissive path.
 
 This separation of concerns allows engineering teams to leverage open standards for capability discovery while enforcing Byzantine Fault Tolerance at the execution boundary.
 
@@ -123,7 +123,7 @@ The AI control plane only receives metadata scrubbed of credentials and PII. The
 
 ### 5. The Agent Fabric Vision
 
-We are moving away from monolithic assistants toward an "Agent Fabric"—an interconnected mesh of micro-agents delegating tasks to one another across organizational boundaries.
+We are moving away from monolithic assistants toward an "Agent Fabric" - an interconnected mesh of micro-agents delegating tasks to one another across organizational boundaries.
 
 If this fabric relies on implicit trust and naked tool calls, the blast radius of a single failure will cascade unpredictably.
 

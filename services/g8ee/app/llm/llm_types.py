@@ -107,7 +107,7 @@ class ThinkingConfig:
     """Canonical thinking/reasoning effort request.
 
     thinking_level is always a ThinkingLevel (never None). ThinkingLevel.OFF
-    means "do not enable thinking for this call" — providers translate OFF
+    means "do not enable thinking for this call" - providers translate OFF
     to the appropriate per-provider omission (no thinking_config key for
     Gemini, no thinking dict for Anthropic, think=False for Ollama, no
     reasoning key for OpenAI).

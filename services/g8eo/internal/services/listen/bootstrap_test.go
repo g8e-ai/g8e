@@ -75,7 +75,7 @@ func TestBootstrapFlow(t *testing.T) {
 	cliSessionID := resp["cli_session_id"].(string)
 	require.NotEmpty(t, cliSessionID, "cli_session_id must be non-empty")
 	require.NotEqual(t, bootstrapSessionID, cliSessionID,
-		"cli_session_id MUST be a distinct identifier from operator_session_id — session types are strictly disjoint")
+		"cli_session_id MUST be a distinct identifier from operator_session_id - session types are strictly disjoint")
 
 	// 3. Status - now bootstrapped
 	req = httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)

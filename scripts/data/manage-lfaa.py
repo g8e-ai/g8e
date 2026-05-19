@@ -16,7 +16,7 @@ LFAA (Local-First Audit Architecture) Management Script
 
 Query and manage the operator's local audit vault (SQLite) from the CLI.
 The audit vault stores sessions, events (USER_MSG, AI_MSG, CMD_EXEC, FILE_MUTATION),
-and file mutation logs — all written locally by the operator for data sovereignty.
+and file mutation logs - all written locally by the operator for data sovereignty.
 
 DB location: <project-root>/.g8e/data/g8e.db (default when no --db-path, --container, or --volume is specified)
 
@@ -118,7 +118,7 @@ class LFAAManager:
             )
             if listen_probe.returncode == 0:
                 raise RuntimeError(
-                    f'Container {self._container!r} is running in listen mode (operator) — '
+                    f'Container {self._container!r} is running in listen mode (operator) - '
                     f'it has no LFAA audit vault.\n'
                     f'LFAA is written by normal-mode operators. '
                     f'Target an operator-test container instead.'

@@ -138,13 +138,13 @@ class HeartbeatSnapshotService:
 
     async def _on_ws_disconnect(self) -> None:
         self._ready = False
-        logger.warning("[HEARTBEAT] WebSocket disconnected — ready state reset, preserving active sessions for re-subscription")
+        logger.warning("[HEARTBEAT] WebSocket disconnected - ready state reset, preserving active sessions for re-subscription")
 
     async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
         """Track an operator session as active.
 
         Subscription is handled via a single ``heartbeat:*`` pattern set up in
-        ``start()`` — this method only records the (operator, session) pair so
+        ``start()`` - this method only records the (operator, session) pair so
         callers can observe activity. It is idempotent and never opens a new
         per-session pubsub subscription.
         """
@@ -155,7 +155,7 @@ class HeartbeatSnapshotService:
         )
 
     async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        """Stop tracking an operator session. No pubsub state to release—
+        """Stop tracking an operator session. No pubsub state to release - 
         the pattern subscription is shared across all operators.
         """
         self._active_sessions.discard((operator_id, operator_session_id))

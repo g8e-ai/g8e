@@ -329,12 +329,12 @@ func (c *OperatorPubSubClient) checkTLSConnectivity(ctx context.Context) error {
 
 	ws, resp, err := dialer.DialContext(ctx, wsURL, nil)
 	if err == nil {
-		// Unexpected: proxy accepted a sessionless connection — close it cleanly
+		// Unexpected: proxy accepted a sessionless connection - close it cleanly
 		ws.Close()
 		return nil
 	}
 
-	// A non-nil HTTP response means the server replied — TCP and TLS are healthy.
+	// A non-nil HTTP response means the server replied - TCP and TLS are healthy.
 	// The specific status code is irrelevant; what matters is that it responded.
 	if resp != nil {
 		return nil

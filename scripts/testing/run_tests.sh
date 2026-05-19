@@ -169,7 +169,7 @@ _show_llm_config() {
         echo ""
     else
         echo ""
-        echo -e "  ${YELLOW}No LLM flags provided — ai_integration tests will be skipped.${NC}"
+        echo -e "  ${YELLOW}No LLM flags provided - ai_integration tests will be skipped.${NC}"
         echo ""
     fi
 }
@@ -184,7 +184,7 @@ _show_web_search_config() {
         echo ""
     else
         echo ""
-        echo -e "  ${YELLOW}No web search flags — requires_web_search tests will be skipped.${NC}"
+        echo -e "  ${YELLOW}No web search flags - requires_web_search tests will be skipped.${NC}"
         echo ""
     fi
 }

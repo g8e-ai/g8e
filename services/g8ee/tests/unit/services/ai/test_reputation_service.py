@@ -14,7 +14,7 @@
 """Unit tests for the Phase 3 ReputationService (GDD §14.5).
 
 Pure-function table coverage and dispatcher idempotency. The dispatcher
-uses ``AsyncMock`` data services — no cache, no IO. The classifier is
+uses ``AsyncMock`` data services - no cache, no IO. The classifier is
 exercised exhaustively against the §14.5 outcome table.
 """
 
@@ -184,7 +184,7 @@ class TestApplySlash:
 
 
 # ---------------------------------------------------------------------------
-# classify_stakes — §14.5 table
+# classify_stakes - §14.5 table
 # ---------------------------------------------------------------------------
 
 
@@ -340,7 +340,7 @@ class TestClassifyStakesNemesis:
         ))
         by_agent = _outcomes_by_agent(rows)
         # Default breakdown has Nemesis voting for "rm -rf /", which is not
-        # a winner support — counts as an attack.
+        # a winner support - counts as an attack.
         assert by_agent[NEMESIS].rationale == "nemesis_attack_false_alarm"
         assert by_agent[NEMESIS].slash_tier == SlashTier.TIER_2
 

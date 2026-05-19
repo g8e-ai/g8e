@@ -85,7 +85,7 @@ THINKING_LEVEL_PRIORITY_ASC: tuple["ThinkingLevel", ...] = (
 class ThinkingDialect(StrEnum):
     """Wire dialect a self-hosted (Ollama) model expects for reasoning toggling.
 
-    Cloud providers (Gemini/OpenAI/Anthropic) do not need this — their
+    Cloud providers (Gemini/OpenAI/Anthropic) do not need this - their
     translation is fixed. Ollama hosts a heterogeneous zoo of model families
     where the same internal ThinkingLevel maps to different on-the-wire knobs.
     """
@@ -163,9 +163,9 @@ class AttachmentType(StrEnum):
 class GroundingSource(StrEnum):
     """Identifies the origin of grounding context fed to the AI.
 
-    ATTACHMENT       — user-uploaded file (PDF, image, text) injected as LLM Parts.
-    WEB_SEARCH       — explicit search_web tool call result (provider-agnostic).
-    PROVIDER_NATIVE  — native provider grounding (e.g. Gemini Search grounding metadata).
+    ATTACHMENT       - user-uploaded file (PDF, image, text) injected as LLM Parts.
+    WEB_SEARCH       - explicit search_web tool call result (provider-agnostic).
+    PROVIDER_NATIVE  - native provider grounding (e.g. Gemini Search grounding metadata).
     """
     def __str__(self) -> str:
         return self.value
@@ -197,7 +197,7 @@ class CommandGenerationOutcome(StrEnum):
     """Terminal outcomes the Tribunal pipeline can produce.
 
     Only successful outcomes are enumerated. Sage never proposes a command,
-    so there is no `fallback` outcome — when the Tribunal cannot produce
+    so there is no `fallback` outcome - when the Tribunal cannot produce
     a command it raises a typed TribunalError (disabled / provider_unavailable /
     generation_failed / system_error / auditor_failed / model_not_configured)
     and the tool call fails.
@@ -540,7 +540,7 @@ FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = tuple(
 )
 
 G8EE_APP_TITLE                       = "g8e Engine"
-G8EE_APP_DESCRIPTION                 = "g8e Engine (g8ee) — AI engine for the g8e platform. Agentic AI system with LLM provider abstraction providing Zero-Trust AI for infrastructure operations."
+G8EE_APP_DESCRIPTION                 = "g8e Engine (g8ee) - AI engine for the g8e platform. Agentic AI system with LLM provider abstraction providing Zero-Trust AI for infrastructure operations."
 G8EE_APP_CONTACT_NAME                = "g8e Support"
 G8EE_APP_CONTACT_URL                 = "https://localhost"
 G8EE_APP_CONTACT_EMAIL               = "help@g8e.ai"

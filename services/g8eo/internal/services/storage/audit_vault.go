@@ -188,7 +188,7 @@ func (avs *AuditVaultService) bootstrap() error {
 			return fmt.Errorf("failed to initialize ledger git repository: %w", err)
 		}
 	} else {
-		avs.logger.Warn("Git not available — ledger git repository will not be initialized")
+		avs.logger.Warn("Git not available - ledger git repository will not be initialized")
 	}
 
 	if err := avs.initDatabase(); err != nil {

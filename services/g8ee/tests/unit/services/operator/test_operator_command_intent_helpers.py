@@ -96,7 +96,7 @@ class TestIamHelperMethods:
         assert action is None
 
     def test_detach_and_attach_commands_differ_for_same_intent(self):
-        """Attach and detach commands must be distinct — they perform opposite IAM operations."""
+        """Attach and detach commands must be distinct - they perform opposite IAM operations."""
         svc = _make_service()
         attach = svc._build_iam_attach_command("ec2_discovery")
         detach = svc._build_iam_detach_command("ec2_discovery")
@@ -117,7 +117,7 @@ class TestIntentDependencyResolution:
         assert "ec2_discovery" in result
 
     def test_dependent_intent_pulls_in_prerequisite(self):
-        """ec2_management requires ec2_discovery — both must appear in the resolved list."""
+        """ec2_management requires ec2_discovery - both must appear in the resolved list."""
         result = _make_service()._resolve_intent_dependencies(["ec2_management"])
         assert "ec2_management" in result
         assert "ec2_discovery" in result
@@ -146,6 +146,6 @@ class TestIntentDependencyResolution:
         assert len(result) >= 2
 
     def test_single_intent_no_deps_count(self):
-        """ec2_discovery has no dependencies — result length must be exactly 1."""
+        """ec2_discovery has no dependencies - result length must be exactly 1."""
         result = _make_service()._resolve_intent_dependencies(["ec2_discovery"])
         assert len(result) == 1

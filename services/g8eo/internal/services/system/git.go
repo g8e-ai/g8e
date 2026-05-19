@@ -43,7 +43,7 @@ func ResolveGitBinary(logger *slog.Logger) string {
 		return absPath
 	}
 
-	logger.Warn("Git binary not found — ledger (git-backed file versioning) will be disabled")
+	logger.Warn("Git binary not found - ledger (git-backed file versioning) will be disabled")
 	return ""
 }
 

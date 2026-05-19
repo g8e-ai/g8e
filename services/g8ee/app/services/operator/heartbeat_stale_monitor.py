@@ -142,7 +142,7 @@ class HeartbeatStaleMonitorService:
 
                 last_hb = op.latest_heartbeat_snapshot.timestamp if op.latest_heartbeat_snapshot else None
                 if not last_hb:
-                    # No heartbeat data yet — operator is freshly registered (e.g.
+                    # No heartbeat data yet - operator is freshly registered (e.g.
                     # the local CLI bootstrap operator that owns the listener
                     # itself). Do NOT flip its status; wait for the threshold-based
                     # path to make a decision once the operator has actually

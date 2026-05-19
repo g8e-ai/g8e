@@ -62,7 +62,7 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 	}
 	result.StartTime = &startTime
 
-	// Resolve path — default to operator's working directory when none is specified
+	// Resolve path - default to operator's working directory when none is specified
 	path := req.Path
 	if path == "" || path == "." {
 		path = s.workDir

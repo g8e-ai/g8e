@@ -25,7 +25,7 @@ class FakeEventService:
     """Typed fake implementing EventServiceProtocol.
 
     Records all publish calls for assertion in tests. Does not perform any
-    real I/O. Implements the protocol structurally — no inheritance required.
+    real I/O. Implements the protocol structurally - no inheritance required.
     """
 
     def __init__(self) -> None:

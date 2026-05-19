@@ -13,6 +13,6 @@ For more on the origins, philosophy, and future of g8e, please visit [g8e.ai/blo
 
 ## Core Architecture
 
-1.  **Protocol (Substrate)**: A domain-agnostic wire contract — a typed, signed, state-bound `GovernanceEnvelope` carrying L1/L2/L3 evidence.
+1.  **Protocol (Substrate)**: A domain-agnostic wire contract - a typed, signed, state-bound `GovernanceEnvelope` carrying L1/L2/L3 evidence.
 2.  **Operator (Role)**: A host-side implementation that speaks the protocol. It receives signed transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts. `g8eo` is the reference implementation.
 3.  **Application Layer (Optional)**: Components like the **Engine (g8ee)** and **Dashboard (g8ed)** which consume the public protocol.

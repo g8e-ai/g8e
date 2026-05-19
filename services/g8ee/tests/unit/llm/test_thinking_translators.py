@@ -14,7 +14,7 @@
 """Unit tests for the thinking-level translator layer.
 
 Covers:
-  * clamp_thinking_level rules — empty support, OFF handling, downward clamp,
+  * clamp_thinking_level rules - empty support, OFF handling, downward clamp,
     lowest-fallback when desired is below everything supported.
   * Each of the four per-provider translators:
       - translate_for_gemini
@@ -63,7 +63,7 @@ class TestClampThinkingLevel:
 
     def test_empty_support_returns_off(self):
         """A model with no declared thinking levels always maps to OFF,
-        regardless of desired level — the caller asked for something the
+        regardless of desired level - the caller asked for something the
         model cannot provide."""
         cfg = LLMModelConfig(name="no-thinking", supported_thinking_levels=[])
         for desired in ThinkingLevel:

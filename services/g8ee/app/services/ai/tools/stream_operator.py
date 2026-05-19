@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``stream_operator`` tool — shotgun operator binary across the SSH fleet."""
+"""``stream_operator`` tool - shotgun operator binary across the SSH fleet."""
 
 from __future__ import annotations
 

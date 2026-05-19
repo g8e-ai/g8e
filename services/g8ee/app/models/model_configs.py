@@ -74,7 +74,7 @@ class LLMModelConfig(G8eBaseModel):
     """Configuration for an LLM model including capability constraints.
 
     Frozen. Use ``MODEL_REGISTRY.override(name, **updates)`` to install a
-    scoped, modified variant for tests or capability probes — never mutate
+    scoped, modified variant for tests or capability probes - never mutate
     a registered config in place. Mutation would leak across the whole
     process (MODEL_REGISTRY is a module-level singleton).
     """
@@ -364,7 +364,7 @@ ANTHROPIC_DEFAULT_CONFIG = LLMModelConfig(
 # OpenAI models
 #
 # GPT-5 mini exposes reasoning.effort at minimal/low. The generic default
-# entry has no declared thinking capability — set supported_thinking_levels
+# entry has no declared thinking capability - set supported_thinking_levels
 # explicitly on any new model that does.
 # =============================================================================
 
@@ -480,7 +480,7 @@ def clamp_thinking_level(desired: ThinkingLevel, config: "LLMModelConfig") -> Th
 # constant (instead of fabricating a fresh LLMModelConfig per call) guarantees
 # stable identity across callers and prevents accidental per-call mutation
 # leaking between tests. Its name is a sentinel ("unknown") rather than the
-# requested model name because the config is meant to be opaque — callers that
+# requested model name because the config is meant to be opaque - callers that
 # need the real model string must resolve it from their own context.
 UNKNOWN_MODEL_CONFIG = LLMModelConfig(
     name="unknown",
@@ -536,7 +536,7 @@ class LLMModelRegistry(G8eBaseModel):
         and stores it in the private overrides map for the duration of the
         context. On exit the override is removed, restoring the original.
 
-        Fails loudly if ``model_name`` is not registered — fabricating an
+        Fails loudly if ``model_name`` is not registered - fabricating an
         ad-hoc config would bypass registration-time validation (e.g. the
         Ollama ``thinking_dialect`` check).
 
@@ -578,7 +578,7 @@ class LLMModelRegistry(G8eBaseModel):
         return _highest_thinking_level(self.get(model_name))
 
 
-# Every Ollama config MUST declare its reasoning dialect explicitly —
+# Every Ollama config MUST declare its reasoning dialect explicitly  - 
 # ``NONE`` for models without reasoning, ``NATIVE_TOGGLE`` for those with the
 # native ``think`` kwarg. Silently defaulting a missing dialect hides the fact
 # that a new model has no reasoning configured, so we fail loudly at import
@@ -600,7 +600,7 @@ for _cfg in _OLLAMA_CONFIGS:
         raise ValueError(
             f"Ollama model {_cfg.name!r} is registered without a thinking_dialect. "
             "Every Ollama config MUST declare ThinkingDialect.NONE or "
-            "ThinkingDialect.NATIVE_TOGGLE explicitly — a silent fallback "
+            "ThinkingDialect.NATIVE_TOGGLE explicitly - a silent fallback "
             "would bake 'no thinking' into a new model forever."
         )
 

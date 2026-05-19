@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``run_commands_with_operator`` tool — Tribunal-routed shell execution."""
+"""``run_commands_with_operator`` tool - Tribunal-routed shell execution."""
 
 from __future__ import annotations
 

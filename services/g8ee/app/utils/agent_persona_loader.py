@@ -84,7 +84,7 @@ class AgentPersona(BaseModel):
         Canonical layout per docs/architecture/agent_personas.md:
         1. <role>
         2. <output_contract> (only if present as explicit field; the
-           ``output_contract`` tag MUST NOT be embedded in ``identity`` —
+           ``output_contract`` tag MUST NOT be embedded in ``identity``  - 
            that contract is enforced by
            ``test_prompt_alignment::test_no_persona_embeds_output_contract_in_identity``).
         3. <identity>

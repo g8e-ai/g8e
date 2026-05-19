@@ -513,7 +513,7 @@ func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Re
 }
 
 // =============================================================================
-// /db/{collection}/{id} — Document Store
+// /db/{collection}/{id} - Document Store
 //
 // GET    /db/{collection}/{id}       → get document
 // PUT    /db/{collection}/{id}       → set (create/replace) document
@@ -1006,7 +1006,7 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 }
 
 // =============================================================================
-// /db/_sse_events — SSE Event Buffer management
+// /db/_sse_events - SSE Event Buffer management
 //
 // DELETE /db/_sse_events         → wipe all SSE events
 // GET    /db/_sse_events/count   → count rows
@@ -1207,7 +1207,7 @@ func (h *HTTPHandler) handleSSEEvents(w http.ResponseWriter, r *http.Request, id
 }
 
 // =============================================================================
-// /api/internal/sse/push, /api/internal/sse/events — Internal SSE event bridge
+// /api/internal/sse/push, /api/internal/sse/events - Internal SSE event bridge
 //
 // POST /api/internal/sse/push     → Producer (g8ee Engine) appends an event.
 //                                   Body MUST set exactly one of
@@ -1217,7 +1217,7 @@ func (h *HTTPHandler) handleSSEEvents(w http.ResponseWriter, r *http.Request, id
 //                                   web_session_id, cli_session_id, user_id,
 //                                   plus since_id=N and limit=K.
 //
-// The substrate refuses to talk about a bare session id — every routing
+// The substrate refuses to talk about a bare session id - every routing
 // target is tagged at the type level so a web_session_id can never be
 // mis-delivered as a cli_session_id (or vice versa).
 // =============================================================================
@@ -1552,7 +1552,7 @@ func (h *HTTPHandler) handleDBQuery(w http.ResponseWriter, r *http.Request, coll
 }
 
 // =============================================================================
-// /kv/{key} — KV Store
+// /kv/{key} - KV Store
 //
 // GET    /kv/{key}           → get value
 // PUT    /kv/{key}           → set value (body: {"value":"...", "ttl": seconds})
@@ -1736,9 +1736,9 @@ func (h *HTTPHandler) handleKVDeletePattern(w http.ResponseWriter, r *http.Reque
 }
 
 // =============================================================================
-// /blob/{namespace}/{id}      — Blob Store
-// /blob/{namespace}/{id}/meta — Blob metadata
-// /blob/{namespace}           — Namespace-level delete
+// /blob/{namespace}/{id}      - Blob Store
+// /blob/{namespace}/{id}/meta - Blob metadata
+// /blob/{namespace}           - Namespace-level delete
 //
 // PUT    /blob/{namespace}/{id}       → store blob (raw bytes, Content-Type header required, optional X-Blob-TTL seconds)
 // GET    /blob/{namespace}/{id}       → retrieve blob (streams raw bytes with original Content-Type)
@@ -1777,7 +1777,7 @@ func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// DELETE /blob/{namespace} — delete entire namespace
+	// DELETE /blob/{namespace} - delete entire namespace
 	if len(parts) == 1 {
 		if r.Method != http.MethodDelete {
 			jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1911,7 +1911,7 @@ func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 }
 
 // =============================================================================
-// /pubsub/publish — HTTP-based publish (for components that don't hold a WS)
+// /pubsub/publish - HTTP-based publish (for components that don't hold a WS)
 //
 // POST /pubsub/publish  body: {"channel":"...", "data": {...}}
 // =============================================================================
@@ -2241,7 +2241,7 @@ func (h *HTTPHandler) handlePasskeyRevokeCredential(w http.ResponseWriter, r *ht
 }
 
 // handleUsers handles user management (POST to create a user).
-// Requires mTLS — only CLI/internal callers with a signed certificate can create users.
+// Requires mTLS - only CLI/internal callers with a signed certificate can create users.
 func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -2601,7 +2601,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		// agent (mTLS URI SAN); the cli_session_id is the routing namespace
 		// the BYO/CLI client uses to receive SessionEvents (SSE) and embed in
 		// outbound request bodies. Conflating the two would let an operator
-		// session drain another client's event stream — and vice versa.
+		// session drain another client's event stream - and vice versa.
 
 		// Store the binding between operator_session_id and cli_session_id in a first-class
 		// collection to support metadata, expiry, and revocation. Without this binding,

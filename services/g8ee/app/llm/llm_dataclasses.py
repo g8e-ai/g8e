@@ -152,7 +152,7 @@ class SdkGroundingRawData:
     """Typed representation of raw SDK grounding metadata extracted at the provider boundary.
 
     Populated by the respective provider and attached to GenerateContentResponse.grounding_raw.
-    Consumed exclusively by GroundingService — never accessed outside the grounding boundary.
+    Consumed exclusively by GroundingService - never accessed outside the grounding boundary.
     """
     web_search_queries: list[str] = field(default_factory=list)
     grounding_chunks: list[SdkGroundingChunk] = field(default_factory=list)

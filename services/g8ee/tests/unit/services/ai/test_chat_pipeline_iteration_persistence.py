@@ -172,9 +172,9 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
         # Simulate the agent ending on a final wrap-up segment that the SSE
         # delivery layer leaves in state.response_text for _persist_ai_response.
         # Mutate the *actual* state instance constructed by _run_chat_impl,
-        # not the outer test fixture — otherwise the final persist path runs
+        # not the outer test fixture - otherwise the final persist path runs
         # against an empty response_text and no final row is written.
-        kwargs["state"].response_text = "All checks completed — service is healthy."
+        kwargs["state"].response_text = "All checks completed - service is healthy."
 
     svc.g8e_agent.run_with_sse = AsyncMock(side_effect=_fake_run_with_sse)
 
@@ -202,7 +202,7 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
     assert contents == [
         iteration_texts[0],
         iteration_texts[1],
-        "All checks completed — service is healthy.",
+        "All checks completed - service is healthy.",
     ]
 
     # Intermediate rows: AI_PRIMARY source, no grounding, no token usage.
@@ -215,7 +215,7 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
         assert intermediate["investigation_id"] == "inv-iter"
 
     # Final row: still AI_PRIMARY; its grounding/token-usage come from ctx
-    # (both None in this fake — real runs populate them via COMPLETE chunks).
+    # (both None in this fake - real runs populate them via COMPLETE chunks).
     final = primary_calls[-1]
     assert final["sender"] == MessageSender.AI_PRIMARY
     assert isinstance(final["metadata"], AIResponseMetadata)
@@ -231,7 +231,7 @@ async def test_final_persist_skipped_when_response_text_is_whitespace_only():
     async def _fake_run_with_sse(**kwargs):
         on_iter = kwargs["on_iteration_text"]
         await on_iter("Iteration commentary before tool call.")
-        # Stream ends on TOOL_RESULT — response_text already cleared by SSE.
+        # Stream ends on TOOL_RESULT - response_text already cleared by SSE.
         kwargs["state"].response_text = "   "
 
     svc.g8e_agent.run_with_sse = AsyncMock(side_effect=_fake_run_with_sse)
@@ -257,7 +257,7 @@ async def test_final_persist_skipped_when_response_text_is_whitespace_only():
     primary_calls = _ai_primary_calls(svc.investigation_service.investigation_data_service.add_chat_message)
     contents = [c["content"] for c in primary_calls]
 
-    # Only the intermediate iteration was persisted — no trailing empty row.
+    # Only the intermediate iteration was persisted - no trailing empty row.
     assert contents == ["Iteration commentary before tool call."]
 
 
@@ -269,7 +269,7 @@ async def test_iteration_callback_skips_whitespace_only_text():
 
     async def _fake_run_with_sse(**kwargs):
         on_iter = kwargs["on_iteration_text"]
-        # Whitespace-only — should be dropped by the closure's guard.
+        # Whitespace-only - should be dropped by the closure's guard.
         await on_iter("   \n  ")
         await on_iter("Real commentary.")
         kwargs["state"].response_text = "Final answer."
@@ -301,7 +301,7 @@ async def test_iteration_callback_skips_whitespace_only_text():
 async def test_iteration_callback_passed_to_run_with_sse():
     """Regression: _run_chat_impl must wire a callback that writes AI_PRIMARY rows.
 
-    It is not enough that *some* callable is passed — the callable must actually
+    It is not enough that *some* callable is passed - the callable must actually
     produce an ``investigation_service.investigation_data_service.add_chat_message`` call with
     ``sender == MessageSender.AI_PRIMARY`` and
     ``metadata.source == EventType.SOURCE_AI_PRIMARY`` when invoked with

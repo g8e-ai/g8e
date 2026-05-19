@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-Unit tests for aiohttp_session — the three named session constructors.
+Unit tests for aiohttp_session - the three named session constructors.
 """
 
 import ssl

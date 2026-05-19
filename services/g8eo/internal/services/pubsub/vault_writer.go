@@ -26,7 +26,7 @@ import (
 
 // VaultWriter owns dual-vault persistence for command executions and file diffs.
 // Raw vault receives unscrubbed data; scrubbed vault receives sentinel-processed data.
-// Both writes are best-effort — failures are logged but never propagate to callers.
+// Both writes are best-effort - failures are logged but never propagate to callers.
 type VaultWriter struct {
 	config     *config.Config
 	logger     *slog.Logger
@@ -35,7 +35,7 @@ type VaultWriter struct {
 	localStore *storage.LocalStoreService
 }
 
-// NewVaultWriter creates a VaultWriter. All service dependencies are optional — a nil
+// NewVaultWriter creates a VaultWriter. All service dependencies are optional - a nil
 // service is treated as disabled, matching the IsEnabled() pattern used elsewhere.
 func NewVaultWriter(
 	cfg *config.Config,

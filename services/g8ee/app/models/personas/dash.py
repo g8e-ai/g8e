@@ -31,7 +31,7 @@ class DashPersona(AgentPersonaModel):
             id="dash",
             display_name="Dash",
             icon="bolt",
-            description="The fast-path agent — resolves simple requests with minimum viable work.",
+            description="The fast-path agent - resolves simple requests with minimum viable work.",
             role="responder",
             model_tier="assistant",
             tools=[

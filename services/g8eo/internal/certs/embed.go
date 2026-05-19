@@ -50,7 +50,7 @@ func GetServerCARootCAs() (*x509.CertPool, error) {
 	serverCAMu.RUnlock()
 
 	if len(pem) == 0 {
-		return nil, fmt.Errorf("server CA not set — call certs.SetCA before making TLS connections")
+		return nil, fmt.Errorf("server CA not set - call certs.SetCA before making TLS connections")
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(pem) {
@@ -60,7 +60,7 @@ func GetServerCARootCAs() (*x509.CertPool, error) {
 }
 
 // GetTLSConfig returns a TLS configuration that trusts the hub CA.
-// No client certificate is included — the per-operator mTLS cert is applied
+// No client certificate is included - the per-operator mTLS cert is applied
 // after bootstrap via rebuildTransportWithOperatorCert.
 func GetTLSConfig() (*tls.Config, error) {
 	rootCAs, err := GetServerCARootCAs()

@@ -23,7 +23,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// GetDiffStat — wraps calculateDiffStat
+// GetDiffStat - wraps calculateDiffStat
 // ---------------------------------------------------------------------------
 
 func TestLedgerService_GetDiffStat_EmptyHashesReturnsEmpty(t *testing.T) {

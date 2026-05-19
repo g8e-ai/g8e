@@ -415,7 +415,7 @@ class InternalUnexpectedError(G8eError):
 # These are raised by LLM provider adapters when a request asks the model for
 # a capability it does not support (extended thinking, function calling, etc).
 # They are caught by name/type at call sites that need to decide whether to
-# downgrade, retry without the capability, or skip a test — never by matching
+# downgrade, retry without the capability, or skip a test - never by matching
 # on exception message substrings. Consumers MUST use isinstance() rather
 # than string parsing.
 class ModelCapabilityError(ExternalServiceError):

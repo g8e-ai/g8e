@@ -300,7 +300,7 @@ class TestGradeTurnHappyPath:
 
 
 class TestGradeTurnErrorPaths:
-    """Error handling — all system errors raise EvalJudgeError."""
+    """Error handling - all system errors raise EvalJudgeError."""
 
     async def test_empty_candidates_raises(self, judge, mock_provider):
         mock_provider.generate_content_lite.return_value = GenerateContentResponse(candidates=[])

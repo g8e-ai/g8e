@@ -8,7 +8,7 @@ envelopes per row in the `payload` field (see
 
 The bench must NOT do ad-hoc dict-spelunking against this shape: any schema
 drift in the protocol silently breaks the bench. Parsing through these typed models
-makes drift visible — fields that disappear or change type fail validation
+makes drift visible - fields that disappear or change type fail validation
 loudly, and the contract test in `evals/tests/test_sse_wire.py` pins the
 shape against the protocol definition.
 """

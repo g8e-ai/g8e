@@ -117,7 +117,7 @@ class OperatorDocument(G8eIdentifiableModel):
     Maps to operator_status_info in protocol/models/operator_document.json.
     Populated from operator KV cache keyed by KVKey.doc(Collections.OPERATORS, id) or
     GET /api/internal/operators/:id/status.
-    client is the authority — g8ee only reads this document.
+    client is the authority - g8ee only reads this document.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -302,7 +302,7 @@ def _coerce_heartbeat_type(value: object) -> HeartbeatType:
     try:
         return HeartbeatType(value)
     except (ValueError, KeyError):
-        logger.warning("Unknown HeartbeatType value %r — defaulting to AUTOMATIC", value)
+        logger.warning("Unknown HeartbeatType value %r - defaulting to AUTOMATIC", value)
         return HeartbeatType.AUTOMATIC
 
 
@@ -817,7 +817,7 @@ class HeartbeatSSEEnvelope(G8eBaseModel):
 
     Authorship boundary: g8ee owns `operator_id` and `status` (the authoritative value from
     OperatorDocument); `metrics` carries the g8eo-authored HeartbeatSnapshot
-    snapshot verbatim (defined in protocol/proto/operator.proto) —
+    snapshot verbatim (defined in protocol/proto/operator.proto)  - 
     the same instance persisted as `latest_heartbeat_snapshot` on the operator
     document. There is no flat projection: wire, persistence, and browser
     all see the identical nested shape. Callers must never mutate fields
@@ -865,7 +865,7 @@ class OperatorStatusUpdatedPayload(G8eBaseModel):
 # BROADCAST EVENT MODELS
 # =============================================================================
 # Typed payloads for _broadcast_command_event calls. Replaces raw dicts.
-# All timestamp fields use datetime (not str) — serialized to ISO on the wire.
+# All timestamp fields use datetime (not str) - serialized to ISO on the wire.
 # =============================================================================
 
 class CommandFailedBroadcastEvent(G8eBaseModel):

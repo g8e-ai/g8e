@@ -112,7 +112,7 @@ class SettingsService:
         Model-driven by design: each nested settings model is overlaid as a
         whole object, and the auth merge iterates ``AuthSettings`` fields
         rather than hand-listing them. Adding a new field on any of these
-        nested models therefore flows through automatically — hand-listing
+        nested models therefore flows through automatically - hand-listing
         fields here is the bug class that previously dropped new fields
         (e.g. command_validation auto-approve, auth auditor_hmac_key) on
         the platform-bootstrap path.
@@ -134,7 +134,7 @@ class SettingsService:
         settings.listen = platform_settings.listen
 
         # Auth: bootstrap value wins when present; platform DB fills gaps.
-        # Iterating AuthSettings.model_fields makes this structural — newly
+        # Iterating AuthSettings.model_fields makes this structural - newly
         # added auth tokens (e.g. future signing keys) overlay automatically
         # without revisiting this method.
         for field_name in type(settings.auth).model_fields:

@@ -75,7 +75,7 @@ TRIBUNAL_HONEST_FOUR: tuple[str, ...] = (
     str(TribunalMember.VARIANCE),
     str(TribunalMember.PRAGMA),
 )
-"""Persona ids for the honest four. Nemesis is excluded — its stake follows a
+"""Persona ids for the honest four. Nemesis is excluded - its stake follows a
 proper-scoring rule (GDD §5)."""
 
 NEMESIS_ID: str = str(TribunalMember.NEMESIS)
@@ -88,12 +88,12 @@ WARDEN_ID: str = "warden"
 # the EMA update so the slash bites the post-update scalar. The tier is also
 # preserved on the StakeResolution record so peer auditors can replay.
 _SLASH_TIER_RETENTION: dict[SlashTier, float] = {
-    # Tier 1: 50-100% — pick mid-band conservative retention so a single
+    # Tier 1: 50-100% - pick mid-band conservative retention so a single
     # catastrophic event halves the agent's standing.
     SlashTier.TIER_1: 0.25,
-    # Tier 2: 5-20% — modest hit per fault.
+    # Tier 2: 5-20% - modest hit per fault.
     SlashTier.TIER_2: 0.85,
-    # Tier 3: 0.1-1% — barely above noise; the EMA itself does most of the
+    # Tier 3: 0.1-1% - barely above noise; the EMA itself does most of the
     # liveness pressure.
     SlashTier.TIER_3: 0.99,
 }
@@ -207,7 +207,7 @@ def _execution_destructive(
 def classify_stakes(inputs: ClassifierInputs) -> list[StakeOutcome]:
     """Compute per-agent ``StakeOutcome`` rows from a verdict.
 
-    Mirrors GDD §14.5. Returns one outcome per affected agent — the four
+    Mirrors GDD §14.5. Returns one outcome per affected agent - the four
     honest tribunal members (always), Nemesis (always), Sage (always), and
     Auditor (when an Auditor verdict was emitted, i.e. ``auditor_reason`` is
     not None). ``inputs.extra_agents`` lets callers add Triage when Phase 4
@@ -287,7 +287,7 @@ def classify_stakes(inputs: ClassifierInputs) -> list[StakeOutcome]:
                 rationale="winner_supporter_unverified",
             ))
         else:
-            # Honest dissent — calibrated lower than supporters, still positive
+            # Honest dissent - calibrated lower than supporters, still positive
             # baseline because diversity is a feature.
             rows.append(StakeOutcome(
                 agent_id=member_id,
@@ -324,7 +324,7 @@ def classify_stakes(inputs: ClassifierInputs) -> list[StakeOutcome]:
             rationale="nemesis_attack_confirmed",
         ))
     elif auditor_intervened and nemesis_abstained:
-        # Missed a real flaw — large loss (Tier 3 liveness).
+        # Missed a real flaw - large loss (Tier 3 liveness).
         rows.append(StakeOutcome(
             agent_id=NEMESIS_ID,
             outcome_score=0.1,
@@ -400,7 +400,7 @@ def classify_stakes(inputs: ClassifierInputs) -> list[StakeOutcome]:
     # ------------------------------------------------------------------
     if auditor_reason is not None:
         if destructive:
-            # Tier 1: catastrophic — auditor approved a HIGH-risk command that
+            # Tier 1: catastrophic - auditor approved a HIGH-risk command that
             # then failed during execution.
             rows.append(StakeOutcome(
                 agent_id=AUDITOR_ID,
@@ -524,7 +524,7 @@ def classify_stakes(inputs: ClassifierInputs) -> list[StakeOutcome]:
         ))
 
     # ------------------------------------------------------------------
-    # Extra agents (Phase 4 hook — Triage clarifications)
+    # Extra agents (Phase 4 hook - Triage clarifications)
     # ------------------------------------------------------------------
     for extra in inputs.extra_agents:
         if any(row.agent_id == extra for row in rows):
@@ -545,7 +545,7 @@ def classify_stakes(inputs: ClassifierInputs) -> list[StakeOutcome]:
 
 @dataclass(frozen=True)
 class ResolveStakesResult:
-    """Return value of ``resolve_stakes`` — one row per affected agent."""
+    """Return value of ``resolve_stakes`` - one row per affected agent."""
 
     resolutions: list[StakeResolution]
 

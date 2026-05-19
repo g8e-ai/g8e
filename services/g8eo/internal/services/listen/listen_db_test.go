@@ -377,7 +377,7 @@ func TestSchemaIdempotent(t *testing.T) {
 	require.NoError(t, db1.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
-	// Re-open same database — schema init should not fail or lose data
+	// Re-open same database - schema init should not fail or lose data
 	db2, err := NewListenDBService(dir, secretsDir, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer db2.Close()
@@ -507,7 +507,7 @@ func TestKVSet_OverwriteReplacesValue(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// KVTTL — no-expiry path
+// KVTTL - no-expiry path
 // ---------------------------------------------------------------------------
 
 func TestKVTTL_NoExpiry(t *testing.T) {

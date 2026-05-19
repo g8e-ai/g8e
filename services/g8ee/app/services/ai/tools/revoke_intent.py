@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``revoke_intent_permission`` tool — revoke a previously granted AWS intent."""
+"""``revoke_intent_permission`` tool - revoke a previously granted AWS intent."""
 
 from __future__ import annotations
 

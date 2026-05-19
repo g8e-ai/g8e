@@ -118,7 +118,7 @@ type OperatorRegistrationRequest struct {
 //     spiffe://g8e.local/cli/<user_id>/<cli_session_id> (see protocol.WorkloadIdentity.CLISPIFFEID).
 //
 // Conflating the two would let an operator session drain another client's
-// event stream — the substrate refuses to do so.
+// event stream - the substrate refuses to do so.
 type OperatorRegistrationResponse struct {
 	Success                bool            `json:"success"`
 	OperatorSessionID      string          `json:"operator_session_id,omitempty"`
@@ -355,7 +355,7 @@ type CLISession struct {
 // User represents a platform user with passkey credentials.
 //
 // IsBootstrap identifies the ephemeral local-superadmin identity created by
-// `./g8e platform start -a` over loopback. It is *not* a privilege tier — it
+// `./g8e platform start -a` over loopback. It is *not* a privilege tier - it
 // marks an identity that exists purely to make a fresh local install usable
 // without ceremony, and that is retired automatically the first time a real
 // device-link login completes.
@@ -393,7 +393,7 @@ type AdminAuditEntry struct {
 	Details    map[string]interface{} `json:"details,omitempty"`
 }
 
-// Admin audit action constants. Keep these stable — downstream tooling and
+// Admin audit action constants. Keep these stable - downstream tooling and
 // receipts join on the string value.
 const (
 	AdminAuditActionRetireLocalSuperadmin = "retire_local_superadmin"

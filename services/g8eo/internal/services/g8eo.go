@@ -160,12 +160,12 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	var gitPath string
 	if vs.config.NoGit {
-		vs.logger.Info("Git disabled via --no-git flag — ledger will not be available")
+		vs.logger.Info("Git disabled via --no-git flag - ledger will not be available")
 	} else {
 		gitPath = system.ResolveGitBinary(vs.logger)
 		if gitPath != "" {
 			if gitVersion, err := system.ValidateGitBinary(gitPath); err != nil {
-				vs.logger.Warn("Git binary found but not functional — ledger will not be available", "path", gitPath, "error", err)
+				vs.logger.Warn("Git binary found but not functional - ledger will not be available", "path", gitPath, "error", err)
 				gitPath = ""
 			} else {
 				vs.logger.Info("Git binary validated", "version", gitVersion)
@@ -201,7 +201,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		vs.historyHandler = storage.NewHistoryHandler(vs.auditVault, vs.ledger, vs.logger)
 		vs.logger.Info("History Handler initialized (FETCH_HISTORY ready)")
 	} else if vs.auditVault != nil && vs.auditVault.IsEnabled() {
-		vs.logger.Warn("Ledger disabled — audit vault active without git-backed file versioning")
+		vs.logger.Warn("Ledger disabled - audit vault active without git-backed file versioning")
 		vs.historyHandler = storage.NewHistoryHandler(vs.auditVault, nil, vs.logger)
 		vs.logger.Info("History Handler initialized (FETCH_HISTORY ready, file history unavailable)")
 	}

@@ -254,7 +254,7 @@ def _parse_assignments(assignments: list) -> Dict[str, str]:
     settings: Dict[str, str] = {}
     for pair in assignments:
         if '=' not in pair:
-            print(f"[settings] Invalid assignment '{pair}' — expected key=value", file=sys.stderr)
+            print(f"[settings] Invalid assignment '{pair}' - expected key=value", file=sys.stderr)
             sys.exit(1)
         key, _, value = pair.partition('=')
         settings[key.strip()] = value

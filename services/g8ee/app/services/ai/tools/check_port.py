@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``check_port_status`` tool — TCP/UDP reachability probe via the operator."""
+"""``check_port_status`` tool - TCP/UDP reachability probe via the operator."""
 
 from __future__ import annotations
 

@@ -87,7 +87,7 @@ func TestShellQuote_ContainsSingleQuote(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// parseInterleavedArgs — flags must be parseable BEFORE, AFTER, and BETWEEN
+// parseInterleavedArgs - flags must be parseable BEFORE, AFTER, and BETWEEN
 // positional host arguments. Regression test for the bug where
 // `stream host1 --key XXX` treated `--key` and `XXX` as additional hosts.
 // ---------------------------------------------------------------------------
@@ -449,7 +449,7 @@ func TestHumanBytes_EdgeCases(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// collectHosts — stdin path
+// collectHosts - stdin path
 // ---------------------------------------------------------------------------
 
 func TestCollectHosts_Stdin(t *testing.T) {
@@ -482,7 +482,7 @@ func TestCollectHosts_WhitespaceOnlyLines(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// resolveHost — additional edge cases
+// resolveHost - additional edge cases
 // ---------------------------------------------------------------------------
 
 func TestResolveHost_WildcardSSHConfigMatch(t *testing.T) {
@@ -540,7 +540,7 @@ Host alias
 }
 
 // ---------------------------------------------------------------------------
-// emitJSON — JSON shape and typed field serialization
+// emitJSON - JSON shape and typed field serialization
 // ---------------------------------------------------------------------------
 
 func TestEmitJSON_PerHostEvent(t *testing.T) {
@@ -718,7 +718,7 @@ func TestEmitJSON_TsIsRFC3339(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runConcurrentStream — fan-out, per-host emission, context cancellation
+// runConcurrentStream - fan-out, per-host emission, context cancellation
 // ---------------------------------------------------------------------------
 
 func TestRunConcurrentStream_NoHosts(t *testing.T) {
@@ -832,7 +832,7 @@ func TestPrintStreamUsage_ContainsKeywords(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RunStream — flag-error and no-hosts paths exercised via subprocess exec
+// RunStream - flag-error and no-hosts paths exercised via subprocess exec
 // (uses -test.run on the test binary itself to avoid os.Exit in the parent)
 // ---------------------------------------------------------------------------
 
@@ -993,7 +993,7 @@ func TestBuildAuthMethods_InvalidAgentSocket_StillLoadsKeys(t *testing.T) {
 	r := resolvedHost{
 		keyFiles: []string{keyPath},
 	}
-	// Non-existent agent socket — Dial fails silently; key-file method still loaded
+	// Non-existent agent socket - Dial fails silently; key-file method still loaded
 	methods := buildAuthMethods(r, "/tmp/nonexistent_agent_sock_xyz")
 	assert.Len(t, methods, 1)
 }

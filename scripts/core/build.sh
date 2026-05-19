@@ -137,7 +137,7 @@ _wait_optional_app_healthy() {
     esac
 }
 
-# PKI volume is never wiped — preserved across reset, wipe, and rebuild.
+# PKI volume is never wiped - preserved across reset, wipe, and rebuild.
 PKI_VOLUME="$OPERATOR_LISTEN_PKI_DIR"
 SECRETS_VOLUME="$OPERATOR_LISTEN_SECRETS_DIR"
 
@@ -602,7 +602,7 @@ fi
 if [[ "$COMMAND" == "reset" ]]; then
     mapfile -t RESET_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
 
-    echo "Wiping Operator listen-mode data and secrets — PKI certs preserved..."
+    echo "Wiping Operator listen-mode data and secrets - PKI certs preserved..."
     _stop_g8ee
     _stop_operator_listen
     
@@ -736,7 +736,7 @@ fi
 
 # ─── setup ───────────────────────────────────────────────────────────────────
 # Full first-time setup, then start the platform.
-# Does NOT wipe data volumes — safe to run on an existing installation.
+# Does NOT wipe data volumes - safe to run on an existing installation.
 # Operator binary builds provide the listen-mode and remote Operator artifacts.
 
 if [[ "$COMMAND" == "setup" ]]; then

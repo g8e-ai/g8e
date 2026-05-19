@@ -42,7 +42,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// handleRekeyVault — missing old key → ExitConfigError
+// handleRekeyVault - missing old key → ExitConfigError
 // ---------------------------------------------------------------------------
 
 func TestHandleRekeyVault_MissingOldKey_Subprocess(t *testing.T) {
@@ -68,7 +68,7 @@ func TestHandleRekeyVault_MissingOldKey_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleRekeyVault — vault not initialized → ExitConfigError
+// handleRekeyVault - vault not initialized → ExitConfigError
 // ---------------------------------------------------------------------------
 
 func TestHandleRekeyVault_VaultNotInitialized_Subprocess(t *testing.T) {
@@ -98,7 +98,7 @@ func TestHandleRekeyVault_VaultNotInitialized_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleRekeyVault — vault initialized, successful rekey → ExitSuccess
+// handleRekeyVault - vault initialized, successful rekey → ExitSuccess
 // ---------------------------------------------------------------------------
 
 func TestHandleRekeyVault_Success_Subprocess(t *testing.T) {
@@ -129,7 +129,7 @@ func TestHandleRekeyVault_Success_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleVerifyVault — vault not initialized → ExitSuccess (treated as ok)
+// handleVerifyVault - vault not initialized → ExitSuccess (treated as ok)
 // ---------------------------------------------------------------------------
 
 func TestHandleVerifyVault_NotInitialized_Subprocess(t *testing.T) {
@@ -156,7 +156,7 @@ func TestHandleVerifyVault_NotInitialized_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleVerifyVault — vault initialized, correct key → ExitSuccess
+// handleVerifyVault - vault initialized, correct key → ExitSuccess
 // ---------------------------------------------------------------------------
 
 func TestHandleVerifyVault_ValidKey_Subprocess(t *testing.T) {
@@ -187,7 +187,7 @@ func TestHandleVerifyVault_ValidKey_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleVerifyVault — vault initialized, wrong key → ExitGeneralError
+// handleVerifyVault - vault initialized, wrong key → ExitGeneralError
 // ---------------------------------------------------------------------------
 
 func TestHandleVerifyVault_WrongKey_Subprocess(t *testing.T) {
@@ -221,7 +221,7 @@ func TestHandleVerifyVault_WrongKey_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleVerifyVault — missing API key → ExitConfigError
+// handleVerifyVault - missing API key → ExitConfigError
 // ---------------------------------------------------------------------------
 
 func TestHandleVerifyVault_MissingAPIKey_Subprocess(t *testing.T) {
@@ -256,7 +256,7 @@ func TestHandleVerifyVault_MissingAPIKey_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleResetVault — vault not initialized → ExitSuccess (no-op)
+// handleResetVault - vault not initialized → ExitSuccess (no-op)
 // ---------------------------------------------------------------------------
 
 func TestHandleResetVault_NotInitialized_Subprocess(t *testing.T) {
@@ -283,7 +283,7 @@ func TestHandleResetVault_NotInitialized_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleResetVault — initialized, wrong confirmation → ExitSuccess (cancelled)
+// handleResetVault - initialized, wrong confirmation → ExitSuccess (cancelled)
 // ---------------------------------------------------------------------------
 
 func TestHandleResetVault_WrongConfirmation_Subprocess(t *testing.T) {
@@ -317,7 +317,7 @@ func TestHandleResetVault_WrongConfirmation_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleVaultCommand — bad log level → ExitConfigError
+// handleVaultCommand - bad log level → ExitConfigError
 // ---------------------------------------------------------------------------
 
 func TestHandleVaultCommand_BadLogLevel_Subprocess(t *testing.T) {
@@ -341,7 +341,7 @@ func TestHandleVaultCommand_BadLogLevel_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleVaultCommand — verify-vault path, vault not initialized → ExitSuccess
+// handleVaultCommand - verify-vault path, vault not initialized → ExitSuccess
 // ---------------------------------------------------------------------------
 
 func TestHandleVaultCommand_VerifyVault_NotInitialized_Subprocess(t *testing.T) {
@@ -363,7 +363,7 @@ func TestHandleVaultCommand_VerifyVault_NotInitialized_Subprocess(t *testing.T) 
 }
 
 // ---------------------------------------------------------------------------
-// handleVaultCommand — reset-vault path, vault not initialized → ExitSuccess
+// handleVaultCommand - reset-vault path, vault not initialized → ExitSuccess
 // ---------------------------------------------------------------------------
 
 func TestHandleVaultCommand_ResetVault_NotInitialized_Subprocess(t *testing.T) {
@@ -384,7 +384,7 @@ func TestHandleVaultCommand_ResetVault_NotInitialized_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runListenMode — invalid log level → ExitConfigError
+// runListenMode - invalid log level → ExitConfigError
 // ---------------------------------------------------------------------------
 
 func TestRunListenMode_BadLogLevel_Subprocess(t *testing.T) {
@@ -408,7 +408,7 @@ func TestRunListenMode_BadLogLevel_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runOpenClawMode — invalid log level → ExitConfigError
+// runOpenClawMode - invalid log level → ExitConfigError
 // ---------------------------------------------------------------------------
 
 func TestRunOpenClawMode_BadLogLevel_Subprocess(t *testing.T) {
@@ -427,7 +427,7 @@ func TestRunOpenClawMode_BadLogLevel_Subprocess(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runOpenClawMode — empty gateway URL → ExitConfigError
+// runOpenClawMode - empty gateway URL → ExitConfigError
 // ---------------------------------------------------------------------------
 
 func TestRunOpenClawMode_EmptyURL_Subprocess(t *testing.T) {
@@ -463,7 +463,7 @@ func (r *stringReader) Read(p []byte) (int, error) {
 func nopCloser(s string) *stringReader { return &stringReader{s: s} }
 
 // ---------------------------------------------------------------------------
-// Vault header save helper — uses a known relative path so the subprocess
+// Vault header save helper - uses a known relative path so the subprocess
 // can find it via G8E_TEST_TMP_DIR.
 // ---------------------------------------------------------------------------
 

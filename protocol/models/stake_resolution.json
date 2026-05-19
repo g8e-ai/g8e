@@ -1,10 +1,10 @@
 {
   "_comment": "Canonical StakeResolution document shape. One row per (tribunal_command_id, agent_id) pair, written by the reputation_service post-verdict. Records the outcome scalar fed into the agent's EMA scalar update and any slash tier applied (GDD §5-§6, §14.5). The document id is the composite `{tribunal_command_id}:{agent_id}` which gives write-once idempotency: replaying the same verdict cannot double-resolve.",
-  "_authority": "g8ee (Python — StakeResolution in app/models/reputation.py)",
+  "_authority": "g8ee (Python - StakeResolution in app/models/reputation.py)",
   "_consumers": [
-    "g8ee (reputation_service — writes one row per affected agent after each verdict)",
-    "g8ee (peer-auditor replay — recomputes EMA trajectory from the resolution log)",
-    "g8ee (ops/debug — grounding source for 'why did agent X's scalar change')"
+    "g8ee (reputation_service - writes one row per affected agent after each verdict)",
+    "g8ee (peer-auditor replay - recomputes EMA trajectory from the resolution log)",
+    "g8ee (ops/debug - grounding source for 'why did agent X's scalar change')"
   ],
 
   "stake_resolution": {

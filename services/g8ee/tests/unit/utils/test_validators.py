@@ -54,7 +54,7 @@ def _minimal_whitelist(**overrides) -> dict:
 
 
 # =============================================================================
-# CommandBlacklistValidator — configuration error paths
+# CommandBlacklistValidator - configuration error paths
 # =============================================================================
 
 
@@ -108,7 +108,7 @@ class TestCommandBlacklistValidatorConfigurationErrors:
 
 
 # =============================================================================
-# CommandBlacklistValidator — load and validation logic
+# CommandBlacklistValidator - load and validation logic
 # =============================================================================
 
 
@@ -167,7 +167,7 @@ class TestCommandBlacklistValidatorBehavior:
 
 
 # =============================================================================
-# CommandWhitelistValidator — configuration error paths
+# CommandWhitelistValidator - configuration error paths
 # =============================================================================
 
 
@@ -185,7 +185,7 @@ class TestCommandWhitelistValidatorConfigurationErrors:
 
 
 # =============================================================================
-# CommandWhitelistValidator — load and validation logic
+# CommandWhitelistValidator - load and validation logic
 # =============================================================================
 
 

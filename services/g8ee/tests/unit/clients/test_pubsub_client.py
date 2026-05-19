@@ -158,7 +158,7 @@ class TestPubSubClientPsubscribe:
 
     async def test_psubscribe_adds_pattern_after_ensure_ws(self, connected_client, task_tracker):
         """Regression: pattern must be added to _subscribed_patterns after
-        _ensure_ws() — same race condition as subscribe()."""
+        _ensure_ws() - same race condition as subscribe()."""
         pattern = "results:*"
 
         async def mock_ack():

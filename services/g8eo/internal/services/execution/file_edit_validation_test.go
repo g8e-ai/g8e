@@ -525,7 +525,7 @@ func TestFileEditService_PermissionsAndStats(t *testing.T) {
 		tmpDir := t.TempDir()
 		// Create a regular file, then target a path that treats it as a directory.
 		// Writing to a path whose parent component is a file (not a dir) is
-		// structurally impossible — os.MkdirAll will fail even as root.
+		// structurally impossible - os.MkdirAll will fail even as root.
 		barrier := filepath.Join(tmpDir, "barrier")
 		require.NoError(t, os.WriteFile(barrier, []byte("not-a-dir"), 0644))
 		testFile := filepath.Join(barrier, "target.txt")

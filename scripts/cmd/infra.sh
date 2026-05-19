@@ -42,7 +42,7 @@ case "$TOP" in
         _bootstrap_url="${G8E_BOOTSTRAP_URL:-https://localhost:$_bootstrap_port}"
 
         if [[ ! -f "$_trust_bundle" ]]; then
-            echo "[g8e] Trust bundle not found at $_trust_bundle — start the platform first: ./g8e platform start" >&2
+            echo "[g8e] Trust bundle not found at $_trust_bundle - start the platform first: ./g8e platform start" >&2
             exit 1
         fi
 
@@ -99,7 +99,7 @@ print(json.dumps({
         # 5. Extract and save results.
         # cli_session_id is the disjoint BYO/CLI routing namespace minted at
         # login alongside operator_session_id. The CLI must NEVER reuse the
-        # operator_session_id as a cli session — those are first-class disjoint
+        # operator_session_id as a cli session - those are first-class disjoint
         # session types.
         _session_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('operator_session_id',''))" 2>/dev/null)
         _cli_session_id=$(echo "$_reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('cli_session_id',''))" 2>/dev/null)
@@ -144,7 +144,7 @@ print(json.dumps({
         fi
 
         _save_credentials "$_session_id" "$_login_user_id" "$_operator_id" "$_cli_session_id"
-        echo "[g8e] Authenticated — operator_id=$_operator_id operator_session=${_session_id:0:8}... cli_session=${_cli_session_id:0:8}..."
+        echo "[g8e] Authenticated - operator_id=$_operator_id operator_session=${_session_id:0:8}... cli_session=${_cli_session_id:0:8}..."
         echo "[g8e] Credentials saved to $G8E_CREDENTIALS_FILE"
         exit 0 ;;
 

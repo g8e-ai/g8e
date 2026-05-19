@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-KVCacheClient — HTTP-based Key-Value client for operator.
+KVCacheClient - HTTP-based Key-Value client for operator.
 
 Talks to the Operator in --listen mode via HTTP (KV store).
 API: get, set, delete, exists, expire, ttl, keys,

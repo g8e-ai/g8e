@@ -82,7 +82,7 @@ func parseSSHConfig(path string) map[string]*sshConfigBlock {
 
 		switch key {
 		case "host":
-			// New Host block — save previous, start fresh
+			// New Host block - save previous, start fresh
 			currentPattern = val
 			b := &sshConfigBlock{}
 			blocks[currentPattern] = b
@@ -419,7 +419,7 @@ func streamToHost(
 	// Capture stdout+stderr (bounded) so the caller can surface the remote
 	// operator's output when it exits non-zero. Without this, the deployment
 	// tool silently drops every remote log line and a failing operator is
-	// indistinguishable from a generic SSH exit — see g8eo review notes.
+	// indistinguishable from a generic SSH exit - see g8eo review notes.
 	const maxCapturedBytes = 64 * 1024
 	stderrBuf := &boundedBuffer{limit: maxCapturedBytes}
 	stdoutBuf := &boundedBuffer{limit: maxCapturedBytes}
@@ -494,7 +494,7 @@ wait "$PID"`,
 	err = session.Run(remoteCmd)
 	close(runDone)
 	if err != nil {
-		// SSH exit status non-zero is surfaced as *ssh.ExitError — treat operator
+		// SSH exit status non-zero is surfaced as *ssh.ExitError - treat operator
 		// exit as a normal end of session, not a hard failure, but attach the
 		// captured remote stderr (and last-resort stdout) so the caller can
 		// tell a real auth/registration failure apart from a clean exit.

@@ -1,8 +1,8 @@
 {
-  "_comment": "Canonical CaseModel document shape. g8ee is the authority — it creates and owns this document in its SQLite store. client reads it via g8ee HTTP API to render case lists and the dashboard. A field mismatch breaks case creation, status updates, and investigation linkage.",
+  "_comment": "Canonical CaseModel document shape. g8ee is the authority - it creates and owns this document in its SQLite store. client reads it via g8ee HTTP API to render case lists and the dashboard. A field mismatch breaks case creation, status updates, and investigation linkage.",
 
   "_authority": "g8ee (SQLite)",
-  "_consumers": ["client (JS — renders case list/detail, creates cases via g8ee API)"],
+  "_consumers": ["client (JS - renders case list/detail, creates cases via g8ee API)"],
 
   "case": {
     "_description": "Full case document as stored in g8ee SQLite and returned by g8ee case endpoints.",
@@ -12,7 +12,7 @@
         "type": "string",
         "format": "uuid",
         "required": true,
-        "description": "Unique case identifier (UUID v4). Always generated server-side by g8ee — never accepted from client."
+        "description": "Unique case identifier (UUID v4). Always generated server-side by g8ee - never accepted from client."
       },
       "title": {
         "type": "string",

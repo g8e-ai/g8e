@@ -3,7 +3,7 @@ Low-level file reader that bypasses the shell for direct file access on the targ
 ALWAYS use list_files_and_directories_with_detailed_metadata BEFORE this tool to verify the file exists and get the exact filename.
 
 <parameters>
-- path: REQUIRED — absolute or relative to operator working directory
+- path: REQUIRED - absolute or relative to operator working directory
 - max_size: default 100KB, max 1MB (truncated if exceeded)
 - target_operator: REQUIRED when multiple operators bound (hostname, operator_id, or index)
 </parameters>

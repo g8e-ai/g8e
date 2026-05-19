@@ -260,7 +260,7 @@ class TestResolveIntentDependencies:
 
 
 # ---------------------------------------------------------------------------
-# execute_command — target_systems population
+# execute_command - target_systems population
 # ---------------------------------------------------------------------------
 
 class TestExecuteCommandTargetSystems:
@@ -447,8 +447,8 @@ class TestExecuteCommandTargetSystems:
     async def test_whitelist_alone_does_not_skip_human_approval(self):
         """Whitelisting is a hard ALLOW-LIST, NOT an auto-approve list.
 
-        When only enable_whitelisting is on, every command — even one that
-        passes the L1 whitelist gate — must still go through human approval.
+        When only enable_whitelisting is on, every command - even one that
+        passes the L1 whitelist gate - must still go through human approval.
         Auto-approval requires the explicit enable_auto_approve flag.
         """
         approval_service = FakeApprovalService()
@@ -478,7 +478,7 @@ class TestExecuteCommandTargetSystems:
         )
         result = await service.execute_command(args, g8e_context, investigation, request_settings)
 
-        # Human approval IS requested — whitelisting doesn't bypass it.
+        # Human approval IS requested - whitelisting doesn't bypass it.
         assert len(approval_service.command_approval_calls) == 1
         assert result.command_executed == "uptime"
 

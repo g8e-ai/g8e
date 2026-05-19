@@ -67,13 +67,13 @@ _TOOLS_DIR: Path = _PROMPTS_DATA_DIR / "tools"
 # Personas that carry ``str.format`` placeholders by design because their
 # single caller renders them with substituted values. The prompt-alignment
 # doctrine is explicit that scaffolding belongs in the consumer, not the
-# persona — this allowlist is the opt-out for personas whose migration to
+# persona - this allowlist is the opt-out for personas whose migration to
 # template-rendered scaffolding has not yet happened. Shrinking this set is
 # the goal; do not grow it without a documented owner.
 _PERSONA_PLACEHOLDER_ALLOWLIST: frozenset[str] = frozenset()
 
 
-# Agents whose system prompts must be pure voice — no ``{...}``
+# Agents whose system prompts must be pure voice - no ``{...}``
 # placeholders. Every Tribunal member plus the Auditor (Auditor) is
 # rendered through ``TRIBUNAL_PROMPT_TEMPLATE`` / ``TRIBUNAL_AUDITOR_TEMPLATE``
 # in ``command_generator.py``; the primary / fast-path agents (Sage, Dash)
@@ -164,7 +164,7 @@ class TestOutputContractIsExplicitField:
     used to carry a regex fallback that pulled an embedded ``<output_contract>``
     tag out of ``identity``; that fallback was removed because no live persona
     relied on it. This test enforces the invariant that lets the fallback stay
-    gone — if any persona ever embeds the tag in ``identity`` again, both this
+    gone - if any persona ever embeds the tag in ``identity`` again, both this
     test fires and the system prompt will (correctly) show the tag in the wrong
     place, prompting a migration to the explicit field instead of resurrecting
     a regex.
@@ -184,7 +184,7 @@ class TestOutputContractIsExplicitField:
         assert not offenders, (
             "Personas embedded <output_contract> in their identity field: "
             f"{offenders}. Move the contract to the explicit "
-            "agent.metadata.<id>.output_contract field instead — see "
+            "agent.metadata.<id>.output_contract field instead - see "
             "AgentPersona.get_system_prompt()."
         )
 
@@ -261,7 +261,7 @@ class TestEveryActiveToolHasADescriptionFile:
     """Each active ``OperatorToolName`` (i.e. every enum value not listed
     in the tool-registry pending-restoration allowlist) must have a
     matching ``prompts_data/tools/<name>.txt`` file. Drift here means the
-    LLM sees the tool schema but no description for it — an immediate
+    LLM sees the tool schema but no description for it - an immediate
     quality regression."""
 
     def _pending_restoration(self) -> frozenset[str]:
@@ -289,7 +289,7 @@ class TestEveryActiveToolHasADescriptionFile:
     def test_no_orphan_tool_description_files(self) -> None:
         """Every ``tools/<name>.txt`` should correspond to a real
         ``OperatorToolName`` value. An orphan file means a tool was renamed
-        or removed without cleaning up its description — a stale artifact
+        or removed without cleaning up its description - a stale artifact
         that confuses future readers."""
         enum_values = {member.value for member in OperatorToolName.__members__.values()}
         orphans = [
@@ -330,7 +330,7 @@ class TestAgenticReasoningLivesOnSage:
         )
 
     def test_agentic_reasoning_not_in_dash_identity(self) -> None:
-        """Dash is the fast-path voice — it must not carry the deep
+        """Dash is the fast-path voice - it must not carry the deep
         reasoning block or it ceases to be a fast path."""
         dash = get_agent_persona("dash")
         assert "<agentic_reasoning>" not in dash.identity, (

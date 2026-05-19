@@ -132,7 +132,7 @@ class CommandValidationSettings(G8eBaseModel):
       safety.
 
       This does NOT permit blacklisted or forbidden commands, and does NOT
-      widen the whitelist when whitelisting is enabled — the command must still
+      widen the whitelist when whitelisting is enabled - the command must still
       pass all hard gates first.
 
       Two auto-approve sources are unioned at request time:
@@ -248,7 +248,7 @@ class LLMSettings(G8eBaseModel):
     """LLM provider configuration.
 
     Enum fields (primary_provider, assistant_provider, lite_provider) stay
-    as ``LLMProvider`` enum instances inside the application boundary — the
+    as ``LLMProvider`` enum instances inside the application boundary - the
     G8eBaseModel contract. Wire/DB serialization runs through
     ``flatten_for_*`` which uses ``mode="json"`` and emits string values.
     """
