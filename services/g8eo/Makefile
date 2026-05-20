@@ -81,7 +81,11 @@ build:
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
 		-o build/linux-amd64/g8e.operator ./cmd/g8eo
-	@cp build/linux-amd64/g8e.operator build/linux-amd64/g8e.gateway
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+		-trimpath \
+		-buildvcs=false \
+		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
+		-o build/linux-amd64/g8e.gateway ./cmd/g8eo
 	@echo 'Built: build/linux-amd64/g8e.operator'
 	@echo 'Built: build/linux-amd64/g8e.gateway'
 	@SIZE=$$(ls -lh build/linux-amd64/g8e.operator | awk '{print $$5}') && \
@@ -98,7 +102,11 @@ build-all:
 			-buildvcs=false \
 			-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$$arch'" \
 			-o $(BUILD_DIR)/linux-$$arch/g8e.operator ./cmd/g8eo || exit 1; \
-		cp $(BUILD_DIR)/linux-$$arch/g8e.operator $(BUILD_DIR)/linux-$$arch/g8e.gateway; \
+		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build \
+			-trimpath \
+			-buildvcs=false \
+			-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$$arch'" \
+			-o $(BUILD_DIR)/linux-$$arch/g8e.gateway ./cmd/g8eo || exit 1; \
 		SIZE=$$(ls -lh $(BUILD_DIR)/linux-$$arch/g8e.operator | awk '{print $$5}'); \
 		echo "  linux/$$arch: $$SIZE (uncompressed)"; \
 	done
@@ -131,7 +139,11 @@ _build-local-binary:
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
 		-o build/linux-amd64/$(BINARY_NAME) ./cmd/g8eo
-	@cp build/linux-amd64/$(BINARY_NAME) build/linux-amd64/g8e.gateway
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build \
+		-trimpath \
+		-buildvcs=false \
+		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
+		-o build/linux-amd64/g8e.gateway ./cmd/g8eo
 	@echo "Built: build/linux-amd64/$(BINARY_NAME)"
 	@echo "Built: build/linux-amd64/g8e.gateway"
 
@@ -174,7 +186,11 @@ _build-release:
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$(ARCH)'" \
 		-o build/linux-$(ARCH)/$(BINARY_NAME) ./cmd/g8eo
-	@cp build/linux-$(ARCH)/$(BINARY_NAME) build/linux-$(ARCH)/g8e.gateway
+	@CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH) $(GO) build \
+		-trimpath \
+		-buildvcs=false \
+		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$(ARCH)'" \
+		-o build/linux-$(ARCH)/g8e.gateway ./cmd/g8eo
 
 # =============================================================================
 # CODE QUALITY
