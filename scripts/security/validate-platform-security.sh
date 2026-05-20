@@ -3,6 +3,10 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+source "$SCRIPT_DIR/../core/path_utils.sh"
+PROJECT_ROOT="$(resolve_g8e_root)"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -51,8 +55,8 @@ check_env_var() {
 # 2. Host security checks
 echo -e "\n${YELLOW}2. Checking host security files...${NC}"
 FAILED=0
-G8E_PKI_DIR="${G8E_PKI_DIR:-$PROJECT_ROOT/.g8e/pki}"
-G8E_SECRETS_DIR="${G8E_SECRETS_DIR:-$PROJECT_ROOT/.g8e/secrets}"
+G8E_PKI_DIR="${G8E_PKI_DIR:-${PROJECT_ROOT:-}/.g8e/pki}"
+G8E_SECRETS_DIR="${G8E_SECRETS_DIR:-${PROJECT_ROOT:-}/.g8e/secrets}"
 
 if [ ! -f "$G8E_PKI_DIR/root/root_ca.crt" ]; then echo -e "${RED}FAILED: $G8E_PKI_DIR/root/root_ca.crt missing${NC}"; FAILED=1; fi
 if [ ! -f "$G8E_PKI_DIR/trust/hub-bundle.pem" ]; then echo -e "${RED}FAILED: $G8E_PKI_DIR/trust/hub-bundle.pem missing${NC}"; FAILED=1; fi

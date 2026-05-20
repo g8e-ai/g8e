@@ -143,6 +143,9 @@ class DeviceLinkManager:
             return False
 
         if not force:
+            import sys
+            if not sys.stdin.isatty():
+                raise RuntimeError("Non-interactive environment detected. Confirmation required. Use --force to bypass.")
             response = input(f"Permanently delete {token}? [y/N]: ")
             if response.strip().lower() != 'y':
                 print("Deletion cancelled.")

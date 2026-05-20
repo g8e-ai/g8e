@@ -216,6 +216,9 @@ class UserManager:
         print(f"  Name:  {user.get('name')}")
 
         if not force:
+            import sys
+            if not sys.stdin.isatty():
+                raise RuntimeError("Non-interactive environment detected. Confirmation required. Use --force to bypass.")
             response = input("\nType the user's email to confirm deletion: ")
             if response.strip().lower() != (user.get('email') or '').lower():
                 print("Deletion cancelled.")

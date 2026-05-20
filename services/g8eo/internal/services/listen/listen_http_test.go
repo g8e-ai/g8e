@@ -15,10 +15,13 @@ package listen
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -484,7 +487,6 @@ func TestHandleDB(t *testing.T) {
 // event under a typed routing column so CLI (BYO frontend) and web sessions
 // occupy disjoint routing namespaces and never receive each other's events.
 func TestInternalSSEBridge(t *testing.T) {
-	t.Skip("SSE bridge test has pre-existing failure unrelated to operator status filter change")
 	h, _ := setupTestHTTPHandler(t)
 	_, _ = h.db.SSEEventsWipe()
 
@@ -496,13 +498,59 @@ func TestInternalSSEBridge(t *testing.T) {
 
 	push := func(body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/internal/sse/push", strings.NewReader(body))
+		req.TLS = &tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{
+				{
+					URIs: []*url.URL{
+						{Scheme: "spiffe", Host: "g8e.local", Path: "/app/g8ee"},
+					},
+				},
+			},
+		}
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEPush(rr, req)
 		return rr
 	}
 
+	t.Run("push requires mTLS certificate", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/internal/sse/push", strings.NewReader(`{"web_session_id":"ws-1","event":{"type":"ai.text","data":{}}}`))
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEPush(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Contains(t, rr.Body.String(), "mTLS client certificate required")
+	})
+
+	t.Run("push requires correct G8EE app identity", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/internal/sse/push", strings.NewReader(`{"web_session_id":"ws-1","event":{"type":"ai.text","data":{}}}`))
+		req.TLS = &tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{
+				{
+					URIs: []*url.URL{
+						{Scheme: "spiffe", Host: "g8e.local", Path: "/app/g8eo"},
+					},
+				},
+			},
+		}
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEPush(rr, req)
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "unauthorized client identity")
+	})
+
+	seedCLISession := func(cliSessionID, operatorSessionID string) {
+		cliSess := models.CLISession{
+			ID:                cliSessionID,
+			UserID:            "u-1",
+			OperatorSessionID: operatorSessionID,
+			ExpiresAt:         time.Now().Add(24 * time.Hour),
+		}
+		b, _ := json.Marshal(cliSess)
+		err := h.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b)
+		require.NoError(t, err)
+	}
+
 	t.Run("web session event is persisted and replayable", func(t *testing.T) {
-		body := `{"web_session_id":"ws-1","user_id":"u-1","event":{"type":"ai.text","data":{"chunk":"hello"}}}`
+		body := `{"web_session_id":"ws-1","event":{"type":"ai.text","data":{"chunk":"hello"}}}`
 		rr := push(body)
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -524,7 +572,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		// Set up the cli->operator binding for authorization
-		h.db.KVSet(sessionCLIBindKey("cli-1"), "op-session-1", 0)
+		seedCLISession("cli-1", "op-session-1")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-1&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
@@ -543,7 +591,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		// Set up the cli->operator binding for authorization
-		h.db.KVSet(sessionCLIBindKey("shared-id"), "op-session-1", 0)
+		seedCLISession("shared-id", "op-session-1")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=shared-id&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
@@ -624,12 +672,12 @@ func TestInternalSSEBridge(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "cli session not found or not bound")
+		assert.Contains(t, rr.Body.String(), "cli session not found")
 	})
 
 	t.Run("authorization: operator cannot access cli_session_id owned by different operator", func(t *testing.T) {
 		// Bind cli-owned to op-session-1
-		h.db.KVSet(sessionCLIBindKey("cli-owned"), "op-session-1", 0)
+		seedCLISession("cli-owned", "op-session-1")
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-owned"}, "test", `{"event":{"type":"x"}}`)
 
 		// Try to access with op-session-2
@@ -643,7 +691,7 @@ func TestInternalSSEBridge(t *testing.T) {
 
 	t.Run("authorization: operator can access own cli_session_id", func(t *testing.T) {
 		// Bind cli-mine to op-session-1
-		h.db.KVSet(sessionCLIBindKey("cli-mine"), "op-session-1", 0)
+		seedCLISession("cli-mine", "op-session-1")
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-mine"}, "x", `{"event":{"type":"x"}}`)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-mine&since_id=0", nil)

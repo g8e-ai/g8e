@@ -103,6 +103,9 @@ class PasskeyManager:
         print(f"  Credential: {credential_id}")
 
         if not force:
+            import sys
+            if not sys.stdin.isatty():
+                raise RuntimeError("Non-interactive environment detected. Confirmation required. Use --force to bypass.")
             response = input("\nType 'yes' to confirm: ")
             if response.strip().lower() != 'yes':
                 print("Revocation cancelled.")
@@ -145,6 +148,9 @@ class PasskeyManager:
         print("  On next login attempt, they will be prompted to register a new passkey.")
 
         if not force:
+            import sys
+            if not sys.stdin.isatty():
+                raise RuntimeError("Non-interactive environment detected. Confirmation required. Use --force to bypass.")
             response = input("\nType 'yes' to confirm: ")
             if response.strip().lower() != 'yes':
                 print("Reset cancelled.")
@@ -181,6 +187,9 @@ class PasskeyManager:
         print("  The user will be locked out until a new passkey is registered.")
 
         if not force:
+            import sys
+            if not sys.stdin.isatty():
+                raise RuntimeError("Non-interactive environment detected. Confirmation required. Use --force to bypass.")
             response = input("\nType 'yes' to confirm: ")
             if response.strip().lower() != 'yes':
                 print("Revocation cancelled.")

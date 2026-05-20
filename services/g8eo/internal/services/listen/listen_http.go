@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
@@ -1340,6 +1341,28 @@ type internalSSEPushPayload struct {
 func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// Strictly verify that the caller is the G8EE app identity via mTLS peer certificate URI SAN
+	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+		h.logger.Warn("Unauthorized SSE push attempt: missing mTLS client certificate", "path", r.URL.Path)
+		jsonError(w, http.StatusUnauthorized, "mTLS client certificate required")
+		return
+	}
+
+	wid := protocol.NewWorkloadIdentity()
+	cert := r.TLS.PeerCertificates[0]
+	isG8EE := false
+	for _, uri := range cert.URIs {
+		if wid.MatchesApp(uri.String(), marshaler.Status(constants.Status.ComponentName.G8EE)) {
+			isG8EE = true
+			break
+		}
+	}
+	if !isG8EE {
+		h.logger.Warn("Unauthorized SSE push attempt: not G8EE app identity", "path", r.URL.Path, "uris", cert.URIs)
+		jsonError(w, http.StatusForbidden, "unauthorized client identity")
 		return
 	}
 

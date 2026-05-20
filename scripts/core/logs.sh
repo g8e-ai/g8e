@@ -18,7 +18,7 @@ echo "  logs.sh $*"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$PROJECT_ROOT/.g8e}"
 LOG_DIR="$G8E_RUNTIME_DIR/logs"
@@ -72,18 +72,19 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -h|--help) usage ;;
         -f|--follow) FOLLOW=true; shift ;;
-        -n|--tail) TAIL="$2"; shift 2 ;;
+        -n|--tail) TAIL="${2:-}"; shift 2 ;;
         --all) INCLUDE_ALL=true; shift ;;
-        -g|--grep) GREP_PATTERN="$2"; shift 2 ;;
-        -v|--invert) INVERT_PATTERN="$2"; shift 2 ;;
-        -s|--since) SINCE="$2"; shift 2 ;;
+        -g|--grep) GREP_PATTERN="${2:-}"; shift 2 ;;
+        -v|--invert) INVERT_PATTERN="${2:-}"; shift 2 ;;
+        -s|--since) SINCE="${2:-}"; shift 2 ;;
         -l|--level)
-            case "${2,,}" in
+            local level_arg="${2:-}"
+            case "${level_arg,,}" in
                 error) LEVEL_PATTERN="error" ;;
                 warn)  LEVEL_PATTERN="warn" ;;
                 info)  LEVEL_PATTERN="info" ;;
                 debug) LEVEL_PATTERN="debug" ;;
-                *) echo "[g8e] unknown level: '$2' (valid: error, warn, info, debug)" >&2; exit 1 ;;
+                *) echo "[g8e] unknown level: '${level_arg}' (valid: error, warn, info, debug)" >&2; exit 1 ;;
             esac
             shift 2 ;;
         operator|g8ee) SERVICES+=("$1"); shift ;;

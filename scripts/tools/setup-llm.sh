@@ -79,6 +79,9 @@ ARG_GEMINI_KEY=""
 ARG_ANTHROPIC_KEY=""
 ARG_MAX_TOKENS=""
 NON_INTERACTIVE=false
+if [[ ! -t 0 ]]; then
+    NON_INTERACTIVE=true
+fi
 
 # Helper for 'set' and 'get' subcommands
 EXT_ARGS=()
@@ -88,29 +91,29 @@ case "$COMMAND" in
         while [[ $# -gt 0 ]]; do
             case "$1" in
                 --user-id=*)           ARG_USER_ID="${1#*=}";           shift 1 ;;
-                --user-id)             ARG_USER_ID="$2";                shift 2 ;;
+                --user-id)             ARG_USER_ID="${2:-}";            shift 2 ;;
                 --provider=*)          ARG_PROVIDER="${1#*=}";          shift 1 ;;
-                --provider)            ARG_PROVIDER="$2";               shift 2 ;;
+                --provider)            ARG_PROVIDER="${2:-}";           shift 2 ;;
                 --primary-llm=*)       ARG_MODEL="${1#*=}";             shift 1 ;;
-                --primary-llm)         ARG_MODEL="$2";                  shift 2 ;;
+                --primary-llm)         ARG_MODEL="${2:-}";              shift 2 ;;
                 --model=*)             ARG_MODEL="${1#*=}";             shift 1 ;;
-                --model)               ARG_MODEL="$2";                  shift 2 ;;
+                --model)               ARG_MODEL="${2:-}";              shift 2 ;;
                 --assistant-llm=*)     ARG_ASST_MODEL="${1#*=}";        shift 1 ;;
-                --assistant-llm)       ARG_ASST_MODEL="$2";             shift 2 ;;
+                --assistant-llm)       ARG_ASST_MODEL="${2:-}";         shift 2 ;;
                 --asst-model=*)        ARG_ASST_MODEL="${1#*=}";        shift 1 ;;
-                --asst-model)          ARG_ASST_MODEL="$2";             shift 2 ;;
+                --asst-model)          ARG_ASST_MODEL="${2:-}";         shift 2 ;;
                 --lite-llm=*)          ARG_LITE_MODEL="${1#*=}";        shift 1 ;;
-                --lite-llm)            ARG_LITE_MODEL="$2";             shift 2 ;;
+                --lite-llm)            ARG_LITE_MODEL="${2:-}";         shift 2 ;;
                 --endpoint=*)          ARG_ENDPOINT="${1#*=}";          shift 1 ;;
-                --endpoint)            ARG_ENDPOINT="$2";               shift 2 ;;
+                --endpoint)            ARG_ENDPOINT="${2:-}";           shift 2 ;;
                 --openai-api-key=*)    ARG_API_KEY="${1#*=}";           shift 1 ;;
-                --openai-api-key)      ARG_API_KEY="$2";                shift 2 ;;
+                --openai-api-key)      ARG_API_KEY="${2:-}";            shift 2 ;;
                 --gemini-api-key=*)    ARG_GEMINI_KEY="${1#*=}";        shift 1 ;;
-                --gemini-api-key)      ARG_GEMINI_KEY="$2";             shift 2 ;;
+                --gemini-api-key)      ARG_GEMINI_KEY="${2:-}";         shift 2 ;;
                 --anthropic-api-key=*) ARG_ANTHROPIC_KEY="${1#*=}";      shift 1 ;;
-                --anthropic-api-key)   ARG_ANTHROPIC_KEY="$2";          shift 2 ;;
+                --anthropic-api-key)   ARG_ANTHROPIC_KEY="${2:-}";       shift 2 ;;
                 --max-tokens=*)        ARG_MAX_TOKENS="${1#*=}";        shift 1 ;;
-                --max-tokens)          ARG_MAX_TOKENS="$2";             shift 2 ;;
+                --max-tokens)          ARG_MAX_TOKENS="${2:-}";         shift 2 ;;
                 -h|--help)             usage ;;
                 *)                     echo "Unknown option: $1" >&2; exit 1 ;;
             esac
