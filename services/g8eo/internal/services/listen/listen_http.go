@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"html"
 	"io"
 	"log/slog"
 	"net"
@@ -352,7 +353,7 @@ func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) 
     </div>
 </body>
 </html>
-`, host, h.cfg.Listen.BootstrapPort)
+`, html.EscapeString(host), h.cfg.Listen.BootstrapPort)
 }
 
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -2577,16 +2578,16 @@ func (h *HTTPHandler) handleApprovalPage(w http.ResponseWriter, r *http.Request)
         
         <div class="transaction-info">
             <div class="label">Transaction Hash:</div>
-            <div class="value">` + suspendedTx.TransactionHash + `</div>
+            <div class="value">` + html.EscapeString(suspendedTx.TransactionHash) + `</div>
             
             <div class="label">Tool Name:</div>
-            <div class="value">` + suspendedTx.ToolName + `</div>
+            <div class="value">` + html.EscapeString(suspendedTx.ToolName) + `</div>
             
             <div class="label">Tool Arguments:</div>
-            <div class="value"><pre>` + string(suspendedTx.ToolArguments) + `</pre></div>
+            <div class="value"><pre>` + html.EscapeString(string(suspendedTx.ToolArguments)) + `</pre></div>
             
             <div class="label">Expires At:</div>
-            <div class="value">` + expiresAtStr + `</div>
+            <div class="value">` + html.EscapeString(expiresAtStr) + `</div>
         </div>
         
         <div class="actions">
@@ -2625,7 +2626,7 @@ func (h *HTTPHandler) handleApprovalPage(w http.ResponseWriter, r *http.Request)
 
         async function approveTransaction() {
             const statusDiv = document.getElementById('status');
-            const txHash = "` + suspendedTx.TransactionHash + `";
+            const txHash = "` + html.EscapeString(suspendedTx.TransactionHash) + `";
             
             try {
                 statusDiv.style.display = 'block';

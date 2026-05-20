@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+# [0.2.7] - 2026-05-20
+
+## Overview
+Release **v0.2.7** separates the **Governance Gateway (`g8eg`)** and the **Governed Operator (`g8eo`)** into distinct roles, introduces an **MCP & A2A protocol translator gateway**, removes external runtime dependencies (`git` and `jq`), and improves overall security and developer experience.
+
+## Key Changes
+
+* **Substrate Role Splitting**: The Go substrate is now explicitly split into the **Governance Gateway (`g8eg`)** acting as the central Policy Decision Point (PDP), and the **Governed Operator (`g8eo`)** acting as the host-side Policy Execution Point (PEP).
+* **MCP & A2A Gateway**: `g8eo` can now act as a standalone admission gate for standard AI clients. It translates standard tool calls into governed transactions and supports out-of-band transaction suspension with WebAuthn approval before execution.
+* **Native Dependencies**: Replaced external CLI dependencies on `git` and `jq` with native Go (`go-git/v5`) and Python implementations to streamline the runtime footprint.
+* **Security Enhancements**: Implemented strict mTLS client-identity verification for Server-Sent Events (SSE) push endpoints.
+* **CLI Protections**: Added interactive confirmation prompts to prevent accidental data loss on destructive operations like `platform reset` and `platform clean`.
+* **Air-gapped Support**: Improved protobuf generation for air-gapped environments.
+
+## Shoutout
+Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding a new developer troubleshooting guide - hopefully this PR addresses the friction. If not, PRs are much appreciated.
+
+
 ## [0.2.6] - 2026-05-19
 
 ### Added

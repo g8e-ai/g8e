@@ -283,6 +283,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		}
 		resp, err = publicClient.Do(hReq)
 		require.NoError(t, err)
+		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			t.Fatalf("OOB approval failed with status %d: %s", resp.StatusCode, string(body))
@@ -493,6 +494,7 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		}
 		resp, err = publicClient.Do(req)
 		require.NoError(t, err)
+		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			t.Fatalf("OOB approval failed with status %d: %s", resp.StatusCode, string(body))
