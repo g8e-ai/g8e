@@ -8,6 +8,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 G8E_ENV_FILE="$PROJECT_ROOT/.g8e/.env"
 
+_sed_i() {
+    if [[ "${OSTYPE:-}" == "darwin"* ]]; then
+        sed -i "" "$@"
+    else
+        sed -i "$@"
+    fi
+}
+
 # Ensure .g8e directory exists
 mkdir -p "$PROJECT_ROOT/.g8e"
 
@@ -83,7 +91,7 @@ _set_var() {
     touch "$G8E_ENV_FILE"
     if grep -q "^export $key=" "$G8E_ENV_FILE"; then
         # Update existing
-        sed -i "s|^export $key=.*|export $key=\"$value\"|" "$G8E_ENV_FILE"
+        _sed_i "s|^export $key=.*|export $key=\"$value\"|" "$G8E_ENV_FILE"
     else
         # Append new
         echo "export $key=\"$value\"" >> "$G8E_ENV_FILE"
@@ -113,7 +121,7 @@ _unset_var() {
     fi
     
     if [[ -f "$G8E_ENV_FILE" ]]; then
-        sed -i "/^export $key=/d" "$G8E_ENV_FILE"
+        _sed_i "/^export $key=/d" "$G8E_ENV_FILE"
         echo "[g8e] Unset $key in $G8E_ENV_FILE"
     fi
 }

@@ -49,7 +49,7 @@ case "$TOP" in
 
         # 1. Request a device-link token via bootstrap port (unauthenticated)
         echo "  Requesting device-link token..."
-        _fingerprint=$(echo "g8e-cli-$(hostname)-$(whoami)" | sha256sum | awk '{print $1}')
+        _fingerprint=$(echo "g8e-cli-$(hostname)-$(whoami)" | _sha256)
         _dl_body=$(python3 -c "import json, sys; print(json.dumps({'email': sys.argv[1], 'name': sys.argv[2], 'max_uses': int(sys.argv[3]), 'ttl_seconds': int(sys.argv[4])}))" \
             "$_login_email" "cli-$(hostname)" "$_dl_count" "$_dl_ttl")
         _dl_resp=$( curl -sS \
