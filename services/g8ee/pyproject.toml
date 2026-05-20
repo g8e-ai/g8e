@@ -121,6 +121,10 @@ timeout_method = "signal"
     line-length = 100
     indent-width = 4
     cache-dir = ".ruff_cache"
+    exclude = [
+        "app/proto",
+        "../../evals/g8e_evals/proto",
+    ]
 
     [tool.ruff.lint]
     select = [
