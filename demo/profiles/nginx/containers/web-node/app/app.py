@@ -5,7 +5,7 @@ import os
 import json
 import random
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
@@ -24,7 +24,7 @@ def index():
         'node': NODE_ID,
         'status': 'ok',
         'version': '2.1.0',
-        'timestamp': datetime.utcnow().isoformat() + 'Z'
+        'timestamp': datetime.now(UTC).isoformat() + 'Z'
     })
 
 

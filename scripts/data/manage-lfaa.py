@@ -54,7 +54,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, List
 
 from _lib import print_banner, PROJECT_ROOT
@@ -538,24 +538,19 @@ class LFAAManager:
         
         # Calculate window duration
         if oldest and newest:
-            from datetime import datetime
             try:
                 dt_oldest = datetime.fromisoformat(oldest.replace('Z', '+00:00'))
                 dt_newest = datetime.fromisoformat(newest.replace('Z', '+00:00'))
-                duration_sec = (dt_newest - dt_oldest).total_seconds()
-                duration_str = f"{duration_sec:.1f}s"
+                duration_str = f"{(dt_newest - dt_oldest).total_seconds():.1f}s"
             except Exception:
-                duration_sec = 0
                 duration_str = "N/A"
         else:
-            duration_sec = 0
             duration_str = "N/A"
 
         # ANSI Colors
         BOLD = '\033[1m'
         GREEN = '\033[32m'
         RED = '\033[31m'
-        CYAN = '\033[36m'
         DIM = '\033[2m'
         RESET = '\033[0m'
 
@@ -583,7 +578,7 @@ class LFAAManager:
         print(f'{BOLD}GOVERNANCE FUNNEL {DIM}{"─" * 58}{RESET}')
         print(f'                              {DIM}ingest{RESET}        {DIM}blocked{RESET}            {DIM}allowed{RESET}')
         
-        W1, W2, W3, W4 = 26, 12, 14, 14
+        W2, W4 = 12, 14
         print(f"  {BOLD}L1  Technical bedrock{RESET}        {l1_ingest:>{W2},}      {DIM}{l1_blocked:,}{RESET}  {DIM}({l1_blocked/l1_ingest*100 if l1_ingest > 0 else 0:.1f}%){RESET}             {l1_allowed:,}")
         print(f"  {BOLD}L2  Tribunal consensus{RESET}         {l2_ingest:>{W2},}        {l2_blocked:,}                      {l2_allowed:,}")
         print(f"  {BOLD}L3  Human authorization{RESET}        {l3_ingest:>{W2},}        {l3_blocked:,}                      {l3_allowed:,}")
@@ -641,11 +636,9 @@ class LFAAManager:
         # Envelope Integrity
         print(f'{BOLD}ENVELOPE INTEGRITY {DIM}{"─" * 58}{RESET}')
         valid_hash = total - l1_blocked_hash
-        hash_pct = (valid_hash / total * 100) if total > 0 else 100
         print(f'  Hash signatures        {GREEN}{valid_hash:,} / {total:,}{RESET}  {DIM}valid{RESET}    {DIM}({l1_blocked_hash:,} tampered, rejected at L1){RESET}')
         
         fresh = total - l1_blocked_expiry
-        fresh_pct = (fresh / total * 100) if total > 0 else 100
         print(f'  Temporal freshness   {GREEN}{fresh:,} / {total:,}{RESET}  {DIM}fresh{RESET}    {DIM}(TTL: {l1_blocked_expiry:,} expired){RESET}')
         
         # Ledger Status
@@ -777,7 +770,7 @@ class LFAAManager:
             events.append(event)
 
         payload = {
-            'exported_at': datetime.utcnow().isoformat() + 'Z',
+            'exported_at': datetime.now(UTC).isoformat() + 'Z',
             'operator_session': dict(operatorSession),
             'total_events': len(events),
             'events': events,
