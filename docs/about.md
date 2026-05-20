@@ -5,15 +5,15 @@ parent: Architecture
 
 # About g8e
 
-g8e is a governed execution substrate for agentic infrastructure. It provides a data-sovereign, protocol-agnostic boundary between AI agents and host systems.
+g8e is a zero-trust execution substrate for agentic infrastructure. It gives AI systems, BYO frontends, BYO agents, and standard tool protocols a governed way to mutate real machines.
 
-The core invariant is that every transaction must clear a fail-closed verification gauntlet (L1/L2/L3) at the host boundary before execution.
+The core invariant is narrow: every mutation is a typed, signed, state-bound `GovernanceEnvelope`, and every envelope must clear a fail-closed L1/L2/L3 verification gauntlet before the host executes.
 
-For more on the origins, philosophy, and future of g8e, please visit [g8e.ai/blog](https://g8e.ai/blog).
+MCP, A2A, OpenAI-style tool calls, and future agent protocols are payload formats. g8e is the governance envelope and sovereign execution boundary around those payloads.
 
 ## Core Architecture
 
-1.  **Protocol (Substrate)**: A domain-agnostic wire contract - a typed, signed, state-bound `GovernanceEnvelope` carrying L1/L2/L3 evidence.
-2.  **Governance Gateway (g8eg)**: The central, BFT-governed Policy Decision Point (PDP) running in `--listen` mode to broker, suspend, and validate transactions.
-3.  **Governed Operator (g8eo)**: The host-resident execution boundary and Policy Execution Point (PEP). It enforces protocol compliance, verifies L1/L2/L3 signatures, functions as an MCP Server to clients, and executes transactions via the Warden stage.
-4.  **Application Layer (Optional)**: Components like the **Engine (g8ee)** and **Dashboard (g8ed)** which consume the public protocol.
+1. **Protocol substrate** - the domain-agnostic wire contract, schemas, transaction hash, state binding, receipt model, and L1/L2/L3 verification rules.
+2. **Governance Gateway (`g8eg`)** - the reference Policy Decision Point (PDP), running in `--listen` mode for mTLS APIs, PKI, replay defense, transaction suspension, state roots, and dispatch.
+3. **Governed Operator (`g8eo`)** - the host-resident Policy Execution Point (PEP), MCP server, Sentinel scrubber, local audit authority, and Warden execution boundary.
+4. **Application layer** - optional producers and consumers, including the reference Engine (`g8ee`), BYO frontends, BYO agents, MCP clients, A2A clients, and native g8e applications.
