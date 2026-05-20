@@ -21,10 +21,10 @@ The core contract and governance model that all components must follow.
 - [**Security Principles**](protocol.md#host-sovereignty--audit) - Trustless execution and host sovereignty.
 
 ## 2. Substrate Components
-The reference Go implementation compiles into a single binary serving two distinct roles:
+The reference Go implementation compiles from a single codebase into two role-specific binaries:
 
-- [**Governance Gateway (g8eg)**](g8eg.md) - The central PDP / BFT-governed Policy Decision Point running in `--listen` mode.
-- [**Governed Operator (g8eo)**](operator.md) - The host-side PEP / sovereign execution agent and MCP Server.
+- [**Governance Gateway (g8eg)**](g8eg.md) (`g8e.gateway`) - The central PDP / BFT-governed Policy Decision Point running in `--listen` mode.
+- [**Governed Operator (g8eo)**](operator.md) (`g8e.operator`) - The host-side PEP / sovereign execution agent and MCP Server.
 
 ## 3. Reference Applications
 Optional components demonstrating the protocol in action.
@@ -35,7 +35,7 @@ Optional components demonstrating the protocol in action.
 Guides for setting up, testing, and contributing to the platform.
 
 - [**Contribution Guide**](../CONTRIBUTING.md) - Environment setup, development workflows, and testing standards.
-- [**Developer Troubleshooting**](developer/troubleshooting.md) - Common setup failures and recovery checks.
+- [**Developer Troubleshooting**](troubleshooting.md) - Common setup failures and recovery checks.
 - [**CLI Reference**](cli_help.md) - Help for the `./g8e` management tool.
 
 ## 5. General Reference

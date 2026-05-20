@@ -1,6 +1,6 @@
 # g8e Substrate - Governance Gateway (g8eg)
 
-The reference Go implementation of the g8e Protocol compiles into a single, multi-role binary used in two distinct ways to secure and govern AI execution:
+The reference Go implementation of the g8e Protocol compiles from a single codebase into two role-specific binaries used in two distinct ways to secure and govern AI execution:
 
 1. **Governance Gateway (`g8eg` / `g8e.gateway`)**: Runs in `--listen` mode to serve as the central, fail-closed Byzantine Fault Tolerant (BFT) Governance Substrate (Policy Decision Point / PDP).
 2. **Governed Operator / MCP Server (`g8eo` / `g8e.operator`)**: Runs on target hosts (and exposes MCP over stdio with `--mcp-serve`) to function as the sovereign tool execution boundary (Policy Execution Point / PEP).
@@ -9,7 +9,7 @@ The reference Go implementation of the g8e Protocol compiles into a single, mult
 
 ## Core Principles
 
-- **Single Binary, Multi-Role**: A single compiled binary behaves as the central Policy Decision Point (Gateway) or host-level Policy Execution Point (Governed Operator) depending on invocation flags and build targets.
+- **Single Codebase, Two Roles**: The exact same Go codebase is compiled into the central Policy Decision Point (`g8e.gateway`) and host-level Policy Execution Point (`g8e.operator`). Behavior is activated via invocation flags (e.g. `--listen`).
 - **mTLS-Everywhere**: All communication is outbound-only from the target operator and strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts.
 - **Local-First Audit (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger.
 - **UAP JSON-First (GovernanceEnvelope)**: Every mutation action is governed by a UAP JSON `GovernanceEnvelope`. This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
