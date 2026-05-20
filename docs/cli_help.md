@@ -143,10 +143,10 @@ When no operator is connected:
 - `ssh-config`: Manage SSH identities for fleet operations
 
 ### test
-- `g8eo [path]`: Go Operator substrate tests with race detection. This is the default when no component is provided.
-- `g8ee [path]`: Optional Python Engine adapter tests with LLM provider support.
-- `ci`: Run all CI workflow steps locally (proto verify, lint, vulncheck, substrate tests, app tests).
-- `chaos [options]`: Run the g8eo Chaos Tester against the local audit stack (e.g., `--count=100`).
+- `g8eo [path]`: Go Operator substrate tests with race detection. Run `./g8e test g8eo -h` for unique options. This is the default when no component is provided.
+- `g8ee [path]`: Optional Python Engine adapter tests with LLM provider support. Run `./g8e test g8ee -h` for unique options.
+- `ci`: Run all CI workflow steps locally (proto verify, lint, vulncheck, substrate tests, app tests). Run `./g8e test ci -h` for details.
+- `chaos [options]`: Run the g8eo Chaos Tester against the local audit stack. Run `./g8e test chaos -h` for options.
 
 ### security
 - `validate`: Check TLS integrity and volume permissions
