@@ -12,10 +12,10 @@
     "ssh_config_path": "/etc/g8e/ssh_config"
   },
   "ports": {
-    "operator_http": 9000,
-    "operator_wss": 9001,
-    "operator_bootstrap": 9002,
-    "operator_public": 9003,
+    "operator_http": 443,
+    "operator_wss": 443,
+    "operator_bootstrap": 80,
+    "operator_public": 443,
     "g8ee_http": 8443
   },
   "g8ee": {

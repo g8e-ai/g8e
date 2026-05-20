@@ -23,7 +23,7 @@ pytestmark = pytest.mark.unit
 @pytest.fixture
 def mock_listen_settings():
     mock = MagicMock()
-    mock.blob_url = "https://localhost:9000"
+    mock.blob_url = "https://localhost:443"
     return mock
 
 @pytest.fixture
@@ -50,7 +50,7 @@ class TestBlobClient:
 
         with patch.object(blob_client, "_get_http_session", return_value=mock_session):
             assert await blob_client.connect() is True
-            mock_session.get.assert_called_once_with("https://localhost:9000/health")
+            mock_session.get.assert_called_once_with("https://localhost:443/health")
 
     async def test_connect_failure(self, blob_client):
         mock_resp = AsyncMock()
@@ -74,7 +74,7 @@ class TestBlobClient:
         with patch.object(blob_client, "_get_http_session", return_value=mock_session):
             await blob_client.put_blob("ns", "id", b"data", "image/png")
             mock_session.put.assert_called_once_with(
-                "https://localhost:9000/blob/ns/id",
+                "https://localhost:443/blob/ns/id",
                 data=b"data",
                 headers={"Content-Type": "image/png"}
             )
@@ -128,7 +128,7 @@ class TestBlobClient:
 
         with patch.object(blob_client, "_get_http_session", return_value=mock_session):
             await blob_client.delete_blob("ns", "id")
-            mock_session.delete.assert_called_once_with("https://localhost:9000/blob/ns/id")
+            mock_session.delete.assert_called_once_with("https://localhost:443/blob/ns/id")
 
     async def test_delete_namespace_success(self, blob_client):
         mock_resp = AsyncMock()
@@ -142,4 +142,4 @@ class TestBlobClient:
         with patch.object(blob_client, "_get_http_session", return_value=mock_session):
             count = await blob_client.delete_namespace("ns")
             assert count == 5
-            mock_session.delete.assert_called_once_with("https://localhost:9000/blob/ns")
+            mock_session.delete.assert_called_once_with("https://localhost:443/blob/ns")

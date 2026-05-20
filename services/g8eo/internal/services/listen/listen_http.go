@@ -209,6 +209,50 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	return pathTraversalGuard(mux)
 }
 
+func (h *HTTPHandler) buildMasterRouter() http.Handler {
+	mux := http.NewServeMux()
+
+	// 1. Bootstrap routes (unauthenticated)
+	bootstrap := h.buildBootstrapRouter()
+	mux.Handle("/health", bootstrap)
+	mux.Handle("/.well-known/", bootstrap)
+	mux.Handle("/api/auth/device-link/register", bootstrap)
+	mux.Handle("/api/auth/device-link/request", bootstrap)
+	mux.Handle("/ca.crt", bootstrap)
+	mux.Handle("/trust", bootstrap)
+	mux.Handle("/trust.sh", bootstrap)
+	mux.Handle("/trust.ps1", bootstrap)
+	mux.Handle("/trust.bat", bootstrap)
+	mux.Handle("/g8e", bootstrap)
+
+	// 2. Public routes (unauthenticated or web session)
+	public := h.buildPublicRouter()
+	mux.Handle("/", public)
+	mux.Handle("/api/auth/login/", public)
+	mux.Handle("/api/auth/logout", public)
+	mux.Handle("/api/auth/bootstrap", public)
+	mux.Handle("/api/auth/bootstrap/status", public)
+	mux.Handle("/api/user/", public)
+	mux.Handle("/api/auth/web-session", public)
+	mux.Handle("/api/auth/passkey/", public)
+	mux.Handle("/approve/", public)
+	mux.Handle("/api/approve/", public)
+
+	// 3. mTLS routes (authenticated)
+	// We use the main router for everything else. Note that the main router
+	// also includes /health and /.well-known but the more specific prefixes
+	// above will take precedence in ServeMux.
+	main := h.buildRouter()
+	mux.Handle("/api/", main)
+	mux.Handle("/db/", main)
+	mux.Handle("/kv/", main)
+	mux.Handle("/pubsub/publish", main)
+	mux.Handle("/ws/pubsub", main)
+	mux.Handle("/blob/", main)
+
+	return pathTraversalGuard(mux)
+}
+
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.buildRouter().ServeHTTP(w, r)
 }

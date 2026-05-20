@@ -313,7 +313,7 @@ case "$TOP" in
       \"command\": \"$G8E_PROJECT_ROOT/g8e\",
       \"args\": [\"mcp\", \"serve\"],
       \"env\": {
-        \"G8E_OPERATOR_URL\": \"https://localhost:9000\"
+        \"G8E_OPERATOR_URL\": \"https://localhost:443\"
       }
     }
   }

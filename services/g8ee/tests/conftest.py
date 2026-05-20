@@ -245,7 +245,7 @@ def _web_search_settings_from_env() -> SearchSettings | None:
     )
 
 
-def _is_operator_online(host: str = "localhost", port: int = 9000, timeout: float = 1.0) -> bool:
+def _is_operator_online(host: str = "localhost", port: int = 443, timeout: float = 1.0) -> bool:
     """Check if the operator is online by attempting a socket connection to its port."""
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -318,9 +318,9 @@ def pytest_configure(config):
     _OPERATOR_ONLINE = is_online
 
     if is_online:
-        logger.info("Operator is ONLINE on port 9000")
+        logger.info("Operator is ONLINE on port 443")
     else:
-        logger.warning("Operator is OFFLINE on port 9000. Integration tests requiring a live operator will be skipped.")
+        logger.warning("Operator is OFFLINE on port 443. Integration tests requiring a live operator will be skipped.")
 
     # Only load settings if they haven't been set yet
     try:

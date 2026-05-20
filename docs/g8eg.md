@@ -10,7 +10,7 @@ The reference Go implementation of the g8e Protocol compiles from a single codeb
 ## Core Principles
 
 - **Single Codebase, Two Roles**: The exact same Go codebase is compiled into the central Policy Decision Point (`g8e.gateway`) and host-level Policy Execution Point (`g8e.operator`). Behavior is activated via invocation flags (e.g. `--listen`).
-- **mTLS-Everywhere**: All communication is outbound-only from the target operator and strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts.
+- **mTLS-Everywhere**: All communication is outbound-only from the target operator and strictly gated by Gateway-owned mutual TLS (default port 443). No inbound ports are required on managed hosts.
 - **Local-First Audit (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger.
 - **UAP JSON-First (GovernanceEnvelope)**: Every mutation action is governed by a UAP JSON `GovernanceEnvelope`. This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
 - **3-Layer Governance**: Hard gates at the bedrock (L1), consensus in the middle (L2), and human authorization at the top (L3).
@@ -84,19 +84,20 @@ By passing `--listen`, the binary transforms into the platform's central backbon
     - **Secrets Vault** - Tamper-evident bootstrap secrets with a `bootstrap_digest.json` manifest.
     - **Audit Authority** - Append-only encrypted log of every event and signed `ActionReceipt`.
 
-### Four-Port Contract
+### Multiplexed Port Contract
 
-The Governance Gateway (`g8eg`) exposes four distinct ports for different protocol surfaces:
+The Governance Gateway (`g8eg`) leverages **port multiplexing** to expose its distinct protocol surfaces. While logically separate, these surfaces are often collapsed onto standard ports (e.g., `443`) for infrastructure simplicity. The substrate automatically detects port overlaps and promotes the listener to a **Multiplexed Handler** with **Optional mTLS**.
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **Bootstrap** | `9002` (HTTP) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
-| **Public Port** | `9003` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
-| **mTLS API** | `9000` | mTLS + URI SAN | `/api/governance/envelope`, `/db/*` (reads + bootstrap writes), `/kv/*`, `/blob/*`, `/pubsub/publish`, `/api/operators/*`, `/api/device-links/*`, `/api/pki/{sign-csr,revoke,revocation-bundle}`, `/api/auth/passkey/*`. |
-| **Pub/Sub** | `9001` (mTLS WSS) | mTLS + URI SAN | `/ws/pubsub` real-time fan-out. |
+| **Bootstrap** | `80` (HTTP) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
+| **Public Port** | `443` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
+| **mTLS API** | `443` (mTLS) | mTLS + URI SAN | `/api/governance/envelope`, `/db/*` (reads + bootstrap writes), `/kv/*`, `/blob/*`, `/pubsub/publish`, `/api/operators/*`, `/api/device-links/*`, `/api/pki/{sign-csr,revoke,revocation-bundle}`, `/api/auth/passkey/*`. |
+| **Pub/Sub** | `443` (mTLS WSS) | mTLS + URI SAN | `/ws/pubsub` real-time fan-out. |
 
-- **mTLS Ports (WSS, mTLS API)**: Require valid operator certificates with URI SAN binding to operator session IDs. Used for substrate operations and command dispatch.
-- **Public Ports (Bootstrap, Public)**: The **Public Port (9003)** is a plain TLS endpoint for browser-based flows. The **Bootstrap Port (9002)** is a plain HTTP endpoint used to download the initial trust bundle and bootstrap enrollment. These are the sovereign entry points for new operators and BYO clients.
+- **Multiplexing Invariant**: When mTLS and Public surfaces share a port (e.g., `443`), the gateway uses `tls.VerifyClientCertIfGiven`. It permits unauthenticated access to public routes (governed by Web Sessions) while strictly enforcing mTLS and URI SAN verification for substrate APIs.
+- **Port Collapsing**: If all three TLS-based surfaces (Public, mTLS API, Pub/Sub) are assigned to the same port, the gateway starts a single physical listener running the `MasterRouter`.
+- **Bootstrap Isolation**: The **Bootstrap Port (80)** remains plain HTTP by default to facilitate initial trust-anchor delivery before a client possesses the platform CA.
 
 ### Substrate Mutation Entry
 

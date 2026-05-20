@@ -410,7 +410,7 @@ func TestSentinelStrictMode(t *testing.T) {
 	})
 
 	t.Run("scrubs sensitive key-value pairs", func(t *testing.T) {
-		input := "salary_info: 75000\nincome_data: 90000"
+		input := "salary_info: 75000\nincome_data: 4430"
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "salary_info: [VALUE]")
 		assert.Contains(t, result, "income_data: [VALUE]")

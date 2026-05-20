@@ -111,10 +111,8 @@ Available flags: `-p` (provider), `-m` (primary model), `-a` (assistant model), 
 
 When debugging connectivity:
 
-- `9000` - Gateway mTLS API
-- `9001` - Gateway Pub/Sub (WSS)
-- `9002` - Gateway Bootstrap (HTTP)
-- `9003` - Gateway Public (BYO/Browser)
+- `443` - Gateway mTLS API / Pub/Sub / Public
+- `80` - Gateway Bootstrap (HTTP)
 - `8443` - g8ee Adapter (HTTPS)
 
 ---
