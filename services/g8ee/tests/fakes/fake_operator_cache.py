@@ -32,7 +32,7 @@ class FakeOperatorCache:
         return True
 
     collection: str = "operators"
-    cache: "CacheAsideService" = None
+    cache: CacheAsideService = None
 
     async def get_operator(self, operator_id: str):
         return None

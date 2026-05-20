@@ -51,7 +51,7 @@ class AttachmentService:
 
     def __init__(
         self,
-        blob_service: "BlobService",
+        blob_service: BlobService,
         settings: G8eePlatformSettings,
     ):
         self.blob_service = blob_service

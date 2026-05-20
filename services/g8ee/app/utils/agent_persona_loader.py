@@ -42,7 +42,7 @@ class AgentPersona(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     @staticmethod
-    def from_model(model: AgentPersonaModel) -> "AgentPersona":
+    def from_model(model: AgentPersonaModel) -> AgentPersona:
         """Convert an AgentPersonaModel to an AgentPersona."""
         return AgentPersona(
             id=model.id,

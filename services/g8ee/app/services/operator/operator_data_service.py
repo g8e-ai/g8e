@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 class OperatorDataService(OperatorDataServiceProtocol):
     """Domain service for Operator data management using CacheAsideService."""
 
-    def __init__(self, cache: "CacheAsideService", internal_http_client: "HTTPClient"):
+    def __init__(self, cache: CacheAsideService, internal_http_client: HTTPClient):
         self.cache = cache
         self.internal_http_client = internal_http_client
         self.collection = DB_COLLECTION_OPERATORS

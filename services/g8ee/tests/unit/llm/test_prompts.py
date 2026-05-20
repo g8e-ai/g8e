@@ -621,7 +621,7 @@ def test_build_modular_system_prompt_dash_includes_full_governance_stack(mock_lo
         assert f"Content of {required}" in prompt, (
             f"Dash must include {required} (same stack as Sage)"
         )
-    # Mode prompts (capabilities/execution/tools) must be present too  - 
+    # Mode prompts (capabilities/execution/tools) must be present too  -
     # Dash carries the operator + g8e_web_search tool surface and
     # therefore needs the same mode-driven scaffolding as Sage.
     assert "Capabilities prompt" in prompt

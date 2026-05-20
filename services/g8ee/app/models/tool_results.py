@@ -140,7 +140,7 @@ class CommandInternalResult(G8eBaseModel):
     stderr: str | None = None
     error: str | None = None
     error_type: CommandErrorType | None = None
-    error_analysis: "ErrorAnalysisResult | None" = None
+    error_analysis: ErrorAnalysisResult | None = None
     exit_code: int | None = None
     execution_time_seconds: float | None = None
     operator_id: str | None = None

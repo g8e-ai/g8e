@@ -53,7 +53,7 @@ class ModelOverrideResolver:
         return self.primary_model if needs_primary else self.assistant_model
 
 
-def schema_to_dict(schema: "Schema | dict[str, Any]") -> dict[str, Any]:
+def schema_to_dict(schema: Schema | dict[str, Any]) -> dict[str, Any]:
     """Recursively convert a ToolDeclaration parameter schema to a plain dictionary."""
     if isinstance(schema, dict):
         return schema

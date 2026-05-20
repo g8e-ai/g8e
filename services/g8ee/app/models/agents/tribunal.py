@@ -55,7 +55,7 @@ class TribunalConsensusFailedError(TribunalError):
     summary of the candidate set so Sage can decide how to proceed.
     """
 
-    def __init__(self, request: str, vote_breakdown: "VoteBreakdown") -> None:
+    def __init__(self, request: str, vote_breakdown: VoteBreakdown) -> None:
         self.vote_breakdown = vote_breakdown
 
         # Build a structured summary of candidates by member for the LLM
@@ -372,7 +372,7 @@ class CommandGenerationResult(G8eBaseModel):
         description="Revised command produced by the auditor when auditor_passed=False",
     )
     auditor_reason: AuditorReason | None = Field(default=None, description="The auditor's stated reason.")
-    warden_risk_analysis: "CommandRiskAnalysis | None" = Field(
+    warden_risk_analysis: CommandRiskAnalysis | None = Field(
         default=None,
         description="Warden-classified risk analysis from the audit stage."
     )
