@@ -169,7 +169,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		},
 	}
 
-	hash, err = uap.GenerateMessageID((*uap.UAPEnvelope)(env))
+	hash, err = uap.GenerateMessageID(env)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to compute transaction hash: %w", err)
 	}
