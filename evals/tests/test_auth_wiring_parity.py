@@ -36,6 +36,7 @@ from g8e_evals.transport import (
     AuthContext,
 )
 from g8e_protocol.models import BoundOperator
+from g8e_protocol.constants import ComponentName
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -145,6 +146,9 @@ def _baseline_env(fake_pki: dict[str, Path]) -> dict[str, str]:
         "OPERATOR_SESSION_ID": "sess-parity-001",
         "CLI_SESSION_ID": "cli-parity-001",
         "USER_ID": "user-parity-001",
+        "G8E_OPERATOR_SESSION_ID": "sess-parity-001",
+        "G8E_CLI_SESSION_ID": "cli-parity-001",
+        "G8E_USER_ID": "user-parity-001",
         "G8E_CLI_CERT": str(fake_pki["cert"]),
         "G8E_CLI_KEY": str(fake_pki["key"]),
         "G8E_TRUST_BUNDLE": str(fake_pki["bundle"]),

@@ -24,7 +24,7 @@ case "$SUB" in
             status)   _banner "platform status";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" status  "${@:2}" ;;
             reset)
                 _banner "platform reset"
-                local skip_confirm=false
+                skip_confirm=false
                 for arg in "${@:2}"; do
                     if [[ "$arg" == "-y" || "$arg" == "--yes" || "$arg" == "--force" ]]; then
                         skip_confirm=true
@@ -52,7 +52,7 @@ case "$SUB" in
                 exec bash "$SCRIPT_DIR/scripts/core/build.sh" reset   "${@:2}" ;;
             clean)
                 _banner "platform clean"
-                local skip_confirm=false
+                skip_confirm=false
                 for arg in "${@:2}"; do
                     if [[ "$arg" == "-y" || "$arg" == "--yes" || "$arg" == "--force" ]]; then
                         skip_confirm=true
