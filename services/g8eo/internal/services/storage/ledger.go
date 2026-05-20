@@ -14,13 +14,10 @@
 package storage
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -28,6 +25,10 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	vault "github.com/g8e-ai/g8e/services/g8eo/internal/services/vault"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/storer"
 )
 
 // LedgerService maintains a git-backed version control of all files modified by the operator.
@@ -378,39 +379,6 @@ func (lms *LedgerService) copyToLedger(srcPath, dstPath string) error {
 	return nil
 }
 
-// gitExec runs a git command in the specified directory.
-func (lms *LedgerService) gitExec(dir string, args ...string) error {
-	gitPath := lms.auditVault.GetGitPath()
-	if gitPath == "" {
-		return fmt.Errorf("git not available")
-	}
-	cmd := exec.Command(gitPath, args...)
-	cmd.Dir = dir
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git %s in %s: %v (stderr: %s)", args[0], dir, err, strings.TrimSpace(stderr.String()))
-	}
-	return nil
-}
-
-// gitOutput runs a git command in the specified directory and returns stdout.
-func (lms *LedgerService) gitOutput(dir string, args ...string) (string, error) {
-	gitPath := lms.auditVault.GetGitPath()
-	if gitPath == "" {
-		return "", fmt.Errorf("git not available")
-	}
-	cmd := exec.Command(gitPath, args...)
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git %s in %s: %v (stderr: %s)", args[0], dir, err, strings.TrimSpace(stderr.String()))
-	}
-	return strings.TrimSpace(stdout.String()), nil
-}
-
 // GetStateMerkleRoot returns the current git commit hash as the state merkle root.
 // This provides a BFT-verifiable snapshot of the ledger state at a point in time.
 func (lms *LedgerService) GetStateMerkleRoot() (string, error) {
@@ -422,35 +390,48 @@ func (lms *LedgerService) GetStateMerkleRoot() (string, error) {
 	defer lms.mu.Unlock()
 
 	ledgerDir := lms.auditVault.filesPath
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = ledgerDir
-
-	output, err := cmd.CombinedOutput()
+	repo, err := git.PlainOpen(ledgerDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to get current git hash: %w, output: %s", err, string(output))
+		return "", fmt.Errorf("failed to open ledger git repo: %w", err)
 	}
-
-	hash := strings.TrimSpace(string(output))
-	return hash, nil
+	ref, err := repo.Head()
+	if err != nil {
+		return "", fmt.Errorf("failed to get HEAD ref: %w", err)
+	}
+	return ref.Hash().String(), nil
 }
 
 // snapshotLedger creates a git commit and returns the commit hash.
 func (lms *LedgerService) snapshotLedger(ledgerDir, message string) (string, error) {
-	if err := lms.gitExec(ledgerDir, "add", "-A"); err != nil {
+	repo, err := git.PlainOpen(ledgerDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to open git repo: %w", err)
+	}
+
+	w, err := repo.Worktree()
+	if err != nil {
+		return "", fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	err = w.AddWithOptions(&git.AddOptions{All: true})
+	if err != nil && err != git.ErrEmptyCommit {
 		return "", fmt.Errorf("git add failed: %w", err)
 	}
 
 	commitMsg := fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), message)
-	if err := lms.gitExec(ledgerDir, "commit", "-m", commitMsg, "--allow-empty"); err != nil {
+	hash, err := w.Commit(commitMsg, &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "g8e Operator",
+			Email: "operator@" + constants.DefaultEndpoint,
+			When:  time.Now(),
+		},
+		AllowEmptyCommits: true,
+	})
+	if err != nil {
 		return "", fmt.Errorf("git commit failed: %w", err)
 	}
 
-	hash, err := lms.gitOutput(ledgerDir, "rev-parse", "HEAD")
-	if err != nil {
-		return "", fmt.Errorf("failed to get HEAD: %w", err)
-	}
-
-	return hash, nil
+	return hash.String(), nil
 }
 
 // calculateDiffStat calculates the diff statistics between two commits.
@@ -459,16 +440,67 @@ func (lms *LedgerService) calculateDiffStat(ledgerDir, hashBefore, hashAfter str
 		return ""
 	}
 
-	output, err := lms.gitOutput(ledgerDir, "diff", "--stat", hashBefore, hashAfter)
-	if err != nil || output == "" {
+	repo, err := git.PlainOpen(ledgerDir)
+	if err != nil {
+		lms.logger.Warn("Failed to open git repo for diff stat", "error", err)
 		return ""
 	}
 
-	lines := strings.Split(output, "\n")
-	if len(lines) == 0 {
+	commitBefore, err := repo.CommitObject(plumbing.NewHash(hashBefore))
+	if err != nil {
+		lms.logger.Warn("Failed to get commitBefore for diff stat", "error", err)
 		return ""
 	}
-	return strings.TrimSpace(lines[len(lines)-1])
+
+	commitAfter, err := repo.CommitObject(plumbing.NewHash(hashAfter))
+	if err != nil {
+		lms.logger.Warn("Failed to get commitAfter for diff stat", "error", err)
+		return ""
+	}
+
+	patch, err := commitBefore.Patch(commitAfter)
+	if err != nil {
+		lms.logger.Warn("Failed to generate patch for diff stat", "error", err)
+		return ""
+	}
+
+	stats := patch.Stats()
+	if len(stats) == 0 {
+		return ""
+	}
+
+	numFiles := len(stats)
+	totalAdd := 0
+	totalDel := 0
+	for _, s := range stats {
+		totalAdd += s.Addition
+		totalDel += s.Deletion
+	}
+
+	var parts []string
+	if numFiles == 1 {
+		parts = append(parts, "1 file changed")
+	} else {
+		parts = append(parts, fmt.Sprintf("%d files changed", numFiles))
+	}
+
+	if totalAdd > 0 {
+		if totalAdd == 1 {
+			parts = append(parts, "1 insertion(+)")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d insertions(+)", totalAdd))
+		}
+	}
+
+	if totalDel > 0 {
+		if totalDel == 1 {
+			parts = append(parts, "1 deletion(-)")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d deletions(-)", totalDel))
+		}
+	}
+
+	return strings.Join(parts, ", ")
 }
 
 // calculateDiffContent computes the full diff content between two commits.
@@ -477,13 +509,31 @@ func (lms *LedgerService) calculateDiffContent(ledgerDir, hashBefore, hashAfter 
 		return ""
 	}
 
-	output, err := lms.gitOutput(ledgerDir, "diff", hashBefore, hashAfter)
+	repo, err := git.PlainOpen(ledgerDir)
 	if err != nil {
-		lms.logger.Warn("Failed to calculate diff content", string(constants.ConnectionStateError), err)
+		lms.logger.Warn("Failed to open git repo for diff content", "error", err)
 		return ""
 	}
 
-	return output
+	commitBefore, err := repo.CommitObject(plumbing.NewHash(hashBefore))
+	if err != nil {
+		lms.logger.Warn("Failed to get commitBefore for diff content", "error", err)
+		return ""
+	}
+
+	commitAfter, err := repo.CommitObject(plumbing.NewHash(hashAfter))
+	if err != nil {
+		lms.logger.Warn("Failed to get commitAfter for diff content", "error", err)
+		return ""
+	}
+
+	patch, err := commitBefore.Patch(commitAfter)
+	if err != nil {
+		lms.logger.Warn("Failed to generate patch for diff content", "error", err)
+		return ""
+	}
+
+	return patch.String()
 }
 
 // GetDiffContent returns the full diff content between two commits.
@@ -545,39 +595,34 @@ func (lms *LedgerService) GetFileHistory(filePath string, limit int, operatorSes
 		relPath = ledgerPath
 	}
 
-	output, err := lms.gitOutput(ledgerDir, "log",
-		fmt.Sprintf("-n%d", limit),
-		"--format=%H\t%aI\t%s",
-		"--", relPath)
+	repo, err := git.PlainOpen(ledgerDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open git repo: %w", err)
+	}
+
+	cIter, err := repo.Log(&git.LogOptions{FileName: &relPath})
 	if err != nil {
 		return nil, fmt.Errorf("git log failed: %w", err)
 	}
-
-	if output == "" {
-		return nil, nil
-	}
+	defer cIter.Close()
 
 	var entries []FileHistoryEntry
-	scanner := bufio.NewScanner(strings.NewReader(output))
-	for scanner.Scan() {
-		line := scanner.Text()
-		parts := strings.SplitN(line, "\t", 3)
-		if len(parts) < 3 {
-			continue
+	count := 0
+	err = cIter.ForEach(func(c *object.Commit) error {
+		if count >= limit {
+			return storer.ErrStop
 		}
-
-		ts, err := time.Parse(time.RFC3339, parts[1])
-		if err != nil {
-			lms.logger.Warn("Failed to parse commit timestamp", "raw", parts[1], string(constants.ConnectionStateError), err)
-			ts = time.Time{}
-		}
-
 		entries = append(entries, FileHistoryEntry{
-			CommitHash: parts[0],
-			Timestamp:  ts,
-			Message:    strings.TrimSpace(parts[2]),
+			CommitHash: c.Hash.String(),
+			Timestamp:  c.Author.When,
+			Message:    strings.TrimSpace(c.Message),
 			FilePath:   filePath,
 		})
+		count++
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to iterate commits: %w", err)
 	}
 
 	return entries, nil
@@ -632,20 +677,27 @@ func (lms *LedgerService) GetFileAtCommit(filePath, commitHash, operatorSessionI
 
 // gitShowFile retrieves a file's content at a specific commit.
 func (lms *LedgerService) gitShowFile(ledgerDir, commitHash, relPath string) (string, error) {
-	gitPath := lms.auditVault.GetGitPath()
-	if gitPath == "" {
-		return "", fmt.Errorf("git not available")
+	repo, err := git.PlainOpen(ledgerDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to open git repo: %w", err)
 	}
-	ref := fmt.Sprintf("%s:%s", commitHash, relPath)
-	cmd := exec.Command(gitPath, "show", ref)
-	cmd.Dir = ledgerDir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git show %s: %w", ref, err)
+
+	commit, err := repo.CommitObject(plumbing.NewHash(commitHash))
+	if err != nil {
+		return "", fmt.Errorf("failed to find commit %s: %w", commitHash, err)
 	}
-	return stdout.String(), nil
+
+	file, err := commit.File(relPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to find file %s in commit %s: %w", relPath, commitHash, err)
+	}
+
+	content, err := file.Contents()
+	if err != nil {
+		return "", fmt.Errorf("failed to read file contents: %w", err)
+	}
+
+	return content, nil
 }
 
 // RestoreFileFromCommit restores a file to its state at a specific commit.

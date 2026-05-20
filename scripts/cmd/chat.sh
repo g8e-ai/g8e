@@ -214,57 +214,56 @@ _chat_stream_events() {
             continue
         fi
         local count
-        count=$(echo "$resp" | jq -r '.count // 0' 2>/dev/null || echo 0)
+        count=$(python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - count --default 0 <<<"$resp")
         if [[ "$count" -gt 0 ]]; then
             idle=0
-            # Stream each event to stdout as: [id type] payload
-            echo "$resp" | jq -c '.events[]' | while read -r event; do
-                etype=$(echo "$event" | jq -r '.event_type')
-                payload=$(echo "$event" | jq -r '.payload')
-                id=$(echo "$event" | jq -r '.id')
-                
-                # Only show relevant events to the user
-                case "$etype" in
-                    "g8e.v1.ai.llm.chat.iteration.text.chunk.received")
-                        printf "%s" "$payload" | jq -r '.event.data.content // empty'
-                        ;;
-                    "g8e.v1.ai.llm.chat.iteration.failed"|"g8e.v1.ai.llm.chat.iteration.stopped")
-                        error_msg=$(echo "$payload" | jq -r '.event.data.error // "Unknown error"')
-                        printf "\n\033[1;31m[%s]\033[0m %s\n" "$etype" "$error_msg"
-                        ;;
-                    "g8e.v1.ai.llm.chat.iteration.thinking.started")
-                        thinking=$(echo "$payload" | jq -r '.event.data.thinking // empty')
-                        action=$(echo "$payload" | jq -r '.event.data.action_type // "UPDATE"')
-                        if [[ "$action" == "START" ]]; then
-                            printf "\n\033[1;30mThinking...\033[0m "
-                        elif [[ -n "$thinking" && "$thinking" != "null" ]]; then
-                            printf "\033[1;30m.\033[0m"
-                        fi
-                        ;;
-                    "g8e.v1.ai.llm.chat.iteration.text.completed")
-                        printf "\n"
-                        ;;
-                    "g8e.v1.ai.llm.chat.iteration.started")
-                        : # ignore start event
-                        ;;
-                    *)
-                        # Optional: show tool calls or other progress
-                        if [[ "$etype" == *"tool"* ]]; then
-                            tool_name=$(echo "$payload" | jq -r '.event.data.tool_name // "unknown"')
-                            status=$(echo "$payload" | jq -r '.event.data.status // empty')
-                            if [[ "$status" == "STARTED" ]]; then
-                                printf "\n\033[1;34m[Tool: %s]\033[0m " "$tool_name"
-                            fi
-                        fi
-                        ;;
-                esac
-                echo "$id" > "$_chat_cursor_file"
-            done
+            # Stream each event to stdout and save cursor
+            while IFS= read -r line; do
+                if [[ "$line" == ID_CURSOR:* ]]; then
+                    echo "${line#ID_CURSOR:}" > "$_chat_cursor_file"
+                else
+                    printf "%s\n" "$line"
+                fi
+            done < <(python3 -c "import json, sys
+try:
+    resp = json.loads(sys.argv[1])
+    events = resp.get('events', [])
+    for event in events:
+        etype = event.get('event_type')
+        payload = event.get('payload', {})
+        eid = event.get('id')
+        
+        print(f'ID_CURSOR:{eid}')
+        
+        if etype == 'g8e.v1.ai.llm.chat.iteration.text.chunk.received':
+            content = payload.get('event', {}).get('data', {}).get('content', '')
+            sys.stdout.write(content)
+        elif etype in ('g8e.v1.ai.llm.chat.iteration.failed', 'g8e.v1.ai.llm.chat.iteration.stopped'):
+            err = payload.get('event', {}).get('data', {}).get('error', 'Unknown error')
+            sys.stdout.write(f'\n\033[1;31m[{etype}]\033[0m {err}\n')
+        elif etype == 'g8e.v1.ai.llm.chat.iteration.thinking.started':
+            thinking = payload.get('event', {}).get('data', {}).get('thinking', '')
+            action = payload.get('event', {}).get('data', {}).get('action_type', 'UPDATE')
+            if action == 'START':
+                sys.stdout.write('\n\033[1;30mThinking...\033[0m ')
+            elif thinking and thinking != 'null':
+                sys.stdout.write('\033[1;30m.\033[0m')
+        elif etype == 'g8e.v1.ai.llm.chat.iteration.text.completed':
+            sys.stdout.write('\n')
+        elif 'tool' in etype:
+            tool_name = payload.get('event', {}).get('data', {}).get('tool_name', 'unknown')
+            status = payload.get('event', {}).get('data', {}).get('status', '')
+            if status == 'STARTED':
+                sys.stdout.write(f'\n\033[1;34m[Tool: {tool_name}]\033[0m ')
+    sys.stdout.flush()
+except Exception as e:
+    pass" "$resp")
+
             if [[ -s "$_chat_cursor_file" ]]; then
                 last_id=$(cat "$_chat_cursor_file")
             fi
             # If we saw a terminal event, exit
-            if echo "$resp" | jq -e '.events[] | select(.event_type | test("text\\.completed|failed|stopped"))' >/dev/null 2>&1; then
+            if python3 -c "import json, sys; d = json.loads(sys.argv[1]); print(any(e.get('event_type') in ('g8e.v1.ai.llm.chat.iteration.text.completed', 'g8e.v1.ai.llm.chat.iteration.failed', 'g8e.v1.ai.llm.chat.iteration.stopped') for e in d.get('events', [])))" "$resp" | grep -q True; then
                 return 0
             fi
         else
@@ -299,45 +298,39 @@ case "$SUB" in
         # client's event stream.
         context_json="{\"cli_session_id\": \"${G8E_CLI_SESSION_ID:-}\", \"user_id\": \"${G8E_USER_ID:-}\", \"case_id\": \"${CASE_ID:-}\", \"investigation_id\": \"${INVESTIGATION_ID:-}\", \"source_component\": \"client\"}"
         
-        body_obj=$(jq -n \
-            --argjson context "$context_json" \
-            --arg message "$MESSAGE" \
-            --arg sentinel_mode "true" \
-            --arg primary_provider "$LLM_PRIMARY_PROVIDER" \
-            --arg primary_model "$LLM_PRIMARY_MODEL" \
-            --arg assistant_provider "$LLM_ASSISTANT_PROVIDER" \
-            --arg assistant_model "$LLM_ASSISTANT_MODEL" \
-            --arg lite_provider "$LLM_LITE_PROVIDER" \
-            --arg lite_model "$LLM_LITE_MODEL" \
-            --arg primary_api_key "$LLM_PRIMARY_API_KEY" \
-            --arg primary_endpoint "$LLM_PRIMARY_ENDPOINT" \
-            --arg assistant_api_key "$LLM_ASSISTANT_API_KEY" \
-            --arg assistant_endpoint "$LLM_ASSISTANT_ENDPOINT" \
-            --arg lite_api_key "$LLM_LITE_API_KEY" \
-            --arg lite_endpoint "$LLM_LITE_ENDPOINT" \
-            '{
-                context: $context,
-                message: $message,
-                attachments: [],
-                sentinel_mode: ($sentinel_mode == "true"),
-                llm_primary_provider: (if $primary_provider != "" then $primary_provider else null end),
-                llm_primary_model: (if $primary_model != "" then $primary_model else null end),
-                llm_assistant_provider: (if $assistant_provider != "" then $assistant_provider else null end),
-                llm_assistant_model: (if $assistant_model != "" then $assistant_model else null end),
-                llm_lite_provider: (if $lite_provider != "" then $lite_provider else null end),
-                llm_lite_model: (if $lite_model != "" then $lite_model else null end),
-                llm_primary_api_key: (if $primary_api_key != "" then $primary_api_key else null end),
-                llm_primary_endpoint: (if $primary_endpoint != "" then $primary_endpoint else null end),
-                llm_assistant_api_key: (if $assistant_api_key != "" then $assistant_api_key else null end),
-                llm_assistant_endpoint: (if $assistant_endpoint != "" then $assistant_endpoint else null end),
-                llm_lite_api_key: (if $lite_api_key != "" then $lite_api_key else null end),
-                llm_lite_endpoint: (if $lite_endpoint != "" then $lite_endpoint else null end)
-            }')
+        body_obj=$(python3 -c "import json, sys
+context = json.loads(sys.argv[1])
+out = {
+    'context': context,
+    'message': sys.argv[2],
+    'attachments': [],
+    'sentinel_mode': sys.argv[3] == 'true',
+    'llm_primary_provider': sys.argv[4] or None,
+    'llm_primary_model': sys.argv[5] or None,
+    'llm_assistant_provider': sys.argv[6] or None,
+    'llm_assistant_model': sys.argv[7] or None,
+    'llm_lite_provider': sys.argv[8] or None,
+    'llm_lite_model': sys.argv[9] or None,
+    'llm_primary_api_key': sys.argv[10] or None,
+    'llm_primary_endpoint': sys.argv[11] or None,
+    'llm_assistant_api_key': sys.argv[12] or None,
+    'llm_assistant_endpoint': sys.argv[13] or None,
+    'llm_lite_api_key': sys.argv[14] or None,
+    'llm_lite_endpoint': sys.argv[15] or None
+}
+print(json.dumps(out))" \
+            "$context_json" "$MESSAGE" "true" \
+            "${LLM_PRIMARY_PROVIDER:-}" "${LLM_PRIMARY_MODEL:-}" \
+            "${LLM_ASSISTANT_PROVIDER:-}" "${LLM_ASSISTANT_MODEL:-}" \
+            "${LLM_LITE_PROVIDER:-}" "${LLM_LITE_MODEL:-}" \
+            "${LLM_PRIMARY_API_KEY:-}" "${LLM_PRIMARY_ENDPOINT:-}" \
+            "${G8E_TEST_LLM_API_KEY:-${TEST_LLM_API_KEY:-}}" "${LLM_ASSISTANT_ENDPOINT:-}" \
+            "${LLM_LITE_API_KEY:-}" "${LLM_LITE_ENDPOINT:-}")
 
         if [[ "$NEW_CASE" == "true" ]]; then
-            body=$(echo "$body_obj" | jq -c '. + {resource_creation: {create_case: true}}')
+            body=$(python3 -c "import json, sys; d = json.loads(sys.argv[1]); d['resource_creation'] = {'create_case': True}; print(json.dumps(d))" "$body_obj")
         else
-            body=$(echo "$body_obj" | jq -c '.')
+            body="$body_obj"
         fi
 
         _banner "sending chat to g8ee..."
@@ -345,7 +338,7 @@ case "$SUB" in
             echo "[chat] g8ee connection failed" >&2; exit 1
         }
         _check_g8e_error "$resp" "chat"
-        echo "$resp" | jq . 2>/dev/null || echo "$resp"
+        echo "$resp" | python3 -m json.tool 2>/dev/null || echo "$resp"
 
         _banner "streaming events for cli session ${G8E_CLI_SESSION_ID:0:12}... (Ctrl+C to stop)"
         _chat_stream_events "${G8E_CLI_SESSION_ID}" 0 "$TIMEOUT_SECS"

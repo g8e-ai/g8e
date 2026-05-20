@@ -14,7 +14,7 @@ ls README.md g8e Makefile
 ```
 
 Use a POSIX shell such as Linux, macOS Terminal, WSL, or Git Bash. The root
-`./g8e` launcher and `Makefile` use Bash, `find`, `sed`, `curl`, and `jq`.
+`./g8e` launcher and `Makefile` use Bash, `find`, `sed`, and `curl`.
 
 Check the current version requirements in [Developer Guidelines](../devs.md).
 At minimum, install the tools for the component you are touching:
@@ -24,19 +24,24 @@ At minimum, install the tools for the component you are touching:
 - Node only for dashboard or GUI work.
 - Docker only for demo fleet workflows.
 
-## `./g8e` fails with missing `curl` or `jq`
+## `./g8e` fails with missing `curl`
 
 The launcher performs a dependency check before dispatching subcommands. Install
 the missing command and retry from the repository root.
 
 ```bash
 command -v curl
-command -v jq
 ./g8e platform status
 ```
 
 If the command exists in one terminal but not another, fix the shell `PATH`
 before changing project files.
+
+> Note: To support sovereign, agnostic, and air-gapped deployments, `jq` is
+> completely eliminated as a host dependency. All JSON parsing and request
+> assembly are handled internally by a native, self-contained Python 3 utility
+> (`scripts/core/json_query.py`), allowing g8e to run on virtually any modern
+> Linux environment without extra system package requirements.
 
 ## `make proto` fails before generating files
 
@@ -50,12 +55,18 @@ command -v curl
 command -v chmod
 command -v find
 command -v sed
-make buf-install
 ```
 
-If Buf is not installed globally, the Makefile downloads a local `./buf`
-binary. That step needs network access to GitHub releases and permission to
-write an executable file in the repo root.
+For air-gapped and sovereign setups, the Makefile is highly resilient:
+1. If Go is present on the host, `make proto` natively compiles Buf from source
+   on your machine to ensure a flawless, host-agnostic binary fit.
+2. If Go is absent, it attempts to download the pre-compiled binary from Buf releases.
+3. If both are absent or if the network is offline, the build gracefully succeeds
+   and utilizes the pre-generated protocol files already committed under
+   `services/g8ee/app/proto/` rather than failing the compilation.
+
+If you are modifying `.proto` files in an offline environment and need to recompile,
+ensure that `buf` is installed globally on your path.
 
 If generation succeeds but Python imports fail later, rerun the full target
 instead of only calling Buf:

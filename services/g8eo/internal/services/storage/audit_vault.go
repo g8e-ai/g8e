@@ -14,13 +14,11 @@
 package storage
 
 import (
-	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -30,6 +28,8 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/vault"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 // AuditVaultConfig holds configuration for the Local-First Audit Architecture
@@ -276,7 +276,7 @@ func (avs *AuditVaultService) initLedgerGit() error {
 	return avs.initGitRepo(avs.ledgerPath)
 }
 
-// initGitRepo initializes a git repository in the specified directory
+// initGitRepo initializes a git repository in the specified directory using native go-git
 func (avs *AuditVaultService) initGitRepo(path string) error {
 	gitDir := filepath.Join(path, ".git")
 
@@ -284,15 +284,9 @@ func (avs *AuditVaultService) initGitRepo(path string) error {
 		return nil
 	}
 
-	if err := avs.gitExecInDir(path, "init"); err != nil {
+	repo, err := git.PlainInit(path, false)
+	if err != nil {
 		return fmt.Errorf("git init failed: %w", err)
-	}
-
-	if err := avs.gitExecInDir(path, "config", "user.name", "g8e Operator"); err != nil {
-		return fmt.Errorf("git config user.name failed: %w", err)
-	}
-	if err := avs.gitExecInDir(path, "config", "user.email", "operator@"+constants.DefaultEndpoint); err != nil {
-		return fmt.Errorf("git config user.email failed: %w", err)
 	}
 
 	gitignore := filepath.Join(path, ".gitignore")
@@ -300,29 +294,26 @@ func (avs *AuditVaultService) initGitRepo(path string) error {
 		return fmt.Errorf("failed to create .gitignore: %w", err)
 	}
 
-	if err := avs.gitExecInDir(path, "add", "-A"); err != nil {
-		return fmt.Errorf("failed to git add: %w", err)
+	w, err := repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree: %w", err)
 	}
 
-	if err := avs.gitExecInDir(path, "commit", "-m", "Initial ledger commit", "--allow-empty"); err != nil {
+	if _, err := w.Add(".gitignore"); err != nil {
+		return fmt.Errorf("failed to git add .gitignore: %w", err)
+	}
+
+	_, err = w.Commit("Initial ledger commit", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "g8e Operator",
+			Email: "operator@" + constants.DefaultEndpoint,
+			When:  time.Now(),
+		},
+	})
+	if err != nil {
 		return fmt.Errorf("failed to create initial commit: %w", err)
 	}
 
-	return nil
-}
-
-// gitExecInDir runs a git command in the specified directory
-func (avs *AuditVaultService) gitExecInDir(dir string, args ...string) error {
-	if avs.gitPath == "" {
-		return fmt.Errorf("git not available")
-	}
-	cmd := exec.Command(avs.gitPath, args...)
-	cmd.Dir = dir
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git %s in %s: %v (stderr: %s)", args[0], dir, err, strings.TrimSpace(stderr.String()))
-	}
 	return nil
 }
 
@@ -1086,40 +1077,17 @@ func (avs *AuditVaultService) GetFileMutations(eventID int64) ([]*FileMutationLo
 	return mutations, rows.Err()
 }
 
-// gitExec runs a git command in the ledger directory and returns an error if it fails
-func (avs *AuditVaultService) gitExec(args ...string) error {
-	if avs.gitPath == "" {
-		return fmt.Errorf("git not available")
-	}
-	cmd := exec.Command(avs.gitPath, args...)
-	cmd.Dir = avs.ledgerPath
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git %s: %v (stderr: %s)", args[0], err, strings.TrimSpace(stderr.String()))
-	}
-	return nil
-}
-
-// gitOutput runs a git command in the ledger directory and returns stdout
-func (avs *AuditVaultService) gitOutput(args ...string) (string, error) {
-	if avs.gitPath == "" {
-		return "", fmt.Errorf("git not available")
-	}
-	cmd := exec.Command(avs.gitPath, args...)
-	cmd.Dir = avs.ledgerPath
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git %s: %v (stderr: %s)", args[0], err, strings.TrimSpace(stderr.String()))
-	}
-	return strings.TrimSpace(stdout.String()), nil
-}
-
-// gitGetCurrentHash gets the current HEAD commit hash
+// gitGetCurrentHash gets the current HEAD commit hash using native go-git
 func (avs *AuditVaultService) gitGetCurrentHash() (string, error) {
-	return avs.gitOutput("rev-parse", "HEAD")
+	repo, err := git.PlainOpen(avs.ledgerPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open git repo: %w", err)
+	}
+	ref, err := repo.Head()
+	if err != nil {
+		return "", fmt.Errorf("failed to get HEAD ref: %w", err)
+	}
+	return ref.Hash().String(), nil
 }
 
 // GetLedgerGitDir returns the ledger path for use by LedgerMirrorService

@@ -789,12 +789,7 @@ func pct(n, total int64) float64 {
 }
 
 func findGit() (string, error) {
-	for _, p := range []string{"/usr/bin/git", "/usr/local/bin/git"} {
-		if _, err := os.Stat(p); err == nil {
-			return p, nil
-		}
-	}
-	return "", fmt.Errorf("git not found")
+	return "embedded", nil
 }
 
 func printSummaryRow(category string, count int, expectedOutcome string, actual int) {

@@ -36,8 +36,15 @@ help:
 # =============================================================================
 .PHONY: proto
 proto: buf-install
-	@echo "Generating Protobuf code with Buf..."
-	@$(BUF) generate protocol/proto
+	@if command -v buf &> /dev/null || [ -f "./buf" ]; then \
+		echo "Generating Protobuf code with Buf..."; \
+		$(BUF) generate protocol/proto; \
+	elif [ -d "services/g8ee/app/proto" ] && [ -f "services/g8ee/app/proto/common_pb2.py" ]; then \
+		echo "Buf not found and system is offline/air-gapped. Utilizing pre-generated protocol files."; \
+	else \
+		echo "Error: Buf not found and no pre-generated protocol files found. Network access required for initial setup." >&2; \
+		exit 1; \
+	fi
 	@echo "Post-processing Python code..."
 	@touch services/g8ee/app/proto/__init__.py
 	@find services/g8ee/app/proto -name "*_pb2*.py" -exec sed -i 's/^import \(.*_pb2\)/from . import \1/' {} +
@@ -65,9 +72,14 @@ proto-force: buf-install
 .PHONY: buf-install
 buf-install:
 	@if ! command -v buf &> /dev/null && [ ! -f "./buf" ]; then \
-		echo "Buf not found, downloading..."; \
-		curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$$(uname -s)-$$(uname -m)" -o ./buf; \
-		chmod +x ./buf; \
+		if command -v go &> /dev/null; then \
+			echo "Installing Buf natively via Go toolchain..."; \
+			GOBIN=$$(pwd) go install github.com/bufbuild/buf/cmd/buf@v1.30.0; \
+		else \
+			echo "Go not found, attempting direct download..."; \
+			curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$$(uname -s)-$$(uname -m)" -o ./buf && chmod +x ./buf || \
+			echo "Warning: Failed to download Buf. Proceeding with existing protocol files if available."; \
+		fi \
 	fi
 
 # =============================================================================

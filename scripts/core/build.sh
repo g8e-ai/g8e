@@ -60,10 +60,10 @@ OPERATOR_LISTEN_PID_FILE="$OPERATOR_LISTEN_PID_DIR/operator-listen.pid"
 OPERATOR_LISTEN_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/operator-listen.log"
 G8EE_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ee.pid"
 G8EE_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ee.log"
-OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-$(jq -r '.ports.operator_http // "9000"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9000")}"
-OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-$(jq -r '.ports.operator_wss // "9001"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9001")}"
-OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(jq -r '.ports.operator_bootstrap // "9002"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9002")}"
-OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(jq -r '.ports.operator_public // "9003"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "9003")}"
+OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_http --default "9000" 2>/dev/null)}"
+OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_wss --default "9001" 2>/dev/null)}"
+OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_bootstrap --default "9002" 2>/dev/null)}"
+OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_public --default "9003" 2>/dev/null)}"
 OPERATOR_LISTEN_LOG_MAX_BACKUPS=5
 
 DEV_MODE=false
@@ -308,7 +308,7 @@ _start_g8ee() {
         export G8E_INTERNAL_PUBSUB_URL="wss://localhost:${OPERATOR_LISTEN_WSS_PORT}"
 
         local cert_name
-        cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$PROJECT_ROOT/protocol/constants/paths.json" 2>/dev/null || echo "g8ee")
+        cert_name=$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" g8ee.cert_name --default "g8ee" 2>/dev/null)
         setsid "$venv_dir/bin/uvicorn" app.main:app --host 0.0.0.0 --port 8443 \
             --ssl-keyfile "$OPERATOR_LISTEN_PKI_DIR/issued/apps/${cert_name}.key" \
             --ssl-certfile "$OPERATOR_LISTEN_PKI_DIR/issued/apps/${cert_name}.crt" \
@@ -339,10 +339,32 @@ _start_operator_listen() {
         return 0
     fi
 
-    local bin="$PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.gateway"
-    # Always run make build-local - Go's build caching makes this cheap when nothing changed
-    echo "  Building Governance Gateway and Operator natively..."
-    (cd "$PROJECT_ROOT/services/g8eo" && make build-local)
+    local host_arch="amd64"
+    case "$(uname -m)" in
+        x86_64)         host_arch="amd64" ;;
+        aarch64|arm64)  host_arch="arm64" ;;
+        i386|i686)      host_arch="386" ;;
+    esac
+    local bin="$PROJECT_ROOT/services/g8eo/build/linux-${host_arch}/g8e.gateway"
+
+    if command -v go >/dev/null 2>&1; then
+        echo "  Building Governance Gateway and Operator natively..."
+        (cd "$PROJECT_ROOT/services/g8eo" && make build-local) || {
+            if [ -f "$bin" ]; then
+                echo "  WARNING: Native build failed, but pre-built binary exists. Using pre-built..."
+            else
+                echo "  Error: Native build failed and no pre-built binary found." >&2
+                return 1
+            fi
+        }
+    else
+        if [ -f "$bin" ]; then
+            echo "  Go toolchain not found. Using pre-compiled binary for ${host_arch}..."
+        else
+            echo "  Error: Go toolchain not found and no pre-compiled binary found for ${host_arch} at $bin" >&2
+            return 1
+        fi
+    fi
 
     echo "  Starting Governance Gateway..."
     mkdir -p "$OPERATOR_LISTEN_DATA_DIR" "$OPERATOR_LISTEN_PKI_DIR" "$OPERATOR_LISTEN_SECRETS_DIR" "$OPERATOR_LISTEN_PID_DIR" "$OPERATOR_LISTEN_LOG_DIR"
@@ -540,7 +562,7 @@ if [[ "$COMMAND" == "status" ]]; then
         trust_bundle="$OPERATOR_LISTEN_PKI_DIR/trust/hub-bundle.pem"
         if [[ -f "$trust_bundle" ]]; then
             status_resp=$(curl -sS --cacert "$trust_bundle" "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/api/auth/bootstrap/status" 2>/dev/null)
-            if [[ $(echo "$status_resp" | jq -r '.bootstrapped' 2>/dev/null) == "true" ]]; then
+            if [[ $(echo "$status_resp" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - bootstrapped 2>/dev/null) == "true" ]]; then
                 bootstrapped="YES"
             else
                 bootstrapped="NO"

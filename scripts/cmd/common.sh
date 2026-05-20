@@ -82,7 +82,7 @@ _operator_bootstrap() {
     # Check if already bootstrapped AND we have valid local credentials - no rotation on normal start
     local status_resp
     status_resp=$(curl -sS --cacert "$trust_bundle" "$public_url/api/auth/bootstrap/status" 2>/dev/null)
-    if [[ $(echo "$status_resp" | jq -r '.bootstrapped' 2>/dev/null) == "true" ]]; then
+    if [[ $(echo "$status_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - bootstrapped 2>/dev/null) == "true" ]]; then
         # Check if local credentials exist and are valid
         if [[ -f "$G8E_CLI_CERT_FILE" ]] && openssl x509 -noout -in "$G8E_CLI_CERT_FILE" -checkend 0 >/dev/null 2>&1; then
             return 0
@@ -107,13 +107,8 @@ _operator_bootstrap() {
 
     # Build bootstrap request with CSRs (plan §4.3)
     local bootstrap_body
-    bootstrap_body=$(jq -n \
-        --arg email "$email" \
-        --arg name "$name" \
-        --arg op_csr "$_op_csr_pem" \
-        --arg cli_csr "$_cli_csr_pem" \
-        --arg fingerprint "$system_fingerprint" \
-        '{email: $email, name: $name, csr_pem: $op_csr, cli_csr_pem: $cli_csr, system_fingerprint: $fingerprint}')
+    bootstrap_body=$(python3 -c "import json, sys; print(json.dumps({'email': sys.argv[1], 'name': sys.argv[2], 'csr_pem': sys.argv[3], 'cli_csr_pem': sys.argv[4], 'system_fingerprint': sys.argv[5]}))" \
+        "$email" "$name" "$_op_csr_pem" "$_cli_csr_pem" "$system_fingerprint")
 
     # Perform bootstrap over loopback
     local resp
@@ -123,7 +118,7 @@ _operator_bootstrap() {
         "$public_url/api/auth/bootstrap")
 
     local success
-    success=$(echo "$resp" | jq -r '.success' 2>/dev/null)
+    success=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - success 2>/dev/null)
     if [[ "$success" != "true" ]]; then
         echo "[g8e] bootstrap failed: $resp" >&2
         return 1
@@ -135,16 +130,16 @@ _operator_bootstrap() {
     # to receive SessionEvents and embed in outbound request bodies. The
     # substrate refuses to conflate the two session types.
     local operator_id operator_session_id cli_session_id operator_cert operator_cert_chain cli_cert cli_cert_chain hub_trust_bundle
-    operator_id=$(echo "$resp" | jq -r '.operator_id' 2>/dev/null)
-    operator_session_id=$(echo "$resp" | jq -r '.operator_session_id' 2>/dev/null)
-    cli_session_id=$(echo "$resp" | jq -r '.cli_session_id' 2>/dev/null)
-    operator_cert=$(echo "$resp" | jq -r '.operator_cert' 2>/dev/null)
-    operator_cert_chain=$(echo "$resp" | jq -r '.operator_cert_chain' 2>/dev/null)
-    cli_cert=$(echo "$resp" | jq -r '.cli_cert' 2>/dev/null)
-    cli_cert_chain=$(echo "$resp" | jq -r '.cli_cert_chain' 2>/dev/null)
-    hub_trust_bundle=$(echo "$resp" | jq -r '.hub_trust_bundle' 2>/dev/null)
+    operator_id=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - operator_id 2>/dev/null)
+    operator_session_id=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - operator_session_id 2>/dev/null)
+    cli_session_id=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - cli_session_id 2>/dev/null)
+    operator_cert=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - operator_cert 2>/dev/null)
+    operator_cert_chain=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - operator_cert_chain 2>/dev/null)
+    cli_cert=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - cli_cert 2>/dev/null)
+    cli_cert_chain=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - cli_cert_chain 2>/dev/null)
+    hub_trust_bundle=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - hub_trust_bundle 2>/dev/null)
     local user_id
-    user_id=$(echo "$resp" | jq -r '.user.id' 2>/dev/null)
+    user_id=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - user.id 2>/dev/null)
 
     if [[ -z "$operator_id" || -z "$operator_session_id" || -z "$operator_cert" || -z "$cli_session_id" || "$cli_session_id" == "null" || -z "$cli_cert" ]]; then
         echo "[g8e] bootstrap failed: incomplete response (missing operator_id, operator_session_id, cli_session_id, operator_cert, or cli_cert)" >&2
@@ -223,7 +218,7 @@ _operator_curl() {
         args+=(--cert "$cli_cert" --key "$cli_key")
     else
         local cert_name
-        cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$SCRIPT_DIR/protocol/constants/paths.json" 2>/dev/null || echo "g8ee")
+        cert_name=$(python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" "$SCRIPT_DIR/protocol/constants/paths.json" g8ee.cert_name --default g8ee 2>/dev/null)
         if [[ -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" && -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key" ]]; then
             args+=(--cert "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" --key "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key")
         else
@@ -265,7 +260,7 @@ _build_protocol_curl_args() {
         _args+=(--cert "$cli_cert" --key "$cli_key")
     else
         local cert_name
-        cert_name=$(jq -r '.g8ee.cert_name // "g8ee"' "$SCRIPT_DIR/protocol/constants/paths.json" 2>/dev/null || echo "g8ee")
+        cert_name=$(python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" "$SCRIPT_DIR/protocol/constants/paths.json" g8ee.cert_name --default g8ee 2>/dev/null)
         if [[ -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" && -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key" ]]; then
             _args+=(--cert "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" --key "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key")
         else
@@ -374,18 +369,19 @@ _check_g8e_error() {
     fi
     
     # Check for structured g8e error response
-    if echo "$resp" | jq -e '.error' >/dev/null 2>&1; then
+    if echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - error --exists >/dev/null 2>&1; then
         local code message component
-        code=$(echo "$resp" | jq -r '.error.code // "UNKNOWN"')
-        message=$(echo "$resp" | jq -r '.error.message // "An unexpected error occurred"')
-        component=$(echo "$resp" | jq -r '.error.component // "unknown"')
+        code=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - error.code --default "UNKNOWN" 2>/dev/null)
+        message=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - error.message --default "An unexpected error occurred" 2>/dev/null)
+        component=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - error.component --default "unknown" 2>/dev/null)
         
         echo -e "\033[1;31m[g8e error]\033[0m \033[1m$code\033[0m ($component): $message" >&2
         
         # If there are remediation steps, show them
-        if echo "$resp" | jq -e '.error.remediation_steps | length > 0' >/dev/null 2>&1; then
+        if echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - error.remediation_steps --exists >/dev/null 2>&1 && \
+           [ $(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - error.remediation_steps --length 2>/dev/null) -gt 0 ]; then
             echo -e "\033[1;34mRemediation:\033[0m" >&2
-            echo "$resp" | jq -r '.error.remediation_steps[]' | sed 's/^/  - /' >&2
+            echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - error.remediation_steps --array | sed 's/^/  - /' >&2
         fi
         
         exit 1
