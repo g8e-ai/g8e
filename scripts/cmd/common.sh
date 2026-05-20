@@ -29,6 +29,14 @@ G8E_CLI_KEY_FILE="$G8E_CREDENTIALS_DIR/cli.key"
 G8E_OPERATOR_CERT_FILE="$G8E_CREDENTIALS_DIR/operator.crt"
 G8E_OPERATOR_KEY_FILE="$G8E_CREDENTIALS_DIR/operator.key"
 
+_sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum | awk '{print $1}'
+    else
+        shasum -a 256 | awk '{print $1}'
+    fi
+}
+
 _banner() {
     echo -e "\033[1;34m[g8e]\033[0m $*"
 }
@@ -103,7 +111,7 @@ _operator_bootstrap() {
     fi
 
     local system_fingerprint
-    system_fingerprint=$(echo "g8e-cli-$(hostname)-$(whoami)" | sha256sum | awk '{print $1}')
+    system_fingerprint=$(echo "g8e-cli-$(hostname)-$(whoami)" | _sha256)
 
     # Build bootstrap request with CSRs (plan §4.3)
     local bootstrap_body

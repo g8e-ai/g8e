@@ -34,7 +34,7 @@ _generate_workload_csrs "$TMP_DIR"
 OP_CSR_PEM="$_op_csr_pem"
 CLI_CSR_PEM="$_cli_csr_pem"
 CLI_KEY_FILE="$_cli_key_file"
-FINGERPRINT=$(echo "g8e-byo-test" | sha256sum | awk '{print $1}')
+FINGERPRINT=$(echo "g8e-byo-test" | _sha256)
 
 # 4. Bootstrap
 _banner "Step 1: Bootstrap over loopback"
