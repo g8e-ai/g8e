@@ -105,7 +105,9 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 		// Mock response if no downstream configured
 		w.Header().Set(constants.HeaderContentType, "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`))
+		if _, err := w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`)); err != nil {
+			g.logger.Error("Failed to write mock tools/list response", "error", err)
+		}
 		return
 	}
 
@@ -113,12 +115,18 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 	client := &http.Client{Timeout: 10 * time.Second}
 	var resp *http.Response
 	var err error
+	var body []byte
 
 	// For MCP tools/list, we usually expect a JSON-RPC request even for listing
 	// If it's a GET, we might be looking for SSE or a simplified discovery
 	if r.Method == http.MethodPost {
 		// Ensure we pass through the body if present, or create a valid tools/list request
-		body, _ := io.ReadAll(r.Body)
+		body, err = io.ReadAll(r.Body)
+		if err != nil {
+			g.logger.Error("Failed to read request body", "error", err)
+			g.jsonRPCError(w, 1, -32603, "failed to read request body")
+			return
+		}
 		if len(body) == 0 {
 			body = []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
 		}
@@ -134,11 +142,17 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 		g.jsonRPCError(w, 1, -32603, fmt.Sprintf("failed to query downstream MCP server: %v", err))
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			g.logger.Error("Failed to close response body", "error", err)
+		}
+	}()
 
 	w.Header().Set(constants.HeaderContentType, "application/json")
 	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		g.logger.Error("Failed to copy response body", "error", err)
+	}
 }
 
 type processGatewayOptions struct {
@@ -150,7 +164,11 @@ type processGatewayOptions struct {
 func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts processGatewayOptions) (hash string, uapBytes []byte, err error) {
 	stateRoot := ""
 	if g.stateRootProvider != nil {
-		stateRoot, _ = g.stateRootProvider.GetCurrentStateRoot()
+		var err error
+		stateRoot, err = g.stateRootProvider.GetCurrentStateRoot()
+		if err != nil {
+			g.logger.Warn("Failed to get current state root", "error", err)
+		}
 	}
 
 	now := time.Now().UTC()
@@ -389,7 +407,9 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 func (g *GatewayService) jsonError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set(constants.HeaderContentType, "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": msg}); err != nil {
+		g.logger.Error("Failed to encode JSON error response", "error", err)
+	}
 }
 
 func (g *GatewayService) jsonRPCResponse(w http.ResponseWriter, id interface{}, result interface{}) {
@@ -397,12 +417,19 @@ func (g *GatewayService) jsonRPCResponse(w http.ResponseWriter, id interface{}, 
 		JSONRPC: "2.0",
 		ID:      id,
 	}
-	b, _ := json.Marshal(result)
+	b, err := json.Marshal(result)
+	if err != nil {
+		g.logger.Error("Failed to marshal JSON-RPC result", "error", err)
+		g.jsonRPCError(w, id, -32603, "failed to marshal result")
+		return
+	}
 	res.Result = json.RawMessage(b)
 
 	w.Header().Set(constants.HeaderContentType, "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(res)
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		g.logger.Error("Failed to encode JSON-RPC response", "error", err)
+	}
 }
 
 func (g *GatewayService) jsonRPCError(w http.ResponseWriter, id interface{}, code int, msg string) {
@@ -416,7 +443,9 @@ func (g *GatewayService) jsonRPCError(w http.ResponseWriter, id interface{}, cod
 	}
 	w.Header().Set(constants.HeaderContentType, "application/json")
 	w.WriteHeader(http.StatusOK) // JSON-RPC usually returns 200 even for errors
-	json.NewEncoder(w).Encode(res)
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		g.logger.Error("Failed to encode JSON-RPC error response", "error", err)
+	}
 }
 
 // mapSubstrateError maps governance verification errors to granular JSON-RPC codes.
@@ -472,10 +501,12 @@ func (g *GatewayService) mapSubstrateError(err error) (int, string) {
 func (g *GatewayService) jsonResponse(w http.ResponseWriter, id interface{}, result interface{}) {
 	w.Header().Set(constants.HeaderContentType, "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"id":     id,
 		"result": result,
-	})
+	}); err != nil {
+		g.logger.Error("Failed to encode JSON response", "error", err)
+	}
 }
 
 // storeSuspendedTransaction stores a transaction awaiting L3 approval.
@@ -493,7 +524,9 @@ func (g *GatewayService) storeSuspendedTransaction(txHash string, envelope []byt
 		UserID:          userID,
 		OperatorID:      operatorID,
 	}
-	_ = g.suspendedStore.StoreSuspendedTransaction(tx)
+	if err := g.suspendedStore.StoreSuspendedTransaction(tx); err != nil {
+		g.logger.Error("Failed to store suspended transaction", "tx_hash", txHash, "error", err)
+	}
 }
 
 // GetSuspendedTransaction retrieves a suspended transaction by hash.
@@ -509,7 +542,9 @@ func (g *GatewayService) deleteSuspendedTransaction(txHash string) {
 	if g.suspendedStore == nil {
 		return
 	}
-	_ = g.suspendedStore.DeleteSuspendedTransaction(txHash)
+	if err := g.suspendedStore.DeleteSuspendedTransaction(txHash); err != nil {
+		g.logger.Error("Failed to delete suspended transaction", "tx_hash", txHash, "error", err)
+	}
 }
 
 // ResumeWithL3Proof re-submits a suspended transaction with an attached L3
@@ -591,7 +626,11 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	if err != nil {
 		return "", fmt.Errorf("failed to call downstream MCP server: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			g.logger.Error("Failed to close response body", "error", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("downstream MCP server returned status %d", resp.StatusCode)
@@ -652,7 +691,11 @@ func (g *GatewayService) DispatchToA2ADownstream(ctx context.Context, skillName 
 	if err != nil {
 		return "", fmt.Errorf("failed to call downstream A2A server: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			g.logger.Error("Failed to close response body", "error", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("downstream A2A server returned status %d", resp.StatusCode)

@@ -41,7 +41,6 @@ linters-settings:
       - wrapperFunc
       - rangeValCopy
       - hugeParam
-      - octalLiteral # style preference, not security-critical
       - preferStringWriter # style preference, not security-critical
 
 linters:

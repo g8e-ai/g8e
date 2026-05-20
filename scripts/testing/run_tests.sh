@@ -352,6 +352,21 @@ run_g8eo() {
     log_header "Running g8eo tests (host)"
     _check_pki_exists
     cd "$PROJECT_ROOT/services/g8eo"
+    
+    # Ensure GOPATH/bin is in PATH for Go tools
+    local gopath="$(go env GOPATH 2>/dev/null || echo "$HOME/go")"
+    export PATH="$gopath/bin:$PATH"
+    
+    # Run golangci-lint before tests
+    log_header "Running golangci-lint"
+    if ! command -v golangci-lint >/dev/null 2>&1; then
+        log_warn "golangci-lint not found in PATH. Run 'cd services/g8eo && make install-tools' to install."
+        log_warn "Skipping golangci-lint for now..."
+    elif ! golangci-lint run --path-prefix=services/g8eo; then
+        log_err "golangci-lint failed"
+        return 1
+    fi
+    
     local test_target="./..."
     local pass_through_args=()
 
