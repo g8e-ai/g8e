@@ -62,7 +62,7 @@ async def _run_warden_stage(
         return None
 
     logger.info(
-        "[TRIBUNAL-WARDEN] Starting risk analysis for command: %r",
+        "[LLM-RISK-FILTER] Starting risk analysis for command: %r",
         vote_winner[:200] + "..." if len(vote_winner) > 200 else vote_winner,
     )
 
@@ -84,7 +84,7 @@ async def _run_warden_stage(
     if not risk_analysis:
         return None
 
-    logger.info("[TRIBUNAL-WARDEN] Risk analysis complete: level=%s", risk_analysis.risk_level)
+    logger.info("[LLM-RISK-FILTER] Risk analysis complete: level=%s", risk_analysis.risk_level)
 
     if risk_analysis.risk_level != RiskLevel.HIGH:
         return risk_analysis
@@ -96,7 +96,7 @@ async def _run_warden_stage(
             "[WARDEN-CIRCUIT-BREAKER] Second warden block detected for investigation=%s - triggering AGENT_CONFLICT",
             investigation_id,
         )
-        logger.warning("[TRIBUNAL-WARDEN] Blocking command due to repeated HIGH risk detection: %r", vote_winner)
+        logger.warning("[LLM-RISK-FILTER] Blocking command due to repeated HIGH risk detection: %r", vote_winner)
         if investigation_state:
             investigation_state.warden_block_count = 0
 
@@ -120,7 +120,7 @@ async def _run_warden_stage(
         "[WARDEN-CIRCUIT-BREAKER] First warden block for investigation=%s - generating contextual feedback",
         investigation_id,
     )
-    logger.info("[TRIBUNAL-WARDEN] Blocking command due to HIGH risk detection: %r", vote_winner)
+    logger.info("[LLM-RISK-FILTER] Blocking command due to HIGH risk detection: %r", vote_winner)
     if investigation_state:
         investigation_state.warden_block_count = block_count + 1
 
@@ -144,7 +144,7 @@ async def _run_warden_stage(
     if error_analysis and error_analysis.suggested_fix:
         feedback_msg += f" Suggestion: {error_analysis.suggested_fix}"
 
-    logger.info("[TRIBUNAL-WARDEN] Feedback for Sage: %s", feedback_msg)
+    logger.info("[LLM-RISK-FILTER] Feedback for Sage: %s", feedback_msg)
 
     await emitter.emit(
         EventType.AI_TRIBUNAL_SESSION_WARDEN_BLOCKED,

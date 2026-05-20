@@ -25,7 +25,11 @@ Strict Local Data Sovereignty
 SaaS-based agent architectures pull your authoritative, sensitive state into their cloud. g8e inverts this. Raw operational data, credentials, and forensic logs are quarantined locally on the managed host in an encrypted Local-First Audit Architecture (LFAA). The AI and external platforms only ever receive scrubbed, metadata-safe context after it passes through the host's Sentinel Guard.
 
 The Universal Protocol Translator
-The AI landscape is fracturing into a protocol war. g8e makes you immune. Because it treats protocols like MCP simply as untrusted payloads, it can ingest any standard, force it through a BFT governance check, and output a mathematically safe command.
+The AI landscape is fracturing into a protocol war. g8e makes you immune. The sovereign `g8eo` Operator operates as a standalone gateway that intercepts Model Context Protocol (MCP) and Agent-to-Agent (A2A) calls:
+- **Zero-Trust Interception**: Integrates natively with standard clients (Claude Desktop, Cursor, generic LLMs) using standard JSON-RPC (MCP) or HTTP (A2A), parsing payloads into canonical protojson governance envelopes before any downstream execution occurs.
+- **L2 Consensus via Local Gateway Policy**: For clients unable to generate Tribunal signatures, `g8eo` provides an *Implicit L2* signature under a configured local gateway policy.
+- **L3 Out-of-Band Suspension & WebAuthn Approval**: Mutations are held in suspension, returning a local WebAuthn long-polling/OOB approval challenge URL so users can co-validate and approve actions securely without specialized IDE plugins.
+- **Warden Downstream Dispatch**: Once verified, Warden commits an initial "intent to execute" receipt to the local SQLite vault. Only after successful vaulting is the egress translator used to forward the command to the downstream server. Warden then captures the JSON-RPC response, commits the final signed action receipt to the SQLite vault, and returns the response.
 
 True Proof of Human Presence (PHP)
 The machine handles what is machine-checkable; the human handles intent. The Operator halts state mutations until the envelope carries an explicit, hardware-bound WebAuthn/Passkey signature from a human co-validator.
@@ -59,43 +63,110 @@ The system is architected for universal distrust between all actors:
 
 *   **The Protocol (Wire Contract)**: A typed, signed, state-bound transaction layer. It is the single source of truth for all system mutations and the only mandatory component for interoperability. See [GovernanceEnvelope](protocol/proto/common.proto) (protojson).
 
+#### Standalone Gateway: Ingress & Verification Gauntlet
+Before any action is executed, the `g8eo` standalone gateway intercepts the request, wraps it in a `GovernanceEnvelope`, and subjects it to the 3-Layer Governance Gauntlet. If any check fails, it fails closed and logs the error. If all checks pass, the Warden authorizes and vaults the intent.
+
 ```mermaid
 graph TD
-    Start["Original MCP / A2A / User Message<br/>(Interpreted Intent)"]
+    classDef client fill:#eceff1,stroke:#37474f,stroke-width:2px,color:#37474f;
+    classDef gate fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+    classDef fail fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#b71c1c;
+    classDef vault fill:#efebe9,stroke:#4e342e,stroke-width:2px,color:#3e2723;
+    classDef target fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
 
-    subgraph Verification ["Operator Verification - protocol-mandated"]
+    ClientReq["Client Request<br/>(Claude / Cursor / Agent)"]:::client
+
+    subgraph g8eo_ingress ["g8eo Standalone Gateway (Ingress & Verification)"]
         direction TB
-        L1{"L1: Technical Bedrock<br/>Forbidden Patterns?"}
-        L2{"L2: Consensus<br/>Tribunal Signature?"}
-        L3{"L3: Authorization<br/>Human Presence?"}
-        State{"State Check<br/>Merkle Root Fresh?"}
-        
-        FailClosed["Fail Closed<br/>Error + Audit Entry"]
-        Warden["Signed Action Receipt<br/>Audit Commitment"]
-        LocalVault([Local Vault])
 
-        L1 -- "Passed" --> L2
-        L1 -- "Violated" ----> FailClosed
-        
-        L2 -- "Passed" --> L3
-        L2 -- "Invalid/Missing" ---> FailClosed
-        
-        L3 -- "Authorized" --> State
-        L3 -- "Denied" --> FailClosed
-        
-        State -- "Fresh" --> Warden
-        State -- "Stale" --> FailClosed
+        TranslatorIn["Ingress Translator<br/>(MCP/A2A Request to GovernanceEnvelope)"]:::gate
 
-        Warden --> LocalVault
-        FailClosed --> LocalVault
+        subgraph Verification ["3-Layer Governance Gauntlet"]
+            direction TB
+            L1["L1: Technical Bedrock<br/>(Forbidden Patterns Check)"]:::gate
+            L2["L2: Consensus Verification<br/>(Tribunal Signatures Check)"]:::gate
+            L3["L3: Authorization Gate<br/>(WebAuthn Passkey / Human Presence)"]:::gate
+            State["State Check<br/>(Merkle State Root Freshness)"]:::gate
+
+            L1 --> L2
+            L2 --> L3
+            L3 --> State
+        end
+
+        WardenRequest["Warden Execution Boundary<br/>(Authorizes & Signs Intent)"]:::gate
+        VaultCommitPre["Vault Commit & Sign<br/>(Signs Initial Receipt)"]:::gate
+
+        FailClosed["Fail Closed<br/>(Reject Payload & Log Error)"]:::fail
+        LocalVault[("Local SQLite Vault<br/>(Audit Logs & Receipts)")]:::vault
+
+        TranslatorIn --> L1
+        State --> WardenRequest
+        WardenRequest --> VaultCommitPre
     end
 
-    LocalVault --> Destination["Original MCP / A2A / User Message<br/>(Audited, Signed, Recorded)"]
+    OutboundMCP["Outbound to Intended MCP Target<br/>(Proceeds to Egress & Response)"]:::target
 
-    Start --> L1
+    ClientReq -- "1. JSON-RPC Request" --> TranslatorIn
+
+    L1 -. "Violation" .-> FailClosed
+    L2 -. "Invalid/Missing" .-> FailClosed
+    L3 -. "Denied" .-> FailClosed
+    State -. "Stale" .-> FailClosed
+
+    FailClosed --> LocalVault
+    VaultCommitPre --> LocalVault
+    VaultCommitPre -- "2. Vaulted & Approved" --> OutboundMCP
+    VaultCommitPre ~~~ OutboundMCP
+    LocalVault ~~~ OutboundMCP
 ```
 
-The **Operator (`g8eo`)** is the host-resident execution boundary. It enforces a **hard admission gate** where only strictly compliant `UniversalEnvelope` (protojson) events are allowed to pass. Any malformed JSON, missing signatures, or unauthorized payloads are rejected before dispatch, ensuring the host remains insulated from unverified intent.
+#### Standalone Gateway: Egress & Audit Response Flow
+Once the intent is securely vaulted in the local SQLite database, the egress path initiates. The verified `GovernanceEnvelope` is translated back into the native client protocol (MCP/A2A) and routed to the downstream server. Upon completion, Warden captures the result, signs a final receipt, vaults the outcome, and translates the response back to the client.
+
+```mermaid
+graph TD
+    classDef client fill:#eceff1,stroke:#37474f,stroke-width:2px,color:#37474f;
+    classDef gate fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+    classDef vault fill:#efebe9,stroke:#4e342e,stroke-width:2px,color:#3e2723;
+    classDef target fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
+
+    subgraph IngressEnd ["End of Ingress / Vaulted Intent"]
+        VaultCommitPre["Vaulted Intent<br/>(Initial Signed Receipt)"]:::gate
+    end
+
+    subgraph g8eo_egress ["g8eo Standalone Gateway (Egress & Response)"]
+        direction TB
+
+        TranslatorOut["Egress Translator<br/>(GovernanceEnvelope to MCP/A2A Request)"]:::gate
+
+        subgraph g8eo_response ["g8eo Audit & Response"]
+            direction TB
+            WardenResponse["Warden Sovereign Executor<br/>(Captures & Validates Result)"]:::gate
+            VaultCommitPost["Vault Commit & Sign<br/>(Signs Final Receipt)"]:::gate
+            TranslatorResponse["Response Translator<br/>(Result to JSON-RPC Response)"]:::gate
+
+            WardenResponse --> VaultCommitPost
+            VaultCommitPost --> TranslatorResponse
+        end
+
+        LocalVault[("Local SQLite Vault<br/>(Audit Logs & Receipts)")]:::vault
+        TranslatorOut -.-> g8eo_response
+        VaultCommitPost --> LocalVault
+    end
+
+    Target["Downstream MCP/A2A Server<br/>(Postgres, FileSystem, etc.)"]:::target
+
+    subgraph ClientResponseBoundary ["Client Response Boundary"]
+        ClientRes["Client Response<br/>(Claude / Cursor / Agent)"]:::client
+    end
+
+    VaultCommitPre -- "1. Egress (Only After Vaulting)" --> TranslatorOut
+    TranslatorOut -- "2. Clean Tool Call" --> Target
+    Target -- "3. Raw Tool Result" --> WardenResponse
+    TranslatorResponse -- "4. JSON-RPC Response" --> ClientRes
+```
+
+The **Operator (`g8eo`)** is the host-resident execution boundary. It enforces a **hard admission gate** where only strictly compliant `UniversalEnvelope` (protojson) events are allowed to pass. Any malformed JSON, missing signatures, or unauthorized payloads are rejected before dispatch, ensuring the host remains insulated from unverified intent. It acts as a universal protocol translator, converting standard client payloads into canonical governance envelopes and executing verified operations against downstream servers.
 
 ### g8ee: A Reference Agentic System
 **g8ee** is our reference implementation of an agentic system with structural reasoning built on the g8e protocol. It translates high-level user intent into verifiable protocol transactions, utilizing a multi-layered hierarchy and a continuous **ReAct loop** to decompose requests into atomic actions. It functions as a **protocol-native producer**, generating the cryptographic proofs (L2 signatures) required to clear the operator's fail-closed gates.
@@ -116,18 +187,18 @@ graph TD
         subgraph Tribunal ["Tribunal (L2 Producer)"]
             direction TB
             Panel["5-Member Agent Panel"]:::engine
-            Warden["Warden (Two-Strike Circuit Breaker)"]:::engine
-            Auditor["Auditor (L2 Verifier)"]:::engine
+            WardenFilter["LLM Risk Filter / Warden<br/>(Two-Strike Circuit Breaker)"]:::engine
+            Auditor["LLM Auditor<br/>(Reputation Commitments)"]:::engine
             
-            Panel --> Warden
-            Warden --> Auditor
+            Panel --> WardenFilter
+            WardenFilter --> Auditor
         end
         
         Triage --> Reasoner
         Reasoner --> Panel
         
         %% Short Circuits (Feedback Loops)
-        Warden -. "Risk Feedback (Short Circuit)" .-> Reasoner
+        WardenFilter -. "Risk Feedback (Short Circuit)" .-> Reasoner
         Auditor -. "Rejection / Revision (Short Circuit)" .-> Reasoner
     end
 
@@ -141,8 +212,8 @@ The AI Engine employs a multi-layered agentic hierarchy to ensure high-fidelity 
 - **Triage & Dash:** Agents for routing, posture assessment, and high-speed responses.
 - **Sage:** Primary interpreter of user intent. Sage stakes reputation on proposals but **cannot execute**; it must submit intent to the Tribunal.
 - **Tribunal:** Isolated agents generating command proposals. Requires consensus (2/5 or 5/5) to proceed. If consensus fails, it loops back to Sage for refinement.
-- **Warden:** Heuristic blocker that rejects unsafe proposals. Rejections trigger a loop back to Sage to improve intent translation.
-- **Auditor:** Final verification layer. Reviews the investigation history to ensure accuracy before signing the protocol envelope.
+- **LLM Risk Filter (Warden Filter):** Heuristic prompt-level filter that evaluates candidate commands for safety and policy risks before a transaction envelope is created. Rejections trigger a loop back to Sage to improve intent translation.
+- **LLM Auditor:** Final consensus validation layer. Swaps, revises, or validates candidate commands and commits cryptographic Merkle root commitments over the agent reputation scoreboard.
 - **Nemesis:** Adversary designed to test the hierarchy. Nemesis proposals are recorded for audit but never executed; they are presented to the user for manual approval.
 
 *   **The Principal (Intent)**: The entity requesting the action (e.g., a human via WebAuthn/Passkey or an upstream AI agent).
@@ -179,6 +250,24 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 2.  **Login**: `./g8e login` to authenticate the CLI via mTLS.
 3.  **Audit**: View real-time transaction logs in `.g8e/logs/operator-listen.log`.
 
+### Standing up the MCP Gateway
+
+g8e can act as a standalone, zero-trust gateway for any standard MCP client:
+
+1. **Configure downstream servers**: Define your target downstream MCP server URL using the `G8E_MCP_DOWNSTREAM_URL` environment variable or configuration files.
+2. **Interact with the Gateway CLI**:
+   ```bash
+   # Check the health of your MCP gateway and connection
+   ./g8e mcp status
+
+   # Run a test query against tools/list and tools/call
+   ./g8e mcp test
+
+   # Start the stdio proxy bridge for tools like Claude Desktop
+   ./g8e mcp serve
+   ```
+3. **Claude Desktop / Client Setup**: Automatically generate your client configuration using `./g8e mcp config`. This generates the settings block pointing to the secure stdio bridge.
+
 ---
 
 ## Documentation
@@ -191,6 +280,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 ### Implementation Reference
 - **Protocol Schemas**: `protocol/proto/*.proto`
 - **Governance Logic**: `services/g8eo/internal/services/governance/`
+- **MCP/A2A Gateway**: `services/g8eo/internal/services/mcp/`
 - **Audit Storage**: `services/g8eo/internal/services/storage/audit_vault.go`
 
 **License**: Apache 2.0
