@@ -1,4 +1,32 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package tests
+
+/*
+TestMCPGateway_EndToEnd exercises g8eo from the perspective of a standard MCP client
+(e.g., Claude Code or a generic AI agent). It verifies the "Universal Protocol Translator"
+logic which allows "dumb" clients to be governed by the g8e substrate without needing
+native signing or envelope construction logic.
+
+Practical Coverage:
+1. Protocol Translation: Maps JSON-RPC tools/list and tools/call to typed GovernanceEnvelopes.
+2. 3-Layer Gauntlet: Forces tool calls through L1 (Hard Gates), L2 (Consensus), and L3 (Approval).
+3. Suspension & OOB: Verifies that mutations are suspended, recorded, and only resumed
+   after Out-of-Band (OOB) human approval via WebAuthn/Passkey.
+4. Downstream Dispatch: Ensures verified payloads are correctly unwrapped and dispatched
+   to the real downstream MCP server.
+*/
 
 import (
 	"bytes"
@@ -151,8 +179,15 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	cookie := &http.Cookie{Name: "g8e_session", Value: webSess.ID}
 
-	// Register and get cert
-	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
+	// Register and get cert (bootstrap port is TLS-multiplexed)
+	bootstrapURL := fmt.Sprintf("https://localhost:%d", ls.GetBootstrapPort())
+	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
+	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
+	rootPool := x509.NewCertPool()
+	rootPool.AppendCertsFromPEM(rootPEM)
+	rootPool.AppendCertsFromPEM(hubPEM)
+	bootstrapClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
+
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "mcp-test-client"}}
 	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
@@ -166,7 +201,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	regBody, _ := json.Marshal(regReq)
 	hReq, _ := http.NewRequest(http.MethodPost, bootstrapURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
 	hReq.Header.Set(constants.HeaderDeviceToken, token)
-	hResp, err := http.DefaultClient.Do(hReq)
+	hResp, err := bootstrapClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, hResp.StatusCode)
 	var regResp models.OperatorRegistrationResponse
@@ -174,11 +209,6 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	hResp.Body.Close()
 
 	// Create mTLS client
-	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
-	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
-	rootPool := x509.NewCertPool()
-	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(hubPEM)
 	privBytes, _ := x509.MarshalPKCS8PrivateKey(priv)
 	cert, _ := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
 
@@ -404,8 +434,15 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	cookie := &http.Cookie{Name: "g8e_session", Value: webSess.ID}
 
-	// Register and get cert
-	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
+	// Register and get cert (bootstrap port is TLS-multiplexed)
+	bootstrapURL := fmt.Sprintf("https://localhost:%d", ls.GetBootstrapPort())
+	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
+	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
+	rootPool := x509.NewCertPool()
+	rootPool.AppendCertsFromPEM(rootPEM)
+	rootPool.AppendCertsFromPEM(hubPEM)
+	bootstrapClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
+
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	csrTmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "a2a-test-client"}}
 	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, priv)
@@ -419,7 +456,7 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	regBody, _ := json.Marshal(regReq)
 	hReq, _ := http.NewRequest(http.MethodPost, bootstrapURL+"/api/auth/device-link/register", bytes.NewReader(regBody))
 	hReq.Header.Set(constants.HeaderDeviceToken, token)
-	hResp, err := http.DefaultClient.Do(hReq)
+	hResp, err := bootstrapClient.Do(hReq)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, hResp.StatusCode)
 	var regResp models.OperatorRegistrationResponse
@@ -427,11 +464,6 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	hResp.Body.Close()
 
 	// Create mTLS client
-	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
-	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
-	rootPool := x509.NewCertPool()
-	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(hubPEM)
 	privBytes, _ := x509.MarshalPKCS8PrivateKey(priv)
 	cert, _ := tls.X509KeyPair([]byte(regResp.OperatorCert), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}))
 

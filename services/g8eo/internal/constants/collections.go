@@ -46,4 +46,5 @@ const (
 	CollectionStakeResolutions CollectionName = "stake_resolutions"
 	CollectionRevokedCertificates CollectionName = "revoked_certificates"
 	CollectionTrustedSigners CollectionName = "trusted_signers"
+	CollectionChaosEvents CollectionName = "chaos_events"
 )

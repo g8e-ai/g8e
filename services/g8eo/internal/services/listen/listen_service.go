@@ -213,11 +213,12 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		}
 	}
 
-	if cfg.Listen.BootstrapPort == cfg.Listen.HTTPPort {
+	switch {
+	case cfg.Listen.BootstrapPort == cfg.Listen.HTTPPort:
 		ls.bootstrapServer = ls.server
-	} else if cfg.Listen.BootstrapPort == cfg.Listen.WSSPort {
+	case cfg.Listen.BootstrapPort == cfg.Listen.WSSPort:
 		ls.bootstrapServer = ls.wssServer
-	} else {
+	default:
 		ls.bootstrapServer = &http.Server{
 			Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
 			Handler:           getHandler(cfg.Listen.BootstrapPort),
@@ -227,13 +228,14 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		}
 	}
 
-	if cfg.Listen.PublicPort == cfg.Listen.HTTPPort {
+	switch {
+	case cfg.Listen.PublicPort == cfg.Listen.HTTPPort:
 		ls.publicServer = ls.server
-	} else if cfg.Listen.PublicPort == cfg.Listen.WSSPort {
+	case cfg.Listen.PublicPort == cfg.Listen.WSSPort:
 		ls.publicServer = ls.wssServer
-	} else if cfg.Listen.PublicPort == cfg.Listen.BootstrapPort {
+	case cfg.Listen.PublicPort == cfg.Listen.BootstrapPort:
 		ls.publicServer = ls.bootstrapServer
-	} else {
+	default:
 		ls.publicServer = &http.Server{
 			Addr:              fmt.Sprintf(":%d", cfg.Listen.PublicPort),
 			Handler:           getHandler(cfg.Listen.PublicPort),
@@ -366,11 +368,12 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		}
 	}
 
-	if cfg.Listen.BootstrapPort == cfg.Listen.HTTPPort {
+	switch {
+	case cfg.Listen.BootstrapPort == cfg.Listen.HTTPPort:
 		ls.bootstrapServer = ls.server
-	} else if cfg.Listen.BootstrapPort == cfg.Listen.WSSPort {
+	case cfg.Listen.BootstrapPort == cfg.Listen.WSSPort:
 		ls.bootstrapServer = ls.wssServer
-	} else {
+	default:
 		ls.bootstrapServer = &http.Server{
 			Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
 			Handler:           getHandler(cfg.Listen.BootstrapPort),
@@ -380,13 +383,14 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		}
 	}
 
-	if cfg.Listen.PublicPort == cfg.Listen.HTTPPort {
+	switch {
+	case cfg.Listen.PublicPort == cfg.Listen.HTTPPort:
 		ls.publicServer = ls.server
-	} else if cfg.Listen.PublicPort == cfg.Listen.WSSPort {
+	case cfg.Listen.PublicPort == cfg.Listen.WSSPort:
 		ls.publicServer = ls.wssServer
-	} else if cfg.Listen.PublicPort == cfg.Listen.BootstrapPort {
+	case cfg.Listen.PublicPort == cfg.Listen.BootstrapPort:
 		ls.publicServer = ls.bootstrapServer
-	} else {
+	default:
 		ls.publicServer = &http.Server{
 			Addr:              fmt.Sprintf(":%d", cfg.Listen.PublicPort),
 			Handler:           getHandler(cfg.Listen.PublicPort),
