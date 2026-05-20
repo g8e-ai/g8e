@@ -45,7 +45,7 @@ func (f *fakeEnvelopeProcessor) ProcessEnvelope(ctx context.Context, payload []b
 	return f.receipt, f.err
 }
 
-func newGovernanceEnvelopeHandler(t *testing.T, proc EnvelopeProcessor) *HTTPHandler {
+func newGovernanceEnvelopeHandler(t *testing.T, proc governance.EnvelopeProcessor) *HTTPHandler {
 	t.Helper()
 	h, _ := setupTestHTTPHandler(t)
 	h.envProc = proc

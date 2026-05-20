@@ -1,10 +1,12 @@
 package pubsub
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -93,24 +96,46 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *uap.UA
 	return env
 }
 
-func TestPubSubCommandService_HandleShutdownRequest_UAP(t *testing.T) {
+func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
 	f := newPubsubFixture(t)
-	t.Run("successful UAP shutdown", func(t *testing.T) {
-		reason := "remote control"
-		req := &operatorv1.ShutdownRequested{Reason: reason}
+
+	t.Run("successful synchronous processing", func(t *testing.T) {
+		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-sync"}
 		payload, _ := proto.Marshal(req)
 
-		msg := PubSubCommandMessage{
-			ID:        "shutdown-1",
-			EventType: constants.Event.Operator.ShutdownRequested,
-			Payload:   payload,
+		env := &commonv1.GovernanceEnvelope{
+			Id:              "tx-sync",
+			TransactionHash: "hash-sync",
+			ProtocolVersion: "1.0",
+			Timestamp:       timestamppb.Now(),
+			ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+			ActionType:      string(constants.ActionTypeFsList),
+			TargetResource:  "localhost",
+			Payload:         payload,
+			StateMerkleRoot: "test-state-root",
+			Nonce:           "nonce-sync",
+			Governance: &commonv1.GovernanceMetadata{
+				L2: &commonv1.L2Metadata{
+					KeyId: "test-key",
+				},
+			},
 		}
-		f.Svc.handleShutdownRequest(msg)
-		select {
-		case r := <-f.Svc.ShutdownChan:
-			assert.Equal(t, reason, r)
-		case <-time.After(1 * time.Second):
-			t.Fatal("shutdown not received")
-		}
+
+		// Re-hash for verifier
+		env.TransactionHash, _ = uap.GenerateMessageID((*uap.UAPEnvelope)(env))
+		env.Id = env.TransactionHash
+
+		// Sign for verifier
+		l2Payload := fmt.Sprintf("%s|true", env.TransactionHash)
+		sig := ed25519.Sign(f.SignerPriv, []byte(l2Payload))
+		env.Governance.L2.TribunalSignature = hex.EncodeToString(sig)
+
+		uapBytes, _ := (protojson.MarshalOptions{}).Marshal(env)
+
+		receipt, err := f.Svc.ProcessEnvelope(context.Background(), uapBytes)
+		require.NoError(t, err)
+		require.NotNil(t, receipt)
+		require.Equal(t, env.Id, receipt.TransactionId)
+		require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, receipt.Status)
 	})
 }

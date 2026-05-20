@@ -46,6 +46,7 @@ type ListenService struct {
 	passkey         *PasskeyService
 	userSvc         *UserService
 	apiKeySvc       *ApiKeyService
+	mcpGateway      *mcp.GatewayService
 	server          *http.Server
 	wssServer       *http.Server
 	bootstrapServer *http.Server
@@ -112,23 +113,23 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	apiKeySvc := NewApiKeyService(db, logger)
 
 	ls := &ListenService{
-		cfg:       cfg,
-		logger:    logger,
-		db:        db,
-		pubsub:    pubsub,
-		auth:      auth,
-		pki:       pki,
-		reg:       reg,
-		passkey:   passkey,
-		userSvc:   userSvc,
-		apiKeySvc: apiKeySvc,
+		cfg:        cfg,
+		logger:     logger,
+		db:         db,
+		pubsub:     pubsub,
+		auth:       auth,
+		pki:        pki,
+		reg:        reg,
+		passkey:    passkey,
+		userSvc:    userSvc,
+		apiKeySvc:  apiKeySvc,
+		mcpGateway: mcp.NewGatewayService(logger, db),
 	}
 
-	mcpGateway := mcp.NewGatewayService(logger, db)
-	mcpGateway.SetA2ADependencies(cfg.Listen.A2ADownstreamURL)
+	ls.mcpGateway.SetA2ADependencies(cfg.Listen.A2ADownstreamURL)
 	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Listen.PublicPort)
-	mcpGateway.SetPublicBaseURL(publicBaseURL)
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, mcpGateway, ls.IsReady, ls.IsGovernanceReady)
+	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.mcpGateway, ls.IsReady, ls.IsGovernanceReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -183,23 +184,23 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 	apiKeySvc := NewApiKeyService(db, logger)
 
 	ls := &ListenService{
-		cfg:       cfg,
-		logger:    logger,
-		db:        db,
-		pubsub:    pubsub,
-		auth:      auth,
-		pki:       pki,
-		reg:       reg,
-		passkey:   passkey,
-		userSvc:   userSvc,
-		apiKeySvc: apiKeySvc,
+		cfg:        cfg,
+		logger:     logger,
+		db:         db,
+		pubsub:     pubsub,
+		auth:       auth,
+		pki:        pki,
+		reg:        reg,
+		passkey:    passkey,
+		userSvc:    userSvc,
+		apiKeySvc:  apiKeySvc,
+		mcpGateway: mcp.NewGatewayService(logger, db),
 	}
 
-	mcpGateway := mcp.NewGatewayService(logger, db)
-	mcpGateway.SetA2ADependencies(cfg.Listen.A2ADownstreamURL)
+	ls.mcpGateway.SetA2ADependencies(cfg.Listen.A2ADownstreamURL)
 	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Listen.PublicPort)
-	mcpGateway.SetPublicBaseURL(publicBaseURL)
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, mcpGateway, ls.IsReady, ls.IsGovernanceReady)
+	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.mcpGateway, ls.IsReady, ls.IsGovernanceReady)
 
 	tlsConfig := pki.TLSConfig()
 	tlsConfigPlain := pki.TLSConfigPlain()
@@ -361,6 +362,9 @@ func (ls *ListenService) Start(ctx context.Context) error {
 		"data_dir", ls.cfg.Listen.DataDir)
 
 	ls.logger.Info("Listen TLS servers starting", "http_port", ls.cfg.Listen.HTTPPort, "wss_port", ls.cfg.Listen.WSSPort, "bootstrap_port", ls.cfg.Listen.BootstrapPort)
+
+	// Start background maintenance for MCP gateway
+	go ls.mcpGateway.RunMaintenance(ctx)
 
 	errChan := make(chan error, 4)
 	readyChan := make(chan struct{}, 4)

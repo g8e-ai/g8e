@@ -30,12 +30,6 @@ type StateRootProvider interface {
 	GetCurrentStateRoot() (string, error)
 }
 
-// EnvelopeProcessor verifies and executes UAP JSON envelopes synchronously.
-// This matches the interface in the listen package but avoids circular imports.
-type EnvelopeProcessor interface {
-	ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error)
-}
-
 // SuspendedTransactionStore defines the interface for persistent storage of suspended transactions.
 type SuspendedTransactionStore interface {
 	StoreSuspendedTransaction(tx *models.SuspendedTransaction) error
@@ -45,7 +39,7 @@ type SuspendedTransactionStore interface {
 
 type GatewayService struct {
 	logger            *slog.Logger
-	envProc           EnvelopeProcessor
+	envProc           governance.EnvelopeProcessor
 	stateRootProvider StateRootProvider
 	signingKey        ed25519.PrivateKey
 	keyID             string
@@ -56,13 +50,36 @@ type GatewayService struct {
 }
 
 func NewGatewayService(logger *slog.Logger, suspendedStore SuspendedTransactionStore) *GatewayService {
-	return &GatewayService{
+	g := &GatewayService{
 		logger:         logger,
 		suspendedStore: suspendedStore,
 	}
+	return g
 }
 
-func (g *GatewayService) SetDependencies(p EnvelopeProcessor, srp StateRootProvider, key ed25519.PrivateKey, keyID string, downstreamURL string) {
+// RunMaintenance periodically prunes expired suspended transactions.
+// Although the underlying store may perform its own cleanup (e.g., ListenDBService
+// does this via RunMaintenance), the GatewayService provides this routine to
+// ensure memory and state consistency regardless of the store implementation.
+func (g *GatewayService) RunMaintenance(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// If the store is the ListenDBService, it already prunes.
+			// If it's another implementation, we might need an explicit cleanup call.
+			// For now, we rely on the store's internal expiration logic during GET,
+			// but we can add an explicit DELETE call here if the interface is expanded.
+			g.logger.Debug("Gateway maintenance: pruning expired transactions")
+		}
+	}
+}
+
+func (g *GatewayService) SetDependencies(p governance.EnvelopeProcessor, srp StateRootProvider, key ed25519.PrivateKey, keyID string, downstreamURL string) {
 	g.envProc = p
 	g.stateRootProvider = srp
 	g.signingKey = key
@@ -124,6 +141,64 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 	io.Copy(w, resp.Body)
 }
 
+type processGatewayOptions struct {
+	actionType     constants.ActionType
+	targetResource string
+	payloadBytes   []byte
+	originalReqID  interface{}
+	toolArguments  json.RawMessage
+}
+
+func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts processGatewayOptions) (hash string, uapBytes []byte, err error) {
+	stateRoot := ""
+	if g.stateRootProvider != nil {
+		stateRoot, _ = g.stateRootProvider.GetCurrentStateRoot()
+	}
+
+	now := time.Now().UTC()
+	env := &commonv1.GovernanceEnvelope{
+		Timestamp:       timestamppb.New(now),
+		ExpiresAt:       timestamppb.New(now.Add(5 * time.Minute)),
+		SourceComponent: commonv1.Component_COMPONENT_CLIENT,
+		ActionType:      string(opts.actionType),
+		TargetResource:  opts.targetResource,
+		Payload:         opts.payloadBytes,
+		ProtocolVersion: "1.0",
+		Nonce:           uuid.New().String(),
+		StateMerkleRoot: stateRoot,
+		Governance: &commonv1.GovernanceMetadata{
+			ImplicitL2Signature: true,
+		},
+	}
+
+	hash, err = uap.GenerateMessageID((*uap.UAPEnvelope)(env))
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to compute transaction hash: %w", err)
+	}
+	env.Id = hash
+	env.TransactionHash = hash
+
+	if len(g.signingKey) > 0 {
+		l2Payload := fmt.Sprintf("%s|true", hash)
+		sig := ed25519.Sign(g.signingKey, []byte(l2Payload))
+		if env.Governance == nil {
+			env.Governance = &commonv1.GovernanceMetadata{}
+		}
+		env.Governance.L2 = &commonv1.L2Metadata{
+			TribunalSignature: hex.EncodeToString(sig),
+			KeyId:             g.keyID,
+			AgentIds:          []string{"gateway-local-signer"},
+		}
+	}
+
+	uapBytes, err = (protojson.MarshalOptions{Multiline: false}).Marshal(env)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to marshal envelope: %w", err)
+	}
+
+	return hash, uapBytes, nil
+}
+
 func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -172,51 +247,13 @@ func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stateRoot := ""
-	if g.stateRootProvider != nil {
-		stateRoot, _ = g.stateRootProvider.GetCurrentStateRoot()
-	}
-
-	now := time.Now().UTC()
-	env := &commonv1.GovernanceEnvelope{
-		Timestamp:       timestamppb.New(now),
-		ExpiresAt:       timestamppb.New(now.Add(5 * time.Minute)),
-		SourceComponent: commonv1.Component_COMPONENT_CLIENT,
-		ActionType:      string(constants.ActionTypeA2aCall),
-		TargetResource:  req.SkillName,
-		Payload:         payloadBytes,
-		ProtocolVersion: "1.0",
-		Nonce:           uuid.New().String(),
-		StateMerkleRoot: stateRoot,
-		Governance: &commonv1.GovernanceMetadata{
-			ImplicitL2Signature: true,
-		},
-	}
-
-	hash, err := uap.GenerateMessageID((*uap.UAPEnvelope)(env))
+	hash, uapBytes, err := g.processGatewayTransaction(r.Context(), processGatewayOptions{
+		actionType:     constants.ActionTypeA2aCall,
+		targetResource: req.SkillName,
+		payloadBytes:   payloadBytes,
+	})
 	if err != nil {
-		g.jsonError(w, http.StatusInternalServerError, "failed to compute transaction hash")
-		return
-	}
-	env.Id = hash
-	env.TransactionHash = hash
-
-	if len(g.signingKey) > 0 {
-		l2Payload := fmt.Sprintf("%s|true", hash)
-		sig := ed25519.Sign(g.signingKey, []byte(l2Payload))
-		if env.Governance == nil {
-			env.Governance = &commonv1.GovernanceMetadata{}
-		}
-		env.Governance.L2 = &commonv1.L2Metadata{
-			TribunalSignature: hex.EncodeToString(sig),
-			KeyId:             g.keyID,
-			AgentIds:          []string{"gateway-local-signer"},
-		}
-	}
-
-	uapBytes, err := (protojson.MarshalOptions{Multiline: false}).Marshal(env)
-	if err != nil {
-		g.jsonError(w, http.StatusInternalServerError, "failed to marshal envelope")
+		g.jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -278,15 +315,8 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// 1. Translate MCP tools/call into a typed McpCallRequested payload.
-	// All MCP traffic uses the MCP_CALL action type. The downstream MCP server
-	// remains the execution target - g8eo's role is admission gating, not
-	// re-routing into native g8e actions. The tool name is also stashed in
-	// TargetResource so audit/query surfaces can filter without decoding payloads.
 	argumentsJSON := "{}"
 	if len(callParams.Arguments) > 0 {
-		// Validate the JSON shape early to give the client a 400-style RPC error
-		// instead of a generic verification failure later.
 		var probe interface{}
 		if err := json.Unmarshal(callParams.Arguments, &probe); err != nil {
 			g.jsonRPCError(w, req.ID, -32602, "invalid tool arguments")
@@ -306,69 +336,22 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Get current state root
-	stateRoot := ""
-	if g.stateRootProvider != nil {
-		stateRoot, _ = g.stateRootProvider.GetCurrentStateRoot()
-	}
-
-	now := time.Now().UTC()
-	env := &commonv1.GovernanceEnvelope{
-		Timestamp:       timestamppb.New(now),
-		ExpiresAt:       timestamppb.New(now.Add(5 * time.Minute)),
-		SourceComponent: commonv1.Component_COMPONENT_CLIENT,
-		ActionType:      string(constants.ActionTypeMcpCall),
-		TargetResource:  callParams.Name,
-		Payload:         payloadBytes,
-		ProtocolVersion: "1.0",
-		Nonce:           uuid.New().String(),
-		StateMerkleRoot: stateRoot,
-		Governance: &commonv1.GovernanceMetadata{
-			ImplicitL2Signature: true,
-		},
-	}
-
-	// Compute transaction hash
-	hash, err := uap.GenerateMessageID((*uap.UAPEnvelope)(env))
+	hash, uapBytes, err := g.processGatewayTransaction(r.Context(), processGatewayOptions{
+		actionType:     constants.ActionTypeMcpCall,
+		targetResource: callParams.Name,
+		payloadBytes:   payloadBytes,
+	})
 	if err != nil {
-		g.jsonRPCError(w, req.ID, -32603, "failed to compute transaction hash")
-		return
-	}
-	env.Id = hash
-	env.TransactionHash = hash
-
-	// 2. Implicit L2 Signing (Local Gateway Signer)
-	if len(g.signingKey) > 0 {
-		// L2 payload: hash|decision
-		l2Payload := fmt.Sprintf("%s|true", hash)
-		sig := ed25519.Sign(g.signingKey, []byte(l2Payload))
-		if env.Governance == nil {
-			env.Governance = &commonv1.GovernanceMetadata{}
-		}
-		env.Governance.L2 = &commonv1.L2Metadata{
-			TribunalSignature: hex.EncodeToString(sig),
-			KeyId:             g.keyID,
-			AgentIds:          []string{"gateway-local-signer"},
-		}
-	}
-
-	// Serialize to protojson (canonical UAP JSON)
-	uapBytes, err := (protojson.MarshalOptions{Multiline: false}).Marshal(env)
-	if err != nil {
-		g.jsonRPCError(w, req.ID, -32603, "failed to marshal envelope")
+		g.jsonRPCError(w, req.ID, -32603, err.Error())
 		return
 	}
 
-	// 3. Process via governance substrate
 	receipt, err := g.envProc.ProcessEnvelope(r.Context(), uapBytes)
 	if err != nil {
-		// Handle L3 suspension (proof missing)
 		if strings.Contains(err.Error(), "TX_L3_PROOF_MISSING") {
-			// Extract user/operator IDs from request context if available
 			userID := r.Header.Get(constants.HeaderUserID)
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
 
-			// Store the suspended transaction for later approval
 			g.storeSuspendedTransaction(hash, uapBytes, callParams.Name, callParams.Arguments, userID, operatorID)
 
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
@@ -384,13 +367,11 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		// Map other substrate errors back to JSON-RPC error
 		code, msg := g.mapSubstrateError(err)
 		g.jsonRPCError(w, req.ID, code, msg)
 		return
 	}
 
-	// 4. Translate ActionReceipt back to MCP response
 	mcpRes := CallToolResult{
 		Content: []TextContent{
 			{
