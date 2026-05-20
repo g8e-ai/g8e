@@ -27,14 +27,16 @@ The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In th
 In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the Governance Gateway (`g8eg` / `g8e.gateway` binary) in **Listen Mode** (`--listen`). In this mode, the Governance Gateway acts as the platform's central persistence and messaging backbone rather than an outbound execution agent.
 
 ### Architecture & Ports
-The Governance Gateway in Listen Mode exposes interfaces for public protocol communication from optional reference adapters (Dashboard and Engine) and BYO clients. While the binary defaults to port 443, the standard platform deployment maps these via the Four-Port Contract:
+The Governance Gateway in Listen Mode exposes four logical surfaces. Defaults are sourced from `protocol/constants/paths.json`. The TLS surfaces multiplex onto a single port when configured equal; Bootstrap must remain on its own port to be served as plain HTTP.
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **Bootstrap** | `80` (HTTP) | None | Download trust bundles, device-link enrollment, and CSR signing. |
-| **Public Port** | `443` (TLS) | Web session | Browser login, WebAuthn challenge, and PKI discovery. |
-| **mTLS API** | `443` | mTLS + URI SAN | Central `/api/governance/envelope` mutation endpoint and `/db` persistence. |
-| **Pub/Sub** | `443` (mTLS WSS) | mTLS + URI SAN | Real-time WebSocket event fan-out. |
+| **Bootstrap** | `8441` (plain HTTP) | None | Download trust bundles, device-link enrollment, and CSR signing. |
+| **Public Port** | `8440` (TLS) | Web session | Browser login, WebAuthn challenge, and PKI discovery. |
+| **mTLS API** | `8440` | mTLS + URI SAN | Central `/api/governance/envelope` mutation endpoint and `/db` persistence. |
+| **Pub/Sub** | `8440` (mTLS WSS) | mTLS + URI SAN | Real-time WebSocket event fan-out. |
+
+When the mTLS, Public, and Pub/Sub surfaces share a port, the gateway serves them through a single `MasterRouter` with `tls.VerifyClientCertIfGiven`; per-route handlers enforce mTLS and URI SAN on substrate routes. To deploy on privileged ports (for example, `443` and `80`), grant the gateway binary `CAP_NET_BIND_SERVICE` or use an external port redirect; the unprivileged defaults above require no out-of-band setup. See `docs/g8eg.md` for the full multiplex contract.
 
 ### Core Responsibilities
 - **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file in `.g8e/data`.

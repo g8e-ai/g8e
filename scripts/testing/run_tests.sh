@@ -408,6 +408,11 @@ run_chaos() {
     # Ensure binary is built or run directly with go run
     # 'go run' is simpler for a one-off tool
     go run ./cmd/chaos_tester --data-dir="$PROJECT_ROOT/.g8e/data" --pki-dir="$PROJECT_ROOT/.g8e/pki" "${EXTRA_ARGS[@]}"
+    
+    # Run the actual audit summary command after chaos test completes
+    log_header "Running Audit Summary"
+    cd "$PROJECT_ROOT"
+    "$PROJECT_ROOT/g8e" data audit --db-path "$PROJECT_ROOT/.g8e/data/g8e.db" summary
 }
 
 run_ci() {

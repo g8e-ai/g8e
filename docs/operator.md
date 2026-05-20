@@ -143,10 +143,10 @@ The Warden's Ed25519 signing key lives in `.g8e/secrets/warden_signing_key`; its
 | `-D`, `--device-token` | Device-link token for automated registration and CSR signing. |
 | `-e`, `--endpoint` | Hub endpoint address. |
 | `--listen` | Start in Hub mode. |
-| `--wss-listen-port` | Pub/Sub port (default 443). |
-| `--http-listen-port` | mTLS API port (default 443). |
-| `--bootstrap-listen-port` | Device-link enrollment port (default 80). |
-| `--public-listen-port` | Browser/BYO public port (default 443). |
+| `--wss-listen-port` | Pub/Sub port (default `8440`; multiplexes onto the mTLS API listener when equal to `--http-listen-port`). |
+| `--http-listen-port` | mTLS API port (default `8440`). |
+| `--bootstrap-listen-port` | Device-link enrollment port (default `8441`, plain HTTP; must not share a port with any TLS surface). |
+| `--public-listen-port` | Browser/BYO public port (default `8440`; multiplexes onto the mTLS API listener when equal, using `VerifyClientCertIfGiven`). |
 | `--data-dir` | Persistence directory (default `.g8e/data`). |
 | `--pki-dir` | PKI hierarchy directory (default `.g8e/pki`). |
 | `--secrets-dir` | Platform secrets directory (default `.g8e/secrets`). |

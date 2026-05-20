@@ -412,6 +412,27 @@ var auditVaultMigrations = []sqliteutil.Migration{
 		CREATE INDEX IF NOT EXISTS idx_receipts_timestamp ON receipts(timestamp);
 		`,
 	},
+	{
+		Version:     3,
+		Description: "Add chaos_events table for chaos testing isolation",
+		SQL: `
+		CREATE TABLE IF NOT EXISTS chaos_events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			operator_session_id TEXT,
+			timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
+			chaos_id INTEGER NOT NULL,
+			category TEXT NOT NULL,
+			outcome TEXT NOT NULL,
+			content_text TEXT,
+			command_raw TEXT,
+			transaction_hash TEXT,
+			FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_chaos_events_session_id ON chaos_events(operator_session_id);
+		CREATE INDEX IF NOT EXISTS idx_chaos_events_timestamp ON chaos_events(timestamp);
+		CREATE INDEX IF NOT EXISTS idx_chaos_events_category ON chaos_events(category);
+		`,
+	},
 }
 
 // CreateSession creates a new session in the audit log
@@ -569,6 +590,107 @@ func (avs *AuditVaultService) RecordEvents(events []*Event) error {
 	}
 
 	avs.logger.Info("Batch of events recorded", "count", len(events))
+	return nil
+}
+
+// ChaosEvent represents a chaos test event
+type ChaosEvent struct {
+	ID                int64
+	OperatorSessionID string
+	Timestamp         time.Time
+	ChaosID           int
+	Category          string
+	Outcome           string
+	ContentText       string
+	CommandRaw        string
+	TransactionHash   string
+}
+
+// RecordChaosEvent records a chaos test event in the chaos_events table
+func (avs *AuditVaultService) RecordChaosEvent(event *ChaosEvent) (int64, error) {
+	if avs == nil || avs.db == nil {
+		return 0, nil
+	}
+
+	query := `
+	INSERT INTO chaos_events (
+		operator_session_id, timestamp, chaos_id, category, outcome,
+		content_text, command_raw, transaction_hash
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	result, err := avs.db.Exec(query,
+		event.OperatorSessionID,
+		sqliteutil.FormatTimestamp(event.Timestamp),
+		event.ChaosID,
+		event.Category,
+		event.Outcome,
+		event.ContentText,
+		event.CommandRaw,
+		event.TransactionHash,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to record chaos event: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get chaos event id: %w", err)
+	}
+
+	return id, nil
+}
+
+// RecordChaosEvents records multiple chaos events in a single database transaction
+func (avs *AuditVaultService) RecordChaosEvents(events []*ChaosEvent) error {
+	if avs == nil || avs.db == nil {
+		return nil
+	}
+
+	if len(events) == 0 {
+		return nil
+	}
+
+	tx, err := avs.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+
+	query := `
+	INSERT INTO chaos_events (
+		operator_session_id, timestamp, chaos_id, category, outcome,
+		content_text, command_raw, transaction_hash
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, event := range events {
+		_, err := stmt.Exec(
+			event.OperatorSessionID,
+			sqliteutil.FormatTimestamp(event.Timestamp),
+			event.ChaosID,
+			event.Category,
+			event.Outcome,
+			event.ContentText,
+			event.CommandRaw,
+			event.TransactionHash,
+		)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to record chaos event: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return nil
 }
 

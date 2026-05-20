@@ -109,11 +109,13 @@ Available flags: `-p` (provider), `-m` (primary model), `-a` (assistant model), 
 
 ## Infrastructure Ports
 
-When debugging connectivity:
+When debugging connectivity (defaults from `protocol/constants/paths.json`):
 
-- `443` - Gateway mTLS API / Pub/Sub / Public
-- `80` - Gateway Bootstrap (HTTP)
+- `8440` - Gateway mTLS API / Pub/Sub / Public (multiplexed onto a single TLS listener)
+- `8441` - Gateway Bootstrap (plain HTTP; isolated from TLS surfaces)
 - `8443` - g8ee Adapter (HTTPS)
+
+All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the gateway binary or front it with an external port redirect.
 
 ---
 

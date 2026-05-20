@@ -69,7 +69,8 @@ case "$SUB" in
                     echo "  1. Stop all running g8e services (Operator and any optional apps)."
                     echo "  2. Completely delete the entire runtime directory ($G8E_RUNTIME_DIR)."
                     echo "  3. Delete all SQLite databases, bootstrap secrets, logs, AND TLS/PKI certificates/keys."
-                    echo "  4. All trust routes and credentials will be permanently destroyed."
+                    echo "  4. Clean Python caches (__pycache__, .pyc, .pyo)."
+                    echo "  5. All trust routes and credentials will be permanently destroyed."
                     echo ""
                     read -p "Are you sure you want to continue? (y/n): " confirm
                     if [[ ! "$confirm" =~ ^[Yy]([Ee][Ss])?$ ]]; then
