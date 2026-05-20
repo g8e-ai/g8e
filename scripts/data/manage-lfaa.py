@@ -674,8 +674,8 @@ class LFAAManager:
         """).fetchall()
         if rows:
             for r in rows:
-                session_id = r['operator_session_id']
-                print(f'  {session_id:<20}    {r["count"]:>3}')
+                op_session_id = r['operator_session_id']
+                print(f'  {op_session_id:<20}    {r["count"]:>3}')
         else:
             print(f'  {DIM}No operator sessions found.{RESET}')
         print()
