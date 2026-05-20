@@ -156,10 +156,8 @@ def fake_pki(tmp_path: Path) -> dict[str, Path]:
 
 def _baseline_env(fake_pki: dict[str, Path]) -> dict[str, str]:
     return {
-        **os.environ,
-        "OPERATOR_SESSION_ID": "sess-parity-001",
-        "CLI_SESSION_ID": "cli-parity-001",
-        "USER_ID": "user-parity-001",
+        "HOME": os.environ.get("HOME", "/home/bob"),
+        "PATH": os.environ.get("PATH", ""),
         "G8E_OPERATOR_SESSION_ID": "sess-parity-001",
         "G8E_CLI_SESSION_ID": "cli-parity-001",
         "G8E_USER_ID": "user-parity-001",
@@ -167,7 +165,7 @@ def _baseline_env(fake_pki: dict[str, Path]) -> dict[str, str]:
         "G8E_CLI_KEY": str(fake_pki["key"]),
         "G8E_TRUST_BUNDLE": str(fake_pki["bundle"]),
         "G8E_PKI_DIR": str(fake_pki["pki"]),
-        "G8EE_URL": f"https://localhost:{PathConstants.PORT_G8EE_HTTP}",
+        "G8E_G8EE_URL": f"https://localhost:{PathConstants.PORT_G8EE_HTTP}",
         "G8E_INTERNAL_HTTP_URL": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
         # Make sure no stray optional headers leak in from the dev env.
         "G8E_CASE_ID": "",
@@ -212,7 +210,7 @@ def test_auth_wiring_matches_shell_helpers(fake_pki):
 
     # Cookie parity
     assert shell["cookies"] == py["cookies"]
-    assert py["cookies"].get(SESSION_COOKIE_NAME) == env["OPERATOR_SESSION_ID"]
+    assert py["cookies"].get(SESSION_COOKIE_NAME) == env["G8E_OPERATOR_SESSION_ID"]
 
     # Header parity - the canary. Any new required header added to
     # _append_g8e_auth_headers but not AuthContext.auth_headers
@@ -227,20 +225,20 @@ def test_auth_wiring_matches_shell_helpers(fake_pki):
     # Sanity: the canonical fields we promise downstream are actually set.
     h = py["headers"]
     assert h["Content-Type"] == "application/json"
-    assert h["Authorization"] == f"Bearer {env['OPERATOR_SESSION_ID']}"
-    assert h["X-G8E-CLI-Session-ID"] == env["CLI_SESSION_ID"]
+    assert h["Authorization"] == f"Bearer {env['G8E_OPERATOR_SESSION_ID']}"
+    assert h["X-G8E-CLI-Session-ID"] == env["G8E_CLI_SESSION_ID"]
 
     # Invert the conflation check: business context headers must NOT leak
     # into the minimal auth header set; that context is body-embedded instead.
     assert "X-G8E-Source-Component" not in h
     assert "X-G8E-User-ID" not in h
-    assert h["Authorization"] == f"Bearer {env['OPERATOR_SESSION_ID']}"
+    assert h["Authorization"] == f"Bearer {env['G8E_OPERATOR_SESSION_ID']}"
 
 
 def test_configurable_contexts_match_when_set(fake_pki):
     env = _baseline_env(fake_pki)
     env.update({
-        "WEB_SESSION_ID": "web-parity-001",
+        "G8E_WEB_SESSION_ID": "web-parity-001",
         "G8E_SOURCE_COMPONENT": "g8ee",
     })
     
@@ -262,3 +260,18 @@ def test_configurable_contexts_match_when_set(fake_pki):
     rc = ctx.to_request_context()
     assert rc.web_session_id == "web-parity-001"
     assert rc.source_component == ComponentName.G8EE
+
+
+def test_invalid_source_component_raises_error(fake_pki):
+    env = _baseline_env(fake_pki)
+    env["G8E_SOURCE_COMPONENT"] = "invalid-component-name"
+
+    saved = dict(os.environ)
+    try:
+        os.environ.clear()
+        os.environ.update(env)
+        with pytest.raises(ValueError, match="Invalid G8E_SOURCE_COMPONENT='invalid-component-name'"):
+            AuthContext.from_env()
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)

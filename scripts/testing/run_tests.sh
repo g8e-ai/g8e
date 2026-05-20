@@ -245,16 +245,8 @@ if [[ -z "$COMPONENT" ]]; then
 fi
 
 _prompt_llm_config() {
-    # Check for G8E_ prefixed vars and populate standard ones if found
-    if [[ -n "${G8E_TEST_LLM_PROVIDER:-}" ]]; then
-        export TEST_LLM_PROVIDER="$G8E_TEST_LLM_PROVIDER"
-    fi
-    if [[ -n "${G8E_TEST_LLM_API_KEY:-}" ]]; then
-        export TEST_LLM_API_KEY="$G8E_TEST_LLM_API_KEY"
-    fi
-
     # Skip if already provided via env/flags OR if not interactive
-    [[ -n "${TEST_LLM_PROVIDER:-}" ]] && return
+    [[ -n "${G8E_TEST_LLM_PROVIDER:-}" ]] && return
     
     echo ""
     log_warn "LLM credentials not set. AI integration tests will be skipped."
@@ -263,9 +255,9 @@ _prompt_llm_config() {
 }
 
 _show_llm_config() {
-    if [[ -n "${TEST_LLM_PROVIDER:-}" ]]; then
-        local provider="${TEST_LLM_PROVIDER}"
-        local primary_model="${TEST_LLM_PRIMARY_MODEL:-}"
+    if [[ -n "${G8E_TEST_LLM_PROVIDER:-}" ]]; then
+        local provider="${G8E_TEST_LLM_PROVIDER}"
+        local primary_model="${G8E_TEST_LLM_PRIMARY_MODEL:-}"
         
         # Determine default model if not set
         if [[ -z "$primary_model" ]]; then
@@ -281,13 +273,13 @@ _show_llm_config() {
         echo ""
         echo -e "${CYAN}  LLM Configuration${NC}"
         echo -e "  Primary Provider:   ${provider}"
-        [[ -n "${TEST_LLM_ASSISTANT_PROVIDER:-}" ]] && echo -e "  Assistant Provider: ${TEST_LLM_ASSISTANT_PROVIDER}"
-        [[ -n "${TEST_LLM_LITE_PROVIDER:-}" ]]      && echo -e "  Lite Provider:      ${TEST_LLM_LITE_PROVIDER}"
+        [[ -n "${G8E_TEST_LLM_ASSISTANT_PROVIDER:-}" ]] && echo -e "  Assistant Provider: ${G8E_TEST_LLM_ASSISTANT_PROVIDER}"
+        [[ -n "${G8E_TEST_LLM_LITE_PROVIDER:-}" ]]      && echo -e "  Lite Provider:      ${G8E_TEST_LLM_LITE_PROVIDER}"
         echo -e "  Primary Model:      ${primary_model}"
-        [[ -n "${TEST_LLM_ASSISTANT_MODEL:-}" ]]     && echo -e "  Assistant Model:    ${TEST_LLM_ASSISTANT_MODEL}"
-        [[ -n "${TEST_LLM_LITE_MODEL:-}" ]]          && echo -e "  Lite Model:         ${TEST_LLM_LITE_MODEL}"
-        [[ -n "${TEST_LLM_ENDPOINT_URL:-}" ]]        && echo -e "  Primary Endpoint:   ${TEST_LLM_ENDPOINT_URL}"
-        [[ -n "${TEST_LLM_API_KEY:-}" ]]             && echo -e "  Primary API Key:    (set)"
+        [[ -n "${G8E_TEST_LLM_ASSISTANT_MODEL:-}" ]]     && echo -e "  Assistant Model:    ${G8E_TEST_LLM_ASSISTANT_MODEL}"
+        [[ -n "${G8E_TEST_LLM_LITE_MODEL:-}" ]]          && echo -e "  Lite Model:         ${G8E_TEST_LLM_LITE_MODEL}"
+        [[ -n "${G8E_TEST_LLM_ENDPOINT_URL:-}" ]]        && echo -e "  Primary Endpoint:   ${G8E_TEST_LLM_ENDPOINT_URL}"
+        [[ -n "${G8E_TEST_LLM_API_KEY:-}" ]]             && echo -e "  Primary API Key:    (set)"
         echo ""
     else
         echo ""
@@ -297,11 +289,11 @@ _show_llm_config() {
 }
 
 _show_web_search_config() {
-    if [[ -n "${TEST_WEB_SEARCH_PROJECT_ID:-}" ]] && [[ -n "${TEST_WEB_SEARCH_ENGINE_ID:-}" ]] && [[ -n "${TEST_WEB_SEARCH_API_KEY:-}" ]]; then
+    if [[ -n "${G8E_TEST_WEB_SEARCH_PROJECT_ID:-}" ]] && [[ -n "${G8E_TEST_WEB_SEARCH_ENGINE_ID:-}" ]] && [[ -n "${G8E_TEST_WEB_SEARCH_API_KEY:-}" ]]; then
         echo ""
         echo -e "${CYAN}  Web Search Configuration${NC}"
-        echo -e "  Project ID:      ${TEST_WEB_SEARCH_PROJECT_ID}"
-        echo -e "  Engine ID:       ${TEST_WEB_SEARCH_ENGINE_ID}"
+        echo -e "  Project ID:      ${G8E_TEST_WEB_SEARCH_PROJECT_ID}"
+        echo -e "  Engine ID:       ${G8E_TEST_WEB_SEARCH_ENGINE_ID}"
         echo -e "  API Key:         (set)"
         echo ""
     else

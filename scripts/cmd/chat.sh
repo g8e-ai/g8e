@@ -64,7 +64,7 @@ case "$SUB" in
     -h|--help|help) _chat_help; exit 0 ;;
 esac
 
-_ensure_authenticated
+_require_authenticated
 
 if [[ -z "${G8E_CLI_SESSION_ID:-}" ]]; then
     echo "[g8e] CLI_SESSION_ID is missing from credentials - re-run: ./g8e login" >&2
@@ -337,7 +337,7 @@ print(json.dumps(out))" \
             "${LLM_ASSISTANT_PROVIDER:-}" "${LLM_ASSISTANT_MODEL:-}" \
             "${LLM_LITE_PROVIDER:-}" "${LLM_LITE_MODEL:-}" \
             "${LLM_PRIMARY_API_KEY:-}" "${LLM_PRIMARY_ENDPOINT:-}" \
-            "${G8E_TEST_LLM_API_KEY:-${TEST_LLM_API_KEY:-}}" "${LLM_ASSISTANT_ENDPOINT:-}" \
+            "${G8E_TEST_LLM_API_KEY:-}" "${LLM_ASSISTANT_ENDPOINT:-}" \
             "${LLM_LITE_API_KEY:-}" "${LLM_LITE_ENDPOINT:-}")
 
         if [[ "$NEW_CASE" == "true" ]]; then

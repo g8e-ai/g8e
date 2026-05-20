@@ -61,7 +61,7 @@ Evaluates AI agent reasoning and tool-calling accuracy using signed `ActionRecei
 ./g8e platform start
 
 # 2. Authenticate (required for mTLS tests)
-./g8e login --email user@example.com
+./g8e login
 
 # 3. Run substrate tests
 ./g8e test

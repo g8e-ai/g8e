@@ -107,11 +107,11 @@ class AuthContext:
         Raises :class:`RuntimeError` if a required value is missing or if
         the mTLS client certificate files do not exist on disk.
         """
-        sid = (operator_session_id or os.environ.get("G8E_OPERATOR_SESSION_ID") or os.environ.get("OPERATOR_SESSION_ID") or "").strip()
-        cli_sid = (os.environ.get("G8E_CLI_SESSION_ID") or os.environ.get("CLI_SESSION_ID") or "").strip()
-        web_sid = (os.environ.get("G8E_WEB_SESSION_ID") or os.environ.get("WEB_SESSION_ID") or "").strip()
-        uid = (os.environ.get("G8E_USER_ID") or os.environ.get("USER_ID") or "").strip()
-        oid = (os.environ.get("G8E_ORGANIZATION_ID") or os.environ.get("ORGANIZATION_ID") or "").strip()
+        sid = (operator_session_id or os.environ.get("G8E_OPERATOR_SESSION_ID") or "").strip()
+        cli_sid = (os.environ.get("G8E_CLI_SESSION_ID") or "").strip()
+        web_sid = (os.environ.get("G8E_WEB_SESSION_ID") or "").strip()
+        uid = (os.environ.get("G8E_USER_ID") or "").strip()
+        oid = (os.environ.get("G8E_ORGANIZATION_ID") or "").strip()
         fingerprint = (os.environ.get("G8E_SYSTEM_FINGERPRINT") or "").strip()
         
         source = ComponentName.CLIENT
@@ -120,10 +120,10 @@ class AuthContext:
             try:
                 source = ComponentName(raw_source)
             except ValueError:
-                # Fallback to CLIENT if invalid, or I could raise error.
-                # Given 'rip and replace' and 'no tech debt', maybe raise error?
-                # But evals might want to be robust.
-                pass
+                raise ValueError(
+                    f"Invalid G8E_SOURCE_COMPONENT='{raw_source}'. "
+                    f"Must be one of: {[c.value for c in ComponentName]}"
+                ) from None
 
         missing: list[str] = []
         if not sid:
@@ -135,8 +135,9 @@ class AuthContext:
         if missing:
             raise AuthenticationError(
                 "evals transport requires an authenticated session. "
-                "Run `./g8e login` (or start the platform so superadmin is "
-                "bootstrapped), then re-run. Missing: " + ", ".join(missing)
+                "Run `./g8e login` (or start the platform so the bootstrap "
+                "superuser is auto-provisioned), then re-run. Missing: "
+                + ", ".join(missing)
             )
 
         client_cert = os.environ.get("G8E_CLI_CERT") or ""
@@ -149,7 +150,7 @@ class AuthContext:
 
         trust_bundle = resolve_trust_bundle()
 
-        g8ee_url = (os.environ.get("G8EE_URL") or f"https://localhost:{PathConstants.PORT_G8EE_HTTP}").rstrip("/")
+        g8ee_url = (os.environ.get("G8E_G8EE_URL") or f"https://localhost:{PathConstants.PORT_G8EE_HTTP}").rstrip("/")
         op_url = (
             operator_url
             or os.environ.get("G8E_INTERNAL_HTTP_URL")

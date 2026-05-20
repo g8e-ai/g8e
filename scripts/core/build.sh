@@ -573,7 +573,7 @@ _print_platform_info() {
         echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "  Provisioning & Login"
         echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "  Login:                  ./g8e login --email superadmin@g8e.local"
+        echo "  Login:                  ./g8e login"
         echo "  New Device Link:        ./g8e data device-links create --email superadmin@g8e.local"
     else
         echo "  Optional apps:          not running (use ./g8e apps start to enable)"

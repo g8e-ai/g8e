@@ -137,9 +137,9 @@ def get_auth_token() -> str:
     """Return the operator session token from env (set by `g8e login`).
 
     The wrapper gates `g8e data` on a valid operator session before invoking
-    this script, so OPERATOR_SESSION_ID is expected to be present.
+    this script, so G8E_OPERATOR_SESSION_ID is expected to be present.
     """
-    return os.environ.get('OPERATOR_SESSION_ID', '')
+    return os.environ.get('G8E_OPERATOR_SESSION_ID', '')
 
 
 def get_auditor_hmac_key() -> str:
@@ -156,7 +156,7 @@ def get_auditor_hmac_key() -> str:
                 return key
     except OSError:
         pass
-    return os.environ.get('AUDITOR_HMAC_KEY', '')
+    return os.environ.get('G8E_AUDITOR_HMAC_KEY', '')
 
 
 # =============================================================================

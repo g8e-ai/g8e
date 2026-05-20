@@ -37,18 +37,30 @@ import (
 func TestBootstrapFlow(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 
-	// Generate a real CSR for the test
+	// Generate real CSRs for the test
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	csrTemplate := x509.CertificateRequest{
 		Subject: pkix.Name{
-			CommonName:   "g8e-cli-test",
+			CommonName:   "g8e-operator-test",
 			Organization: []string{"g8e"},
 		},
 	}
 	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &csrTemplate, priv)
 	require.NoError(t, err)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrBytes})
+
+	cliPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	cliCsrTemplate := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:   "g8e-cli-test",
+			Organization: []string{"g8e"},
+		},
+	}
+	cliCsrBytes, err := x509.CreateCertificateRequest(rand.Reader, &cliCsrTemplate, cliPriv)
+	require.NoError(t, err)
+	cliCsrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCsrBytes})
 
 	// 1. Initial status - not bootstrapped
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
@@ -64,6 +76,7 @@ func TestBootstrapFlow(t *testing.T) {
 		"email":              "superadmin@g8e.local",
 		"name":               "Superadmin",
 		"csr_pem":            string(csrPEM),
+		"cli_csr_pem":        string(cliCsrPEM),
 		"system_fingerprint": "test-fingerprint",
 	}
 	body, _ := json.Marshal(bootstrapBody)

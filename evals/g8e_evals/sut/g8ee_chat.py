@@ -144,22 +144,13 @@ class G8eeChatSUT:
             self.model_provider = config.primary.model or "g8ee:server-default"
 
     async def check_settings(self) -> G8eeUserSettings | None:
-        """Fetch current user settings from g8ee for pre-flight validation."""
-        async with self._client() as client:
-            try:
-                request = SettingsGetRequest(
-                    context=self.env.to_request_context()
-                )
-                resp = await client.post(
-                    f"{self.env.g8ee_url}/api/internal/settings/user/get",
-                    headers=self._g8ee_headers(),
-                    content=request.model_dump_json(),
-                )
-                resp.raise_for_status()
-                return G8eeUserSettings.model_validate(resp.json())
-            except Exception as e:
-                logger.warning("Failed to fetch settings from g8ee: %s", e)
-                return None
+        """Fetch current user settings from g8ee for pre-flight validation.
+
+        Note: This method is disabled because g8ee cannot validate operator sessions
+        directly - sessions are stored in the Operator's SQLite database, not in
+        g8ee's cache. The actual chat endpoint will validate the session when called.
+        """
+        return None
 
     # ---- HTTP client construction --------------------------------------
 
@@ -196,11 +187,17 @@ class G8eeChatSUT:
                 )
 
             if resp.status_code != 200:
+                reason = f"g8ee chat returned HTTP {resp.status_code}: {resp.text[:400]}"
+                if resp.status_code == 401:
+                    reason = (
+                        "g8ee chat returned HTTP 401 Unauthorized. Your session may have expired. "
+                        "Run `./g8e login` to re-authenticate."
+                    )
                 return Response(
                     answer="",
                     model=self.model_provider,
                     binding=BindingType.UNBOUND,
-                    unbound_reason=f"g8ee chat returned HTTP {resp.status_code}: {resp.text[:400]}",
+                    unbound_reason=reason,
                 )
 
             try:
@@ -235,6 +232,16 @@ class G8eeChatSUT:
         # g8ee investigation_id. Scan the agent trail for a substrate tx_id
         # before claiming RECEIPT_BOUND.
         substrate_tx_id = _extract_substrate_transaction_id(trail)
+
+        if self.config.mode == "baseline":
+            return Response(
+                answer=answer_text,
+                model=self.model_provider,
+                transaction_id=None,
+                receipt=receipt,
+                binding=BindingType.UNBOUND,
+                unbound_reason="baseline mode (binding disabled)",
+            )
 
         if terminal_event in _FAILURE_TERMINAL_EVENTS:
             return Response(
