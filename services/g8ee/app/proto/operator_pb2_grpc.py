@@ -5,7 +5,7 @@ import warnings
 
 from . import operator_pb2 as operator__pb2
 
-GRPC_GENERATED_VERSION = '1.80.0'
+GRPC_GENERATED_VERSION = "1.80.0"
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -17,15 +17,15 @@ except ImportError:
 
 if _version_not_supported:
     raise RuntimeError(
-        f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in operator_pb2_grpc.py depends on'
-        + f' grpcio>={GRPC_GENERATED_VERSION}.'
-        + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
-        + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
+        f"The grpc package installed is at version {GRPC_VERSION},"
+         " but the generated code in operator_pb2_grpc.py depends on"
+         f" grpcio>={GRPC_GENERATED_VERSION}."
+         f" Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}"
+         f" or downgrade your generated code using grpcio-tools<={GRPC_VERSION}."
     )
 
 
-class OperatorServiceStub(object):
+class OperatorServiceStub:
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -35,107 +35,107 @@ class OperatorServiceStub(object):
             channel: A grpc.Channel.
         """
         self.ExecuteCommand = channel.unary_unary(
-                '/g8e.operator.v1.OperatorService/ExecuteCommand',
+                "/g8e.operator.v1.OperatorService/ExecuteCommand",
                 request_serializer=operator__pb2.CommandRequested.SerializeToString,
                 response_deserializer=operator__pb2.CommandResult.FromString,
                 _registered_method=True)
         self.CancelCommand = channel.unary_unary(
-                '/g8e.operator.v1.OperatorService/CancelCommand',
+                "/g8e.operator.v1.OperatorService/CancelCommand",
                 request_serializer=operator__pb2.CommandCancelRequested.SerializeToString,
                 response_deserializer=operator__pb2.CommandResult.FromString,
                 _registered_method=True)
         self.EditFile = channel.unary_unary(
-                '/g8e.operator.v1.OperatorService/EditFile',
+                "/g8e.operator.v1.OperatorService/EditFile",
                 request_serializer=operator__pb2.FileEditRequested.SerializeToString,
                 response_deserializer=operator__pb2.CommandResult.FromString,
                 _registered_method=True)
         self.ListFileSystem = channel.unary_unary(
-                '/g8e.operator.v1.OperatorService/ListFileSystem',
+                "/g8e.operator.v1.OperatorService/ListFileSystem",
                 request_serializer=operator__pb2.FsListRequested.SerializeToString,
                 response_deserializer=operator__pb2.CommandResult.FromString,
                 _registered_method=True)
         self.ReadFileSystem = channel.unary_unary(
-                '/g8e.operator.v1.OperatorService/ReadFileSystem',
+                "/g8e.operator.v1.OperatorService/ReadFileSystem",
                 request_serializer=operator__pb2.FsReadRequested.SerializeToString,
                 response_deserializer=operator__pb2.CommandResult.FromString,
                 _registered_method=True)
 
 
-class OperatorServiceServicer(object):
+class OperatorServiceServicer:
     """Missing associated documentation comment in .proto file."""
 
     def ExecuteCommand(self, request, context):
         """Execute a shell command
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def CancelCommand(self, request, context):
         """Cancel a running command
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def EditFile(self, request, context):
         """Edit a file
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def ListFileSystem(self, request, context):
         """List directory contents
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def ReadFileSystem(self, request, context):
         """Read file contents
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
 
 def add_OperatorServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'ExecuteCommand': grpc.unary_unary_rpc_method_handler(
+            "ExecuteCommand": grpc.unary_unary_rpc_method_handler(
                     servicer.ExecuteCommand,
                     request_deserializer=operator__pb2.CommandRequested.FromString,
                     response_serializer=operator__pb2.CommandResult.SerializeToString,
             ),
-            'CancelCommand': grpc.unary_unary_rpc_method_handler(
+            "CancelCommand": grpc.unary_unary_rpc_method_handler(
                     servicer.CancelCommand,
                     request_deserializer=operator__pb2.CommandCancelRequested.FromString,
                     response_serializer=operator__pb2.CommandResult.SerializeToString,
             ),
-            'EditFile': grpc.unary_unary_rpc_method_handler(
+            "EditFile": grpc.unary_unary_rpc_method_handler(
                     servicer.EditFile,
                     request_deserializer=operator__pb2.FileEditRequested.FromString,
                     response_serializer=operator__pb2.CommandResult.SerializeToString,
             ),
-            'ListFileSystem': grpc.unary_unary_rpc_method_handler(
+            "ListFileSystem": grpc.unary_unary_rpc_method_handler(
                     servicer.ListFileSystem,
                     request_deserializer=operator__pb2.FsListRequested.FromString,
                     response_serializer=operator__pb2.CommandResult.SerializeToString,
             ),
-            'ReadFileSystem': grpc.unary_unary_rpc_method_handler(
+            "ReadFileSystem": grpc.unary_unary_rpc_method_handler(
                     servicer.ReadFileSystem,
                     request_deserializer=operator__pb2.FsReadRequested.FromString,
                     response_serializer=operator__pb2.CommandResult.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'g8e.operator.v1.OperatorService', rpc_method_handlers)
+            "g8e.operator.v1.OperatorService", rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('g8e.operator.v1.OperatorService', rpc_method_handlers)
+    server.add_registered_method_handlers("g8e.operator.v1.OperatorService", rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class OperatorService(object):
+class OperatorService:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -152,7 +152,7 @@ class OperatorService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/g8e.operator.v1.OperatorService/ExecuteCommand',
+            "/g8e.operator.v1.OperatorService/ExecuteCommand",
             operator__pb2.CommandRequested.SerializeToString,
             operator__pb2.CommandResult.FromString,
             options,
@@ -179,7 +179,7 @@ class OperatorService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/g8e.operator.v1.OperatorService/CancelCommand',
+            "/g8e.operator.v1.OperatorService/CancelCommand",
             operator__pb2.CommandCancelRequested.SerializeToString,
             operator__pb2.CommandResult.FromString,
             options,
@@ -206,7 +206,7 @@ class OperatorService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/g8e.operator.v1.OperatorService/EditFile',
+            "/g8e.operator.v1.OperatorService/EditFile",
             operator__pb2.FileEditRequested.SerializeToString,
             operator__pb2.CommandResult.FromString,
             options,
@@ -233,7 +233,7 @@ class OperatorService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/g8e.operator.v1.OperatorService/ListFileSystem',
+            "/g8e.operator.v1.OperatorService/ListFileSystem",
             operator__pb2.FsListRequested.SerializeToString,
             operator__pb2.CommandResult.FromString,
             options,
@@ -260,7 +260,7 @@ class OperatorService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/g8e.operator.v1.OperatorService/ReadFileSystem',
+            "/g8e.operator.v1.OperatorService/ReadFileSystem",
             operator__pb2.FsReadRequested.SerializeToString,
             operator__pb2.CommandResult.FromString,
             options,

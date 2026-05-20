@@ -43,9 +43,9 @@ class OperatorStreamExecutor:
 
     def __init__(
         self,
-        approval_service: "OperatorApprovalService",
-        internal_http_client: "InternalHttpClient",
-        settings: "G8eePlatformSettings",
+        approval_service: OperatorApprovalService,
+        internal_http_client: InternalHttpClient,
+        settings: G8eePlatformSettings,
     ) -> None:
         self._approval_service = approval_service
         self._internal_http_client = internal_http_client

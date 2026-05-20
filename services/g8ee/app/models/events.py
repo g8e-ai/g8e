@@ -58,7 +58,7 @@ class SessionEvent(G8eBaseModel):
     task_id: str | None = Field(default=None, description="AI task ID for routing")
 
     @model_validator(mode="after")
-    def _exactly_one_session_id(self) -> "SessionEvent":
+    def _exactly_one_session_id(self) -> SessionEvent:
         if self.web_session_id and self.cli_session_id:
             raise ValueError(
                 "SessionEvent cannot set both web_session_id and cli_session_id; "
@@ -100,7 +100,7 @@ class SessionEventWire(G8eBaseModel):
     event: _SSEEventBody
 
     @classmethod
-    def from_session_event(cls, se: SessionEvent) -> "SessionEventWire":
+    def from_session_event(cls, se: SessionEvent) -> SessionEventWire:
         data = se.payload.model_dump(mode="json")
         if se.web_session_id:
             data["web_session_id"] = se.web_session_id
@@ -126,7 +126,7 @@ class BackgroundEventWire(G8eBaseModel):
     event: _SSEEventBody
 
     @classmethod
-    def from_background_event(cls, be: BackgroundEvent) -> "BackgroundEventWire":
+    def from_background_event(cls, be: BackgroundEvent) -> BackgroundEventWire:
         data = be.payload.model_dump(mode="json")
         data["user_id"] = be.user_id
         if be.investigation_id is not None:

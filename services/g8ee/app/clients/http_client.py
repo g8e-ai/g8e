@@ -93,7 +93,7 @@ class RequestTrace(G8eBaseModel):
         return {}
 
     @classmethod
-    def from_headers(cls, headers: dict[str, str], component_id: str) -> "RequestTrace":
+    def from_headers(cls, headers: dict[str, str], component_id: str) -> RequestTrace:
         """Create trace info from incoming HTTP headers"""
         # Execution ID should now be provided in the RequestContext body,
         # but for tracing existing incoming requests that might still have it
@@ -402,7 +402,7 @@ class HTTPClient:
         json_data: JSONPayload | None = None,
         context: G8eHttpContext | None = None,
         params: QueryParams | None = None,
-    ) -> "AiohttpResponse":
+    ) -> AiohttpResponse:
         """
         Make an HTTP request with automatic retry and circuit breaking.
 
@@ -688,7 +688,7 @@ class HTTPClient:
         json_data: JSONPayload | None = None,
         headers: dict[str, str] | None = None,
         context: G8eHttpContext | None = None,
-    ) -> "AiohttpResponse":
+    ) -> AiohttpResponse:
         return await self.request(
             "POST", url, headers=headers, json_data=json_data, context=context
         )
@@ -699,7 +699,7 @@ class HTTPClient:
         params: QueryParams | None = None,
         headers: dict[str, str] | None = None,
         context: G8eHttpContext | None = None,
-    ) -> "AiohttpResponse":
+    ) -> AiohttpResponse:
         return await self.request(
             "GET", url, headers=headers, context=context, params=params
         )
@@ -791,7 +791,7 @@ class HTTPClient:
             await self._session.close()
             self._session = None
 
-    async def __aenter__(self) -> "HTTPClient ":
+    async def __aenter__(self) -> HTTPClient :
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:

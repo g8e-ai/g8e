@@ -548,7 +548,7 @@ class G8eoResultEnvelope(G8eBaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_session_ids(self) -> "G8eoResultEnvelope":
+    def validate_session_ids(self) -> G8eoResultEnvelope:
         """Ensure strict separation of session types and validate required context.
 
         Matches G8eHttpContext validation logic for consistency.
@@ -589,7 +589,7 @@ class G8eMessage(G8eBaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_session_ids(self) -> "G8eMessage":
+    def validate_session_ids(self) -> G8eMessage:
         """Ensure strict separation of session types and validate required context.
 
         Matches G8eHttpContext validation logic for consistency.

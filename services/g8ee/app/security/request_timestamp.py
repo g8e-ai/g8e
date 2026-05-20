@@ -138,7 +138,7 @@ def validate_timestamp(
 
 async def check_nonce_kv(
     nonce: str,
-    cache_aside_service: "CacheAsideService"
+    cache_aside_service: CacheAsideService
 ) -> NonceCheckResult:
     """
     Check and mark nonce using operator KV store.
@@ -340,7 +340,7 @@ class RequestTimestampValidator:
     Provides both sync and async validation methods.
     """
 
-    def __init__(self, cache_aside_service: "CacheAsideService | None", require_nonce: bool = False):
+    def __init__(self, cache_aside_service: CacheAsideService | None, require_nonce: bool = False):
         """
         Initialize validator.
 

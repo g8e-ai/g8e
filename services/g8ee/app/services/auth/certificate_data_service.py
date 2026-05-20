@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class CertificateDataService:
     """Service for persisting certificate-related data, such as revocations."""
 
-    def __init__(self, cache: "CacheAsideService"):
+    def __init__(self, cache: CacheAsideService):
         self.cache = cache
         self.collection = DB_COLLECTION_REVOKED_CERTS
 

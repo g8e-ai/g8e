@@ -110,7 +110,7 @@ class LLMModelConfig(G8eBaseModel):
     # Opus-class models typically want 8_192+.
     thinking_output_reserve: int = 4_096
 
-    def to_litellm_settings(self, system_instructions: str = "", response_format: Any = None) -> "LiteLLMSettings":
+    def to_litellm_settings(self, system_instructions: str = "", response_format: Any = None) -> LiteLLMSettings:
         """Convert this model config to a LiteLLMSettings object."""
         from app.llm.llm_types import LiteLLMSettings
         return LiteLLMSettings(
@@ -414,12 +414,12 @@ OLLAMA_DEFAULT_CONFIG = LLMModelConfig(
 # Thinking-level helpers
 # =============================================================================
 
-def _intensity_levels(config: "LLMModelConfig") -> list[ThinkingLevel]:
+def _intensity_levels(config: LLMModelConfig) -> list[ThinkingLevel]:
     """Return supported levels excluding OFF, in registry-declared order."""
     return [lvl for lvl in config.supported_thinking_levels if lvl is not ThinkingLevel.OFF]
 
 
-def _lowest_thinking_level(config: "LLMModelConfig") -> ThinkingLevel | None:
+def _lowest_thinking_level(config: LLMModelConfig) -> ThinkingLevel | None:
     levels = _intensity_levels(config)
     if not levels:
         return None
@@ -429,7 +429,7 @@ def _lowest_thinking_level(config: "LLMModelConfig") -> ThinkingLevel | None:
     return None
 
 
-def _highest_thinking_level(config: "LLMModelConfig") -> ThinkingLevel | None:
+def _highest_thinking_level(config: LLMModelConfig) -> ThinkingLevel | None:
     levels = _intensity_levels(config)
     if not levels:
         return None
@@ -439,7 +439,7 @@ def _highest_thinking_level(config: "LLMModelConfig") -> ThinkingLevel | None:
     return None
 
 
-def clamp_thinking_level(desired: ThinkingLevel, config: "LLMModelConfig") -> ThinkingLevel:
+def clamp_thinking_level(desired: ThinkingLevel, config: LLMModelConfig) -> ThinkingLevel:
     """Clamp a desired ThinkingLevel to what the given model supports.
 
     Rules:
@@ -578,7 +578,7 @@ class LLMModelRegistry(G8eBaseModel):
         return _highest_thinking_level(self.get(model_name))
 
 
-# Every Ollama config MUST declare its reasoning dialect explicitly  - 
+# Every Ollama config MUST declare its reasoning dialect explicitly  -
 # ``NONE`` for models without reasoning, ``NATIVE_TOGGLE`` for those with the
 # native ``think`` kwarg. Silently defaulting a missing dialect hides the fact
 # that a new model has no reasoning configured, so we fail loudly at import

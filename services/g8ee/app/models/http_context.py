@@ -88,7 +88,7 @@ class RequestContext(G8eBaseModel):
     )
 
     @classmethod
-    def from_app_context(cls, context: "G8eHttpContext") -> "RequestContext":
+    def from_app_context(cls, context: G8eHttpContext) -> RequestContext:
         """Create a RequestContext from a G8eHttpContext."""
         return cls(
             web_session_id=context.web_session_id,
@@ -255,7 +255,7 @@ class G8eHttpContext(G8eBaseModel):
                     raise AuthenticationError(f"Operator session ID mismatch for operator {op.operator_id}")
 
     @classmethod
-    def from_request_context(cls, request_context: RequestContext, is_exempt_path: bool = False) -> "G8eHttpContext":
+    def from_request_context(cls, request_context: RequestContext, is_exempt_path: bool = False) -> G8eHttpContext:
         """Create G8eHttpContext from RequestContext (extracted from request body).
 
         This is the new preferred method for context extraction, eliminating

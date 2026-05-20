@@ -305,7 +305,7 @@ class LLMSettings(G8eBaseModel):
         """Return the configured primary model, or provider default if not set."""
         if self.primary_model:
             return self.primary_model
-        
+
         if self.primary_provider:
             provider_models = {
                 LLMProvider.OPENAI: self.openai_model,
@@ -322,7 +322,7 @@ class LLMSettings(G8eBaseModel):
         """Return the configured assistant model, or provider default if not set."""
         if self.assistant_model:
             return self.assistant_model
-        
+
         if self.assistant_provider:
             provider_models = {
                 LLMProvider.OPENAI: self.openai_model,
@@ -339,7 +339,7 @@ class LLMSettings(G8eBaseModel):
         """Return the configured lite model, or assistant_model/provider default as fallback."""
         if self.lite_model:
             return self.lite_model
-        
+
         # Try provider default for lite role if lite_provider is set
         if self.lite_provider:
             provider_models = {
@@ -400,9 +400,9 @@ class LLMSettings(G8eBaseModel):
                 LLMProvider.OLLAMA.value: (self.ollama_api_key, self.ollama_endpoint, self.ollama_model),
                 LLMProvider.LLAMACPP.value: (self.llamacpp_api_key, self.llamacpp_endpoint, self.llamacpp_model),
             }
-            
+
             p_key, p_endpoint, p_model = provider_defaults.get(effective_provider, (None, None, None))
-            
+
             if not api_key:
                 api_key = p_key
             if not endpoint:

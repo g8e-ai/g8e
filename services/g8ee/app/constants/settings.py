@@ -74,7 +74,7 @@ class ThinkingLevel(StrEnum):
 # Ascending priority (cheap -> expensive). OFF is excluded; it is not an
 # "intensity" value but the absence of thinking. Lookup helpers in
 # app/models/model_configs.py rely on this ordering.
-THINKING_LEVEL_PRIORITY_ASC: tuple["ThinkingLevel", ...] = (
+THINKING_LEVEL_PRIORITY_ASC: tuple[ThinkingLevel, ...] = (
     ThinkingLevel.MINIMAL,
     ThinkingLevel.LOW,
     ThinkingLevel.MEDIUM,

@@ -879,7 +879,7 @@ async def delete_case(
 @router.post(InternalApiPaths.G8EE_OPERATORS_TERMINATE, response_model=OperatorTerminateResponse)
 async def terminate_operator(
     request: OperatorTerminateRequest,
-    operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
+    operator_lifecycle_service: OperatorLifecycleService = Depends(get_g8ee_operator_lifecycle_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ):
     """
@@ -938,7 +938,7 @@ async def listen_session_auth(
 @router.post(InternalApiPaths.G8EE_OPERATORS_CREATE_SLOT, response_model=OperatorSlotCreationResponse)
 async def create_operator_slot(
     request: OperatorSlotCreationRequest,
-    operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
     settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
     api_key_service: ApiKeyService = Depends(get_g8ee_api_key_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
@@ -1031,7 +1031,7 @@ async def create_operator_slot(
 @router.post(InternalApiPaths.G8EE_OPERATORS_UPDATE_API_KEY, response_model=OperatorUpdateApiKeyResponse)
 async def update_operator_api_key(
     request: OperatorUpdateApiKeyRequest,
-    operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
     settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
     api_key_service: ApiKeyService = Depends(get_g8ee_api_key_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
@@ -1149,7 +1149,7 @@ async def revoke_operator_certificate(
 @router.post(InternalApiPaths.G8EE_OPERATORS_CLAIM_SLOT, response_model=OperatorSlotClaimResponse)
 async def claim_operator_slot(
     request: OperatorSlotClaimRequest,
-    operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
+    operator_lifecycle_service: OperatorLifecycleService = Depends(get_g8ee_operator_lifecycle_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ):
     """
@@ -1201,7 +1201,7 @@ async def claim_operator_slot(
 @router.post(InternalApiPaths.G8EE_OPERATORS_BIND, response_model=OperatorBindResponse)
 async def bind_operators(
     request: OperatorBindRequest,
-    operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
     event_service: EventService = Depends(get_g8ee_event_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ):
@@ -1301,7 +1301,7 @@ async def bind_operators(
 @router.post(InternalApiPaths.G8EE_OPERATORS_UNBIND, response_model=OperatorUnbindResponse)
 async def unbind_operators(
     request: OperatorUnbindRequest,
-    operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
     event_service: EventService = Depends(get_g8ee_event_service),
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ):

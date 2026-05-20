@@ -49,7 +49,7 @@ class HeartbeatSnapshotService:
         return self._ready
 
     @property
-    def pubsub_client(self) -> "PubSubClient | None":
+    def pubsub_client(self) -> PubSubClient | None:
         return self._pubsub_client
 
     @property
@@ -111,19 +111,19 @@ class HeartbeatSnapshotService:
 
     async def push_heartbeat_sse(
         self,
-        envelope: "HeartbeatSSEEnvelope",
-        payload: "G8eoHeartbeatPayload",
-        operator: "OperatorDocument",
+        envelope: HeartbeatSSEEnvelope,
+        payload: G8eoHeartbeatPayload,
+        operator: OperatorDocument,
     ) -> None:
         await self._push_heartbeat_sse(envelope, payload, operator)
 
-    def validate_heartbeat_timestamp(self, payload: "G8eoHeartbeatPayload") -> "RequestValidationResult":
+    def validate_heartbeat_timestamp(self, payload: G8eoHeartbeatPayload) -> RequestValidationResult:
         return self._validate_heartbeat_timestamp(payload)
 
     def validate_operator_identity(
         self,
         channel_operator_id: str,
-        payload: "G8eoHeartbeatPayload",
+        payload: G8eoHeartbeatPayload,
         operator_session_id: str,
     ) -> bool:
         return self._validate_operator_identity(channel_operator_id, payload, operator_session_id)
@@ -132,8 +132,8 @@ class HeartbeatSnapshotService:
         self,
         operator_id: str,
         operator_session_id: str,
-        payload: "G8eoHeartbeatPayload",
-    ) -> "OperatorDocument | None":
+        payload: G8eoHeartbeatPayload,
+    ) -> OperatorDocument | None:
         return await self._get_and_validate_operator(operator_id, operator_session_id, payload)
 
     async def _on_ws_disconnect(self) -> None:

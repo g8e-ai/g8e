@@ -173,7 +173,7 @@ def translate_for_ollama(
     clamped = clamp_thinking_level(level, config)
     # Every Ollama model MUST declare its dialect at registration time (see
     # _OLLAMA_CONFIGS validation in model_configs.py). A None here means the
-    # caller supplied a config that was never registered as an Ollama model  - 
+    # caller supplied a config that was never registered as an Ollama model  -
     # fail loudly rather than silently masquerading as "no thinking".
     if config.thinking_dialect is None:
         raise ValueError(

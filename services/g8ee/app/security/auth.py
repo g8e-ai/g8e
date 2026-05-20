@@ -61,7 +61,7 @@ def is_infrastructure_health_check_ip(ip: str) -> bool:
 async def authenticate_proxy_or_internal(
     request: Request,
     settings: G8eePlatformSettings,
-    operator_session_service: "OperatorSessionService | None" = None,
+    operator_session_service: OperatorSessionService | None = None,
 ) -> AuthenticatedUser:
     """Authenticate via proxy headers (browser) or Bearer operator session (CLI/mTLS)."""
     proxy_user_id = request.headers.get(PROXY_USER_ID_HEADER)
