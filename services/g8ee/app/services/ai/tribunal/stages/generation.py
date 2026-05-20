@@ -39,6 +39,7 @@ from app.models.agents.tribunal import (
     TribunalSessionGenerationFailedPayload,
 )
 from app.models.model_configs import get_model_config
+from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.utils.agent_persona_loader import get_agent_persona
 from app.utils.json_utils import extract_json_from_text
 from app.utils.command import normalise_command
@@ -113,7 +114,9 @@ async def _run_generation_pass(
             name="TribunalResponse"
         )
 
-    settings = model_config.to_litellm_settings(
+    settings = AIGenerationConfigBuilder.build_lite_settings(
+        model=model,
+        max_tokens=None,
         system_instructions=member_persona.get_system_prompt() or "",
         response_format=response_format,
     )
