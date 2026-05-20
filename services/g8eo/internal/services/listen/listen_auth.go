@@ -212,12 +212,12 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		}
 
 		// [PIVOT] MCP & A2A gateways handle their own authentication since they support standard clients
-if strings.HasPrefix(r.URL.Path, "/api/mcp/") || strings.HasPrefix(r.URL.Path, "/api/a2a/") {
-next.ServeHTTP(w, r)
-return
-}
+		if strings.HasPrefix(r.URL.Path, "/api/mcp/") || strings.HasPrefix(r.URL.Path, "/api/a2a/") || strings.HasPrefix(r.URL.Path, "/api/approve/") {
+			next.ServeHTTP(w, r)
+			return
+		}
 
-// These routes are new protocol entry points.
+		// These routes are new protocol entry points.
 		// Native Registration Path (Phase 4)
 		// This endpoint is the new sovereign entry point for enrolling binaries.
 		// It MUST be accessible without an internal token as it is the first step

@@ -418,6 +418,9 @@ message ActionReceipt {
 
   // ED25519 signature over canonical serialization of fields 1-8
   string signature = 9;
+
+  // Flag indicating if the transaction was signed implicitly (gateway-local).
+  bool implicit_l2_signature = 10;
 }
 
 // CommitmentAttestation is the Auditor's signed record that a verified

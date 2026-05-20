@@ -152,6 +152,7 @@ type ActionReceiptRecord struct {
 	ExecutedAt        time.Time                  `json:"executed_at"`
 	SignerKeyID       string                     `json:"signer_key_id"`
 	Signature         string                     `json:"signature"`
+	ImplicitL2        bool                       `json:"implicit_l2_signature"`
 	Timestamp         time.Time                  `json:"timestamp"`
 }
 

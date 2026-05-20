@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -16,6 +17,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -186,6 +188,9 @@ func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 		ProtocolVersion: "1.0",
 		Nonce:           uuid.New().String(),
 		StateMerkleRoot: stateRoot,
+		Governance: &commonv1.GovernanceMetadata{
+			ImplicitL2Signature: true,
+		},
 	}
 
 	hash, err := uap.GenerateMessageID((*uap.UAPEnvelope)(env))
@@ -199,12 +204,13 @@ func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 	if len(g.signingKey) > 0 {
 		l2Payload := fmt.Sprintf("%s|true", hash)
 		sig := ed25519.Sign(g.signingKey, []byte(l2Payload))
-		env.Governance = &commonv1.GovernanceMetadata{
-			L2: &commonv1.L2Metadata{
-				TribunalSignature: hex.EncodeToString(sig),
-				KeyId:             g.keyID,
-				AgentIds:          []string{"gateway-local-signer"},
-			},
+		if env.Governance == nil {
+			env.Governance = &commonv1.GovernanceMetadata{}
+		}
+		env.Governance.L2 = &commonv1.L2Metadata{
+			TribunalSignature: hex.EncodeToString(sig),
+			KeyId:             g.keyID,
+			AgentIds:          []string{"gateway-local-signer"},
 		}
 	}
 
@@ -317,6 +323,9 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 		ProtocolVersion: "1.0",
 		Nonce:           uuid.New().String(),
 		StateMerkleRoot: stateRoot,
+		Governance: &commonv1.GovernanceMetadata{
+			ImplicitL2Signature: true,
+		},
 	}
 
 	// Compute transaction hash
@@ -333,12 +342,13 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 		// L2 payload: hash|decision
 		l2Payload := fmt.Sprintf("%s|true", hash)
 		sig := ed25519.Sign(g.signingKey, []byte(l2Payload))
-		env.Governance = &commonv1.GovernanceMetadata{
-			L2: &commonv1.L2Metadata{
-				TribunalSignature: hex.EncodeToString(sig),
-				KeyId:             g.keyID,
-				AgentIds:          []string{"gateway-local-signer"},
-			},
+		if env.Governance == nil {
+			env.Governance = &commonv1.GovernanceMetadata{}
+		}
+		env.Governance.L2 = &commonv1.L2Metadata{
+			TribunalSignature: hex.EncodeToString(sig),
+			KeyId:             g.keyID,
+			AgentIds:          []string{"gateway-local-signer"},
 		}
 	}
 
@@ -375,7 +385,8 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 		}
 
 		// Map other substrate errors back to JSON-RPC error
-		g.jsonRPCError(w, req.ID, -32603, err.Error())
+		code, msg := g.mapSubstrateError(err)
+		g.jsonRPCError(w, req.ID, code, msg)
 		return
 	}
 
@@ -427,6 +438,56 @@ func (g *GatewayService) jsonRPCError(w http.ResponseWriter, id interface{}, cod
 	w.Header().Set(constants.HeaderContentType, "application/json")
 	w.WriteHeader(http.StatusOK) // JSON-RPC usually returns 200 even for errors
 	json.NewEncoder(w).Encode(res)
+}
+
+// mapSubstrateError maps governance verification errors to granular JSON-RPC codes.
+func (g *GatewayService) mapSubstrateError(err error) (int, string) {
+	if err == nil {
+		return 0, ""
+	}
+
+	msg := err.Error()
+
+	switch {
+	case errors.Is(err, governance.ErrInvalidEnvelope),
+		errors.Is(err, governance.ErrTransactionIDMissing),
+		errors.Is(err, governance.ErrPayloadMissing),
+		errors.Is(err, governance.ErrUnknownActionType):
+		return ErrCodeInvalidEnvelope, msg
+
+	case errors.Is(err, governance.ErrPayloadDecodeFailed):
+		return ErrCodePayloadDecodeFailed, msg
+
+	case errors.Is(err, governance.ErrTransactionHashMissing),
+		errors.Is(err, governance.ErrTransactionHashMismatch):
+		return ErrCodeHashMismatch, msg
+
+	case errors.Is(err, governance.ErrTransactionExpired):
+		return ErrCodeExpired, msg
+
+	case errors.Is(err, governance.ErrTransactionReplay):
+		return ErrCodeReplay, msg
+
+	case errors.Is(err, governance.ErrStateRootMissing),
+		errors.Is(err, governance.ErrStateRootRequired),
+		errors.Is(err, governance.ErrStateRootMismatch):
+		return ErrCodeStateMismatch, msg
+
+	case errors.Is(err, governance.ErrL1ValidationFailed):
+		return ErrCodeL1ValidationFailed, msg
+
+	case errors.Is(err, governance.ErrL2SignatureMissing),
+		errors.Is(err, governance.ErrL2SignatureInvalid),
+		errors.Is(err, governance.ErrL2KeyNotConfigured):
+		return ErrCodeL2SignatureInvalid, msg
+
+	case errors.Is(err, governance.ErrL3ProofInvalid),
+		errors.Is(err, governance.ErrL3VerifierNotConfigured):
+		return ErrCodeL3ProofInvalid, msg
+	}
+
+	// Map other substrate errors back to JSON-RPC error
+	return -32603, msg
 }
 
 func (g *GatewayService) jsonResponse(w http.ResponseWriter, id interface{}, result interface{}) {
