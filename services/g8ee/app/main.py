@@ -76,6 +76,7 @@ from .constants import (
     ComponentName,
     G8eHeaders,
 )
+from .constants.generated_paths import PathConstants
 from .models.state import G8eeAppState
 from .db.blob_service import BlobService
 from .db.db_service import DBService
@@ -317,4 +318,4 @@ app = _build_app()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("components.g8ee.app.main:app", host="0.0.0.0", port=8443, reload=True)
+    uvicorn.run("components.g8ee.app.main:app", host="0.0.0.0", port=PathConstants.PORT_G8EE_HTTP, reload=True)

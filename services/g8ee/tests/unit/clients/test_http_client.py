@@ -58,9 +58,11 @@ pytestmark = pytest.mark.unit
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def client():
+    from app.models.settings import ListenSettings
+    listen = ListenSettings()
     c = HTTPClient (
         component_id=ComponentName.G8EE,
-        base_url="https://localhost:443",
+        base_url=listen.http_url,
         timeout=DEFAULT_TIMEOUT,
         retry_config=RetryConfig(),
         circuit_breaker_config=CircuitBreakerConfig(),
@@ -75,9 +77,11 @@ async def client():
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def authed_client():
+    from app.models.settings import ListenSettings
+    listen = ListenSettings()
     c = HTTPClient (
         component_id=ComponentName.G8EE,
-        base_url="https://localhost:443",
+        base_url=listen.http_url,
         timeout=DEFAULT_TIMEOUT,
         retry_config=RetryConfig(),
         circuit_breaker_config=CircuitBreakerConfig(),
@@ -387,7 +391,7 @@ class TestG8eHTTPClientPrepareRequest:
 
     async def test_prepare_request_joins_base_url_with_path(self, client):
         url, _headers, _trace, _ctx = await client._prepare_request("GET", "/api/health", headers={}, context=None)
-        assert url == "https://localhost:443/api/health"
+        assert url == "https://localhost:8440/api/health"
 
     async def test_prepare_request_caller_headers_override_defaults(self, client):
         _url, headers, _trace, _ctx = await client._prepare_request(

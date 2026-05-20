@@ -15,6 +15,7 @@ import json
 from enum import StrEnum
 from pathlib import Path
 
+from app.constants.generated_paths import PathConstants
 from app.constants.protocol import _AGENTS, _STATUS
 from app.constants.paths import PATHS
 from app.constants.models import SecurityConstraintsConstants
@@ -547,9 +548,9 @@ G8EE_APP_CONTACT_EMAIL               = "help@g8e.ai"
 G8EE_APP_LICENSE_NAME                = "Proprietary"
 G8EE_APP_LICENSE_URL                 = "https://github.com/g8e-ai/g8e/blob/main/LICENSE"
 
-CORS_ALLOWED_ORIGIN_G8EE             = "https://localhost:8443"
-CORS_ALLOWED_ORIGIN_CLIENT_HTTP       = "http://localhost:80"
-CORS_ALLOWED_ORIGIN_CLIENT_HTTPS      = "https://localhost:443"
+CORS_ALLOWED_ORIGIN_G8EE             = f"https://localhost:{PathConstants.PORT_G8EE_HTTP}"
+CORS_ALLOWED_ORIGIN_CLIENT_HTTP       = f"http://localhost:{PathConstants.PORT_OPERATOR_BOOTSTRAP}"
+CORS_ALLOWED_ORIGIN_CLIENT_HTTPS      = f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}"
 CORS_ALLOWED_ORIGIN_LOCALHOST       = "https://localhost"
 CORS_ALLOWED_ORIGIN_G8E             = "https://localhost"
 

@@ -1295,6 +1295,58 @@ def generate_go_events() -> str:
     return "".join(lines)
 
 
+def generate_go_paths() -> str:
+    """Generate Go constants from paths.json."""
+    data = load_json("paths.json")
+    lines = [go_header("paths.json", "constants"), "\n"]
+    
+    lines.append("// Path constants generated from paths.json\n")
+    lines.append("var Paths = struct {\n")
+    lines.append("\tInfra struct {\n")
+    for key in data.get("infra", {}).keys():
+        parts = key.split("_")
+        name = "".join(p.capitalize() for p in parts)
+        lines.append(f"\t\t{name} string\n")
+    lines.append("\t}\n")
+    
+    lines.append("\tPorts struct {\n")
+    for key in data.get("ports", {}).keys():
+        parts = key.split("_")
+        name = "".join(p.capitalize() for p in parts)
+        lines.append(f"\t\t{name} int\n")
+    lines.append("\t}\n")
+    
+    lines.append("}{\n")
+    
+    lines.append("\tInfra: struct {\n")
+    for key in data.get("infra", {}).keys():
+        parts = key.split("_")
+        name = "".join(p.capitalize() for p in parts)
+        lines.append(f"\t\t{name} string\n")
+    lines.append("\t}{\n")
+    for key, value in data.get("infra", {}).items():
+        parts = key.split("_")
+        name = "".join(p.capitalize() for p in parts)
+        lines.append(f'\t\t{name}: "{value}",\n')
+    lines.append("\t},\n")
+    
+    lines.append("\tPorts: struct {\n")
+    for key in data.get("ports", {}).keys():
+        parts = key.split("_")
+        name = "".join(p.capitalize() for p in parts)
+        lines.append(f"\t\t{name} int\n")
+    lines.append("\t}{\n")
+    for key, value in data.get("ports", {}).items():
+        parts = key.split("_")
+        name = "".join(p.capitalize() for p in parts)
+        lines.append(f"\t\t{name}: {value},\n")
+    lines.append("\t},\n")
+    
+    lines.append("}\n")
+    
+    return "".join(lines)
+
+
 def generate_go():
     """Generate all Go constants."""
     print("Generating Go constants...")
@@ -1326,6 +1378,10 @@ def generate_go():
     # Generate intents.go
     content = generate_go_intents()
     write_go_file("intents.go", content)
+    
+    # Generate paths.go
+    content = generate_go_paths()
+    write_go_file("paths.go", content)
     
     # Generate mappings.go
     content = generate_go_mappings()
@@ -1389,6 +1445,27 @@ def generate_python_action_mappings() -> str:
     return "".join(lines)
 
 
+def generate_python_paths() -> str:
+    """Generate Python constants from paths.json."""
+    data = load_json("paths.json")
+    lines = [PYTHON_HEADER.format(filename="paths.json"), "\n"]
+    
+    lines.append("class PathConstants:\n")
+    lines.append('    """Collection of canonical G8E paths and ports."""\n')
+    
+    # 1. Infrastructure paths
+    for key, value in data.get("infra", {}).items():
+        const_name = f"PATH_{key.upper()}"
+        lines.append(f'    {const_name} = "{value}"\n')
+    
+    # 2. Ports
+    for key, value in data.get("ports", {}).items():
+        const_name = f"PORT_{key.upper()}"
+        lines.append(f'    {const_name} = {value}\n')
+    
+    return "".join(lines)
+
+
 def generate_python():
     """Generate all Python constants."""
     print("Generating Python constants...")
@@ -1416,7 +1493,17 @@ def generate_python():
     # Generate channels.py
     content = generate_python_channels()
     write_python_file("channels.py", content)
+
+    # Generate generated_paths.py for g8ee
+    content = generate_python_paths()
+    write_python_file("generated_paths.py", content)
     
+    # Generate generated_paths.py for protocol wrapper
+    protocol_generated_paths_path = PROTOCOL_PYTHON_DIR / "generated_paths.py"
+    with open(protocol_generated_paths_path, "w") as f:
+        f.write(content)
+    print(f"Generated {protocol_generated_paths_path}")
+
     # Generate proto_mappings.py
     content = generate_python_proto_mappings()
     if content:
@@ -1435,13 +1522,31 @@ def generate_shell_paths() -> str:
     data = load_json("paths.json")
     lines = [SHELL_HEADER.format(filename="paths.json"), "\n"]
     
-    # 1. Infrastructure paths
-    for key, value in data.get("infra", {}).items():
-        const_name = f"G8E_PATH_{key.upper()}"
+    def flatten(obj, prefix=""):
+        res = []
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                # Handle empty key in paths.json (used for generic services)
+                new_key = f"{prefix}_{k.upper()}" if k else prefix
+                res.extend(flatten(v, new_key))
+        else:
+            res.append((prefix.strip("_"), obj))
+        return res
+
+    # 1. Paths (non-numeric or specified sections)
+    for key, value in flatten(data):
+        if key.startswith("PORTS_") or key.startswith("INFRA_"):
+            # infra keys are usually top-level path constants, we strip the INFRA_ prefix
+            final_key = key.replace("INFRA_", "", 1) if key.startswith("INFRA_") else key
+        else:
+            final_key = key
+            
+        const_name = f"G8E_PATH_{final_key}"
         lines.append(f'export {const_name}="{value}"\n')
     
-    # 2. Ports
-    for key, value in data.get("ports", {}).items():
+    # 2. Ports (numeric values from ports section)
+    ports = data.get("ports", {})
+    for key, value in ports.items():
         const_name = f"G8E_PORT_{key.upper()}"
         lines.append(f'export {const_name}={value}\n')
     

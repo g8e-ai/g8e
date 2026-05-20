@@ -238,8 +238,7 @@ _operator_curl() {
     if [[ -f "$cli_cert" && -f "$cli_key" ]]; then
         args+=(--cert "$cli_cert" --key "$cli_key")
     else
-        local cert_name
-        cert_name=$(python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" "$SCRIPT_DIR/protocol/constants/paths.json" g8ee.cert_name --default g8ee 2>/dev/null)
+        local cert_name="${G8E_PATH_G8EE_CERT_NAME:-g8ee}"
         if [[ -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" && -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key" ]]; then
             args+=(--cert "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" --key "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key")
         else
@@ -280,8 +279,7 @@ _build_protocol_curl_args() {
     if [[ -f "$cli_cert" && -f "$cli_key" ]]; then
         _args+=(--cert "$cli_cert" --key "$cli_key")
     else
-        local cert_name
-        cert_name=$(python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" "$SCRIPT_DIR/protocol/constants/paths.json" g8ee.cert_name --default g8ee 2>/dev/null)
+        local cert_name="${G8E_PATH_G8EE_CERT_NAME:-g8ee}"
         if [[ -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" && -f "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key" ]]; then
             _args+=(--cert "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.crt" --key "$G8E_PKI_DIR_HOST/issued/apps/${cert_name}.key")
         else

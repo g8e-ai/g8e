@@ -98,7 +98,7 @@ async def real_cache_aside(real_kv_client, real_db_client):
 async def test_kv_cache_client_real_auth(real_kv_client):
     """Test that KVCacheClient is configured with correct mTLS auth settings."""
     # This test verifies the client is configured correctly with mTLS auth
-    # and correct port. It will catch the port mismatch issue (443 vs 443).
+    # and correct port.
 
     # Verify the client has mTLS auth configured
     assert real_kv_client._ca_cert_path is not None, \
@@ -108,11 +108,9 @@ async def test_kv_cache_client_real_auth(real_kv_client):
     assert real_kv_client._client_key_path is not None, \
         "No client key path configured for mTLS"
 
-    # Verify the port is correct (443 for HTTPS, not 443 for WSS)
-    assert real_kv_client.http_url.endswith(":443"), \
-        f"KVCacheClient should use port 443, but got {real_kv_client.http_url}"
-    assert ":443" not in real_kv_client.http_url, \
-        f"KVCacheClient should not use port 443 (WSS), but got {real_kv_client.http_url}"
+    # Verify the port is correct (8440 for HTTPS)
+    assert real_kv_client.http_url.endswith(":8440"), \
+        f"KVCacheClient should use port 8440, but got {real_kv_client.http_url}"
 
 
 @pytest.mark.asyncio
@@ -126,10 +124,8 @@ async def test_kv_cache_client_auth_present(real_kv_client):
 
 @pytest.mark.asyncio
 async def test_kv_cache_port_correctness(real_kv_client):
-    """Test that KVCacheClient is using the correct port (443, not 443)."""
-    # Port 443 is for HTTPS, port 443 is for WSS
-    # The HTTP client should use port 443
-    assert real_kv_client.http_url.endswith(":443"), \
-        f"KVCacheClient should use port 443, but got {real_kv_client.http_url}"
-    assert ":443" not in real_kv_client.http_url, \
-        f"KVCacheClient should not use port 443 (WSS), but got {real_kv_client.http_url}"
+    """Test that KVCacheClient is using the correct port (8440 for HTTPS)."""
+    # Port 8440 is for HTTPS
+    # The HTTP client should use port 8440
+    assert real_kv_client.http_url.endswith(":8440"), \
+        f"KVCacheClient should use port 8440, but got {real_kv_client.http_url}"

@@ -55,7 +55,7 @@ proto: buf-install
 		$(BUF) generate protocol/proto; \
 		if [ -f "services/g8ee/.venv/bin/python" ]; then \
 			echo "Generating Python Protobuf code locally..."; \
-			services/g8ee/.venv/bin/python -m grpc_tools.protoc -Iprotocol/proto --python_out=services/g8ee/app/proto --grpc_python_out=services/g8ee/app/proto protocol/proto/*.proto; \
+			services/g8ee/.venv/bin/python -m grpc_tools.protoc -Iprotocol/proto --python_out=services/g8ee/app/proto protocol/proto/*.proto; \
 		fi \
 	elif [ -d "services/g8ee/app/proto" ] && [ -f "services/g8ee/app/proto/common_pb2.py" ]; then \
 		echo "Buf not found and system is offline/air-gapped. Utilizing pre-generated protocol files."; \
@@ -83,7 +83,7 @@ proto-force: buf-install
 	@echo "Force generating Protobuf code..."
 	@$(BUF) generate protocol/proto
 	@if [ -f "services/g8ee/.venv/bin/python" ]; then \
-		services/g8ee/.venv/bin/python -m grpc_tools.protoc -Iprotocol/proto --python_out=services/g8ee/app/proto --grpc_python_out=services/g8ee/app/proto protocol/proto/*.proto; \
+		services/g8ee/.venv/bin/python -m grpc_tools.protoc -Iprotocol/proto --python_out=services/g8ee/app/proto protocol/proto/*.proto; \
 	fi
 	@echo "Post-processing Python code..."
 	@touch services/g8ee/app/proto/__init__.py

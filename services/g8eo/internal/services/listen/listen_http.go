@@ -379,7 +379,7 @@ func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) 
             <div class="label">Trust & Security</div>
             <p>To use this operator from your browser or as a BYO client, you must first trust the platform's root certificate. If you see a "Not Secure" warning, please run the trust script:</p>
             <code>curl -fsSL http://%s:%d/trust | sudo sh</code>
-            <p><small>(Note: Use the bootstrap port 9002 for initial trust setup over plain HTTP)</small></p>
+            <p><small>(Note: Use the bootstrap port %d for initial trust setup over plain HTTP)</small></p>
         </div>
 
         <div class="section">
@@ -397,7 +397,7 @@ func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) 
     </div>
 </body>
 </html>
-`, html.EscapeString(host), h.cfg.Listen.BootstrapPort)
+`, html.EscapeString(host), h.cfg.Listen.BootstrapPort, h.cfg.Listen.BootstrapPort)
 }
 
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {

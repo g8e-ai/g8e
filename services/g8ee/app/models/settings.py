@@ -37,6 +37,7 @@ from app.constants import (
     LLMProvider,
     LogLevel,
 )
+from app.constants.generated_paths import PathConstants
 from app.constants.paths import PATHS
 from pydantic import field_validator
 from app.models.base import ConfigDict, Field, G8eBaseModel, G8eIdentifiableModel
@@ -80,13 +81,13 @@ class ComponentURLsSettings(G8eBaseModel):
     """Internal and external component URL configuration.
 
     The internal SSE bridge (`/api/internal/sse/push`, `/api/internal/sse/events`)
-    lives on the Operator's mTLS HTTP listener (default :9000), so ``client_url``
+    lives on the Operator's mTLS HTTP listener (default from paths.json), so ``client_url``
     defaults to that listener. The CLI / BYO frontends consume events from the
     same host. Override with the ``G8E_CLIENT_URL`` env var if you front the
     Operator behind a different ingress.
     """
-    g8ee_url: str = Field("https://localhost:8443")
-    client_url: str = Field("https://localhost:9000")
+    g8ee_url: str = Field(f"https://localhost:{PathConstants.PORT_G8EE_HTTP}")
+    client_url: str = Field(f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}")
 
 class CommandValidationSettings(G8eBaseModel):
     """Operator command safety and validation configuration.
@@ -216,9 +217,9 @@ class DatabaseSettings(G8eBaseModel):
 
 class ListenSettings(G8eBaseModel):
     """operator (Operator --listen mode) configuration."""
-    http_url: str = Field(default_factory=lambda: os.environ.get("G8E_INTERNAL_HTTP_URL", "https://localhost:9000") or "https://localhost:9000")
-    pubsub_url: str = Field(default_factory=lambda: os.environ.get("G8E_INTERNAL_PUBSUB_URL", "wss://localhost:9001") or "wss://localhost:9001")
-    blob_url: str = Field(default_factory=lambda: os.environ.get("G8E_INTERNAL_HTTP_URL", "https://localhost:9000") or "https://localhost:9000")
+    http_url: str = Field(default_factory=lambda: os.environ.get("G8E_INTERNAL_HTTP_URL", f"https://localhost:{PATHS['ports']['operator_http']}") or f"https://localhost:{PATHS['ports']['operator_http']}")
+    pubsub_url: str = Field(default_factory=lambda: os.environ.get("G8E_INTERNAL_PUBSUB_URL", f"wss://localhost:{PATHS['ports']['operator_wss']}") or f"wss://localhost:{PATHS['ports']['operator_wss']}")
+    blob_url: str = Field(default_factory=lambda: os.environ.get("G8E_INTERNAL_HTTP_URL", f"https://localhost:{PATHS['ports']['operator_http']}") or f"https://localhost:{PATHS['ports']['operator_http']}")
     default_ttl: int = Field(CACHE_TTL_DEFAULT)
     enable_cache_read: bool = Field(False)
 
@@ -483,7 +484,7 @@ class ReputationSettings(G8eBaseModel):
 
 class G8eePlatformSettings(G8eBaseModel):
     """Platform-level deployment configuration."""
-    port: int = Field(8443)
+    port: int = Field(PathConstants.PORT_G8EE_HTTP)
     host: str = Field("0.0.0.0")
     log_level: LogLevel = Field(LogLevel.INFO)
     enable_logging: bool = Field(True)

@@ -28,8 +28,8 @@ type LoadOptions struct {
 	// Required
 	APIKey           string
 	OperatorEndpoint string
-	WSSPort          int // WSS port to dial on operator (default: 443)
-	HTTPPort         int // HTTP port to dial on operator for auth proxy (default: 443)
+	WSSPort          int // WSS port to dial on operator (default: from paths.json)
+	HTTPPort         int // HTTP port to dial on operator for auth proxy (default: from paths.json)
 
 	// Cloud Operator mode
 	CloudMode     bool
@@ -69,10 +69,10 @@ type LoadOptions struct {
 // No outbound authentication is required - the Operator simply starts and listens.
 type ListenConfig struct {
 	Enabled          bool
-	WSSPort          int    // WSS/TLS port for operator pub/sub connections (default: 443)
-	HTTPPort         int    // TLS/HTTPS port for internal g8ee/client traffic (default: 443)
-	BootstrapPort    int    // Plain-TLS port for bootstrap routes (/.well-known/, /api/auth/device-link/register) (default: 80)
-	PublicPort       int    // Plain-TLS port for browser-based auth and setup (default: 443)
+	WSSPort          int    // WSS/TLS port for operator pub/sub connections (default: from paths.json)
+	HTTPPort         int    // TLS/HTTPS port for internal g8ee/client traffic (default: from paths.json)
+	BootstrapPort    int    // Plain-TLS port for bootstrap routes (/.well-known/, /api/auth/device-link/register) (default: from paths.json)
+	PublicPort       int    // Plain-TLS port for browser-based auth and setup (default: from paths.json)
 	DataDir          string // Root directory for SQLite database (default: .g8e/data in working directory)
 	PKIDir           string // Directory for TLS certificates (default: .g8e/pki)
 	SecretsDir       string // Directory for platform secrets (default: .g8e/secrets)
@@ -141,8 +141,8 @@ type Config struct {
 
 	// operator connection ports (operator dials these on the remote host)
 	PubSubURL string // WebSocket base URL for operator pub/sub (e.g., wss://192.168.1.10:443) - no path; client appends /ws/pubsub
-	WSSPort   int    // WSS port used to build PubSubURL (default: 443)
-	HTTPPort  int    // HTTPS port for auth/bootstrap requests via operator proxy (default: 443)
+	WSSPort   int    // WSS port used to build PubSubURL (default: from paths.json)
+	HTTPPort  int    // HTTPS port for auth/bootstrap requests via operator proxy (default: from paths.json)
 
 	// Logging
 	LogLevel string // Active log level (info, debug, error)
@@ -266,16 +266,16 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 	// Default ports must match protocol/constants/paths.json (canonical source of truth).
 	if !allowTestPortZero {
 		if wssPort <= 0 {
-			wssPort = 443 // default WSS port (must match protocol/constants/paths.json ports.operator_wss)
+			wssPort = constants.Paths.Ports.OperatorWss
 		}
 		if httpPort <= 0 {
-			httpPort = 443 // default HTTPS API port (must match protocol/constants/paths.json ports.operator_http)
+			httpPort = constants.Paths.Ports.OperatorHttp
 		}
 		if bootstrapPort <= 0 {
-			bootstrapPort = 80 // default bootstrap port (must match protocol/constants/paths.json ports.operator_bootstrap)
+			bootstrapPort = constants.Paths.Ports.OperatorBootstrap
 		}
 		if publicPort <= 0 {
-			publicPort = 443 // default public port (must match protocol/constants/paths.json ports.operator_public)
+			publicPort = constants.Paths.Ports.OperatorPublic
 		}
 	}
 	if passkeyRpID == "" {
@@ -346,7 +346,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		PKIDir:            opts.PKIDir,
 		SecretsDir:        opts.SecretsDir,
 
-		// Derived values - ports default to 443
+		// Derived values - ports default to values from paths.json
 		Endpoint:      opts.OperatorEndpoint,
 		PubSubURL:     buildPubSubURL(opts.OperatorEndpoint, opts.WSSPort),
 		WSSPort:       wssPortOrDefault(opts.WSSPort),
@@ -399,30 +399,29 @@ func heartbeatIntervalOrDefault(d time.Duration) time.Duration {
 	return 30 * time.Second
 }
 
-// buildPubSubURL creates a WebSocket URL, omitting port 443 only when explicitly set
+// buildPubSubURL creates a WebSocket URL, omitting port 443 if it is the effective port.
 func buildPubSubURL(endpoint string, wssPort int) string {
-	if wssPort == 443 {
-		// Port 443 explicitly set - omit from URL
+	port := wssPortOrDefault(wssPort)
+	if port == 443 {
 		return fmt.Sprintf("wss://%s", endpoint)
 	}
-	port := wssPortOrDefault(wssPort)
 	return fmt.Sprintf("wss://%s:%d", endpoint, port)
 }
 
-// wssPortOrDefault returns p if non-zero, otherwise 443.
+// wssPortOrDefault returns p if non-zero, otherwise the default from paths.json.
 func wssPortOrDefault(p int) int {
 	if p > 0 {
 		return p
 	}
-	return 443
+	return constants.Paths.Ports.OperatorWss
 }
 
-// httpPortOrDefault returns p if non-zero, otherwise 443.
+// httpPortOrDefault returns p if non-zero, otherwise the default from paths.json.
 func httpPortOrDefault(p int) int {
 	if p > 0 {
 		return p
 	}
-	return 443
+	return constants.Paths.Ports.OperatorHttp
 }
 
 // tlsServerName returns the TLS ServerName override to use when endpoint is a

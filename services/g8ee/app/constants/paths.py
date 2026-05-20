@@ -18,6 +18,7 @@ from typing import TypedDict, cast
 
 from app.constants.env_vars import EnvVar
 from app.utils.path import resolve_project_root
+from app.constants.generated_paths import PathConstants
 
 
 class InfraPaths(TypedDict):
@@ -41,6 +42,7 @@ class G8eePaths(TypedDict):
 class PathsDict(TypedDict):
     infra: InfraPaths
     g8ee: G8eePaths
+    ports: dict[str, int]
 
 
 # The bridge to protocol paths.
@@ -91,21 +93,28 @@ def _load_paths() -> PathsDict:
             default_pki_dir = str(pki_path)
             default_secrets_dir = str(secrets_path)
         else:
-            default_pki_dir = os.environ.get(EnvVar.PKIDir, "/pki")
-            default_secrets_dir = os.environ.get(EnvVar.SECRETS_DIR, "/secrets")
+            default_pki_dir = os.environ.get(EnvVar.PKIDir, PathConstants.PATH_PKI_DIR)
+            default_secrets_dir = os.environ.get(EnvVar.SECRETS_DIR, PathConstants.PATH_SECRETS_DIR)
         app_cert_dir = str(Path(default_pki_dir) / "issued" / "apps")
         paths = {
             "infra": {
-                "db_path": "/data/g8e.db",
+                "db_path": PathConstants.PATH_DB_PATH,
                 "ca_cert_path": str(Path(default_pki_dir) / "trust" / "hub-bundle.pem"),
                 "app_cert_dir": app_cert_dir,
                 "pki_dir": os.environ.get(EnvVar.PKIDir, default_pki_dir),
                 "secrets_dir": os.environ.get(EnvVar.SECRETS_DIR, default_secrets_dir),
-                "docs_dir": "/docs",
+                "docs_dir": PathConstants.PATH_DOCS_DIR,
                 "protocol_dir": _PROTOCOL_DIR,
                 "protocol_constants_dir": _PROTOCOL_DIR + "/constants",
                 "protocol_models_dir": _PROTOCOL_DIR + "/models",
-                "ssh_config_path": "/etc/g8e/ssh_config",
+                "ssh_config_path": PathConstants.PATH_SSH_CONFIG_PATH,
+            },
+            "ports": {
+                "operator_http": PathConstants.PORT_OPERATOR_HTTP,
+                "operator_wss": PathConstants.PORT_OPERATOR_WSS,
+                "operator_bootstrap": PathConstants.PORT_OPERATOR_BOOTSTRAP,
+                "operator_public": PathConstants.PORT_OPERATOR_PUBLIC,
+                "g8ee_http": PathConstants.PORT_G8EE_HTTP,
             },
             "g8ee": {
                 "cert_name": "g8ee",

@@ -39,7 +39,7 @@ markers = [
     "thinking: Tests requiring LLM thinking/reasoning capability",
     "tools: Tests requiring LLM tool calling/function calling capability",
     "operator_wire: Integration tests that publish tool-call events directly to a live Operator via PubSub (no AI, no approval gate)",
-    "requires_operator: Integration tests that require a live Operator on port 9000 (e.g. for DB or KV access)",
+    "requires_operator: Integration tests that require a live Operator on port 8440 (e.g. for DB or KV access)",
 ]
 
 # Output and logging
@@ -226,36 +226,4 @@ timeout_method = "signal"
     quote-style = "double"
     indent-style = "space"
     line-ending = "auto"
-
-# ============================================================================
-# MyPy Configuration (Type Checking)
-# ============================================================================
-[tool.mypy]
-python_version = "3.14"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_any_generics = true
-check_untyped_defs = true
-no_implicit_reexport = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-show_error_codes = true
-
-# Per-module options
-[[tool.mypy.overrides]]
-module = "tests.*"
-disallow_untyped_defs = false
-
-[[tool.mypy.overrides]]
-module = [
-    "google.*",
-    "google.cloud.*",
-    "google.genai.*",
-]
-ignore_missing_imports = true
 

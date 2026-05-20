@@ -18,6 +18,7 @@ wired with typed fakes. Use the individual fake constructors directly when
 testing a sub-service in isolation.
 """
 
+from app.constants.generated_paths import PathConstants
 from app.models.cache import CacheOperationResult
 from app.models.settings import G8eePlatformSettings
 from app.services.operator.command_service import OperatorCommandService
@@ -145,7 +146,7 @@ def build_command_service(
     event_service = event_service or FakeEventService()
     ai_response_analyzer = ai_response_analyzer or FakeAIResponseAnalyzer()
     investigation_service = investigation_service or FakeInvestigationService()
-    settings = settings or G8eePlatformSettings(port=8443)
+    settings = settings or G8eePlatformSettings(port=PathConstants.PORT_G8EE_HTTP)
 
     operator_data_service = OperatorDataService(cache=cache_aside_service, internal_http_client=internal_http_client)
 

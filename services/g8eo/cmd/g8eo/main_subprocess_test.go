@@ -27,6 +27,7 @@ package main
 // coverage tooling registers them as entered, while keeping the parent test process safe.
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -413,7 +414,7 @@ func TestRunListenMode_BadLogLevel_Subprocess(t *testing.T) {
 
 func TestRunOpenClawMode_BadLogLevel_Subprocess(t *testing.T) {
 	if os.Getenv("G8E_TEST_OPENCLAW_BAD_LOG") == "1" {
-		runOpenClawMode("ws://localhost:18789", "", "", "", "", "notavalidlevel")
+		runOpenClawMode(fmt.Sprintf("ws://localhost:%d", constants.Paths.Ports.OpenclawGateway), "", "", "", "", "notavalidlevel")
 		return
 	}
 

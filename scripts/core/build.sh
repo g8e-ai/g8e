@@ -62,6 +62,7 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "${SCRIPT_DIR}/path_utils.sh"
 PROJECT_ROOT="${G8E_PROJECT_ROOT:-$(resolve_g8e_root)}"
+. "${PROJECT_ROOT}/scripts/cmd/paths.sh"
 
 G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$PROJECT_ROOT/.g8e}"
 OPERATOR_LISTEN_DATA_DIR="${OPERATOR_LISTEN_DATA_DIR:-$G8E_RUNTIME_DIR/data}"
@@ -73,10 +74,11 @@ OPERATOR_LISTEN_PID_FILE="$OPERATOR_LISTEN_PID_DIR/operator-listen.pid"
 OPERATOR_LISTEN_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/operator-listen.log"
 G8EE_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ee.pid"
 G8EE_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ee.log"
-OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_http --default "443" 2>/dev/null)}"
-OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_wss --default "443" 2>/dev/null)}"
-OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_bootstrap --default "80" 2>/dev/null)}"
-OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_public --default "443" 2>/dev/null)}"
+OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-$G8E_PORT_OPERATOR_HTTP}"
+OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-$G8E_PORT_OPERATOR_WSS}"
+OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$G8E_PORT_OPERATOR_BOOTSTRAP}"
+OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$G8E_PORT_OPERATOR_PUBLIC}"
+G8EE_HTTP_PORT="${G8EE_HTTP_PORT:-$G8E_PORT_G8EE_HTTP}"
 OPERATOR_LISTEN_LOG_MAX_BACKUPS=5
 
 DEV_MODE=false
@@ -146,7 +148,7 @@ _stop_optional_app() {
 
 _wait_optional_app_healthy() {
     case "$1" in
-        g8ee) _wait_service_healthy "g8ee" "https://localhost:8443/health" 10 1 "$G8EE_LOG_FILE" ;;
+        g8ee) _wait_service_healthy "g8ee" "https://localhost:${G8EE_HTTP_PORT}/health" 10 1 "$G8EE_LOG_FILE" ;;
     esac
 }
 
@@ -324,7 +326,7 @@ _start_g8ee() {
         return 0
     fi
 
-    _check_port_available 8443 "g8ee Engine API" || exit 1
+    _check_port_available "${G8EE_HTTP_PORT}" "g8ee Engine API" || exit 1
 
     local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
     if [ ! -d "$venv_dir" ]; then
@@ -334,7 +336,7 @@ _start_g8ee() {
         "$venv_dir/bin/pip" install -r "$PROJECT_ROOT/services/g8ee/requirements.txt"
     fi
 
-    echo "  Starting g8ee on port 8443 (HTTPS)..."
+    echo "  Starting g8ee on port ${G8EE_HTTP_PORT} (HTTPS)..."
     _rotate_logs "$G8EE_LOG_FILE"
 
     (
@@ -346,9 +348,8 @@ _start_g8ee() {
         export G8E_INTERNAL_HTTP_URL="https://localhost:${OPERATOR_LISTEN_HTTP_PORT}"
         export G8E_INTERNAL_PUBSUB_URL="wss://localhost:${OPERATOR_LISTEN_WSS_PORT}"
 
-        local cert_name
-        cert_name=$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" g8ee.cert_name --default "g8ee" 2>/dev/null)
-        setsid "$venv_dir/bin/uvicorn" app.main:app --host 0.0.0.0 --port 8443 \
+        local cert_name="${G8E_PATH_G8EE_CERT_NAME:-g8ee}"
+        setsid "$venv_dir/bin/uvicorn" app.main:app --host 0.0.0.0 --port "${G8EE_HTTP_PORT}" \
             --ssl-keyfile "$OPERATOR_LISTEN_PKI_DIR/issued/apps/${cert_name}.key" \
             --ssl-certfile "$OPERATOR_LISTEN_PKI_DIR/issued/apps/${cert_name}.crt" \
             > "$G8EE_LOG_FILE" 2>&1 &

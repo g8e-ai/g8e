@@ -29,6 +29,7 @@ import socket
 import pytest
 import pytest_asyncio
 
+from app.constants.generated_paths import PathConstants
 from app.clients.db_client import DBClient
 from app.clients.kv_cache_client import KVCacheClient
 from app.constants import (
@@ -245,10 +246,19 @@ def _web_search_settings_from_env() -> SearchSettings | None:
     )
 
 
-def _is_operator_online(host: str = "localhost", port: int = 443, timeout: float = 1.0) -> bool:
+def _is_operator_online(host: str | None = None, port: int | None = None, timeout: float = 1.0) -> bool:
     """Check if the operator is online by attempting a socket connection to its port."""
+    from urllib.parse import urlparse
+
+    from app.models.settings import ListenSettings
+    listen = ListenSettings()
+    parsed = urlparse(listen.http_url)
+
+    target_host = host or parsed.hostname or "localhost"
+    target_port = port or parsed.port or PathConstants.PORT_OPERATOR_HTTP
+
     try:
-        with socket.create_connection((host, port), timeout=timeout):
+        with socket.create_connection((target_host, target_port), timeout=timeout):
             return True
     except (TimeoutError, ConnectionRefusedError, OSError):
         return False
@@ -304,12 +314,18 @@ async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = T
 
 def pytest_configure(config):
     import asyncio
+    from urllib.parse import urlparse
 
     from app.llm.factory import set_llm_settings, set_search_settings, set_settings
+    from app.models.settings import ListenSettings
 
     logger.info("Pytest configure started.")
 
     # Check if operator is online once at the start
+    listen = ListenSettings()
+    parsed = urlparse(listen.http_url)
+    target_port = parsed.port or PathConstants.PORT_OPERATOR_HTTP
+
     is_online = _is_operator_online()
     config.stash[pytest.StashKey[bool]()] = is_online
 
@@ -318,9 +334,9 @@ def pytest_configure(config):
     _OPERATOR_ONLINE = is_online
 
     if is_online:
-        logger.info("Operator is ONLINE on port 443")
+        logger.info(f"Operator is ONLINE on port {target_port}")
     else:
-        logger.warning("Operator is OFFLINE on port 443. Integration tests requiring a live operator will be skipped.")
+        logger.warning(f"Operator is OFFLINE on port {target_port}. Integration tests requiring a live operator will be skipped.")
 
     # Only load settings if they haven't been set yet
     try:
@@ -569,7 +585,7 @@ def test_settings():
 
     settings = get_settings()
     if settings is None or not hasattr(settings, "auth"):
-        return G8eePlatformSettings(port=8443, auth=AuthSettings(), listen=ListenSettings())
+        return G8eePlatformSettings(auth=AuthSettings(), listen=ListenSettings())
     return settings
 
 
@@ -604,7 +620,7 @@ def mock_event_service():
 @pytest.fixture
 def mock_settings():
     from app.models.settings import AuthSettings
-    return G8eePlatformSettings(port=443, auth=AuthSettings(), listen=ListenSettings())
+    return G8eePlatformSettings(auth=AuthSettings(), listen=ListenSettings())
 
 
 @pytest.fixture

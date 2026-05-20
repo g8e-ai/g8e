@@ -42,7 +42,7 @@ device:
 
 upstream:
   url: http://acme-ingest.internal
-  port: 8443
+  port: ${G8EE_PORT:-8443}
   tls_cert: /etc/device/certs/client.crt
 
 runtime:
@@ -109,8 +109,8 @@ case "$PROFILE" in
 
     bad_upstream)
         # Config points at a port nothing listens on.
-        # Fix: edit upstream.port back to 8443.
-        sed -i 's/port: 8443/port: 1/' "$CONFIG"
+        # Fix: edit upstream.port back to ${G8EE_PORT:-8443}.
+        sed -i "s/port: ${G8EE_PORT:-8443}/port: 1/" "$CONFIG"
         ;;
 
     disk_full)

@@ -16,7 +16,8 @@
     "operator_wss": 8440,
     "operator_bootstrap": 8441,
     "operator_public": 8440,
-    "g8ee_http": 8443
+    "g8ee_http": 8443,
+    "openclaw_gateway": 18789
   },
   "g8ee": {
     "app_dir": "/app/services/g8ee",
