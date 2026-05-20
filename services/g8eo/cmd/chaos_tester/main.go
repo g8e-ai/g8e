@@ -485,10 +485,10 @@ func main() {
 
 	// Batch rejection and success writers to reduce SQLite contention
 	rejectionBatch := &batchEventWriter{
-		warden:    warden,
-		logger:    logger,
-		flushSize: 100,
-		events:    make([]*storage.Event, 0, 100),
+		auditVault: av,
+		logger:     logger,
+		flushSize:  100,
+		events:     make([]*storage.ChaosEvent, 0, 100),
 	}
 	defer rejectionBatch.flush() // ensure final batch is written
 
@@ -640,32 +640,35 @@ func fireOne(
 
 // batchEventWriter batches events to reduce SQLite lock contention
 type batchEventWriter struct {
-	mu        sync.Mutex
-	warden    *governance.Warden
-	logger    *slog.Logger
-	events    []*storage.Event
-	flushSize int
+	mu         sync.Mutex
+	auditVault *storage.AuditVaultService
+	logger     *slog.Logger
+	events     []*storage.ChaosEvent
+	flushSize  int
 }
 
 func (b *batchEventWriter) recordRejection(id int, cat category, env *uap.UAPEnvelope, verErr error) {
-	if b.warden.AuditVault == nil {
+	if b.auditVault == nil {
 		return
 	}
 
 	reason := classifyRejection(verErr)
-	event := &storage.Event{
+	event := &storage.ChaosEvent{
 		OperatorSessionID: env.OperatorSessionId,
 		Timestamp:         time.Now(),
-		Type:              constants.EventType(reason),
+		ChaosID:           id,
+		Category:          categoryName(cat),
+		Outcome:           reason,
 		ContentText:       fmt.Sprintf("[chaos-id:%d] %s: %s", id, categoryName(cat), verErr.Error()),
 		CommandRaw:        env.ActionType + " / " + env.TargetResource,
+		TransactionHash:   env.TransactionHash,
 	}
 
 	b.queueEvent(event)
 }
 
 func (b *batchEventWriter) recordExecution(id int, cat category, env *uap.UAPEnvelope, execErr error) {
-	if b.warden.AuditVault == nil {
+	if b.auditVault == nil {
 		return
 	}
 
@@ -674,18 +677,21 @@ func (b *batchEventWriter) recordExecution(id int, cat category, env *uap.UAPEnv
 		status = fmt.Sprintf("FAILED: %v", execErr)
 	}
 
-	event := &storage.Event{
+	event := &storage.ChaosEvent{
 		OperatorSessionID: env.OperatorSessionId,
 		Timestamp:         time.Now(),
-		Type:              "action_receipt",
+		ChaosID:           id,
+		Category:          categoryName(cat),
+		Outcome:           status,
 		ContentText:       fmt.Sprintf("[chaos-id:%d] %s: %s", id, categoryName(cat), status),
 		CommandRaw:        fmt.Sprintf("%s / %s (hash: %s)", env.ActionType, env.TargetResource, env.TransactionHash[:12]),
+		TransactionHash:   env.TransactionHash,
 	}
 
 	b.queueEvent(event)
 }
 
-func (b *batchEventWriter) queueEvent(ev *storage.Event) {
+func (b *batchEventWriter) queueEvent(ev *storage.ChaosEvent) {
 	b.mu.Lock()
 	b.events = append(b.events, ev)
 	shouldFlush := len(b.events) >= b.flushSize
@@ -699,7 +705,7 @@ func (b *batchEventWriter) queueEvent(ev *storage.Event) {
 func (b *batchEventWriter) flush() {
 	b.mu.Lock()
 	events := b.events
-	b.events = make([]*storage.Event, 0, b.flushSize)
+	b.events = make([]*storage.ChaosEvent, 0, b.flushSize)
 	b.mu.Unlock()
 
 	if len(events) == 0 {
@@ -707,37 +713,10 @@ func (b *batchEventWriter) flush() {
 	}
 
 	// Use a single transaction for the whole batch
-	if b.warden.AuditVault != nil {
-		if err := b.warden.AuditVault.RecordEvents(events); err != nil {
-			b.logger.Warn("failed to record batch of events", "error", err)
+	if b.auditVault != nil {
+		if err := b.auditVault.RecordChaosEvents(events); err != nil {
+			b.logger.Warn("failed to record batch of chaos events", "error", err)
 		}
-	}
-}
-
-// recordRejection writes a rejection event directly to the audit vault so
-// rejected envelopes appear in the events table alongside successes.
-func recordRejection(
-	id int,
-	cat category,
-	env *uap.UAPEnvelope,
-	verErr error,
-	warden *governance.Warden,
-	logger *slog.Logger,
-) {
-	if warden.AuditVault == nil {
-		return
-	}
-
-	reason := classifyRejection(verErr)
-	event := &storage.Event{
-		OperatorSessionID: "chaos-session-001",
-		Timestamp:         time.Now(),
-		Type:              constants.EventType(reason),
-		ContentText:       fmt.Sprintf("[chaos-id:%d] %s: %s", id, categoryName(cat), verErr.Error()),
-		CommandRaw:        env.ActionType + " / " + env.TargetResource,
-	}
-	if _, err := warden.AuditVault.RecordEvent(event); err != nil {
-		logger.Warn("failed to record rejection event", "id", id, "error", err)
 	}
 }
 

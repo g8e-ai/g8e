@@ -80,7 +80,7 @@ When no operator is connected:
 
 ### Daily Operations
 ```bash
-./g8e platform start    # Start Governance Gateway (g8eg) in listen mode (exposes 4 ports: 9000-9003)
+./g8e platform start    # Start Governance Gateway (g8eg) in listen mode (default ports: 8440 multiplexed TLS, 8441 plain Bootstrap)
 ./g8e platform status   # Check service health and PIDs (shows all four endpoints)
 ./g8e platform logs     # Stream aggregated logs
 ./g8e platform settings # View or update platform configuration

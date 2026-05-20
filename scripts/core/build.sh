@@ -702,7 +702,18 @@ if [[ "$COMMAND" == "clean" ]]; then
     _stop_g8ee
     _stop_operator_listen
     rm -rf "$G8E_RUNTIME_DIR" 2>/dev/null || true
-    
+
+    echo "Cleaning Python caches..."
+    find "$PROJECT_ROOT" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find "$PROJECT_ROOT" -type f -name "*.pyc" -delete 2>/dev/null || true
+    find "$PROJECT_ROOT" -type f -name "*.pyo" -delete 2>/dev/null || true
+    find "$PROJECT_ROOT" -type d -name "*.pyc" -exec rm -rf {} + 2>/dev/null || true
+    find "$PROJECT_ROOT" -type d -name "*.pyo" -exec rm -rf {} + 2>/dev/null || true
+    if [ -d "$PROJECT_ROOT/services/g8ee/.venv" ]; then
+        rm -rf "$PROJECT_ROOT/services/g8ee/.venv/__pycache__" 2>/dev/null || true
+        find "$PROJECT_ROOT/services/g8ee/.venv" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    fi
+
     echo "Done."
     exit 0
 fi

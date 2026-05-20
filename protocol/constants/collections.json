@@ -130,6 +130,11 @@
       "value": "trusted_signers",
       "_go_const": "TrustedSigners",
       "_python_const": "TRUSTED_SIGNERS"
+    },
+    "chaos_events": {
+      "value": "chaos_events",
+      "_go_const": "ChaosEvents",
+      "_python_const": "CHAOS_EVENTS"
     }
   }
 }
