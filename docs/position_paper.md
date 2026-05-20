@@ -32,16 +32,16 @@ Every component treats every other component as a potential adversary. There is 
 **The Principal (User) does not trust:**
 
 - *Any single AI provider or model.* The Principal binds heterogeneous providers and tiers (primary / lite / assistant) across the reasoning agents so an adversarial or hallucinating provider cannot collude with itself across the cascade. Tribunal members, Warden's risk analyzers, and Auditor are independently configurable.
-- *Any host running an Operator.* mTLS with URI-SAN workload identity, system fingerprinting, device-link tokens with bounded `max_uses` and TTLs, slot-count accounting, API-key rotation, and revocation are enforced at the Operator listener, not by the AI layer.
+- *Any host running an Operator.* mTLS with URI-SAN workload identity, system fingerprinting, device-link tokens with bounded `max_uses` and TTLs, slot-count accounting, API-key rotation, and revocation are enforced at the Governance Gateway (g8eg), not by the AI layer.
 
 **The Engine (g8ee) does not trust:**
 
 - *The user.* L1 Technical Bedrock (forbidden patterns, blacklist, whitelist) blocks dangerous instructions before any model sees them. The Engine refuses to compromise infrastructure for any single user request regardless of the user's authority over the conversation.
 - *The Operator.* Operator output passes through Sentinel ingress scrubbing (PII, credentials, tokens) before any AI sees it. The Engine speaks to the Operator only over mTLS, only via scoped sessions (`web_session_id` / `cli_session_id` / `operator_session_id`), and never reads raw stdout/stderr - only the scrubbed projection.
 
-**The Operator (g8eo) does not trust:**
+**The Governed Operator (g8eo) and Governance Gateway (g8eg) do not trust:**
 
-- *The user or the AI.* The Operator opens no inbound ports; all client-facing traffic arrives over mTLS to its `--listen` mode. Every mutation crosses the protocol admission boundary: `GovernanceEnvelope` integrity, typed-payload decode, L1 reflected forbidden patterns, hash binding, freshness (`expires_at` + nonce), state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) L3 WebAuthn proof. Sentinel performs egress scrubbing on every result before any byte leaves the host.
+- *The user or the AI.* The Governance Gateway opens no inbound ports; all client-facing traffic arrives over mTLS to its `--listen` mode. Every mutation crosses the protocol admission boundary: `GovernanceEnvelope` integrity, typed-payload decode, L1 reflected forbidden patterns, hash binding, freshness (`expires_at` + nonce), state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) L3 WebAuthn proof. Sentinel performs egress scrubbing on every result before any byte leaves the host.
 
 **The Engine's internal pipeline does not trust itself.** No single agent inside g8ee holds both intent authority and execution authority. The cascade in §2.3 forces every state-changing instruction through an ensemble of independent, ideologically opposed agents before it is even *eligible* for the protocol gauntlet.
 
@@ -67,11 +67,11 @@ The governance boundary. The protocol is not a data pipe; it is an armored trans
 * **The vulnerability:** Raw tool calls lack state awareness and cryptographic proof.
 * **The constraint:** The protocol binds the typed payload to a deterministic transaction hash, the L1/L2/L3 signatures, and the `state_merkle_root` of the target host.
 
-**IV. The Operator (The Execution Boundary)**
-The host-side binary. The Operator is the sovereign system of record and the physical execution boundary.
+**IV. The Governed Operator (The Execution Boundary)**
+The host-side binary. The Governed Operator (g8eo) is the sovereign system of record and the physical execution boundary.
 
 * **The vulnerability:** Upstream AI or compromised transit networks injecting malicious payloads.
-* **The constraint:** The Operator distrusts all inbound traffic. It enforces L1 hard-gates (e.g., regex blocking `sudo`), verifies the L2 Tribunal signature, demands the L3 Human signature, and checks the transaction's state root against the host's actual state to prevent the execution of stale context.
+* **The constraint:** The Governed Operator distrusts all inbound traffic. It enforces L1 hard-gates (e.g., regex blocking `sudo`), verifies the L2 Tribunal signature, demands the L3 Human signature, and checks the transaction's state root against the host's actual state to prevent the execution of stale context.
 
 #### 2.3 The Engine-Internal Byzantine Cascade
 
@@ -86,7 +86,7 @@ Within the Engine, every turn that could touch a host flows through a layered ca
 7. **Auditor verification.** If Warden clears the command, the Auditor (primary tier) sees the request, the operator context, and the anonymized candidate clusters. Auditor verdicts are `ok`, `swap:<cluster_id>` (promote a dissenter), or `revised:<command>`. Auditor's job is intent fidelity and syntactic integrity; it judges the command, not the source. On `ok` or `swap`, the verdict is bound to a SHA-256 **Merkle commitment** over the agent reputation scoreboard, chained via `prev_root` HMAC-SHA256 - a tamper-evident history of agent performance. Reputation-commitment failure is fatal; the verdict cannot proceed.
 8. **L1/L2/L3 wrapping.** The Auditor-verified command is packaged as a typed `CommandRequested` payload inside a `GovernanceEnvelope`, signed by the L2 Tribunal key, and presented to the user for L3 WebAuthn approval (or auto-approval policy if the verb is in `auto_approved.json` and L1/L2 cleared).
 9. **Substrate admission gauntlet.** The signed envelope is submitted over mTLS to the Operator, which independently re-runs the entire fail-closed gauntlet (§3). The Engine has no privileged channel.
-10. **Warden execution + signed receipt.** Inside the Operator, the substrate Warden (distinct from the AI Warden) is the *only* execution boundary. It writes an executing-state `ActionReceipt` to the audit vault before dispatch and a final receipt with `state_root_after` after dispatch.
+10. **Warden execution + signed receipt.** Inside the Governed Operator, the substrate Warden (distinct from the AI Warden) is the *only* execution boundary. It writes an executing-state `ActionReceipt` to the audit vault before dispatch and a final receipt with `state_root_after` after dispatch.
 
 **Key invariant.** Any single agent in this cascade can be replaced or removed for an experiment, but the *signed-envelope substrate gauntlet* (§3) is non-negotiable. If the Engine's internal cascade is compromised end-to-end - e.g. a single adversarial provider supplied every model tier - the Operator still rejects the resulting envelope at L1 (forbidden patterns) or at the state-root / freshness / signer-trust gates.
 
@@ -98,7 +98,7 @@ MCP is highly effective at standardizing *what* a tool call is. But an MCP serve
 
 In a mutual-adversary architecture, MCP is treated strictly as the **Payload**, and the host Operator is the **admission boundary**. The execution substrate does not "wrap" the payload as a passive courier; it ingests the payload at its perimeter and refuses to let it cross into the application layer - much less the host - until the surrounding `GovernanceEnvelope` proves itself against every conformance gate.
 
-When an LLM client issues a standard MCP `call_tool` request, the gateway intercepts the JSON-RPC message, normalizes the arguments into a base64 Protobuf payload, and binds it to a `GovernanceEnvelope`. The Operator's `TransactionVerifier` then forces that envelope through an ordered, fail-closed gauntlet *before any application code runs*:
+When an LLM client issues a standard MCP `call_tool` request, the gateway intercepts the JSON-RPC message, normalizes the arguments into a base64 Protobuf payload, and binds it to a `GovernanceEnvelope`. The Governed Operator's `TransactionVerifier` then forces that envelope through an ordered, fail-closed gauntlet *before any application code runs*:
 
 1. **Envelope integrity** - the JSON envelope must decode; `id` and `action_type` must be present; `action_type` must be registered.
 2. **Typed payload binding** - `payload` must decode as the protobuf message declared by `action_type`. Untyped or shape-mismatched payloads are rejected.

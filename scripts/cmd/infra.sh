@@ -159,10 +159,9 @@ case "$TOP" in
         echo -e "  Operator ID: \033[1m$_operator_id\033[0m"
         echo -e "  Sessions:    operator=${_session_id:0:8}..., cli=${_cli_session_id:0:8}..."
 
-        echo -e "\n\033[1mOperator Binaries:\033[0m"
-        echo -e "  linux/amd64: \033[1m$G8E_PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.operator\033[0m (default/built)"
-        echo -e "  linux/arm64: [requires \033[1;34m./g8e operator build-all\033[0m]"
-        echo -e "  linux/386:   [requires \033[1;34m./g8e operator build-all\033[0m]"
+        echo -e "\n\033[1mPlatform Binaries (Governance Gateway & Operator Agent):\033[0m"
+        echo -e "  linux/amd64: \033[1m$G8E_PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.gateway\033[0m (Gateway PDP)"
+        echo -e "               \033[1m$G8E_PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.operator\033[0m (Operator PEP / MCP)"
 
         echo -e "\n\033[1mDeploy to Remote Host:\033[0m"
         echo -e "  Run this to deploy and connect a new sovereign agent:"

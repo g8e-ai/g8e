@@ -113,7 +113,7 @@ The set of standards and regulations that g8e adheres to, including NSA ZIG alig
 
 ## Coordination Store (SQLite)
 
-The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. The Operator binary running in `--listen` mode is the single source of truth - a single SQLite database in WAL mode shared by all components via the Operator's document store, KV, and pub/sub APIs. g8ee and  are stateless with respect to persistence and access all data through the  HTTP API.
+The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. The Governance Gateway (`g8eg`) running in `--listen` mode is the single source of truth - a single SQLite database in WAL mode shared by all components via the Gateway's document store, KV, and pub/sub APIs. g8ee and dashboard components are stateless with respect to persistence and access all data through the Gateway's HTTP API.
 
 ---
 
@@ -185,9 +185,15 @@ The AI engine component with LLM provider abstraction supporting OpenAI, Anthrop
 
 ---
 
-## g8eo (g8e Operator)
+## Governance Gateway (g8eg)
 
-The Go-based reference implementation of the Operator. A lightweight (~4MB) binary that provides language-agnostic, platform-agnostic execution, file operations, local storage, and heartbeat monitoring. When started with `--listen`, it acts as the platform's central **Coordination Store**.
+The central, BFT-governed Policy Decision Point (PDP) running in `--listen` mode (built as the `g8e.gateway` binary from the Go substrate codebase). It acts as the platform's cryptographic backplane, providing central persistence (SQLite Coordination Store), PKI/CA certificate issuance, a secure pub/sub broker, Server-Sent Events (SSE) buffering, replay protection, and the authoritative audit event vault.
+
+---
+
+## Governed Operator (g8eo)
+
+The host-resident execution agent and Policy Execution Point (PEP) (built as the `g8e.operator` binary from the Go substrate codebase). Running on target hosts, `g8eo` connects outbound-only over mTLS WSS to `g8eg`. It exposes host tools as a Model Context Protocol (MCP) Server, verifies incoming UAP transactions against local L1/L2/L3 gates, executes actions strictly through the Warden boundary, and records tamper-evident local audit logs (Audit Vault, Scrubbed Vault, and git-backed session ledgers).
 
 ---
 
@@ -319,7 +325,7 @@ A security principle where entities receive only the minimum permissions necessa
 
 ## Ledger
 
-The file-mutation audit layer of the LFAA. The Operator implements a **Multi-Ledger Architecture**: each operator session receives its own isolated git repository initialized on first use at `.g8e/data/ledger/sessions/<operator_session_id>/`. A global ledger at `.g8e/data/ledger/` acts as the bootstrap root, but all runtime file-mutation history is written into the operator session-scoped sub-repository.
+The file-mutation audit layer of the LFAA. The Governed Operator implements a **Multi-Ledger Architecture**: each operator session receives its own isolated git repository initialized on first use at `.g8e/data/ledger/sessions/<operator_session_id>/`. A global ledger at `.g8e/data/ledger/` acts as the bootstrap root, but all runtime file-mutation history is written into the operator session-scoped sub-repository.
 
 Every file mutation follows a two-phase commit: the Ledger snapshots the file's state before the mutation (`LedgerHashBefore`), the Operator executes, then the Ledger snapshots the result (`LedgerHashAfter`). Each phase produces a git commit with a timestamped message referencing the operator session ID. The resulting git hash pair provides a cryptographically verifiable diff, enabling time-travel, rollback, and cross-session forensic comparison.
 
@@ -412,7 +418,7 @@ The remote LLM inference component. g8e supports any remote Ollama server reacha
 
 ## Operator
 
-The language-agnostic, platform-agnostic execution binary that runs on target systems and receives commands from the g8e control plane. The current ~4MB Go binary (`g8eo`) is the reference implementation for Linux and macOS. When running in `--listen` mode, the Operator serves as the platform's **Coordination Store**, providing the document store, KV, and pub/sub broker for  and g8ee.
+An abbreviation generally referring to the **Governed Operator (`g8eo`)** role when running on target hosts as the PEP, or the compiled Go codebase which generates both `g8e.gateway` (`g8eg`) and `g8e.operator` (`g8eo`) binaries.
 
 Operator command/result traffic follows the g8e protocol: UAP JSON `GovernanceEnvelope` bytes carry typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport.
 

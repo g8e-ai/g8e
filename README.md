@@ -114,8 +114,8 @@ graph TD
     State -. "Stale" .-> FailClosed
 
     FailClosed --> LocalVault
-    VaultCommitPre --> LocalVault
     VaultCommitPre -- "2. Vaulted & Approved" --> OutboundMCP
+    VaultCommitPre --> LocalVault
     VaultCommitPre ~~~ OutboundMCP
     LocalVault ~~~ OutboundMCP
 ```

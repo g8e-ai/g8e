@@ -24,7 +24,9 @@ case "$SUB" in
         _banner "operator init"
         (cd "$SCRIPT_DIR/services/g8eo" && make build-local)
         echo ""
-        echo "Operator binary built on host: $SCRIPT_DIR/services/g8eo/build/linux-amd64/g8e.operator"
+        echo "Binaries built on host:"
+        echo "  - Operator Agent:   $SCRIPT_DIR/services/g8eo/build/linux-amd64/g8e.operator"
+        echo "  - Governance Gateway: $SCRIPT_DIR/services/g8eo/build/linux-amd64/g8e.gateway"
         exit 0 ;;
     build)
         _banner "operator build"

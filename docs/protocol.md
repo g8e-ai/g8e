@@ -6,9 +6,9 @@ title: g8e Protocol
 
 Last Updated: 2026-05-18
 
-The **g8e Protocol** is a governance and compliance standard. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) at the Operator's admission boundary and forces them through a fail-closed verification gauntlet - envelope integrity, typed-payload decode, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the substrate boundary: they never reach the application layer (Warden, execution handlers) and they never touch the host. Admitted payloads produce a cryptographically provable audit trail with local-first persistence at the site of execution.
+The **g8e Protocol** is a governance and compliance standard. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) at the Governance Gateway's admission boundary and forces them through a fail-closed verification gauntlet - envelope integrity, typed-payload decode, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the substrate boundary: they never reach the execution boundary (the Warden) and they never touch the host. Admitted payloads produce a cryptographically provable audit trail with local-first persistence at the site of execution.
 
-The protocol is the only mandatory layer of g8e. Any conforming implementation - Operator, client, or BYO frontend - interoperates by speaking this contract. The reference Operator (`g8eo`) and reference Engine (`g8ee`) are interchangeable with anything that produces and verifies the same envelopes.
+The protocol is the only mandatory layer of g8e. Any conforming implementation - Governance Gateway, Governed Operator, client, or BYO frontend - interoperates by speaking this contract. The reference Governance Gateway (`g8eg`), Governed Operator (`g8eo`), and reference Engine (`g8ee`) are interchangeable with anything that produces and verifies the same envelopes.
 
 ---
 
@@ -20,7 +20,7 @@ The protocol is the only mandatory layer of g8e. Any conforming implementation -
 4. **Body-embedded context** - Business and execution context (`web_session_id`, `cli_session_id`, `operator_session_id`, `user_id`, `case_id`, `investigation_id`, etc.) lives inside the envelope body via a typed `RequestContext`. HTTP headers are reserved for protocol-level metadata and mTLS-bound identity.
 5. **BFT state binding** - Mutations carry a `state_merkle_root` that the Operator compares against its current host state. Stale-state transactions are rejected.
 6. **Signed receipts** - Every accepted mutation produces a Warden-signed `ActionReceipt` containing status, `state_root_before`, `state_root_after`, and a key-id-bound Ed25519 signature.
-7. **Operator sovereignty** - No bundled component has privileged channels. The Operator is the only execution boundary, and its rules apply uniformly to BYO and reference clients.
+7. **Operator sovereignty** - No bundled component has privileged channels. The Governed Operator (`g8eo`) is the only execution boundary, and its rules apply uniformly to BYO and reference clients.
 
 ---
 
@@ -75,7 +75,7 @@ The schema source of truth lives under `@/home/bob/g8e/protocol/proto/`:
 
 ## JSON-RPC Error Mapping
 
-For BYO clients using the MCP or A2A protocol translation gateway, g8eo provides granular JSON-RPC error codes to disambiguate substrate verification failures. These codes reside in the reserved range `-32000` to `-32099`.
+For BYO clients using the MCP or A2A protocol translation gateway, `g8eg` (serving as Gateway) and `g8eo` (serving as MCP Server) provide granular JSON-RPC error codes to disambiguate substrate verification failures. These codes reside in the reserved range `-32000` to `-32099`.
 
 | Code | Label | Meaning |
 |---|---|---|
@@ -110,9 +110,9 @@ Static, deterministic checks enforced before any code executes.
 A cryptographic proof that an independent ensemble agreed on the instruction.
 
 - **Mechanism** - Ed25519 signature over `transaction_hash | decision`.
-- **Trust** - The Operator maintains an Operator-owned `SignerStore`; missing or unknown keys cause rejection.
+- **Trust** - The Governed Operator maintains an Operator-owned `SignerStore`; missing or unknown keys cause rejection.
 - **Producer** - Any conforming L2 producer (the bundled Engine, a BYO multi-agent system, or a single signer for low-stakes flows).
-- **Reference Engine producer** - g8ee runs its own internal Byzantine cascade upstream of the L2 signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Warden risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Engine signs only after Auditor passes. The Operator does not assume any of this; it re-runs every gate below independently. See [g8ee Governance & Safety](g8ee.md) and [position paper §2.3](position_paper.md).
+- **Reference Engine producer** - g8ee runs its own internal Byzantine cascade upstream of the L2 signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Warden risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Engine signs only after Auditor passes. The substrate gateway and operator do not assume any of this; they re-run every gate below independently. See [g8ee Governance & Safety](g8ee.md) and [position paper §2.3](position_paper.md).
 
 ### L3: Authorization (Human)
 
@@ -131,11 +131,11 @@ Hardware-bound proof of human presence, except where policy explicitly permits a
 2. Client embeds the payload in a `GovernanceEnvelope`, populating `nonce`, `expires_at`, and `state_merkle_root`.
 3. The L2 producer computes `transaction_hash` and attaches a Tribunal signature.
 4. The L3 actor (human) signs the same hash via WebAuthn.
-5. Client submits canonical-JSON envelope over mTLS to the Operator.
+5. Client submits canonical-JSON envelope over mTLS to the Governance Gateway (`g8eg`), which validates, records/suspends as needed, and dispatches to the target Governed Operator (`g8eo`) over secure mTLS WSS.
 
-### Verification Phase (Operator)
+### Verification Phase (Gateway & Operator)
 
-The `TransactionVerifier` runs the following gates in order:
+The `TransactionVerifier` on both `g8eg` and `g8eo` runs the following gates in order:
 
 1. **Integrity** - `id == transaction_hash == SHA256(canonical_fields)`.
 2. **Freshness** - `expires_at` not passed; `nonce` not in the replay store.
@@ -146,10 +146,10 @@ The `TransactionVerifier` runs the following gates in order:
 
 ### Execution & Receipt Phase (Operator → Client)
 
-The **Warden** signs an executing-state `ActionReceipt` and writes it to the AuditVault. If logging fails, execution is aborted.
+The **Warden** on the Governed Operator signs an executing-state `ActionReceipt` and writes it to the AuditVault. If logging fails, execution is aborted.
 2. The Warden dispatches the typed payload to its execution handler (e.g., shell executor, file edit handler).
 3. The Warden updates the receipt with the final status (`COMPLETED` / `FAILED`), the post-state root, and a fresh signature.
-4. The Operator publishes a result envelope (also a `GovernanceEnvelope`) carrying the typed result and the signed receipt.
+4. The Governed Operator publishes a result envelope (also a `GovernanceEnvelope`) carrying the typed result and the signed receipt back to the Gateway.
 
 ---
 
@@ -293,4 +293,4 @@ Agent performance is tracked via an EMA scalar `[0.0, 1.0]` in the `reputation_s
 | Audit storage | `@/home/bob/g8e/services/g8eo/internal/services/storage/audit_vault.go` |
 | Workload identity | `@/home/bob/g8e/protocol/workload_identity.go` |
 
-For the reference Operator implementation see [Operator](operator.md). For the reference Engine application see [g8ee Service](g8ee_service.md). For Hub/data-backplane behavior see [g8eo Service](g8eo_service.md).
+For the reference Operator implementation see [Operator](operator.md). For the reference Engine application see [g8ee Engine](g8ee.md). For Hub/data-backplane behavior see [Governance Gateway (g8eg)](g8eg.md).

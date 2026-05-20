@@ -16,7 +16,7 @@ Components run host-native. **Do not use Docker for primary component developmen
 
 ### Setup
 
-- **Go 1.26+** (required, for `g8eo`).
+- **Go 1.26+** (required, for `g8eg`/`g8eo`).
 - **Python 3.14+** (only when developing the optional `g8ee` adapter).
 
 ### Common Commands
@@ -24,8 +24,8 @@ Components run host-native. **Do not use Docker for primary component developmen
 | Command | Purpose |
 |---|---|
 | `./g8e` | Interactive Platform Manager. |
-| `./g8e platform start` | Start the reference Operator (`g8eo`) only. |
-| `./g8e platform start --with-apps` | Operator plus optional bundled adapters. |
+| `./g8e platform start` | Start the Governance Gateway (`g8eg`) only. |
+| `./g8e platform start --with-apps` | Gateway plus optional bundled adapters. |
 | `./g8e apps start [g8ee|all]` | Start optional application-layer adapters. |
 | `./g8e platform status` | Substrate health first, optional app status separately. |
 | `./g8e login` | Authenticate the local CLI. |
@@ -37,21 +37,22 @@ The root `./g8e` script is a Bash-based dispatcher and the single entry point fo
 
 - **Platform Management (`./g8e platform`)**: Orchestrates the mandatory substrate lifecycle via `scripts/core/build.sh`.
 - **Application Layer (`./g8e apps`)**: Manages optional, opt-in adapters (like `g8ee`) that extend the platform's capabilities.
-- **Operator Operations (`./g8e operator`)**: Lifecycle management for `g8eo` binaries and remote fleet deployment.
+- **Operator Operations (`./g8e operator`)**: Lifecycle management for `g8eo` (Governed Operator) binaries and remote fleet deployment.
 - **Infrastructure & Data (`./g8e data` / `./g8e security`)**: Unified interface for interacting with the substrate state and security invariants.
 
 **Technical Invariants:**
 1. **Path Resolution**: All scripts must resolve `G8E_PROJECT_ROOT` relative to their own location.
-2. **Service Readiness**: The platform is not "ready" until the Operator listen-mode health check (`/healthz`) passes.
+2. **Service Readiness**: The platform is not "ready" until the Governance Gateway (`g8eg`) listen-mode health check (`/healthz`) passes.
 3. **Canonical Wire Format**: All client-facing interaction (HTTP, PubSub, receipts) must use **canonical JSON (protojson)**. Binary Protobuf is reserved for internal storage.
 4. **Fail-Closed Execution**: Scripts must never mask failures or proceed with missing trust material.
 
 ## Architecture Philosophy
 
-g8e is split into the **Protocol (substrate)**, an **Operator** that implements it on a host, and an optional **Application Layer**.
+g8e is split into the **Protocol (substrate)**, the **Governance Gateway (g8eg)**, the **Governed Operator (g8eo)**, and an optional **Application Layer**.
 
-- **Protocol (substrate)** - Shared `.proto` schemas plus the canonical-JSON wire contract; the source of truth for what every Operator and client must honor.
-- **Reference Operator (`g8eo`)** - The mandatory substrate. In `--listen` mode, it provides the platform's central persistence, PKI, and protocol API (including a minimal bootstrap interface).
+- **Protocol (substrate)** - Shared `.proto` schemas plus the canonical-JSON wire contract; the source of truth for what every operator and client must honor.
+- **Governance Gateway (`g8eg`)** - The central, BFT-governed Policy Decision Point (PDP) running in `--listen` mode. It provides the platform's central persistence, PKI, and protocol API (including a minimal bootstrap interface).
+- **Governed Operator (`g8eo`)** - The host-side Policy Execution Point (PEP) and MCP Server. It enforces protocol compliance, verifies L1/L2/L3 signatures, and executes transactions via the Warden stage.
 - **Reference Application Layer (optional)** - Optional adapters like `g8ee` that extend the platform's reasoning capabilities. All interaction flows through the CLI by default.
 - **Host-native execution** - Core components run as native processes.
 - **Zero-config discovery** - Services use a standardized local runtime directory (`.g8e/`) for discovery and configuration sharing.
@@ -60,13 +61,13 @@ g8e is split into the **Protocol (substrate)**, an **Operator** that implements 
 
 | Component | Role | Runtime | Build |
 |---|---|---|---|
-| Operator (`g8eo`) | Reference Operator: Persistence, Pub/Sub, Root of Trust | Host Go binary | Native Go via `Makefile` |
+| Governance Gateway (`g8eg`) / Governed Operator (`g8eo`) | Central PDP (`g8eg`) and host-side PEP (`g8eo`) | Host Go binary (compiled from single Go substrate codebase to both `g8e.gateway` and `g8e.operator`) | Native Go via `Makefile` |
 | Engine (`g8ee`) | Optional Adapter: AI Backend & Workflow Orchestration | Python 3.14 venv | `pip install` into local `.venv` |
 
 ### Host-native Startup Lifecycle
 
 The `./g8e platform start` command (invoked via `scripts/core/build.sh`) manages the sequence:
-1. **Operator binary check/build** → Operator starts in `--listen mode`.
+1. **Gateway binary check/build** → Governance Gateway (`g8eg`) starts in `--listen` mode.
 2. **Root of trust generation** (first boot only) - ECDSA P-384 CA hierarchy, intermediate CAs, and trust bundles in `.g8e/pki/`; `session_encryption_key`, `warden_signing_key` in `.g8e/secrets/`.
 3. **Optional service initialization** - `g8ee` starts under its venv with mTLS + URI SAN identity.
 4. **Asynchronous convergence** - Services poll health endpoints (e.g., Engine polls `https://localhost:9000/health`).
@@ -135,10 +136,10 @@ AI agents tend to wrap poorly understood code in new abstractions. This is stric
 
 ## Component Rules
 
-### g8eo / Operator (Go)
+### g8eg (Gateway) / g8eo (Governed Operator) (Go)
 - **LFAA payload stamping** - All LFAA results include an `execution_id`.
 - **Concurrency** - Goroutines have explicit cancellation contexts and clear channel ownership.
-- **Protocol boundary** - Any capability needed by bundled apps or BYO clients is exposed through the public Operator protocol.
+- **Protocol boundary** - Any capability needed by bundled apps or BYO clients is exposed through the public gateway protocol.
 - **Execution boundary** - Warden is the sole circuit breaker before dispatch. Every accepted mutation emits a signed `ActionReceipt`.
 
 ### g8ee (Python/FastAPI, optional adapter)

@@ -196,4 +196,4 @@ scripts/
 
 For detailed help on any subcommand: `./g8e <command> --help`.
 
-See also: [Operator](operator.md), [g8eo Service](g8eo_service.md), [Tests](tests.md), [Evals](evals.md), [Demos](demos.md).
+See also: [Operator](operator.md), [Governance Gateway (g8eg)](g8eg.md), [Tests](tests.md), [Evals](evals.md), [Demos](demos.md).
