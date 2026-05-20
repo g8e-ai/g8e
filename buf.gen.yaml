@@ -1,11 +1,11 @@
 version: v2
 plugins:
   # Go generation
-  - remote: buf.build/protocolbuffers/go:v1.34.1
+  - local: protoc-gen-go
     out: .
     opt:
       - module=github.com/g8e-ai/g8e
-  
-  # Python generation
-  - remote: buf.build/protocolbuffers/python:v26.1
-    out: services/g8ee/app/proto
+  - local: protoc-gen-go-grpc
+    out: .
+    opt:
+      - module=github.com/g8e-ai/g8e
