@@ -14,8 +14,11 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
@@ -24,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -106,6 +110,8 @@ func main() {
 	var oldAPIKey string
 	var verifyVault bool
 	var resetVault bool
+	var mcpServe bool
+	flag.BoolVar(&mcpServe, "mcp-serve", false, "Expose MCP gateway over stdio (JSON-RPC)")
 	flag.StringVar(&apiKey, "k", "", "API key")
 	flag.StringVar(&deviceToken, "D", "", "Device link token for operator deployment")
 	flag.StringVar(&endpointURL, "e", "", "Endpoint (hostname or IP)")
@@ -214,6 +220,11 @@ func main() {
 
 	if listenMode {
 		runListenMode(listenWSSPort, listenHTTPPort, listenBootstrapPort, listenPublicPort, listenDataDir, listenPKIDir, listenSecretsDir, listenPasskeyRpID, listenPasskeyRpName, logLevel)
+		return
+	}
+
+	if mcpServe {
+		runMCPServe(endpointURL, listenPKIDir, logLevel)
 		return
 	}
 
@@ -885,4 +896,194 @@ func exportWardenPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string
 	}
 
 	return nil
+}
+
+// runMCPServe runs the MCP stdio JSON-RPC proxy to the Operator's mTLS HTTP API.
+func runMCPServe(endpointURL, pkiDir, logLevel string) {
+	// 1. Resolve mTLS certificates
+	cliCertFile := os.Getenv("G8E_CLI_CERT")
+	if cliCertFile == "" {
+		home, _ := os.UserHomeDir()
+		cliCertFile = filepath.Join(home, ".g8e", "cli.crt")
+	}
+	cliKeyFile := os.Getenv("G8E_CLI_KEY")
+	if cliKeyFile == "" {
+		home, _ := os.UserHomeDir()
+		cliKeyFile = filepath.Join(home, ".g8e", "cli.key")
+	}
+
+	// 2. Resolve trust bundle
+	trustBundle := os.Getenv("G8E_TRUST_BUNDLE")
+	if trustBundle == "" {
+		if pkiDir != "" {
+			trustBundle = filepath.Join(pkiDir, "trust", "hub-bundle.pem")
+		} else {
+			// fallback
+			trustBundle = ".g8e/pki/trust/hub-bundle.pem"
+		}
+	}
+
+	// Read certificates
+	cert, err := tls.LoadX509KeyPair(cliCertFile, cliKeyFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load client keypair (cert: %s, key: %s): %v\n", cliCertFile, cliKeyFile, err)
+		os.Exit(1)
+	}
+
+	caCert, err := os.ReadFile(trustBundle)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to read trust bundle %s: %v\n", trustBundle, err)
+		os.Exit(1)
+	}
+	caPool := x509.NewCertPool()
+	caPool.AppendCertsFromPEM(caCert)
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      caPool,
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   30 * time.Second,
+	}
+
+	// Operator URL
+	operatorURL := os.Getenv("G8E_OPERATOR_URL")
+	if operatorURL == "" {
+		operatorURL = os.Getenv("G8E_INTERNAL_HTTP_URL")
+	}
+	if operatorURL == "" {
+		if endpointURL != "" {
+			if !strings.HasPrefix(endpointURL, "http") {
+				operatorURL = "https://" + endpointURL
+			} else {
+				operatorURL = endpointURL
+			}
+		} else {
+			operatorURL = "https://localhost:9000"
+		}
+	}
+
+	sessionID := os.Getenv("G8E_OPERATOR_SESSION_ID")
+
+	// Read JSON-RPC from stdin line-by-line
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var req struct {
+			JSONRPC string          `json:"jsonrpc"`
+			ID      interface{}     `json:"id"`
+			Method  string          `json:"method"`
+			Params  json.RawMessage `json:"params"`
+		}
+		if err := json.Unmarshal(line, &req); err != nil {
+			sendRPCError(nil, -32700, "Parse error: "+err.Error())
+			continue
+		}
+
+		switch req.Method {
+		case "initialize":
+			sendRPCResponse(req.ID, map[string]interface{}{
+				"protocolVersion": "2024-11-05",
+				"capabilities": map[string]interface{}{
+					"tools": map[string]interface{}{},
+				},
+				"serverInfo": map[string]interface{}{
+					"name":    "g8e-gateway",
+					"version": "1.0.0",
+				},
+			})
+		case "notifications/initialized":
+			// No response needed for notifications
+
+		case "ping":
+			sendRPCResponse(req.ID, map[string]interface{}{})
+
+		case "tools/list":
+			respBytes, err := forwardToOperator(client, operatorURL, "/api/mcp/v1/tools/list", line, sessionID)
+			if err != nil {
+				sendRPCError(req.ID, -32603, "Failed to call Operator: "+err.Error())
+			} else {
+				os.Stdout.Write(respBytes)
+				os.Stdout.Write([]byte("\n"))
+			}
+
+		case "tools/call":
+			respBytes, err := forwardToOperator(client, operatorURL, "/api/mcp/v1/tools/call", line, sessionID)
+			if err != nil {
+				sendRPCError(req.ID, -32603, "Failed to call Operator: "+err.Error())
+			} else {
+				os.Stdout.Write(respBytes)
+				os.Stdout.Write([]byte("\n"))
+			}
+
+		default:
+			if req.ID != nil {
+				sendRPCError(req.ID, -32601, "Method not found: "+req.Method)
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "mcp serve stdin read error: %v\n", err)
+	}
+}
+
+func sendRPCResponse(id interface{}, result interface{}) {
+	res := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      id,
+		"result":  result,
+	}
+	b, _ := json.Marshal(res)
+	os.Stdout.Write(b)
+	os.Stdout.Write([]byte("\n"))
+}
+
+func sendRPCError(id interface{}, code int, message string) {
+	res := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      id,
+		"error": map[string]interface{}{
+			"code":    code,
+			"message": message,
+		},
+	}
+	b, _ := json.Marshal(res)
+	os.Stdout.Write(b)
+	os.Stdout.Write([]byte("\n"))
+}
+
+func forwardToOperator(client *http.Client, operatorURL, path string, body []byte, sessionID string) ([]byte, error) {
+	req, err := http.NewRequest("POST", operatorURL+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if sessionID != "" {
+		req.Header.Set("X-G8E-Authorization", "Bearer "+sessionID)
+		req.Header.Set("X-G8E-CLI-Session-ID", os.Getenv("G8E_CLI_SESSION_ID"))
+		req.Header.Set("X-G8E-Source-Component", "client")
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return respBytes, nil
 }
