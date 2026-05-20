@@ -6,8 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"crypto/ed25519"
+	"crypto/rand"
+
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
 
@@ -37,16 +41,25 @@ func (m *mockL3Verifier) VerifyL3Proof(userID, transactionHash string, proof *co
 }
 
 type pubsubFixture struct {
-	Cfg    *config.Config
-	Logger *slog.Logger
-	DB     *MockOperatorPubSubClient
-	Svc    *PubSubCommandService
+	Cfg        *config.Config
+	Logger     *slog.Logger
+	DB         *MockOperatorPubSubClient
+	Svc        *PubSubCommandService
+	SignerPriv ed25519.PrivateKey
+	SignerPub  ed25519.PublicKey
 }
 
 func newPubsubFixture(t *testing.T) *pubsubFixture {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	db := NewMockOperatorPubSubClient()
+
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	signerStore := &governance.SimpleSignerStore{
+		Signers: map[string]ed25519.PublicKey{
+			"test-key": pub,
+		},
+	}
 
 	svc, err := NewPubSubCommandService(CommandServiceConfig{
 		Config:            cfg,
@@ -56,15 +69,20 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		StateRootProvider: &mockStateRootProvider{},
 		TransactionAudit:  &mockTransactionAudit{},
 		L3Verifier:        &mockL3Verifier{},
+		SignerStore:       signerStore,
+		WardenSigningKey:  priv,
+		WardenKeyID:       "warden-key",
 	})
 	if err != nil {
 		t.Fatalf("failed to create PubSubCommandService: %v", err)
 	}
 
 	return &pubsubFixture{
-		Cfg:    cfg,
-		Logger: logger,
-		DB:     db,
-		Svc:    svc,
+		Cfg:        cfg,
+		Logger:     logger,
+		DB:         db,
+		Svc:        svc,
+		SignerPriv: priv,
+		SignerPub:  pub,
 	}
 }

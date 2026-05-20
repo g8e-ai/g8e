@@ -14,29 +14,18 @@
 package listen
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 
-	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 )
-
-// EnvelopeProcessor verifies and executes UAP JSON envelopes synchronously,
-// returning a signed ActionReceipt or a governance verification error. It is
-// implemented by *pubsub.PubSubCommandService and injected into the listen
-// HTTP surface after construction so the substrate's fail-closed mutation
-// boundary is reachable via POST /api/governance/envelope.
-type EnvelopeProcessor interface {
-	ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error)
-}
 
 // SetEnvelopeProcessor wires the synchronous envelope-processing pipeline
 // into the listen HTTP surface. It must be called after the listen service
 // has been constructed and before BYO clients submit transactions to
 // /api/governance/envelope. Calling with nil disables the endpoint.
-func (ls *ListenService) SetEnvelopeProcessor(p EnvelopeProcessor) {
+func (ls *ListenService) SetEnvelopeProcessor(p governance.EnvelopeProcessor) {
 	ls.handler.envProc = p
 	// Dependencies are now set via SetDependencies in runListenMode or similar
 }

@@ -34,6 +34,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/mcp"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	"github.com/google/uuid"
@@ -64,7 +65,7 @@ type HTTPHandler struct {
 	// nil until SetEnvelopeProcessor is called by the boot sequence after
 	// the in-process command service has initialized the verifier and
 	// Warden. While nil, /api/governance/envelope returns 503.
-	envProc EnvelopeProcessor
+	envProc governance.EnvelopeProcessor
 }
 
 func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, mcpGateway *mcp.GatewayService, isReady func() bool, isGovernanceReady func() bool) *HTTPHandler {
@@ -2448,6 +2449,19 @@ func (h *HTTPHandler) handleApprovalChallenge(w http.ResponseWriter, r *http.Req
 func (h *HTTPHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Request, txHash, userID string) {
 	if r.Method != http.MethodPost {
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// Retrieve suspended transaction to ensure it exists and belongs to the user
+	suspendedTx, ok := h.mcp.GetSuspendedTransaction(txHash)
+	if !ok {
+		jsonError(w, http.StatusNotFound, "transaction not found or expired")
+		return
+	}
+
+	// Verify the logged-in user is authorized to approve this transaction
+	if suspendedTx.UserID != "" && suspendedTx.UserID != userID {
+		jsonError(w, http.StatusForbidden, "transaction belongs to another user")
 		return
 	}
 
