@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Literal, Union
 
+from g8e_protocol.generated_paths import PathConstants
 from g8e_evals.models import ActionReceipt, ScoreDetails, TaskMetadata
 
 # Forward reference for ChatEvaluationReceipt to avoid circular import
@@ -42,7 +43,7 @@ class SUTConfig:
     assistant: LLMRoleConfig = field(default_factory=LLMRoleConfig)
     lite: LLMRoleConfig = field(default_factory=LLMRoleConfig)
     
-    operator_url: str = "https://localhost:9000"
+    operator_url: str = f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}"
     operator_id: Optional[str] = None
     operator_session_id: Optional[str] = None
     state_root: str = "test-state-root-v1"

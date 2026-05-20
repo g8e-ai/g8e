@@ -73,7 +73,7 @@ A standard, predictable fix workflow:
 |----------------------|-------------------------------------------------|------------------------------------------------|---------------------------------------------------------|
 | `crashed`            | repeating `FATAL crash_on_start=true` + supervisor restart loop | `crash_on_start: true` in config    | Edit config, set `false`; supervisor restarts automatically |
 | `wrong_config`       | `upstream sync failed: DNS resolution failed`  | `upstream.url` points at a decommissioned host | Fix `upstream.url`, `pkill -f device-service.sh`        |
-| `bad_upstream`       | `upstream sync failed: connection refused`      | `upstream.port: 1` in config                   | Restore `port: 8443`, restart service                   |
+| `bad_upstream`       | `upstream sync failed: connection refused`      | `upstream.port: 1` in config                   | Restore `port: ${G8EE_PORT:-8443}`, restart service                   |
 | `disk_full`          | `cache disk pressure: staging.bin is 50MB`      | 50MB junk file in `/var/lib/device/cache/`     | Delete `staging.bin` (+ optional restart)               |
 | `cert_expired`       | `TLS client cert expired at ...`                | Cert file shows past `not_after`               | Run `/opt/device/rotate-cert.sh`, restart service       |
 | `stuck_loop`         | No new log lines for >10min, process still running | `stuck_loop: true` in config                | Edit config, `pkill -f device-service.sh`               |

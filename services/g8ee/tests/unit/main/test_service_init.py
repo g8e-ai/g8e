@@ -28,6 +28,7 @@ import pytest
 from app.errors import ConfigurationError
 from app.models.settings import G8eePlatformSettings
 from app.utils.service_init import initialize_g8e_service
+from app.constants.generated_paths import PathConstants
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
@@ -37,7 +38,7 @@ def _make_cache_aside_service():
 
 
 def _make_settings():
-    return G8eePlatformSettings(port=8443)
+    return G8eePlatformSettings(port=PathConstants.PORT_G8EE_HTTP)
 
 
 class TestUseDbConfigTrue:

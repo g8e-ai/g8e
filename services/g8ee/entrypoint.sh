@@ -21,6 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "${SCRIPT_DIR}/../../scripts/core/path_utils.sh"
 G8E_PROJECT_ROOT="$(resolve_g8e_root)"
 export G8E_PROJECT_ROOT
+. "${G8E_PROJECT_ROOT}/scripts/cmd/paths.sh"
 
 SECRETS_DIR="${G8E_SECRETS_DIR:-${G8E_PROJECT_ROOT:-}/.g8e/secrets}"
 PKI_DIR="${G8E_PKI_DIR:-${G8E_PROJECT_ROOT:-}/.g8e/pki}"
@@ -32,7 +33,7 @@ fi
 
 # operator readiness is gated by docker-compose `depends_on: operator: service_healthy`.
 # Execute the main application - bootstrap service handles secret loading
-CERT_NAME=$(jq -r '.g8ee.cert_name // "g8ee"' "${G8E_PROJECT_ROOT}/protocol/constants/paths.json" 2>/dev/null || echo "g8ee")
-exec uvicorn app.main:app --host 0.0.0.0 --port 8443 \
+CERT_NAME="${G8E_PATH_G8EE_CERT_NAME:-g8ee}"
+exec uvicorn app.main:app --host 0.0.0.0 --port "${G8E_PORT_G8EE_HTTP}" \
     --ssl-keyfile "${PKI_DIR}/issued/apps/${CERT_NAME}.key" \
     --ssl-certfile "${PKI_DIR}/issued/apps/${CERT_NAME}.crt"

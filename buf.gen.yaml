@@ -5,7 +5,3 @@ plugins:
     out: .
     opt:
       - module=github.com/g8e-ai/g8e
-  - local: protoc-gen-go-grpc
-    out: .
-    opt:
-      - module=github.com/g8e-ai/g8e

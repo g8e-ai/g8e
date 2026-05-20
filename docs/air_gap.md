@@ -5,8 +5,8 @@ parent: Architecture
 
 # Air-Gap Architecture
 
-Last Updated: 2026-05-12
-Version: v0.2.6
+Last Updated: 2026-05-20
+Version: v0.2.7
 
 g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through a self-contained **Substrate** (Governance Gateway, Governed Operator, and Protocol), vendored dependencies, and optional local LLM inference.
 
@@ -57,12 +57,12 @@ To execute mutations on the local air-gapped host, a **Governed Operator (`g8eo`
 
 ## Local LLM Inference
 
-For air-gapped reasoning, g8e integrates a local inference engine within the `g8ee` (Engine) component.
+For air-gapped reasoning, g8e supports external local inference via the `g8ee` (Engine) component's `LlamaCppProvider`.
 
-- **Engine:** `llama.cpp` integration via `LlamaCppProvider`.
+- **Engine:** HTTP client to external `llama.cpp` server via OpenAI-compatible API.
 - **Default Model:** `Gemma 4 E2B` (optimized for local reasoning).
-- **Interface:** OpenAI-compatible internal API.
-- **Provisioning:** Model GGUF files must be pre-staged in `services/g8ee/models/`. If the file is missing, the Engine will attempt a download, which will fail in a true air-gap.
+- **Interface:** Configured via `llamacpp_endpoint` setting (default: `http://localhost:11444`).
+- **Provisioning:** Model GGUF files must be pre-staged on the external llama.cpp server. The Engine does not download models; it is a client only.
 
 ---
 
@@ -74,9 +74,32 @@ For air-gapped reasoning, g8e integrates a local inference engine within the `g8
 | **Runtime** | **None** | All components communicate exclusively over the internal `g8e-network` or localhost. |
 
 ### Vendoring & Dependency Management
-- **Substrate (Go):** 100% vendored in `services/g8eo/vendor/`.
-- **Dashboard:** Locked via its dependency manifest; all assets are bundled during the build.
-- **Engine (Python):** Requirements are frozen. For air-gap builds, use the pre-staged environment or Docker image strategy.
+
+**Direct Dependency Invariant:** All package manifests must reflect only direct imports. Transitive dependencies are not explicitly listed. This invariant is enforced by header comments in `services/g8ee/requirements.txt` and auditable via `./g8e test g8ee`.
+
+**Substrate (Go):**
+- 100% vendored in `services/g8eo/vendor/`.
+- Build tools declared in `services/g8eo/go.mod` (protoc-gen-go, protoc-gen-go-grpc).
+- Protocol generation uses local `buf` and `protoc` (no remote BSR dependency).
+
+**Python Runtime (g8ee):**
+- Direct dependencies frozen in `services/g8ee/requirements.txt`.
+- Categories: web framework (fastapi, uvicorn), LLM providers (google-genai, anthropic, openai), protocol (protobuf, grpcio), storage (sqlalchemy, alembic), utilities (tenacity, python-dateutil).
+- No vendoring; use pre-staged virtual environment or Docker image.
+
+**Protocol Package:**
+- Python bindings in `protocol/python/g8e_protocol/` generated from `.proto` files.
+- Build dependency: `grpcio-tools` for Python stub generation.
+
+**Evals Suite:**
+- Dependencies in `evals/pyproject.toml` (pytest, httpx, pydantic).
+- Separate from runtime g8ee dependencies.
+
+**Build-Time Tools:**
+- `buf` (Buf CLI) for protobuf schema management.
+- `protoc-gen-go`, `protoc-gen-go-grpc` for Go stubs.
+- `grpcio-tools` for Python stubs.
+- These tools are not required at runtime.
 
 ---
 
@@ -89,9 +112,10 @@ For air-gapped reasoning, g8e integrates a local inference engine within the `g8
 
 ### 2. Implementation (Air-Gapped Host)
 1. **Stage Binaries:** Place the `g8e.gateway` and `g8e.operator` binaries and component source/images on the host.
-2. **Stage Model:** Place the `.gguf` file in `services/g8ee/models/`.
+2. **Stage External LLM Server:** Deploy llama.cpp server with pre-staged `.gguf` model files on the host or adjacent network.
 3. **Configure:**
-   - Set `vertex_search_enabled` to `false` in Settings.
+   - Set `search.enabled` to `false` in `SearchSettings`.
+   - Set `llamacpp_endpoint` to the external llama.cpp server URL (default: `http://localhost:11444`).
    - Ensure `llm_primary_provider` is set to `llamacpp`.
 4. **Launch:** `./g8e platform up`
 
@@ -100,6 +124,6 @@ For air-gapped reasoning, g8e integrates a local inference engine within the `g8
 ## Security Invariants
 
 1. **No Outbound Dialing:** In Listen Mode, the Governance Gateway (`g8eg`) is forbidden from initiating connections to any address outside the local platform.
-2. **Mutual Trust:** All internal traffic between Dashboard, Engine, and Operator is encrypted using the Operator's internal CA.
+2. **Mutual Trust:** All internal traffic between Governance Gateway, Engine, and Operator is encrypted using the Operator's internal CA.
 3. **Data Sovereignty:** All audit logs, chat history, and telemetry remain strictly on the host's filesystem in the `.g8e` directory.
 4. **Fail-Closed Privacy:** If a component requires an external resource that is unavailable, it must fail with a clear error rather than attempting a fallback to insecure or public endpoints.

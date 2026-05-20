@@ -14,6 +14,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,7 +52,7 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, 30*time.Second, cfg.HeartbeatInterval)
 	assert.Equal(t, int64(1024), cfg.LocalStoreMaxSizeMB)
 	assert.Equal(t, 30, cfg.LocalStoreRetentionDays)
-	assert.Equal(t, 443, cfg.HTTPPort)
+	assert.Equal(t, constants.Paths.Ports.OperatorHttp, cfg.HTTPPort)
 
 	// WorkDir defaults to the project root when --working-dir is not supplied
 	assert.Equal(t, wantWorkDir, cfg.WorkDir)
@@ -97,10 +98,16 @@ func TestLoad_PubSubURLFormats(t *testing.T) {
 			name:       "hostname default port",
 			endpoint:   constants.DefaultEndpoint,
 			wssPort:    0,
-			wantPubSub: "wss://" + constants.DefaultEndpoint + ":443",
+			wantPubSub: fmt.Sprintf("wss://%s:%d", constants.DefaultEndpoint, constants.Paths.Ports.OperatorWss),
 		},
 		{
 			name:       "hostname custom port",
+			endpoint:   constants.DefaultEndpoint,
+			wssPort:    constants.Paths.Ports.OperatorWss,
+			wantPubSub: fmt.Sprintf("wss://%s:%d", constants.DefaultEndpoint, constants.Paths.Ports.OperatorWss),
+		},
+		{
+			name:       "explicit port 443 omission",
 			endpoint:   constants.DefaultEndpoint,
 			wssPort:    443,
 			wantPubSub: "wss://" + constants.DefaultEndpoint,
@@ -109,13 +116,13 @@ func TestLoad_PubSubURLFormats(t *testing.T) {
 			name:       "IPv4 default port",
 			endpoint:   "10.0.1.42",
 			wssPort:    0,
-			wantPubSub: "wss://10.0.1.42:443",
+			wantPubSub: fmt.Sprintf("wss://10.0.1.42:%d", constants.Paths.Ports.OperatorWss),
 		},
 		{
 			name:       "IPv4 custom port",
 			endpoint:   "192.168.1.5",
-			wssPort:    8443,
-			wantPubSub: "wss://192.168.1.5:8443",
+			wssPort:    constants.Paths.Ports.G8eeHttp,
+			wantPubSub: fmt.Sprintf("wss://192.168.1.5:%d", constants.Paths.Ports.G8eeHttp),
 		},
 	}
 
@@ -136,10 +143,10 @@ func TestLoad_HTTPPortOverride(t *testing.T) {
 	cfg, err := Load(LoadOptions{
 		APIKey:           "k",
 		OperatorEndpoint: constants.DefaultEndpoint,
-		HTTPPort:         8443,
+		HTTPPort:         constants.Paths.Ports.G8eeHttp,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, 8443, cfg.HTTPPort)
+	assert.Equal(t, constants.Paths.Ports.G8eeHttp, cfg.HTTPPort)
 }
 
 func TestLoad_TLSServerName(t *testing.T) {
@@ -302,31 +309,31 @@ func TestLoadListen_SucceedsWithAllDefaults(t *testing.T) {
 
 func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 	t.Run("reject wssPort 0", func(t *testing.T) {
-		_, err := LoadListen(0, 443, 80, 443, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(0, constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorBootstrap, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "wssPort cannot be 0 in production")
 	})
 
 	t.Run("reject httpPort 0", func(t *testing.T) {
-		_, err := LoadListen(443, 0, 80, 443, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(constants.Paths.Ports.OperatorWss, 0, constants.Paths.Ports.OperatorBootstrap, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "httpPort cannot be 0 in production")
 	})
 
 	t.Run("reject bootstrapPort 0", func(t *testing.T) {
-		_, err := LoadListen(443, 443, 0, 443, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(constants.Paths.Ports.OperatorWss, constants.Paths.Ports.OperatorHttp, 0, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "bootstrapPort cannot be 0 in production")
 	})
 
 	t.Run("reject publicPort 0", func(t *testing.T) {
-		_, err := LoadListen(443, 443, 80, 0, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(constants.Paths.Ports.OperatorWss, constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorBootstrap, 0, "", "", "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "publicPort cannot be 0 in production")
 	})
 
 	t.Run("accept all non-zero ports in production", func(t *testing.T) {
-		_, err := LoadListen(443, 443, 80, 443, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(constants.Paths.Ports.OperatorWss, constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorBootstrap, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
 		require.NoError(t, err)
 	})
 }
@@ -336,11 +343,12 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadOpenClaw_Valid(t *testing.T) {
-	cfg, err := LoadOpenClaw("wss://gateway.example.com:18789", "token123", "node-1", "My Node", "", "debug")
+	gatewayURL := fmt.Sprintf("wss://gateway.example.com:%d", constants.Paths.Ports.OpenclawGateway)
+	cfg, err := LoadOpenClaw(gatewayURL, "token123", "node-1", "My Node", "", "debug")
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
-	assert.Equal(t, "wss://gateway.example.com:18789", cfg.GatewayURL)
+	assert.Equal(t, gatewayURL, cfg.GatewayURL)
 	assert.Equal(t, "token123", cfg.Token)
 	assert.Equal(t, "node-1", cfg.NodeID)
 	assert.Equal(t, "My Node", cfg.DisplayName)
@@ -361,7 +369,8 @@ func TestLoadOpenClaw_MissingGatewayURL(t *testing.T) {
 }
 
 func TestLoadOpenClaw_OptionalFieldsEmpty(t *testing.T) {
-	cfg, err := LoadOpenClaw("ws://gateway:18789", "", "", "", "", "")
+	gatewayURL := fmt.Sprintf("ws://gateway:%d", constants.Paths.Ports.OpenclawGateway)
+	cfg, err := LoadOpenClaw(gatewayURL, "", "", "", "", "")
 	require.NoError(t, err)
 
 	assert.Empty(t, cfg.Token)
@@ -432,10 +441,10 @@ func TestWSSPortOrDefault(t *testing.T) {
 		input int
 		want  int
 	}{
-		{0, 443},
-		{-1, 443},
+		{0, constants.Paths.Ports.OperatorWss},
+		{-1, constants.Paths.Ports.OperatorWss},
 		{1, 1},
-		{443, 443},
+		{constants.Paths.Ports.OperatorWss, constants.Paths.Ports.OperatorWss},
 	}
 
 	for _, tt := range tests {
@@ -452,11 +461,11 @@ func TestHTTPPortOrDefault(t *testing.T) {
 		input int
 		want  int
 	}{
-		{0, 443},
-		{-1, 443},
+		{0, constants.Paths.Ports.OperatorHttp},
+		{-1, constants.Paths.Ports.OperatorHttp},
 		{1, 1},
-		{443, 443},
-		{443, 443},
+		{constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorHttp},
+		{constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorHttp},
 	}
 
 	for _, tt := range tests {

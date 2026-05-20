@@ -20,6 +20,7 @@ from app.constants.collections import (
     PLATFORM_SETTINGS_DOC,
     USER_SETTINGS_DOC_PREFIX,
 )
+from app.constants.generated_paths import PathConstants
 from app.models.settings import G8eePlatformSettings
 from app.services.infra.settings_service import SettingsService
 
@@ -46,7 +47,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 8443,
+                "port": PathConstants.PORT_G8EE_HTTP,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -68,9 +69,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": "https://localhost:443",
-                    "pubsub_url": "wss://localhost:443",
-                    "blob_url": "https://localhost:443",
+                    "http_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
+                    "pubsub_url": f"wss://localhost:{PathConstants.PORT_OPERATOR_WSS}",
+                    "blob_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -78,14 +79,14 @@ class TestG8eeSettingsOverlayIntegration:
                     "g8e_api_key": None
                 },
                 "component_urls": {
-                    "g8ee_url": "https://localhost:8443",
-                    "client_url": "https://localhost:443"
+                    "g8ee_url": f"https://localhost:{PathConstants.PORT_G8EE_HTTP}",
+                    "client_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
                 "absolute_session_timeout": 86400,
                 "docs_dir": "/g8e/docs",
-                "supervisor_port": 443,
+                "supervisor_port": PathConstants.PORT_OPERATOR_HTTP,
                 "app_url": "https://localhost",
                 "allowed_origins": "",
                 "passkey_rp_name": "localhost",
@@ -128,7 +129,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 8443,
+                "port": PathConstants.PORT_G8EE_HTTP,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -150,9 +151,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": "https://localhost:443",
-                    "pubsub_url": "wss://localhost:443",
-                    "blob_url": "https://localhost:443",
+                    "http_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
+                    "pubsub_url": f"wss://localhost:{PathConstants.PORT_OPERATOR_WSS}",
+                    "blob_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -160,14 +161,14 @@ class TestG8eeSettingsOverlayIntegration:
                     "g8e_api_key": None
                 },
                 "component_urls": {
-                    "g8ee_url": "https://localhost:8443",
-                    "client_url": "https://localhost:443"
+                    "g8ee_url": f"https://localhost:{PathConstants.PORT_G8EE_HTTP}",
+                    "client_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
                 "absolute_session_timeout": 86400,
                 "docs_dir": "/g8e/docs",
-                "supervisor_port": 443,
+                "supervisor_port": PathConstants.PORT_OPERATOR_HTTP,
                 "app_url": "https://localhost",
                 "allowed_origins": "",
                 "passkey_rp_name": "localhost",
@@ -246,7 +247,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 8443,
+                "port": PathConstants.PORT_G8EE_HTTP,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -284,7 +285,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 8443,
+                "port": PathConstants.PORT_G8EE_HTTP,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -306,9 +307,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": "https://localhost:443",
-                    "pubsub_url": "wss://localhost:443",
-                    "blob_url": "https://localhost:443",
+                    "http_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
+                    "pubsub_url": f"wss://localhost:{PathConstants.PORT_OPERATOR_WSS}",
+                    "blob_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -316,14 +317,14 @@ class TestG8eeSettingsOverlayIntegration:
                     "g8e_api_key": None
                 },
                 "component_urls": {
-                    "g8ee_url": "https://localhost:8443",
-                    "client_url": "https://localhost:443"
+                    "g8ee_url": f"https://localhost:{PathConstants.PORT_G8EE_HTTP}",
+                    "client_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
                 "absolute_session_timeout": 86400,
                 "docs_dir": "/g8e/docs",
-                "supervisor_port": 443,
+                "supervisor_port": PathConstants.PORT_OPERATOR_HTTP,
                 "app_url": "https://localhost",
                 "allowed_origins": "",
                 "passkey_rp_name": "localhost",
@@ -386,7 +387,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 8443,
+                "port": PathConstants.PORT_G8EE_HTTP,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -425,7 +426,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 8443,
+                "port": PathConstants.PORT_G8EE_HTTP,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -462,7 +463,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 8443,
+                "port": PathConstants.PORT_G8EE_HTTP,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -520,7 +521,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 8443,
+                "port": PathConstants.PORT_G8EE_HTTP,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -574,7 +575,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 8443,
+                "port": PathConstants.PORT_G8EE_HTTP,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,

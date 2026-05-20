@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -33,6 +34,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 )
 
@@ -45,17 +47,13 @@ import (
 // mcp_gateway_test.go.
 //
 // Skip conditions:
-//   - Operator not reachable at $OPERATOR_URL (default https://localhost:8440)
+//   - Operator not reachable at $OPERATOR_URL (default from paths.json)
 //   - Trust bundle not present at $G8E_PKI_DIR_HOST/trust/hub-bundle.pem
 //   - Platform already bootstrapped (403) and no rotation context available
-//
-// To run: ./g8e platform clean && ./g8e platform start && \
-//
-//	OPERATOR_URL=https://localhost:8440 go test ./tests/ -run TestMCPRealOperator_Smoke -v
 func TestMCPRealOperator_Smoke(t *testing.T) {
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = "https://localhost:8440"
+		operatorURL = fmt.Sprintf("https://localhost:%d", constants.Paths.Ports.OperatorPublic)
 	}
 
 	insecureClient := &http.Client{

@@ -28,6 +28,8 @@ main.py responsibilities:
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from app.constants.generated_paths import PathConstants
 from fastapi import FastAPI
 
 from app.main import lifespan
@@ -71,7 +73,7 @@ def _configure_settings(mocks):
     settings.ca_cert_path = "/tmp/ca.crt"
     settings.operator_session_id = "session"
     settings.listen.default_ttl = 3600
-    settings.port = 8443
+    settings.port = PathConstants.PORT_G8EE_HTTP
 
     mocks["initialize_g8e_service"].side_effect = AsyncMock(return_value=settings)
 

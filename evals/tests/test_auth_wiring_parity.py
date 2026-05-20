@@ -43,6 +43,7 @@ from pathlib import Path
 
 import pytest
 
+from g8e_protocol.generated_paths import PathConstants
 from g8e_evals.transport import (
     SESSION_COOKIE_NAME,
     SOURCE_COMPONENT_CLIENT,
@@ -166,8 +167,8 @@ def _baseline_env(fake_pki: dict[str, Path]) -> dict[str, str]:
         "G8E_CLI_KEY": str(fake_pki["key"]),
         "G8E_TRUST_BUNDLE": str(fake_pki["bundle"]),
         "G8E_PKI_DIR": str(fake_pki["pki"]),
-        "G8EE_URL": "https://localhost:8443",
-        "G8E_INTERNAL_HTTP_URL": "https://localhost:9000",
+        "G8EE_URL": f"https://localhost:{PathConstants.PORT_G8EE_HTTP}",
+        "G8E_INTERNAL_HTTP_URL": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
         # Make sure no stray optional headers leak in from the dev env.
         "G8E_CASE_ID": "",
         "G8E_INVESTIGATION_ID": "",

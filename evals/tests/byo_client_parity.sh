@@ -39,8 +39,8 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 TEST_EMAIL="byo-test@g8e.local"
 TEST_NAME="BYO Test User"
 TRUST_BUNDLE="$G8E_PKI_DIR_HOST/trust/hub-bundle.pem"
-OPERATOR_URL="https://localhost:9003"
-G8EE_URL="https://localhost:8443"
+OPERATOR_URL="https://localhost:$G8E_PORT_OPERATOR_PUBLIC"
+G8EE_URL="https://localhost:$G8E_PORT_G8EE_HTTP"
 
 # 3. Generate CSRs
 _generate_workload_csrs "$TMP_DIR"
@@ -51,29 +51,27 @@ FINGERPRINT=$(echo "g8e-byo-test" | _sha256)
 
 # 4. Bootstrap
 _banner "Step 1: Bootstrap over loopback"
-BOOTSTRAP_BODY=$(jq -n \
-    --arg email "$TEST_EMAIL" \
-    --arg name "$TEST_NAME" \
-    --arg op_csr "$OP_CSR_PEM" \
-    --arg cli_csr "$CLI_CSR_PEM" \
-    --arg fingerprint "$FINGERPRINT" \
-    '{email: $email, name: $name, csr_pem: $op_csr, cli_csr_pem: $cli_csr, system_fingerprint: $fingerprint}')
+BOOTSTRAP_BODY=$(python3 -c "import json, sys; print(json.dumps({'email': sys.argv[1], 'name': sys.argv[2], 'csr_pem': sys.argv[3], 'cli_csr_pem': sys.argv[4], 'system_fingerprint': sys.argv[5]}))" \
+    "$TEST_EMAIL" "$TEST_NAME" "$OP_CSR_PEM" "$CLI_CSR_PEM" "$FINGERPRINT")
 
 RESP=$(curl -sS --cacert "$TRUST_BUNDLE" \
     -X POST -H "Content-Type: application/json" \
     -d "$BOOTSTRAP_BODY" \
     "$OPERATOR_URL/api/auth/bootstrap")
 
-SUCCESS=$(echo "$RESP" | jq -r '.success')
+SUCCESS=$(echo "$RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - success 2>/dev/null)
 if [[ "$SUCCESS" != "true" ]]; then
     echo "Bootstrap failed: $RESP"
     exit 1
 fi
 
-OPERATOR_SESSION_ID=$(echo "$RESP" | jq -r '.operator_session_id')
-CLI_SESSION_ID=$(echo "$RESP" | jq -r '.cli_session_id')
-USER_ID=$(echo "$RESP" | jq -r '.user.id')
-CLI_CERT=$(echo "$RESP" | jq -r '.cli_cert_chain // .cli_cert')
+OPERATOR_SESSION_ID=$(echo "$RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - operator_session_id 2>/dev/null)
+CLI_SESSION_ID=$(echo "$RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - cli_session_id 2>/dev/null)
+USER_ID=$(echo "$RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - user.id 2>/dev/null)
+CLI_CERT=$(echo "$RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - cli_cert_chain --default "" 2>/dev/null)
+if [[ -z "$CLI_CERT" ]]; then
+    CLI_CERT=$(echo "$RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - cli_cert 2>/dev/null)
+fi
 
 echo "Bootstrap successful!"
 echo "User ID: $USER_ID"
@@ -89,15 +87,11 @@ _banner "Step 2: Send chat message to g8ee via raw curl"
 # Note: We must use the CLI cert and provide the session headers
 # g8ee expects Authorization: Bearer <token> for auth and RequestContext in body for routing.
 
-CONTEXT_JSON=$(jq -n \
-    --arg cli_sid "$CLI_SESSION_ID" \
-    --arg uid "$USER_ID" \
-    '{cli_session_id: $cli_sid, user_id: $uid, source_component: "client"}')
+CONTEXT_JSON=$(python3 -c "import json, sys; print(json.dumps({'cli_session_id': sys.argv[1], 'user_id': sys.argv[2], 'source_component': 'client'}))" \
+    "$CLI_SESSION_ID" "$USER_ID")
 
-CHAT_BODY=$(jq -n \
-    --argjson context "$CONTEXT_JSON" \
-    --arg msg "Hello from BYO client test" \
-    '{context: $context, message: $msg, sentinel_mode: true, resource_creation: {create_case: true}}')
+CHAT_BODY=$(python3 -c "import json, sys; print(json.dumps({'context': json.loads(sys.argv[1]), 'message': sys.argv[2], 'sentinel_mode': True, 'resource_creation': {'create_case': True}}))" \
+    "$CONTEXT_JSON" "Hello from BYO client test")
 
 # We use the CLI cert which is bound to the operator session
 CHAT_RESP=$(curl -sS --cacert "$TRUST_BUNDLE" \
@@ -109,13 +103,13 @@ CHAT_RESP=$(curl -sS --cacert "$TRUST_BUNDLE" \
     -d "$CHAT_BODY" \
     "$G8EE_URL/api/internal/chat")
 
-CHAT_SUCCESS=$(echo "$CHAT_RESP" | jq -r '.success')
+CHAT_SUCCESS=$(echo "$CHAT_RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - success 2>/dev/null)
 if [[ "$CHAT_SUCCESS" != "true" ]]; then
     echo "Chat send failed: $CHAT_RESP"
     exit 1
 fi
 
-INVESTIGATION_ID=$(echo "$CHAT_RESP" | jq -r '.investigation_id')
+INVESTIGATION_ID=$(echo "$CHAT_RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - investigation_id 2>/dev/null)
 echo "Chat sent! Investigation ID: $INVESTIGATION_ID"
 
 # 6. Poll SSE
@@ -129,20 +123,19 @@ SSE_RESP=$(curl -sS --cacert "$TRUST_BUNDLE" \
     -H "Authorization: Bearer $OPERATOR_SESSION_ID" \
     "$OPERATOR_URL/api/internal/sse/events?cli_session_id=$CLI_SESSION_ID&since_id=0&limit=10")
 
-EVENT_COUNT=$(echo "$SSE_RESP" | jq -r '.count')
-if [[ "$EVENT_COUNT" -eq 0 ]]; then
+EVENT_COUNT=$(echo "$SSE_RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - count 2>/dev/null)
+if [[ -z "$EVENT_COUNT" || "$EVENT_COUNT" -eq 0 ]]; then
     echo "No SSE events found: $SSE_RESP"
     exit 1
 fi
 
 echo "Found $EVENT_COUNT SSE events!"
-echo "$SSE_RESP" | jq -c '.events[].event_type'
+echo "$SSE_RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - events --array | python3 -c "import sys, json; data = [json.loads(line) for line in sys.stdin if line.strip()]; [print(item.get('event_type')) for item in data]"
 
 # 7. A2A Call and OOB Approval Flow
 _banner "Step 4: Test A2A Call and OOB Approval Flow"
 
-A2A_CALL_BODY=$(jq -n \
-    '{skill_name: "test-skill", payload: {foo: "bar"}}')
+A2A_CALL_BODY=$(python3 -c "import json; print(json.dumps({'skill_name': 'test-skill', 'payload': {'foo': 'bar'}}))")
 
 # We make the initial A2A call which should suspend
 A2A_RESP=$(curl -sS --cacert "$TRUST_BUNDLE" \
@@ -154,18 +147,24 @@ A2A_RESP=$(curl -sS --cacert "$TRUST_BUNDLE" \
     -d "$A2A_CALL_BODY" \
     "$OPERATOR_URL/api/a2a/v1/call")
 
-STATUS=$(echo "$A2A_RESP" | jq -r '.result.status // .status')
+STATUS=$(echo "$A2A_RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - result.status --default "" 2>/dev/null)
+if [[ -z "$STATUS" ]]; then
+    STATUS=$(echo "$A2A_RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - status 2>/dev/null)
+fi
+
 if [[ "$STATUS" != "suspended" ]]; then
     echo "A2A call did not suspend: $A2A_RESP"
     exit 1
 fi
 
-TX_HASH=$(echo "$A2A_RESP" | jq -r '.result.tx_hash // .tx_hash')
+TX_HASH=$(echo "$A2A_RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - result.tx_hash --default "" 2>/dev/null)
+if [[ -z "$TX_HASH" ]]; then
+    TX_HASH=$(echo "$A2A_RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - tx_hash 2>/dev/null)
+fi
 echo "A2A call successfully suspended! TX Hash: $TX_HASH"
 
 # Perform OOB Approval via WebAuthn verify endpoint
-PROOF_BODY=$(jq -n \
-    '{id: "fake-id", rawId: "fake-id", clientDataJSON: "fake-data", authenticatorData: "fake-auth", signature: "fake-sig"}')
+PROOF_BODY=$(python3 -c "import json; print(json.dumps({'id': 'fake-id', 'rawId': 'fake-id', 'clientDataJSON': 'fake-data', 'authenticatorData': 'fake-auth', 'signature': 'fake-sig'}))")
 
 COOKIE_HEADER="g8e_session=$OPERATOR_SESSION_ID"
 
@@ -176,8 +175,8 @@ VERIFY_RESP=$(curl -sS --cacert "$TRUST_BUNDLE" \
     -d "$PROOF_BODY" \
     "$OPERATOR_URL/api/approve/$TX_HASH/verify")
 
-VERIFY_ERROR=$(echo "$VERIFY_RESP" | jq -r '.error // empty')
-VERIFY_SUMMARY=$(echo "$VERIFY_RESP" | jq -r '.result_summary // empty')
+VERIFY_ERROR=$(echo "$VERIFY_RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - error --default "" 2>/dev/null)
+VERIFY_SUMMARY=$(echo "$VERIFY_RESP" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - result_summary --default "" 2>/dev/null)
 
 if [[ -n "$VERIFY_SUMMARY" ]]; then
     echo "A2A E2E Flow Completed Successfully with result: $VERIFY_SUMMARY"

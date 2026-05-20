@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -99,7 +100,7 @@ func TestNewListenServiceFromComponents(t *testing.T) {
 
 	cfg.Listen.PKIDir = pkiDir
 	cfg.Listen.SecretsDir = secretsDir
-	cfg.Listen.BootstrapPort = 80
+	cfg.Listen.BootstrapPort = constants.Paths.Ports.OperatorBootstrap
 
 	ls := newListenServiceFromComponents(cfg, logger, db, pubsub)
 	assert.NotNil(t, ls)

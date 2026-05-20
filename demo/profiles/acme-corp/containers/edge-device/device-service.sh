@@ -52,7 +52,7 @@ FUNCTION="$(cfg function unknown)"
 SITE="$(cfg site unknown)"
 LOCATION="$(cfg location unknown)"
 UPSTREAM_URL="$(cfg url "http://acme-ingest.internal")"
-UPSTREAM_PORT="$(cfg port "8443")"
+UPSTREAM_PORT="$(cfg port "$G8EE_PORT")"
 LOG_INTERVAL="$(cfg log_interval_sec 5)"
 HEARTBEAT_INTERVAL="$(cfg heartbeat_interval_sec 30)"
 ERROR_INJECT="$(cfg error_injection_percent 0)"
@@ -165,7 +165,7 @@ while true; do
     # --- Upstream sync (simulated; detect configured-but-bogus endpoints)
     if [[ "$UPSTREAM_URL" != "http://acme-ingest.internal" ]]; then
         log ERROR "upstream sync failed: DNS resolution failed for '$UPSTREAM_URL' (check upstream.url in $CONFIG)"
-    elif [[ "$UPSTREAM_PORT" != "8443" ]]; then
+    elif [[ "$UPSTREAM_PORT" != "$G8EE_PORT" ]]; then
         log ERROR "upstream sync failed: connection refused to ${UPSTREAM_URL}:${UPSTREAM_PORT} (check upstream.port)"
     fi
 

@@ -58,9 +58,9 @@ class IamCommandBuilder:
             f'  if [ -z "$CREDS" ] || [ "$CREDS" = "null" ]; then '
             f"    echo 'ERROR: Failed to assume Escalation Role. Check IAM trust policy.' && exit 1; "
             f"  fi && "
-            f"  export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.AccessKeyId') && "
-            f"  export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.SecretAccessKey') && "
-            f"  export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.SessionToken') && "
+            f"  export AWS_ACCESS_KEY_ID=$(echo $CREDS | python3 -c \"import sys, json; print(json.load(sys.stdin)['AccessKeyId'])\") && "
+            f"  export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | python3 -c \"import sys, json; print(json.load(sys.stdin)['SecretAccessKey'])\") && "
+            f"  export AWS_SESSION_TOKEN=$(echo $CREDS | python3 -c \"import sys, json; print(json.load(sys.stdin)['SessionToken'])\") && "
             f"  echo 'Successfully assumed Escalation Role' && "
             f"  escalation_identity=$(aws sts get-caller-identity --query 'Arn' --output text) && "
             f'  echo "Now operating as: $escalation_identity" && '
@@ -112,9 +112,9 @@ class IamCommandBuilder:
             f'  if [ -z "$CREDS" ] || [ "$CREDS" = "null" ]; then '
             f"    echo 'ERROR: Failed to assume Escalation Role. Check IAM trust policy.' && exit 1; "
             f"  fi && "
-            f"  export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.AccessKeyId') && "
-            f"  export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.SecretAccessKey') && "
-            f"  export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.SessionToken') && "
+            f"  export AWS_ACCESS_KEY_ID=$(echo $CREDS | python3 -c \"import sys, json; print(json.load(sys.stdin)['AccessKeyId'])\") && "
+            f"  export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | python3 -c \"import sys, json; print(json.load(sys.stdin)['SecretAccessKey'])\") && "
+            f"  export AWS_SESSION_TOKEN=$(echo $CREDS | python3 -c \"import sys, json; print(json.load(sys.stdin)['SessionToken'])\") && "
             f"  echo 'Successfully assumed Escalation Role' && "
             f"  escalation_identity=$(aws sts get-caller-identity --query 'Arn' --output text) && "
             f'  echo "Now operating as: $escalation_identity" && '

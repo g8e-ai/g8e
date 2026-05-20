@@ -34,10 +34,11 @@ if [ ! -f "$GATEWAY_BIN" ]; then
 fi
 
 # Ensure ports match values from paths.json constants
-HTTP_PORT=$(jq -r '.ports.operator_http // "443"' "${G8E_PROJECT_ROOT}/protocol/constants/paths.json" 2>/dev/null || echo "443")
-WSS_PORT=$(jq -r '.ports.operator_wss // "443"' "${G8E_PROJECT_ROOT}/protocol/constants/paths.json" 2>/dev/null || echo "443")
-BOOTSTRAP_PORT=$(jq -r '.ports.operator_bootstrap // "80"' "${G8E_PROJECT_ROOT}/protocol/constants/paths.json" 2>/dev/null || echo "80")
-PUBLIC_PORT=$(jq -r '.ports.operator_public // "443"' "${G8E_PROJECT_ROOT}/protocol/constants/paths.json" 2>/dev/null || echo "443")
+. "${G8E_PROJECT_ROOT}/scripts/cmd/paths.sh"
+HTTP_PORT="${G8E_PORT_OPERATOR_HTTP:-443}"
+WSS_PORT="${G8E_PORT_OPERATOR_WSS:-443}"
+BOOTSTRAP_PORT="${G8E_PORT_OPERATOR_BOOTSTRAP:-80}"
+PUBLIC_PORT="${G8E_PORT_OPERATOR_PUBLIC:-443}"
 
 echo "Starting g8eg Governance Gateway (listen mode) on ports HTTP:${HTTP_PORT}, WSS:${WSS_PORT}..."
 exec "$GATEWAY_BIN" --listen \

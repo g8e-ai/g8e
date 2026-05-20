@@ -36,6 +36,7 @@ from app.logging import (
     setup_logging,
 )
 from app.models.settings import G8eePlatformSettings
+from app.constants.generated_paths import PathConstants
 
 pytestmark = pytest.mark.unit
 
@@ -45,7 +46,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 
 def _make_settings(log_level: LogLevel = LogLevel.INFO, enable_logging: bool = True) -> G8eePlatformSettings:
-    settings = G8eePlatformSettings(port=8443)
+    settings = G8eePlatformSettings(port=PathConstants.PORT_G8EE_HTTP)
     settings.log_level = log_level
     settings.enable_logging = enable_logging
     return settings

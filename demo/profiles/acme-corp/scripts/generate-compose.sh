@@ -209,6 +209,7 @@ x-edge-env: &edge-env
   G8E_DEVICE_TOKEN: ${DEVICE_TOKEN:-}
   G8E_ENDPOINT: ${G8E_ENDPOINT:-localhost}
   G8E_OPERATOR_ENDPOINT: ${G8E_ENDPOINT:-localhost}
+  G8EE_PORT: ${G8EE_PORT:-8443}
 
 x-edge-device: &edge-device
   image: acme-edge-device:latest

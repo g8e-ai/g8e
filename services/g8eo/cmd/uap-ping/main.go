@@ -31,6 +31,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 )
@@ -55,7 +56,7 @@ func main() {
 	caPool := x509.NewCertPool()
 	caPool.AddCert(caCert)
 
-	// 2. Start Warden Server (8443)
+	// 2. Start Warden Server
 	go func() {
 		tlsConfig := &tls.Config{
 			ClientAuth: tls.RequireAndVerifyClientCert,
@@ -67,7 +68,7 @@ func main() {
 		}
 
 		server := &http.Server{
-			Addr:      ":8443",
+			Addr:      fmt.Sprintf(":%d", constants.Paths.Ports.G8eeHttp),
 			TLSConfig: tlsConfig,
 		}
 
@@ -95,7 +96,7 @@ func main() {
 			w.Write([]byte("Warden: Envelope authorized and logged."))
 		})
 
-		log.Printf("Warden Server listening on https://localhost:8443/uap (mTLS required)")
+		log.Printf("Warden Server listening on https://localhost:%d/uap (mTLS required)", constants.Paths.Ports.G8eeHttp)
 		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Warden Server failed: %v", err)
 		}
@@ -139,7 +140,7 @@ func main() {
 	}
 
 	log.Printf("Sage Client: Sending UAP envelope to Warden...")
-	resp, err := client.Post("https://localhost:8443/uap", "application/json", bytes.NewBuffer(payload))
+	resp, err := client.Post(fmt.Sprintf("https://localhost:%d/uap", constants.Paths.Ports.G8eeHttp), "application/json", bytes.NewBuffer(payload))
 	if err != nil {
 		log.Fatalf("Sage Client: Request failed: %v", err)
 	}

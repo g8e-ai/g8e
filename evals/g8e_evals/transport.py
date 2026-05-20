@@ -48,6 +48,7 @@ from g8e_protocol.constants import (
     HTTP_CLI_SESSION_ID_HEADER,
     ComponentName,
 )
+from g8e_protocol.generated_paths import PathConstants
 from g8e_protocol.models import RequestContext, BoundOperator
 
 from g8e_evals.tls import resolve_trust_bundle
@@ -148,11 +149,11 @@ class AuthContext:
 
         trust_bundle = resolve_trust_bundle()
 
-        g8ee_url = (os.environ.get("G8EE_URL") or "https://localhost:8443").rstrip("/")
+        g8ee_url = (os.environ.get("G8EE_URL") or f"https://localhost:{PathConstants.PORT_G8EE_HTTP}").rstrip("/")
         op_url = (
             operator_url
             or os.environ.get("G8E_INTERNAL_HTTP_URL")
-            or "https://localhost:9000"
+            or f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}"
         ).rstrip("/")
 
         return cls(

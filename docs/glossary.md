@@ -173,12 +173,6 @@ The platform name. g8e is an open-source, air-gapped capable AI governance platf
 
 ---
 
-## g8ed (Dashboard)
-
-The web frontend component. Handles user authentication (passkey/FIDO2/WebAuthn), web session management, the chat interface, Operator Panel, and SSE streaming to browsers. Routes messages between users and g8ee.
-
----
-
 ## g8ee (g8e Engine)
 
 The AI engine component with LLM provider abstraction supporting OpenAI, Anthropic, Gemini, and Ollama providers. Processes natural language requests, reasons about system state, generates commands, and manages investigations. Implements the tool calling loop for Operator interactions and the Intent-Based Policy System for Cloud Operators.
