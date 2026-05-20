@@ -1,4 +1,31 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package tests
+
+/*
+TestBYOClientParity_EndToEnd exercises g8eo from the perspective of a "g8ee-native"
+or protocol-aware application. Unlike the MCP Gateway test, this verifies the
+low-level substrate invariants directly.
+
+Practical Coverage:
+1. Protocol Nativeness: Manually constructs and signs Protobuf GovernanceEnvelopes.
+2. mTLS & Enrollment: Exercises the full CSR-based enrollment and mTLS authentication flow.
+3. State Binding: Verifies that transactions are bound to a specific StateMerkleRoot.
+4. WebSocket Pub/Sub: Tests the real-time result stream delivery via authenticated WebSockets.
+5. End-to-End Parity: Proves that a "Bring Your Own" client can exercise the exact same
+   governance gauntlet as the bundled engine by fulfilling the cryptographic requirements.
+*/
 
 import (
 	"bytes"
@@ -97,7 +124,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	// Since we used port 0, we need to know what ports were assigned.
 	// We'll add getters for the servers in ListenService.
 	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
-	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
+	bootstrapURL := fmt.Sprintf("https://localhost:%d", ls.GetBootstrapPort())
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	wssURL := fmt.Sprintf("wss://localhost:%d/ws/pubsub", ls.GetWSSPort())
 
@@ -174,7 +201,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	req.Header.Set(constants.HeaderDeviceToken, token)
 
-	bootstrapClient := &http.Client{}
+	bootstrapClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}}}
 	resp, err = bootstrapClient.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
