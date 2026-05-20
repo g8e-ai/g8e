@@ -40,11 +40,25 @@ down:
 	$(COMPOSE) down
 
 status:
+	@echo "pNFS Cluster Status"
+	@echo "==================="
+	@running=$$(docker ps -q -f "label=demo.service=pnfs-node" | wc -l); \
+	total=$$(docker ps -a -q -f "label=demo.service=pnfs-node" | wc -l); \
+	echo "  devices running: $$running / $$total"
 	@$(COMPOSE) ps --format "table {{.Name}}\t{{.Status}}"
 
 clean:
 	@echo "Cleaning up..."
 	$(COMPOSE) down -v --rmi local
+
+operators:
+	@echo "Operator Status"
+	@echo "==============="
+	@if docker exec pnfs-client-node pgrep -f g8e.operator > /dev/null 2>&1; then \
+		echo "  pnfs-client-node: running"; \
+	else \
+		echo "  pnfs-client-node: stopped"; \
+	fi
 
 deploy:
 	@set -e; \
@@ -53,27 +67,42 @@ deploy:
 		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
 	fi; \
 	if [ -z "$$TOKEN" ]; then \
-		echo "Usage: make deploy -d dlk_xxx"; \
+		echo "Usage: ./g8e demo deploy -d dlk_xxx"; \
 		exit 1; \
 	fi; \
 	echo "Deploying operator to client node..."; \
-	docker exec pnfs-client-node sh -c "\
-		curl -fsSL -H \"Authorization: Bearer $$TOKEN\" \
-			-o g8e.operator \"https://$(G8E_ENDPOINT)/blob/operator-binary/linux-amd64\" && \
-		chmod +x g8e.operator && \
-		nohup ./g8e.operator --endpoint $(G8E_ENDPOINT) --working-dir /root --log info -D \"$$TOKEN\" < /dev/null > g8e.operator.log 2>&1 & \
+	docker exec -d -e DEVICE_TOKEN="$$TOKEN" pnfs-client-node sh -c "\
+		CURL_OPTS=\"-fsSL --cacert /operator/ca.crt\"; \
+		[ ! -f /operator/ca.crt ] && echo \"CRITICAL: /operator/ca.crt missing\" && exit 1; \
+		curl \$$CURL_OPTS -H \"Authorization: Bearer \$$DEVICE_TOKEN\" \
+			-o /root/g8e.operator \"https://$(G8E_ENDPOINT)/blob/operator-binary/linux-amd64\" && \
+		chmod +x /root/g8e.operator && \
+		nohup /root/g8e.operator --endpoint $(G8E_ENDPOINT) --working-dir /root --log info --cloud=false -D \"\$$DEVICE_TOKEN\" < /dev/null > /root/g8e.operator.log 2>&1 & \
 		PID=\$$!; \
 		echo \"    operator started (pid: \$$PID)\""
 
 shell:
-	@test -n "$(N)" || (echo "Usage: make shell N=client-node" && exit 1)
+	@test -n "$(N)" || (echo "Usage: ./g8e demo shell N=client-node" && exit 1)
 	@docker exec -it pnfs-$(N) bash
 
 logs:
 	$(COMPOSE) logs -f
 
 devices:
-	@docker ps --filter "label=demo.service=pnfs-node" --format '{{.Names}}' | sort
+	@docker ps --filter "label=demo.service=pnfs-node" --format '{{.Names}}' | sed 's/^$(CONTAINER_PREFIX)-//' | sort
+
+discover-hosts: devices
+
+health: status
+
+vanish:
+	@echo "Removing operator from client node..."
+	@PID=$$(docker exec pnfs-client-node pgrep -f 'g8e\.operator' 2>/dev/null); \
+	if [ -n "$$PID" ]; then \
+		docker exec pnfs-client-node kill $$PID 2>/dev/null || true; \
+	fi; \
+	docker exec pnfs-client-node rm -f g8e.operator g8e.operator.log
+	@echo "Operator removed."
 
 broken:
 	@echo "No broken nodes in this demo; focus on governance."

@@ -1,6 +1,10 @@
 package mcp
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+)
 
 // JSONRPCRequest represents a standard JSON-RPC 2.0 request.
 type JSONRPCRequest struct {
@@ -42,3 +46,6 @@ type TextContent struct {
 	Type string `json:"type"`
 	Text string `json:"text"`
 }
+
+// SuspendedTransaction is an alias for the shared models type.
+type SuspendedTransaction = models.SuspendedTransaction

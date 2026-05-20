@@ -8,6 +8,7 @@ This document defines the technical standards, architectural invariants, and con
 2. **3-layer governance bedrock.** L1 hard gates (forbidden patterns) via protobuf reflection; L2 multi-agent Tribunal consensus with reputation staking; L3 human-in-the-loop with hardware-bound WebAuthn proofs (auto-approval for benign diagnostics only after L1+L2 pass).
 3. **Data sovereignty.** Raw command output and file contents stay on the Operator host, encrypted, and never persist platform-side. Platform state is host-native under `.g8e/`.
 4. **Security by structure.** All changes adhere to the Security Review Checklist. The Operator is the only execution boundary.
+5. **BYO Frontend.** The platform is UI-less by design. The **CLI (`./g8e`) is the default out-of-the-box UI**. The Operator provides a minimal bootstrap web interface, but primary interaction is via the CLI, BYO clients, or the optional `g8ee` reasoning engine.
 
 ## Development Lifecycle
 
@@ -50,8 +51,8 @@ The root `./g8e` script is a Bash-based dispatcher and the single entry point fo
 g8e is split into the **Protocol (substrate)**, an **Operator** that implements it on a host, and an optional **Application Layer**.
 
 - **Protocol (substrate)** - Shared `.proto` schemas plus the canonical-JSON wire contract; the source of truth for what every Operator and client must honor.
-- **Reference Operator (`g8eo`)** - In `--listen` mode it is the foundational service for the bundled deployment: generates the platform CA, foundational secrets, and exposes the public protocol API.
-- **Reference Application Layer (optional)** - Reference adapters like `g8ee` consume the public protocol surface on equal footing with any BYO client.
+- **Reference Operator (`g8eo`)** - The mandatory substrate. In `--listen` mode, it provides the platform's central persistence, PKI, and protocol API (including a minimal bootstrap interface).
+- **Reference Application Layer (optional)** - Optional adapters like `g8ee` that extend the platform's reasoning capabilities. All interaction flows through the CLI by default.
 - **Host-native execution** - Core components run as native processes.
 - **Zero-config discovery** - Services use a standardized local runtime directory (`.g8e/`) for discovery and configuration sharing.
 
@@ -60,7 +61,7 @@ g8e is split into the **Protocol (substrate)**, an **Operator** that implements 
 | Component | Role | Runtime | Build |
 |---|---|---|---|
 | Operator (`g8eo`) | Reference Operator: Persistence, Pub/Sub, Root of Trust | Host Go binary | Native Go via `Makefile` |
-| Engine (`g8ee`) | Optional Adapter: AI Backend & Workflow Orchestration | Python 3.12 venv | `pip install` into local `.venv` |
+| Engine (`g8ee`) | Optional Adapter: AI Backend & Workflow Orchestration | Python 3.14 venv | `pip install` into local `.venv` |
 
 ### Host-native Startup Lifecycle
 

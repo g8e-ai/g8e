@@ -151,6 +151,8 @@ class EventType(StrEnum):
     OPERATOR_INTENT_APPROVAL_REQUESTED = "g8e.v1.operator.intent.approval.requested"
     OPERATOR_INTENT_APPROVAL_GRANTED = "g8e.v1.operator.intent.approval.granted"
     OPERATOR_INTENT_APPROVAL_REJECTED = "g8e.v1.operator.intent.approval.rejected"
+    OPERATOR_MCP_CALL_REQUESTED = "g8e.v1.operator.mcp.call.requested"
+    OPERATOR_A2A_CALL_REQUESTED = "g8e.v1.operator.a2a.call.requested"
     OPERATOR_NETWORK_PING_REQUESTED = "g8e.v1.operator.network.ping.requested"
     OPERATOR_NETWORK_PING_RECEIVED = "g8e.v1.operator.network.ping.received"
     OPERATOR_NETWORK_PING_COMPLETED = "g8e.v1.operator.network.ping.completed"

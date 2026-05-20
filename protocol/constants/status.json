@@ -1733,6 +1733,20 @@
       "_go_name": "RevokeIntent",
       "_python_name": "REVOKE_INTENT"
     },
+    "mcp.call": {
+      "value": "MCP_CALL",
+      "_go_const": "ActionTypeMcpCall",
+      "_python_const": "ACTION_TYPE_MCP_CALL",
+      "_go_name": "McpCall",
+      "_python_name": "MCP_CALL"
+    },
+    "a2a.call": {
+      "value": "A2A_CALL",
+      "_go_const": "ActionTypeA2aCall",
+      "_python_const": "ACTION_TYPE_A2A_CALL",
+      "_go_name": "A2aCall",
+      "_python_name": "A2A_CALL"
+    },
     "_meta": {
       "_go_name": "ActionType",
       "_go_type": "ActionType",

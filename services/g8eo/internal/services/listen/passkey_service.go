@@ -180,6 +180,40 @@ func (s *PasskeyService) GenerateAuthenticationChallenge(userID string) (*protoc
 	return options, nil
 }
 
+// GenerateApprovalChallenge creates a WebAuthn assertion challenge bound to a transaction hash.
+// This is used for Out-of-Band (OOB) approval of suspended transactions.
+func (s *PasskeyService) GenerateApprovalChallenge(userID, transactionHash string) (*protocol.CredentialAssertion, error) {
+	user, err := s.getUser(userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	// We don't use BeginLogin here because we want to force the challenge to be the transaction hash.
+	// We build the assertion options manually.
+	var allowedCredentials []protocol.CredentialDescriptor
+	for _, cred := range user.PasskeyCredentials {
+		allowedCredentials = append(allowedCredentials, protocol.CredentialDescriptor{
+			Type:         protocol.PublicKeyCredentialType,
+			CredentialID: cred.ID,
+		})
+	}
+
+	options := &protocol.CredentialAssertion{
+		Response: protocol.PublicKeyCredentialRequestOptions{
+			Challenge:          protocol.URLEncodedBase64(base64.RawURLEncoding.EncodeToString([]byte(transactionHash))),
+			Timeout:            60000,
+			RelyingPartyID:     s.rpID,
+			AllowedCredentials: allowedCredentials,
+			UserVerification:   protocol.VerificationPreferred,
+		},
+	}
+
+	return options, nil
+}
+
 // AssertionResponse is the client response for authentication verification.
 type AssertionResponse struct {
 	ID                string `json:"id"`

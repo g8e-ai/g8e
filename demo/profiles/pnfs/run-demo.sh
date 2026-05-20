@@ -16,7 +16,7 @@ case "$1" in
         ./g8e demo profile switch pnfs
         
         echo "[2/3] Starting pNFS cluster..."
-        make -C demo/profiles/pnfs up
+        ./g8e demo up
         
         echo "[3/3] Demo ready. Deploy operator to continue."
         echo "Run: ./g8e demo deploy -d YOUR_TOKEN"

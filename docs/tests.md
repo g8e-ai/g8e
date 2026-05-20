@@ -33,7 +33,7 @@ g8e is designed to be a **testing environment and a production environment at th
 ./g8e test g8eo services/pubsub
 ```
 
-Validates the reference Operator (`g8eo`) and its protocol enforcement (`GovernanceEnvelope`, 3-layer governance, Audit Vault) without requiring Node, Python, or g8ee. Uses Operator listen mode and unified command/result paths. Keeps the required platform boundary small and independently verifiable.
+Validates the reference Operator (`g8eo`) and its protocol enforcement (`GovernanceEnvelope`, 3-layer governance, Audit Vault) without requiring Python or g8ee. Uses Operator listen mode and unified command/result paths. Keeps the required platform boundary small and independently verifiable.
 
 ### 2. App Adapter Tests (Explicit Opt-In)
 

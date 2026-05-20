@@ -242,6 +242,10 @@ func unmarshalPayload(eventType constants.EventType, payload []byte) (proto.Mess
 		m = &operatorv1.DirectCommandResultAuditRequested{}
 	case constants.Event.Operator.FetchFileDiff.Requested:
 		m = &operatorv1.FetchFileDiffRequested{}
+	case constants.Event.Operator.Mcp.CallRequested:
+		m = &operatorv1.McpCallRequested{}
+	case constants.Event.Operator.A2a.CallRequested:
+		m = &operatorv1.A2ACallRequested{}
 	default:
 		return nil, fmt.Errorf("unknown event type for unmarshaling: %s", eventType)
 	}

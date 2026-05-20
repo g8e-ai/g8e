@@ -34,6 +34,8 @@ def map_event_type_to_action_type(event_type: str) -> str:
         EventType.OPERATOR_HISTORY_FETCH_REQUESTED: "FETCH_HISTORY",
         EventType.OPERATOR_INTENT_REQUESTED: "GRANT_INTENT",
         EventType.OPERATOR_INTENT_REVOKE_REQUESTED: "REVOKE_INTENT",
+        EventType.OPERATOR_MCP_CALL_REQUESTED: "MCP_CALL",
+        EventType.OPERATOR_A2A_CALL_REQUESTED: "A2A_CALL",
         EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED: "PORT_CHECK",
     }
     return mapping.get(event_type, event_type)
@@ -56,6 +58,8 @@ def map_action_type_to_event_type(action_type: str) -> str:
         "FETCH_HISTORY": EventType.OPERATOR_HISTORY_FETCH_REQUESTED,
         "GRANT_INTENT": EventType.OPERATOR_INTENT_REQUESTED,
         "REVOKE_INTENT": EventType.OPERATOR_INTENT_REVOKE_REQUESTED,
+        "MCP_CALL": EventType.OPERATOR_MCP_CALL_REQUESTED,
+        "A2A_CALL": EventType.OPERATOR_A2A_CALL_REQUESTED,
         "PORT_CHECK": EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED,
     }
     return mapping.get(action_type, action_type)

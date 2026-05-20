@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	execution "github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/mcp"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
@@ -85,6 +86,9 @@ type PubSubCommandService struct {
 	warden              *governance.Warden
 	transactionVerifier *governance.TransactionVerifier
 	signerStore         governance.SignerStore
+
+	// MCP gateway for protocol translation egress
+	mcpGateway *mcp.GatewayService
 }
 
 // CommandServiceConfig holds all dependencies for PubSubCommandService.
@@ -110,6 +114,9 @@ type CommandServiceConfig struct {
 	// Warden configuration
 	WardenSigningKey ed25519.PrivateKey
 	WardenKeyID      string
+
+	// MCP gateway for protocol translation egress
+	MCPGateway *mcp.GatewayService
 }
 
 // NewPubSubCommandService creates the dispatcher and all first-class sub-services using the provided config.
@@ -166,6 +173,8 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	rs.history.localStore = c.LocalStore
 	rs.history.rawVault = c.RawVault
 	rs.history.historyHandler = c.HistoryHandler
+
+	rs.mcpGateway = c.MCPGateway
 
 	rs.buildHandlers()
 
@@ -231,6 +240,8 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		constants.ActionTypePortCheck,
 		constants.ActionTypeFetchLogs,
 		constants.ActionTypeEvalAnswer,
+		constants.ActionTypeMcpCall,
+		constants.ActionTypeA2aCall,
 	}
 	rs.transactionVerifier = governance.NewTransactionVerifier(
 		c.Logger,
@@ -240,6 +251,13 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		c.L3Verifier,
 		knownActionTypes,
 	)
+
+	// Wire MCP gateway with dependencies if configured.
+	// MCPGateway is used as the egress dispatcher for protocol translation.
+	if rs.mcpGateway != nil {
+		rs.mcpGateway.SetDependencies(rs, c.StateRootProvider, c.WardenSigningKey, c.WardenKeyID, c.Config.Listen.MCPDownstreamURL)
+		rs.mcpGateway.SetA2ADependencies(c.Config.Listen.A2ADownstreamURL)
+	}
 
 	c.Logger.Info("UAP governance services initialized",
 		"tribunal_node_id", c.Config.OperatorID,
@@ -268,6 +286,12 @@ func (rs *PubSubCommandService) buildHandlers() {
 		constants.Event.Operator.Audit.DirectCmd:            rs.audit.HandleDirectCmdRequest,
 		constants.Event.Operator.Audit.DirectCmdResult:      rs.audit.HandleDirectCmdResultRequest,
 		constants.Event.Operator.FetchFileDiff.Requested:    rs.history.HandleFetchFileDiffRequest,
+		constants.Event.Operator.Mcp.CallRequested: func(ctx context.Context, msg PubSubCommandMessage) {
+			_, _ = rs.handleMcpCallRequestSync(ctx, msg)
+		},
+		constants.Event.Operator.A2a.CallRequested: func(ctx context.Context, msg PubSubCommandMessage) {
+			_, _ = rs.handleA2aCallRequestSync(ctx, msg)
+		},
 	}
 }
 
@@ -627,8 +651,101 @@ func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, 
 		return rs.handleEvalAnswerRequestSync(ctx, pubsubMsg)
 	}
 
+	// MCP_CALL must return the downstream MCP server's result text as the
+	// receipt summary so the gateway can forward it back to the client.
+	if eventType == constants.Event.Operator.Mcp.CallRequested {
+		return rs.handleMcpCallRequestSync(ctx, pubsubMsg)
+	}
+	if eventType == constants.Event.Operator.A2a.CallRequested {
+		return rs.handleA2aCallRequestSync(ctx, pubsubMsg)
+	}
+
 	handler(ctx, pubsubMsg)
 	return "", nil
+}
+
+// handleMcpCallRequestSync is the Warden egress for MCP_CALL transactions:
+// it decodes the typed payload, dispatches to the configured downstream MCP
+// server via the gateway, and returns the textual result so the Warden can
+// stamp it into the signed ActionReceipt.
+func (rs *PubSubCommandService) handleMcpCallRequestSync(ctx context.Context, msg PubSubCommandMessage) (string, error) {
+	if rs.mcpGateway == nil {
+		return "", errors.New("MCP gateway not configured - cannot dispatch downstream call")
+	}
+
+	req, err := unmarshalPayload(msg.EventType, msg.Payload)
+	if err != nil {
+		rs.logger.Error("Failed to unmarshal MCP call payload", string(constants.ConnectionStateError), err)
+		return "", err
+	}
+	mcpReq, ok := req.(*operatorv1.McpCallRequested)
+	if !ok {
+		return "", fmt.Errorf("invalid payload type for MCP call: %T", req)
+	}
+	if mcpReq.ToolName == "" {
+		return "", errors.New("MCP call missing tool_name")
+	}
+
+	args := json.RawMessage(mcpReq.ArgumentsJson)
+	if len(args) == 0 {
+		args = json.RawMessage("{}")
+	}
+
+	rs.logger.Info("Dispatching verified MCP call to downstream",
+		"tool", mcpReq.ToolName,
+		"transaction_id", msg.ID)
+
+	summary, err := rs.mcpGateway.DispatchToDownstream(ctx, mcpReq.ToolName, args)
+	if err != nil {
+		return "", fmt.Errorf("downstream MCP dispatch failed: %w", err)
+	}
+	// Bound the receipt summary to avoid unbounded growth on chatty tools.
+	if len(summary) > 4096 {
+		summary = summary[:4096]
+	}
+	return summary, nil
+}
+
+// handleA2aCallRequestSync is the Warden egress for A2A_CALL transactions:
+// it decodes the typed payload, dispatches to the configured downstream A2A
+// server via the gateway, and returns the textual result so the Warden can
+// stamp it into the signed ActionReceipt.
+func (rs *PubSubCommandService) handleA2aCallRequestSync(ctx context.Context, msg PubSubCommandMessage) (string, error) {
+	if rs.mcpGateway == nil {
+		return "", errors.New("A2A gateway not configured - cannot dispatch downstream call")
+	}
+
+	req, err := unmarshalPayload(msg.EventType, msg.Payload)
+	if err != nil {
+		rs.logger.Error("Failed to unmarshal A2A call payload", string(constants.ConnectionStateError), err)
+		return "", err
+	}
+	a2aReq, ok := req.(*operatorv1.A2ACallRequested)
+	if !ok {
+		return "", fmt.Errorf("invalid payload type for A2A call: %T", req)
+	}
+	if a2aReq.SkillName == "" {
+		return "", errors.New("A2A call missing skill_name")
+	}
+
+	payload := json.RawMessage(a2aReq.PayloadJson)
+	if len(payload) == 0 {
+		payload = json.RawMessage("{}")
+	}
+
+	rs.logger.Info("Dispatching verified A2A call to downstream",
+		"skill", a2aReq.SkillName,
+		"transaction_id", msg.ID)
+
+	summary, err := rs.mcpGateway.DispatchToA2ADownstream(ctx, a2aReq.SkillName, payload)
+	if err != nil {
+		return "", fmt.Errorf("downstream A2A dispatch failed: %w", err)
+	}
+	// Bound the receipt summary to avoid unbounded growth on chatty tools.
+	if len(summary) > 4096 {
+		summary = summary[:4096]
+	}
+	return summary, nil
 }
 
 func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {

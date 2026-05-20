@@ -33,8 +33,9 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
+	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/mcp"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	"github.com/google/uuid"
 )
 
@@ -132,9 +133,10 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/audit/receipts/export", h.handleAuditReceiptsExport)
 
 	mux.HandleFunc("/api/mcp/v1/tools/list", h.mcp.HandleToolsList)
-mux.HandleFunc("/api/mcp/v1/tools/call", h.mcp.HandleToolsCall)
+	mux.HandleFunc("/api/mcp/v1/tools/call", h.mcp.HandleToolsCall)
+	mux.HandleFunc("/api/a2a/v1/call", h.mcp.HandleA2aCall)
 
-// Internal SSE event bridge (used by g8ee Engine to publish typed events
+	// Internal SSE event bridge (used by g8ee Engine to publish typed events
 	// for browser/CLI subscribers to consume). Producers are authenticated by
 	// mTLS app identity; consumers poll /api/internal/sse/events or stream /api/internal/sse/stream.
 	mux.HandleFunc("/api/internal/sse/push", h.handleInternalSSEPush)
@@ -190,10 +192,15 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	authedMux.HandleFunc("/api/auth/passkey/register-challenge", h.handlePasskeyRegisterChallenge)
 	authedMux.HandleFunc("/api/auth/passkey/register-verify", h.handlePasskeyRegisterVerify)
 
+	// OOB Approval UI for suspended MCP/A2A transactions
+	mux.HandleFunc("/approve/", h.handleApprovalPage)
+	authedMux.HandleFunc("/api/approve/", h.handleApprovalAction)
+
 	// Wrap authed routes in WebSessionAuth middleware
 	mux.Handle("/api/user/", h.auth.WebSessionAuth(authedMux, h.db))
 	mux.Handle("/api/auth/web-session", h.auth.WebSessionAuth(authedMux, h.db))
 	mux.Handle("/api/auth/passkey/", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/approve/", h.auth.WebSessionAuth(authedMux, h.db))
 
 	return pathTraversalGuard(mux)
 }
@@ -266,6 +273,18 @@ func jsonError(w http.ResponseWriter, status int, msg string) {
 	jsonResponse(w, status, struct {
 		Error string `json:"error"`
 	}{Error: msg})
+}
+
+func (h *HTTPHandler) GetMCPGateway() *mcp.GatewayService {
+	return h.mcp
+}
+
+func (h *HTTPHandler) GetPasskeyService() *PasskeyService {
+	return h.passkey
+}
+
+func (h *HTTPHandler) GetPubSubBroker() *PubSubBroker {
+	return h.pubsub
 }
 
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -2295,8 +2314,294 @@ func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse(w, http.StatusCreated, map[string]interface{}{
 		string(constants.AuthAuditResultSuccess): true,
-		string(constants.HistoryActorUser):       user,
+		"user_id":                                user.ID,
+		"email":                                  user.Email,
 	})
+}
+
+// handleApprovalAction handles WebAuthn challenge/verify for suspended transactions.
+func (h *HTTPHandler) handleApprovalAction(w http.ResponseWriter, r *http.Request) {
+	// Path format: /api/approve/{txHash}/{action}
+	path := strings.TrimPrefix(r.URL.Path, "/api/approve/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 {
+		jsonError(w, http.StatusBadRequest, "invalid request path")
+		return
+	}
+
+	txHash := parts[0]
+	action := parts[1]
+
+	userID, ok := r.Context().Value(userIDKey).(string)
+	if !ok || userID == "" {
+		jsonError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	switch action {
+	case "challenge":
+		h.handleApprovalChallenge(w, r, txHash, userID)
+	case "verify":
+		h.handleApprovalVerify(w, r, txHash, userID)
+	default:
+		jsonError(w, http.StatusBadRequest, "unknown action")
+	}
+}
+
+func (h *HTTPHandler) handleApprovalChallenge(w http.ResponseWriter, r *http.Request, txHash, userID string) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// Retrieve suspended transaction to ensure it exists and belongs to the user
+	// (or the user is authorized to approve it)
+	suspendedTx, ok := h.mcp.GetSuspendedTransaction(txHash)
+	if !ok {
+		jsonError(w, http.StatusNotFound, "transaction not found or expired")
+		return
+	}
+
+	// For now, we allow any logged-in user to see the challenge, but we might
+	// want to restrict this to the UserID stashed in the suspended transaction
+	// if it was initiated by a specific user.
+	if suspendedTx.UserID != "" && suspendedTx.UserID != userID {
+		jsonError(w, http.StatusForbidden, "transaction belongs to another user")
+		return
+	}
+
+	options, err := h.passkey.GenerateApprovalChallenge(userID, txHash)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, options)
+}
+
+func (h *HTTPHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Request, txHash, userID string) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req AssertionResponse
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	// Map AssertionResponse to commonv1.L3Proof
+	proof := &commonv1.L3Proof{
+		ClientDataJson:    req.ClientDataJSON,
+		AuthenticatorData: req.AuthenticatorData,
+		Signature:         req.Signature,
+		CredentialId:      req.ID,
+	}
+
+	// Resume the transaction with the proof
+	receipt, err := h.mcp.ResumeWithL3Proof(r.Context(), txHash, userID, proof)
+	if err != nil {
+		// If it's still a verification failure, return the receipt if available
+		if receipt != nil {
+			jsonResponse(w, http.StatusForbidden, receipt)
+			return
+		}
+		jsonError(w, http.StatusForbidden, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, receipt)
+}
+
+// handleApprovalPage serves the OOB approval UI for suspended MCP/A2A transactions.
+func (h *HTTPHandler) handleApprovalPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// Extract transaction hash from URL path
+	txHash := strings.TrimPrefix(r.URL.Path, "/approve/")
+	if txHash == "" {
+		http.Error(w, "transaction hash required", http.StatusBadRequest)
+		return
+	}
+
+	// Retrieve suspended transaction from MCP gateway
+	suspendedTx, ok := h.mcp.GetSuspendedTransaction(txHash)
+	if !ok {
+		http.Error(w, "transaction not found or expired", http.StatusNotFound)
+		return
+	}
+
+	// Format expiration time for display
+	expiresAtStr := suspendedTx.ExpiresAt.Format(time.RFC3339)
+
+	// Serve simple HTML approval page
+	html := `<!DOCTYPE html>
+<html>
+<head>
+    <title>Approve Transaction - g8e</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
+        .container { border: 1px solid #ddd; border-radius: 8px; padding: 20px; }
+        h1 { color: #333; }
+        .transaction-info { background: #f5f5f5; padding: 15px; border-radius: 4px; margin: 20px 0; }
+        .label { font-weight: bold; margin-bottom: 5px; }
+        .value { margin-bottom: 15px; word-break: break-all; }
+        .actions { margin-top: 20px; }
+        button { padding: 10px 20px; margin-right: 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .approve { background: #4CAF50; color: white; }
+        .reject { background: #f44336; color: white; }
+        .approve:hover { background: #45a049; }
+        .reject:hover { background: #da190b; }
+        .status { margin-top: 20px; padding: 10px; border-radius: 4px; display: none; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Approve Transaction</h1>
+        <p>A tool execution requires your authorization via WebAuthn.</p>
+        
+        <div class="transaction-info">
+            <div class="label">Transaction Hash:</div>
+            <div class="value">` + suspendedTx.TransactionHash + `</div>
+            
+            <div class="label">Tool Name:</div>
+            <div class="value">` + suspendedTx.ToolName + `</div>
+            
+            <div class="label">Tool Arguments:</div>
+            <div class="value"><pre>` + string(suspendedTx.ToolArguments) + `</pre></div>
+            
+            <div class="label">Expires At:</div>
+            <div class="value">` + expiresAtStr + `</div>
+        </div>
+        
+        <div class="actions">
+            <button class="approve" onclick="approveTransaction()">Approve with WebAuthn</button>
+            <button class="reject" onclick="rejectTransaction()">Reject</button>
+        </div>
+        
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        // Helper to convert base64url to Uint8Array
+        function base64urlToUint8Array(base64url) {
+            const padding = '='.repeat((4 - base64url.length % 4) % 4);
+            const base64 = (base64url + padding).replace(/\-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        // Helper to convert Uint8Array to base64url
+        function bufferToBase64url(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary)
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+        }
+
+        async function approveTransaction() {
+            const statusDiv = document.getElementById('status');
+            const txHash = "` + suspendedTx.TransactionHash + `";
+            
+            try {
+                statusDiv.style.display = 'block';
+                statusDiv.className = 'status';
+                statusDiv.textContent = 'Requesting challenge...';
+
+                // 1. Get Authentication Challenge
+                const challengeResp = await fetch("/api/approve/" + txHash + "/challenge");
+                if (!challengeResp.ok) {
+                    if (challengeResp.status === 401) {
+                        throw new Error("You must be logged in to approve transactions.");
+                    }
+                    const err = await challengeResp.json();
+                    throw new Error(err.error || "Failed to get challenge");
+                }
+                const options = await challengeResp.json();
+
+                // Prepare options for navigator.credentials.get
+                options.publicKey.challenge = base64urlToUint8Array(options.publicKey.challenge);
+                if (options.publicKey.allowCredentials) {
+                    options.publicKey.allowCredentials.forEach(cred => {
+                        cred.id = base64urlToUint8Array(cred.id);
+                    });
+                }
+
+                statusDiv.textContent = 'Please follow your browser prompts to authorize with your passkey...';
+
+                // 2. WebAuthn Assertion
+                const assertion = await navigator.credentials.get({
+                    publicKey: options.publicKey
+                });
+
+                statusDiv.textContent = 'Verifying authorization...';
+
+                // 3. Verify Assertion
+                const verifyResp = await fetch("/api/approve/" + txHash + "/verify", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        id: assertion.id,
+                        rawId: bufferToBase64url(assertion.rawId),
+                        clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+                        authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+                        signature: bufferToBase64url(assertion.response.signature),
+                        userHandle: assertion.response.userHandle ? bufferToBase64url(assertion.response.userHandle) : null
+                    })
+                });
+
+                if (!verifyResp.ok) {
+                    const err = await verifyResp.json();
+                    throw new Error(err.error || "Verification failed");
+                }
+
+                const receipt = await verifyResp.json();
+                statusDiv.className = 'status success';
+                statusDiv.innerHTML = '<strong>Success!</strong><br/>Transaction approved and executed.<br/>Result: ' + (receipt.result_summary || "completed");
+                
+                // Optional: redirect back after success
+                // setTimeout(() => { window.close(); }, 3000);
+            } catch (err) {
+                console.error(err);
+                statusDiv.className = 'status error';
+                statusDiv.textContent = 'Error: ' + err.message;
+            }
+        }
+
+        function rejectTransaction() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'status error';
+            statusDiv.textContent = 'Transaction rejected. You can close this window.';
+        }
+    </script>
+</body>
+</html>`
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(html))
 }
 
 // =============================================================================

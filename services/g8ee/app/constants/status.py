@@ -351,6 +351,8 @@ class ActionType(StrEnum):
     EVAL_ANSWER = "EVAL_ANSWER"
     GRANT_INTENT = "GRANT_INTENT"
     REVOKE_INTENT = "REVOKE_INTENT"
+    MCP_CALL = "MCP_CALL"
+    A2A_CALL = "A2A_CALL"
 
 class CommandErrorType(StrEnum):
     """Generated from protocol/constants/status.json - command.error.type"""

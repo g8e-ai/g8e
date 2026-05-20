@@ -264,6 +264,8 @@ func (s *ListenDBService) RunMaintenance(ctx context.Context) {
 			s.db.Exec("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 			// Nonces
 			s.db.Exec("DELETE FROM nonces WHERE expires_at < ?", now)
+			// Suspended transactions
+			s.db.Exec("DELETE FROM suspended_transactions WHERE expires_at < ?", now)
 		}
 	}
 }
@@ -1069,6 +1071,86 @@ func (s *ListenDBService) BlobDelete(namespace, id string) (bool, error) {
 // Returns the count of deleted blobs.
 func (s *ListenDBService) BlobDeleteNamespace(namespace string) (int64, error) {
 	result, err := s.db.Exec("DELETE FROM blobs WHERE namespace = ?", namespace)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+// =============================================================================
+// Suspended Transactions - L3 approval queue
+// =============================================================================
+
+// StoreSuspendedTransaction stores a transaction awaiting L3 approval.
+func (s *ListenDBService) StoreSuspendedTransaction(tx *models.SuspendedTransaction) error {
+	now := sqliteutil.FormatTimestamp(tx.CreatedAt)
+	expires := sqliteutil.FormatTimestamp(tx.ExpiresAt)
+
+	var toolArgsStr string
+	if tx.ToolArguments != nil {
+		toolArgsStr = string(tx.ToolArguments)
+	}
+
+	_, err := s.db.Exec(
+		`INSERT INTO suspended_transactions 
+		 (transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(transaction_hash) DO UPDATE SET
+		   envelope = excluded.envelope,
+		   expires_at = excluded.expires_at`,
+		tx.TransactionHash, string(tx.Envelope), now, expires, tx.ToolName, toolArgsStr, tx.UserID, tx.OperatorID,
+	)
+	return err
+}
+
+// GetSuspendedTransaction retrieves a suspended transaction by hash.
+// Returns (nil, false) if not found or expired.
+func (s *ListenDBService) GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool) {
+	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID string
+	err := s.db.QueryRow(
+		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
+		txHash, sqliteutil.NowTimestamp(),
+	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID)
+	if err != nil {
+		return nil, false
+	}
+
+	createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
+	if err != nil {
+		return nil, false
+	}
+	expiresAt, err := sqliteutil.ParseTimestamp(expiresAtStr)
+	if err != nil {
+		return nil, false
+	}
+
+	var toolArgs json.RawMessage
+	if toolArgsStr != "" {
+		toolArgs = json.RawMessage(toolArgsStr)
+	}
+
+	return &models.SuspendedTransaction{
+		TransactionHash: txHash,
+		Envelope:        json.RawMessage(envelopeStr),
+		CreatedAt:       createdAt,
+		ExpiresAt:       expiresAt,
+		ToolName:        toolName,
+		ToolArguments:   toolArgs,
+		UserID:          userID,
+		OperatorID:      operatorID,
+	}, true
+}
+
+// DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
+func (s *ListenDBService) DeleteSuspendedTransaction(txHash string) error {
+	_, err := s.db.Exec("DELETE FROM suspended_transactions WHERE transaction_hash = ?", txHash)
+	return err
+}
+
+// CleanupExpiredSuspendedTransactions removes expired suspended transactions.
+// Returns the count of deleted transactions.
+func (s *ListenDBService) CleanupExpiredSuspendedTransactions() (int64, error) {
+	result, err := s.db.Exec("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
 	if err != nil {
 		return 0, err
 	}

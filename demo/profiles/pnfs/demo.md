@@ -26,7 +26,7 @@ In this demo, the pNFS mount at `/mnt/pnfs` contains sensitive operational data.
 
 2. **Start the demo fleet**:
    ```bash
-   make up
+   ./g8e demo up
    ```
 
 3. **Deploy the Operator**:
