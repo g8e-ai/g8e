@@ -97,6 +97,7 @@ first-issues:
 clean:
 	@echo "Cleaning up build artifacts and runtime state..."
 	@$(MAKE) -C services/g8eo clean
+	@$(MAKE) -C services/g8eg clean
 	@rm -rf .g8e/
 	@find . -name "*.pyc" -delete
 	@find . -name "__pycache__" -type d -exec rm -rf {} +
@@ -108,6 +109,10 @@ clean:
 .PHONY: build-g8eo
 build-g8eo:
 	@$(MAKE) -C services/g8eo build
+
+.PHONY: build-g8eg
+build-g8eg:
+	@$(MAKE) -C services/g8eg build
 
 .PHONY: test-g8eo
 test-g8eo:
