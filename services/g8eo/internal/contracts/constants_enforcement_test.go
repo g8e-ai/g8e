@@ -105,6 +105,13 @@ var allowlistedValues = map[string]bool{
 
 	// ApprovalType values - common in logs and other contexts
 	"command": true,
+
+	// Very common generic strings that cause false positives
+	"error":     true,
+	"message":   true,
+	"client":    true,
+	"suspended": true,
+	"text":      true,
 }
 
 // constantInfo tracks where a constant value is defined
