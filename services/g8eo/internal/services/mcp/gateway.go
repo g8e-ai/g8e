@@ -145,8 +145,6 @@ type processGatewayOptions struct {
 	actionType     constants.ActionType
 	targetResource string
 	payloadBytes   []byte
-	originalReqID  interface{}
-	toolArguments  json.RawMessage
 }
 
 func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts processGatewayOptions) (hash string, uapBytes []byte, err error) {
@@ -579,7 +577,7 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	mcpReq := JSONRPCRequest{
 		JSONRPC: "2.0",
 		Method:  "tools/call",
-		Params:  json.RawMessage(fmt.Sprintf(`{"name":"%s","arguments":%s}`, toolName, string(toolArgs))),
+		Params:  json.RawMessage(fmt.Sprintf(`{"name":%q,"arguments":%s}`, toolName, string(toolArgs))),
 		ID:      1,
 	}
 

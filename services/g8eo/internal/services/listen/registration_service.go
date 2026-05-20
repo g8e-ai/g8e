@@ -94,10 +94,6 @@ func sessionOperatorBindKey(operatorSessionID string) string {
 	return sessionOperatorBindPrefix + operatorSessionID + sessionBindSuffix
 }
 
-func sessionCLIBindKey(cliSessionID string) string {
-	return sessionCLIBindPrefix + cliSessionID + sessionBindSuffix
-}
-
 func isValidDeviceLinkToken(token string) bool {
 	return strings.HasPrefix(token, "dlk_") && len(token) >= 20 && !strings.ContainsAny(token, `/\`)
 }

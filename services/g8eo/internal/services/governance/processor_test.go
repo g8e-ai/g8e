@@ -17,8 +17,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
+	"github.com/stretchr/testify/require"
 )
 
 // mockProcessor implements EnvelopeProcessor for testing interface compliance.
