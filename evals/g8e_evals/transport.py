@@ -32,6 +32,7 @@ from g8e_protocol.constants import (
     HTTP_AUTHORIZATION_HEADER,
     HTTP_BEARER_PREFIX,
     HTTP_CONTENT_TYPE_HEADER,
+    HTTP_CLI_SESSION_ID_HEADER,
     ComponentName,
 )
 from g8e_protocol.models import RequestContext, BoundOperator
@@ -92,11 +93,11 @@ class AuthContext:
         Raises :class:`RuntimeError` if a required value is missing or if
         the mTLS client certificate files do not exist on disk.
         """
-        sid = (operator_session_id or os.environ.get("OPERATOR_SESSION_ID") or "").strip()
-        cli_sid = (os.environ.get("CLI_SESSION_ID") or "").strip()
-        web_sid = (os.environ.get("WEB_SESSION_ID") or "").strip()
-        uid = (os.environ.get("USER_ID") or "").strip()
-        oid = (os.environ.get("ORGANIZATION_ID") or "").strip()
+        sid = (operator_session_id or os.environ.get("G8E_OPERATOR_SESSION_ID") or os.environ.get("OPERATOR_SESSION_ID") or "").strip()
+        cli_sid = (os.environ.get("G8E_CLI_SESSION_ID") or os.environ.get("CLI_SESSION_ID") or "").strip()
+        web_sid = (os.environ.get("G8E_WEB_SESSION_ID") or os.environ.get("WEB_SESSION_ID") or "").strip()
+        uid = (os.environ.get("G8E_USER_ID") or os.environ.get("USER_ID") or "").strip()
+        oid = (os.environ.get("G8E_ORGANIZATION_ID") or os.environ.get("ORGANIZATION_ID") or "").strip()
         fingerprint = (os.environ.get("G8E_SYSTEM_FINGERPRINT") or "").strip()
         
         source = ComponentName.CLIENT
@@ -112,11 +113,11 @@ class AuthContext:
 
         missing: list[str] = []
         if not sid:
-            missing.append("OPERATOR_SESSION_ID")
+            missing.append("G8E_OPERATOR_SESSION_ID")
         if not cli_sid:
-            missing.append("CLI_SESSION_ID")
+            missing.append("G8E_CLI_SESSION_ID")
         if not uid:
-            missing.append("USER_ID")
+            missing.append("G8E_USER_ID")
         if missing:
             raise AuthenticationError(
                 "evals transport requires an authenticated session. "
@@ -169,6 +170,8 @@ class AuthContext:
         if self.operator_session_id:
             # Substrate uses Authorization: Bearer <token>.
             headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX} {self.operator_session_id}"
+        if self.cli_session_id:
+            headers[HTTP_CLI_SESSION_ID_HEADER] = self.cli_session_id
         
         return headers
 

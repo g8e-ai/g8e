@@ -88,9 +88,13 @@ def get_trust_bundle() -> str:
             raise FileNotFoundError(f"G8E_TRUST_BUNDLE points to a missing file: {path}")
         return str(path)
 
-    if not TRUST_BUNDLE_PATH.exists():
+    # Dynamically resolve PKI_DIR to support runtime environment changes (e.g. in tests)
+    pki_dir = resolve_path("G8E_PKI_DIR", G8E_DIR / "pki")
+    trust_bundle_path = pki_dir / "trust" / "hub-bundle.pem"
+
+    if not trust_bundle_path.exists():
         raise FileNotFoundError(
-            f"Hub trust bundle not found at {TRUST_BUNDLE_PATH}. "
+            f"Hub trust bundle not found at {trust_bundle_path}. "
             "Run `./g8e platform start` to provision PKI, or set G8E_TRUST_BUNDLE."
         )
-    return str(TRUST_BUNDLE_PATH)
+    return str(trust_bundle_path)
