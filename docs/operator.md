@@ -4,13 +4,17 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-05-18
+Last Updated: 2026-05-20
 
-The **g8e Operator** is the platform- and language-agnostic role defined by the [g8e Protocol](protocol.md): a device or piece of software that speaks the protocol to perform remote operations under the security guarantees the protocol enables. An Operator receives signed transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+The **g8e Operator** is the host-side, sovereign agent role defined by the [g8e Protocol](protocol.md): a daemon or piece of software that speaks the protocol to perform remote operations under the security guarantees the protocol enables. An Operator receives signed transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference Operator is **`g8eo`**, a single statically compiled Go binary. It is one implementation of many possible implementations - anything that conforms to the protocol can replace it. This document focuses on the role itself: what an Operator does, what it defends against, and how it preserves data sovereignty.
+The reference Operator is **`g8eo`** (built as the `g8e.operator` binary). It functions as a sovereign, **Governed Operator** and **Model Context Protocol (MCP) Server** (the Policy Execution Point).
 
-> **Two roles, one binary.** The same `g8eo` binary runs as a **Satellite** on a managed host (this document) and as a **Hub** in `--listen` mode (the data backplane - see [g8eo Service](g8eo_service.md)). Satellite mode is the focus here.
+> **One Build, One Binary, Two Roles.** The exact same compiled Go codebase is used to power both sides of the governance boundary:
+> - **`g8eg` (Governance Gateway / `g8e.gateway`)**: Runs in `--listen` mode as the central Policy Decision Point (PDP) and cryptographic backplane.
+> - **`g8eo` (Governed Operator / `g8e.operator`)**: Runs on target hosts (and serves MCP over stdio with `--mcp-serve`) as the host-side Policy Execution Point (PEP).
+>
+> This document focuses on the PEP / Governed Operator role on a managed host.
 
 ---
 
@@ -87,7 +91,7 @@ A multi-ledger architecture under `.g8e/data/ledger/sessions/<operator_session_i
 
 ## Identity, PKI, and mTLS
 
-The Operator runs entirely under mTLS with workload identity bound to SPIFFE-style URI SANs. CLI and operator agent are cryptographically distinct principals issued separate certificates.
+The Operator runs entirely under mTLS with workload identity bound to SPIFFE-style URI SANs. CLI and governed operator are cryptographically distinct principals issued separate certificates.
 
 | Role | URI SAN pattern |
 |---|---|
@@ -125,7 +129,7 @@ The Warden's Ed25519 signing key lives in `.g8e/secrets/warden_signing_key`; its
 | Mode | Purpose |
 |---|---|
 | **Standard (default)** | Satellite execution on a managed host. |
-| **Listen** (`--listen`) | Hub mode. See [g8eo Service](g8eo_service.md). |
+| **Listen** (`--listen`) | Hub mode. See [Governance Gateway (g8eg)](g8eg.md). |
 | **Stream** | Concurrent SSH-based fleet deployment (the binary streams itself into memory on remote hosts). |
 | **OpenClaw** | Runs as a standalone capability provider behind an OpenClaw Gateway for external orchestrators. |
 
@@ -189,4 +193,4 @@ The Operator is fully self-contained. There are no runtime internet dependencies
 | Listen mode entry | `@/home/bob/g8e/services/g8eo/cmd/g8eo/main.go` |
 | PKI / CertStore | `@/home/bob/g8e/services/g8eo/internal/services/listen/listen_certs.go` |
 
-See also: [Protocol](protocol.md), [g8eo Service (Hub mode)](g8eo_service.md), [g8ee Service](g8ee.md).
+See also: [Protocol](protocol.md), [Governance Gateway (g8eg)](g8eg.md), [g8ee Engine](g8ee.md).

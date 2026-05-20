@@ -8,14 +8,14 @@ parent: Components
 Last Updated: 2026-05-18
 Version: v0.4.0
 
-g8ee is the **optional reference AI engine** of the g8e platform. It is one concrete application-layer adapter built on top of the [g8e Protocol](protocol.md); the protocol substrate (`g8eo`, the reference Operator) is the only mandatory component. g8ee demonstrates how a Tribunal-based, multi-provider LLM reasoning system can act as a **Layer 2 (Consensus) producer** that emits typed, signed `GovernanceEnvelope` (UAP) transactions to a conforming Operator for verification and execution.
+g8ee is the **optional reference AI engine** of the g8e platform. It is one concrete application-layer adapter built on top of the [g8e Protocol](protocol.md); the protocol substrate (`g8eg` and `g8eo`) is the only mandatory component. g8ee demonstrates how a Tribunal-based, multi-provider LLM reasoning system can act as a **Layer 2 (Consensus) producer** that emits typed, signed `GovernanceEnvelope` (UAP) transactions to a Governance Gateway (`g8eg`) for validation/approval and subsequent execution by a Governed Operator (`g8eo`).
 
 If you are building a BYO client, you do not need g8ee - anything that produces protocol-conformant transactions is interchangeable with it. g8ee is shipped in-tree as the first reference consumer of that same public contract.
 
 ## Position in the Platform
 
-- **Mandatory substrate**: `g8eo` Operator (Hub mode via `--listen`, Satellite mode on managed hosts). Owns L1/L2/L3 verification, PKI/mTLS, audit, and Warden execution.
-- **Optional reference application layer**: `g8ee` (this component, AI engine / L2 producer). It consumes the Operator protocol surface and has no privileged substrate role.
+- **Mandatory substrate**: `g8eg` Governance Gateway (Listen mode via `--listen`) and `g8eo` Governed Operator (runs on target hosts). The gateway owns platform-level PKI, coordination, Pub/Sub, and transaction validation/suspension. The operator owns local validation, local git-backed ledger, and host-level Warden tool execution.
+- **Optional reference application layer**: `g8ee` (this component, AI engine / L2 producer). It consumes the Gateway protocol surface and has no privileged substrate role.
 - **Default start (`./g8e platform start`)**: Operator only. g8ee is started explicitly via `./g8e platform start --with-apps` or `./g8e apps start g8ee`.
 - **Wire format**: canonical JSON (protojson) `GovernanceEnvelope` on all client-facing surfaces (HTTP, pub/sub, receipts). Signing is computed over a deterministic transaction hash; wire encoding is independent of the security invariant.
 
@@ -23,14 +23,14 @@ If you are building a BYO client, you do not need g8ee - anything that produces 
 
 ## AI Agent Architecture
 
-The g8e platform utilizes a specialized multi-agent system designed for autonomous infrastructure management. The architecture enforces a strict separation between **Reasoning** (the application layer, e.g., g8ee) and the **Substrate** (the mandatory g8eo Operator). This ensures that no action reaches a host without cryptographic proof of intent, consensus, and human authorization.
+The g8e platform utilizes a specialized multi-agent system designed for autonomous infrastructure management. The architecture enforces a strict separation between **Reasoning** (the application layer, e.g., g8ee) and the **Substrate** (the mandatory g8eg Gateway and g8eo Governed Operator). This ensures that no action reaches a host without cryptographic proof of intent, consensus, and human authorization.
 
 ### Core Principles
 
 - **3-Layer Governance Bedrock**: Every action is gated by a hierarchical validation system (L1 Technical Bedrock, L2 Consensus, L3 Authorization).
 - **Intent-Driven Execution**: Reasoning agents (Sage/Dash) never write shell commands directly; they articulate natural language intent to the Tribunal.
 - **Ensemble Consensus**: The Tribunal uses an independent multi-member ensemble with unique technical "lenses" to translate intent into commands.
-- **Host Sovereignty**: The Operator (g8eo) distrusts all upstream inputs. It verifies every transaction against the protocol before execution.
+- **Host Sovereignty**: The Governed Operator (g8eo) distrusts all upstream inputs. It verifies every transaction against the protocol before execution.
 - **Fail-Closed Verification**: Any missing signature, stale state root, or L1 violation results in immediate transaction rejection.
 - **Interrogation Gate**: Agents can pause execution to ask clarifying questions via structured `<interrogation>` blocks, preventing "guessing" when context is missing.
 
@@ -90,7 +90,7 @@ Every host-mutating tool call flows through an ordered cascade. Each stage is in
 7. **L1 re-validation**: Any command produced via swap or revision is re-checked against `validate_command_safety` (forbidden patterns, blacklist, whitelist) before it can leave the Engine.
 8. **L2/L3 envelope wrap**: The verified command is packaged as a typed `CommandRequested` payload inside a `GovernanceEnvelope`, signed by the L2 Tribunal key.
 9. **Approval Pipeline**: State-changing operations trigger an `OPERATOR_COMMAND_APPROVAL_REQUESTED` event, halting execution until a human approves via the UI (or `auto_approved.json` policy applies). L3 auto-approval never bypasses L1 or L2.
-10. **Substrate admission gauntlet**: The signed envelope is submitted over mTLS to the Operator, which independently re-runs the entire fail-closed gauntlet (envelope integrity → typed payload → L1 reflected forbidden patterns → hash binding → freshness → state root → L2 trusted-signer → L3 WebAuthn). The Engine has no privileged channel.
+10. **Substrate admission gauntlet**: The signed envelope is submitted over mTLS to the Governance Gateway (`g8eg`) and subsequent Governed Operator (`g8eo`), which independently re-run the entire fail-closed validation and execution gauntlets. The Engine has no privileged channel.
 11. **Sentinel egress scrub**: After execution the Operator scrubs every byte of stdout/stderr before publishing the result envelope back to the Engine.
 
 **Failure routing**: Tribunal consensus failure (after R2) and Warden first-strike both feed back to Sage to re-articulate intent. Warden second-strike and Auditor catastrophic failure both surface as agent-conflict events that demand human intervention.
@@ -116,8 +116,9 @@ The g8e platform utilizes a tiered agent persona system that separates **Substra
 
 | Layer | Agent | Code ID | Role | Tier | Purpose |
 |---|---|---|---|---|---|
-| **Substrate** | **Operator** | `g8eo` | `executor` | `N/A` | Sovereign host implementation; enforces the protocol. |
-| **Substrate** | **Warden (Substrate)** | `warden` | `boundary` | `N/A` | Final execution stop; enforces state root and emits receipts. |
+| **Substrate** | **Governance Gateway** | `g8eg` | `gateway` | `N/A` | Central Policy Decision Point (PDP); owns PKI and pub/sub. |
+| **Substrate** | **Governed Operator** | `g8eo` | `executor` | `N/A` | Sovereign host Policy Execution Point (PEP); runs Warden. |
+| **Substrate** | **Warden (Substrate)** | `warden` | `boundary` | `N/A` | Host-side execution boundary on `g8eo`; enforces state root and emits receipts. |
 | **Reasoning** | **Triage** | `triage` | `classifier` | `lite` | Initial classification of complexity, intent, and posture. |
 | **Reasoning** | **Sage** | `sage` | `reasoner` | `primary` | Senior reasoning authority for complex investigations. |
 | **Reasoning** | **Dash** | `dash` | `responder` | `assistant` | Fast-path responder for simple, single-turn tasks. |
@@ -204,7 +205,8 @@ flowchart LR
     Client((BYO Client<br/>Browser / CLI / Agent))
 
     subgraph Substrate ["Mandatory Substrate"]
-        Operator["g8eo (Hub: --listen)<br/>Protocol enforcement, PKI/mTLS,<br/>Document/KV/Blob/PubSub, LFAA"]
+        g8eg["g8eg (Governance Gateway)<br/>Listen mode: --listen<br/>PDP, PKI, SQLite, Pub/Sub"]
+        g8eo["g8eo (Governed Operator)<br/>PEP, Warden, local git ledger"]
     end
 
     subgraph App ["Optional Reference Application Layer"]
@@ -212,8 +214,9 @@ flowchart LR
         g8ee["g8ee<br/>AI Engine / L2 Producer"]
     end
 
-    Client -- "TLS 1.3 / mTLS" --> Operator
-    g8ee <--> Operator
+    Client -- "TLS 1.3 / mTLS" --> g8eg
+    g8ee <--> g8eg
+    g8eo -- "mTLS WSS" --> g8eg
 ```
 
 ### The Tribunal (Ensemble Command Generation)

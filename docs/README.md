@@ -20,10 +20,11 @@ The core contract and governance model that all components must follow.
 - [**Governance Hierarchy**](protocol.md#3-layer-governance-bedrock) - L1/L2/L3 validation model.
 - [**Security Principles**](protocol.md#host-sovereignty--audit) - Trustless execution and host sovereignty.
 
-## 2. g8eo - Reference Operator
-The primary substrate implementation in Go.
+## 2. Substrate Components
+The reference Go implementation compiles into a single binary serving two distinct roles:
 
-- [**g8eo (Operator)**](g8eo.md) - Reference implementation of the g8e Protocol.
+- [**Governance Gateway (g8eg)**](g8eg.md) - The central PDP / BFT-governed Policy Decision Point running in `--listen` mode.
+- [**Governed Operator (g8eo)**](operator.md) - The host-side PEP / sovereign execution agent and MCP Server.
 
 ## 3. Reference Applications
 Optional components demonstrating the protocol in action.

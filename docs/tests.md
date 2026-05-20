@@ -12,8 +12,8 @@ g8e is designed to be a **testing environment and a production environment at th
 
 ## Core Engineering Principles
 
-- **Hermetic execution** - Tests run directly on the host via `./g8e test`. Go for the substrate (`g8eo`); repo-local Python for explicit app-layer targets (`g8ee`).
-- **Real infrastructure** - Substrate test runs begin with `./g8e platform start`. App-layer tests require explicit app startup via `./g8e apps start g8ee` or `./g8e platform start --with-apps`.
+- **Hermetic execution** - Tests run directly on the host via `./g8e test`. Go for the substrate (`g8eg`/`g8eo`); repo-local Python for explicit app-layer targets (`g8ee`).
+- **Real infrastructure** - Substrate test runs begin with `./g8e platform start` (launching the `g8eg` Gateway). App-layer tests require explicit app startup via `./g8e apps start g8ee` or `./g8e platform start --with-apps`.
 - **No mocks policy** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use the real wire paths.
 - **mTLS by default** - Most internal and substrate communication requires mTLS. The runner injects certs from `.g8e/pki` automatically when authenticated (`./g8e login`).
 - **Body-embedded context** - Business and session context is provided as a `RequestContext` in the request body. `X-G8E-*` context headers are not supported and are ignored by the substrate.
@@ -25,7 +25,7 @@ g8e is designed to be a **testing environment and a production environment at th
 
 ## Test Harness Architecture
 
-### 1. Reference Operator Tests (Protocol Path)
+### 1. Substrate Tests (Protocol Path)
 
 ```bash
 ./g8e test            # default
@@ -33,7 +33,7 @@ g8e is designed to be a **testing environment and a production environment at th
 ./g8e test g8eo services/pubsub
 ```
 
-Validates the reference Operator (`g8eo`) and its protocol enforcement (`GovernanceEnvelope`, 3-layer governance, Audit Vault) without requiring Python or g8ee. Uses Operator listen mode and unified command/result paths. Keeps the required platform boundary small and independently verifiable.
+Validates the substrate components (`g8eg` and `g8eo`) and their protocol enforcement (`GovernanceEnvelope`, 3-layer governance, Audit Vault) without requiring Python or g8ee. Uses Gateway listen mode and unified command/result paths. Keeps the required platform boundary small and independently verifiable.
 
 ### 2. App Adapter Tests (Explicit Opt-In)
 
@@ -57,7 +57,7 @@ Evaluates AI agent reasoning and tool-calling accuracy using signed `ActionRecei
 ## Common Workflow
 
 ```bash
-# 1. Start the reference Operator
+# 1. Start the Governance Gateway
 ./g8e platform start
 
 # 2. Authenticate (required for mTLS tests)
@@ -86,7 +86,7 @@ Available flags: `-p` (provider), `-m` (primary model), `-a` (assistant model), 
 
 ## Component Specifics
 
-### Go (g8eo)
+### Go (g8eg & g8eo)
 
 - **Tooling** - `gotestsum` if available for dots-style output.
 - **Race detection** - Always enabled via `-race`.
@@ -111,10 +111,10 @@ Available flags: `-p` (provider), `-m` (primary model), `-a` (assistant model), 
 
 When debugging connectivity:
 
-- `9000` - Operator mTLS API
-- `9001` - Operator Pub/Sub (WSS)
-- `9002` - Operator Bootstrap (HTTP)
-- `9003` - Operator Public (BYO/Browser)
+- `9000` - Gateway mTLS API
+- `9001` - Gateway Pub/Sub (WSS)
+- `9002` - Gateway Bootstrap (HTTP)
+- `9003` - Gateway Public (BYO/Browser)
 - `8443` - g8ee Adapter (HTTPS)
 
 ---

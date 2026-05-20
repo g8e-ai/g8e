@@ -8,7 +8,7 @@ parent: Architecture
 Last Updated: 2026-05-12
 Version: v0.2.6
 
-g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through a self-contained **Substrate** (Operator + Protocol), vendored dependencies, and optional local LLM inference.
+g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through a self-contained **Substrate** (Governance Gateway, Governed Operator, and Protocol), vendored dependencies, and optional local LLM inference.
 
 ---
 
@@ -18,27 +18,38 @@ The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In th
 
 - **No Telemetry:** Zero outbound usage, health, or error data is sent to Lateralus Labs.
 - **Local Assets:** All frontend assets (fonts, icons, JS libraries) are served locally by the application layer.
-- **Local Persistence:** All platform state, including chat history, settings, and secrets, is stored in a unified SQLite database managed by the reference Operator (`g8eo`) in Listen Mode.
+- **Local Persistence:** All platform state, including chat history, settings, and secrets, is stored in a unified SQLite database managed by the Governance Gateway (`g8eg`) in Listen Mode.
 
 ---
 
-## The Platform Backbone: Operator (Listen Mode)
+## The Platform Backbone: Governance Gateway (g8eg)
 
-In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the `g8eo` (Operator) binary in **Listen Mode** (`--listen`). In this mode, the Operator acts as the platform's central persistence and messaging backbone rather than an outbound execution agent.
+In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the Governance Gateway (`g8eg` / `g8e.gateway` binary) in **Listen Mode** (`--listen`). In this mode, the Governance Gateway acts as the platform's central persistence and messaging backbone rather than an outbound execution agent.
 
 ### Architecture & Ports
-The reference Operator in Listen Mode exposes interfaces for public protocol communication from optional reference adapters (Dashboard and Engine) and BYO clients. While the binary defaults to port 443, the standard platform deployment maps these to:
+The Governance Gateway in Listen Mode exposes interfaces for public protocol communication from optional reference adapters (Dashboard and Engine) and BYO clients. While the binary defaults to port 443, the standard platform deployment maps these via the Four-Port Contract:
 
-| Port | Protocol | Purpose |
-|---|---|---|
-| **9000** | **HTTPS** | **Substrate API:** Document Store, Vault, and Protocol endpoints. |
-| **9001** | **WSS** | **Pub/Sub Broker:** Real-time messaging backbone for all platform events. |
+| Surface | Port (default) | Auth | Purpose |
+|---|---|---|---|
+| **Bootstrap** | `9002` (HTTP) | None | Download trust bundles, device-link enrollment, and CSR signing. |
+| **Public Port** | `9003` (TLS) | Web session | Browser login, WebAuthn challenge, and PKI discovery. |
+| **mTLS API** | `9000` | mTLS + URI SAN | Central `/api/governance/envelope` mutation endpoint and `/db` persistence. |
+| **Pub/Sub** | `9001` (mTLS WSS) | mTLS + URI SAN | Real-time WebSocket event fan-out. |
 
 ### Core Responsibilities
 - **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file in `.g8e/data`.
 - **Internal PKI:** Acts as the platform's Certificate Authority (CA), auto-generating ECDSA P-384 TLS certificates for all inter-component traffic.
 - **Secret Management:** Provides an encrypted Vault for storing platform secrets (API keys, internal tokens) without external dependencies.
 - **Messaging:** Serves as the central Pub/Sub broker for all compliant clients.
+
+---
+
+## The PEP: Governed Operator (g8eo)
+
+To execute mutations on the local air-gapped host, a **Governed Operator (`g8eo` / `g8e.operator`)** daemon runs in standard mode on the target machine:
+- Connects outbound-only over local mTLS WSS to the local `g8eg` gateway.
+- Subscribes to command events, processes them via local Warden boundaries, and writes history to a host-local ledger.
+- Exposes tools to standard local clients as a Model Context Protocol (MCP) Server.
 
 ---
 
@@ -61,7 +72,7 @@ For air-gapped reasoning, g8e integrates a local inference engine within the `g8
 | **Runtime** | **None** | All components communicate exclusively over the internal `g8e-network` or localhost. |
 
 ### Vendoring & Dependency Management
-- **Operator (Go):** 100% vendored in `services/g8eo/vendor/`.
+- **Substrate (Go):** 100% vendored in `services/g8eo/vendor/`.
 - **Dashboard:** Locked via its dependency manifest; all assets are bundled during the build.
 - **Engine (Python):** Requirements are frozen. For air-gap builds, use the pre-staged environment or Docker image strategy.
 
@@ -75,7 +86,7 @@ For air-gapped reasoning, g8e integrates a local inference engine within the `g8
 3. **Export Assets:** Bundle the `.g8e` runtime directory and component binaries.
 
 ### 2. Implementation (Air-Gapped Host)
-1. **Stage Binaries:** Place the `g8e.operator` binary and component source/images on the host.
+1. **Stage Binaries:** Place the `g8e.gateway` and `g8e.operator` binaries and component source/images on the host.
 2. **Stage Model:** Place the `.gguf` file in `services/g8ee/models/`.
 3. **Configure:**
    - Set `vertex_search_enabled` to `false` in Settings.
@@ -86,7 +97,7 @@ For air-gapped reasoning, g8e integrates a local inference engine within the `g8
 
 ## Security Invariants
 
-1. **No Outbound Dialing:** In Listen Mode, the Operator is forbidden from initiating connections to any address outside the local platform.
+1. **No Outbound Dialing:** In Listen Mode, the Governance Gateway (`g8eg`) is forbidden from initiating connections to any address outside the local platform.
 2. **Mutual Trust:** All internal traffic between Dashboard, Engine, and Operator is encrypted using the Operator's internal CA.
 3. **Data Sovereignty:** All audit logs, chat history, and telemetry remain strictly on the host's filesystem in the `.g8e` directory.
 4. **Fail-Closed Privacy:** If a component requires an external resource that is unavailable, it must fail with a clear error rather than attempting a fallback to insecure or public endpoints.

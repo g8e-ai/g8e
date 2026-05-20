@@ -335,16 +335,16 @@ _stop_g8ee() {
 
 _start_operator_listen() {
     if _operator_listen_running; then
-        echo "  Operator listen mode is already running (PID: $(cat "$OPERATOR_LISTEN_PID_FILE"))."
+        echo "  Governance Gateway is already running (PID: $(cat "$OPERATOR_LISTEN_PID_FILE"))."
         return 0
     fi
 
-    local bin="$PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.operator"
+    local bin="$PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.gateway"
     # Always run make build-local - Go's build caching makes this cheap when nothing changed
-    echo "  Building Operator binary natively..."
+    echo "  Building Governance Gateway and Operator natively..."
     (cd "$PROJECT_ROOT/services/g8eo" && make build-local)
 
-    echo "  Starting Operator listen mode..."
+    echo "  Starting Governance Gateway..."
     mkdir -p "$OPERATOR_LISTEN_DATA_DIR" "$OPERATOR_LISTEN_PKI_DIR" "$OPERATOR_LISTEN_SECRETS_DIR" "$OPERATOR_LISTEN_PID_DIR" "$OPERATOR_LISTEN_LOG_DIR"
 
     _rotate_logs "$OPERATOR_LISTEN_LOG_FILE"

@@ -7,7 +7,7 @@ title: g8e CLI
 Last Updated: 2026-05-19
 Version: v0.2.6
 
-The `g8e` command is the unified entry point for the g8e platform. The platform is built on the **g8e Protocol** as substrate; this CLI manages the reference Operator (`g8eo`) runtime by default and exposes the reference Engine app (`g8ee`) only as an optional application-layer adapter.
+The `g8e` command is the unified entry point for the g8e platform. The platform is built on the **g8e Protocol** as substrate; this CLI manages the substrate (`g8eg` and `g8eo`) by default and exposes the reference Engine app (`g8ee`) only as an optional application-layer adapter.
 
 ## Usage
 
@@ -36,7 +36,8 @@ The default substrate is the Operator plus the shared protocol. Bundled apps rem
 
 | Layer | Component | Language | Purpose |
 |-----------|-----------|----------|---------|
-| **Substrate** | **Operator (g8eo)** | Go | Protocol hub, policy enforcement, execution, audit, receipts, persistence, and pub/sub in listen mode. |
+| **Substrate (Gateway)** | **g8eg** | Go | Policy Decision Point (PDP): Protocol hub, CA/PKI, persistence, and pub/sub broker in listen mode. |
+| **Substrate (Operator)**| **g8eo** | Go | Policy Execution Point (PEP): Sovereign host execution (Warden), local git ledger, and MCP Server. |
 | **Protocol** | **protocol/proto** | Protobuf | Canonical transaction schemas, typed payloads, and envelope contracts. |
 | **Application Layer** | **g8ee** | Python | Optional reference Engine adapter for agentic proposal and L2 proof generation. |
 
@@ -60,7 +61,7 @@ A user request moves through the **3-Layer Governance Bedrock**:
 3. **L1: Technical Bedrock**: Initial scrubbing and validation against forbidden patterns (sudo, etc.).
 4. **L2: Consensus (Tribunal)**: Intent is translated into commands by the ensemble. The Warden checks for risk, and the Auditor verifies technical correctness.
 5. **L3: Authorization**: State-changing operations halt for human approval. Benign commands may use auto-approval if configured.
-6. **Execution**: The Operator verifies protocol proofs locally, executes accepted work, and commits receipts to the host-authoritative audit ledger.
+6. **Execution**: The Governed Operator (`g8eo`) verifies protocol proofs locally, executes accepted work, and commits receipts to the host-authoritative audit ledger.
 
 ## Operational Modes
 
@@ -79,7 +80,7 @@ When no operator is connected:
 
 ### Daily Operations
 ```bash
-./g8e platform start    # Start Operator listen mode only (exposes 4 ports: 9001, 9000, 9003, 9000)
+./g8e platform start    # Start Governance Gateway (g8eg) in listen mode (exposes 4 ports: 9000-9003)
 ./g8e platform status   # Check service health and PIDs (shows all four endpoints)
 ./g8e platform logs     # Stream aggregated logs
 ./g8e platform settings # View or update platform configuration
@@ -116,12 +117,12 @@ When no operator is connected:
 - `unset <key>`: Remove a variable from `.g8e/.env`
 
 ### platform
-- `start [-a|--with-apps|--with-g8ee]`: Start Operator listen mode by default; optional apps require explicit opt-in
-- `stop`: Stop Operator listen mode and any optional app processes
-- `restart [-a|--with-apps|--with-g8ee]`: Restart Operator listen mode by default; optional apps require explicit opt-in
+- `start [-a|--with-apps|--with-g8ee]`: Start Governance Gateway (`g8eg`) listen mode by default; optional apps require explicit opt-in
+- `stop`: Stop Governance Gateway and any optional app processes
+- `restart [-a|--with-apps|--with-g8ee]`: Restart Governance Gateway listen mode by default; optional apps require explicit opt-in
 - `status`: Show substrate health first and optional application-layer status separately
-- `reset`: Destructive. Wipes Engine data, Operator listen-mode data, and bootstrap secrets while preserving PKI material in `.g8e/pki`
-- `wipe`: Clears application data via the Operator listen-mode API. Preserves platform settings, PKI material, secrets, and authentication state
+- `reset`: Destructive. Wipes Engine data, Gateway listen-mode data, and bootstrap secrets while preserving PKI material in `.g8e/pki`
+- `wipe`: Clears application data via the Gateway listen-mode API. Preserves platform settings, PKI material, secrets, and authentication state
 - `clean`: Nuke all processes and the `.g8e` runtime directory
 - `logs`: Stream logs from all components
 - `settings`: Manage platform configuration (sections: general, llm, etc.)
