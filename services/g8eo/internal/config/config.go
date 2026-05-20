@@ -79,6 +79,7 @@ type ListenConfig struct {
 	PasskeyRpID      string // RP ID for passkey operations (default: localhost)
 	PasskeyRpName    string // RP Name for passkey operations (default: g8e)
 	MCPDownstreamURL string // URL of the downstream MCP server to proxy discovery and execution to
+	A2ADownstreamURL string // URL of the downstream A2A server to proxy execution to
 }
 
 // OpenClawConfig holds configuration for --openclaw mode.
@@ -208,11 +209,14 @@ func FindProjectRoot() string {
 // no outbound connections. The Operator simply starts and listens locally.
 // allowTestPortZero should be true only when called from Go tests; when false,
 // port 0 is rejected to prevent dynamic port assignment in production.
-func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir string, passkeyRpID, passkeyRpName, mcpDownstreamURL string, allowTestPortZero bool) (*Config, error) {
+func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir string, passkeyRpID, passkeyRpName, mcpDownstreamURL, a2aDownstreamURL string, allowTestPortZero bool) (*Config, error) {
 	projectRoot := FindProjectRoot()
 
 	if mcpDownstreamURL == "" {
 		mcpDownstreamURL = os.Getenv("G8E_MCP_DOWNSTREAM_URL")
+	}
+	if a2aDownstreamURL == "" {
+		a2aDownstreamURL = os.Getenv("G8E_A2A_DOWNSTREAM_URL")
 	}
 
 	if dataDir == "" {
@@ -297,6 +301,7 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 			PasskeyRpID:      passkeyRpID,
 			PasskeyRpName:    passkeyRpName,
 			MCPDownstreamURL: mcpDownstreamURL,
+			A2ADownstreamURL: a2aDownstreamURL,
 		},
 	}, nil
 }

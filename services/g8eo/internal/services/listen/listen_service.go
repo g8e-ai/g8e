@@ -124,7 +124,10 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		apiKeySvc: apiKeySvc,
 	}
 
-	mcpGateway := mcp.NewGatewayService(logger)
+	mcpGateway := mcp.NewGatewayService(logger, db)
+	mcpGateway.SetA2ADependencies(cfg.Listen.A2ADownstreamURL)
+	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Listen.PublicPort)
+	mcpGateway.SetPublicBaseURL(publicBaseURL)
 	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, mcpGateway, ls.IsReady, ls.IsGovernanceReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
@@ -192,7 +195,10 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		apiKeySvc: apiKeySvc,
 	}
 
-	mcpGateway := mcp.NewGatewayService(logger)
+	mcpGateway := mcp.NewGatewayService(logger, db)
+	mcpGateway.SetA2ADependencies(cfg.Listen.A2ADownstreamURL)
+	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Listen.PublicPort)
+	mcpGateway.SetPublicBaseURL(publicBaseURL)
 	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, mcpGateway, ls.IsReady, ls.IsGovernanceReady)
 
 	tlsConfig := pki.TLSConfig()
@@ -272,16 +278,6 @@ func (ls *ListenService) GetPKIAuthority() *PKIAuthority {
 // GetHTTPHandler returns the HTTP handler.
 func (ls *ListenService) GetHTTPHandler() *HTTPHandler {
 	return ls.handler
-}
-
-// GetPubSubBroker returns the PubSub broker.
-func (h *HTTPHandler) GetPubSubBroker() *PubSubBroker {
-	return h.pubsub
-}
-
-// GetMCPGateway returns the MCP gateway service.
-func (h *HTTPHandler) GetMCPGateway() *mcp.GatewayService {
-	return h.mcp
 }
 
 // GetHTTPPort returns the assigned port for the HTTP server.

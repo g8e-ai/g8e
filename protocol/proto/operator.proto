@@ -358,6 +358,37 @@ message EvalAnswerRequested {
   string model = 4;
 }
 
+// Payload for g8e.v1.operator.mcp.call.requested
+// Carries the downstream MCP tool name and its JSON-RPC arguments verbatim so
+// the substrate can verify L1 forbidden patterns against the tool name before
+// the Warden dispatches the verified call to the configured downstream MCP
+// server.
+message McpCallRequested {
+  // The MCP tool name (e.g., "fs_read", "drop_table"). Forbidden patterns
+  // here block the gauntlet at L1 before any signature or state check.
+  string tool_name = 1 [(g8e.common.v1.forbidden_patterns) = "(?i)^(sudo|su)$,(?i)rm[ _-]?rf[ _-]?root,(?i)drop[ _-]?database"];
+
+  // JSON-encoded arguments object exactly as the MCP client supplied it.
+  // Stored as a string (not Struct) so the canonical hash is computed over
+  // the bytes the client signed, with no normalization ambiguity.
+  string arguments_json = 2;
+
+  // Optional client-supplied invocation id surfaced back in the result.
+  string execution_id = 3;
+}
+
+// Payload for g8e.v1.operator.a2a.call.requested
+// Mirrors McpCallRequested for the Agent-to-Agent JSON protocol.
+message A2aCallRequested {
+  // Target agent skill / capability name.
+  string skill_name = 1 [(g8e.common.v1.forbidden_patterns) = "(?i)^(sudo|su)$"];
+
+  // JSON-encoded A2A task payload.
+  string payload_json = 2;
+
+  string execution_id = 3;
+}
+
 // ActionReceipt is the signed proof of a completed or failed mutation.
 // It is emitted by the Warden after execution.
 message ActionReceipt {

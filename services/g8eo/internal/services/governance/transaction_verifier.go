@@ -210,14 +210,10 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 	if tv.replayStore == nil {
 		return nil, ErrReplayStoreMissing
 	}
-	replayed, err := tv.replayStore.CheckAndSetNonce(envelope.Nonce, expiresAt)
-	if err != nil {
-		return nil, fmt.Errorf("replay check failed: %w", err)
-	}
-	if replayed {
-		tv.logger.Error("Transaction replay detected", "nonce", envelope.Nonce)
-		return nil, ErrTransactionReplay
-	}
+	// Nonce consumption is deferred until after all other gates pass so a
+	// transaction that legitimately suspends on L3_PROOF_MISSING can be
+	// resumed once the human supplies WebAuthn proof without forcing the
+	// upstream client to re-issue the call with a fresh nonce.
 
 	if envelope.StateMerkleRoot == "" {
 		return nil, ErrStateRootRequired
@@ -285,6 +281,19 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		}
 	}
 
+	// Consume the nonce only after every gate has succeeded so that
+	// recoverable failures (L3 suspended pending human approval) do not
+	// burn the nonce and force the upstream client to re-issue a fresh
+	// envelope.
+	replayed, err := tv.replayStore.CheckAndSetNonce(envelope.Nonce, expiresAt)
+	if err != nil {
+		return nil, fmt.Errorf("replay check failed: %w", err)
+	}
+	if replayed {
+		tv.logger.Error("Transaction replay detected", "nonce", envelope.Nonce)
+		return nil, ErrTransactionReplay
+	}
+
 	// 9. Return verified transaction
 	verified := &VerifiedTransaction{
 		Envelope:       envelope,
@@ -326,6 +335,10 @@ func (tv *TransactionVerifier) decodePayloadForAction(actionType constants.Actio
 		msg = &operatorv1.FetchFileHistoryRequested{}
 	case constants.ActionTypeEvalAnswer:
 		msg = &operatorv1.EvalAnswerRequested{}
+	case constants.ActionTypeMcpCall:
+		msg = &operatorv1.McpCallRequested{}
+	case constants.ActionTypeA2aCall:
+		msg = &operatorv1.A2ACallRequested{}
 	default:
 		return nil, ErrUnknownActionType
 	}
@@ -388,9 +401,13 @@ func (tv *TransactionVerifier) verifyL2Signature(pubKey ed25519.PublicKey, signa
 }
 
 // isMutation returns true if the action type modifies system state.
+// MCP_CALL and A2A_CALL are mutations because the substrate cannot reason
+// about the side effects of arbitrary downstream tools/skills - they must
+// pass the L3 human-presence gate just like any local mutation.
 func (tv *TransactionVerifier) isMutation(actionType constants.ActionType) bool {
 	switch actionType {
-	case constants.ActionTypeExecuteBash, constants.ActionTypeFileEdit, constants.ActionTypeRestoreFile, constants.ActionTypeShutdown:
+	case constants.ActionTypeExecuteBash, constants.ActionTypeFileEdit, constants.ActionTypeRestoreFile, constants.ActionTypeShutdown,
+		constants.ActionTypeMcpCall, constants.ActionTypeA2aCall:
 		return true
 	case constants.ActionTypeEvalAnswer:
 		return false

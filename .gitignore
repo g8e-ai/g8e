@@ -250,12 +250,6 @@ bin/
 *.crt
 *.secret
 
-# Node.js (if any)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
 # OS generated files
 .DS_Store
 .DS_Store?

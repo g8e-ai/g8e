@@ -59,6 +59,10 @@ func MapEventTypeToActionType(eventType EventType) ActionType {
 		return ActionTypeGrantIntent
 	case Event.Operator.Intent.RevokeRequested:
 		return ActionTypeRevokeIntent
+	case Event.Operator.Mcp.CallRequested:
+		return ActionTypeMcpCall
+	case Event.Operator.A2a.CallRequested:
+		return ActionTypeA2aCall
 	case Event.Operator.PortCheck.Requested:
 		return ActionTypePortCheck
 	default:
@@ -97,6 +101,10 @@ func MapActionTypeToEventType(actionType ActionType) EventType {
 		return Event.Operator.Intent.Requested
 	case ActionTypeRevokeIntent:
 		return Event.Operator.Intent.RevokeRequested
+	case ActionTypeMcpCall:
+		return Event.Operator.Mcp.CallRequested
+	case ActionTypeA2aCall:
+		return Event.Operator.A2a.CallRequested
 	case ActionTypePortCheck:
 		return Event.Operator.PortCheck.Requested
 	default:

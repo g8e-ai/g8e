@@ -1,10 +1,49 @@
-# g8e
+g8e: The Zero-Trust Substrate for Agentic Infrastructure
+What is g8e?
+g8e is a universal, zero-trust execution boundary and BFT protocol for AI agents. At its core, g8e physically separates an AI's intent generation from actual host execution. It is deployed as a tiny, sovereign Operator binary (g8eo) that drops onto any host, runs an isolated execution boundary, and dials out to the platform.
 
-**Byzantine Fault Tolerant (BFT) Governance Substrate for Agentic Infrastructure.**
+Instead of replacing emerging AI tool-calling standards like Anthropic's Model Context Protocol (MCP) or A2A, g8e acts as the Universal Translator and Security Envelope.
 
-g8e is a zero-trust execution substrate that forces AI tool calls into a governance envelope. It physically separates intent generation from execution, requiring a compliant agentic system to reach structural consensus before mutating state.
+The Payload is Malleable: Any standard JSON-RPC tool request (like MCP) acts as the payload.
 
-Designed for universal interoperability, g8e provides a mandatory security perimeter for standard JSON-based protocols like Anthropic's **Model Context Protocol (MCP)** and **Agent-to-Agent (A2A)**. While these protocols define the "what" (the payload), g8e serves as the **Admission Gate** - ensuring every transaction is typed, signed, and state-bound before it touches the host.
+The Protocol is Absolute: g8e wraps that payload in a canonical UAP JSON GovernanceEnvelope.
+
+Before a single bit moves on the host OS, the g8eo Operator strictly verifies this envelope—enforcing hardcoded L1 technical gates, L2 BFT consensus signatures, and an L3 hardware-bound human authorization. It never fails open.
+
+Why g8e?
+The industry's current trajectory for agentic automation is structurally broken. Giving a single LLM direct access to production is gross negligence, but relying on "Human-in-the-Loop" alert fatigue is operational suicide. Furthermore, bringing AI to secure environments typically requires punching massive, dangerous inbound holes through enterprise firewalls.
+
+g8e solves this completely, offering unprecedented superpowers to both developers and SecOps:
+
+Outbound-Only, Zero-Trust Access (Bypass the Firewall)
+Because the g8eo Operator dials out, it requires zero inbound open ports. You can drop the binary onto an air-gapped retail edge node, a strict corporate VPC, or a compromised forensic server. Suddenly, you have a secure, bi-directional tunnel for Claude Desktop or your custom agent to debug production without violating SecOps policies.
+
+Multi-Model Sovereignty & Provider Agnosticism
+Relying on a single foundational model is a supply-chain vulnerability; if a model is poisoned, biased, or experiences an outage, your automation fails. g8e is entirely provider-agnostic. Because the L2 Tribunal resolves intent via Byzantine Fault Tolerant (BFT) consensus, you can power the independent voting agents using a heterogeneous ensemble (e.g., mixing Anthropic, OpenAI, and local open-source models). If one model hallucinates or is compromised, the diverse ensemble outvotes it, ensuring mathematical resilience against single-provider failures.
+
+Strict Local Data Sovereignty
+SaaS-based agent architectures pull your authoritative, sensitive state into their cloud. g8e inverts this. Raw operational data, credentials, and forensic logs are quarantined locally on the managed host in an encrypted Local-First Audit Architecture (LFAA). The AI and external platforms only ever receive scrubbed, metadata-safe context after it passes through the host's Sentinel Guard.
+
+The Universal Protocol Translator
+The AI landscape is fracturing into a protocol war. g8e makes you immune. Because it treats protocols like MCP simply as untrusted payloads, it can ingest any standard, force it through a BFT governance check, and output a mathematically safe command.
+
+True Proof of Human Presence (PHP)
+The machine handles what is machine-checkable; the human handles intent. The Operator halts state mutations until the envelope carries an explicit, hardware-bound WebAuthn/Passkey signature from a human co-validator.
+
+The End-Game: Native Agentic Governance
+While g8e serves as the ultimate secure tunnel for today's MCP and A2A payloads, its architecture inevitably drives a paradigm shift.
+
+Developers who start by tunneling standard tools through the g8e Gateway quickly realize the power of the protocol. If you build an application that speaks native g8e—outputting canonical JSON (protojson) GovernanceEnvelopes directly—your agentic system is mathematically governed from the ground up.
+
+A native g8e application inherits:
+
+Immunity to single-agent hallucination loops via L2 Tribunal Consensus.
+
+Instant protection against MITRE ATT&CK vectors via L1 Hard Gates.
+
+State-bound execution that mathematically rejects stale commands via Merkle state roots.
+
+g8e is not just how you safely use today's AI tools; it is the definitive wire contract for how autonomous systems will interact with physical infrastructure tomorrow.
 
 ---
 

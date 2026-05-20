@@ -51,7 +51,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	secretsDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 
-	cfg, err := config.LoadListen(0, 0, 0, 0, dataDir, pkiDir, secretsDir, "localhost", "g8e", "", true)
+	cfg, err := config.LoadListen(0, 0, 0, 0, dataDir, pkiDir, secretsDir, "localhost", "g8e", "", "", true)
 	require.NoError(t, err)
 
 	ls, err := listen.NewListenService(cfg, testutil.NewTestLogger())

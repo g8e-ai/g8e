@@ -548,7 +548,7 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 
 	logger.Info("g8e Operator - Listen Mode (operator)", "version", version, "build", buildID)
 
-	cfg, err := config.LoadListen(wssPort, httpPort, bootstrapPort, publicPort, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName, "", false)
+	cfg, err := config.LoadListen(wssPort, httpPort, bootstrapPort, publicPort, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName, "", "", false)
 	if err != nil {
 		logger.Error("Failed to load listen configuration", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
@@ -594,6 +594,10 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 	// Loopback Pub/Sub for in-process command dispatch
 	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetHTTPHandler().GetPubSubBroker())
 
+	// Resolve the MCP gateway up-front so the pubsub command service can
+	// reach it for Warden egress dispatch on verified MCP_CALL transactions.
+	mcpSvc := svc.GetHTTPHandler().GetMCPGateway()
+
 	psConfig := pubsub.CommandServiceConfig{
 		Config:            cfg,
 		Logger:            logger,
@@ -613,6 +617,7 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 		L3Verifier:        govDeps.L3Verifier,
 		WardenSigningKey:  wardenPriv,
 		WardenKeyID:       wardenKeyID,
+		MCPGateway:        mcpSvc,
 	}
 
 	cmdSvc, err := pubsub.NewPubSubCommandService(psConfig)
@@ -626,9 +631,11 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 	// /api/governance/envelope and receive a signed ActionReceipt.
 	svc.SetEnvelopeProcessor(cmdSvc)
 
-	// Set MCP gateway dependencies
-	if mcpSvc := svc.GetHTTPHandler().GetMCPGateway(); mcpSvc != nil {
-		mcpSvc.SetDependencies(cmdSvc, govDeps.StateRootProvider, wardenPriv, wardenKeyID)
+	// Wire MCP gateway -> substrate processor. Egress dispatch back to the
+	// downstream MCP server is invoked from the Warden via cmdSvc, so the
+	// gateway only needs the substrate processor + signing identity here.
+	if mcpSvc != nil {
+		mcpSvc.SetDependencies(cmdSvc, govDeps.StateRootProvider, wardenPriv, wardenKeyID, cfg.Listen.MCPDownstreamURL)
 	}
 
 	go func() {

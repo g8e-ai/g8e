@@ -481,6 +481,8 @@ const (
 	ActionTypeEvalAnswer ActionType = "EVAL_ANSWER"
 	ActionTypeGrantIntent ActionType = "GRANT_INTENT"
 	ActionTypeRevokeIntent ActionType = "REVOKE_INTENT"
+	ActionTypeMcpCall ActionType = "MCP_CALL"
+	ActionTypeA2aCall ActionType = "A2A_CALL"
 )
 
 // CommandErrorType is a typed string for command error type.
@@ -1201,6 +1203,8 @@ var Status = struct {
 		EvalAnswer ActionType
 		GrantIntent ActionType
 		RevokeIntent ActionType
+		McpCall ActionType
+		A2aCall ActionType
 	}
 	CommandErrorType struct {
 		ValidationError CommandErrorType
@@ -2014,6 +2018,8 @@ var Status = struct {
 		EvalAnswer ActionType
 		GrantIntent ActionType
 		RevokeIntent ActionType
+		McpCall ActionType
+		A2aCall ActionType
 	}{
 		ExecuteBash: ActionTypeExecuteBash,
 		FileEdit: ActionTypeFileEdit,
@@ -2030,6 +2036,8 @@ var Status = struct {
 		EvalAnswer: ActionTypeEvalAnswer,
 		GrantIntent: ActionTypeGrantIntent,
 		RevokeIntent: ActionTypeRevokeIntent,
+		McpCall: ActionTypeMcpCall,
+		A2aCall: ActionTypeA2aCall,
 	},
 	CommandErrorType: struct {
 		ValidationError CommandErrorType

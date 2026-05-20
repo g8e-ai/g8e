@@ -794,6 +794,20 @@
       "_python_const": "OPERATOR_INTENT_APPROVAL_REJECTED",
       "_go_alias": "Intent.ApprovalRejected"
     },
+    "operator.mcp.call.requested": {
+      "value": "g8e.v1.operator.mcp.call.requested",
+      "_go_const": "OperatorMcpCallRequested",
+      "_python_const": "OPERATOR_MCP_CALL_REQUESTED",
+      "_uap_action": "MCP_CALL",
+      "_go_alias": "Mcp.CallRequested"
+    },
+    "operator.a2a.call.requested": {
+      "value": "g8e.v1.operator.a2a.call.requested",
+      "_go_const": "OperatorA2aCallRequested",
+      "_python_const": "OPERATOR_A2A_CALL_REQUESTED",
+      "_uap_action": "A2A_CALL",
+      "_go_alias": "A2a.CallRequested"
+    },
     "operator.network.ping.requested": {
       "value": "g8e.v1.operator.network.ping.requested",
       "_go_const": "OperatorNetworkPingRequested",

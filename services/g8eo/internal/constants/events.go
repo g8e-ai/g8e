@@ -151,6 +151,8 @@ const EventOperatorIntentRevokeRequested EventType = "g8e.v1.operator.intent.rev
 const EventOperatorIntentApprovalRequested EventType = "g8e.v1.operator.intent.approval.requested"
 const EventOperatorIntentApprovalGranted EventType = "g8e.v1.operator.intent.approval.granted"
 const EventOperatorIntentApprovalRejected EventType = "g8e.v1.operator.intent.approval.rejected"
+const EventOperatorMcpCallRequested EventType = "g8e.v1.operator.mcp.call.requested"
+const EventOperatorA2aCallRequested EventType = "g8e.v1.operator.a2a.call.requested"
 const EventOperatorNetworkPingRequested EventType = "g8e.v1.operator.network.ping.requested"
 const EventOperatorNetworkPingReceived EventType = "g8e.v1.operator.network.ping.received"
 const EventOperatorNetworkPingCompleted EventType = "g8e.v1.operator.network.ping.completed"
@@ -312,6 +314,9 @@ const EventSourceAiTriage EventType = "g8e.v1.source.ai.triage"
 const EventSourceSystem EventType = "g8e.v1.source.system"
 
 // Event.Operator provides hierarchical access to operator event constants
+type _EventOperatorA2a struct {
+	CallRequested EventType
+}
 type _EventOperatorAudit struct {
 	AIMsg EventType
 	Command EventType
@@ -421,6 +426,9 @@ type _EventOperatorIntent struct {
 	RevokeRequested EventType
 	Revoked EventType
 }
+type _EventOperatorMcp struct {
+	CallRequested EventType
+}
 type _EventOperatorNetworkPing struct {
 	Completed EventType
 	Failed EventType
@@ -457,6 +465,7 @@ type _EventOperatorStreamApproval struct {
 }
 
 type _EventOperator struct {
+	A2a _EventOperatorA2a
 	APIKeyRefreshed EventType
 	Audit _EventOperatorAudit
 	Bootstrap _EventOperatorBootstrap
@@ -479,6 +488,7 @@ type _EventOperator struct {
 	HeartbeatReceived EventType
 	HeartbeatRequested EventType
 	Intent _EventOperatorIntent
+	Mcp _EventOperatorMcp
 	NetworkPing _EventOperatorNetworkPing
 	PanelListUpdated EventType
 	PortCheck _EventOperatorPortCheck
@@ -499,6 +509,9 @@ var Event = struct {
 	Operator _EventOperator
 }{
 	Operator: _EventOperator{
+		A2a: _EventOperatorA2a{
+			CallRequested: EventOperatorA2aCallRequested,
+		},
 		APIKeyRefreshed: EventOperatorApiKeyRefreshed,
 		Audit: _EventOperatorAudit{
 			AIMsg: EventOperatorAuditAiRecorded,
@@ -615,6 +628,9 @@ var Event = struct {
 			Requested: EventOperatorIntentRequested,
 			RevokeRequested: EventOperatorIntentRevokeRequested,
 			Revoked: EventOperatorIntentRevoked,
+		},
+		Mcp: _EventOperatorMcp{
+			CallRequested: EventOperatorMcpCallRequested,
 		},
 		NetworkPing: _EventOperatorNetworkPing{
 			Completed: EventOperatorNetworkPingCompleted,
