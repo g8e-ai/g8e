@@ -283,10 +283,16 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
 	serviceKeyPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.key")
 	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.crt")
+	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.chain.pem")
 
-	needService := !fileExists(serviceKeyPath) || !fileExists(serviceCertPath)
+	needService := !fileExists(serviceKeyPath) || !fileExists(serviceCertPath) || !fileExists(chainPath)
 	if !needService {
-		tlsCert, err := tls.LoadX509KeyPair(serviceCertPath, serviceKeyPath)
+		// Prefer loading the chain file for the service certificate
+		tlsCert, err := tls.LoadX509KeyPair(chainPath, serviceKeyPath)
+		if err != nil {
+			// Fallback to single cert if chain is missing (though EnsurePKI should have created it)
+			tlsCert, err = tls.LoadX509KeyPair(serviceCertPath, serviceKeyPath)
+		}
 		if err != nil {
 			pki.logger.Warn("[PKI] Failed to load service cert, regenerating", string(constants.ConnectionStateError), err)
 			needService = true
@@ -305,9 +311,9 @@ func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
 		if err := pki.generateServiceCert(extraIPs); err != nil {
 			return err
 		}
-		tlsCert, err := tls.LoadX509KeyPair(serviceCertPath, serviceKeyPath)
+		tlsCert, err := tls.LoadX509KeyPair(chainPath, serviceKeyPath)
 		if err != nil {
-			return fmt.Errorf("failed to load generated service cert: %w", err)
+			return fmt.Errorf("failed to load generated service cert chain: %w", err)
 		}
 		pki.serviceCert = tlsCert
 	}

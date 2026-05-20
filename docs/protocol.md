@@ -68,8 +68,28 @@ The schema source of truth lives under `@/home/bob/g8e/protocol/proto/`:
 | File | Purpose |
 |---|---|
 | `common.proto` | `GovernanceEnvelope`, `GovernanceMetadata`, L1/L2/L3 substructures. |
-| `operator.proto` | Typed mutation payloads (`CommandRequested`, `FileEditRequested`, `ActionReceipt`, etc.). |
-| `pubsub.proto` | Envelope-aware pub/sub message types. |
+- `operator.proto` | Typed mutation payloads (`CommandRequested`, `FileEditRequested`, `ActionReceipt`, etc.).
+- `pubsub.proto` | Envelope-aware pub/sub message types.
+
+---
+
+## JSON-RPC Error Mapping
+
+For BYO clients using the MCP or A2A protocol translation gateway, g8eo provides granular JSON-RPC error codes to disambiguate substrate verification failures. These codes reside in the reserved range `-32000` to `-32099`.
+
+| Code | Label | Meaning |
+|---|---|---|
+| `-32000` | `ERR_INVALID_ENVELOPE` | Malformed UAP JSON, missing ID, or unknown action type. |
+| `-32001` | `ERR_HASH_MISMATCH` | `transaction_hash` is missing or does not match computed SHA-256. |
+| `-32002` | `ERR_EXPIRED` | `expires_at` timestamp has passed. |
+| `-32003` | `ERR_REPLAY` | `nonce` has already been used within the expiry window. |
+| `-32004` | `ERR_STATE_MISMATCH` | `state_merkle_root` does not match the current host state. |
+| `-32005` | `ERR_L1_FAILED` | Typed payload violates L1 forbidden patterns or Sentinel rules. |
+| `-32006` | `ERR_L2_FAILED` | L2 Tribunal signature is missing, invalid, or from an untrusted key. |
+| `-32007` | `ERR_L3_FAILED` | L3 WebAuthn proof is missing or failed verification. |
+| `-32008` | `ERR_PAYLOAD_DECODE` | Failed to decode the base64 `payload` into its typed protobuf message. |
+| `-32101` | `ERR_SUBSTRATE_NOT_READY` | Governance substrate (Warden/Verifier) is not initialized. |
+| `-32603` | `INTERNAL_ERROR` | Unhandled internal error or execution failure. |
 
 ---
 

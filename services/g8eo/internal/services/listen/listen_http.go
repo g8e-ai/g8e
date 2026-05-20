@@ -170,7 +170,8 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux := http.NewServeMux()
 
-	// Public auth routes (browser-reachable, no mTLS, uses session cookies)
+	// Landing page and health
+	mux.HandleFunc("/", h.handleLandingPage)
 	mux.HandleFunc("/health", h.handleHealth)
 	mux.HandleFunc("/api/auth/login/challenge", h.handleAuthLoginChallenge)
 	mux.HandleFunc("/api/auth/login/verify", h.handleAuthLoginVerify)
@@ -285,6 +286,71 @@ func (h *HTTPHandler) GetPasskeyService() *PasskeyService {
 
 func (h *HTTPHandler) GetPubSubBroker() *PubSubBroker {
 	return h.pubsub
+}
+
+func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+
+	host := r.Host
+	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
+		host = h
+	}
+	if strings.Contains(host, ":") {
+		host, _, _ = net.SplitHostPort(host)
+	}
+	if host == "" {
+		host = "localhost"
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html>
+<head>
+    <title>g8e Operator - Public Entry</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; }
+        .container { border: 1px solid #ddd; border-radius: 8px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        h1 { color: #2c3e50; margin-top: 0; }
+        .section { margin-bottom: 30px; }
+        .label { font-weight: bold; color: #34495e; }
+        code { background: #f8f9fa; padding: 2px 5px; border-radius: 4px; border: 1px solid #e9ecef; }
+        .btn { display: inline-block; background: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; margin-top: 10px; }
+        .btn:hover { background: #2980b9; }
+        .footer { margin-top: 40px; font-size: 0.9em; color: #7f8c8d; border-top: 1px solid #eee; padding-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>g8e Operator</h1>
+        <p>You have reached the public entry point for the g8e Operator substrate.</p>
+
+        <div class="section">
+            <div class="label">Trust & Security</div>
+            <p>To use this operator from your browser or as a BYO client, you must first trust the platform's root certificate. If you see a "Not Secure" warning, please run the trust script:</p>
+            <code>curl -fsSL http://%s:%d/trust | sudo sh</code>
+            <p><small>(Note: Use the bootstrap port 9002 for initial trust setup over plain HTTP)</small></p>
+        </div>
+
+        <div class="section">
+            <div class="label">Next Steps</div>
+            <ul>
+                <li><a href="/api/auth/login/challenge">Check Login Capabilities</a></li>
+                <li><a href="/.well-known/g8e/pki/root.pem">Download Root CA</a></li>
+                <li><a href="https://github.com/g8e-ai/g8e/docs" target="_blank">Read Documentation</a></li>
+            </ul>
+        </div>
+
+        <div class="footer">
+            Sovereign Governance Substrate &copy; 2026 Lateralus Labs, LLC.
+        </div>
+    </div>
+</body>
+</html>
+`, host, h.cfg.Listen.BootstrapPort)
 }
 
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {

@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/listen"
@@ -32,6 +34,12 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
+
+type gatewayAcceptingL3Verifier struct{}
+
+func (gatewayAcceptingL3Verifier) VerifyL3Proof(_ string, _ string, _ *commonv1.L3Proof) (bool, error) {
+	return true, nil
+}
 
 func TestMCPGateway_EndToEnd(t *testing.T) {
 	dataDir := t.TempDir()
@@ -92,7 +100,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		StateRootProvider: govDeps.StateRootProvider,
 		TransactionAudit:  govDeps.TransactionAudit,
 		SignerStore:       govDeps.SignerStore,
-		L3Verifier:        acceptingL3Verifier{},
+		L3Verifier:        gatewayAcceptingL3Verifier{},
 		WardenSigningKey:  wardenPriv,
 		WardenKeyID:       wardenKeyID,
 		MCPGateway:        mcpGateway,
@@ -108,11 +116,40 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 3. Setup client identity
 	token := "dlk_mcp_test"
+	userID := "mcp-user"
 	linkData := models.DeviceLinkData{
-		Token: token, UserID: "mcp-user", OrganizationID: "mcp-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
+		Token: token, UserID: userID, OrganizationID: "mcp-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	linkBytes, _ := json.Marshal(linkData)
 	ls.GetDB().KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
+
+	// Create user with a dummy passkey so VerifyL3Proof passes
+	user := models.User{
+		ID:     userID,
+		Email:  "mcp@test.com",
+		Name:   "MCP User",
+		Status: constants.UserStatusActive,
+		PasskeyCredentials: []models.PasskeyCredential{
+			{
+				ID:              []byte("fake-id"),
+				PublicKey:       []byte("fake-pubkey"),
+				AttestationType: "none",
+				Authenticator: models.Authenticator{
+					AAGUID:    []byte("AAAAAAAAAAAAAAAAAAAAAA=="),
+					SignCount: 0,
+				},
+				CreatedAtUnixMs: time.Now().UnixMilli(),
+			},
+		},
+	}
+	userBytes, err := json.Marshal(user)
+	require.NoError(t, err)
+	ls.GetDB().DocSet("users", userID, userBytes)
+
+	// Create web session EARLIER so it's part of the state root when the transaction is initiated
+	webSess, err := ls.GetHTTPHandler().GetPasskeyService().CreateWebSession(userID)
+	require.NoError(t, err)
+	cookie := &http.Cookie{Name: "g8e_session", Value: webSess.ID}
 
 	// Register and get cert
 	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
@@ -154,6 +191,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		},
 	}
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 
 	// 4. Test MCP tools/list
 	t.Run("tools/list", func(t *testing.T) {
@@ -203,6 +241,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		var mcpRes struct {
 			Result struct {
 				Content []struct {
+					Type string `json:"type"`
 					Text string `json:"text"`
 				} `json:"content"`
 			} `json:"result"`
@@ -210,10 +249,51 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		body, _ := io.ReadAll(resp.Body)
 		err = json.Unmarshal(body, &mcpRes)
 		require.NoError(t, err)
-		if len(mcpRes.Result.Content) == 0 {
-			t.Fatalf("empty content in MCP response. Raw body: %s", string(body))
+
+		// MCP tool call returns "Execution paused" because it triggers L3
+		require.NotEmpty(t, mcpRes.Result.Content)
+		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
+
+		// Extract txHash from the message
+		text := mcpRes.Result.Content[0].Text
+		parts := strings.Split(text, "/approve/")
+		require.Len(t, parts, 2)
+		txHash := strings.Split(parts[1], " ")[0]
+
+		// 6. OOB Approval Flow
+		proofReq := map[string]interface{}{
+			"id":                "fake-id",
+			"rawId":             "fake-id",
+			"clientDataJSON":    "fake-data",
+			"authenticatorData": "fake-auth",
+			"signature":         "fake-sig",
 		}
-		require.Equal(t, "mcp says hello\n", mcpRes.Result.Content[0].Text)
+		proofBody, _ := json.Marshal(proofReq)
+		hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/approve/"+txHash+"/verify", bytes.NewReader(proofBody))
+		hReq.Header.Set("Content-Type", "application/json")
+		hReq.AddCookie(cookie)
+
+		// Create a separate client for public port that doesn't use mTLS certs
+		publicClient := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					RootCAs: rootPool,
+				},
+			},
+		}
+		resp, err = publicClient.Do(hReq)
+		require.NoError(t, err)
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("OOB approval failed with status %d: %s", resp.StatusCode, string(body))
+		}
+
+		var receipt struct {
+			ResultSummary string `json:"result_summary"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&receipt)
+		require.NoError(t, err)
+		require.Equal(t, "mcp says hello\n", receipt.ResultSummary)
 	})
 }
 
@@ -272,7 +352,7 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		StateRootProvider: govDeps.StateRootProvider,
 		TransactionAudit:  govDeps.TransactionAudit,
 		SignerStore:       govDeps.SignerStore,
-		L3Verifier:        acceptingL3Verifier{},
+		L3Verifier:        gatewayAcceptingL3Verifier{},
 		WardenSigningKey:  wardenPriv,
 		WardenKeyID:       wardenKeyID,
 		MCPGateway:        mcpGateway,
@@ -288,11 +368,40 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 
 	// 3. Setup client identity
 	token := "dlk_a2a_test"
+	userID := "a2a-user"
 	linkData := models.DeviceLinkData{
-		Token: token, UserID: "a2a-user", OrganizationID: "a2a-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
+		Token: token, UserID: userID, OrganizationID: "a2a-org", MaxUses: 1, Status: "active", ExpiresAt: time.Now().Add(1 * time.Hour),
 	}
 	linkBytes, _ := json.Marshal(linkData)
 	ls.GetDB().KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
+
+	// Create user with a dummy passkey so VerifyL3Proof passes
+	user := models.User{
+		ID:     userID,
+		Email:  "a2a@test.com",
+		Name:   "A2A User",
+		Status: constants.UserStatusActive,
+		PasskeyCredentials: []models.PasskeyCredential{
+			{
+				ID:              []byte("fake-id"),
+				PublicKey:       []byte("fake-pubkey"),
+				AttestationType: "none",
+				Authenticator: models.Authenticator{
+					AAGUID:    []byte("AAAAAAAAAAAAAAAAAAAAAA=="),
+					SignCount: 0,
+				},
+				CreatedAtUnixMs: time.Now().UnixMilli(),
+			},
+		},
+	}
+	userBytes, err := json.Marshal(user)
+	require.NoError(t, err)
+	ls.GetDB().DocSet("users", userID, userBytes)
+
+	// Create web session EARLIER so it's part of the state root when the transaction is initiated
+	webSess, err := ls.GetHTTPHandler().GetPasskeyService().CreateWebSession(userID)
+	require.NoError(t, err)
+	cookie := &http.Cookie{Name: "g8e_session", Value: webSess.ID}
 
 	// Register and get cert
 	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
@@ -334,6 +443,7 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		},
 	}
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 
 	// 4. Test A2A Call (Suspends for L3, then Resume)
 	t.Run("a2a call", func(t *testing.T) {
@@ -361,10 +471,6 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		txHash := mcpRes.Result.TxHash
 
 		// 5. OOB Approval Flow
-		webSess, err := ls.GetHTTPHandler().GetPasskeyService().CreateWebSession("a2a-user")
-		require.NoError(t, err)
-		cookie := &http.Cookie{Name: "g8e_session", Value: webSess.ID}
-
 		proofReq := map[string]interface{}{
 			"id":                "fake-id",
 			"rawId":             "fake-id",
@@ -373,12 +479,24 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 			"signature":         "fake-sig",
 		}
 		proofBody, _ := json.Marshal(proofReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/approve/"+txHash+"/verify", bytes.NewReader(proofBody))
+		req, _ := http.NewRequest(http.MethodPost, publicURL+"/api/approve/"+txHash+"/verify", bytes.NewReader(proofBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.AddCookie(cookie)
-		resp, err = mtlsClient.Do(req)
+
+		// Create a separate client for public port that doesn't use mTLS certs
+		publicClient := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					RootCAs: rootPool,
+				},
+			},
+		}
+		resp, err = publicClient.Do(req)
 		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("OOB approval failed with status %d: %s", resp.StatusCode, string(body))
+		}
 
 		var receipt struct {
 			ResultSummary string `json:"result_summary"`
