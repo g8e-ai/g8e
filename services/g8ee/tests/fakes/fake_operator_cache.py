@@ -11,10 +11,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 """Typed fake for OperatorDataServiceProtocol."""
 
 from app.constants import ComponentName, OperatorHistoryEventType, OperatorStatus
 from app.models.cache import CacheOperationResult
+from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
 
 

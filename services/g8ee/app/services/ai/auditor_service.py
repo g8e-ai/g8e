@@ -53,6 +53,7 @@ from app.models.agents.tribunal import (
 )
 from app.utils.agent_persona_loader import AgentPersona
 from app.models.model_configs import get_model_config
+from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 
 if TYPE_CHECKING:
     from app.services.ai.generator import TribunalEmitter
@@ -204,7 +205,9 @@ async def call_auditor_llm(
             name="TribunalAuditorResponse"
         )
 
-    settings = model_config.to_litellm_settings(
+    settings = AIGenerationConfigBuilder.build_lite_settings(
+        model=model,
+        max_tokens=None,
         system_instructions=auditor_persona.get_system_prompt() or "",
         response_format=response_format,
     )
