@@ -243,12 +243,20 @@ fi
 _check_port_available() {
     local port="$1"
     local name="$2"
-    if ! python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(0.5); s.bind(('127.0.0.1', $port))" 2>/dev/null; then
+    if ! python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.settimeout(0.5); s.bind(('127.0.0.1', $port))" 2>/dev/null; then
         local pid_info=""
         if command -v lsof >/dev/null 2>&1; then
-            pid_info=$(lsof -i :"$port" -t 2>/dev/null | xargs ps -o pid=,comm= 2>/dev/null | tr '\n' ' ')
+            local pids
+            pids=$(lsof -i :"$port" -t 2>/dev/null)
+            if [ -n "$pids" ]; then
+                pid_info=$(echo "$pids" | xargs ps -o pid=,comm= 2>/dev/null | tr '\n' ' ')
+            fi
         elif command -v fuser >/dev/null 2>&1; then
-            pid_info=$(fuser "$port"/tcp 2>/dev/null | xargs ps -o pid=,comm= 2>/dev/null | tr '\n' ' ')
+            local pids
+            pids=$(fuser "$port"/tcp 2>/dev/null)
+            if [ -n "$pids" ]; then
+                pid_info=$(echo "$pids" | xargs ps -o pid=,comm= 2>/dev/null | tr '\n' ' ')
+            fi
         fi
         echo "Error: Port $port ($name) is already in use!" >&2
         if [ -n "$pid_info" ]; then
