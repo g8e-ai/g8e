@@ -74,8 +74,8 @@ check_port() {
     return 0
 }
 
-check_port 9000 || FAILED=1 # g8eo (Operator --listen)
-check_port 9001 || FAILED=1 # g8eo (WSS)
+check_port 443 || FAILED=1 # g8eo (Operator --listen)
+check_port 443 || FAILED=1 # g8eo (WSS)
 check_port 443 || FAILED=1  # g8ee (Engine)
 
 if [ $FAILED -eq 0 ]; then

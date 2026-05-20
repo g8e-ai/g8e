@@ -554,7 +554,7 @@ func TestSentinel_AnalyzeFileEdit_BlockedOperations(t *testing.T) {
 		content   string
 	}{
 		{"write passwd", "/etc/passwd", constants.FileOperationWrite, "attacker:x:0:0::/root:/bin/bash"},
-		{"write shadow", "/etc/shadow", constants.FileOperationWrite, "attacker:$6$salt$hash:19000:0:99999:7:::"},
+		{"write shadow", "/etc/shadow", constants.FileOperationWrite, "attacker:$6$salt$hash:1443:0:99999:7:::"},
 		{"write sudoers", "/etc/sudoers", constants.FileOperationWrite, "ALL ALL=(ALL) NOPASSWD: ALL"},
 		{"write ld preload", "/etc/ld.so.preload", constants.FileOperationWrite, "/tmp/evil.so"},
 		{"delete log", "/var/log/auth.log", constants.FileOperationDelete, ""},

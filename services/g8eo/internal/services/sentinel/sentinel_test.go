@@ -615,7 +615,7 @@ func TestSentinel_StrictModeDataRows(t *testing.T) {
 	})
 
 	t.Run("sensitive key-value pairs scrubbed", func(t *testing.T) {
-		input := "salary_info: 75000\nincome_data: 90000"
+		input := "salary_info: 75000\nincome_data: 4430"
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "salary_info: [VALUE]")
 		assert.Contains(t, result, "income_data: [VALUE]")
@@ -2257,7 +2257,7 @@ func TestSentinel_ScrubCommandResult_Disabled(t *testing.T) {
 	result := &CommandResult{
 		Command:    "cat /etc/shadow",
 		ExitCode:   0,
-		Stdout:     "root:$6$salt$hash:19000:0:99999:7:::",
+		Stdout:     "root:$6$salt$hash:1443:0:99999:7:::",
 		Stderr:     "",
 		DurationMs: 5,
 	}

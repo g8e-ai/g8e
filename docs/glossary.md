@@ -73,7 +73,7 @@ The process of connecting an Operator to a web session, enabling command executi
 
 ## Bootstrap Process
 
-The initial setup process for g8e, where the Operator generates PKI certificates and establishes trust via device-link enrollment on the bootstrap port (default 9002).
+The initial setup process for g8e, where the Operator generates PKI certificates and establishes trust via device-link enrollment on the bootstrap port (default 80).
 
 ---
 
@@ -559,7 +559,7 @@ See `docs/position_paper.md` §2.1 and `docs/g8ee.md` "Governance & Safety - The
 
 ## Trust Portal
 
-A host-local bootstrap interface served by the Operator on the bootstrap port (default 9002) during initial setup. It provides trust scripts and PKI root certificates for device-link enrollment and establishing trust.
+A host-local bootstrap interface served by the Operator on the bootstrap port (default 80) during initial setup. It provides trust scripts and PKI root certificates for device-link enrollment and establishing trust.
 
 ---
 

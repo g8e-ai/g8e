@@ -241,7 +241,7 @@ func TestLoadListen_Defaults(t *testing.T) {
 func TestLoadListen_ExplicitValues(t *testing.T) {
 	cfg, err := LoadListen(
 		9443,
-		9000,
+		443,
 		80,
 		443,
 		"/var/data",
@@ -256,7 +256,7 @@ func TestLoadListen_ExplicitValues(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 9443, cfg.Listen.WSSPort)
-	assert.Equal(t, 9000, cfg.Listen.HTTPPort)
+	assert.Equal(t, 443, cfg.Listen.HTTPPort)
 	assert.Equal(t, 80, cfg.Listen.BootstrapPort)
 	assert.Equal(t, 443, cfg.Listen.PublicPort)
 	assert.Equal(t, "/var/data", cfg.Listen.DataDir)
@@ -272,9 +272,9 @@ func TestLoadListen_PartialDefaults(t *testing.T) {
 			wantWorkDir, err = os.Getwd()
 			require.NoError(t, err)
 		}
-		cfg, err := LoadListen(9001, 0, 0, 0, "", "", "", "", "", "", "", true)
+		cfg, err := LoadListen(443, 0, 0, 0, "", "", "", "", "", "", "", true)
 		require.NoError(t, err)
-		assert.Equal(t, 9001, cfg.Listen.WSSPort)
+		assert.Equal(t, 443, cfg.Listen.WSSPort)
 		assert.Equal(t, 0, cfg.Listen.HTTPPort)
 		assert.Equal(t, filepath.Join(wantWorkDir, ".g8e", "data"), cfg.Listen.DataDir)
 	})
@@ -302,31 +302,31 @@ func TestLoadListen_SucceedsWithAllDefaults(t *testing.T) {
 
 func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 	t.Run("reject wssPort 0", func(t *testing.T) {
-		_, err := LoadListen(0, 9000, 80, 443, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(0, 443, 80, 443, "", "", "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "wssPort cannot be 0 in production")
 	})
 
 	t.Run("reject httpPort 0", func(t *testing.T) {
-		_, err := LoadListen(9001, 0, 80, 443, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(443, 0, 80, 443, "", "", "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "httpPort cannot be 0 in production")
 	})
 
 	t.Run("reject bootstrapPort 0", func(t *testing.T) {
-		_, err := LoadListen(9001, 9000, 0, 443, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(443, 443, 0, 443, "", "", "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "bootstrapPort cannot be 0 in production")
 	})
 
 	t.Run("reject publicPort 0", func(t *testing.T) {
-		_, err := LoadListen(9001, 9000, 80, 0, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(443, 443, 80, 0, "", "", "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "publicPort cannot be 0 in production")
 	})
 
 	t.Run("accept all non-zero ports in production", func(t *testing.T) {
-		_, err := LoadListen(9001, 9000, 80, 443, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(443, 443, 80, 443, "", "", "", "", "", "", "", false)
 		require.NoError(t, err)
 	})
 }
@@ -456,7 +456,7 @@ func TestHTTPPortOrDefault(t *testing.T) {
 		{-1, 443},
 		{1, 1},
 		{443, 443},
-		{9000, 9000},
+		{443, 443},
 	}
 
 	for _, tt := range tests {

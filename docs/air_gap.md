@@ -31,10 +31,10 @@ The Governance Gateway in Listen Mode exposes interfaces for public protocol com
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **Bootstrap** | `9002` (HTTP) | None | Download trust bundles, device-link enrollment, and CSR signing. |
-| **Public Port** | `9003` (TLS) | Web session | Browser login, WebAuthn challenge, and PKI discovery. |
-| **mTLS API** | `9000` | mTLS + URI SAN | Central `/api/governance/envelope` mutation endpoint and `/db` persistence. |
-| **Pub/Sub** | `9001` (mTLS WSS) | mTLS + URI SAN | Real-time WebSocket event fan-out. |
+| **Bootstrap** | `80` (HTTP) | None | Download trust bundles, device-link enrollment, and CSR signing. |
+| **Public Port** | `443` (TLS) | Web session | Browser login, WebAuthn challenge, and PKI discovery. |
+| **mTLS API** | `443` | mTLS + URI SAN | Central `/api/governance/envelope` mutation endpoint and `/db` persistence. |
+| **Pub/Sub** | `443` (mTLS WSS) | mTLS + URI SAN | Real-time WebSocket event fan-out. |
 
 ### Core Responsibilities
 - **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file in `.g8e/data`.

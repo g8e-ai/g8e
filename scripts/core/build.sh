@@ -60,10 +60,10 @@ OPERATOR_LISTEN_PID_FILE="$OPERATOR_LISTEN_PID_DIR/operator-listen.pid"
 OPERATOR_LISTEN_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/operator-listen.log"
 G8EE_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ee.pid"
 G8EE_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ee.log"
-OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_http --default "9000" 2>/dev/null)}"
-OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_wss --default "9001" 2>/dev/null)}"
-OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_bootstrap --default "9002" 2>/dev/null)}"
-OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_public --default "9003" 2>/dev/null)}"
+OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_http --default "443" 2>/dev/null)}"
+OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_wss --default "443" 2>/dev/null)}"
+OPERATOR_LISTEN_BOOTSTRAP_PORT="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_bootstrap --default "80" 2>/dev/null)}"
+OPERATOR_LISTEN_PUBLIC_PORT="${OPERATOR_LISTEN_PUBLIC_PORT:-$(python3 "$PROJECT_ROOT/scripts/core/json_query.py" "$PROJECT_ROOT/protocol/constants/paths.json" ports.operator_public --default "443" 2>/dev/null)}"
 OPERATOR_LISTEN_LOG_MAX_BACKUPS=5
 
 DEV_MODE=false

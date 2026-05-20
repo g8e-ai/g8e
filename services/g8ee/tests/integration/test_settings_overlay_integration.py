@@ -68,9 +68,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": "https://localhost:9000",
-                    "pubsub_url": "wss://localhost:9001",
-                    "blob_url": "https://localhost:9000",
+                    "http_url": "https://localhost:443",
+                    "pubsub_url": "wss://localhost:443",
+                    "blob_url": "https://localhost:443",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -79,7 +79,7 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "component_urls": {
                     "g8ee_url": "https://localhost:8443",
-                    "client_url": "https://localhost:9000"
+                    "client_url": "https://localhost:443"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
@@ -150,9 +150,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": "https://localhost:9000",
-                    "pubsub_url": "wss://localhost:9001",
-                    "blob_url": "https://localhost:9000",
+                    "http_url": "https://localhost:443",
+                    "pubsub_url": "wss://localhost:443",
+                    "blob_url": "https://localhost:443",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -161,7 +161,7 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "component_urls": {
                     "g8ee_url": "https://localhost:8443",
-                    "client_url": "https://localhost:9000"
+                    "client_url": "https://localhost:443"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
@@ -306,9 +306,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": "https://localhost:9000",
-                    "pubsub_url": "wss://localhost:9001",
-                    "blob_url": "https://localhost:9000",
+                    "http_url": "https://localhost:443",
+                    "pubsub_url": "wss://localhost:443",
+                    "blob_url": "https://localhost:443",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -317,7 +317,7 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "component_urls": {
                     "g8ee_url": "https://localhost:8443",
-                    "client_url": "https://localhost:9000"
+                    "client_url": "https://localhost:443"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,

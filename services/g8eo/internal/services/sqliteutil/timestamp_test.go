@@ -59,7 +59,7 @@ func TestNowTimestamp_IsUTCRFC3339Nano(t *testing.T) {
 }
 
 func TestParseTimestamp_CanonicalFormat(t *testing.T) {
-	ts := time.Date(2025, 6, 15, 10, 20, 30, 999000000, time.UTC)
+	ts := time.Date(2025, 6, 15, 10, 20, 30, 99443000, time.UTC)
 	formatted := FormatTimestamp(ts)
 
 	parsed, err := ParseTimestamp(formatted)
