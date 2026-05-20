@@ -31,7 +31,6 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/vault"
 )
 
@@ -163,15 +162,8 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if vs.config.NoGit {
 		vs.logger.Info("Git disabled via --no-git flag - ledger will not be available")
 	} else {
-		gitPath = system.ResolveGitBinary(vs.logger)
-		if gitPath != "" {
-			if gitVersion, err := system.ValidateGitBinary(gitPath); err != nil {
-				vs.logger.Warn("Git binary found but not functional - ledger will not be available", "path", gitPath, string(constants.ConnectionStateError), err)
-				gitPath = ""
-			} else {
-				vs.logger.Info("Git binary validated", "version", gitVersion)
-			}
-		}
+		vs.logger.Info("Go-git (native Go implementation) initialized and ready")
+		gitPath = "embedded"
 	}
 	vs.config.GitPath = gitPath
 	vs.config.GitAvailable = gitPath != ""

@@ -50,18 +50,14 @@ case "$TOP" in
         # 1. Request a device-link token via bootstrap port (unauthenticated)
         echo "  Requesting device-link token..."
         _fingerprint=$(echo "g8e-cli-$(hostname)-$(whoami)" | sha256sum | awk '{print $1}')
-        _dl_body=$(jq -n \
-            --arg email "$_login_email" \
-            --arg name "cli-$(hostname)" \
-            --argjson count "$_dl_count" \
-            --argjson ttl "$_dl_ttl" \
-            '{email: $email, name: $name, max_uses: $count, ttl_seconds: $ttl}')
+        _dl_body=$(python3 -c "import json, sys; print(json.dumps({'email': sys.argv[1], 'name': sys.argv[2], 'max_uses': int(sys.argv[3]), 'ttl_seconds': int(sys.argv[4])}))" \
+            "$_login_email" "cli-$(hostname)" "$_dl_count" "$_dl_ttl")
         _dl_resp=$( curl -sS \
             -X POST -H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json" \
             -d "$_dl_body" \
             "$_bootstrap_url/api/auth/device-link/request" 2>&1 )
-        _dl_token=$(echo "$_dl_resp" | jq -r '.token // ""' 2>/dev/null)
-        _login_user_id=$(echo "$_dl_resp" | jq -r '.user_id // ""' 2>/dev/null)
+        _dl_token=$(echo "$_dl_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - token 2>/dev/null)
+        _login_user_id=$(echo "$_dl_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - user_id 2>/dev/null)
         if [[ -z "$_dl_token" ]]; then
             echo "[g8e] Failed to create device-link: $_dl_resp" >&2
             exit 1
@@ -79,28 +75,22 @@ case "$TOP" in
 
         # 4. Register via bootstrap port (no mTLS required on this route)
         echo "  Registering with operator..."
-        _reg_body=$(jq -n \
-            --arg fingerprint "$_fingerprint" \
-            --arg hostname "$(hostname)" \
-            --arg username "${USER:-$LOGNAME}" \
-            --arg op_csr "$_op_csr_pem" \
-            --arg cli_csr "$_cli_csr_pem" \
-            '{
-                system_fingerprint: $fingerprint,
-                hostname: $hostname,
-                os: "linux",
-                arch: "'$(uname -m)'",
-                username: $username,
-                csr_pem: $op_csr,
-                cli_csr_pem: $cli_csr
-            }')
+        _reg_body=$(python3 -c "import json, sys; print(json.dumps({
+            'system_fingerprint': sys.argv[1],
+            'hostname': sys.argv[2],
+            'os': 'linux',
+            'arch': sys.argv[3],
+            'username': sys.argv[4],
+            'csr_pem': sys.argv[5],
+            'cli_csr_pem': sys.argv[6]
+        }))" "$_fingerprint" "$(hostname)" "$(uname -m)" "${USER:-$LOGNAME}" "$_op_csr_pem" "$_cli_csr_pem")
         _reg_resp=$( curl -sS \
             -X POST -H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json" \
             -H "${G8E_HEADER_DEVICE_TOKEN_HEADER}: $_dl_token" \
             -d "$_reg_body" \
             "$_bootstrap_url/api/auth/device-link/register" 2>&1 )
 
-        _reg_error=$(echo "$_reg_resp" | jq -r '.error // ""' 2>/dev/null)
+        _reg_error=$(echo "$_reg_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - error 2>/dev/null)
         if [[ -n "$_reg_error" ]]; then
             echo "[g8e] Registration failed: $_reg_error" >&2
             exit 1
@@ -111,14 +101,14 @@ case "$TOP" in
         # login alongside operator_session_id. The CLI must NEVER reuse the
         # operator_session_id as a cli session - those are first-class disjoint
         # session types.
-        _session_id=$(echo "$_reg_resp" | jq -r '.operator_session_id // ""' 2>/dev/null)
-        _cli_session_id=$(echo "$_reg_resp" | jq -r '.cli_session_id // ""' 2>/dev/null)
-        _operator_id=$(echo "$_reg_resp" | jq -r '.operator_id // ""' 2>/dev/null)
-        _op_cert_pem=$(echo "$_reg_resp" | jq -r '.operator_cert // ""' 2>/dev/null)
-        _op_chain_pem=$(echo "$_reg_resp" | jq -r '.operator_cert_chain // ""' 2>/dev/null)
-        _cli_cert_pem=$(echo "$_reg_resp" | jq -r '.cli_cert // ""' 2>/dev/null)
-        _cli_chain_pem=$(echo "$_reg_resp" | jq -r '.cli_cert_chain // ""' 2>/dev/null)
-        _hub_bundle=$(echo "$_reg_resp" | jq -r '.hub_trust_bundle // ""' 2>/dev/null)
+        _session_id=$(echo "$_reg_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - operator_session_id 2>/dev/null)
+        _cli_session_id=$(echo "$_reg_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - cli_session_id 2>/dev/null)
+        _operator_id=$(echo "$_reg_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - operator_id 2>/dev/null)
+        _op_cert_pem=$(echo "$_reg_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - operator_cert 2>/dev/null)
+        _op_chain_pem=$(echo "$_reg_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - operator_cert_chain 2>/dev/null)
+        _cli_cert_pem=$(echo "$_reg_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - cli_cert 2>/dev/null)
+        _cli_chain_pem=$(echo "$_reg_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - cli_cert_chain 2>/dev/null)
+        _hub_bundle=$(echo "$_reg_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - hub_trust_bundle 2>/dev/null)
 
         if [[ -z "$_session_id" || -z "$_operator_id" || -z "$_op_cert_pem" || -z "$_cli_session_id" || -z "$_cli_cert_pem" ]]; then
             echo "[g8e] Unexpected registration response (missing operator_session_id, cli_session_id, operator_id, operator_cert, or cli_cert): $_reg_resp" >&2

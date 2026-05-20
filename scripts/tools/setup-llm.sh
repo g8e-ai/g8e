@@ -237,7 +237,7 @@ esac
 _SETTINGS_JSON="$(_exec_in_pod python3 /app/scripts/data/manage-operator.py settings export --section llm $USER_ID_ARG 2>/dev/null || echo "{}")"
 
 _get_setting() {
-    echo "$_SETTINGS_JSON" | jq -r ".$1 // \"\""
+    echo "$_SETTINGS_JSON" | python3 "$REPO_ROOT/scripts/core/json_query.py" - "$1" 2>/dev/null
 }
 
 _cur_provider="$(_get_setting llm_provider)"

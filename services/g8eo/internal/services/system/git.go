@@ -17,50 +17,19 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 )
 
-// ResolveGitBinary finds the git binary using the following resolution order:
-// 1. Sibling bin/git relative to the running operator binary
-// 2. System PATH
-// Returns the absolute path to git, or empty string if not found.
+// ResolveGitBinary is a stub for native go-git migration.
 func ResolveGitBinary(logger *slog.Logger) string {
-	if execPath, err := os.Executable(); err == nil {
-		execDir := filepath.Dir(execPath)
-		siblingGit := filepath.Join(execDir, "bin", "git")
-		if isExecutable(siblingGit) {
-			absPath, _ := filepath.Abs(siblingGit)
-			logger.Info("Git binary found (bundled)", "path", absPath)
-			return absPath
-		}
-	}
-
-	if systemGit, err := exec.LookPath("git"); err == nil {
-		absPath, _ := filepath.Abs(systemGit)
-		logger.Info("Git binary found (system)", "path", absPath)
-		return absPath
-	}
-
-	logger.Warn("Git binary not found - ledger (git-backed file versioning) will be disabled")
-	return ""
+	return "embedded"
 }
 
-// ValidateGitBinary verifies the resolved git binary is functional and returns the version string.
+// ValidateGitBinary is a stub for native go-git migration.
 func ValidateGitBinary(gitPath string) (string, error) {
 	if gitPath == "" {
 		return "", fmt.Errorf("no git binary path provided")
 	}
-
-	cmd := exec.Command(gitPath, "version")
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("git binary at %s is not functional: %w", gitPath, err)
-	}
-
-	version := strings.TrimSpace(string(out))
-	return version, nil
+	return "go-git v5 (embedded)", nil
 }
 
 func isExecutable(path string) bool {

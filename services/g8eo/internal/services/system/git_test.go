@@ -15,7 +15,6 @@ package system
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -25,50 +24,22 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
 
-func testGitPath(t *testing.T) string {
-	t.Helper()
-	gitPath, err := exec.LookPath("git")
-	if err != nil {
-		t.Skip("git not available - skipping git-dependent test")
-	}
-	return gitPath
-}
-
 func TestResolveGitBinary_SystemGit(t *testing.T) {
-	_ = testGitPath(t)
-
 	logger := testutil.NewTestLogger()
 	resolved := ResolveGitBinary(logger)
-	require.NotEmpty(t, resolved)
-}
-
-func TestResolveGitBinary_ReturnsAbsolutePath(t *testing.T) {
-	_ = testGitPath(t)
-
-	logger := testutil.NewTestLogger()
-	resolved := ResolveGitBinary(logger)
-	require.NotEmpty(t, resolved)
-	assert.True(t, filepath.IsAbs(resolved), "expected absolute path, got %q", resolved)
+	assert.Equal(t, "embedded", resolved)
 }
 
 func TestValidateGitBinary_Valid(t *testing.T) {
-	gitPath := testGitPath(t)
-
-	version, err := ValidateGitBinary(gitPath)
+	version, err := ValidateGitBinary("embedded")
 	require.NoError(t, err)
-	assert.Contains(t, version, "git version")
+	assert.Contains(t, version, "go-git v5")
 }
 
 func TestValidateGitBinary_Empty(t *testing.T) {
 	_, err := ValidateGitBinary("")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no git binary path provided")
-}
-
-func TestValidateGitBinary_Invalid(t *testing.T) {
-	_, err := ValidateGitBinary("/nonexistent/git")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not functional")
 }
 
 func TestIsExecutable_NotExist(t *testing.T) {
