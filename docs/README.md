@@ -6,19 +6,17 @@ permalink: /docs/
 
 # g8e Documentation Index
 
-Last Updated: 2026-05-19
+Last Updated: 2026-05-20
 Version: v0.2.6
 
-> **Note**: Portions of this documentation are AI-generated. While audited for technical accuracy, some descriptive verbiage may remain non-idiomatic or subjective.
-
-The documentation is organized by service and role, separating the mandatory protocol substrate from the optional application-layer components.
+The documentation is organized around the g8e execution substrate: a typed, signed, state-bound `GovernanceEnvelope`, a fail-closed gateway, and a sovereign host Operator. Application layers, frontends, agents, and tool protocols are replaceable producers and consumers of that contract.
 
 ## 1. Protocol Substrate
-The core contract and governance model that all components must follow.
+The domain-agnostic wire contract and governance model that every conforming component must follow.
 
-- [**Protocol Substrate**](protocol.md) - The wire contract, transaction flow, and governance bedrock.
+- [**Protocol Substrate**](protocol.md) - The `GovernanceEnvelope`, transaction flow, L1/L2/L3 gates, receipts, and session rules.
 - [**Governance Hierarchy**](protocol.md#3-layer-governance-bedrock) - L1/L2/L3 validation model.
-- [**Security Principles**](protocol.md#host-sovereignty--audit) - Trustless execution and host sovereignty.
+- [**Security Principles**](protocol.md#host-sovereignty--audit) - Host sovereignty, local-first audit, and fail-closed execution.
 
 ## 2. Substrate Components
 The reference Go implementation compiles from a single codebase into two role-specific binaries:
@@ -27,7 +25,7 @@ The reference Go implementation compiles from a single codebase into two role-sp
 - [**Governed Operator (g8eo)**](operator.md) (`g8e.operator`) - The host-side PEP / sovereign execution agent and MCP Server.
 
 ## 3. Reference Applications
-Optional components demonstrating the protocol in action.
+Optional producers and consumers demonstrating the protocol in action.
 
 - [**g8ee Engine**](g8ee.md) - Reference AI reasoning and Tribunal orchestration.
 
@@ -39,9 +37,8 @@ Guides for setting up, testing, and contributing to the platform.
 - [**CLI Reference**](cli_help.md) - Help for the `./g8e` management tool.
 
 ## 5. General Reference
-Broad architectural context and platform history.
+Broad architectural context and platform thesis.
 
-- [**About g8e**](about.md) - Origins and governance philosophy.
-- [**Position Paper**](position_paper.md) - Thesis on AI-powered, human-driven infrastructure.
+- [**About g8e**](about.md) - Compact architecture framing.
+- [**Position Paper**](position_paper.md) - Thesis on BFT governance at the AI execution boundary.
 - [**Glossary**](glossary.md) - Canonical platform terminology.
-
