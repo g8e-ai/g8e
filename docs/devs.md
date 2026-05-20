@@ -16,7 +16,12 @@ Components run host-native. **Do not use Docker for primary component developmen
 
 ### Setup
 
-- **Go 1.26+** (required, for `g8eg`/`g8eo`).
+- **Go 1.26+** (required, for `g8eg`/`g8eo`). Configure GOPATH in your shell profile (`~/.bashrc` or `~/.zshrc`):
+  ```bash
+  export GOPATH=$HOME/go
+  export PATH=$GOPATH/bin:$PATH
+  ```
+  Go tools installed via `go install` (e.g., golangci-lint, govulncheck) are placed in `$GOPATH/bin`.
 - **Python 3.14+** (only when developing the optional `g8ee` adapter).
 
 ### Common Commands

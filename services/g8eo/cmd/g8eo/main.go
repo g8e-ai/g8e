@@ -903,12 +903,20 @@ func runMCPServe(endpointURL, pkiDir, logLevel string) {
 	// 1. Resolve mTLS certificates
 	cliCertFile := os.Getenv("G8E_CLI_CERT")
 	if cliCertFile == "" {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to get user home directory: %v\n", err)
+			os.Exit(1)
+		}
 		cliCertFile = filepath.Join(home, ".g8e", "cli.crt")
 	}
 	cliKeyFile := os.Getenv("G8E_CLI_KEY")
 	if cliKeyFile == "" {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to get user home directory: %v\n", err)
+			os.Exit(1)
+		}
 		cliKeyFile = filepath.Join(home, ".g8e", "cli.key")
 	}
 
@@ -939,6 +947,7 @@ func runMCPServe(endpointURL, pkiDir, logLevel string) {
 	caPool.AppendCertsFromPEM(caCert)
 
 	tlsConfig := &tls.Config{
+		MinVersion:   tls.VersionTLS12,
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caPool,
 	}
@@ -1012,8 +1021,12 @@ func runMCPServe(endpointURL, pkiDir, logLevel string) {
 			if err != nil {
 				sendRPCError(req.ID, -32603, "Failed to call Operator: "+err.Error())
 			} else {
-				os.Stdout.Write(respBytes)
-				os.Stdout.Write([]byte("\n"))
+				if _, err := os.Stdout.Write(respBytes); err != nil {
+					fmt.Fprintf(os.Stderr, "failed to write response: %v\n", err)
+				}
+				if _, err := os.Stdout.Write([]byte("\n")); err != nil {
+					fmt.Fprintf(os.Stderr, "failed to write newline: %v\n", err)
+				}
 			}
 
 		case "tools/call":
@@ -1021,8 +1034,12 @@ func runMCPServe(endpointURL, pkiDir, logLevel string) {
 			if err != nil {
 				sendRPCError(req.ID, -32603, "Failed to call Operator: "+err.Error())
 			} else {
-				os.Stdout.Write(respBytes)
-				os.Stdout.Write([]byte("\n"))
+				if _, err := os.Stdout.Write(respBytes); err != nil {
+					fmt.Fprintf(os.Stderr, "failed to write response: %v\n", err)
+				}
+				if _, err := os.Stdout.Write([]byte("\n")); err != nil {
+					fmt.Fprintf(os.Stderr, "failed to write newline: %v\n", err)
+				}
 			}
 
 		default:
@@ -1043,9 +1060,17 @@ func sendRPCResponse(id interface{}, result interface{}) {
 		"id":      id,
 		"result":  result,
 	}
-	b, _ := json.Marshal(res)
-	os.Stdout.Write(b)
-	os.Stdout.Write([]byte("\n"))
+	b, err := json.Marshal(res)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to marshal RPC response: %v\n", err)
+		return
+	}
+	if _, err := os.Stdout.Write(b); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to write response: %v\n", err)
+	}
+	if _, err := os.Stdout.Write([]byte("\n")); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to write newline: %v\n", err)
+	}
 }
 
 func sendRPCError(id interface{}, code int, message string) {
@@ -1057,9 +1082,17 @@ func sendRPCError(id interface{}, code int, message string) {
 			"message": message,
 		},
 	}
-	b, _ := json.Marshal(res)
-	os.Stdout.Write(b)
-	os.Stdout.Write([]byte("\n"))
+	b, err := json.Marshal(res)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to marshal RPC error: %v\n", err)
+		return
+	}
+	if _, err := os.Stdout.Write(b); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to write response: %v\n", err)
+	}
+	if _, err := os.Stdout.Write([]byte("\n")); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to write newline: %v\n", err)
+	}
 }
 
 func forwardToOperator(client *http.Client, operatorURL, path string, body []byte, sessionID string) ([]byte, error) {

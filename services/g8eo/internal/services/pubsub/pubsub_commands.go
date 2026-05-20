@@ -287,10 +287,14 @@ func (rs *PubSubCommandService) buildHandlers() {
 		constants.Event.Operator.Audit.DirectCmdResult:      rs.audit.HandleDirectCmdResultRequest,
 		constants.Event.Operator.FetchFileDiff.Requested:    rs.history.HandleFetchFileDiffRequest,
 		constants.Event.Operator.Mcp.CallRequested: func(ctx context.Context, msg PubSubCommandMessage) {
-			_, _ = rs.handleMcpCallRequestSync(ctx, msg)
+			if _, err := rs.handleMcpCallRequestSync(ctx, msg); err != nil {
+				rs.logger.Error("MCP call request handler failed", "error", err)
+			}
 		},
 		constants.Event.Operator.A2a.CallRequested: func(ctx context.Context, msg PubSubCommandMessage) {
-			_, _ = rs.handleA2aCallRequestSync(ctx, msg)
+			if _, err := rs.handleA2aCallRequestSync(ctx, msg); err != nil {
+				rs.logger.Error("A2A call request handler failed", "error", err)
+			}
 		},
 	}
 }
