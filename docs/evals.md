@@ -81,9 +81,9 @@ The harness is fail-closed without canonical mTLS + session credentials:
 
 1. `./g8e platform start` - Operator + g8ee.
 2. `./g8e login` - mints client cert/key, captures session id, exports the env vars `scripts/cmd/evals.sh` re-exports for the bench:
-   - `OPERATOR_SESSION_ID`, `USER_ID`
+   - `G8E_OPERATOR_SESSION_ID`, `G8E_USER_ID`
    - `G8E_CLI_CERT`, `G8E_CLI_KEY`, `G8E_TRUST_BUNDLE`
-   - `G8EE_URL`, `G8E_INTERNAL_HTTP_URL`, `G8E_PKI_DIR`
+   - `G8E_G8EE_URL`, `G8E_INTERNAL_HTTP_URL`, `G8E_PKI_DIR`
 3. **LLM API keys** must be available to g8ee for any provider you select. The chat request body forwards `llm_<role>_provider`, `llm_<role>_model`, `llm_<role>_api_key`, and `llm_<role>_endpoint` for `primary`, `assistant`, and `lite`. The CLI performs a pre-flight check against `GET /api/internal/settings/user`; missing keys abort the run before any tasks post.
 
 ---
@@ -164,7 +164,7 @@ Acceptable for v1; the long-term fix is to consume an Operator-native `text/even
 
 | Symptom | Action |
 |---|---|
-| `AuthenticationError: missing OPERATOR_SESSION_ID / USER_ID` | Re-run `./g8e login`. |
+| `AuthenticationError: missing G8E_OPERATOR_SESSION_ID / G8E_USER_ID` | Re-run `./g8e login`. |
 | `Pre-flight validation failed: missing API key for primary provider` | Pass `--primary-api-key` (and equivalents) or configure the keys in g8ee user settings. |
 | All tasks `UNBOUND` with `answer-only turn` | Expected for IFEval-style prompts that never trigger a Warden mutation. Receipt binding only occurs when the agent stack escalates a typed mutation through Tribunal→Warden. |
 | Receipt verification failure | Confirm `.g8e/pki/warden_pub.pem` was exported by the running Operator and `--operator-url` points at the same instance. |

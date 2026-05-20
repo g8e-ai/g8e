@@ -191,8 +191,8 @@
     "_go_const": "SupervisorPort",
     "_python_const": "SUPERVISOR_PORT"
   },
-  "G8EE_URL": {
-    "value": "G8EE_URL",
+  "G8E_G8EE_URL": {
+    "value": "G8E_G8EE_URL",
     "config_key": "component_urls.g8ee_url",
     "_go_const": "G8EEURL",
     "_python_const": "G8EE_URL"
@@ -429,5 +429,55 @@
     "config_key": "runtime.project_root",
     "_go_const": "ProjectRoot",
     "_python_const": "PROJECT_ROOT"
+  },
+  "G8E_TEST_LLM_PROVIDER": {
+    "value": "G8E_TEST_LLM_PROVIDER",
+    "_go_const": "TestLLMProvider",
+    "_python_const": "TEST_LLM_PROVIDER"
+  },
+  "G8E_TEST_LLM_API_KEY": {
+    "value": "G8E_TEST_LLM_API_KEY",
+    "_go_const": "TestLLMAPIKey",
+    "_python_const": "TEST_LLM_API_KEY"
+  },
+  "G8E_TEST_LLM_PRIMARY_MODEL": {
+    "value": "G8E_TEST_LLM_PRIMARY_MODEL",
+    "_go_const": "TestLLMPrimaryModel",
+    "_python_const": "TEST_LLM_PRIMARY_MODEL"
+  },
+  "G8E_TEST_LLM_ASSISTANT_PROVIDER": {
+    "value": "G8E_TEST_LLM_ASSISTANT_PROVIDER",
+    "_go_const": "TestLLMAssistantProvider",
+    "_python_const": "TEST_LLM_ASSISTANT_PROVIDER"
+  },
+  "G8E_TEST_LLM_ASSISTANT_MODEL": {
+    "value": "G8E_TEST_LLM_ASSISTANT_MODEL",
+    "_go_const": "TestLLMAssistantModel",
+    "_python_const": "TEST_LLM_ASSISTANT_MODEL"
+  },
+  "G8E_TEST_LLM_LITE_PROVIDER": {
+    "value": "G8E_TEST_LLM_LITE_PROVIDER",
+    "_go_const": "TestLLMLiteProvider",
+    "_python_const": "TEST_LLM_LITE_PROVIDER"
+  },
+  "G8E_TEST_LLM_LITE_MODEL": {
+    "value": "G8E_TEST_LLM_LITE_MODEL",
+    "_go_const": "TestLLMLiteModel",
+    "_python_const": "TEST_LLM_LITE_MODEL"
+  },
+  "G8E_TEST_LLM_ENDPOINT_URL": {
+    "value": "G8E_TEST_LLM_ENDPOINT_URL",
+    "_go_const": "TestLLMEndpointURL",
+    "_python_const": "TEST_LLM_ENDPOINT_URL"
+  },
+  "G8E_TEST_LLM_MAX_TOKENS": {
+    "value": "G8E_TEST_LLM_MAX_TOKENS",
+    "_go_const": "TestLLMMaxTokens",
+    "_python_const": "TEST_LLM_MAX_TOKENS"
+  },
+  "G8E_AUDITOR_HMAC_KEY": {
+    "value": "G8E_AUDITOR_HMAC_KEY",
+    "_go_const": "AuditorHMACKey",
+    "_python_const": "AUDITOR_HMAC_KEY"
   }
 }

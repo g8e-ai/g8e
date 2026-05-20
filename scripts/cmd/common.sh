@@ -92,7 +92,7 @@ _generate_workload_csrs() {
 _operator_bootstrap() {
     local email="${G8E_BOOTSTRAP_EMAIL:-superadmin@g8e.local}"
     local name="${G8E_BOOTSTRAP_NAME:-Superadmin}"
-    local public_port="${OPERATOR_LISTEN_PUBLIC_PORT:-$G8E_PORT_OPERATOR_PUBLIC}"
+    local public_port="${G8E_OPERATOR_LISTEN_PUBLIC_PORT:-$G8E_PORT_OPERATOR_PUBLIC}"
     local public_url="https://localhost:$public_port"
     local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
 
@@ -292,7 +292,7 @@ _build_protocol_curl_args() {
 }
 
 # Append the minimal g8e HTTP substrate auth headers to a curl args array.
-# Required env: OPERATOR_SESSION_ID or CLI_SESSION_ID.
+# Required env: G8E_OPERATOR_SESSION_ID or G8E_CLI_SESSION_ID.
 # Usage: _append_g8e_auth_headers <array_name>
 _append_g8e_auth_headers() {
     local _outvar="$1"
@@ -341,7 +341,7 @@ _operator_bin() {
 _load_credentials() {
     if [[ -f "$G8E_CREDENTIALS_FILE" ]]; then
         source "$G8E_CREDENTIALS_FILE"
-        if [[ -n "$OPERATOR_SESSION_ID" ]]; then
+        if [[ -n "$G8E_OPERATOR_SESSION_ID" ]]; then
             # Credentials loaded, operator session available
             :
         fi
@@ -411,7 +411,7 @@ _credentials_exist() {
     [[ -f "$G8E_CREDENTIALS_FILE" ]]
 }
 
-_ensure_authenticated() {
+_require_authenticated() {
     if _load_credentials; then
         # Validate the saved CLI certificate against the *current* trust bundle.
         # `./g8e platform clean` regenerates the runtime PKI but leaves the

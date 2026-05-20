@@ -107,7 +107,7 @@ When no operator is connected:
 - `[prompt]`: Start an interactive web session with the AI Engine. Supports optional initial prompt.
 
 ### identity
-- `login --email <email> [--count <n>] [--ttl <seconds>]`: Authenticate and save operator session to `~/.g8e/credentials`. Optional count (default 1) and TTL (default 3600).
+- `login [--email <email>] [--count <n>] [--ttl <seconds>]`: Authenticate and save operator session to `~/.g8e/credentials`. In sandbox mode `--email` is optional and defaults to the bootstrap superuser (`superadmin@g8e.local`); pass it explicitly only to switch to a non-default user. Optional count (default 1) and TTL (default 3600).
 - `logout`: Clear local operator session and credentials
 
 ### vars
@@ -191,12 +191,15 @@ Usage:
 - `verify-receipts <report-dir>`: Re-verify receipt signatures offline
 - `list`: List benchmark suites and bundled gold sets
 
-**Receipt mode requires a running Operator and a bound `--operator-session-id`/`--operator-id`. Baseline mode runs the SUT without binding.**
+**Receipt mode requires a running Operator and an authenticated CLI session. Baseline mode runs the SUT without binding.**
 
 #### evals workflow (new harness)
-1. `./g8e evals bench --suite ifeval --mode baseline`
-2. `./g8e evals bench --suite ifeval --mode receipt --operator-session-id <id> --operator-id <id>`
-3. `./g8e evals verify-receipts reports/ifeval-<ts>`
+1. `./g8e login` (zero-arg in sandbox; mints CLI mTLS cert + session)
+2. `./g8e evals bench --suite ifeval --mode baseline`
+3. `./g8e evals bench --suite ifeval --mode receipt`
+4. `./g8e evals verify-receipts reports/ifeval-<ts>`
+
+**NOTE: G8E_OPERATOR_SESSION_ID is loaded from `~/.g8e/credentials` automatically after `./g8e login`. Do not pass `--operator-session-id` unless you are explicitly overriding the cached session - passing the wrong UUID (e.g. `G8E_OPERATOR_ID`) is rejected with a hard error.**
 
 ### Integration Tools
 - `mcp`: Model Context Protocol integration (config, test, status)

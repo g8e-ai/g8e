@@ -1022,10 +1022,12 @@ func TestHandleBootstrap(t *testing.T) {
 
 	t.Run("Success - Bootstrap with CSR over loopback", func(t *testing.T) {
 		csr := generateTestCSR(t)
+		cliCsr := generateTestCSR(t)
 		body := map[string]string{
 			"email":              "superadmin@g8e.local",
 			"name":               "Superadmin",
 			"csr_pem":            csr,
+			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "test-fp",
 		}
 		b, _ := json.Marshal(body)
@@ -1053,10 +1055,12 @@ func TestHandleBootstrap(t *testing.T) {
 		// Create a fresh handler to ensure no users exist
 		h2, _ := setupTestHTTPHandler(t)
 		csr := generateTestCSR(t)
+		cliCsr := generateTestCSR(t)
 		body := map[string]string{
 			"email":              "superadmin@g8e.local",
 			"name":               "Superadmin",
 			"csr_pem":            csr,
+			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "test-fp",
 		}
 		b, _ := json.Marshal(body)
@@ -1073,10 +1077,12 @@ func TestHandleBootstrap(t *testing.T) {
 	t.Run("Success - Rotation for existing bootstrap user", func(t *testing.T) {
 		// Use the first handler which already has a bootstrap user
 		csr := generateTestCSR(t)
+		cliCsr := generateTestCSR(t)
 		body := map[string]string{
 			"email":              "superadmin@g8e.local",
 			"name":               "Superadmin",
 			"csr_pem":            csr,
+			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "rotated-fp",
 		}
 		b, _ := json.Marshal(body)
@@ -1103,10 +1109,12 @@ func TestHandleBootstrap(t *testing.T) {
 
 		// 3. Attempt rotation
 		csr := generateTestCSR(t)
+		cliCsr := generateTestCSR(t)
 		body := map[string]string{
 			"email":              "superadmin@g8e.local",
 			"name":               "Superadmin",
 			"csr_pem":            csr,
+			"cli_csr_pem":        cliCsr,
 			"system_fingerprint": "fail-fp",
 		}
 		b, _ := json.Marshal(body)

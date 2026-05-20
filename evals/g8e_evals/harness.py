@@ -44,7 +44,6 @@ class SUTConfig:
     lite: LLMRoleConfig = field(default_factory=LLMRoleConfig)
     
     operator_url: str = f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}"
-    operator_id: Optional[str] = None
     operator_session_id: Optional[str] = None
     state_root: str = "test-state-root-v1"
     

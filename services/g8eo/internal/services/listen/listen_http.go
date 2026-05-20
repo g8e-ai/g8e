@@ -3030,21 +3030,18 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 
 		operator.OperatorCert = certPEM
 
-		// CLI certificate generation (optional)
-		var cliCertPEM, cliCertChainPEM string
-		if req.CLICSRPEM != "" {
-			cliCertPEM, cliCertChainPEM, err = h.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID)
-			if err != nil {
-				h.logger.Error("Failed to sign bootstrap CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
-				jsonError(w, http.StatusInternalServerError, "failed to sign CLI CSR")
-				return
-			}
-		} else {
-			// [SPIFFE-DRIFT] Fallback: If no CLI CSR provided, the CLI cert returned MUST be
-			// the operator cert for backwards compatibility with older binaries, even though
-			// they will fail modern /cli/ path checks.
-			cliCertPEM = certPEM
-			cliCertChainPEM = chainPEM
+		// CLI certificate generation (mandatory)
+		if req.CLICSRPEM == "" {
+			h.logger.Error("Bootstrap request missing mandatory CLI CSR", "user_id", user.ID)
+			jsonError(w, http.StatusBadRequest, "cli_csr_pem is mandatory")
+			return
+		}
+
+		cliCertPEM, cliCertChainPEM, err := h.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID)
+		if err != nil {
+			h.logger.Error("Failed to sign bootstrap CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
+			jsonError(w, http.StatusInternalServerError, "failed to sign CLI CSR")
+			return
 		}
 
 		// Persist operator document

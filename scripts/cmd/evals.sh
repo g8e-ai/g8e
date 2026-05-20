@@ -65,9 +65,10 @@ case "$SUB" in
                 exit 1
             }
         fi
-        export "$G8E_ENV_OPERATOR_SESSION_ID"="$G8E_OPERATOR_SESSION_ID"
-        export "$G8E_ENV_USER_ID"="$G8E_USER_ID"
-        export "$G8E_ENV_OPERATOR_ID"="$G8E_OPERATOR_ID"
+        export $G8E_ENV_OPERATOR_SESSION_ID="$G8E_OPERATOR_SESSION_ID"
+        export $G8E_ENV_CLI_SESSION_ID="$G8E_CLI_SESSION_ID"
+        export $G8E_ENV_USER_ID="$G8E_USER_ID"
+        export $G8E_ENV_OPERATOR_ID="$G8E_OPERATOR_ID"
         export G8E_CLI_CERT="${G8E_CLI_CERT:-$G8E_CLI_CERT_FILE}"
         export G8E_CLI_KEY="${G8E_CLI_KEY:-$G8E_CLI_KEY_FILE}"
         export "$G8E_ENV_G8EE_URL"="${G8E_G8EE_URL:-https://localhost:$G8E_PORT_G8EE_HTTP}"

@@ -94,6 +94,16 @@ var EnvVar = struct {
 	RuntimeDir EnvVarKey
 	SSHConfigPath EnvVarKey
 	ProjectRoot EnvVarKey
+	TestLLMProvider EnvVarKey
+	TestLLMAPIKey EnvVarKey
+	TestLLMPrimaryModel EnvVarKey
+	TestLLMAssistantProvider EnvVarKey
+	TestLLMAssistantModel EnvVarKey
+	TestLLMLiteProvider EnvVarKey
+	TestLLMLiteModel EnvVarKey
+	TestLLMEndpointURL EnvVarKey
+	TestLLMMaxTokens EnvVarKey
+	AuditorHMACKey EnvVarKey
 }{
 	LLMMaxTokens: "G8E_LLM_MAX_TOKENS",
 	LLMCommandGenEnabled: "G8E_LLM_COMMAND_GEN_ENABLED",
@@ -127,7 +137,7 @@ var EnvVar = struct {
 	UploadPath: "G8E_UPLOAD_PATH",
 	DocsDir: "G8E_DOCS_DIR",
 	SupervisorPort: "G8E_SUPERVISOR_PORT",
-	G8EEURL: "G8EE_URL",
+	G8EEURL: "G8E_G8EE_URL",
 	ClientURL: "G8E_CLIENT_URL",
 	OperatorEndpoint: "G8E_OPERATOR_ENDPOINT",
 	EnableCommandWhitelisting: "G8E_ENABLE_COMMAND_WHITELISTING",
@@ -168,4 +178,14 @@ var EnvVar = struct {
 	RuntimeDir: "G8E_RUNTIME_DIR",
 	SSHConfigPath: "G8E_SSH_CONFIG_PATH",
 	ProjectRoot: "G8E_PROJECT_ROOT",
+	TestLLMProvider: "G8E_TEST_LLM_PROVIDER",
+	TestLLMAPIKey: "G8E_TEST_LLM_API_KEY",
+	TestLLMPrimaryModel: "G8E_TEST_LLM_PRIMARY_MODEL",
+	TestLLMAssistantProvider: "G8E_TEST_LLM_ASSISTANT_PROVIDER",
+	TestLLMAssistantModel: "G8E_TEST_LLM_ASSISTANT_MODEL",
+	TestLLMLiteProvider: "G8E_TEST_LLM_LITE_PROVIDER",
+	TestLLMLiteModel: "G8E_TEST_LLM_LITE_MODEL",
+	TestLLMEndpointURL: "G8E_TEST_LLM_ENDPOINT_URL",
+	TestLLMMaxTokens: "G8E_TEST_LLM_MAX_TOKENS",
+	AuditorHMACKey: "G8E_AUDITOR_HMAC_KEY",
 }

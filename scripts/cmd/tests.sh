@@ -59,43 +59,43 @@ while [[ ${#_args[@]} -gt 0 ]]; do
     case "${_args[0]}" in
         -p|--llm-provider)
             _require_value "-p/--llm-provider"
-            export TEST_LLM_PROVIDER="${_args[1]}"
+            export G8E_TEST_LLM_PROVIDER="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -m|--primary-model)
             _require_value "-m/--primary-model"
-            export TEST_LLM_PRIMARY_MODEL="${_args[1]}"
+            export G8E_TEST_LLM_PRIMARY_MODEL="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -a|--assistant-model)
             _require_value "-a/--assistant-model"
-            export TEST_LLM_ASSISTANT_MODEL="${_args[1]}"
+            export G8E_TEST_LLM_ASSISTANT_MODEL="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -l|--lite-model)
             _require_value "-l/--lite-model"
-            export TEST_LLM_LITE_MODEL="${_args[1]}"
+            export G8E_TEST_LLM_LITE_MODEL="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -e|--llm-endpoint-url)
             _require_value "-e/--llm-endpoint-url"
-            export TEST_LLM_ENDPOINT_URL="${_args[1]}"
+            export G8E_TEST_LLM_ENDPOINT_URL="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -k|--llm-api-key)
             _require_value "-k/--llm-api-key"
-            export TEST_LLM_API_KEY="${_args[1]}"
+            export G8E_TEST_LLM_API_KEY="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -P|--web-search-project)
             _require_value "-P/--web-search-project"
-            export TEST_WEB_SEARCH_PROJECT_ID="${_args[1]}"
+            export G8E_TEST_WEB_SEARCH_PROJECT_ID="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -E|--web-search-engine)
             _require_value "-E/--web-search-engine"
-            export TEST_WEB_SEARCH_ENGINE_ID="${_args[1]}"
+            export G8E_TEST_WEB_SEARCH_ENGINE_ID="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -K|--web-search-api-key)
             _require_value "-K/--web-search-api-key"
-            export TEST_WEB_SEARCH_API_KEY="${_args[1]}"
+            export G8E_TEST_WEB_SEARCH_API_KEY="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -L|--web-search-location)
             _require_value "-L/--web-search-location"
-            export TEST_WEB_SEARCH_LOCATION="${_args[1]}"
+            export G8E_TEST_WEB_SEARCH_LOCATION="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -d|--device-token)
             _require_value "-d/--device-token"

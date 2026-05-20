@@ -46,9 +46,11 @@ case "$TOP" in
             i=$((i+1))
         done
 
+        # Default to the sandbox bootstrap superuser when --email is omitted.
+        # Frictionless onboarding: `./g8e login` works zero-arg in sandbox mode.
+        # Override with G8E_BOOTSTRAP_EMAIL or --email <addr> for non-default users.
         if [[ -z "$_login_email" ]]; then
-            echo "[g8e] Usage: ./g8e login --email <email> [--count <count>] [--ttl <ttl_seconds>]" >&2
-            exit 1
+            _login_email="${G8E_BOOTSTRAP_EMAIL:-superadmin@g8e.local}"
         fi
 
         _trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
@@ -158,19 +160,16 @@ case "$TOP" in
 
         _save_credentials "$_session_id" "$_login_user_id" "$_operator_id" "$_cli_session_id"
 
-        echo -e "\n\033[1;32mAuthenticated successfully!\033[0m"
-        echo -e "  Operator ID: \033[1m$_operator_id\033[0m"
-        echo -e "  Sessions:    operator=${_session_id:0:8}..., cli=${_cli_session_id:0:8}..."
+        echo -e "\n\033[1;32mAuthenticated as $_login_email\033[0m"
+        echo -e "  mTLS cert:   \033[2m$G8E_CLI_CERT_FILE\033[0m"
+        echo -e "  Credentials: \033[2m$G8E_CREDENTIALS_FILE\033[0m"
+        echo -e "  \033[2mSession + operator IDs are stored locally; no need to copy them into commands.\033[0m"
 
-        echo -e "\n\033[1mPlatform Binaries (Governance Gateway & Operator Agent):\033[0m"
-        echo -e "  linux/amd64: \033[1m$G8E_PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.gateway\033[0m (Gateway PDP)"
-        echo -e "               \033[1m$G8E_PROJECT_ROOT/services/g8eo/build/linux-amd64/g8e.operator\033[0m (Operator PEP / MCP)"
-
-        echo -e "\n\033[1mDeploy to Remote Host:\033[0m"
-        echo -e "  Run this to deploy and connect a new sovereign agent:"
+        echo -e "\n\033[1mDeploy to a remote host (optional):\033[0m"
         echo -e "  \033[1;34m./g8e operator deploy <user@host> --endpoint $(hostname -I | awk '{print $1}') --device-token $_dl_token\033[0m"
 
-        echo -e "\n\033[1mNext steps:\033[0m"
+        echo -e "\n\033[1mNext steps (no flags needed - credentials auto-loaded from ~/.g8e):\033[0m"
+        echo -e "  - Run benchmarks:         \033[1;34m./g8e evals bench --suite ifeval --mode receipt\033[0m"
         echo -e "  - Start chatting:         \033[1;34m./g8e chat\033[0m"
         echo -e "  - Check platform status:  \033[1;34m./g8e platform status\033[0m"
         echo -e "  - Explore CLI help:       \033[1;34m./g8e --help\033[0m"

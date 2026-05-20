@@ -53,8 +53,11 @@ def main():
 @click.option("--idle-timeout", type=float, default=180.0,
               help="Seconds without an SSE event before declaring a task idle")
 @click.option("--operator-url", default=f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}")
-@click.option("--operator-id", envvar="OPERATOR_ID")
-@click.option("--operator-session-id", envvar="OPERATOR_SESSION_ID")
+@click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID",
+              help="Operator session id. Auto-loaded from ~/.g8e/credentials after `./g8e login`; "
+                   "only pass this flag to override the cached session.")
+@click.option("--mode", type=click.Choice(["receipt", "baseline"]), default="receipt",
+              help="Receipt mode (default) verifies on-substrate receipts; baseline mode runs without binding")
 @click.option("--state-root", default="test-state-root-v1")
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("reports"))
 @click.option("--gold-set", type=click.Path(exists=True, path_type=Path))
@@ -67,11 +70,24 @@ def main():
 @click.option("--assistant-endpoint", help="Endpoint URL for the assistant provider")
 @click.option("--lite-api-key", help="API key for the lite provider")
 @click.option("--lite-endpoint", help="Endpoint URL for the lite provider")
-def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, verbose_text, idle_timeout, operator_url, operator_id, operator_session_id, state_root, output_dir, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint):
+def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, verbose_text, idle_timeout, operator_url, operator_session_id, mode, state_root, output_dir, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint):
     """Run a benchmark suite"""
-    if not operator_session_id:
+    if mode == "receipt" and not operator_session_id:
         raise click.UsageError(
-            "operator-session-id is required (run `./g8e login` first)"
+            "operator-session-id is required for receipt mode. Run `./g8e login` first; "
+            "the credentials file is then auto-loaded and no flag is needed."
+        )
+
+    # Reject the well-known footgun: passing the operator_id UUID as
+    # --operator-session-id silently 401s downstream because the substrate
+    # has no session matching that id. Fail fast with an actionable hint
+    # rather than warning-and-continuing with an invalid token.
+    operator_id_env = (os.environ.get("G8E_OPERATOR_ID") or "").strip()
+    if operator_session_id and operator_id_env and operator_session_id == operator_id_env:
+        raise click.UsageError(
+            "--operator-session-id was given the operator_id UUID, not a session id. "
+            "Drop the flag entirely - `./g8e login` already cached the correct session "
+            "in ~/.g8e/credentials and it is auto-loaded by this command."
         )
 
     config = SUTConfig(
@@ -79,12 +95,11 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         assistant=LLMRoleConfig(provider=assistant_provider, model=assistant_model, api_key=assistant_api_key, endpoint=assistant_endpoint),
         lite=LLMRoleConfig(provider=lite_provider, model=lite_model, api_key=lite_api_key, endpoint=lite_endpoint),
         operator_url=operator_url,
-        operator_id=operator_id,
         operator_session_id=operator_session_id,
         state_root=state_root,
         l2_private_key=l2_key,
         l2_key_id=l2_key_id,
-        mode="receipt"
+        mode=mode
     )
 
     asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout))
@@ -116,14 +131,14 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
             on_event=_on_event,
             idle_timeout_s=idle_timeout,
         )
+        # 3. Pre-flight validation: ensure we have API keys for active providers.
+        remote_settings = await sut.check_settings()
     except AuthenticationError as e:
         console.print("[bold red]Authentication Error:[/bold red]")
         console.print(f"  {e}")
         console.print("\n[yellow]Did you run ./g8e login?[/yellow]")
         return
 
-    # 3. Pre-flight validation: ensure we have API keys for active providers.
-    remote_settings = await sut.check_settings()
     llm_settings = remote_settings.llm if remote_settings else None
 
     errors = []
