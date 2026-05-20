@@ -125,4 +125,54 @@ fi
 echo "Found $EVENT_COUNT SSE events!"
 echo "$SSE_RESP" | jq -c '.events[].event_type'
 
+# 7. A2A Call and OOB Approval Flow
+_banner "Step 4: Test A2A Call and OOB Approval Flow"
+
+A2A_CALL_BODY=$(jq -n \
+    '{skill_name: "test-skill", payload: {foo: "bar"}}')
+
+# We make the initial A2A call which should suspend
+A2A_RESP=$(curl -sS --cacert "$TRUST_BUNDLE" \
+    --cert "$CLI_CERT_FILE" --key "$CLI_KEY_FILE" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $OPERATOR_SESSION_ID" \
+    -H "X-G8E-CLI-Session-ID: $CLI_SESSION_ID" \
+    -H "X-G8E-Source-Component: client" \
+    -d "$A2A_CALL_BODY" \
+    "$OPERATOR_URL/api/a2a/v1/call")
+
+STATUS=$(echo "$A2A_RESP" | jq -r '.result.status // .status')
+if [[ "$STATUS" != "suspended" ]]; then
+    echo "A2A call did not suspend: $A2A_RESP"
+    exit 1
+fi
+
+TX_HASH=$(echo "$A2A_RESP" | jq -r '.result.tx_hash // .tx_hash')
+echo "A2A call successfully suspended! TX Hash: $TX_HASH"
+
+# Perform OOB Approval via WebAuthn verify endpoint
+PROOF_BODY=$(jq -n \
+    '{id: "fake-id", rawId: "fake-id", clientDataJSON: "fake-data", authenticatorData: "fake-auth", signature: "fake-sig"}')
+
+COOKIE_HEADER="g8e_session=$OPERATOR_SESSION_ID"
+
+# POST to the verify endpoint
+VERIFY_RESP=$(curl -sS --cacert "$TRUST_BUNDLE" \
+    -X POST -H "Content-Type: application/json" \
+    -H "Cookie: $COOKIE_HEADER" \
+    -d "$PROOF_BODY" \
+    "$OPERATOR_URL/api/approve/$TX_HASH/verify")
+
+VERIFY_ERROR=$(echo "$VERIFY_RESP" | jq -r '.error // empty')
+VERIFY_SUMMARY=$(echo "$VERIFY_RESP" | jq -r '.result_summary // empty')
+
+if [[ -n "$VERIFY_SUMMARY" ]]; then
+    echo "A2A E2E Flow Completed Successfully with result: $VERIFY_SUMMARY"
+elif [[ "$VERIFY_ERROR" == *"downstream A2A dispatch failed"* || "$VERIFY_ERROR" == *"no downstream A2A server configured"* ]]; then
+    echo "A2A E2E Flow reached verification resumption successfully (failed downstream as expected): $VERIFY_ERROR"
+else
+    echo "A2A Verification returned unexpected response: $VERIFY_RESP"
+    exit 1
+fi
+
 _banner "BYO Client Parity Test PASSED"

@@ -346,9 +346,12 @@ case "$TOP" in
                 echo ""
                 ;;
             serve)
-                _banner "mcp $SUB"
-                echo "[g8e] MCP stdio gateway listening..."
-                # Real stdio stream handling will be implemented here
+                _ensure_operator
+                exec "$(_operator_bin)" \
+                    --mcp-serve \
+                    --endpoint "${OPERATOR_HTTP_URL#https://}" \
+                    --pki-dir "$G8E_PKI_DIR_HOST" \
+                    --log "error"
                 ;;
             *)
                 echo "[g8e] unknown mcp subcommand: '$SUB'" >&2; exit 1 ;;

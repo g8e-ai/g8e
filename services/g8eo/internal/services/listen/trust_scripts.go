@@ -41,13 +41,18 @@ func executeTemplate(name, tmpl string, data interface{}) string {
 }
 
 // WindowsTrustScriptBat returns a Windows batch script that trusts the platform CA.
-func WindowsTrustScriptBat(host string, port int) string {
+func WindowsTrustScriptBat(host string, port int, publicPort int) string {
 	host = sanitizeHost(host)
 	portSuffix := ""
 	if port != 80 {
 		portSuffix = fmt.Sprintf(":%d", port)
 	}
 	url := fmt.Sprintf("http://%s%s/ca.crt", host, portSuffix)
+
+	publicPortSuffix := ""
+	if publicPort != 443 {
+		publicPortSuffix = fmt.Sprintf(":%d", publicPort)
+	}
 
 	const tmpl = `@echo off
 :: Escalate to Administrator if not already elevated
@@ -125,25 +130,31 @@ if %errorlevel% EQU 0 (
     )
 )
 
-echo Restart your browser and navigate to https://%HOST%/
+echo Restart your browser and navigate to https://%HOST%{{.PublicPortSuffix}}/
 echo.
 pause
 `
 	return executeTemplate(string(constants.Status.Platform.Windows), tmpl, map[string]interface{}{
-		"Host": host,
-		"URL":  url,
-		"Port": port,
+		"Host":             host,
+		"URL":              url,
+		"Port":             port,
+		"PublicPortSuffix": publicPortSuffix,
 	})
 }
 
 // UniversalTrustScript returns a POSIX shell script for macOS and Linux.
-func UniversalTrustScript(host string, port int) string {
+func UniversalTrustScript(host string, port int, publicPort int) string {
 	host = sanitizeHost(host)
 	portSuffix := ""
 	if port != 80 {
 		portSuffix = fmt.Sprintf(":%d", port)
 	}
 	urlTmpl := fmt.Sprintf("http://%%s%s/ca.crt", portSuffix)
+
+	publicPortSuffix := ""
+	if publicPort != 443 {
+		publicPortSuffix = fmt.Sprintf(":%d", publicPort)
+	}
 
 	const tmpl = `#!/bin/sh
 set -eu
@@ -233,14 +244,15 @@ _log ""
 _log "----------------------------------------------------"
 _log "  Success!"
 _log "----------------------------------------------------"
-_log "Restart your browser and navigate to https://$HOST/"
+_log "Restart your browser and navigate to https://$HOST{{.PublicPortSuffix}}/"
 _log ""
 `
 	return executeTemplate(string(constants.ToolScopeUniversal), tmpl, map[string]interface{}{
-		"Host":       host,
-		"URL":        fmt.Sprintf(urlTmpl, host),
-		"PortSuffix": portSuffix,
-		"Port":       port,
+		"Host":             host,
+		"URL":              fmt.Sprintf(urlTmpl, host),
+		"PortSuffix":       portSuffix,
+		"Port":             port,
+		"PublicPortSuffix": publicPortSuffix,
 	})
 }
 
@@ -398,13 +410,18 @@ exec ./g8e.operator --device-token "$_token" --endpoint "$G8E_HOST"{{.PortFlags}
 }
 
 // WindowsPowerShellTrustScript returns a PowerShell script for Windows.
-func WindowsPowerShellTrustScript(host string, port int) string {
+func WindowsPowerShellTrustScript(host string, port int, publicPort int) string {
 	host = sanitizeHost(host)
 	portSuffix := ""
 	if port != 80 {
 		portSuffix = fmt.Sprintf(":%d", port)
 	}
 	url := fmt.Sprintf("http://%s%s/ca.crt", host, portSuffix)
+
+	publicPortSuffix := ""
+	if publicPort != 443 {
+		publicPortSuffix = fmt.Sprintf(":%d", publicPort)
+	}
 
 	const tmpl = `#Requires -RunAsAdministrator
 $ErrorActionPreference = "Stop"
@@ -474,12 +491,13 @@ Write-Host ""
 Write-Host "----------------------------------------------------"
 Write-Host "  Success!"
 Write-Host "----------------------------------------------------"
-Write-Host "Restart your browser and navigate to https://$g8eHost/"
+Write-Host "Restart your browser and navigate to https://${g8eHost}{{.PublicPortSuffix}}/"
 Write-Host ""
 `
 	return executeTemplate("powershell", tmpl, map[string]interface{}{
-		"URL":  url,
-		"Host": host,
-		"Port": port,
+		"URL":              url,
+		"Host":             host,
+		"Port":             port,
+		"PublicPortSuffix": publicPortSuffix,
 	})
 }

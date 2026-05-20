@@ -758,7 +758,7 @@ func (h *HTTPHandler) handleTrustScript(w http.ResponseWriter, r *http.Request) 
 
 	ua := r.Header.Get("User-Agent")
 	if strings.Contains(ua, "Windows") || strings.Contains(ua, "PowerShell") {
-		script := WindowsPowerShellTrustScript(host, h.cfg.Listen.BootstrapPort)
+		script := WindowsPowerShellTrustScript(host, h.cfg.Listen.BootstrapPort, h.cfg.Listen.PublicPort)
 		w.Header().Set("Content-Type", "text/plain")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
@@ -767,7 +767,7 @@ func (h *HTTPHandler) handleTrustScript(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	script := UniversalTrustScript(host, h.cfg.Listen.BootstrapPort)
+	script := UniversalTrustScript(host, h.cfg.Listen.BootstrapPort, h.cfg.Listen.PublicPort)
 	w.Header().Set("Content-Type", "text/x-shellscript")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
@@ -790,7 +790,7 @@ func (h *HTTPHandler) handleTrustScriptPS1(w http.ResponseWriter, r *http.Reques
 	if host == "" {
 		host = "localhost"
 	}
-	script := WindowsPowerShellTrustScript(host, h.cfg.Listen.BootstrapPort)
+	script := WindowsPowerShellTrustScript(host, h.cfg.Listen.BootstrapPort, h.cfg.Listen.PublicPort)
 	w.Header().Set("Content-Type", "text/plain") // PowerShell scripts often served as text or application/powershell
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
@@ -813,7 +813,7 @@ func (h *HTTPHandler) handleTrustScriptBat(w http.ResponseWriter, r *http.Reques
 	if host == "" {
 		host = "localhost"
 	}
-	script := WindowsTrustScriptBat(host, h.cfg.Listen.BootstrapPort)
+	script := WindowsTrustScriptBat(host, h.cfg.Listen.BootstrapPort, h.cfg.Listen.PublicPort)
 	w.Header().Set("Content-Type", "text/plain") // Batch scripts often served as text
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
