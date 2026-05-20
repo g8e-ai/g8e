@@ -240,6 +240,25 @@ fi
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
+_check_port_available() {
+    local port="$1"
+    local name="$2"
+    if ! python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(0.5); s.bind(('127.0.0.1', $port))" 2>/dev/null; then
+        local pid_info=""
+        if command -v lsof >/dev/null 2>&1; then
+            pid_info=$(lsof -i :"$port" -t 2>/dev/null | xargs ps -o pid=,comm= 2>/dev/null | tr '\n' ' ')
+        elif command -v fuser >/dev/null 2>&1; then
+            pid_info=$(fuser "$port"/tcp 2>/dev/null | xargs ps -o pid=,comm= 2>/dev/null | tr '\n' ' ')
+        fi
+        echo "Error: Port $port ($name) is already in use!" >&2
+        if [ -n "$pid_info" ]; then
+            echo "       Conflicting process: $pid_info" >&2
+        fi
+        return 1
+    fi
+    return 0
+}
+
 
 _operator_listen_running() {
     if [ -f "$OPERATOR_LISTEN_PID_FILE" ]; then
@@ -283,6 +302,8 @@ _start_g8ee() {
         echo "  g8ee is already running (PID: $(cat "$G8EE_PID_FILE"))."
         return 0
     fi
+
+    _check_port_available 8443 "g8ee Engine API" || exit 1
 
     local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
     if [ ! -d "$venv_dir" ]; then
@@ -335,6 +356,11 @@ _start_operator_listen() {
         echo "  Governance Gateway is already running (PID: $(cat "$OPERATOR_LISTEN_PID_FILE"))."
         return 0
     fi
+
+    _check_port_available "$OPERATOR_LISTEN_HTTP_PORT" "Governance Gateway HTTP API" || exit 1
+    _check_port_available "$OPERATOR_LISTEN_WSS_PORT" "Governance Gateway Pub/Sub" || exit 1
+    _check_port_available "$OPERATOR_LISTEN_BOOTSTRAP_PORT" "Operator Bootstrap" || exit 1
+    _check_port_available "$OPERATOR_LISTEN_PUBLIC_PORT" "Operator Public API" || exit 1
 
     local host_arch="amd64"
     case "$(uname -m)" in

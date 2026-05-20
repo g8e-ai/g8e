@@ -10,7 +10,7 @@ The **g8e Operator** is the host-side, sovereign agent role defined by the [g8e 
 
 The reference Operator is **`g8eo`** (built as the `g8e.operator` binary). It functions as a sovereign, **Governed Operator** and **Model Context Protocol (MCP) Server** (the Policy Execution Point).
 
-> **One Build, One Binary, Two Roles.** The exact same compiled Go codebase is used to power both sides of the governance boundary:
+> **One Codebase, Two Binaries, Two Roles.** The exact same compiled Go codebase is used to power both sides of the governance boundary:
 > - **`g8eg` (Governance Gateway / `g8e.gateway`)**: Runs in `--listen` mode as the central Policy Decision Point (PDP) and cryptographic backplane.
 > - **`g8eo` (Governed Operator / `g8e.operator`)**: Runs on target hosts (and serves MCP over stdio with `--mcp-serve`) as the host-side Policy Execution Point (PEP).
 >

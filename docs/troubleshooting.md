@@ -16,12 +16,10 @@ ls README.md g8e Makefile
 Use a POSIX shell such as Linux, macOS Terminal, WSL, or Git Bash. The root
 `./g8e` launcher and `Makefile` use Bash, `find`, `sed`, and `curl`.
 
-Check the current version requirements in [Developer Guidelines](../devs.md).
 At minimum, install the tools for the component you are touching:
 
 - Go for `g8eo` and protocol work.
 - Python for the optional `g8ee` adapter and evals.
-- Node only for dashboard or GUI work.
 - Docker only for demo fleet workflows.
 
 ## `./g8e` fails with missing `curl`
@@ -114,10 +112,8 @@ tail -n 80 .g8e/logs/operator-listen.log
 
 Common causes:
 
-- A previous Operator process is still running.
-- One of the local ports from `protocol/constants/paths.json` is already in use.
-- The Go toolchain is missing or below the version expected by the current
-  Developer Guidelines.
+- One of the local ports from `protocol/constants/paths.json` is already in use (the startup script performs an automatic preflight check and reports conflicting PIDs).
+- The Go toolchain is missing or below the version expected by the current Developer Guidelines.
 - Runtime PKI or secrets were created by an older incompatible checkout.
 
 Stop the managed process before retrying:
@@ -135,8 +131,9 @@ state. They intentionally remove runtime data under `.g8e/`.
 The Python engine is optional. Engine and eval commands expect the local
 virtualenv under `services/g8ee/.venv`.
 
-Create it through the platform scripts so the expected environment variables
-and trust material are wired consistently:
+To maximize developer ergonomics, **both the platform start script and the test runner will automatically bootstrap this virtualenv for you** if it is not found.
+
+You can also manually build it or start the platform with optional apps pre-enabled:
 
 ```bash
 ./g8e platform start --with-apps

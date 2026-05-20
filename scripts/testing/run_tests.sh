@@ -39,6 +39,23 @@ _footer() {
 }
 trap _footer EXIT
 
+_ensure_g8ee_venv() {
+    local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
+    if [[ ! -d "$venv_dir" ]]; then
+        log_warn "g8ee virtualenv not found at $venv_dir. Bootstrapping automatically..."
+        python3 -m venv "$venv_dir"
+        "$venv_dir/bin/pip" install --upgrade pip
+        "$venv_dir/bin/pip" install -r "$PROJECT_ROOT/services/g8ee/requirements.txt"
+    fi
+}
+
+_check_pki_exists() {
+    if [[ ! -d "$PROJECT_ROOT/.g8e/pki" ]]; then
+        log_warn "Runtime PKI directory (.g8e/pki) not found. Some mTLS/integration tests may fail."
+        log_warn "Run './g8e platform start' to initialize PKI trust material."
+    fi
+}
+
 # =============================================================================
 # Parse arguments
 # =============================================================================
@@ -196,11 +213,9 @@ _show_web_search_config() {
 
 run_g8ee() {
     log_header "Running g8ee tests (host)"
+    _ensure_g8ee_venv
+    _check_pki_exists
     local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
-    if [[ ! -d "$venv_dir" ]]; then
-        log_err "g8ee virtualenv not found at $venv_dir. Run ./g8e platform start first."
-        exit 1
-    fi
     
     export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol/python"
     export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
@@ -233,11 +248,9 @@ run_g8ee() {
 
 run_e2e() {
     log_header "Running E2E operator lifecycle tests (host)"
+    _ensure_g8ee_venv
+    _check_pki_exists
     local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
-    if [[ ! -d "$venv_dir" ]]; then
-        log_err "g8ee virtualenv not found at $venv_dir. Run ./g8e platform start first."
-        exit 1
-    fi
     export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol/python"
     export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
     cd "$PROJECT_ROOT/services/g8ee"
@@ -246,6 +259,7 @@ run_e2e() {
 
 run_g8eo() {
     log_header "Running g8eo tests (host)"
+    _check_pki_exists
     cd "$PROJECT_ROOT/services/g8eo"
     local test_target="./..."
     local pass_through_args=()
