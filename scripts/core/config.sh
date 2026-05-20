@@ -6,7 +6,8 @@
 
 # Ensure we have the project root using the canonical heuristic
 if [[ -z "${G8E_PROJECT_ROOT:-}" ]]; then
-    source "$SCRIPT_DIR/scripts/core/path_utils.sh"
+    _config_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+    source "$_config_script_dir/path_utils.sh"
     G8E_PROJECT_ROOT="$(resolve_g8e_root)"
 fi
 

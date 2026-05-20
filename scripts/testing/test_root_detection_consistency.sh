@@ -5,7 +5,7 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)"
 source "$SCRIPT_DIR/scripts/core/path_utils.sh"
 G8E_PROJECT_ROOT="$(resolve_g8e_root)"
 export G8E_PROJECT_ROOT

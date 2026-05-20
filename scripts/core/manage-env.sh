@@ -124,11 +124,11 @@ _load() {
     fi
 }
 
-case "$1" in
+case "${1:-}" in
     ls|list)  _list ;;
-    set)      _set_var "$2" "$3" ;;
-    get)      _get_var "$2" ;;
-    unset)    _unset_var "$2" ;;
+    set)      _set_var "${2:-}" "${3:-}" ;;
+    get)      _get_var "${2:-}" ;;
+    unset)    _unset_var "${2:-}" ;;
     load)     _load ;;
     *)        _usage; exit 1 ;;
 esac

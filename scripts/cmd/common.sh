@@ -4,7 +4,7 @@
 # This file is intended to be sourced by specific command scripts.
 
 # Use canonical root detection heuristic
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../.." && pwd)"
 source "$SCRIPT_DIR/scripts/core/path_utils.sh"
 G8E_PROJECT_ROOT="$(resolve_g8e_root)"
 export G8E_PROJECT_ROOT
@@ -14,10 +14,10 @@ source "$SCRIPT_DIR/scripts/cmd/paths.sh"
 source "$SCRIPT_DIR/scripts/core/config.sh"
 
 # Host-native runtime layout
-G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$SCRIPT_DIR/.g8e}"
-G8E_PKI_DIR_HOST="${G8E_PKI_DIR:-$SCRIPT_DIR/$G8E_PATH_PKI_DIR}"
-G8E_SECRETS_DIR_HOST="${G8E_SECRETS_DIR:-$SCRIPT_DIR/$G8E_PATH_SECRETS_DIR}"
-OPERATOR_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:$G8E_PORT_OPERATOR_HTTP}"
+G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-${SCRIPT_DIR:-}/.g8e}"
+G8E_PKI_DIR_HOST="${G8E_PKI_DIR:-${SCRIPT_DIR:-}/${G8E_PATH_PKI_DIR:-}}"
+G8E_SECRETS_DIR_HOST="${G8E_SECRETS_DIR:-${SCRIPT_DIR:-}/${G8E_PATH_SECRETS_DIR:-}}"
+OPERATOR_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:${G8E_PORT_OPERATOR_HTTP:-9000}}"
 _OPERATOR_PID_FILE="$G8E_RUNTIME_DIR/pids/operator-listen.pid"
 _G8EE_PID_FILE="$G8E_RUNTIME_DIR/pids/g8ee.pid"
 
@@ -113,7 +113,7 @@ _operator_bootstrap() {
     # Perform bootstrap over loopback
     local resp
     resp=$(curl -sS --cacert "$trust_bundle" \
-        -X POST -H "${G8E_HEADER_CONTENT_TYPE}: application/json" \
+        -X POST -H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json" \
         -d "$bootstrap_body" \
         "$public_url/api/auth/bootstrap")
 
@@ -228,12 +228,12 @@ _operator_curl() {
     fi
 
     if [[ -n "$G8E_OPERATOR_SESSION_ID" ]]; then
-        args+=(-H "${G8E_HEADER_AUTHORIZATION}: Bearer $G8E_OPERATOR_SESSION_ID")
+        args+=(-H "${G8E_HEADER_HTTP_AUTHORIZATION_HEADER}: Bearer $G8E_OPERATOR_SESSION_ID")
         # Also send as a cookie for web-authenticated routes
         args+=(--cookie "g8e_session=$G8E_OPERATOR_SESSION_ID")
     fi
 
-    args+=(-H "${G8E_HEADER_CONTENT_TYPE}: application/json")
+    args+=(-H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json")
     [[ -n "$body" ]] && args+=(-d "$body")
     curl "${args[@]}" "$OPERATOR_HTTP_URL$path"
 }
@@ -278,14 +278,14 @@ _build_protocol_curl_args() {
 _append_g8e_auth_headers() {
     local _outvar="$1"
     eval "local __auth_args=(\"\${${_outvar}[@]}\")"
-    __auth_args+=(-H "${G8E_HEADER_CONTENT_TYPE}: application/json")
+    __auth_args+=(-H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json")
     if [[ -n "${G8E_OPERATOR_SESSION_ID:-}" ]]; then
         # Substrate uses Authorization: Bearer <token>.
-        __auth_args+=(-H "${G8E_HEADER_AUTHORIZATION}: Bearer $G8E_OPERATOR_SESSION_ID")
+        __auth_args+=(-H "${G8E_HEADER_HTTP_AUTHORIZATION_HEADER}: Bearer $G8E_OPERATOR_SESSION_ID")
         __auth_args+=(--cookie "g8e_session=$G8E_OPERATOR_SESSION_ID")
     fi
     if [[ -n "${G8E_CLI_SESSION_ID:-}" ]]; then
-        __auth_args+=(-H "${G8E_HEADER_X_SESSION_ID}: $G8E_CLI_SESSION_ID")
+        __auth_args+=(-H "${G8E_HEADER_CLI_SESSION_ID_HEADER}: $G8E_CLI_SESSION_ID")
     fi
     eval "$_outvar=(\"\${__auth_args[@]}\")"
 }

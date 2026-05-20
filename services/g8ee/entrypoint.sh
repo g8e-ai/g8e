@@ -6,9 +6,11 @@ set -e
 # Derive project root using shared utility
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "${SCRIPT_DIR}/../../scripts/core/path_utils.sh"
+G8E_PROJECT_ROOT="$(resolve_g8e_root)"
+export G8E_PROJECT_ROOT
 
-SECRETS_DIR="${G8E_SECRETS_DIR:-${G8E_PROJECT_ROOT}/.g8e/secrets}"
-PKI_DIR="${G8E_PKI_DIR:-${G8E_PROJECT_ROOT}/.g8e/pki}"
+SECRETS_DIR="${G8E_SECRETS_DIR:-${G8E_PROJECT_ROOT:-}/.g8e/secrets}"
+PKI_DIR="${G8E_PKI_DIR:-${G8E_PROJECT_ROOT:-}/.g8e/pki}"
 
 # Load security tokens into environment if files exist
 if [ -f "${SECRETS_DIR}/session_encryption_key" ]; then

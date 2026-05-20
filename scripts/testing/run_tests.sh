@@ -6,9 +6,9 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "${SCRIPT_DIR}/../core/path_utils.sh"
-PROJECT_ROOT="$G8E_PROJECT_ROOT"
+PROJECT_ROOT="${G8E_PROJECT_ROOT:-$(resolve_g8e_root)}"
 
 # =============================================================================
 # Helper functions

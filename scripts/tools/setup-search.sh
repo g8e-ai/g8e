@@ -49,13 +49,16 @@ ARG_API_KEY=""
 ARG_LOCATION=""
 ARG_DISABLE=false
 NON_INTERACTIVE=false
+if [[ ! -t 0 ]]; then
+    NON_INTERACTIVE=true
+fi
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --project-id)  ARG_PROJECT_ID="$2"; shift 2 ;;
-        --engine-id)   ARG_ENGINE_ID="$2";  shift 2 ;;
-        --api-key)     ARG_API_KEY="$2";    shift 2 ;;
-        --location)    ARG_LOCATION="$2";   shift 2 ;;
+        --project-id)  ARG_PROJECT_ID="${2:-}"; shift 2 ;;
+        --engine-id)   ARG_ENGINE_ID="${2:-}";  shift 2 ;;
+        --api-key)     ARG_API_KEY="${2:-}";    shift 2 ;;
+        --location)    ARG_LOCATION="${2:-}";   shift 2 ;;
         --disable)     ARG_DISABLE=true;    shift ;;
         --help|-h)
             echo "Usage: setup-search.sh [options]"

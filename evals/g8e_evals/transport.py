@@ -29,7 +29,6 @@ from typing import Optional
 import httpx
 
 from g8e_protocol.constants import (
-    CLI_SESSION_ID_HEADER,
     HTTP_AUTHORIZATION_HEADER,
     HTTP_BEARER_PREFIX,
     HTTP_CONTENT_TYPE_HEADER,

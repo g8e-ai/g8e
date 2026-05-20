@@ -16,15 +16,68 @@ case "$SUB" in
         fi
         [[ -z "$SUB" ]] && exit 1 || exit 0
         ;;
-    status|start|stop|restart|reset|wipe|clean|settings|logs)
+    status|start|stop|restart|reset|clean|settings|logs)
         case "$SUB" in
             start)    _banner "platform start";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up      "${@:2}" ;;
             stop)     _banner "platform stop";     exec bash "$SCRIPT_DIR/scripts/core/build.sh" down    "${@:2}" ;;
             restart)  _banner "platform restart";  exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") restart "${@:2}" ;;
             status)   _banner "platform status";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" status  "${@:2}" ;;
-            reset)    _banner "platform reset";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" reset   "${@:2}" ;;
-            wipe)     _banner "platform wipe";     exec bash "$SCRIPT_DIR/scripts/core/build.sh" wipe    "${@:2}" ;;
-            clean)    _banner "platform clean";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" clean   "${@:2}" ;;
+            reset)
+                _banner "platform reset"
+                local skip_confirm=false
+                for arg in "${@:2}"; do
+                    if [[ "$arg" == "-y" || "$arg" == "--yes" || "$arg" == "--force" ]]; then
+                        skip_confirm=true
+                    fi
+                done
+                if [[ "$skip_confirm" != "true" ]]; then
+                    if [[ ! -t 0 ]]; then
+                        echo "[g8e] Error: stdin is not a TTY. Interactive confirmation required. Use -y/--yes/--force to bypass." >&2
+                        exit 1
+                    fi
+                    echo ""
+                    echo -e "\033[1;31mWARNING: You are about to RESET the g8e platform!\033[0m"
+                    echo "This command will:"
+                    echo "  1. Stop all running g8e services (Operator and any optional apps)."
+                    echo "  2. Wipe the SQLite databases (users, settings, audits, etc.) and bootstrap secrets."
+                    echo "  3. Preserve your existing TLS/PKI certificates and keys."
+                    echo "  4. Restart the services with a fresh database."
+                    echo ""
+                    read -p "Are you sure you want to continue? (y/n): " confirm
+                    if [[ ! "$confirm" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+                        echo "Reset cancelled."
+                        exit 0
+                    fi
+                fi
+                exec bash "$SCRIPT_DIR/scripts/core/build.sh" reset   "${@:2}" ;;
+            clean)
+                _banner "platform clean"
+                local skip_confirm=false
+                for arg in "${@:2}"; do
+                    if [[ "$arg" == "-y" || "$arg" == "--yes" || "$arg" == "--force" ]]; then
+                        skip_confirm=true
+                    fi
+                done
+                if [[ "$skip_confirm" != "true" ]]; then
+                    if [[ ! -t 0 ]]; then
+                        echo "[g8e] Error: stdin is not a TTY. Interactive confirmation required. Use -y/--yes/--force to bypass." >&2
+                        exit 1
+                    fi
+                    echo ""
+                    echo -e "\033[1;31mWARNING: You are about to CLEAN the g8e platform!\033[0m"
+                    echo "This command will:"
+                    echo "  1. Stop all running g8e services (Operator and any optional apps)."
+                    echo "  2. Completely delete the entire runtime directory ($G8E_RUNTIME_DIR)."
+                    echo "  3. Delete all SQLite databases, bootstrap secrets, logs, AND TLS/PKI certificates/keys."
+                    echo "  4. All trust routes and credentials will be permanently destroyed."
+                    echo ""
+                    read -p "Are you sure you want to continue? (y/n): " confirm
+                    if [[ ! "$confirm" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+                        echo "Clean cancelled."
+                        exit 0
+                    fi
+                fi
+                exec bash "$SCRIPT_DIR/scripts/core/build.sh" clean   "${@:2}" ;;
             settings)
                 _banner "platform settings ${@:2}"
                 _ensure_operator
@@ -35,6 +88,6 @@ case "$SUB" in
         esac ;;
     *)
         echo "[g8e] unknown platform subcommand: '$SUB'" >&2
-        echo "  Valid: settings, status, start, stop, restart, reset, wipe, clean, logs" >&2
+        echo "  Valid: settings, status, start, stop, restart, reset, clean, logs" >&2
         exit 1 ;;
 esac

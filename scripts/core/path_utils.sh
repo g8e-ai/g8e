@@ -10,8 +10,8 @@
 # 4. If in services/g8ee, walk up 2 levels to root
 # 5. Fallback to current directory
 resolve_g8e_root() {
-    if [ -n "$G8E_PROJECT_ROOT" ]; then
-        echo "$G8E_PROJECT_ROOT"
+    if [ -n "${G8E_PROJECT_ROOT:-}" ]; then
+        echo "${G8E_PROJECT_ROOT:-}"
         return
     fi
 

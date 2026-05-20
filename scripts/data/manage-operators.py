@@ -219,6 +219,9 @@ class OperatorManager:
         print("  The new key will be stored by the Operator and will not be displayed.")
 
         if not force:
+            import sys
+            if not sys.stdin.isatty():
+                raise RuntimeError("Non-interactive environment detected. Confirmation required. Use --force to bypass.")
             response = input("\nType 'rotate' to confirm: ")
             if response.strip().lower() != 'rotate':
                 print("Rotation cancelled.")
@@ -260,6 +263,9 @@ class OperatorManager:
         print("  This will terminate the operator session and mark it as terminated.")
 
         if not force:
+            import sys
+            if not sys.stdin.isatty():
+                raise RuntimeError("Non-interactive environment detected. Confirmation required. Use --force to bypass.")
             response = input("\nType 'terminate' to confirm: ")
             if response.strip().lower() != 'terminate':
                 print("Termination cancelled.")

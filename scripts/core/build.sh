@@ -46,9 +46,9 @@ echo "  build.sh $*"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "${SCRIPT_DIR}/path_utils.sh"
-PROJECT_ROOT="$G8E_PROJECT_ROOT"
+PROJECT_ROOT="${G8E_PROJECT_ROOT:-$(resolve_g8e_root)}"
 
 G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$PROJECT_ROOT/.g8e}"
 OPERATOR_LISTEN_DATA_DIR="${OPERATOR_LISTEN_DATA_DIR:-$G8E_RUNTIME_DIR/data}"
@@ -157,8 +157,6 @@ Commands:
                                   Valid: operator g8ee
                                   Optional apps require -a, --with-apps, or --with-g8ee
   reset                           Wipe Operator listen-mode data. PKI certs and secrets are preserved.
-  wipe                            Clear app data from the Operator database
-                                  Operator listen mode stays up; preserves: platform settings, PKI certs, secrets, auth token
   clean                           Nuke runtime processes and data.
   operator-build                  Build linux/amd64 operator binary natively
   operator-build-all              Build all operator architectures natively
@@ -169,7 +167,6 @@ Examples:
   $(basename "$0") up -a                        Start Operator plus optional bundled apps
   $(basename "$0") down                         Stop runtime processes
   $(basename "$0") rebuild                      Restart Operator listen mode
-  $(basename "$0") wipe                         Clear app data from the Operator database
   $(basename "$0") reset                        Wipe Operator listen-mode data
   $(basename "$0") clean                        Remove host runtime state
 EOF
@@ -198,7 +195,7 @@ while [[ $# -gt 0 ]]; do
             OPTIONAL_COMPONENTS+=("g8ee")
             shift
             ;;
-        setup|up|down|restart|reset|wipe|clean|status|operator-build|operator-build-all)
+        setup|up|down|restart|reset|clean|status|operator-build|operator-build-all)
             COMMAND="$1"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
@@ -666,51 +663,6 @@ if [[ "$COMMAND" == "reset" ]]; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Reset complete. PKI certs preserved; bootstrap secrets were recreated."
-    echo ""
-    _print_platform_info
-    exit 0
-fi
-
-# ─── wipe ─────────────────────────────────────────────────────────────────────
-# Clears all app data from the Operator listen-mode database via the HTTP API.
-# Preserves: platform settings (components collection), PKI certs, secrets, auth token, LLM data.
-# Operator listen mode is restarted to flush in-memory state; no volume wipe, no rebuild.
-# Use 'reset' to wipe DB data volumes and rebuild from scratch (PKI still preserved).
-
-if [[ "$COMMAND" == "wipe" ]]; then
-    _preflight
-    mapfile -t WIPE_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
-
-    echo "Stopping Operator listen mode and selected optional apps..."
-    if printf '%s\n' "${WIPE_COMPONENTS[@]}" | grep -qx g8ee; then
-        _stop_g8ee
-    fi
-    _stop_operator_listen
-    echo ""
-
-    echo "Restarting Operator listen mode..."
-    _start_operator_listen
-    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT/health" 120 2
-
-    echo "Clearing app data from Operator listen mode..."
-    echo "  Warning: wipe endpoint removed - X-Internal-Auth and /api/internal/* routes deprecated"
-    echo "  Use './g8e platform reset' to wipe data volumes instead"
-    echo ""
-
-    for svc in "${WIPE_COMPONENTS[@]}"; do
-        [[ "$svc" == "operator" ]] && continue
-        _start_optional_app "$svc"
-    done
-    echo ""
-    echo "Waiting for services..."
-    for svc in "${WIPE_COMPONENTS[@]}"; do
-        [[ "$svc" == "operator" ]] && continue
-        _wait_optional_app_healthy "$svc"
-    done
-
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Wipe complete. Platform settings, PKI certs, secrets, and auth token preserved."
     echo ""
     _print_platform_info
     exit 0

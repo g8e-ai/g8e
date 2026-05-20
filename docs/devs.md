@@ -85,8 +85,8 @@ All runtime state is rooted at `./.g8e/`.
 | `.g8e/pids/` | Process IDs | clear | clear | nuke |
 
 - **`./g8e platform wipe`**: Clears application-layer data via the Operator API but preserves platform settings.
-- **`./g8e platform reset`**: Deletes the database and secrets, but keeps the CA cert so client trust is maintained.
-- **`./g8e platform clean`**: Destructive removal of the entire `.g8e/` directory and all running processes.
+- **`./g8e platform reset`**: Deletes the database and secrets, but keeps the CA cert so client trust is maintained (prompts for confirmation; bypass with `-y`, `--yes`, or `--force`).
+- **`./g8e platform clean`**: Destructive removal of the entire `.g8e/` directory and all running processes (prompts for confirmation; bypass with `-y`, `--yes`, or `--force`).
 
 ## Anti-Tech-Debt Directives
 
