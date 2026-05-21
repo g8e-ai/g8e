@@ -111,12 +111,12 @@ def _llm_settings_from_env() -> LLMSettings | None:
     else:
         lite_provider = assistant_provider
 
-    api_key = os.environ.get(EnvVar.TEST_LLM_API_KEY, "").strip() or None
-    endpoint = os.environ.get(EnvVar.TEST_LLM_ENDPOINT_URL, "").strip() or None
+    api_key = os.environ.get(EnvVar.TEST_LLM_PRIMARY_API_KEY, "").strip() or None
+    endpoint = os.environ.get(EnvVar.TEST_LLM_PRIMARY_ENDPOINT, "").strip() or None
     assistant_api_key = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_API_KEY, "").strip() or None
-    assistant_endpoint = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_ENDPOINT_URL, "").strip() or None
+    assistant_endpoint = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_ENDPOINT, "").strip() or None
     lite_api_key = os.environ.get(EnvVar.TEST_LLM_LITE_API_KEY, "").strip() or None
-    lite_endpoint = os.environ.get(EnvVar.TEST_LLM_LITE_ENDPOINT_URL, "").strip() or None
+    lite_endpoint = os.environ.get(EnvVar.TEST_LLM_LITE_ENDPOINT, "").strip() or None
     primary = os.environ.get(EnvVar.TEST_LLM_PRIMARY_MODEL, "").strip() or None
     assistant = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_MODEL, "").strip() or None
     lite = os.environ.get(EnvVar.TEST_LLM_LITE_MODEL, "").strip() or None
