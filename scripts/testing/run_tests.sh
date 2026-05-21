@@ -166,7 +166,7 @@ while [[ $# -gt 0 ]]; do
                 echo "  ./g8e test g8ee --coverage"
                 echo "  ./g8e test g8ee --pyright --ruff"
                 echo "  ./g8e test g8ee -j auto"
-                echo "  ./g8e test g8ee -p gemini -m gemini-3-flash-preview -k \$GEMINI_API_KEY tests/unit"
+                echo "  ./g8e test g8ee -p gemini -m gemini-3-flash-preview -k \$G8E_LLM_PRIMARY_API_KEY tests/unit"
                 echo "  ./g8e test g8ee -p anthropic -m claude-3-5-sonnet -a claude-3-haiku -k \$ANTHROPIC_API_KEY"
             elif [[ "$DETECTED_COMPONENT" == "chaos" ]]; then
                 echo "Usage: ./g8e test chaos [OPTIONS]"

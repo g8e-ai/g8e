@@ -37,12 +37,32 @@ REMAINING_ARGS=("${@:2}")
 
 case "$SUB" in
     -h|--help|"")
-        help_file="$SCRIPT_DIR/docs/cli_help.md"
-        if [[ -f "$help_file" ]]; then
-            awk '/^### evals/,/^## Detailed Help/' "$help_file" | head -n -1
-        else
-            echo "[g8e] Help file not found: $help_file" >&2; exit 1
-        fi
+        cat << 'EOF'
+Usage: ./g8e evals <command> [options]
+
+Commands:
+  bench --suite <suite> --mode <baseline|receipt>
+      Run a benchmark suite against the new harness.
+      Receipt mode requires a running Operator and an authenticated CLI session. 
+      Baseline mode runs the SUT without binding.
+
+  verify-receipts <report-dir>
+      Re-verify receipt signatures offline.
+
+  list
+      List benchmark suites and bundled gold sets.
+
+Workflow (new harness):
+  1. ./g8e login (zero-arg in sandbox; mints CLI mTLS cert + session)
+  2. ./g8e evals bench --suite ifeval --mode baseline
+  3. ./g8e evals bench --suite ifeval --mode receipt
+  4. ./g8e evals verify-receipts reports/ifeval-<ts>
+
+Note: 
+  G8E_OPERATOR_SESSION_ID is loaded from ~/.g8e/credentials automatically after 
+  ./g8e login. Do not pass --operator-session-id unless you are explicitly 
+  overriding the cached session.
+EOF
         [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
     bench)
         _ensure_evals_venv

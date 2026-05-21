@@ -172,14 +172,14 @@ jobs:
         run: >-
           ./g8e test g8ee
           -p gemini
-          -k "$GEMINI_API_KEY"
+          -k "$G8E_LLM_PRIMARY_API_KEY"
           -m gemini-3.1-pro-preview-customtools
           -a gemini-3-flash-preview
           -l gemini-3.1-flash-lite
           -j auto
           -- tests
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          G8E_LLM_PRIMARY_API_KEY: ${{ secrets.G8E_LLM_PRIMARY_API_KEY }}
 
       - name: Show app logs
         if: failure()

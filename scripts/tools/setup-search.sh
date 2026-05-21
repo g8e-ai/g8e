@@ -228,7 +228,7 @@ fi
 
 if [[ "$NON_INTERACTIVE" == true ]]; then
     if [[ -z "$ARG_API_KEY" && -n "${GEMINI_API_KEY:-}" ]]; then
-        ARG_API_KEY="$GEMINI_API_KEY"
+        ARG_API_KEY="$G8E_LLM_PRIMARY_API_KEY"
     fi
     if [[ -z "$ARG_PROJECT_ID" || -z "$ARG_ENGINE_ID" || -z "$ARG_API_KEY" ]]; then
         _err "--project-id, --engine-id, and --api-key (or GEMINI_API_KEY) are all required"
