@@ -63,3 +63,6 @@ DB_COLLECTION_STAKE_RESOLUTIONS: str       = _c["stake_resolutions"].value
 # Document IDs for settings collection
 PLATFORM_SETTINGS_DOC: str = _d["platform_settings"].value
 USER_SETTINGS_DOC_PREFIX: str = _d["user_settings_prefix"].value
+
+# Sentinel values for unknown IDs
+SENTINEL_ID_UNKNOWN: str = "unknown"

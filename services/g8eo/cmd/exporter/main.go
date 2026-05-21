@@ -229,9 +229,14 @@ func main() {
 		}
 		lines = append(lines, "")
 		lines = append(lines, "# Port constants")
-		for key, value := range snapshot.Ports {
-			// Convert lowercase key to uppercase constant name with G8E_ prefix
-			constName := "G8E_PORT_" + strings.ToUpper(strings.ReplaceAll(key, "-", "_"))
+		for key, value := range snapshot.Paths.Ports {
+			// Convert lowercase key to uppercase constant name
+			// Add G8E_ prefix for g8ee-specific ports
+			prefix := "PORT_"
+			if strings.HasPrefix(key, "g8ee") {
+				prefix = "G8E_PORT_"
+			}
+			constName := prefix + strings.ToUpper(strings.ReplaceAll(key, "-", "_"))
 			lines = append(lines, fmt.Sprintf("%s = %d", constName, value))
 		}
 		lines = append(lines, "")
@@ -246,9 +251,14 @@ func main() {
 
 		// Create PortConstants class
 		lines = append(lines, "class PortConstants:")
-		for key, value := range snapshot.Ports {
-			// Convert lowercase key to uppercase constant name with G8E_ prefix
-			constName := "G8E_PORT_" + strings.ToUpper(strings.ReplaceAll(key, "-", "_"))
+		for key, value := range snapshot.Paths.Ports {
+			// Convert lowercase key to uppercase constant name
+			// Add G8E_ prefix for g8ee-specific ports
+			prefix := "PORT_"
+			if strings.HasPrefix(key, "g8ee") {
+				prefix = "G8E_PORT_"
+			}
+			constName := prefix + strings.ToUpper(strings.ReplaceAll(key, "-", "_"))
 			lines = append(lines, fmt.Sprintf("    %s = %d", constName, value))
 		}
 		lines = append(lines, "")

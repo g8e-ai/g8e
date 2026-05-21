@@ -149,12 +149,20 @@ class TestInternalRouterPathRegistration:
         route_paths = {route.path for route in internal_router.routes}
         assert InternalApiPaths.G8EE_AUTH_REVOKE_CERT in route_paths
 
-    def test_investigation_path_absolute(self):
-        """Investigation endpoint should be registered at absolute path."""
+    def test_investigation_get_path_absolute(self):
+        """Investigation get endpoint should be registered at absolute path."""
         route_paths = {route.path for route in internal_router.routes}
-        # Investigation path has a parameter, so check the base path
-        assert InternalApiPaths.G8EE_INVESTIGATION.replace("{investigation_id}", "test-inv") in route_paths or \
-               any("investigations" in route.path and "{investigation_id}" in route.path for route in internal_router.routes)
+        assert InternalApiPaths.G8EE_INVESTIGATION + "/get" in route_paths
+
+    def test_investigations_query_path_absolute(self):
+        """Investigations query endpoint should be registered at absolute path."""
+        route_paths = {route.path for route in internal_router.routes}
+        assert InternalApiPaths.G8EE_INVESTIGATIONS + "/query" in route_paths
+
+    def test_case_get_path_absolute(self):
+        """Case get endpoint should be registered at absolute path."""
+        route_paths = {route.path for route in internal_router.routes}
+        assert InternalApiPaths.G8EE_CASE + "/get" in route_paths
 
     def test_operator_approval_pending_path_absolute(self):
         """Operator approval pending endpoint should be registered at absolute path."""

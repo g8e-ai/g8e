@@ -171,20 +171,15 @@ class TestOutputContractIsExplicitField:
     """
 
     def test_no_persona_embeds_output_contract_in_identity(self) -> None:
-        agents_json_path = (
-            Path(__file__).parent.parent.parent.parent.parent / "protocol" / "constants" / "agents.json"
-        )
-        with agents_json_path.open() as f:
-            agents_data = json.load(f)
-
         offenders: list[str] = []
-        for agent_id, agent in agents_data["agent.metadata"].items():
-            if "<output_contract>" in agent.get("identity", ""):
+        for agent_id in _PURE_VOICE_PERSONAS:
+            persona = get_agent_persona(agent_id)
+            if "<output_contract>" in (persona.identity or ""):
                 offenders.append(agent_id)
         assert not offenders, (
             "Personas embedded <output_contract> in their identity field: "
             f"{offenders}. Move the contract to the explicit "
-            "agent.metadata.<id>.output_contract field instead - see "
+            "agent_id.<id>.output_contract field instead - see "
             "AgentPersona.get_system_prompt()."
         )
 
