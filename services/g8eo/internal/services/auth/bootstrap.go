@@ -147,8 +147,8 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		LocalStorageEnabled: bs.config.LocalStoreEnabled,
 		NoGit:               bs.config.NoGit,
 		LogLevel:            bs.config.LogLevel,
-		WSSPort:             bs.config.WSSPort,
-		HTTPPort:            bs.config.HTTPPort,
+
+		HTTPPort: bs.config.HTTPPort,
 	}
 
 	reqBody := operatorAuthRequest{

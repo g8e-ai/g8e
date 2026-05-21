@@ -9,7 +9,7 @@ Agentic systems are beginning to mutate production infrastructure through generi
 
 g8e treats agentic execution as a Byzantine Fault Tolerance problem. Every mutation is represented as a canonical JSON `GovernanceEnvelope`: a typed payload, deterministic transaction hash, nonce, expiry, state root, L1 technical evidence, L2 consensus evidence, and L3 human authorization evidence. A host-resident Operator verifies the envelope independently, writes signed receipts to local audit state, and executes only through Warden.
 
-The result is a protocol substrate for AI-controlled infrastructure where interoperability and sovereignty compose cleanly. Open tool protocols remain useful payloads. g8e supplies the admission boundary.
+The result is a protocol Gateway for AI-controlled infrastructure where interoperability and sovereignty compose cleanly. Open tool protocols remain useful payloads. g8e supplies the admission boundary.
 
 ---
 
@@ -31,10 +31,10 @@ The execution boundary has to distrust the AI control plane, the transport, the 
 
 ## 2. g8e architecture
 
-g8e defines a governed execution substrate with four cooperating roles:
+g8e defines a governed execution Gateway with four cooperating roles:
 
 - **Principal** - the human or upstream agent requesting an outcome. For mutations, the final authorization path is anchored by hardware-backed human proof unless policy explicitly permits auto-approval after L1 and L2 verification.
-- **Protocol substrate** - the schemas, envelope rules, transaction hash, state binding, proof model, and receipt semantics that every conforming participant must implement.
+- **Protocol Gateway** - the schemas, envelope rules, transaction hash, state binding, proof model, and receipt semantics that every conforming participant must implement.
 - **Governance Gateway (`g8eg`)** - the reference policy decision point. It owns admission APIs, mTLS identity, PKI, pub/sub fan-out, transaction suspension, replay protection, state roots, and dispatch to governed Operators.
 - **Governed Operator (`g8eo`)** - the reference host-side policy execution point. It is the sovereign execution boundary, local audit authority, Sentinel scrubber, Warden dispatcher, and MCP server.
 
@@ -84,7 +84,7 @@ This ordering matters. It keeps malformed, stale, unsigned, replayed, mistyped, 
 
 ## 5. Consensus as infrastructure control
 
-g8e treats L2 as an interchangeable proof layer. The reference Engine uses a multi-agent Tribunal, but the substrate only requires verifiable consensus evidence from a trusted producer.
+g8e treats L2 as an interchangeable proof layer. The reference Engine uses a multi-agent Tribunal, but the Gateway only requires verifiable consensus evidence from a trusted producer.
 
 The reference model is intentionally heterogeneous:
 
@@ -131,7 +131,7 @@ Native adoption gives engineering teams:
 - **Governance by construction** - transaction metadata exists at intent time rather than being inferred after a tool call.
 - **Audit-ready semantics** - the same transaction hash binds request, proof, execution, result, and receipt.
 - **Interoperable autonomy** - any conforming Operator can verify the action without trusting the application that produced it.
-- **Lower application burden** - L1/L2/L3 enforcement, replay defense, state binding, receipts, local audit, and human proof are delegated to the substrate.
+- **Lower application burden** - L1/L2/L3 enforcement, replay defense, state binding, receipts, local audit, and human proof are delegated to the Gateway.
 
 This is the adoption curve: translate existing protocols first, emit governed transactions natively when the system becomes important.
 
@@ -177,4 +177,4 @@ Agentic infrastructure needs a native execution governance layer. The useful abs
 
 g8e defines that envelope and places a sovereign verifier at the host boundary. Open protocols carry capability. Heterogeneous agents produce evidence. Humans provide hardware-bound authorization where required. The Operator verifies the transaction against local state, records the attempt locally, executes through Warden, and returns signed proof.
 
-That is the minimum viable substrate for autonomous systems that are allowed to change reality.
+That is the minimum viable Gateway for autonomous systems that are allowed to change reality.

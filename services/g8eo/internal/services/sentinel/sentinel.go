@@ -1641,7 +1641,7 @@ func (s *Sentinel) ValidateNoLeakage(text string) (bool, []string) {
 // ValidateIntent ensures the requested intent is present in the allowlist.
 func (s *Sentinel) ValidateIntent(intent constants.CloudIntent) bool {
 	// A requested intent MUST be one of the authoritative protocol intents.
-	// The g8eo substrate enforces this list to prevent agents from requesting
+	// The g8eo Gateway enforces this list to prevent agents from requesting
 	// unmapped or shadow capabilities.
 	switch intent {
 	case constants.IntentEc2Discovery,

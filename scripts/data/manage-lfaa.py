@@ -811,7 +811,7 @@ class LFAAManager:
             print(f'  {DIM}No throughput data available.{RESET}')
 
         print(f'\n{DIM}{LINE}{RESET}')
-        print(f' {DIM}[FOOTER] Local-First Audit Architecture // Open-Source Agentic BFT Substrate // github.com/g8e-ai/g8e{RESET}')
+        print(f' {DIM}[FOOTER] Local-First Audit Architecture // Open-Source Agentic BFT Gateway // github.com/g8e-ai/g8e{RESET}')
         print(f'{DIM}{LINE}{RESET}\n')
 
 

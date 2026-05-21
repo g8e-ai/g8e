@@ -52,7 +52,7 @@ class OperatorSessionService:
     ) -> OperatorSessionDocument:
         """Create a new operator session.
 
-        session_id_override: use the g8eo substrate operator session UUID as the document ID
+        session_id_override: use the g8eo Gateway operator session UUID as the document ID
         so that CLI Bearer tokens resolve directly without a separate mapping table.
         """
         operator_session_id = session_id_override

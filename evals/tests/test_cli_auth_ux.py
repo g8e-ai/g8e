@@ -16,7 +16,7 @@
 These cover the well-known footguns observed in the field:
 
 1. Passing the ``operator_id`` UUID as ``--operator-session-id`` used to
-   silently 401 downstream because the substrate has no session matching
+   silently 401 downstream because the Gateway has no session matching
    that id. The CLI now rejects this with a hard ``UsageError``.
 
 2. Receipt mode without a session id used to error with a stale message

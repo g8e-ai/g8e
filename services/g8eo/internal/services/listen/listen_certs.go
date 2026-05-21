@@ -191,38 +191,6 @@ func (pki *PKIAuthority) TLSConfigPlain() *tls.Config {
 	}
 }
 
-// TLSConfigOptional returns a TLS config that requests but does not require a client certificate.
-// This is used for port multiplexing where some routes on the same port require mTLS
-// and others (like public browser routes) do not.
-func (pki *PKIAuthority) TLSConfigOptional() *tls.Config {
-	pki.mu.RLock()
-	defer pki.mu.RUnlock()
-
-	// Create client CA pool from our root and hub authorities
-	pool := x509.NewCertPool()
-	if pki.rootCert != nil {
-		pool.AddCert(pki.rootCert)
-	}
-	if pki.hubCert != nil {
-		pool.AddCert(pki.hubCert)
-	}
-	if pki.operatorCert != nil {
-		pool.AddCert(pki.operatorCert)
-	}
-
-	return &tls.Config{
-		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			pki.mu.RLock()
-			defer pki.mu.RUnlock()
-			c := pki.serviceCert
-			return &c, nil
-		},
-		ClientAuth: tls.VerifyClientCertIfGiven,
-		ClientCAs:  pool,
-		MinVersion: tls.VersionTLS13,
-	}
-}
-
 // TrustBundlePath returns the path to the hub trust bundle.
 func (pki *PKIAuthority) TrustBundlePath() string {
 	return filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem")

@@ -40,8 +40,8 @@ evals/
 2. SUT POSTs `/api/internal/chat` on g8ee with `resource_creation.create_case=true` and per-role provider/model/api-key overrides from `SUTConfig`. g8ee creates a fresh case+investigation and runs the chat pipeline as a background task.
 3. SUT polls `GET /api/internal/sse/events?since_id=<cursor>` every `poll_interval_s` (default 0.25s), accumulating `AgentTrailEvent` rows filtered by `investigation_id` until a terminal event or `idle_timeout_s`.
 4. `text.chunk` payloads concatenate into the final `answer` string.
-5. The trail is scanned for `g8e.v1.ai.governance.warden.receipt.signed`. If present, its `transaction_hash` becomes the substrate `transaction_id` and `ReceiptCollector` polls `/api/audit/receipts?tx_id=...` for the signed `ActionReceipt`.
-6. Per-task results (full agent trail + optional substrate receipt) are written to `reports/<suite>-<ts>/results.jsonl`.
+5. The trail is scanned for `g8e.v1.ai.governance.warden.receipt.signed`. If present, its `transaction_hash` becomes the Gateway `transaction_id` and `ReceiptCollector` polls `/api/audit/receipts?tx_id=...` for the signed `ActionReceipt`.
+6. Per-task results (full agent trail + optional Gateway receipt) are written to `reports/<suite>-<ts>/results.jsonl`.
 
 ---
 
@@ -53,10 +53,10 @@ The Operator's audit vault keys ActionReceipts by **UAP envelope `transaction_ha
 |---|---|---|
 | Answer-only turn (no Tribunal→Warden mutation) | `None` | `UNBOUND` |
 | Warden signed an ActionReceipt during the turn | receipt `transaction_hash` | `RECEIPT_BOUND` |
-| Pipeline failed (`iteration.failed`, dead-lettered) | substrate hash if any | `UNBOUND` |
-| Idle timeout, no terminal event | substrate hash if any | `UNBOUND` |
+| Pipeline failed (`iteration.failed`, dead-lettered) | Gateway hash if any | `UNBOUND` |
+| Idle timeout, no terminal event | Gateway hash if any | `UNBOUND` |
 
-Regression coverage: `evals/tests/test_g8ee_chat_sut.py` pins `_extract_substrate_transaction_id` so investigation IDs are never promoted to substrate transaction IDs.
+Regression coverage: `evals/tests/test_g8ee_chat_sut.py` pins `_extract_Gateway_transaction_id` so investigation IDs are never promoted to Gateway transaction IDs.
 
 ---
 
@@ -111,7 +111,7 @@ Useful flags:
 
 Each run writes `reports/<suite>-<ts>/`:
 
-- `results.jsonl` - one row per task with full `agent_trail`, `event_counts_by_type`, `terminal_event`, `case_id`, `investigation_id`, assembled `answer`, optional `substrate_receipt`, and benchmark score.
+- `results.jsonl` - one row per task with full `agent_trail`, `event_counts_by_type`, `terminal_event`, `case_id`, `investigation_id`, assembled `answer`, optional `Gateway_receipt`, and benchmark score.
 - `summary.json` - aggregate stats from `report/aggregate.py`.
 
 ---

@@ -8,7 +8,7 @@ parent: Architecture
 Last Updated: 2026-05-20
 Version: v0.2.7
 
-g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through a self-contained **Substrate** (Governance Gateway, Governed Operator, and Protocol), vendored dependencies, and optional local LLM inference.
+g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through a self-contained **Gateway** (Governance Gateway, Governed Operator, and Protocol), vendored dependencies, and optional local LLM inference.
 
 ---
 
@@ -36,7 +36,7 @@ The Governance Gateway in Listen Mode exposes four logical surfaces. Defaults ar
 | **mTLS API** | `8440` | mTLS + URI SAN | Central `/api/governance/envelope` mutation endpoint and `/db` persistence. |
 | **Pub/Sub** | `8440` (mTLS WSS) | mTLS + URI SAN | Real-time WebSocket event fan-out. |
 
-When the mTLS, Public, and Pub/Sub surfaces share a port, the gateway serves them through a single `MasterRouter` with `tls.VerifyClientCertIfGiven`; per-route handlers enforce mTLS and URI SAN on substrate routes. To deploy on privileged ports (for example, `443` and `80`), grant the gateway binary `CAP_NET_BIND_SERVICE` or use an external port redirect; the unprivileged defaults above require no out-of-band setup. See `docs/g8eg.md` for the full multiplex contract.
+When the mTLS, Public, and Pub/Sub surfaces share a port, the gateway serves them through a single `MasterRouter` with `tls.VerifyClientCertIfGiven`; per-route handlers enforce mTLS and URI SAN on Gateway routes. To deploy on privileged ports (for example, `443` and `80`), grant the gateway binary `CAP_NET_BIND_SERVICE` or use an external port redirect; the unprivileged defaults above require no out-of-band setup. See `docs/g8eg.md` for the full multiplex contract.
 
 ### Core Responsibilities
 - **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file in `.g8e/data`.
@@ -77,7 +77,7 @@ For air-gapped reasoning, g8e supports external local inference via the `g8ee` (
 
 **Direct Dependency Invariant:** All package manifests must reflect only direct imports. Transitive dependencies are not explicitly listed. This invariant is enforced by header comments in `services/g8ee/requirements.txt` and auditable via `./g8e test g8ee`.
 
-**Substrate (Go):**
+**Gateway (Go):**
 - 100% vendored in `services/g8eo/vendor/`.
 - Build tools declared in `services/g8eo/go.mod` (protoc-gen-go, protoc-gen-go-grpc).
 - Protocol generation uses local `buf` and `protoc` (no remote BSR dependency).

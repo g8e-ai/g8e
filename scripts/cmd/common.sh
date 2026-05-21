@@ -149,7 +149,7 @@ _operator_bootstrap() {
     # operator_session_id authenticates the host agent (mTLS-bound).
     # cli_session_id is the strictly disjoint routing namespace this CLI uses
     # to receive SessionEvents and embed in outbound request bodies. The
-    # substrate refuses to conflate the two session types.
+    # Gateway refuses to conflate the two session types.
     local operator_id operator_session_id cli_session_id operator_cert operator_cert_chain cli_cert cli_cert_chain hub_trust_bundle
     operator_id=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - operator_id 2>/dev/null)
     operator_session_id=$(echo "$resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - operator_session_id 2>/dev/null)
@@ -291,7 +291,7 @@ _build_protocol_curl_args() {
     eval "$_outvar=(\"\${_args[@]}\")"
 }
 
-# Append the minimal g8e HTTP substrate auth headers to a curl args array.
+# Append the minimal g8e HTTP Gateway auth headers to a curl args array.
 # Required env: G8E_OPERATOR_SESSION_ID or G8E_CLI_SESSION_ID.
 # Usage: _append_g8e_auth_headers <array_name>
 _append_g8e_auth_headers() {
@@ -299,7 +299,7 @@ _append_g8e_auth_headers() {
     eval "local __auth_args=(\"\${${_outvar}[@]}\")"
     __auth_args+=(-H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json")
     if [[ -n "${G8E_OPERATOR_SESSION_ID:-}" ]]; then
-        # Substrate uses Authorization: Bearer <token>.
+        # Gateway uses Authorization: Bearer <token>.
         __auth_args+=(-H "${G8E_HEADER_HTTP_AUTHORIZATION_HEADER}: Bearer $G8E_OPERATOR_SESSION_ID")
         __auth_args+=(--cookie "g8e_session=$G8E_OPERATOR_SESSION_ID")
     fi

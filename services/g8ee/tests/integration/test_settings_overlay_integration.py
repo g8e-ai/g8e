@@ -70,7 +70,7 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "listen": {
                     "http_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
-                    "pubsub_url": f"wss://localhost:{PathConstants.PORT_OPERATOR_WSS}",
+                    "pubsub_url": f"wss://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
                     "blob_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
                     "default_ttl": 3600
                 },
@@ -152,7 +152,7 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "listen": {
                     "http_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
-                    "pubsub_url": f"wss://localhost:{PathConstants.PORT_OPERATOR_WSS}",
+                    "pubsub_url": f"wss://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
                     "blob_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
                     "default_ttl": 3600
                 },
@@ -308,7 +308,7 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "listen": {
                     "http_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
-                    "pubsub_url": f"wss://localhost:{PathConstants.PORT_OPERATOR_WSS}",
+                    "pubsub_url": f"wss://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
                     "blob_url": f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}",
                     "default_ttl": 3600
                 },

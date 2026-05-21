@@ -21,7 +21,7 @@ import (
 
 // EnvelopeProcessor verifies and executes UAP JSON envelopes synchronously,
 // returning a signed ActionReceipt or a governance verification error.
-// It is the primary entry point for the g8e substrate's fail-closed mutation gate.
+// It is the primary entry point for the g8e Gateway's fail-closed mutation gate.
 type EnvelopeProcessor interface {
 	ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error)
 }

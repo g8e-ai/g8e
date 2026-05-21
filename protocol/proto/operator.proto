@@ -364,7 +364,7 @@ message EvalAnswerRequested {
   // Benchmark name (e.g., "ifeval", "simpleqa", "gpqa")
   string benchmark = 2;
 
-  // The model's answer text (opaque to the substrate)
+  // The model's answer text (opaque to the Gateway)
   string answer = 3;
 
   // Model identifier (provider:model format, e.g., "openai:gpt-4")
@@ -373,7 +373,7 @@ message EvalAnswerRequested {
 
 // Payload for g8e.v1.operator.mcp.call.requested
 // Carries the downstream MCP tool name and its JSON-RPC arguments verbatim so
-// the substrate can verify L1 forbidden patterns against the tool name before
+// the Gateway can verify L1 forbidden patterns against the tool name before
 // the Warden dispatches the verified call to the configured downstream MCP
 // server.
 message McpCallRequested {
@@ -450,7 +450,7 @@ message CommitmentAttestation {
   // first commitment. This is what makes the ledger a chain.
   string prior_commitment_hash = 3;
 
-  // StateRootAtCommit is the substrate's state root at the moment the
+  // StateRootAtCommit is the Gateway's state root at the moment the
   // Auditor signed this attestation. It is checked against the
   // envelope.StateMerkleRoot the Tribunal/L2 signed over.
   string state_root_at_commit = 4;

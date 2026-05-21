@@ -87,58 +87,6 @@ func TestLoad_FieldPassthrough(t *testing.T) {
 	assert.Equal(t, constants.DefaultEndpoint, cfg.Endpoint)
 }
 
-func TestLoad_PubSubURLFormats(t *testing.T) {
-	tests := []struct {
-		name       string
-		endpoint   string
-		wssPort    int
-		wantPubSub string
-	}{
-		{
-			name:       "hostname default port",
-			endpoint:   constants.DefaultEndpoint,
-			wssPort:    0,
-			wantPubSub: fmt.Sprintf("wss://%s:%d", constants.DefaultEndpoint, constants.Paths.Ports.OperatorWss),
-		},
-		{
-			name:       "hostname custom port",
-			endpoint:   constants.DefaultEndpoint,
-			wssPort:    constants.Paths.Ports.OperatorWss,
-			wantPubSub: fmt.Sprintf("wss://%s:%d", constants.DefaultEndpoint, constants.Paths.Ports.OperatorWss),
-		},
-		{
-			name:       "explicit port 443 omission",
-			endpoint:   constants.DefaultEndpoint,
-			wssPort:    443,
-			wantPubSub: "wss://" + constants.DefaultEndpoint,
-		},
-		{
-			name:       "IPv4 default port",
-			endpoint:   "10.0.1.42",
-			wssPort:    0,
-			wantPubSub: fmt.Sprintf("wss://10.0.1.42:%d", constants.Paths.Ports.OperatorWss),
-		},
-		{
-			name:       "IPv4 custom port",
-			endpoint:   "192.168.1.5",
-			wssPort:    constants.Paths.Ports.G8eeHttp,
-			wantPubSub: fmt.Sprintf("wss://192.168.1.5:%d", constants.Paths.Ports.G8eeHttp),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := Load(LoadOptions{
-				APIKey:           "k",
-				OperatorEndpoint: tt.endpoint,
-				WSSPort:          tt.wssPort,
-			})
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantPubSub, cfg.PubSubURL)
-		})
-	}
-}
-
 func TestLoad_HTTPPortOverride(t *testing.T) {
 	cfg, err := Load(LoadOptions{
 		APIKey:           "k",
@@ -233,12 +181,12 @@ func TestLoadListen_Defaults(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	cfg, err := LoadListen(0, 0, 0, 0, "", "", "", "", "", "", "", true)
+	cfg, err := LoadListen(0, 0, 0, "", "", "", "", "", "", "", true)
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
 	assert.True(t, cfg.Listen.Enabled)
-	assert.Equal(t, 0, cfg.Listen.WSSPort)
+
 	assert.Equal(t, 0, cfg.Listen.HTTPPort)
 	assert.Equal(t, filepath.Join(wantWorkDir, ".g8e", "data"), cfg.Listen.DataDir)
 	assert.True(t, filepath.IsAbs(cfg.Listen.DataDir))
@@ -247,10 +195,9 @@ func TestLoadListen_Defaults(t *testing.T) {
 
 func TestLoadListen_ExplicitValues(t *testing.T) {
 	cfg, err := LoadListen(
-		9443,
 		443,
 		80,
-		443,
+		8443,
 		"/var/data",
 		"/var/pki",
 		"/var/secrets",
@@ -262,39 +209,25 @@ func TestLoadListen_ExplicitValues(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, 9443, cfg.Listen.WSSPort)
 	assert.Equal(t, 443, cfg.Listen.HTTPPort)
 	assert.Equal(t, 80, cfg.Listen.BootstrapPort)
-	assert.Equal(t, 443, cfg.Listen.PublicPort)
+	assert.Equal(t, 8443, cfg.Listen.PublicPort)
 	assert.Equal(t, "/var/data", cfg.Listen.DataDir)
 	assert.Equal(t, "/var/pki", cfg.Listen.PKIDir)
 	assert.Equal(t, "/var/secrets", cfg.Listen.SecretsDir)
 }
 
 func TestLoadListen_PartialDefaults(t *testing.T) {
-	t.Run("only wss port overridden", func(t *testing.T) {
-		wantWorkDir := FindProjectRoot()
-		if wantWorkDir == "" {
-			var err error
-			wantWorkDir, err = os.Getwd()
-			require.NoError(t, err)
-		}
-		cfg, err := LoadListen(443, 0, 0, 0, "", "", "", "", "", "", "", true)
-		require.NoError(t, err)
-		assert.Equal(t, 443, cfg.Listen.WSSPort)
-		assert.Equal(t, 0, cfg.Listen.HTTPPort)
-		assert.Equal(t, filepath.Join(wantWorkDir, ".g8e", "data"), cfg.Listen.DataDir)
-	})
 
 	t.Run("only data dir overridden", func(t *testing.T) {
-		cfg, err := LoadListen(0, 0, 0, 0, "/custom/data", "", "", "", "", "", "", true)
+		cfg, err := LoadListen(0, 0, 0, "/custom/data", "", "", "", "", "", "", true)
 		require.NoError(t, err)
-		assert.Equal(t, 0, cfg.Listen.WSSPort)
+
 		assert.Equal(t, "/custom/data", cfg.Listen.DataDir)
 	})
 
 	t.Run("no operator fields set", func(t *testing.T) {
-		cfg, err := LoadListen(0, 0, 0, 0, "", "", "", "", "", "", "", true)
+		cfg, err := LoadListen(0, 0, 0, "", "", "", "", "", "", "", true)
 		require.NoError(t, err)
 		assert.Empty(t, cfg.APIKey)
 		assert.Empty(t, cfg.Endpoint)
@@ -303,37 +236,32 @@ func TestLoadListen_PartialDefaults(t *testing.T) {
 }
 
 func TestLoadListen_SucceedsWithAllDefaults(t *testing.T) {
-	_, err := LoadListen(0, 0, 0, 0, "", "", "", "", "", "", "", true)
+	_, err := LoadListen(0, 0, 0, "", "", "", "", "", "", "", true)
 	require.NoError(t, err)
 }
 
 func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
-	t.Run("reject wssPort 0", func(t *testing.T) {
-		_, err := LoadListen(0, constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorBootstrap, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "wssPort cannot be 0 in production")
-	})
 
 	t.Run("reject httpPort 0", func(t *testing.T) {
-		_, err := LoadListen(constants.Paths.Ports.OperatorWss, 0, constants.Paths.Ports.OperatorBootstrap, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(0, constants.Paths.Ports.OperatorBootstrap, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "httpPort cannot be 0 in production")
 	})
 
 	t.Run("reject bootstrapPort 0", func(t *testing.T) {
-		_, err := LoadListen(constants.Paths.Ports.OperatorWss, constants.Paths.Ports.OperatorHttp, 0, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(constants.Paths.Ports.OperatorHttp, 0, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "bootstrapPort cannot be 0 in production")
 	})
 
 	t.Run("reject publicPort 0", func(t *testing.T) {
-		_, err := LoadListen(constants.Paths.Ports.OperatorWss, constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorBootstrap, 0, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorBootstrap, 0, "", "", "", "", "", "", "", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "publicPort cannot be 0 in production")
 	})
 
 	t.Run("accept all non-zero ports in production", func(t *testing.T) {
-		_, err := LoadListen(constants.Paths.Ports.OperatorWss, constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorBootstrap, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorBootstrap, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
 		require.NoError(t, err)
 	})
 }
@@ -429,26 +357,6 @@ func TestHeartbeatIntervalOrDefault(t *testing.T) {
 
 	for _, tt := range tests {
 		assert.Equal(t, tt.want, heartbeatIntervalOrDefault(tt.input), "input=%v", tt.input)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// wssPortOrDefault
-// ---------------------------------------------------------------------------
-
-func TestWSSPortOrDefault(t *testing.T) {
-	tests := []struct {
-		input int
-		want  int
-	}{
-		{0, constants.Paths.Ports.OperatorWss},
-		{-1, constants.Paths.Ports.OperatorWss},
-		{1, 1},
-		{constants.Paths.Ports.OperatorWss, constants.Paths.Ports.OperatorWss},
-	}
-
-	for _, tt := range tests {
-		assert.Equal(t, tt.want, wssPortOrDefault(tt.input), "input=%d", tt.input)
 	}
 }
 

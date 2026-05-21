@@ -16,7 +16,7 @@ package tests
 /*
 TestBYOClientParity_EndToEnd exercises g8eo from the perspective of a "g8ee-native"
 or protocol-aware application. Unlike the MCP Gateway test, this verifies the
-low-level substrate invariants directly.
+low-level Gateway invariants directly.
 
 Practical Coverage:
 1. Protocol Nativeness: Manually constructs and signs Protobuf GovernanceEnvelopes.
@@ -78,7 +78,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	secretsDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 
-	cfg, err := config.LoadListen(0, 0, 0, 0, dataDir, pkiDir, secretsDir, "localhost", "g8e", "", "", true)
+	cfg, err := config.LoadListen(0, 0, 0, dataDir, pkiDir, secretsDir, "localhost", "g8e", "", "", true)
 	require.NoError(t, err)
 
 	ls, err := listen.NewListenService(cfg, testutil.NewTestLogger())
@@ -124,9 +124,9 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	// Since we used port 0, we need to know what ports were assigned.
 	// We'll add getters for the servers in ListenService.
 	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
-	bootstrapURL := fmt.Sprintf("https://localhost:%d", ls.GetBootstrapPort())
+	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
-	wssURL := fmt.Sprintf("wss://localhost:%d/ws/pubsub", ls.GetWSSPort())
+	wssURL := fmt.Sprintf("wss://localhost:%d/ws/pubsub", ls.GetHTTPPort())
 
 	// 1. Discover Operator trust metadata
 	// Hub bundle (Root + Hub CA) is available on public port via HTTPS for initial discovery

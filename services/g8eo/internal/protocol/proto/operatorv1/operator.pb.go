@@ -3095,7 +3095,7 @@ type EvalAnswerRequested struct {
 	PromptId string `protobuf:"bytes,1,opt,name=prompt_id,json=promptId,proto3" json:"prompt_id,omitempty"`
 	// Benchmark name (e.g., "ifeval", "simpleqa", "gpqa")
 	Benchmark string `protobuf:"bytes,2,opt,name=benchmark,proto3" json:"benchmark,omitempty"`
-	// The model's answer text (opaque to the substrate)
+	// The model's answer text (opaque to the Gateway)
 	Answer string `protobuf:"bytes,3,opt,name=answer,proto3" json:"answer,omitempty"`
 	// Model identifier (provider:model format, e.g., "openai:gpt-4")
 	Model         string `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
@@ -3163,7 +3163,7 @@ func (x *EvalAnswerRequested) GetModel() string {
 
 // Payload for g8e.v1.operator.mcp.call.requested
 // Carries the downstream MCP tool name and its JSON-RPC arguments verbatim so
-// the substrate can verify L1 forbidden patterns against the tool name before
+// the Gateway can verify L1 forbidden patterns against the tool name before
 // the Warden dispatches the verified call to the configured downstream MCP
 // server.
 type McpCallRequested struct {
@@ -3437,7 +3437,7 @@ type CommitmentAttestation struct {
 	// CommitmentAttestation in the ledger, or GenesisPriorHash for the
 	// first commitment. This is what makes the ledger a chain.
 	PriorCommitmentHash string `protobuf:"bytes,3,opt,name=prior_commitment_hash,json=priorCommitmentHash,proto3" json:"prior_commitment_hash,omitempty"`
-	// StateRootAtCommit is the substrate's state root at the moment the
+	// StateRootAtCommit is the Gateway's state root at the moment the
 	// Auditor signed this attestation. It is checked against the
 	// envelope.StateMerkleRoot the Tribunal/L2 signed over.
 	StateRootAtCommit string `protobuf:"bytes,4,opt,name=state_root_at_commit,json=stateRootAtCommit,proto3" json:"state_root_at_commit,omitempty"`

@@ -22,6 +22,21 @@ class IFEvalVerifier:
         Verify an IFEval response against its instructions.
         Each instruction has a corresponding entry in kwargs.
         """
+        # Global non-empty check
+        if not answer or not answer.strip():
+            results = []
+            for inst_id, kw in zip(instructions, kwargs):
+                results.append({
+                    "instruction": inst_id,
+                    "passed": False,
+                    "kwargs": kw
+                })
+            return Score(
+                task_id=task_id,
+                passed=False,
+                details={"instructions": results, "error": "Empty answer"}
+            )
+
         results = []
         for inst_id, kw in zip(instructions, kwargs):
             passed = self._check_instruction(inst_id, kw, answer)
@@ -42,10 +57,13 @@ class IFEvalVerifier:
         if inst_id == "punctuation:no_punctuation":
             # Check if answer contains any punctuation
             # IFEval usually excludes basic punctuation .,!?;:
+            # Must contain at least some content
+            if not answer.strip(): return False
             return not any(c in ".,!?;:" for c in answer)
             
         elif inst_id == "keywords:forbidden_words":
             forbidden = kw.get("forbidden_words", [])
+            if not answer.strip() and forbidden: return False
             for word in forbidden:
                 if word.lower() in answer.lower():
                     return False
@@ -81,23 +99,25 @@ class IFEvalVerifier:
         elif inst_id == "length:max_words":
             max_words = kw.get("num_words", 1000000)
             word_count = len(re.findall(r'\w+', answer))
+            if word_count == 0: return False
             return word_count <= max_words
             
         elif inst_id == "case:uppercase":
             # Check if the whole response is uppercase (ignoring non-alpha)
             alpha_only = "".join(c for c in answer if c.isalpha())
-            if not alpha_only: return True
+            if not alpha_only: return False
             return alpha_only.isupper()
             
         elif inst_id == "case:lowercase":
             alpha_only = "".join(c for c in answer if c.isalpha())
-            if not alpha_only: return True
+            if not alpha_only: return False
             return alpha_only.islower()
             
         elif inst_id == "language:response_language":
             # Very basic check - just search for the language name or a common word
             # This is hard to do perfectly without a langdetect lib, but for evals
             # we can use simple heuristics.
+            if not answer.strip(): return False
             lang = kw.get("language", "english").lower()
             # Placeholder: always return True for now if not implemented
             return True

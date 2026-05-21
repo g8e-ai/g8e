@@ -1,13 +1,13 @@
 # g8e pNFS Governance Demo
 
-This demo illustrates how the g8e Operator (g8eo) governs runtime data access in a Parallel NFS (pNFS) environment. It demonstrates the "Substrate-first" architecture where all interactions with sensitive data must pass through the Operator's governance layers.
+This demo illustrates how the g8e Operator (g8eo) governs runtime data access in a Parallel NFS (pNFS) environment. It demonstrates the "Gateway-first" architecture where all interactions with sensitive data must pass through the Operator's governance layers.
 
 ## Architecture
 
 - **Metadata Server**: Manages file layouts and permissions in the pNFS cluster.
 - **Data Server**: Stores the actual file data.
 - **Client Node**: A simulated edge device that mounts the pNFS export and runs the g8e Operator.
-- **g8e Operator**: The mandatory substrate governing all tool calls and data access on the Client Node.
+- **g8e Operator**: The mandatory Gateway governing all tool calls and data access on the Client Node.
 
 ## Governance Scenario
 

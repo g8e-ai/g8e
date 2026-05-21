@@ -9,16 +9,16 @@ permalink: /docs/
 Last Updated: 2026-05-20
 Version: v0.2.6
 
-The documentation is organized around the g8e execution substrate: a typed, signed, state-bound `GovernanceEnvelope`, a fail-closed gateway, and a sovereign host Operator. Application layers, frontends, agents, and tool protocols are replaceable producers and consumers of that contract.
+The documentation is organized around the g8e execution Gateway: a typed, signed, state-bound `GovernanceEnvelope`, a fail-closed gateway, and a sovereign host Operator. Application layers, frontends, agents, and tool protocols are replaceable producers and consumers of that contract.
 
-## 1. Protocol Substrate
+## 1. Protocol Gateway
 The domain-agnostic wire contract and governance model that every conforming component must follow.
 
-- [**Protocol Substrate**](protocol.md) - The `GovernanceEnvelope`, transaction flow, L1/L2/L3 gates, receipts, and session rules.
+- [**Protocol Gateway**](protocol.md) - The `GovernanceEnvelope`, transaction flow, L1/L2/L3 gates, receipts, and session rules.
 - [**Governance Hierarchy**](protocol.md#3-layer-governance-bedrock) - L1/L2/L3 validation model.
 - [**Security Principles**](protocol.md#host-sovereignty--audit) - Host sovereignty, local-first audit, and fail-closed execution.
 
-## 2. Substrate Components
+## 2. Gateway Components
 The reference Go implementation compiles from a single codebase into two role-specific binaries:
 
 - [**Governance Gateway (g8eg)**](g8eg.md) (`g8e.gateway`) - The central PDP / BFT-governed Policy Decision Point running in `--listen` mode.

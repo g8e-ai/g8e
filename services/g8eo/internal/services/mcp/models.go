@@ -56,8 +56,8 @@ const (
 	ErrCodePayloadDecodeFailed = -32008
 
 	// Resource/State Errors (-32100 range)
-	ErrCodeResourceNotFound  = -32100
-	ErrCodeSubstrateNotReady = -32101
+	ErrCodeResourceNotFound = -32100
+	ErrCodeGatewayNotReady  = -32101
 )
 
 // CallToolRequest is the params for the "tools/call" method.

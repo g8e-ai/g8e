@@ -85,11 +85,9 @@ func main() {
 
 	var noGit bool
 
-	var wssPort int
 	var httpPort int
 
 	var listenMode bool
-	var listenWSSPort int
 	var listenHTTPPort int
 	var listenBootstrapPort int
 	var listenPublicPort int
@@ -121,7 +119,6 @@ func main() {
 	flag.StringVar(&logLevel, "l", "info", "Log level")
 	flag.BoolVar(&noGit, "G", false, "Disable git (ledger)")
 	flag.BoolVar(&showVersion, "v", false, "Version")
-	flag.IntVar(&wssPort, "wss-port", constants.Paths.Ports.OperatorWss, "WSS port to dial on operator (default: from paths.json)")
 	flag.IntVar(&httpPort, "http-port", constants.Paths.Ports.OperatorHttp, "HTTPS port for auth/bootstrap via operator proxy (default: from paths.json)")
 	flag.StringVar(&apiKey, "key", "", "API key")
 	flag.StringVar(&deviceToken, "device-token", "", "Device link token for operator deployment")
@@ -136,7 +133,6 @@ func main() {
 	flag.BoolVar(&showVersion, "version", false, "Version")
 
 	flag.BoolVar(&listenMode, "listen", false, "Listen mode: platform persistence + pub/sub broker")
-	flag.IntVar(&listenWSSPort, "wss-listen-port", constants.Paths.Ports.OperatorWss, "WSS/TLS port for operator pub/sub connections (default: from paths.json)")
 	flag.IntVar(&listenHTTPPort, "http-listen-port", constants.Paths.Ports.OperatorHttp, "HTTPS port for mTLS API (default: from paths.json)")
 	flag.IntVar(&listenBootstrapPort, "bootstrap-listen-port", constants.Paths.Ports.OperatorBootstrap, "Bootstrap TLS port for device-link enrollment (default: from paths.json)")
 	flag.IntVar(&listenPublicPort, "public-listen-port", constants.Paths.Ports.OperatorPublic, "Public browser/BYO bootstrap port (default: from paths.json)")
@@ -168,7 +164,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
-		fmt.Fprintf(os.Stderr, "      --wss-port <port>     WSS port to dial on operator for pub/sub (default: %d)\n", constants.Paths.Ports.OperatorWss)
 		fmt.Fprintf(os.Stderr, "      --http-port <port>    HTTPS port to dial for auth/bootstrap (default: %d)\n", constants.Paths.Ports.OperatorHttp)
 		fmt.Fprintf(os.Stderr, "  -c, --cloud             Cloud Operator mode (for AWS/cloud CLI)\n")
 		fmt.Fprintf(os.Stderr, "  -p, --provider <name>   Cloud provider: aws, gcp, azure\n")
@@ -180,7 +175,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  -v, --version           Show version\n")
 		fmt.Fprintf(os.Stderr, "\nListen Mode (platform persistence + pub/sub broker):\n")
 		fmt.Fprintf(os.Stderr, "  --listen                    Listen mode: local persistence + pub/sub broker\n")
-		fmt.Fprintf(os.Stderr, "  --wss-listen-port <port>    WSS/TLS port for operator pub/sub connections (default: %d)\n", constants.Paths.Ports.OperatorWss)
 		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for mTLS API (default: %d)\n", constants.Paths.Ports.OperatorHttp)
 		fmt.Fprintf(os.Stderr, "  --bootstrap-listen-port <port> Bootstrap TLS port for device-link enrollment (default: %d)\n", constants.Paths.Ports.OperatorBootstrap)
 		fmt.Fprintf(os.Stderr, "  --public-listen-port <port> Public browser/BYO bootstrap port (default: %d)\n", constants.Paths.Ports.OperatorPublic)
@@ -219,7 +213,7 @@ func main() {
 	}
 
 	if listenMode {
-		runListenMode(listenWSSPort, listenHTTPPort, listenBootstrapPort, listenPublicPort, listenDataDir, listenPKIDir, listenSecretsDir, listenPasskeyRpID, listenPasskeyRpName, logLevel)
+		runListenMode(listenHTTPPort, listenBootstrapPort, listenPublicPort, listenDataDir, listenPKIDir, listenSecretsDir, listenPasskeyRpID, listenPasskeyRpName, logLevel)
 		return
 	}
 
@@ -329,9 +323,9 @@ func main() {
 	}
 
 	cfg, err := config.Load(config.LoadOptions{
-		APIKey:              apiKey,
-		OperatorEndpoint:    operatorEndpoint,
-		WSSPort:             wssPort,
+		APIKey:           apiKey,
+		OperatorEndpoint: operatorEndpoint,
+
 		HTTPPort:            httpPort,
 		CloudMode:           cloudMode,
 		CloudProvider:       cloudProvider,
@@ -549,8 +543,8 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 
 // runListenMode starts the Operator in listen mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
-// runs an in-process command service to act as the sovereign execution substrate.
-func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, logLevel string) {
+// runs an in-process command service to act as the sovereign execution Gateway.
+func runListenMode(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
@@ -559,7 +553,7 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 
 	logger.Info("g8e Operator - Listen Mode (operator)", "version", version, "build", buildID)
 
-	cfg, err := config.LoadListen(wssPort, httpPort, bootstrapPort, publicPort, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName, "", "", false)
+	cfg, err := config.LoadListen(httpPort, bootstrapPort, publicPort, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName, "", "", false)
 	if err != nil {
 		logger.Error("Failed to load listen configuration", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
@@ -575,8 +569,8 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Initialize In-Process Execution Substrate
-	logger.Info("Initializing in-process execution substrate...")
+	// Initialize In-Process Execution Gateway
+	logger.Info("Initializing in-process execution Gateway...")
 	execSvc := execution.NewExecutionService(cfg, logger)
 	fileSvc := execution.NewFileEditService(cfg, logger)
 
@@ -642,9 +636,9 @@ func runListenMode(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pk
 	// /api/governance/envelope and receive a signed ActionReceipt.
 	svc.SetEnvelopeProcessor(cmdSvc)
 
-	// Wire MCP gateway -> substrate processor. Egress dispatch back to the
+	// Wire MCP gateway -> Gateway processor. Egress dispatch back to the
 	// downstream MCP server is invoked from the Warden via cmdSvc, so the
-	// gateway only needs the substrate processor + signing identity here.
+	// gateway only needs the Gateway processor + signing identity here.
 	if mcpSvc != nil {
 		mcpSvc.SetDependencies(cmdSvc, govDeps.StateRootProvider, wardenPriv, wardenKeyID, cfg.Listen.MCPDownstreamURL)
 	}

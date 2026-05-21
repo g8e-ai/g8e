@@ -1,8 +1,8 @@
-# g8e Substrate - Governance Gateway (g8eg)
+# g8e Gateway - Governance Gateway (g8eg)
 
 The reference Go implementation of the g8e Protocol compiles from a single codebase into two role-specific binaries used in two distinct ways to secure and govern AI execution:
 
-1. **Governance Gateway (`g8eg` / `g8e.gateway`)**: Runs in `--listen` mode to serve as the central, fail-closed Byzantine Fault Tolerant (BFT) Governance Substrate (Policy Decision Point / PDP).
+1. **Governance Gateway (`g8eg` / `g8e.gateway`)**: Runs in `--listen` mode to serve as the central, fail-closed Byzantine Fault Tolerant (BFT) Governance Gateway (Policy Decision Point / PDP).
 2. **Governed Operator / MCP Server (`g8eo` / `g8e.operator`)**: Runs on target hosts (and exposes MCP over stdio with `--mcp-serve`) to function as the sovereign tool execution boundary (Policy Execution Point / PEP).
 
 ---
@@ -15,7 +15,7 @@ The reference Go implementation of the g8e Protocol compiles from a single codeb
 - **UAP JSON-First (GovernanceEnvelope)**: Every mutation action is governed by a UAP JSON `GovernanceEnvelope`. This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
 - **3-Layer Governance**: Hard gates at the bedrock (L1), consensus in the middle (L2), and human authorization at the top (L3).
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
-- **Protocol vs Implementation**: The protocol is the substrate. The reference Governance Gateway (`g8eg`) and Governed Operator (`g8eo`) implement the protocol's core invariants, while application layers consume their public interfaces.
+- **Protocol vs Implementation**: The protocol is the Gateway. The reference Governance Gateway (`g8eg`) and Governed Operator (`g8eo`) implement the protocol's core invariants, while application layers consume their public interfaces.
 - **Sovereign Authority (PKI)**: The Governance Gateway owns the platform's PKI and is the only entity permitted to sign certificates, maintaining isolated intermediate CAs.
 - **CSR-Based Enrollment**: Participants enroll by submitting a Certificate Signing Request (CSR) to the Governance Gateway. Long-lived API keys are deprecated for identity; the platform relies on short-lived, session-bound certificates.
 
@@ -23,16 +23,16 @@ The reference Go implementation of the g8e Protocol compiles from a single codeb
 
 ## Architecture Overview
 
-The g8e platform is built on the g8e Protocol as substrate. Conforming gateway and operator implementations are what make that protocol live.
+The g8e platform is built on the g8e Protocol as Gateway. Conforming gateway and operator implementations are what make that protocol live.
 
-- **Protocol (Substrate)**: The wire contract, schemas, and L1/L2/L3 verification rules. Mandatory and immutable for any client or implementation.
+- **Protocol (Gateway)**: The wire contract, schemas, and L1/L2/L3 verification rules. Mandatory and immutable for any client or implementation.
 - **Governance Gateway (`g8eg`)**: Built as `g8e.gateway` and run in **Listen Mode** (`--listen`). It acts as the platform's backbone - protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
 - **Governed Operator (`g8eo`)**: Built as `g8e.operator` and run in **Standard Mode** or **MCP Mode** (`--mcp-serve`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease.
-- **Reference Application Layer (Optional)**: Reference components like the Engine (`g8ee`) consume the public Gateway/Operator protocol surface. They have no privileged substrate responsibilities and no private access channels.
+- **Reference Application Layer (Optional)**: Reference components like the Engine (`g8ee`) consume the public Gateway/Operator protocol surface. They have no privileged Gateway responsibilities and no private access channels.
 
 ```mermaid
 flowchart TD
-    subgraph Hub ["Operator/Protocol Substrate"]
+    subgraph Hub ["Operator/Protocol Gateway"]
         direction TB
         subgraph Persistence ["Reference Runtime (g8eg)"]
             listen["Reference Gateway (Listen Mode)"]
@@ -72,7 +72,7 @@ By passing `--listen`, the binary transforms into the platform's central backbon
 
 - **Role**: Reference hub for the bundled deployment.
 - **Capabilities**:
-    - **Substrate API** - `POST /api/governance/envelope` is the only customer-facing mutation entry point.
+    - **Gateway API** - `POST /api/governance/envelope` is the only customer-facing mutation entry point.
     - **Document Store** - JSON document CRUD on a Collection/ID pattern with `json_extract` query support.
     - **KV Store** - TTL-aware ephemeral state with `GLOB` pattern scanning and cursor-based `KVScan`. Supports a Write-Only cache policy.
     - **Blob Store** - Binary persistence for attachments, large objects, and certificate material.
@@ -86,7 +86,7 @@ By passing `--listen`, the binary transforms into the platform's central backbon
 
 ### Multiplexed Port Contract
 
-The Governance Gateway (`g8eg`) exposes four logical protocol surfaces. Operators may bind each surface to its own TCP port or collapse multiple surfaces onto a single shared port. The substrate automatically detects port overlaps and promotes the shared listener to a **Multiplexed Handler** with **Optional mTLS**.
+The Governance Gateway (`g8eg`) exposes four logical protocol surfaces. Operators may bind each surface to its own TCP port or collapse multiple surfaces onto a single shared port. The Gateway automatically detects port overlaps and promotes the shared listener to a **Multiplexed Handler** with **Optional mTLS**.
 
 Default ports are sourced from `protocol/constants/paths.json`:
 
@@ -102,7 +102,7 @@ Default ports are sourced from `protocol/constants/paths.json`:
 The gateway selects a TLS configuration and HTTP handler per port based on which surfaces are mapped to it:
 
 - **mTLS only on a port** (HTTP and/or WSS, no Public): `tls.RequireAndVerifyClientCert`. Strict mTLS for every connection.
-- **mTLS + Public on the same port**: `tls.VerifyClientCertIfGiven`. Unauthenticated requests reach public routes (web-session governed); mTLS and URI SAN verification are enforced for substrate routes by per-route handlers.
+- **mTLS + Public on the same port**: `tls.VerifyClientCertIfGiven`. Unauthenticated requests reach public routes (web-session governed); mTLS and URI SAN verification are enforced for Gateway routes by per-route handlers.
 - **Public only on a port**: TLS without client-cert request.
 - **Bootstrap only on a port**: plain HTTP (no TLS).
 
@@ -114,7 +114,7 @@ When two or more TLS-bearing surfaces share a port, the gateway serves them thro
 - **Privileged ports**: the gateway runs as an unprivileged user, so each configured port must be >1024 unless the binary has been granted `CAP_NET_BIND_SERVICE` (or another root-granted mechanism) out of band. The default ports above are all >1024 and require no privileged setup.
 - **Port equality is the multiplex trigger**: ports collapse only when their numeric values match. Setting `operator_http` and `operator_public` to the same number multiplexes them; setting them to different numbers creates two listeners.
 
-### Substrate Mutation Entry
+### Gateway Mutation Entry
 
 `POST /api/governance/envelope` is the only customer-facing mutation API on the Governance Gateway (`g8eg`). Clients submit canonical JSON (protojson) `GovernanceEnvelope` transactions and receive a signed `ActionReceipt` after the envelope passes transaction hash, expiry, nonce/replay, state-root, L2 signer, L3 proof, and L1 typed-payload validation.
 
@@ -189,9 +189,11 @@ The g8e Protocol enforces strict separation between disjoint session types to pr
 | **Web Session** | `web_session_id` | Authenticates a **browser-based client** (e.g., Dashboard). Bound to a secure session cookie. | Passkey (WebAuthn) |
 
 **Key Invariants:**
-- **Disjoint Routing**: The substrate (SSE/PubSub) routes events based on these identifiers. A `web_session_id` can never receive events intended for a `cli_session_id`.
+- **Disjoint Routing**: The Gateway (SSE/PubSub) routes events based on these identifiers. A `web_session_id` can never receive events intended for a `cli_session_id`.
 - **Identity Binding**: CLI and Operator sessions are cryptographically bound to their respective mTLS certificates via SPIFFE URI SANs.
-- **No Conflation**: The substrate refuses to "fallback" to a single session ID; every request must explicitly declare which session context it is operating within.
+- **No Conflation**: The Gateway refuses to "fallback" to a single session ID; every request must explicitly declare which session context it is operating within.
+
+SSE producers must set exactly one top-level routing key. Session-targeted events use either `web_session_id` or `cli_session_id` at the top level; `user_id` remains inside the typed event body for correlation. Background fan-out events use top-level `user_id` and no session route.
 
 ---
 

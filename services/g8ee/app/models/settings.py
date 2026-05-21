@@ -218,7 +218,7 @@ class DatabaseSettings(G8eBaseModel):
 class ListenSettings(G8eBaseModel):
     """operator (Operator --listen mode) configuration."""
     http_url: str = Field(default_factory=lambda: os.environ.get("G8E_INTERNAL_HTTP_URL", f"https://localhost:{PATHS['ports']['operator_http']}") or f"https://localhost:{PATHS['ports']['operator_http']}")
-    pubsub_url: str = Field(default_factory=lambda: os.environ.get("G8E_INTERNAL_PUBSUB_URL", f"wss://localhost:{PATHS['ports']['operator_wss']}") or f"wss://localhost:{PATHS['ports']['operator_wss']}")
+    pubsub_url: str = Field(default_factory=lambda: os.environ.get("G8E_INTERNAL_PUBSUB_URL", f"wss://localhost:{PATHS['ports']['operator_http']}") or f"wss://localhost:{PATHS['ports']['operator_http']}")
     blob_url: str = Field(default_factory=lambda: os.environ.get("G8E_INTERNAL_HTTP_URL", f"https://localhost:{PATHS['ports']['operator_http']}") or f"https://localhost:{PATHS['ports']['operator_http']}")
     default_ttl: int = Field(CACHE_TTL_DEFAULT)
     enable_cache_read: bool = Field(False)

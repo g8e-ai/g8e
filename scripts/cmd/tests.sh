@@ -59,7 +59,7 @@ while [[ ${#_args[@]} -gt 0 ]]; do
     case "${_args[0]}" in
         -p|--llm-provider)
             _require_value "-p/--llm-provider"
-            export G8E_TEST_LLM_PROVIDER="${_args[1]}"
+            export G8E_TEST_LLM_PRIMARY_PROVIDER="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -m|--primary-model)
             _require_value "-m/--primary-model"
@@ -75,11 +75,11 @@ while [[ ${#_args[@]} -gt 0 ]]; do
             _args=("${_args[@]:2}") ;;
         -e|--llm-endpoint-url)
             _require_value "-e/--llm-endpoint-url"
-            export G8E_TEST_LLM_ENDPOINT_URL="${_args[1]}"
+            export G8E_TEST_LLM_PRIMARY_ENDPOINT_URL="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -k|--llm-api-key)
             _require_value "-k/--llm-api-key"
-            export G8E_TEST_LLM_API_KEY="${_args[1]}"
+            export G8E_TEST_LLM_PRIMARY_API_KEY="${_args[1]}"
             _args=("${_args[@]:2}") ;;
         -P|--web-search-project)
             _require_value "-P/--web-search-project"

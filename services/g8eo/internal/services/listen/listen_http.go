@@ -63,7 +63,7 @@ type HTTPHandler struct {
 	mcp               *mcp.GatewayService
 	isReady           func() bool
 	isGovernanceReady func() bool
-	// envProc is the synchronous fail-closed substrate mutation gate. It is
+	// envProc is the synchronous fail-closed Gateway mutation gate. It is
 	// nil until SetEnvelopeProcessor is called by the boot sequence after
 	// the in-process command service has initialized the verifier and
 	// Warden. While nil, /api/governance/envelope returns 503.
@@ -209,50 +209,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	return pathTraversalGuard(mux)
 }
 
-func (h *HTTPHandler) buildMasterRouter() http.Handler {
-	mux := http.NewServeMux()
-
-	// 1. Bootstrap routes (unauthenticated)
-	bootstrap := h.buildBootstrapRouter()
-	mux.Handle("/health", bootstrap)
-	mux.Handle("/.well-known/", bootstrap)
-	mux.Handle("/api/auth/device-link/register", bootstrap)
-	mux.Handle("/api/auth/device-link/request", bootstrap)
-	mux.Handle("/ca.crt", bootstrap)
-	mux.Handle("/trust", bootstrap)
-	mux.Handle("/trust.sh", bootstrap)
-	mux.Handle("/trust.ps1", bootstrap)
-	mux.Handle("/trust.bat", bootstrap)
-	mux.Handle("/g8e", bootstrap)
-
-	// 2. Public routes (unauthenticated or web session)
-	public := h.buildPublicRouter()
-	mux.Handle("/", public)
-	mux.Handle("/api/auth/login/", public)
-	mux.Handle("/api/auth/logout", public)
-	mux.Handle("/api/auth/bootstrap", public)
-	mux.Handle("/api/auth/bootstrap/status", public)
-	mux.Handle("/api/user/", public)
-	mux.Handle("/api/auth/web-session", public)
-	mux.Handle("/api/auth/passkey/", public)
-	mux.Handle("/approve/", public)
-	mux.Handle("/api/approve/", public)
-
-	// 3. mTLS routes (authenticated)
-	// We use the main router for everything else. Note that the main router
-	// also includes /health and /.well-known but the more specific prefixes
-	// above will take precedence in ServeMux.
-	main := h.buildRouter()
-	mux.Handle("/api/", main)
-	mux.Handle("/db/", main)
-	mux.Handle("/kv/", main)
-	mux.Handle("/pubsub/publish", main)
-	mux.Handle("/ws/pubsub", main)
-	mux.Handle("/blob/", main)
-
-	return pathTraversalGuard(mux)
-}
-
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.buildRouter().ServeHTTP(w, r)
 }
@@ -292,7 +248,16 @@ func isDirectDBMutationAllowed(collection string) bool {
 		constants.CollectionPasskeyChallenges,
 		constants.CollectionRevokedCertificates,
 		constants.CollectionTrustedSigners,
-		constants.CollectionConsoleAudit:
+		constants.CollectionConsoleAudit,
+		constants.CollectionCases,
+		constants.CollectionInvestigations,
+		constants.CollectionTasks,
+		constants.CollectionMemories,
+		constants.CollectionAPIKeys,
+		constants.CollectionReputationState,
+		constants.CollectionReputationCommitments,
+		constants.CollectionAgentActivityMetadata,
+		constants.CollectionStakeResolutions:
 		return true
 	default:
 		return false
@@ -373,7 +338,7 @@ func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) 
 <body>
     <div class="container">
         <h1>g8e Operator</h1>
-        <p>You have reached the public entry point for the g8e Operator substrate.</p>
+        <p>You have reached the public entry point for the g8e Operator Gateway.</p>
 
         <div class="section">
             <div class="label">Trust & Security</div>
@@ -392,7 +357,7 @@ func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) 
         </div>
 
         <div class="footer">
-            Sovereign Governance Substrate &copy; 2026 Lateralus Labs, LLC.
+            Sovereign Governance Gateway &copy; 2026 Lateralus Labs, LLC.
         </div>
     </div>
 </body>
@@ -778,7 +743,7 @@ func (h *HTTPHandler) handleG8eDeploy(w http.ResponseWriter, r *http.Request) {
 	if host == "" {
 		host = "localhost"
 	}
-	script := G8eDeployScript(host, h.cfg.Listen.WSSPort, h.cfg.Listen.BootstrapPort)
+	script := G8eDeployScript(host, h.cfg.Listen.HTTPPort, h.cfg.Listen.BootstrapPort)
 	w.Header().Set("Content-Type", "text/x-shellscript")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
@@ -1367,7 +1332,7 @@ func (h *HTTPHandler) handleSSEEvents(w http.ResponseWriter, r *http.Request, id
 //                                   web_session_id, cli_session_id, user_id,
 //                                   plus since_id=N and limit=K.
 //
-// The substrate refuses to talk about a bare session id - every routing
+// The Gateway refuses to talk about a bare session id - every routing
 // target is tagged at the type level so a web_session_id can never be
 // mis-delivered as a cli_session_id (or vice versa).
 // =============================================================================
@@ -1497,7 +1462,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Consumers MUST declare exactly one routing target. The substrate refuses
+	// Consumers MUST declare exactly one routing target. The Gateway refuses
 	// to fall back to a single shared namespace because that is precisely the
 	// conflation we are eliminating.
 	switch {

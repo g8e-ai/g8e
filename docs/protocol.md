@@ -6,7 +6,7 @@ title: g8e Protocol
 
 Last Updated: 2026-05-18
 
-The **g8e Protocol** is a governance and compliance standard. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) at the Governance Gateway's admission boundary and forces them through a fail-closed verification gauntlet - envelope integrity, typed-payload decode, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the substrate boundary: they never reach the execution boundary (the Warden) and they never touch the host. Admitted payloads produce a cryptographically provable audit trail with local-first persistence at the site of execution.
+The **g8e Protocol** is a governance and compliance standard. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) at the Governance Gateway's admission boundary and forces them through a fail-closed verification gauntlet - envelope integrity, typed-payload decode, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the Gateway boundary: they never reach the execution boundary (the Warden) and they never touch the host. Admitted payloads produce a cryptographically provable audit trail with local-first persistence at the site of execution.
 
 The protocol is the only mandatory layer of g8e. Any conforming implementation - Governance Gateway, Governed Operator, client, or BYO frontend - interoperates by speaking this contract. The reference Governance Gateway (`g8eg`), Governed Operator (`g8eo`), and reference Engine (`g8ee`) are interchangeable with anything that produces and verifies the same envelopes.
 
@@ -75,7 +75,7 @@ The schema source of truth lives under `@/home/bob/g8e/protocol/proto/`:
 
 ## JSON-RPC Error Mapping
 
-For BYO clients using the MCP or A2A protocol translation gateway, `g8eg` (serving as Gateway) and `g8eo` (serving as MCP Server) provide granular JSON-RPC error codes to disambiguate substrate verification failures. These codes reside in the reserved range `-32000` to `-32099`.
+For BYO clients using the MCP or A2A protocol translation gateway, `g8eg` (serving as Gateway) and `g8eo` (serving as MCP Server) provide granular JSON-RPC error codes to disambiguate Gateway verification failures. These codes reside in the reserved range `-32000` to `-32099`.
 
 | Code | Label | Meaning |
 |---|---|---|
@@ -88,7 +88,7 @@ For BYO clients using the MCP or A2A protocol translation gateway, `g8eg` (servi
 | `-32006` | `ERR_L2_FAILED` | L2 Tribunal signature is missing, invalid, or from an untrusted key. |
 | `-32007` | `ERR_L3_FAILED` | L3 WebAuthn proof is missing or failed verification. |
 | `-32008` | `ERR_PAYLOAD_DECODE` | Failed to decode the base64 `payload` into its typed protobuf message. |
-| `-32101` | `ERR_SUBSTRATE_NOT_READY` | Governance substrate (Warden/Verifier) is not initialized. |
+| `-32101` | `ERR_Gateway_NOT_READY` | Governance Gateway (Warden/Verifier) is not initialized. |
 | `-32603` | `INTERNAL_ERROR` | Unhandled internal error or execution failure. |
 
 ---
@@ -112,7 +112,7 @@ A cryptographic proof that an independent ensemble agreed on the instruction.
 - **Mechanism** - Ed25519 signature over `transaction_hash | decision`.
 - **Trust** - The Governed Operator maintains an Operator-owned `SignerStore`; missing or unknown keys cause rejection.
 - **Producer** - Any conforming L2 producer (the bundled Engine, a BYO multi-agent system, or a single signer for low-stakes flows).
-- **Reference Engine producer** - g8ee runs its own internal Byzantine cascade upstream of the L2 signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Warden risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Engine signs only after Auditor passes. The substrate gateway and operator do not assume any of this; they re-run every gate below independently. See [g8ee Governance & Safety](g8ee.md) and [position paper §2.3](position_paper.md).
+- **Reference Engine producer** - g8ee runs its own internal Byzantine cascade upstream of the L2 signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Warden risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Engine signs only after Auditor passes. The Gateway gateway and operator do not assume any of this; they re-run every gate below independently. See [g8ee Governance & Safety](g8ee.md) and [position paper §2.3](position_paper.md).
 
 ### L3: Authorization (Human)
 

@@ -12,11 +12,11 @@ g8e is designed to be a **testing environment and a production environment at th
 
 ## Core Engineering Principles
 
-- **Hermetic execution** - Tests run directly on the host via `./g8e test`. Go for the substrate (`g8eg`/`g8eo`); repo-local Python for explicit app-layer targets (`g8ee`).
-- **Real infrastructure** - Substrate test runs begin with `./g8e platform start` (launching the `g8eg` Gateway). App-layer tests require explicit app startup via `./g8e apps start g8ee` or `./g8e platform start --with-apps`.
+- **Hermetic execution** - Tests run directly on the host via `./g8e test`. Go for the Gateway (`g8eg`/`g8eo`); repo-local Python for explicit app-layer targets (`g8ee`).
+- **Real infrastructure** - Gateway test runs begin with `./g8e platform start` (launching the `g8eg` Gateway). App-layer tests require explicit app startup via `./g8e apps start g8ee` or `./g8e platform start --with-apps`.
 - **No mocks policy** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use the real wire paths.
-- **mTLS by default** - Most internal and substrate communication requires mTLS. The runner injects certs from `.g8e/pki` automatically when authenticated (`./g8e login`).
-- **Body-embedded context** - Business and session context is provided as a `RequestContext` in the request body. `X-G8E-*` context headers are not supported and are ignored by the substrate.
+- **mTLS by default** - Most internal and Gateway communication requires mTLS. The runner injects certs from `.g8e/pki` automatically when authenticated (`./g8e login`).
+- **Body-embedded context** - Business and session context is provided as a `RequestContext` in the request body. `X-G8E-*` context headers are not supported and are ignored by the Gateway.
 - **Real LLM calls** - AI integration tests use real provider APIs (Gemini, Anthropic, OpenAI, etc.). HTTP interception is not permitted for LLM clients.
 - **Reproduce first** - Always reproduce a bug with a failing test before generating a fix.
 - **Contract tests** - Enforce alignment between the Operator, optional adapters, and `protocol/` constants/models with typed protobuf assertions.
@@ -25,7 +25,7 @@ g8e is designed to be a **testing environment and a production environment at th
 
 ## Test Harness Architecture
 
-### 1. Substrate Tests (Protocol Path)
+### 1. Gateway Tests (Protocol Path)
 
 ```bash
 ./g8e test            # default
@@ -33,7 +33,7 @@ g8e is designed to be a **testing environment and a production environment at th
 ./g8e test g8eo services/pubsub
 ```
 
-Validates the substrate components (`g8eg` and `g8eo`) and their protocol enforcement (`GovernanceEnvelope`, 3-layer governance, Audit Vault) without requiring Python or g8ee. Uses Gateway listen mode and unified command/result paths. Keeps the required platform boundary small and independently verifiable.
+Validates the Gateway components (`g8eg` and `g8eo`) and their protocol enforcement (`GovernanceEnvelope`, 3-layer governance, Audit Vault) without requiring Python or g8ee. Uses Gateway listen mode and unified command/result paths. Keeps the required platform boundary small and independently verifiable.
 
 ### 2. App Adapter Tests (Explicit Opt-In)
 
@@ -42,7 +42,7 @@ Validates the substrate components (`g8eg` and `g8eo`) and their protocol enforc
 ./g8e test g8ee --pyright --ruff
 ```
 
-Validates the optional bundled Engine adapter (`g8ee`). Requires the relevant app adapter to be started explicitly. Verifies bundled clients without making them substrate dependencies.
+Validates the optional bundled Engine adapter (`g8ee`). Requires the relevant app adapter to be started explicitly. Verifies bundled clients without making them Gateway dependencies.
 
 ### 3. Evals (Application-Layer Benchmark Path)
 
@@ -63,7 +63,7 @@ Evaluates AI agent reasoning and tool-calling accuracy using signed `ActionRecei
 # 2. Authenticate (required for mTLS tests)
 ./g8e login
 
-# 3. Run substrate tests
+# 3. Run Gateway tests
 ./g8e test
 ./g8e test g8eo services/pubsub
 

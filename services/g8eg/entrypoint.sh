@@ -36,16 +36,17 @@ fi
 # Ensure ports match values from paths.json constants
 . "${G8E_PROJECT_ROOT}/scripts/cmd/paths.sh"
 HTTP_PORT="${G8E_PORT_OPERATOR_HTTP:-443}"
-WSS_PORT="${G8E_PORT_OPERATOR_WSS:-443}"
+WSS_PORT="${G8E_PORT_OPERATOR_HTTP:-443}"
 BOOTSTRAP_PORT="${G8E_PORT_OPERATOR_BOOTSTRAP:-80}"
-PUBLIC_PORT="${G8E_PORT_OPERATOR_PUBLIC:-443}"
+# Public TLS surface must NOT collide with the mTLS surface (443) — sharing
+# a port would force VerifyClientCertIfGiven and downgrade the mTLS gate.
+PUBLIC_PORT="${G8E_PORT_OPERATOR_PUBLIC:-8442}"
 
-echo "Starting g8eg Governance Gateway (listen mode) on ports HTTP:${HTTP_PORT}, WSS:${WSS_PORT}..."
+echo "Starting g8eg Governance Gateway (listen mode) on ports HTTP:${HTTP_PORT}..."
 exec "$GATEWAY_BIN" --listen \
     --data-dir "$DATA_DIR" \
     --pki-dir "$PKI_DIR" \
     --secrets-dir "$SECRETS_DIR" \
     --http-listen-port "$HTTP_PORT" \
-    --wss-listen-port "$WSS_PORT" \
     --bootstrap-listen-port "$BOOTSTRAP_PORT" \
     --public-listen-port "$PUBLIC_PORT" "$@"
