@@ -52,7 +52,7 @@ class _InternalApiPathsMeta(type):
                 key = sub_name.removeprefix("CLIENT_").lower()
                 if key in cls._CLIENT_FULL_PATHS:
                     return cls._CLIENT_FULL_PATHS[key]
-        
+
         # Priority 2: G8EE_ prefix (try full then sub)
         if name.startswith("G8EE_"):
             key = name.removeprefix("G8EE_").lower()
@@ -60,7 +60,7 @@ class _InternalApiPathsMeta(type):
                 return cls._G8EE_FULL_PATHS[key]
             if key in cls._G8EE_PATHS:
                 return cls.PREFIX + cls._G8EE_PATHS[key]
-        
+
         # Priority 3: CLIENT_ prefix (try full then sub)
         elif name.startswith("CLIENT_"):
             key = name.removeprefix("CLIENT_").lower()
@@ -68,7 +68,7 @@ class _InternalApiPathsMeta(type):
                 return cls._CLIENT_FULL_PATHS[key]
             if key in cls._CLIENT_PATHS:
                 return cls.PREFIX + cls._CLIENT_PATHS[key]
-        
+
         raise AttributeError(f"'{cls.__name__}' object has no attribute '{name}'")
 
 class InternalApiPaths(metaclass=_InternalApiPathsMeta):

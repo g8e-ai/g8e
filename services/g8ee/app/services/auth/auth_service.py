@@ -90,7 +90,7 @@ class AuthService:
                     cli_session_id = None
                     if g8e_context:
                         cli_session_id = g8e_context.cli_session_id
-                    
+
                     if not cli_session_id:
                         cli_session_id = request.headers.get(G8eHeaders.CLI_SESSION_ID)
 

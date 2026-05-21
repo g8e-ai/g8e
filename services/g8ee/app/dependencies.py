@@ -390,12 +390,12 @@ async def get_g8ee_user_settings(
     the platform settings loaded at startup.
     """
     user_id = None
-    
+
     # 1. Try body-embedded context
     g8e_context = getattr(request.state, "g8e_context", None)
     if g8e_context:
         user_id = g8e_context.user_id
-    
+
     # 2. Try authenticated user state
     if not user_id:
         user = getattr(request.state, "user", None)

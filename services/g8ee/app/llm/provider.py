@@ -135,4 +135,3 @@ class LLMProvider(ABC):
         Returns:
             List of validation error messages. Empty if configuration is valid.
         """
-        pass
