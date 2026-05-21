@@ -119,6 +119,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		reg:        reg,
 		passkey:    passkey,
 		userSvc:    userSvc,
+		sessionSvc: sessionSvc,
 		apiKeySvc:  apiKeySvc,
 		mcpGateway: mcp.NewGatewayService(logger, db),
 	}
@@ -157,6 +158,7 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		reg:        reg,
 		passkey:    passkey,
 		userSvc:    userSvc,
+		sessionSvc: sessionSvc,
 		apiKeySvc:  apiKeySvc,
 		mcpGateway: mcp.NewGatewayService(logger, db),
 	}
