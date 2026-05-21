@@ -21,6 +21,30 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE INDEX IF NOT EXISTS idx_documents_collection ON documents(collection);
 CREATE INDEX IF NOT EXISTS idx_documents_updated ON documents(collection, updated_at);
 
+-- Trigger to invalidate KV cache when a document is inserted
+CREATE TRIGGER IF NOT EXISTS trg_documents_insert_kv
+AFTER INSERT ON documents
+BEGIN
+    DELETE FROM kv_store WHERE key = 'g8e:cache:doc:' || NEW.collection || ':' || NEW.id;
+    DELETE FROM kv_store WHERE key GLOB 'g8e:cache:query:' || NEW.collection || ':*';
+END;
+
+-- Trigger to invalidate KV cache when a document is updated
+CREATE TRIGGER IF NOT EXISTS trg_documents_update_kv
+AFTER UPDATE ON documents
+BEGIN
+    DELETE FROM kv_store WHERE key = 'g8e:cache:doc:' || NEW.collection || ':' || NEW.id;
+    DELETE FROM kv_store WHERE key GLOB 'g8e:cache:query:' || NEW.collection || ':*';
+END;
+
+-- Trigger to invalidate KV cache when a document is deleted
+CREATE TRIGGER IF NOT EXISTS trg_documents_delete_kv
+AFTER DELETE ON documents
+BEGIN
+    DELETE FROM kv_store WHERE key = 'g8e:cache:doc:' || OLD.collection || ':' || OLD.id;
+    DELETE FROM kv_store WHERE key GLOB 'g8e:cache:query:' || OLD.collection || ':*';
+END;
+
 -- KV store with TTL
 CREATE TABLE IF NOT EXISTS kv_store (
     key TEXT PRIMARY KEY,

@@ -284,14 +284,11 @@ class TestCaseDataService:
         mock_del_result = MagicMock()
         mock_del_result.success = True
         # db.delete_document is called and its result is awaited
-        mock_cache.db.delete_document = MagicMock(side_effect=lambda *args, **kwargs: mock_awaitable(mock_del_result))
-        mock_cache.kv.delete = MagicMock(side_effect=lambda *args, **kwargs: mock_awaitable(None))
-        mock_cache.invalidate_query_cache = MagicMock(side_effect=lambda *args, **kwargs: mock_awaitable(None))
+        mock_cache.delete_document = MagicMock(side_effect=lambda *args, **kwargs: mock_awaitable(mock_del_result))
 
         await service.delete_case(case_id)
 
-        mock_cache.db.delete_document.assert_called_once()
-        mock_cache.kv.delete.assert_called_once()
+        mock_cache.delete_document.assert_called_once()
 
     async def test_delete_case_failure_result(self, service, mock_cache):
         case_id = "case-123"
@@ -310,7 +307,7 @@ class TestCaseDataService:
         mock_del_result = MagicMock()
         mock_del_result.success = False
         mock_del_result.error = "Delete error"
-        mock_cache.db.delete_document = MagicMock(side_effect=lambda *args, **kwargs: mock_awaitable(mock_del_result))
+        mock_cache.delete_document = MagicMock(side_effect=lambda *args, **kwargs: mock_awaitable(mock_del_result))
 
         with pytest.raises(DatabaseError, match="Failed to delete case: Delete error"):
             await service.delete_case(case_id)
@@ -328,7 +325,7 @@ class TestCaseDataService:
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z",
         }
-        mock_cache.db.delete_document = MagicMock(side_effect=lambda *args, **kwargs: mock_awaitable_exception(Exception("Fatal delete")))
+        mock_cache.delete_document = MagicMock(side_effect=lambda *args, **kwargs: mock_awaitable_exception(Exception("Fatal delete")))
 
         with pytest.raises(DatabaseError, match="Failed to delete case: Fatal delete"):
             await service.delete_case(case_id)

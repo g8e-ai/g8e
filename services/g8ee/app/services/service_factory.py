@@ -44,6 +44,7 @@ from app.services.infra.internal_http_client import InternalHttpClient
 from app.services.infra.event_service import EventService
 from app.services.infra.settings_service import SettingsService
 from app.services.auth.api_key_service import ApiKeyService
+from app.services.auth.auth_service import AuthService
 from app.services.auth.certificate_service import CertificateService
 from app.services.operator.operator_session_service import OperatorSessionService
 from app.services.operator.operator_auth_service import OperatorAuthService
@@ -122,6 +123,7 @@ class OperatorServices:
     heartbeat_stale_monitor: HeartbeatStaleMonitorService | HeartbeatSnapshotStaleMonitorServiceProtocol
     operator_session_service: OperatorSessionService
     operator_auth_service: OperatorAuthService
+    auth_service: AuthService
     session_auth_listener: SessionAuthListener
     api_key_service: ApiKeyService
     certificate_service: CertificateService
@@ -168,6 +170,7 @@ class AllServices:
     heartbeat_stale_monitor: HeartbeatStaleMonitorService | HeartbeatSnapshotStaleMonitorServiceProtocol
     operator_session_service: OperatorSessionService
     operator_auth_service: OperatorAuthService
+    auth_service: AuthService
     session_auth_listener: SessionAuthListener
     api_key_service: ApiKeyService
     certificate_service: CertificateService
@@ -310,6 +313,11 @@ class ServiceFactory:
             cache_aside=cache_aside_service
         )
 
+        auth_service = AuthService(
+            operator_session_service=operator_session_service,
+            operator_data_service=data_services.operator_data_service,  # type: ignore[arg-type]
+        )
+
         session_auth_listener = SessionAuthListener(
             pubsub_client=pubsub_client,
             session_service=operator_session_service,
@@ -331,6 +339,7 @@ class ServiceFactory:
             heartbeat_stale_monitor=heartbeat_stale_monitor,
             operator_session_service=operator_session_service,
             operator_auth_service=operator_auth_service,
+            auth_service=auth_service,
             session_auth_listener=session_auth_listener,
             api_key_service=api_key_service,
             certificate_service=certificate_service,
@@ -496,6 +505,7 @@ class ServiceFactory:
             heartbeat_stale_monitor=operator_services.heartbeat_stale_monitor,
             operator_session_service=operator_services.operator_session_service,
             operator_auth_service=operator_services.operator_auth_service,
+            auth_service=operator_services.auth_service,
             session_auth_listener=operator_services.session_auth_listener,
             api_key_service=operator_services.api_key_service,
             certificate_service=operator_services.certificate_service,

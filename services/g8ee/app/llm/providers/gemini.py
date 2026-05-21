@@ -361,6 +361,24 @@ class GeminiProvider(LLMProvider):
         logger.info("Gemini provider closed")
 
     @staticmethod
+    def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
+        """Validate Gemini provider configuration.
+
+        Gemini requires an API key but does not require an endpoint URL.
+
+        Args:
+            api_key: The API key for the provider
+            endpoint: The endpoint URL for the provider (unused by Gemini)
+
+        Returns:
+            List of validation error messages. Empty if configuration is valid.
+        """
+        errors = []
+        if not api_key:
+            errors.append("Provider 'gemini' requires an API key.")
+        return errors
+
+    @staticmethod
     def _build_thinking_config_gemini3(tc, model: str, genai_types):
         """Build google.genai ThinkingConfig from canonical ThinkingConfig.
 

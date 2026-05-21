@@ -401,17 +401,16 @@ def generate_go_env_vars() -> str:
         if key.startswith("_"):
             continue
             
-        if isinstance(entry, dict):
-            value = entry.get("value", key)
-            const_name = entry.get("_go_const")
-        else:
-            value = entry # Fallback for old flat format if any
-            const_name = None
+        if not isinstance(entry, dict):
+            print(f"Error: Env var entry '{key}' must be an object with '_go_const' field", file=sys.stderr)
+            sys.exit(1)
 
-            const_name = entry.get("_go_const")
-            if const_name is None:
-                print(f"Error: Env var entry '{key}' missing required '_go_const' field", file=sys.stderr)
-                sys.exit(1)
+        value = entry.get("value", key)
+        const_name = entry.get("_go_const")
+        
+        if const_name is None:
+            print(f"Error: Env var entry '{key}' missing required '_go_const' field", file=sys.stderr)
+            sys.exit(1)
             
         if const_name in assigned_consts:
             print(f"Error: Constant name collision in env_vars.go: '{const_name}' generated from both '{assigned_consts[const_name]}' and '{key}'", file=sys.stderr)

@@ -120,3 +120,19 @@ class LLMProvider(ABC):
         """Async context manager exit - ensures cleanup for non-cached providers."""
         await self.close()
         return False
+
+    @staticmethod
+    @abstractmethod
+    def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
+        """Validate provider-specific configuration requirements.
+
+        Returns a list of error messages. Empty list indicates valid configuration.
+
+        Args:
+            api_key: The API key for the provider (if applicable)
+            endpoint: The endpoint URL for the provider (if applicable)
+
+        Returns:
+            List of validation error messages. Empty if configuration is valid.
+        """
+        pass

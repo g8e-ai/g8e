@@ -43,6 +43,11 @@ from app.constants import (
 )
 from app.constants.message_sender import MessageSender
 from app.llm import get_llm_provider
+from app.llm.providers.open_ai import OpenAIProvider
+from app.llm.providers.anthropic import AnthropicProvider
+from app.llm.providers.gemini import GeminiProvider
+from app.llm.providers.ollama import OllamaProvider
+from app.llm.providers.llama_cpp import LlamaCppProvider
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
 from app.models.http_context import G8eHttpContext
@@ -140,6 +145,15 @@ class ChatPipelineService:
         # Validate credentials for each configured tier
         validation_errors = []
 
+        # Provider class mapping for validation
+        provider_classes = {
+            LLMProvider.OPENAI.value: OpenAIProvider,
+            LLMProvider.ANTHROPIC.value: AnthropicProvider,
+            LLMProvider.GEMINI.value: GeminiProvider,
+            LLMProvider.OLLAMA.value: OllamaProvider,
+            LLMProvider.LLAMACPP.value: LlamaCppProvider,
+        }
+
         def check_tier(tier_name: str, model: str | None, provider: str | None, api_key: str | None, endpoint: str | None):
             if not model:
                 return
@@ -148,35 +162,14 @@ class ChatPipelineService:
                 validation_errors.append(f"{tier_name.capitalize()} model '{model}' configured but no provider selected.")
                 return
 
-            p_val = provider
+            provider_class = provider_classes.get(provider)
+            if not provider_class:
+                validation_errors.append(f"Unsupported {tier_name} provider '{provider}'.")
+                return
 
-            # Exhaustive provider validation
-            if p_val == LLMProvider.OPENAI.value:
-                if not api_key:
-                    validation_errors.append(f"{tier_name.capitalize()} provider 'openai' requires an API key.")
-                if not endpoint:
-                    validation_errors.append(f"{tier_name.capitalize()} provider 'openai' requires an endpoint URL.")
-
-            elif p_val == LLMProvider.ANTHROPIC.value:
-                if not api_key:
-                    validation_errors.append(f"{tier_name.capitalize()} provider 'anthropic' requires an API key.")
-                if not endpoint:
-                    validation_errors.append(f"{tier_name.capitalize()} provider 'anthropic' requires an endpoint URL.")
-
-            elif p_val == LLMProvider.GEMINI.value:
-                if not api_key:
-                    validation_errors.append(f"{tier_name.capitalize()} provider 'gemini' requires an API key.")
-
-            elif p_val == LLMProvider.OLLAMA.value:
-                if not endpoint:
-                    validation_errors.append(f"{tier_name.capitalize()} provider 'ollama' requires an endpoint URL.")
-
-            elif p_val == LLMProvider.LLAMACPP.value:
-                if not endpoint:
-                    validation_errors.append(f"{tier_name.capitalize()} provider 'llamacpp' requires an endpoint URL.")
-
-            else:
-                validation_errors.append(f"Unsupported {tier_name} provider '{p_val}'.")
+            provider_errors = provider_class.validate_config(api_key, endpoint)
+            for error in provider_errors:
+                validation_errors.append(f"{tier_name.capitalize()} {error}")
 
         # Resolve effective provider/key/endpoint per tier. When a request
         # overrides the provider, credential and endpoint resolution must

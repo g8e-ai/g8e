@@ -543,16 +543,20 @@ FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = tuple(
 G8EE_APP_TITLE                       = "g8e Engine"
 G8EE_APP_DESCRIPTION                 = "g8e Engine (g8ee) - AI engine for the g8e platform. Agentic AI system with LLM provider abstraction providing Zero-Trust AI for infrastructure operations."
 G8EE_APP_CONTACT_NAME                = "g8e Support"
-G8EE_APP_CONTACT_URL                 = "https://localhost"
 G8EE_APP_CONTACT_EMAIL               = "help@g8e.ai"
 G8EE_APP_LICENSE_NAME                = "Proprietary"
 G8EE_APP_LICENSE_URL                 = "https://github.com/g8e-ai/g8e/blob/main/LICENSE"
 
-CORS_ALLOWED_ORIGIN_G8EE             = f"https://localhost:{PortConstants.PORT_G8EE_HTTP}"
-CORS_ALLOWED_ORIGIN_CLIENT_HTTP       = f"http://localhost:{PortConstants.PORT_OPERATOR_BOOTSTRAP}"
-CORS_ALLOWED_ORIGIN_CLIENT_HTTPS      = f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}"
-CORS_ALLOWED_ORIGIN_LOCALHOST       = "https://localhost"
-CORS_ALLOWED_ORIGIN_G8E             = "https://localhost"
+# Dynamic host resolution for CORS origins and app contact URL
+# These use PATHS['host'] from protocol/constants/paths.json for dynamic configuration
+from app.constants.paths import PATHS
+_DYNAMIC_HOST = PATHS.get('host', 'localhost')
+G8EE_APP_CONTACT_URL                 = f"https://{_DYNAMIC_HOST}"
+CORS_ALLOWED_ORIGIN_G8EE             = f"https://{_DYNAMIC_HOST}:{PortConstants.PORT_G8EE_HTTP}"
+CORS_ALLOWED_ORIGIN_CLIENT_HTTP       = f"http://{_DYNAMIC_HOST}:{PortConstants.PORT_OPERATOR_BOOTSTRAP}"
+CORS_ALLOWED_ORIGIN_CLIENT_HTTPS      = f"https://{_DYNAMIC_HOST}:{PortConstants.PORT_OPERATOR_HTTP}"
+CORS_ALLOWED_ORIGIN_LOCALHOST       = f"https://{_DYNAMIC_HOST}"
+CORS_ALLOWED_ORIGIN_G8E             = f"https://{_DYNAMIC_HOST}"
 
 HTTP_METHOD_GET                     = "GET"
 HTTP_METHOD_POST                    = "POST"

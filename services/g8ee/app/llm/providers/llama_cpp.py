@@ -31,6 +31,24 @@ class LlamaCppProvider(OpenAIProvider):
     def service_name(self) -> str:
         return "llamacpp"
 
+    @staticmethod
+    def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
+        """Validate llama.cpp provider configuration.
+
+        llama.cpp requires an endpoint URL but does not require an API key.
+
+        Args:
+            api_key: The API key for the provider (unused by llama.cpp)
+            endpoint: The endpoint URL for the provider
+
+        Returns:
+            List of validation error messages. Empty if configuration is valid.
+        """
+        errors = []
+        if not endpoint:
+            errors.append("Provider 'llamacpp' requires an endpoint URL.")
+        return errors
+
     def __init__(self, endpoint: str, api_key: str):
         super().__init__(endpoint=endpoint, api_key=api_key)
         # CodeQL: Don't log full endpoint strings to avoid accidental leakage

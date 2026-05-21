@@ -56,6 +56,7 @@ type HTTPHandler struct {
 	pubsub            *PubSubBroker
 	auth              *AuthService
 	pki               *PKIAuthority
+	sessionSvc        *SessionService
 	reg               *RegistrationService
 	passkey           *PasskeyService
 	userSvc           *UserService
@@ -70,7 +71,7 @@ type HTTPHandler struct {
 	envProc governance.EnvelopeProcessor
 }
 
-func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, mcpGateway *mcp.GatewayService, isReady func() bool, isGovernanceReady func() bool) *HTTPHandler {
+func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, sessionSvc *SessionService, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, mcpGateway *mcp.GatewayService, isReady func() bool, isGovernanceReady func() bool) *HTTPHandler {
 	return &HTTPHandler{
 		cfg:               cfg,
 		logger:            logger,
@@ -78,6 +79,7 @@ func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService
 		pubsub:            pubsub,
 		auth:              auth,
 		pki:               pki,
+		sessionSvc:        sessionSvc,
 		reg:               reg,
 		passkey:           passkey,
 		userSvc:           userSvc,
@@ -3029,28 +3031,18 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 			// Non-fatal - continue without bundle
 		}
 
-		// CLI session id is a first-class session type, strictly disjoint from
-		// operator_session_id. The operator_session_id authenticates the host
-		// agent (mTLS URI SAN); the cli_session_id is the routing namespace
-		// the BYO/CLI client uses to receive SessionEvents (SSE) and embed in
-		// outbound request bodies. Conflating the two would let an operator
-		// session drain another client's event stream - and vice versa.
-
-		// Store the binding between operator_session_id and cli_session_id in a first-class
-		// collection to support metadata, expiry, and revocation. Without this binding,
-		// any authenticated operator could drain any cli_session_id's event buffer.
-		cliSession := models.CLISession{
-			ID:                cliSessionID,
-			UserID:            user.ID,
-			OperatorSessionID: sessionID,
-			SystemFingerprint: req.SystemFingerprint,
-			CreatedAt:         time.Now().UTC(),
-			ExpiresAt:         time.Now().UTC().Add(24 * time.Hour), // Match operator session expiry
-		}
-		cliSessionBytes, _ := json.Marshal(cliSession)
-		if err := h.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
-			h.logger.Error("Failed to persist CLI session during bootstrap", string(constants.ConnectionStateError), err)
-			jsonError(w, http.StatusInternalServerError, "failed to bind CLI session")
+		err = h.sessionSvc.PersistSessions(
+			cliSessionID,
+			sessionID,
+			user.ID,
+			orgID,
+			operatorID,
+			req.SystemFingerprint,
+			"bootstrap",
+		)
+		if err != nil {
+			h.logger.Error("Failed to persist sessions during bootstrap", string(constants.ConnectionStateError), err)
+			jsonError(w, http.StatusInternalServerError, "failed to persist sessions")
 			return
 		}
 

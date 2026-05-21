@@ -166,16 +166,6 @@ class CacheAsideService(DocumentServiceProtocol):
             extra={"collection": collection, "doc_id": document_id, "operation": "create"}
         )
 
-        # Invalidate cache instead of populating it
-        key = self.make_key(collection, document_id)
-        await self.kv.delete(key)
-        await self.invalidate_query_cache(collection)
-
-        logger.info(
-            f"[{self.component_name.upper()}-CACHE] Cache invalidated for new document",
-            extra={"collection": collection, "doc_id": document_id}
-        )
-
         return CacheOperationResult(
             success=True,
             document_id=document_id,
@@ -207,15 +197,6 @@ class CacheAsideService(DocumentServiceProtocol):
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Document updated in database",
             extra={"collection": collection, "doc_id": document_id, "merge": merge}
-        )
-
-        key = self.make_key(collection, document_id)
-        await self.kv.delete(key)
-        await self.invalidate_query_cache(collection)
-
-        logger.info(
-            f"[{self.component_name.upper()}-CACHE] Cache invalidated",
-            extra={"collection": collection, "doc_id": document_id}
         )
 
         return CacheOperationResult(
@@ -434,10 +415,6 @@ class CacheAsideService(DocumentServiceProtocol):
                 component=self.component_name,
             )
 
-        key = self.make_key(collection, document_id)
-        await self.kv.delete(key)
-        await self.invalidate_query_cache(collection)
-
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Array append completed, cache invalidated",
             extra={"collection": collection, "doc_id": document_id, "field": array_field}
@@ -458,10 +435,6 @@ class CacheAsideService(DocumentServiceProtocol):
                 code=ErrorCode.DB_WRITE_ERROR,
                 component=self.component_name,
             )
-
-        key = self.make_key(collection, document_id)
-        await self.kv.delete(key)
-        await self.invalidate_query_cache(collection)
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Document deleted, cache invalidated",
@@ -489,20 +462,6 @@ class CacheAsideService(DocumentServiceProtocol):
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Batch write completed",
-            extra={"operation_count": len(operations)}
-        )
-
-        collections_touched: set[str] = set()
-        for op in operations:
-            key = self.make_key(op.collection, op.doc_id)
-            await self.kv.delete(key)
-            collections_touched.add(op.collection)
-
-        for collection in collections_touched:
-            await self.invalidate_query_cache(collection)
-
-        logger.info(
-            f"[{self.component_name.upper()}-CACHE] KV batch cache invalidated",
             extra={"operation_count": len(operations)}
         )
 
