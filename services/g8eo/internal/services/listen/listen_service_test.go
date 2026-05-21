@@ -100,7 +100,7 @@ func TestNewListenServiceFromComponents(t *testing.T) {
 
 	cfg.Listen.PKIDir = pkiDir
 	cfg.Listen.SecretsDir = secretsDir
-	cfg.Listen.BootstrapPort = constants.Ports.OperatorBootstrap
+	cfg.Listen.BootstrapPort = constants.Ports.OperatorBootstrapHttps
 
 	ls := newListenServiceFromComponents(cfg, logger, db, pubsub)
 	assert.NotNil(t, ls)

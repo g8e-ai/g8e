@@ -31,9 +31,9 @@ if [ ! -f "$GATEWAY_BIN" ]; then
 fi
 
 # Ensure ports match values from paths.json constants
-HTTP_PORT="$G8E_OPERATOR_HTTP_PORT"
+HTTP_PORT="$G8E_OPERATOR_HTTPS_PORT"
 WSS_PORT="$G8E_OPERATOR_PUBLIC_WSS_PORT"
-BOOTSTRAP_PORT="$G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT"
+BOOTSTRAP_PORT="$G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT"
 # Public TLS surface must NOT collide with the mTLS surface (443) — sharing
 # a port would force VerifyClientCertIfGiven and downgrade the mTLS gate.
 PUBLIC_PORT="$G8E_OPERATOR_PUBLIC_HTTPS_PORT"

@@ -110,10 +110,10 @@ def _load_paths() -> PathsDict:
                 "ssh_config_path": PathConstants.PATH_SSH_CONFIG_PATH,
             },
             "ports": {
-                "operator_http": PortConstants.PORT_OPERATOR_HTTP,
-                "operator_bootstrap": PortConstants.PORT_OPERATOR_BOOTSTRAP,
-                "operator_public": PortConstants.PORT_OPERATOR_PUBLIC,
-                "g8ee_http": PortConstants.G8E_PORT_G8EE_HTTP,
+                "operator_https": PortConstants.PORT_OPERATOR_HTTPS,
+                "operator_bootstrap_https": PortConstants.PORT_OPERATOR_BOOTSTRAP_HTTPS,
+                "operator_public_https": PortConstants.PORT_OPERATOR_PUBLIC_HTTPS,
+                "g8ee_https": PortConstants.G8E_PORT_G8EE_HTTPS,
             },
             "g8ee": {
                 "cert_name": "g8ee",

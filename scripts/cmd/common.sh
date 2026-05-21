@@ -29,7 +29,7 @@ source "$SCRIPT_DIR/scripts/core/config.sh"
 # Host-native runtime layout
 G8E_PKI_DIR_HOST="$G8E_PKI_DIR"
 G8E_SECRETS_DIR_HOST="$G8E_SECRETS_DIR"
-OPERATOR_HTTPS_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:${G8E_OPERATOR_HTTP_PORT}}"
+OPERATOR_HTTPS_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:${G8E_OPERATOR_HTTPS_PORT}}"
 _OPERATOR_PID_FILE="$G8E_OPERATOR_PID_FILE"
 _G8EE_PID_FILE="$G8E_G8EE_PID_FILE"
 
@@ -91,7 +91,7 @@ _generate_workload_csrs() {
 _operator_bootstrap() {
     local email="${G8E_BOOTSTRAP_EMAIL:-superadmin@g8e.local}"
     local name="${G8E_BOOTSTRAP_NAME:-Superadmin}"
-    local public_port="${G8E_OPERATOR_PUBLIC_HTTPS_PORT:-$G8E_PORT_OPERATOR_PUBLIC}"
+    local public_port="${G8E_OPERATOR_PUBLIC_HTTPS_PORT:-$G8E_PORT_OPERATOR_PUBLIC_HTTPS}"
     local public_url="https://localhost:$public_port"
     local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
 
@@ -262,7 +262,7 @@ _operator_curl() {
 }
 
 _g8ee_url() {
-    printf '%s' "${G8E_G8EE_URL:-https://localhost:$G8E_PORT_G8EE_HTTP}"
+    printf '%s' "${G8E_G8EE_URL:-https://localhost:$G8E_PORT_G8EE_HTTPS}"
 }
 
 # Build curl args for an mTLS-authenticated request to either Operator or g8ee.

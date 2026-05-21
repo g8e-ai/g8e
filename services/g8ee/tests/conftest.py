@@ -250,7 +250,7 @@ def _is_operator_online(host: str | None = None, port: int | None = None, timeou
     parsed = urlparse(listen.http_url)
 
     target_host = host or parsed.hostname or "localhost"
-    target_port = port or parsed.port or PortConstants.PORT_OPERATOR_HTTP
+    target_port = port or parsed.port or PortConstants.PORT_OPERATOR_HTTPS
 
     try:
         with socket.create_connection((target_host, target_port), timeout=timeout):
@@ -336,7 +336,7 @@ def pytest_configure(config):
     # Check if operator is online once at the start
     listen = ListenSettings()
     parsed = urlparse(listen.http_url)
-    target_port = parsed.port or PortConstants.PORT_OPERATOR_HTTP
+    target_port = parsed.port or PortConstants.PORT_OPERATOR_HTTPS
 
     is_online = _is_operator_online()
     config.stash[pytest.StashKey[bool]()] = is_online

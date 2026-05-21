@@ -119,7 +119,7 @@ func main() {
 	flag.StringVar(&logLevel, "l", "info", "Log level")
 	flag.BoolVar(&noGit, "G", false, "Disable git (ledger)")
 	flag.BoolVar(&showVersion, "v", false, "Version")
-	flag.IntVar(&httpPort, "http-port", constants.Ports.OperatorHttp, "HTTPS port for auth/bootstrap via operator proxy (default: from paths.json)")
+	flag.IntVar(&httpPort, "http-port", constants.Ports.OperatorHttps, "HTTPS port for auth/bootstrap via operator proxy (default: from paths.json)")
 	flag.StringVar(&apiKey, "key", "", "API key")
 	flag.StringVar(&deviceToken, "device-token", "", "Device link token for operator deployment")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
@@ -133,9 +133,9 @@ func main() {
 	flag.BoolVar(&showVersion, "version", false, "Version")
 
 	flag.BoolVar(&listenMode, "listen", false, "Listen mode: platform persistence + pub/sub broker")
-	flag.IntVar(&listenHTTPPort, "http-listen-port", constants.Ports.OperatorHttp, "HTTPS port for mTLS API (default: from paths.json)")
-	flag.IntVar(&listenBootstrapPort, "bootstrap-listen-port", constants.Ports.OperatorBootstrap, "Bootstrap TLS port for device-link enrollment (default: from paths.json)")
-	flag.IntVar(&listenPublicPort, "public-listen-port", constants.Ports.OperatorPublic, "Public browser/BYO bootstrap port (default: from paths.json)")
+	flag.IntVar(&listenHTTPPort, "http-listen-port", constants.Ports.OperatorHttps, "HTTPS port for mTLS API (default: from paths.json)")
+	flag.IntVar(&listenBootstrapPort, "bootstrap-listen-port", constants.Ports.OperatorBootstrapHttps, "Bootstrap TLS port for device-link enrollment (default: from paths.json)")
+	flag.IntVar(&listenPublicPort, "public-listen-port", constants.Ports.OperatorPublicHttps, "Public browser/BYO bootstrap port (default: from paths.json)")
 	flag.StringVar(&listenDataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
 	flag.StringVar(&listenPKIDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
 	flag.StringVar(&listenSecretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
@@ -164,7 +164,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
-		fmt.Fprintf(os.Stderr, "      --http-port <port>    HTTPS port to dial for auth/bootstrap (default: %d)\n", constants.Ports.OperatorHttp)
+		fmt.Fprintf(os.Stderr, "      --http-port <port>    HTTPS port to dial for auth/bootstrap (default: %d)\n", constants.Ports.OperatorHttps)
 		fmt.Fprintf(os.Stderr, "  -c, --cloud             Cloud Operator mode (for AWS/cloud CLI)\n")
 		fmt.Fprintf(os.Stderr, "  -p, --provider <name>   Cloud provider: aws, gcp, azure\n")
 		fmt.Fprintf(os.Stderr, "  -s, --local-storage     Store audit data locally instead of cloud (default: on)\n")
@@ -175,9 +175,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  -v, --version           Show version\n")
 		fmt.Fprintf(os.Stderr, "\nListen Mode (platform persistence + pub/sub broker):\n")
 		fmt.Fprintf(os.Stderr, "  --listen                    Listen mode: local persistence + pub/sub broker\n")
-		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for mTLS API (default: %d)\n", constants.Ports.OperatorHttp)
-		fmt.Fprintf(os.Stderr, "  --bootstrap-listen-port <port> Bootstrap TLS port for device-link enrollment (default: %d)\n", constants.Ports.OperatorBootstrap)
-		fmt.Fprintf(os.Stderr, "  --public-listen-port <port> Public browser/BYO bootstrap port (default: %d)\n", constants.Ports.OperatorPublic)
+		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for mTLS API (default: %d)\n", constants.Ports.OperatorHttps)
+		fmt.Fprintf(os.Stderr, "  --bootstrap-listen-port <port> Bootstrap TLS port for device-link enrollment (default: %d)\n", constants.Ports.OperatorBootstrapHttps)
+		fmt.Fprintf(os.Stderr, "  --public-listen-port <port> Public browser/BYO bootstrap port (default: %d)\n", constants.Ports.OperatorPublicHttps)
 		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: .g8e/data in working directory)\n")
 		fmt.Fprintf(os.Stderr, "  --pki-dir <dir>             Directory for TLS certificates (default: .g8e/pki)\n")
 		fmt.Fprintf(os.Stderr, "  --secrets-dir <dir>         Directory for platform secrets (default: .g8e/secrets)\n")
@@ -983,7 +983,7 @@ func runMCPServe(endpointURL, pkiDir, logLevel string) {
 				operatorURL = endpointURL
 			}
 		} else {
-			operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttp)
+			operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 		}
 	}
 

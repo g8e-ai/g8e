@@ -552,9 +552,9 @@ G8EE_APP_LICENSE_URL                 = "https://github.com/g8e-ai/g8e/blob/main/
 from app.constants.paths import PATHS
 _DYNAMIC_HOST = PATHS.get('host', 'localhost')
 G8EE_APP_CONTACT_URL                 = f"https://{_DYNAMIC_HOST}"
-CORS_ALLOWED_ORIGIN_G8EE             = f"https://{_DYNAMIC_HOST}:{PortConstants.G8E_PORT_G8EE_HTTP}"
-CORS_ALLOWED_ORIGIN_CLIENT_HTTP       = f"http://{_DYNAMIC_HOST}:{PortConstants.PORT_OPERATOR_BOOTSTRAP}"
-CORS_ALLOWED_ORIGIN_CLIENT_HTTPS      = f"https://{_DYNAMIC_HOST}:{PortConstants.PORT_OPERATOR_HTTP}"
+CORS_ALLOWED_ORIGIN_G8EE             = f"https://{_DYNAMIC_HOST}:{PortConstants.G8E_PORT_G8EE_HTTPS}"
+CORS_ALLOWED_ORIGIN_CLIENT_HTTP       = f"http://{_DYNAMIC_HOST}:{PortConstants.PORT_OPERATOR_BOOTSTRAP_HTTPS}"
+CORS_ALLOWED_ORIGIN_CLIENT_HTTPS      = f"https://{_DYNAMIC_HOST}:{PortConstants.PORT_OPERATOR_HTTPS}"
 CORS_ALLOWED_ORIGIN_LOCALHOST       = f"https://{_DYNAMIC_HOST}"
 CORS_ALLOWED_ORIGIN_G8E             = f"https://{_DYNAMIC_HOST}"
 

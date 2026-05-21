@@ -56,7 +56,7 @@ def mock_session():
 @pytest.fixture
 def client(mock_session):
     client = KVCacheClient(
-        http_url="https://localhost:8443",
+        http_url="https://localhost:8440",
         component_name=ComponentName.G8EE,
     )
     client._session = mock_session
@@ -67,7 +67,7 @@ def client(mock_session):
 @pytest.fixture
 def disconnected_client():
     return KVCacheClient(
-        http_url="https://localhost:8443",
+        http_url="https://localhost:8440",
         component_name=ComponentName.G8EE,
     )
 
@@ -80,7 +80,7 @@ class TestKVCacheClientInit:
 
     def test_trailing_slash_stripped_from_urls(self):
         client = KVCacheClient(
-            http_url="https://localhost:8443/",
+            http_url="https://localhost:8440/",
         )
         assert not client.http_url.endswith("/")
 

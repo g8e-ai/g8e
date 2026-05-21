@@ -47,7 +47,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": PortConstants.G8E_PORT_G8EE_HTTP,
+                "port": PortConstants.G8E_PORT_G8EE_HTTPS,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -69,9 +69,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}",
-                    "pubsub_url": f"wss://localhost:{PortConstants.PORT_OPERATOR_HTTP}",
-                    "blob_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}",
+                    "http_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
+                    "pubsub_url": f"wss://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
+                    "blob_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -79,14 +79,14 @@ class TestG8eeSettingsOverlayIntegration:
                     "internal_api_key": None
                 },
                 "component_urls": {
-                    "g8ee_url": f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTP}",
-                    "client_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}"
+                    "g8ee_url": f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTPS}",
+                    "client_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
                 "absolute_session_timeout": 86400,
                 "docs_dir": "/g8e/docs",
-                "supervisor_port": PortConstants.PORT_OPERATOR_HTTP,
+                "supervisor_port": PortConstants.PORT_OPERATOR_HTTPS,
                 "app_url": "https://localhost",
                 "allowed_origins": "",
                 "passkey_rp_name": "localhost",
@@ -129,7 +129,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": PortConstants.G8E_PORT_G8EE_HTTP,
+                "port": PortConstants.G8E_PORT_G8EE_HTTPS,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -151,9 +151,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}",
-                    "pubsub_url": f"wss://localhost:{PortConstants.PORT_OPERATOR_HTTP}",
-                    "blob_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}",
+                    "http_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
+                    "pubsub_url": f"wss://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
+                    "blob_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -161,14 +161,14 @@ class TestG8eeSettingsOverlayIntegration:
                     "internal_api_key": None
                 },
                 "component_urls": {
-                    "g8ee_url": f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTP}",
-                    "client_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}"
+                    "g8ee_url": f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTPS}",
+                    "client_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
                 "absolute_session_timeout": 86400,
                 "docs_dir": "/g8e/docs",
-                "supervisor_port": PortConstants.PORT_OPERATOR_HTTP,
+                "supervisor_port": PortConstants.PORT_OPERATOR_HTTPS,
                 "app_url": "https://localhost",
                 "allowed_origins": "",
                 "passkey_rp_name": "localhost",
@@ -247,7 +247,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": PortConstants.G8E_PORT_G8EE_HTTP,
+                "port": PortConstants.G8E_PORT_G8EE_HTTPS,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -285,7 +285,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": PortConstants.G8E_PORT_G8EE_HTTP,
+                "port": PortConstants.G8E_PORT_G8EE_HTTPS,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -307,9 +307,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}",
-                    "pubsub_url": f"wss://localhost:{PortConstants.PORT_OPERATOR_HTTP}",
-                    "blob_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}",
+                    "http_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
+                    "pubsub_url": f"wss://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
+                    "blob_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -317,14 +317,14 @@ class TestG8eeSettingsOverlayIntegration:
                     "internal_api_key": None
                 },
                 "component_urls": {
-                    "g8ee_url": f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTP}",
-                    "client_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}"
+                    "g8ee_url": f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTPS}",
+                    "client_url": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
                 "absolute_session_timeout": 86400,
                 "docs_dir": "/g8e/docs",
-                "supervisor_port": PortConstants.PORT_OPERATOR_HTTP,
+                "supervisor_port": PortConstants.PORT_OPERATOR_HTTPS,
                 "app_url": "https://localhost",
                 "allowed_origins": "",
                 "passkey_rp_name": "localhost",
@@ -387,7 +387,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": PortConstants.G8E_PORT_G8EE_HTTP,
+                "port": PortConstants.G8E_PORT_G8EE_HTTPS,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -426,7 +426,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": PortConstants.G8E_PORT_G8EE_HTTP,
+                "port": PortConstants.G8E_PORT_G8EE_HTTPS,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -463,7 +463,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": PortConstants.G8E_PORT_G8EE_HTTP,
+                "port": PortConstants.G8E_PORT_G8EE_HTTPS,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -521,7 +521,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": PortConstants.G8E_PORT_G8EE_HTTP,
+                "port": PortConstants.G8E_PORT_G8EE_HTTPS,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -575,7 +575,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": PortConstants.G8E_PORT_G8EE_HTTP,
+                "port": PortConstants.G8E_PORT_G8EE_HTTPS,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,

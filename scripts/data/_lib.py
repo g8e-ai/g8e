@@ -80,7 +80,7 @@ _DEFAULT_PKI_DIR = str(PROJECT_ROOT / '.g8e' / 'pki')
 _DEFAULT_SECRETS_DIR = str(PROJECT_ROOT / '.g8e' / 'secrets')
 _DEFAULT_CREDENTIALS_DIR = str(Path.home() / '.g8e')
 
-OPERATOR_HTTPS_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', f"https://localhost:{_PATHS_DATA['ports']['operator_public']}")
+OPERATOR_HTTPS_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', f"https://localhost:{_PATHS_DATA['ports']['operator_public_https']}")
 COLLECTIONS: List[str] = sorted([v['value'] for v in _COLLECTIONS_DATA['collections'].values()])
 PRESERVE_COLLECTIONS = {'settings'}
 

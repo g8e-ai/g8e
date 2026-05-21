@@ -18,11 +18,11 @@ type EnvVarKey string
 
 // EnvVar groups all environment variable name constants consumed by g8eo.
 var EnvVar = struct {
-	OperatorHTTPPort          EnvVarKey
-	OperatorBootstrapPort     EnvVarKey
-	OperatorPublicPort        EnvVarKey
+	OperatorHTTPSPort          EnvVarKey
+	OperatorBootstrapHTTPSPort     EnvVarKey
+	OperatorPublicHTTPSPort        EnvVarKey
 	OperatorWSSPort           EnvVarKey
-	G8EEHTTPPort              EnvVarKey
+	G8EEHTTPSPort              EnvVarKey
 	PIDDir                    EnvVarKey
 	LogDir                    EnvVarKey
 	OperatorPIDFile           EnvVarKey
@@ -113,11 +113,11 @@ var EnvVar = struct {
 	TestLLMAssistantEndpoint  EnvVarKey
 	TestLLMLiteEndpoint       EnvVarKey
 }{
-	OperatorHTTPPort:          "G8E_OPERATOR_HTTP_PORT",
-	OperatorBootstrapPort:     "G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT",
-	OperatorPublicPort:        "G8E_OPERATOR_PUBLIC_HTTPS_PORT",
+	OperatorHTTPSPort:          "G8E_OPERATOR_HTTPS_PORT",
+	OperatorBootstrapHTTPSPort:     "G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT",
+	OperatorPublicHTTPSPort:        "G8E_OPERATOR_PUBLIC_HTTPS_PORT",
 	OperatorWSSPort:           "G8E_OPERATOR_PUBLIC_WSS_PORT",
-	G8EEHTTPPort:              "G8E_G8EE_HTTP_PORT",
+	G8EEHTTPSPort:              "G8E_G8EE_HTTPS_PORT",
 	PIDDir:                    "G8E_PID_DIR",
 	LogDir:                    "G8E_LOG_DIR",
 	OperatorPIDFile:           "G8E_OPERATOR_PID_FILE",

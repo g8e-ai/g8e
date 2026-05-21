@@ -255,7 +255,7 @@ class TestCircuitBreakerConfig:
         assert cfg.half_open_success_threshold == 3
 
     def test_circuit_breaker_initial_state_is_closed(self):
-        cb = CircuitBreaker(CircuitBreakerConfig(), endpoint="https://localhost:8443")
+        cb = CircuitBreaker(CircuitBreakerConfig(), endpoint="https://localhost:8440")
         assert cb.state is CircuitBreakerState.CLOSED
 
 
@@ -274,7 +274,7 @@ class TestCircuitBreaker:
                 recovery_time=0.0,
                 half_open_success_threshold=1,
             ),
-            endpoint="https://localhost:8443",
+            endpoint="https://localhost:8440",
         )
         assert cb.state is CircuitBreakerState.CLOSED
 
@@ -293,7 +293,7 @@ class TestCircuitBreaker:
     async def test_open_state_blocks_allow_request(self):
         cb = CircuitBreaker(
             CircuitBreakerConfig(failure_threshold=1, recovery_time=9999.0),
-            endpoint="https://localhost:8443",
+            endpoint="https://localhost:8440",
         )
         await cb.record_failure()
         assert cb.state is CircuitBreakerState.OPEN
@@ -302,7 +302,7 @@ class TestCircuitBreaker:
     async def test_half_open_failure_transitions_back_to_open(self):
         cb = CircuitBreaker(
             CircuitBreakerConfig(failure_threshold=1, recovery_time=0.0),
-            endpoint="https://localhost:8443",
+            endpoint="https://localhost:8440",
         )
         await cb.record_failure()
         await cb.allow_request()
@@ -313,7 +313,7 @@ class TestCircuitBreaker:
         assert isinstance(cb.state, CircuitBreakerState)
 
     async def test_closed_state_always_allows_requests(self):
-        cb = CircuitBreaker(CircuitBreakerConfig(), endpoint="https://localhost:8443")
+        cb = CircuitBreaker(CircuitBreakerConfig(), endpoint="https://localhost:8440")
         assert await cb.allow_request() is True
 
 
@@ -330,7 +330,7 @@ class TestG8eHTTPClientInit:
     def test_custom_timeout_is_applied(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=15.0,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -344,7 +344,7 @@ class TestG8eHTTPClientInit:
     def test_default_timeout_matches_module_constant(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -438,7 +438,7 @@ class TestG8eHTTPClientCircuitBreakerIsolation:
     async def test_distinct_url_paths_get_separate_circuit_breakers(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -448,8 +448,8 @@ class TestG8eHTTPClientCircuitBreakerIsolation:
             ca_cert_path="/mock/ca.crt",
         )
         try:
-            cb1 = c._get_circuit_breaker("https://localhost:8443/api/health")
-            cb2 = c._get_circuit_breaker("https://localhost:8443/api/chat/stream")
+            cb1 = c._get_circuit_breaker("https://localhost:8440/api/health")
+            cb2 = c._get_circuit_breaker("https://localhost:8440/api/chat/stream")
             assert cb1 is not cb2
         finally:
             await c.close()
@@ -457,7 +457,7 @@ class TestG8eHTTPClientCircuitBreakerIsolation:
     async def test_same_url_path_returns_cached_circuit_breaker(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -467,8 +467,8 @@ class TestG8eHTTPClientCircuitBreakerIsolation:
             ca_cert_path="/mock/ca.crt",
         )
         try:
-            cb1 = c._get_circuit_breaker("https://localhost:8443/api/health")
-            cb2 = c._get_circuit_breaker("https://localhost:8443/api/health")
+            cb1 = c._get_circuit_breaker("https://localhost:8440/api/health")
+            cb2 = c._get_circuit_breaker("https://localhost:8440/api/health")
             assert cb1 is cb2
         finally:
             await c.close()
@@ -486,7 +486,7 @@ class TestG8eHTTPClientContextManager:
     async def test_context_manager_aenter_returns_client_instance(self):
         async with HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -500,7 +500,7 @@ class TestG8eHTTPClientContextManager:
     async def test_context_manager_aexit_closes_session(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -555,7 +555,7 @@ class TestShouldRetry:
     def test_returns_false_when_retry_count_exhausted(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(max_retries=2),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -569,7 +569,7 @@ class TestShouldRetry:
     def test_returns_false_for_non_retryable_method(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -583,7 +583,7 @@ class TestShouldRetry:
     def test_returns_true_for_retryable_status_and_method(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -598,7 +598,7 @@ class TestShouldRetry:
     def test_returns_false_for_4xx_non_retryable(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -613,7 +613,7 @@ class TestShouldRetry:
     def test_returns_true_for_timeout_exception(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -627,7 +627,7 @@ class TestShouldRetry:
     def test_returns_true_for_server_timeout_exception(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -641,7 +641,7 @@ class TestShouldRetry:
     def test_returns_true_for_server_disconnected_exception(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -655,7 +655,7 @@ class TestShouldRetry:
     def test_returns_false_for_non_retryable_exception(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -677,7 +677,7 @@ class TestCalculateBackoff:
     def test_backoff_is_non_negative(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -692,7 +692,7 @@ class TestCalculateBackoff:
     def test_backoff_increases_with_retry_count(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(retry_jitter_factor=0.0),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -734,7 +734,7 @@ class TestG8eHTTPClientRequest:
     async def _make_client_with_mock_session(self, mock_response_cm):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(max_retries=0),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -763,7 +763,7 @@ class TestG8eHTTPClientRequest:
         resp = _make_mock_response(500, b'{"detail": "internal error"}')
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(max_retries=0, retry_methods=set()),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -791,7 +791,7 @@ class TestG8eHTTPClientRequest:
 
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(max_retries=0),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -815,7 +815,7 @@ class TestG8eHTTPClientRequest:
 
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(max_retries=0),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -837,7 +837,7 @@ class TestG8eHTTPClientRequest:
     async def test_circuit_breaker_open_raises_without_making_request(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(failure_threshold=1, recovery_time=9999.0),
@@ -851,7 +851,7 @@ class TestG8eHTTPClientRequest:
         session.request = MagicMock()
         c._session = session
 
-        cb = c._get_circuit_breaker("https://localhost:8443/api/test")
+        cb = c._get_circuit_breaker("https://localhost:8440/api/test")
         await cb.record_failure()
         assert cb.state is CircuitBreakerState.OPEN
 
@@ -877,7 +877,7 @@ class TestG8eHTTPClientRequest:
 
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(
                 max_retries=2,
@@ -908,7 +908,7 @@ class TestG8eHTTPClientRequest:
 
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(
                 max_retries=2,
@@ -937,7 +937,7 @@ class TestG8eHTTPClientRequest:
 
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(
                 max_retries=3,
@@ -968,7 +968,7 @@ class TestG8eHTTPClientRequest:
 
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(max_retries=0),
             circuit_breaker_config=CircuitBreakerConfig(),

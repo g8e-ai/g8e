@@ -68,7 +68,7 @@ func main() {
 		}
 
 		server := &http.Server{
-			Addr:      fmt.Sprintf(":%d", constants.Ports.G8eeHttp),
+			Addr:      fmt.Sprintf(":%d", constants.Ports.G8eeHttps),
 			TLSConfig: tlsConfig,
 		}
 
@@ -96,7 +96,7 @@ func main() {
 			w.Write([]byte("Actuator: Envelope authorized and logged."))
 		})
 
-		log.Printf("Actuator Server listening on https://localhost:%d/uap (mTLS required)", constants.Ports.G8eeHttp)
+		log.Printf("Actuator Server listening on https://localhost:%d/uap (mTLS required)", constants.Ports.G8eeHttps)
 		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Actuator Server failed: %v", err)
 		}
@@ -140,7 +140,7 @@ func main() {
 	}
 
 	log.Printf("Sage Client: Sending UAP envelope to Actuator...")
-	resp, err := client.Post(fmt.Sprintf("https://localhost:%d/uap", constants.Ports.G8eeHttp), "application/json", bytes.NewBuffer(payload))
+	resp, err := client.Post(fmt.Sprintf("https://localhost:%d/uap", constants.Ports.G8eeHttps), "application/json", bytes.NewBuffer(payload))
 	if err != nil {
 		log.Fatalf("Sage Client: Request failed: %v", err)
 	}

@@ -90,14 +90,14 @@ class ComponentURLsSettings(G8eBaseModel):
     g8ee_url: str = Field(
         default_factory=lambda: os.environ.get(
             EnvVar.G8EE_URL,
-            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTP}",
-        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTP}"
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}",
+        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}"
     )
     client_url: str = Field(
         default_factory=lambda: os.environ.get(
             EnvVar.DASHBOARD_URL,
-            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}",
-        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}"
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}",
+        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
     )
 
 class CommandValidationSettings(G8eBaseModel):
@@ -228,9 +228,9 @@ class DatabaseSettings(G8eBaseModel):
 
 class ListenSettings(G8eBaseModel):
     """operator (Operator --listen mode) configuration."""
-    http_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_http']}") or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_http']}")
-    pubsub_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_PUBSUB_URL, f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_http']}") or f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_http']}")
-    blob_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_http']}") or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_http']}")
+    http_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}") or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
+    pubsub_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_PUBSUB_URL, f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}") or f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
+    blob_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}") or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
     default_ttl: int = Field(CACHE_TTL_DEFAULT)
     enable_cache_read: bool = Field(False)
 
@@ -495,7 +495,7 @@ class ReputationSettings(G8eBaseModel):
 
 class G8eePlatformSettings(G8eBaseModel):
     """Platform-level deployment configuration."""
-    port: int = Field(PortConstants.G8E_PORT_G8EE_HTTP)
+    port: int = Field(PortConstants.G8E_PORT_G8EE_HTTPS)
     host: str = Field("0.0.0.0")
     log_level: LogLevel = Field(LogLevel.INFO)
     enable_logging: bool = Field(True)
@@ -513,8 +513,8 @@ class G8eePlatformSettings(G8eBaseModel):
     app_url: str = Field(
         default_factory=lambda: os.environ.get(
             EnvVar.OPERATOR_URL,
-            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}",
-        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}"
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}",
+        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
     )
     allowed_origins: str = Field(
         default_factory=lambda: os.environ.get(EnvVar.ALLOWED_ORIGINS, "") or ""
@@ -528,8 +528,8 @@ class G8eePlatformSettings(G8eBaseModel):
     passkey_origin: str = Field(
         default_factory=lambda: os.environ.get(
             EnvVar.PASSKEY_ORIGIN,
-            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}",
-        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}"
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}",
+        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTPS}"
     )
 
     llm: LLMSettings = Field(default_factory=LLMSettings)
