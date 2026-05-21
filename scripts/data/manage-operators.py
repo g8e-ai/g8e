@@ -34,7 +34,7 @@ import urllib.parse
 from typing import Dict, Any, List
 
 from _lib import (
-    OPERATOR_BASE_URL,
+    OPERATOR_HTTPS_URL,
     print_banner,
     resolve_user_id,
     operator_request,
@@ -132,8 +132,10 @@ class OperatorManager:
             header_text = "All Operators"
 
         # Query operators collection directly
-        query = {'user_id': uid} if uid else {}
-        operators = operator_request('POST', '/db/operators/_query', query)
+        body = {
+            'filters': [{'field': 'user_id', 'op': '==', 'value': json.dumps(uid)}]
+        } if uid else {}
+        operators = operator_request('POST', '/db/operators/_query', body)
         if not isinstance(operators, list):
             operators = []
 
@@ -169,7 +171,9 @@ class OperatorManager:
             return None
 
         # Check if user already has operator slots
-        existing = operator_request('POST', '/db/operators/_query', {'user_id': uid})
+        existing = operator_request('POST', '/db/operators/_query', {
+            'filters': [{'field': 'user_id', 'op': '==', 'value': json.dumps(uid)}]
+        })
         if isinstance(existing, list) and len(existing) > 0:
             print(f"\nUser {uid} already has {len(existing)} operator slot(s)")
             for op in existing:

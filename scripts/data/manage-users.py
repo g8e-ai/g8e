@@ -37,7 +37,7 @@ from typing import List, Dict, Any
 
 from _lib import (
     PROJECT_ROOT,
-    OPERATOR_BASE_URL,
+    OPERATOR_HTTPS_URL,
     print_banner,
     operator_request,
 )
@@ -46,9 +46,9 @@ _PROTOCOL_CONSTANTS = PROJECT_ROOT / 'protocol' / 'constants'
 
 with open(_PROTOCOL_CONSTANTS / 'status.json') as _f:
     _STATUS = json.load(_f)
-VALID_ROLES: List[str] = list(_STATUS['user.role'].values())
+VALID_ROLES: List[str] = list(_STATUS['status']['user_role'].values()) if 'status' in _STATUS else list(_STATUS['user.role'].values())
 
-USERS_API = f'{OPERATOR_BASE_URL}/api/users'
+USERS_API = f'{OPERATOR_HTTPS_URL}/api/users'
 
 
 class UserManager:
@@ -108,11 +108,16 @@ class UserManager:
 
     def list_users(self, limit: int = 50) -> List[Dict[str, Any]]:
         # Query users collection directly from operator
-        users = operator_request('POST', '/db/users/_query', {})
+        body: Dict[str, Any] = {}
+        if limit > 0:
+            body['limit'] = limit
+        users = operator_request('POST', '/db/users/_query', body)
         if not isinstance(users, list):
             users = []
         total = len(users)
-        users = users[:limit]
+        # In listen mode, limit is handled by the server if passed in body
+        # but we still apply it here just in case.
+        users = users[:limit] if limit > 0 else users
 
         print(f"\nUsers ({len(users)} of {total} total)")
         print("=" * 130)
@@ -136,7 +141,9 @@ class UserManager:
             user = operator_request('GET', f'/db/users/{user_id}')
         else:
             # Query by email
-            users = operator_request('POST', '/db/users/_query', {'email': email})
+            users = operator_request('POST', '/db/users/_query', {
+                'filters': [{'field': 'email', 'op': '==', 'value': json.dumps(email)}]
+            })
             if not isinstance(users, list) or len(users) == 0:
                 print(f"\nUser not found: {email}")
                 return None

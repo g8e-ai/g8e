@@ -39,13 +39,13 @@ from pathlib import Path
 from typing import Dict, Any, List
 
 from _lib import (
-    OPERATOR_BASE_URL,
+    OPERATOR_HTTPS_URL,
     get_document,
     print_banner,
     operator_request,
 )
 
-SETTINGS_API = f'{OPERATOR_BASE_URL}/api/settings'
+SETTINGS_API = f'{OPERATOR_HTTPS_URL}/api/settings'
 OPERATOR_SETTINGS_COLLECTION = 'settings'
 PLATFORM_SETTINGS_ID = 'platform_settings'
 USER_SETTINGS_ID_PREFIX = 'user_settings_'

@@ -29,7 +29,7 @@ source "$SCRIPT_DIR/scripts/core/config.sh"
 # Host-native runtime layout
 G8E_PKI_DIR_HOST="$G8E_PKI_DIR"
 G8E_SECRETS_DIR_HOST="$G8E_SECRETS_DIR"
-OPERATOR_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:${G8E_OPERATOR_HTTP_PORT}}"
+OPERATOR_HTTPS_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:${G8E_OPERATOR_HTTP_PORT}}"
 _OPERATOR_PID_FILE="$G8E_OPERATOR_PID_FILE"
 _G8EE_PID_FILE="$G8E_G8EE_PID_FILE"
 
@@ -91,7 +91,7 @@ _generate_workload_csrs() {
 _operator_bootstrap() {
     local email="${G8E_BOOTSTRAP_EMAIL:-superadmin@g8e.local}"
     local name="${G8E_BOOTSTRAP_NAME:-Superadmin}"
-    local public_port="${G8E_OPERATOR_PUBLIC_PORT:-$G8E_PORT_OPERATOR_PUBLIC}"
+    local public_port="${G8E_OPERATOR_PUBLIC_HTTPS_PORT:-$G8E_PORT_OPERATOR_PUBLIC}"
     local public_url="https://localhost:$public_port"
     local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
 
@@ -252,9 +252,13 @@ _operator_curl() {
         args+=(--cookie "g8e_session=$G8E_OPERATOR_SESSION_ID")
     fi
 
+    if [[ -n "${G8E_CLI_SESSION_ID:-}" ]]; then
+        args+=(-H "${G8E_HEADER_CLI_SESSION_ID:-X-G8E-CLI-Session-ID}: $G8E_CLI_SESSION_ID")
+    fi
+
     args+=(-H "${G8E_HEADER_CONTENTTYPE}: application/json")
     [[ -n "$body" ]] && args+=(-d "$body")
-    curl "${args[@]}" "$OPERATOR_HTTP_URL$path"
+    curl "${args[@]}" "$OPERATOR_HTTPS_URL$path"
 }
 
 _g8ee_url() {
@@ -339,9 +343,10 @@ _g8ee_curl() {
 _run_host_script() {
     export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"
     export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
-    export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
+    export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTPS_URL"
     export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
     [[ -n "${G8E_OPERATOR_SESSION_ID:-}" ]] && export G8E_OPERATOR_SESSION_ID
+    [[ -n "${G8E_CLI_SESSION_ID:-}" ]] && export G8E_CLI_SESSION_ID
     exec "$@"
 }
 

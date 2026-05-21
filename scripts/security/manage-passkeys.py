@@ -38,7 +38,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.absolute()
 sys.path.insert(0, str(PROJECT_ROOT / 'scripts' / 'data'))
 
 from _lib import (
-    OPERATOR_BASE_URL,
+    OPERATOR_HTTPS_URL,
     resolve_user_id,
     operator_request,
 )

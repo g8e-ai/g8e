@@ -80,7 +80,7 @@ _DEFAULT_PKI_DIR = str(PROJECT_ROOT / '.g8e' / 'pki')
 _DEFAULT_SECRETS_DIR = str(PROJECT_ROOT / '.g8e' / 'secrets')
 _DEFAULT_CREDENTIALS_DIR = str(Path.home() / '.g8e')
 
-OPERATOR_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', f"https://localhost:{_PATHS_DATA['ports']['operator_http']}")
+OPERATOR_HTTPS_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', f"https://localhost:{_PATHS_DATA['ports']['operator_public']}")
 COLLECTIONS: List[str] = sorted([v['value'] for v in _COLLECTIONS_DATA['collections'].values()])
 PRESERVE_COLLECTIONS = {'settings'}
 
@@ -167,13 +167,17 @@ def get_auditor_hmac_key() -> str:
 # =============================================================================
 
 def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
-    url = f'{OPERATOR_BASE_URL}{path}'
+    url = f'{OPERATOR_HTTPS_URL}{path}'
     data = json.dumps(body).encode() if body is not None else None
     headers = {'Content-Type': 'application/json'} if data is not None else {}
 
     session_token = get_auth_token()
     if session_token:
         headers['Authorization'] = f'Bearer {session_token}'
+
+    cli_session_id = os.environ.get('G8E_CLI_SESSION_ID', '')
+    if cli_session_id:
+        headers['X-G8E-CLI-Session-ID'] = cli_session_id
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     ctx = _create_ssl_context()
@@ -192,7 +196,7 @@ def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
         raise RuntimeError(f'HTTP {e.code} {method} {path}: {err}')
     except urllib.error.URLError as e:
         raise RuntimeError(
-            f'Cannot reach the Operator listen-mode HTTP API at {OPERATOR_BASE_URL}. '
+            f'Cannot reach the Operator listen-mode HTTP API at {OPERATOR_HTTPS_URL}. '
             f'Is the platform running? (./g8e platform start)\n  {e.reason}'
         )
 
@@ -243,6 +247,12 @@ def resolve_user_id(user_id: str | None, email: str | None) -> str | None:
         'filters': [{'field': 'email', 'op': '==', 'value': json.dumps(email)}]
     })
     if not isinstance(result, list) or len(result) == 0:
+        # Fallback: check if any user has this email in a non-filtered list
+        all_users = operator_request('POST', '/db/users/_query', {})
+        if isinstance(all_users, list):
+            for u in all_users:
+                if (u.get('email') or '').lower() == email.lower():
+                    return u.get('id')
         print(f"\nUser not found with email: {email}")
         return None
     return result[0].get('id')

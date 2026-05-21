@@ -114,9 +114,9 @@ var EnvVar = struct {
 	TestLLMLiteEndpoint       EnvVarKey
 }{
 	OperatorHTTPPort:          "G8E_OPERATOR_HTTP_PORT",
-	OperatorBootstrapPort:     "G8E_OPERATOR_BOOTSTRAP_PORT",
-	OperatorPublicPort:        "G8E_OPERATOR_PUBLIC_PORT",
-	OperatorWSSPort:           "G8E_OPERATOR_WSS_PORT",
+	OperatorBootstrapPort:     "G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT",
+	OperatorPublicPort:        "G8E_OPERATOR_PUBLIC_HTTPS_PORT",
+	OperatorWSSPort:           "G8E_OPERATOR_PUBLIC_WSS_PORT",
 	G8EEHTTPPort:              "G8E_G8EE_HTTP_PORT",
 	PIDDir:                    "G8E_PID_DIR",
 	LogDir:                    "G8E_LOG_DIR",

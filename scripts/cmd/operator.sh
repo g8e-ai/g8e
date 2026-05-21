@@ -100,8 +100,9 @@ case "$SUB" in
         echo "Fetching linux/${_DEPLOY_ARCH} operator from host Operator blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
         curl -sf \
             -H "Authorization: Bearer ${G8E_OPERATOR_SESSION_ID}" \
+            -H "${G8E_HEADER_CLI_SESSION_ID:-X-G8E-CLI-Session-ID}: ${G8E_CLI_SESSION_ID}" \
             --cacert "$trust_bundle" \
-            "${OPERATOR_HTTP_URL}/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
+            "${OPERATOR_HTTPS_URL}/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
             | ssh "${_DEPLOY_TARGET}" "cat > ${_DEPLOY_DEST} && chmod +x ${_DEPLOY_DEST}"
         echo "  Done."
         if [[ -n "$_DEPLOY_ENDPOINT" ]]; then
