@@ -246,7 +246,7 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 	cfg.LocalStoreEnabled = true
 	cfg.NoGit = false
 	cfg.LogLevel = "debug"
-	cfg.WSSPort = 443
+
 	logger := testutil.NewTestLogger()
 
 	svc, err := NewBootstrapService(cfg, logger)
@@ -262,7 +262,7 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 	assert.True(t, capturedBody.RuntimeConfig.LocalStorageEnabled)
 	assert.False(t, capturedBody.RuntimeConfig.NoGit)
 	assert.Equal(t, "debug", capturedBody.RuntimeConfig.LogLevel)
-	assert.Equal(t, 443, capturedBody.RuntimeConfig.WSSPort)
+
 }
 
 func TestRequestHTTPAuth_APIKeyOnly(t *testing.T) {

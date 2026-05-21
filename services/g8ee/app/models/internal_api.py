@@ -253,7 +253,7 @@ class InternalOperatorAuthCall(G8eBaseModel):
 
     context: RequestContext = Field(..., description="Request context with session/user/organization identity")
     authorization: str = Field(..., description="The Bearer token (API key) for the operator")
-    operator_session_id: str = Field(..., description="g8eo substrate operator session UUID - used as the g8ee session document ID so the CLI Bearer token resolves directly")
+    operator_session_id: str = Field(..., description="g8eo Gateway operator session UUID - used as the g8ee session document ID so the CLI Bearer token resolves directly")
     runtime_config: dict | None = Field(default=None)
 
 
@@ -284,7 +284,7 @@ class OperatorDeviceLinkRegisterRequest(G8eBaseModel):
     operator_id: str | None = Field(default=None, description="Operator ID (optional if creating on-demand)")
     operator_type: str = Field(default="SYSTEM", description="Operator type")
     device_link_token: str | None = Field(default=None, description="Device link token for on-demand slot creation")
-    operator_session_id: str | None = Field(default=None, description="g8eo substrate operator session ID - used as the g8ee session document ID so the CLI Bearer token resolves directly")
+    operator_session_id: str | None = Field(default=None, description="g8eo Gateway operator session ID - used as the g8ee session document ID so the CLI Bearer token resolves directly")
 
 
 class OperatorDeviceLinkRegisterResponse(G8eBaseModel):

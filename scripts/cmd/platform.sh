@@ -31,7 +31,20 @@ case "$SUB" in
         ;;
     status|start|stop|restart|reset|clean|settings|logs)
         case "$SUB" in
-            start)    _banner "platform start";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up      "${@:2}" ;;
+            start)
+            _banner "platform start"
+            bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up "${@:2}"
+            # Auto-load credentials after bootstrap if they exist
+            if [[ -f "$G8E_CREDENTIALS_FILE" ]]; then
+                source "$G8E_CREDENTIALS_FILE"
+                export G8E_CLI_CERT="$G8E_CLI_CERT_FILE"
+                export G8E_CLI_KEY="$G8E_CLI_KEY_FILE"
+                export G8E_OPERATOR_CERT="$G8E_OPERATOR_CERT_FILE"
+                export G8E_OPERATOR_KEY="$G8E_OPERATOR_KEY_FILE"
+                echo ""
+                echo -e "\033[1;32m[g8e] Credentials auto-loaded from $G8E_CREDENTIALS_FILE\033[0m"
+            fi
+            ;;
             stop)     _banner "platform stop";     exec bash "$SCRIPT_DIR/scripts/core/build.sh" down    "${@:2}" ;;
             restart)  _banner "platform restart";  exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") restart "${@:2}" ;;
             status)   _banner "platform status";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" status  "${@:2}" ;;

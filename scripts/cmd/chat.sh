@@ -218,7 +218,7 @@ _chat_stream_events() {
         _append_g8e_auth_headers args
         local resp
         # CLI is a first-class BYO session type: poll only the cli namespace so
-        # we never accidentally drain a colliding web session id. The substrate
+        # we never accidentally drain a colliding web session id. The Gateway
         # refuses to talk about a bare session id - every routing target is
         # tagged at the type level.
         if ! resp=$(curl "${args[@]}" "$OPERATOR_HTTP_URL/api/internal/sse/events?cli_session_id=${cli_session_id}&since_id=${last_id}&limit=200" 2>/dev/null); then
@@ -337,7 +337,7 @@ print(json.dumps(out))" \
             "${LLM_ASSISTANT_PROVIDER:-}" "${LLM_ASSISTANT_MODEL:-}" \
             "${LLM_LITE_PROVIDER:-}" "${LLM_LITE_MODEL:-}" \
             "${LLM_PRIMARY_API_KEY:-}" "${LLM_PRIMARY_ENDPOINT:-}" \
-            "${G8E_TEST_LLM_API_KEY:-}" "${LLM_ASSISTANT_ENDPOINT:-}" \
+            "${G8E_TEST_LLM_PRIMARY_API_KEY:-}" "${LLM_ASSISTANT_ENDPOINT:-}" \
             "${LLM_LITE_API_KEY:-}" "${LLM_LITE_ENDPOINT:-}")
 
         if [[ "$NEW_CASE" == "true" ]]; then

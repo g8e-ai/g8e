@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 
 # Re-exported so `cli.py` (and any external caller) can keep catching
 # AuthenticationError from this module's public surface.
-__all__ = ["G8eeChatSUT", "AuthenticationError", "AgentTrailEvent", "_extract_substrate_transaction_id"]
+__all__ = ["G8eeChatSUT", "AuthenticationError", "AgentTrailEvent", "_extract_Gateway_transaction_id"]
 
 
 # Terminal SSE event types that conclude a single chat turn.
@@ -144,13 +144,23 @@ class G8eeChatSUT:
             self.model_provider = config.primary.model or "g8ee:server-default"
 
     async def check_settings(self) -> G8eeUserSettings | None:
-        """Fetch current user settings from g8ee for pre-flight validation.
-
-        Note: This method is disabled because g8ee cannot validate operator sessions
-        directly - sessions are stored in the Operator's SQLite database, not in
-        g8ee's cache. The actual chat endpoint will validate the session when called.
-        """
-        return None
+        """Fetch current user settings from g8ee for pre-flight validation."""
+        async with self._client() as client:
+            request = SettingsGetRequest(context=self.env.to_request_context())
+            try:
+                resp = await client.post(
+                    f"{self.env.g8ee_url}/api/internal/settings/user/get",
+                    headers=self._g8ee_headers(),
+                    content=request.model_dump_json(),
+                )
+                if resp.status_code == 200:
+                    return G8eeUserSettings.model_validate(resp.json())
+                else:
+                    logger.warning("Failed to fetch settings from g8ee: HTTP %s", resp.status_code)
+                    return None
+            except Exception as e:
+                logger.warning("Error fetching settings from g8ee: %s", e)
+                return None
 
     # ---- HTTP client construction --------------------------------------
 
@@ -158,7 +168,7 @@ class G8eeChatSUT:
         return self.env.make_async_client()
 
     def _g8ee_headers(self) -> dict[str, str]:
-        """Minimal headers for g8ee (now authenticated by substrate/mTLS)."""
+        """Minimal headers for g8ee (now authenticated by Gateway/mTLS)."""
         return self.env.auth_headers()
 
     # ---- Main entry point ----------------------------------------------
@@ -214,7 +224,7 @@ class G8eeChatSUT:
             investigation_id = started.investigation_id
 
             # 3. Drain the per-session SSE buffer until terminal or idle.
-            answer_text, trail, terminal_event = await self._drain_events(
+            answer_text, trail, terminal_event, sse_error = await self._drain_events(
                 client, since_id=since_id, investigation_id=investigation_id
             )
 
@@ -226,12 +236,22 @@ class G8eeChatSUT:
             terminal_event=terminal_event,
         )
 
-        # A real substrate transaction_id only exists when a Tribunal->Warden
+        # A real Gateway transaction_id only exists when a Tribunal->Warden
         # mutation produced a signed ActionReceipt. The Operator's audit vault
         # keys receipts by the UAP envelope id (transaction_hash), NOT by the
-        # g8ee investigation_id. Scan the agent trail for a substrate tx_id
+        # g8ee investigation_id. Scan the agent trail for a Gateway tx_id
         # before claiming RECEIPT_BOUND.
-        substrate_tx_id = _extract_substrate_transaction_id(trail)
+        Gateway_tx_id = _extract_Gateway_transaction_id(trail)
+
+        if sse_error:
+            return Response(
+                answer=answer_text,
+                model=self.model_provider,
+                transaction_id=Gateway_tx_id,
+                receipt=receipt,
+                binding=BindingType.UNBOUND,
+                unbound_reason=sse_error,
+            )
 
         if self.config.mode == "baseline":
             return Response(
@@ -247,7 +267,7 @@ class G8eeChatSUT:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
-                transaction_id=substrate_tx_id,
+                transaction_id=Gateway_tx_id,
                 receipt=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"chat terminated with {terminal_event}",
@@ -258,17 +278,17 @@ class G8eeChatSUT:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
-                transaction_id=substrate_tx_id,
+                transaction_id=Gateway_tx_id,
                 receipt=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"idle timeout after {self.idle_timeout_s}s without terminal event",
             )
 
-        if substrate_tx_id:
+        if Gateway_tx_id:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
-                transaction_id=substrate_tx_id,
+                transaction_id=Gateway_tx_id,
                 receipt=receipt,
                 binding=BindingType.RECEIPT_BOUND,
             )
@@ -336,14 +356,15 @@ class G8eeChatSUT:
         client: httpx.AsyncClient,
         since_id: int,
         investigation_id: str,
-    ) -> tuple[str, list[AgentTrailEvent], Optional[str]]:
+    ) -> tuple[str, list[AgentTrailEvent], Optional[str], Optional[str]]:
         """Stream events from the Operator's SSE endpoint until terminal or idle.
 
-        Returns (assembled_answer_text, trail, terminal_event_type_or_None).
+        Returns (assembled_answer_text, trail, terminal_event_type_or_None, error_reason_or_None).
         """
         text_buf: list[str] = []
         trail: list[AgentTrailEvent] = []
         terminal: Optional[str] = None
+        error_reason: Optional[str] = None
         last_event_at = time.time()
 
         params = {
@@ -359,9 +380,18 @@ class G8eeChatSUT:
                 params=params,
                 headers=self.env.auth_headers(),
             ) as event_source:
-                async for event in event_source.aiter_sse():
-                    last_event_at = time.time()
-                    
+                event_iter = event_source.aiter_sse().__aiter__()
+                while True:
+                    idle_remaining = self.idle_timeout_s - (time.time() - last_event_at)
+                    if idle_remaining <= 0:
+                        break
+                    try:
+                        event = await asyncio.wait_for(event_iter.__anext__(), timeout=idle_remaining)
+                    except StopAsyncIteration:
+                        break
+                    except asyncio.TimeoutError:
+                        break
+
                     if event.event == "heartbeat":
                         continue
 
@@ -380,6 +410,8 @@ class G8eeChatSUT:
                         evt_inv = envelope.investigation_id()
                         if evt_inv and evt_inv != investigation_id:
                             continue
+
+                    last_event_at = time.time()
 
                     trail.append(AgentTrailEvent(
                         id=row_id,
@@ -403,17 +435,16 @@ class G8eeChatSUT:
 
                     if event_type in _TERMINAL_EVENTS:
                         terminal = event_type
-                        return ("".join(text_buf), trail, terminal)
+                        return ("".join(text_buf), trail, terminal, None)
 
-                    if time.time() - last_event_at > self.idle_timeout_s:
-                        break
-
+        except httpx.HTTPStatusError as e:
+            logger.warning("SSE Stream auth/transport failure: %s", e)
+            error_reason = f"sse_auth_failed: {e.response.status_code}"
         except Exception as e:
             logger.warning("SSE Stream interrupted: %s", e)
-            # If we were interrupted but already have some events, return them.
-            # The higher-level logic will decide if it's a failure.
+            error_reason = f"sse_interrupted: {e}"
 
-        return ("".join(text_buf), trail, terminal)
+        return ("".join(text_buf), trail, terminal, error_reason)
 
     def _build_receipt(
         self,
@@ -456,7 +487,7 @@ def _extract_investigation_id(payload_obj: dict[str, Any]) -> str:
     return envelope.investigation_id() if envelope is not None else ""
 
 
-def _extract_substrate_transaction_id(trail: list[AgentTrailEvent]) -> str | None:
+def _extract_Gateway_transaction_id(trail: list[AgentTrailEvent]) -> str | None:
     """Scan the agent trail for a Warden-signed ActionReceipt and return its transaction_hash."""
     for evt in trail:
         if evt.event_type != "g8e.v1.ai.governance.warden.receipt.signed":

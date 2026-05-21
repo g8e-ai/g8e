@@ -36,6 +36,7 @@ SUT cannot drift from what the server actually validates.
 from __future__ import annotations
 
 import os
+import ssl
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -175,7 +176,7 @@ class AuthContext:
     # ---- Header / cookie construction ---------------------------------
 
     def auth_headers(self) -> dict[str, str]:
-        """Return the minimal header set required for substrate (g8eo) auth.
+        """Return the minimal header set required for Gateway (g8eo) auth.
 
         Mirrors ``scripts/cmd/common.sh::_operator_curl``.
         """
@@ -183,7 +184,7 @@ class AuthContext:
             HTTP_CONTENT_TYPE_HEADER: "application/json",
         }
         if self.operator_session_id:
-            # Substrate uses Authorization: Bearer <token>.
+            # Gateway uses Authorization: Bearer <token>.
             headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX} {self.operator_session_id}"
         if self.cli_session_id:
             headers[HTTP_CLI_SESSION_ID_HEADER] = self.cli_session_id
@@ -223,6 +224,20 @@ class AuthContext:
 
     # ---- httpx client factory -----------------------------------------
 
+    def _build_ssl_context(self) -> ssl.SSLContext:
+        """Build a single SSLContext with both server CA trust and the
+        client cert chain loaded.
+
+        httpx's split ``verify=`` / ``cert=`` parameters do not load the
+        client chain into the resulting SSLContext in a way that survives
+        the TLS 1.3 CertificateRequest from a server using
+        ``RequireAndVerifyClientCert``. Constructing the context here
+        keeps mTLS working end to end.
+        """
+        ctx = ssl.create_default_context(cafile=self.trust_bundle)
+        ctx.load_cert_chain(certfile=self.client_cert, keyfile=self.client_key)
+        return ctx
+
     def make_async_client(
         self,
         *,
@@ -233,8 +248,7 @@ class AuthContext:
     ) -> httpx.AsyncClient:
         """Construct an ``httpx.AsyncClient`` pre-wired with mTLS + cookie."""
         return httpx.AsyncClient(
-            verify=self.trust_bundle,
-            cert=(self.client_cert, self.client_key),
+            verify=self._build_ssl_context(),
             timeout=httpx.Timeout(
                 connect=connect_timeout,
                 read=read_timeout,

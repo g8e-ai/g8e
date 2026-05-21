@@ -158,6 +158,6 @@ class SSEWireEnvelope(BaseModel):
         return self.event.data.get(name)
 
     def transaction_hash(self) -> str | None:
-        """Return the substrate transaction hash if present in event.data."""
+        """Return the Gateway transaction hash if present in event.data."""
         val = self.field_in_data("transaction_hash")
         return val if isinstance(val, str) else None

@@ -76,64 +76,64 @@ func (f *fakeSuspendedStore) DeleteSuspendedTransaction(txHash string) error {
 func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
 	cases := []struct {
 		name         string
-		substrateErr error
+		GatewayErr   error
 		expectedCode int
 	}{
 		{
 			name:         "invalid envelope",
-			substrateErr: governance.ErrInvalidEnvelope,
+			GatewayErr:   governance.ErrInvalidEnvelope,
 			expectedCode: ErrCodeInvalidEnvelope,
 		},
 		{
 			name:         "hash mismatch",
-			substrateErr: governance.ErrTransactionHashMismatch,
+			GatewayErr:   governance.ErrTransactionHashMismatch,
 			expectedCode: ErrCodeHashMismatch,
 		},
 		{
 			name:         "expired",
-			substrateErr: governance.ErrTransactionExpired,
+			GatewayErr:   governance.ErrTransactionExpired,
 			expectedCode: ErrCodeExpired,
 		},
 		{
 			name:         "replay",
-			substrateErr: governance.ErrTransactionReplay,
+			GatewayErr:   governance.ErrTransactionReplay,
 			expectedCode: ErrCodeReplay,
 		},
 		{
 			name:         "state root mismatch",
-			substrateErr: governance.ErrStateRootMismatch,
+			GatewayErr:   governance.ErrStateRootMismatch,
 			expectedCode: ErrCodeStateMismatch,
 		},
 		{
 			name:         "L1 validation failed",
-			substrateErr: governance.ErrL1ValidationFailed,
+			GatewayErr:   governance.ErrL1ValidationFailed,
 			expectedCode: ErrCodeL1ValidationFailed,
 		},
 		{
 			name:         "L2 signature invalid",
-			substrateErr: governance.ErrL2SignatureInvalid,
+			GatewayErr:   governance.ErrL2SignatureInvalid,
 			expectedCode: ErrCodeL2SignatureInvalid,
 		},
 		{
 			name:         "L3 proof invalid",
-			substrateErr: governance.ErrL3ProofInvalid,
+			GatewayErr:   governance.ErrL3ProofInvalid,
 			expectedCode: ErrCodeL3ProofInvalid,
 		},
 		{
 			name:         "payload decode failed",
-			substrateErr: governance.ErrPayloadDecodeFailed,
+			GatewayErr:   governance.ErrPayloadDecodeFailed,
 			expectedCode: ErrCodePayloadDecodeFailed,
 		},
 		{
 			name:         "internal error fallback",
-			substrateErr: errors.New("some internal error"),
+			GatewayErr:   errors.New("some internal error"),
 			expectedCode: -32603,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			proc := &fakeEnvelopeProcessor{err: tc.substrateErr}
+			proc := &fakeEnvelopeProcessor{err: tc.GatewayErr}
 			g := &GatewayService{
 				envProc: proc,
 			}
@@ -153,7 +153,7 @@ func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
 
 			require.NotNil(t, resp.Error)
 			require.Equal(t, tc.expectedCode, resp.Error.Code)
-			require.Equal(t, tc.substrateErr.Error(), resp.Error.Message)
+			require.Equal(t, tc.GatewayErr.Error(), resp.Error.Message)
 		})
 	}
 }

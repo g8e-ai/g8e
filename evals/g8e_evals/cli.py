@@ -57,7 +57,7 @@ def main():
               help="Operator session id. Auto-loaded from ~/.g8e/credentials after `./g8e login`; "
                    "only pass this flag to override the cached session.")
 @click.option("--mode", type=click.Choice(["receipt", "baseline"]), default="receipt",
-              help="Receipt mode (default) verifies on-substrate receipts; baseline mode runs without binding")
+              help="Receipt mode (default) verifies on-Gateway receipts; baseline mode runs without binding")
 @click.option("--state-root", default="test-state-root-v1")
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("reports"))
 @click.option("--gold-set", type=click.Path(exists=True, path_type=Path))
@@ -79,7 +79,7 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         )
 
     # Reject the well-known footgun: passing the operator_id UUID as
-    # --operator-session-id silently 401s downstream because the substrate
+    # --operator-session-id silently 401s downstream because the Gateway
     # has no session matching that id. Fail fast with an actionable hint
     # rather than warning-and-continuing with an invalid token.
     operator_id_env = (os.environ.get("G8E_OPERATOR_ID") or "").strip()
@@ -114,8 +114,37 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
         if limit:
             tasks = tasks[:limit]
         verifier = IFEvalVerifier()
-    
-    # 2. Initialize SUT (real g8ee chat pipeline by default).
+
+    # 2. Apply G8E_TEST_LLM_* env vars as fallbacks (uniform with integration tests)
+    # Priority: CLI flags > G8E_TEST_LLM_* env vars > g8ee settings
+    if not config.primary.provider:
+        config.primary.provider = os.environ.get("G8E_TEST_LLM_PRIMARY_PROVIDER", "").strip() or None
+    if not config.primary.model:
+        config.primary.model = os.environ.get("G8E_TEST_LLM_PRIMARY_MODEL", "").strip() or None
+    if not config.primary.api_key:
+        config.primary.api_key = os.environ.get("G8E_TEST_LLM_PRIMARY_API_KEY", "").strip() or None
+    if not config.primary.endpoint:
+        config.primary.endpoint = os.environ.get("G8E_TEST_LLM_PRIMARY_ENDPOINT_URL", "").strip() or None
+
+    if not config.assistant.provider:
+        config.assistant.provider = os.environ.get("G8E_TEST_LLM_ASSISTANT_PROVIDER", "").strip() or None
+    if not config.assistant.model:
+        config.assistant.model = os.environ.get("G8E_TEST_LLM_ASSISTANT_MODEL", "").strip() or None
+    if not config.assistant.api_key:
+        config.assistant.api_key = os.environ.get("G8E_TEST_LLM_ASSISTANT_API_KEY", "").strip() or None
+    if not config.assistant.endpoint:
+        config.assistant.endpoint = os.environ.get("G8E_TEST_LLM_ASSISTANT_ENDPOINT_URL", "").strip() or None
+
+    if not config.lite.provider:
+        config.lite.provider = os.environ.get("G8E_TEST_LLM_LITE_PROVIDER", "").strip() or None
+    if not config.lite.model:
+        config.lite.model = os.environ.get("G8E_TEST_LLM_LITE_MODEL", "").strip() or None
+    if not config.lite.api_key:
+        config.lite.api_key = os.environ.get("G8E_TEST_LLM_LITE_API_KEY", "").strip() or None
+    if not config.lite.endpoint:
+        config.lite.endpoint = os.environ.get("G8E_TEST_LLM_LITE_ENDPOINT_URL", "").strip() or None
+
+    # 3. Initialize SUT (real g8ee chat pipeline by default).
     # The renderer is task-scoped, so the SUT-level callback delegates
     # to whichever TurnRenderer is active for the current task.
     current_renderer: dict[str, Optional[TurnRenderer]] = {"r": None}
@@ -180,6 +209,49 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
         console.print("\n[yellow]Provide keys via --primary-api-key, etc. or configure them in g8ee settings.[/yellow]")
         return
 
+    # Validate that at least one LLM model is configured (either in g8ee settings or via CLI flags)
+    has_cli_primary = bool(config.primary.provider and config.primary.model)
+    has_cli_assistant = bool(config.assistant.provider and config.assistant.model)
+    has_cli_lite = bool(config.lite.provider and config.lite.model)
+
+    if llm_settings is None and not (has_cli_primary or has_cli_assistant or has_cli_lite):
+        console.print("[bold red]Pre-flight validation failed:[/bold red]")
+        console.print("  - Could not fetch LLM settings from g8ee and no CLI model provided")
+        console.print("\n[yellow]To configure LLM models:[/yellow]")
+        console.print("  1. Run: ./g8e platform settings")
+        console.print("  2. Set primary_model and/or assistant_model in the LLM section")
+        console.print("  3. Or set G8E_TEST_LLM_* environment variables (uniform with integration tests):")
+        console.print("     - G8E_TEST_LLM_PRIMARY_PROVIDER (e.g., 'openai')")
+        console.print("     - G8E_TEST_LLM_PRIMARY_MODEL (e.g., 'gpt-4o')")
+        console.print("     - G8E_TEST_LLM_PRIMARY_API_KEY (your API key)")
+        console.print("     - G8E_TEST_LLM_PRIMARY_ENDPOINT_URL (if using custom endpoint)")
+        console.print("  4. Restart g8ee: ./g8e apps restart g8ee")
+        console.print("\n[yellow]Alternatively, use CLI flags:[/yellow]")
+        console.print("  ./g8e evals bench --suite ifeval --provider openai --model gpt-4o")
+        return
+
+    if llm_settings:
+        has_settings_primary = bool(llm_settings.primary_model)
+        has_settings_assistant = bool(llm_settings.assistant_model)
+        has_settings_lite = bool(llm_settings.lite_model)
+
+        if not (has_cli_primary or has_cli_assistant or has_cli_lite or
+                has_settings_primary or has_settings_assistant or has_settings_lite):
+            console.print("[bold red]Pre-flight validation failed:[/bold red]")
+            console.print("  - No LLM model configured in g8ee settings")
+            console.print("\n[yellow]To configure LLM models:[/yellow]")
+            console.print("  1. Run: ./g8e platform settings")
+            console.print("  2. Set primary_model and/or assistant_model in the LLM section")
+            console.print("  3. Or set G8E_TEST_LLM_* environment variables (uniform with integration tests):")
+            console.print("     - G8E_TEST_LLM_PRIMARY_PROVIDER (e.g., 'openai')")
+            console.print("     - G8E_TEST_LLM_PRIMARY_MODEL (e.g., 'gpt-4o')")
+            console.print("     - G8E_TEST_LLM_PRIMARY_API_KEY (your API key)")
+            console.print("     - G8E_TEST_LLM_PRIMARY_ENDPOINT_URL (if using custom endpoint)")
+            console.print("  4. Restart g8ee: ./g8e apps restart g8ee")
+            console.print("\n[yellow]Alternatively, use CLI flags:[/yellow]")
+            console.print("  ./g8e evals bench --suite ifeval --provider openai --model gpt-4o")
+            return
+
     collector = ReceiptCollector(config.operator_url)
     
     # Load warden pub key for verification
@@ -228,22 +300,22 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
             answer_chars=len(response.answer or ""),
         )
         
-        # Collect on-substrate receipt (if any) and merge with the in-bench
+        # Collect on-Gateway receipt (if any) and merge with the in-bench
         # agent trail. The agent_trail is the canonical evidence the chat
         # pipeline ran end-to-end; an Operator-issued signed receipt only
         # exists when the agent triggered a mutation (Tribunal->Warden path).
         if response.binding == BindingType.RECEIPT_BOUND and response.transaction_id:
             on_chain_receipt = await collector.collect_receipt(response.transaction_id)
             if on_chain_receipt:
-                # Store the substrate receipt in the response
-                # We keep the original receipt (ChatEvaluationReceipt) and add substrate data
+                # Store the Gateway receipt in the response
+                # We keep the original receipt (ChatEvaluationReceipt) and add Gateway data
                 if isinstance(response.receipt, ChatEvaluationReceipt):
                     # Convert to dict for merging, then back to model
                     receipt_dict = response.receipt.model_dump()
-                    receipt_dict["substrate_receipt"] = on_chain_receipt.model_dump()
+                    receipt_dict["Gateway_receipt"] = on_chain_receipt.model_dump()
                     response.receipt = receipt_dict  # Temporarily store as dict
                 else:
-                    response.receipt = {"substrate_receipt": on_chain_receipt.model_dump()}
+                    response.receipt = {"Gateway_receipt": on_chain_receipt.model_dump()}
                 response.receipt_signature = on_chain_receipt.signature
                 if warden_pub:
                     response.receipt_verified = verify_receipt_signature(on_chain_receipt, warden_pub)
@@ -286,7 +358,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
 
     # 4. Aggregate & Report
     agg = aggregate_results(suite, results)
-    render_summary(agg)
+    render_summary(agg, mode=config.mode)
     
     # 5. Save artifacts
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")

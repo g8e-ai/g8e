@@ -6,7 +6,7 @@ title: Scripts
 
 Last Updated: 2026-05-18
 
-The scripts layer is the primary operational interface for the g8e platform. It enforces a **host-native** execution model and manages the lifecycle of the mandatory Operator substrate plus optional application-layer adapters.
+The scripts layer is the primary operational interface for the g8e platform. It enforces a **host-native** execution model and manages the lifecycle of the mandatory Operator Gateway plus optional application-layer adapters.
 
 ---
 
@@ -14,7 +14,7 @@ The scripts layer is the primary operational interface for the g8e platform. It 
 
 g8e avoids container-orchestration complexity by running directly on the host. There are two distinct tiers:
 
-1. **Substrate (mandatory)** - The `g8eo` binary in `--listen` mode. Owns persistence, PKI, pub/sub, and governance enforcement.
+1. **Gateway (mandatory)** - The `g8eo` binary in `--listen` mode. Owns persistence, PKI, pub/sub, and governance enforcement.
 2. **Application Layer (optional)** - Reference adapters like `g8ee` that consume the public protocol. Run as managed host processes.
 
 ### The `./g8e` CLI entry point
@@ -33,14 +33,14 @@ Running `./g8e` without arguments launches the Interactive Platform Manager. Dir
 
 ### Platform Management - `./g8e platform`
 
-Orchestrates the substrate lifecycle via `scripts/core/build.sh`.
+Orchestrates the Gateway lifecycle via `scripts/core/build.sh`.
 
 | Command | Purpose |
 |---|---|
 | `start [-a\|--with-apps\|--with-g8ee]` | Start Operator listen mode; optional apps require explicit opt-in. |
 | `stop` | Stop Operator listen mode and any optional app processes. |
 | `restart` | Restart with the same flags. |
-| `status` | Substrate health first, optional app status separately. |
+| `status` | Gateway health first, optional app status separately. |
 | `wipe` | Clears app data via the Operator API. Preserves PKI, secrets, settings, and auth state. |
 | `reset` | Destructive: wipes data and bootstrap secrets. **Preserves PKI roots.** |
 | `clean` | Nuke all processes and the entire `.g8e/` runtime directory. |
@@ -56,10 +56,10 @@ Manages optional, opt-in adapters.
 | `start [g8ee\|all]` | Start an optional app. |
 | `stop [g8ee\|all]` | Stop an optional app. |
 | `restart [g8ee\|all]` | Restart an optional app. |
-| `status` | App status alongside substrate status. |
+| `status` | App status alongside Gateway status. |
 | `build [g8ee\|all]` | Install native deps (e.g., Python venv). |
 
-Apps are BYO clients with no substrate responsibilities and no private coupling.
+Apps are BYO clients with no Gateway responsibilities and no private coupling.
 
 ### Operator Operations - `./g8e operator`
 
@@ -95,7 +95,7 @@ Starts an interactive web session with the AI Engine. Optional initial prompt.
 
 Dispatched via `scripts/cmd/infra.sh`.
 
-**`data`** - Python helpers for substrate state:
+**`data`** - Python helpers for Gateway state:
 
 - `users` - User and session management.
 - `operators` - Operator registration and slot management.
@@ -117,7 +117,7 @@ See [Tests](tests.md). Native toolchains via `scripts/testing/run_tests.sh`.
 
 | Command | Purpose |
 |---|---|
-| `g8eo [path]` | Go Operator substrate tests with race detection. **Default when no component is provided.** |
+| `g8eo [path]` | Go Operator Gateway tests with race detection. **Default when no component is provided.** |
 | `g8ee [path]` | Optional Python Engine adapter tests with LLM provider support. |
 | `chaos [options]` | Resiliency testing via `chaos_tester` (e.g., `--count=100`). |
 
@@ -168,7 +168,7 @@ See [Demos](demos.md).
 ```text
 scripts/
 ├── cmd/           # Primary command implementations (Bash)
-│   ├── platform.sh   # Substrate lifecycle
+│   ├── platform.sh   # Gateway lifecycle
 │   ├── apps.sh       # App-layer lifecycle
 │   ├── infra.sh      # Data/Security dispatcher
 │   ├── operator.sh   # Operator binary/deployment
@@ -177,7 +177,7 @@ scripts/
 │   ├── build.sh      # Main process manager
 │   ├── manage-env.sh # Variable resolution
 │   └── path_utils.sh # PROJECT_ROOT resolution
-├── data/          # Substrate interaction (Python)
+├── data/          # Gateway interaction (Python)
 ├── security/      # Security logic
 ├── testing/       # Test runners
 └── tools/         # Setup wizards (LLM, SSH, Search)
@@ -192,7 +192,7 @@ scripts/
    - Python: `Path(__file__).parent.parent.parent.absolute()`
 2. **Service readiness** - The platform is not "ready" until the Hub `/healthz` passes. `build.sh` blocks until this state.
 3. **Canonical wire format** - All client-facing interaction uses canonical JSON (protojson). Binary protobuf is reserved for internal storage.
-4. **Fail-closed execution** - Scripts never mask failures or proceed with missing trust material. Missing trust bundles or secrets exit with an actionable error pointing at the platform substrate.
+4. **Fail-closed execution** - Scripts never mask failures or proceed with missing trust material. Missing trust bundles or secrets exit with an actionable error pointing at the platform Gateway.
 
 For detailed help on any subcommand: `./g8e <command> --help`.
 

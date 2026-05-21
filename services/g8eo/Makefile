@@ -32,7 +32,6 @@ VERSION := $(shell cat ../../VERSION 2>/dev/null | tr -d '[:space:]' || echo 'v0
 BINARY_NAME := g8e.operator
 BUILD_DIR := build
 BLOB_NAMESPACE := operator-binary
-OPERATOR_URL := https://localhost:9000
 
 # =============================================================================
 # ARCHITECTURES

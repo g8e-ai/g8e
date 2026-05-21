@@ -1,5 +1,5 @@
 # ==============================================================================
-# g8e Substrate Git Ignore
+# g8e Gateway Git Ignore
 # Optimized for Air-Gap (Local-First) & Zero-Bloat
 # ==============================================================================
 
@@ -90,7 +90,7 @@ services/g8eo/*.test
 services/g8eo/bin/
 services/g8eo/build/
 
-# --- Go Substrate ---
+# --- Go Gateway ---
 go.work
 go.work.sum
 # Note: vendor/ is INTENTIONALLY NOT IGNORED to support air-gapped builds

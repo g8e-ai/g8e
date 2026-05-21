@@ -391,7 +391,7 @@ func TestHandleVaultCommand_ResetVault_NotInitialized_Subprocess(t *testing.T) {
 func TestRunListenMode_BadLogLevel_Subprocess(t *testing.T) {
 	if os.Getenv("G8E_TEST_LISTEN_BAD_LOG") == "1" {
 		dir := os.Getenv(marshaler.EnvVar(constants.EnvVar.TestTmpDir))
-		runListenMode(0, 0, 0, 0, dir, "", "", "", "", "notavalidlevel")
+		runListenMode(0, 0, 0, dir, "", "", "", "", "notavalidlevel")
 		return
 	}
 

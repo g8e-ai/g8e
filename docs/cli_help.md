@@ -7,7 +7,7 @@ title: g8e CLI
 Last Updated: 2026-05-19
 Version: v0.2.6
 
-The `g8e` command is the unified entry point for the g8e platform. The platform is built on the **g8e Protocol** as substrate; this CLI manages the substrate (`g8eg` and `g8eo`) by default and exposes the reference Engine app (`g8ee`) only as an optional application-layer adapter.
+The `g8e` command is the unified entry point for the g8e platform. The platform is built on the **g8e Protocol** as Gateway; this CLI manages the Gateway (`g8eg` and `g8eo`) by default and exposes the reference Engine app (`g8ee`) only as an optional application-layer adapter.
 
 ## Usage
 
@@ -30,14 +30,14 @@ The platform is built on security-first architectural invariants that cannot be 
 - **Air-Gap Capable**: Fully self-hosted with no SaaS dependencies or mandatory telemetry.
 - **Provider Agnostic**: Swap LLM providers (Gemini, Anthropic, OpenAI, Ollama) at will. Governance is the constant.
 
-## Substrate and Application Layer
+## Gateway and Application Layer
 
-The default substrate is the Operator plus the shared protocol. Bundled apps remain in-tree as opt-in reference adapters and must use the same public protocol surface as BYO clients.
+The default Gateway is the Operator plus the shared protocol. Bundled apps remain in-tree as opt-in reference adapters and must use the same public protocol surface as BYO clients.
 
 | Layer | Component | Language | Purpose |
 |-----------|-----------|----------|---------|
-| **Substrate (Gateway)** | **g8eg** | Go | Policy Decision Point (PDP): Protocol hub, CA/PKI, persistence, and pub/sub broker in listen mode. |
-| **Substrate (Operator)**| **g8eo** | Go | Policy Execution Point (PEP): Sovereign host execution (Warden), local git ledger, and MCP Server. |
+| **Gateway (Gateway)** | **g8eg** | Go | Policy Decision Point (PDP): Protocol hub, CA/PKI, persistence, and pub/sub broker in listen mode. |
+| **Gateway (Operator)**| **g8eo** | Go | Policy Execution Point (PEP): Sovereign host execution (Warden), local git ledger, and MCP Server. |
 | **Protocol** | **protocol/proto** | Protobuf | Canonical transaction schemas, typed payloads, and envelope contracts. |
 | **Application Layer** | **g8ee** | Python | Optional reference Engine adapter for agentic proposal and L2 proof generation. |
 
@@ -96,8 +96,8 @@ When no operator is connected:
 
 ### Testing & Development
 ```bash
-./g8e test           # Go Operator substrate tests
-./g8e test g8eo      # Go Operator substrate tests
+./g8e test           # Go Operator Gateway tests
+./g8e test g8eo      # Go Operator Gateway tests
 ./g8e test g8ee      # Optional Python Engine adapter tests
 ```
 
@@ -120,7 +120,7 @@ When no operator is connected:
 - `start [-a|--with-apps|--with-g8ee]`: Start Governance Gateway (`g8eg`) listen mode by default; optional apps require explicit opt-in
 - `stop`: Stop Governance Gateway and any optional app processes
 - `restart [-a|--with-apps|--with-g8ee]`: Restart Governance Gateway listen mode by default; optional apps require explicit opt-in
-- `status`: Show substrate health first and optional application-layer status separately
+- `status`: Show Gateway health first and optional application-layer status separately
 - `reset`: Destructive. Wipes Engine data, Gateway listen-mode data, and bootstrap secrets while preserving PKI material in `.g8e/pki` (prompts for confirmation; bypass with `-y`, `--yes`, or `--force`)
 - `clean`: Nuke all processes and the `.g8e` runtime directory (prompts for confirmation; bypass with `-y`, `--yes`, or `--force`)
 - `logs`: Stream logs from all components
@@ -130,7 +130,7 @@ When no operator is connected:
 - `start [g8ee|all]`: Start optional bundled app adapter
 - `stop [g8ee|all]`: Stop optional bundled app adapter
 - `restart [g8ee|all]`: Restart optional bundled app adapter
-- `status`: Show optional app status alongside substrate status
+- `status`: Show optional app status alongside Gateway status
 - `build [g8ee|all]`: Install optional app dependencies
 
 ### operator
@@ -143,9 +143,9 @@ When no operator is connected:
 - `ssh-config`: Manage SSH identities for fleet operations
 
 ### test
-- `g8eo [path]`: Go Operator substrate tests with race detection. Run `./g8e test g8eo -h` for unique options. This is the default when no component is provided.
+- `g8eo [path]`: Go Operator Gateway tests with race detection. Run `./g8e test g8eo -h` for unique options. This is the default when no component is provided.
 - `g8ee [path]`: Optional Python Engine adapter tests with LLM provider support. Run `./g8e test g8ee -h` for unique options.
-- `ci`: Run all CI workflow steps locally (proto verify, lint, vulncheck, substrate tests, app tests). Run `./g8e test ci -h` for details.
+- `ci`: Run all CI workflow steps locally (proto verify, lint, vulncheck, Gateway tests, app tests). Run `./g8e test ci -h` for details.
 - `chaos [options]`: Run the g8eo Chaos Tester against the local audit stack. Run `./g8e test chaos -h` for options.
 
 ### security

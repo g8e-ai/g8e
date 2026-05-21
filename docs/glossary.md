@@ -181,13 +181,13 @@ The AI engine component with LLM provider abstraction supporting OpenAI, Anthrop
 
 ## Governance Gateway (g8eg)
 
-The central, BFT-governed Policy Decision Point (PDP) running in `--listen` mode (built as the `g8e.gateway` binary from the Go substrate codebase). It acts as the platform's cryptographic backplane, providing central persistence (SQLite Coordination Store), PKI/CA certificate issuance, a secure pub/sub broker, Server-Sent Events (SSE) buffering, replay protection, and the authoritative audit event vault.
+The central, BFT-governed Policy Decision Point (PDP) running in `--listen` mode (built as the `g8e.gateway` binary from the Go Gateway codebase). It acts as the platform's cryptographic backplane, providing central persistence (SQLite Coordination Store), PKI/CA certificate issuance, a secure pub/sub broker, Server-Sent Events (SSE) buffering, replay protection, and the authoritative audit event vault.
 
 ---
 
 ## Governed Operator (g8eo)
 
-The host-resident execution agent and Policy Execution Point (PEP) (built as the `g8e.operator` binary from the Go substrate codebase). Running on target hosts, `g8eo` connects outbound-only over mTLS WSS to `g8eg`. It exposes host tools as a Model Context Protocol (MCP) Server, verifies incoming UAP transactions against local L1/L2/L3 gates, executes actions strictly through the Warden boundary, and records tamper-evident local audit logs (Audit Vault, Scrubbed Vault, and git-backed session ledgers).
+The host-resident execution agent and Policy Execution Point (PEP) (built as the `g8e.operator` binary from the Go Gateway codebase). Running on target hosts, `g8eo` connects outbound-only over mTLS WSS to `g8eg`. It exposes host tools as a Model Context Protocol (MCP) Server, verifies incoming UAP transactions against local L1/L2/L3 gates, executes actions strictly through the Warden boundary, and records tamper-evident local audit logs (Audit Vault, Scrubbed Vault, and git-backed session ledgers).
 
 ---
 

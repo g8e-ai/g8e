@@ -32,7 +32,6 @@ var Paths = struct {
 	}
 	Ports struct {
 		OperatorHttp int
-		OperatorWss int
 		OperatorBootstrap int
 		OperatorPublic int
 		G8eeHttp int
@@ -64,16 +63,14 @@ var Paths = struct {
 	},
 	Ports: struct {
 		OperatorHttp int
-		OperatorWss int
 		OperatorBootstrap int
 		OperatorPublic int
 		G8eeHttp int
 		OpenclawGateway int
 	}{
 		OperatorHttp: 8440,
-		OperatorWss: 8440,
 		OperatorBootstrap: 8441,
-		OperatorPublic: 8440,
+		OperatorPublic: 8442,
 		G8eeHttp: 8443,
 		OpenclawGateway: 18789,
 	},

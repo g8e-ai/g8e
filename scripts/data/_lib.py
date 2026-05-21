@@ -14,7 +14,7 @@
 """
 Shared utilities for g8e data management scripts.
 
-Provides authentication, HTTP clients for the Operator substrate,
+Provides authentication, HTTP clients for the Operator Gateway,
 and terminal display helpers used across all resource scripts.
 """
 

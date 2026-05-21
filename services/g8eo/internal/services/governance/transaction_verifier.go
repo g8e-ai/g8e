@@ -401,7 +401,7 @@ func (tv *TransactionVerifier) verifyL2Signature(pubKey ed25519.PublicKey, signa
 }
 
 // isMutation returns true if the action type modifies system state.
-// MCP_CALL and A2A_CALL are mutations because the substrate cannot reason
+// MCP_CALL and A2A_CALL are mutations because the Gateway cannot reason
 // about the side effects of arbitrary downstream tools/skills - they must
 // pass the L3 human-presence gate just like any local mutation.
 func (tv *TransactionVerifier) isMutation(actionType constants.ActionType) bool {

@@ -32,11 +32,11 @@ CREATE INDEX IF NOT EXISTS idx_kv_expires ON kv_store(expires_at);
 
 -- SSE event buffer: per-routing-target ring buffer for reconnection replay.
 -- Each row carries exactly one of three first-class routing keys, expressed as
--- distinct columns so the substrate never has to talk about a bare session id:
+-- distinct columns so the Gateway never has to talk about a bare session id:
 --   * web_session_id - browser UI session (mTLS cookie session)
 --   * cli_session_id - BYO/CLI/scripted client session (mTLS cert session)
 --   * user_id        - background fanout to every session a user owns
--- web and cli are routed identically by the substrate but MUST never be
+-- web and cli are routed identically by the Gateway but MUST never be
 -- conflated under a single shared id namespace.
 CREATE TABLE IF NOT EXISTS sse_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -23,7 +23,7 @@ case "$_APP_ACTION" in
     -h|--help|"")
         echo "Usage: ./g8e apps {start|stop|restart|status|build} [g8ee|all]"
         echo ""
-        echo "Optional bundled apps are application-layer adapters and are not part of the default substrate lifecycle."
+        echo "Optional bundled apps are application-layer adapters and are not part of the default Gateway lifecycle."
         [[ -z "$_APP_ACTION" ]] && exit 1 || exit 0
         ;;
 esac

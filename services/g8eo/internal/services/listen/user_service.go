@@ -27,7 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 )
 
-// UserService handles user management in the Operator substrate.
+// UserService handles user management in the Operator Gateway.
 // This replaces client's UserService as the authoritative user source.
 type UserService struct {
 	db     *ListenDBService
@@ -170,7 +170,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 }
 
 // FindBootstrapUser returns the single bootstrap user, if any. Multiple
-// bootstrap users is a substrate invariant violation; if more than one row
+// bootstrap users is a Gateway invariant violation; if more than one row
 // is found the call fails closed so callers can refuse to proceed.
 func (s *UserService) FindBootstrapUser() (*models.User, error) {
 	filters := []models.DocFilter{

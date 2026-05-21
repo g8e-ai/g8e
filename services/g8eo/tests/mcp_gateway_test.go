@@ -16,7 +16,7 @@ package tests
 /*
 TestMCPGateway_EndToEnd exercises g8eo from the perspective of a standard MCP client
 (e.g., Claude Code or a generic AI agent). It verifies the "Universal Protocol Translator"
-logic which allows "dumb" clients to be governed by the g8e substrate without needing
+logic which allows "dumb" clients to be governed by the g8e Gateway without needing
 native signing or envelope construction logic.
 
 Practical Coverage:
@@ -91,7 +91,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	defer downstreamServer.Close()
 
 	// 2. Setup Operator with MCP configuration
-	cfg, err := config.LoadListen(0, 0, 0, 0, dataDir, pkiDir, secretsDir, "localhost", "g8e", "", "", true)
+	cfg, err := config.LoadListen(0, 0, 0, dataDir, pkiDir, secretsDir, "localhost", "g8e", "", "", true)
 	require.NoError(t, err)
 	cfg.Listen.MCPDownstreamURL = downstreamServer.URL
 
@@ -179,8 +179,8 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	cookie := &http.Cookie{Name: "g8e_session", Value: webSess.ID}
 
-	// Register and get cert (bootstrap port is TLS-multiplexed)
-	bootstrapURL := fmt.Sprintf("https://localhost:%d", ls.GetBootstrapPort())
+	// Register and get cert (bootstrap port serves plain HTTP for trust establishment)
+	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
 	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
 	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
 	rootPool := x509.NewCertPool()
@@ -346,7 +346,7 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	defer downstreamServer.Close()
 
 	// 2. Setup Operator with A2A configuration
-	cfg, err := config.LoadListen(0, 0, 0, 0, dataDir, pkiDir, secretsDir, "localhost", "g8e", "", "", true)
+	cfg, err := config.LoadListen(0, 0, 0, dataDir, pkiDir, secretsDir, "localhost", "g8e", "", "", true)
 	require.NoError(t, err)
 	cfg.Listen.A2ADownstreamURL = downstreamServer.URL
 
@@ -434,8 +434,8 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	cookie := &http.Cookie{Name: "g8e_session", Value: webSess.ID}
 
-	// Register and get cert (bootstrap port is TLS-multiplexed)
-	bootstrapURL := fmt.Sprintf("https://localhost:%d", ls.GetBootstrapPort())
+	// Register and get cert (bootstrap port serves plain HTTP for trust establishment)
+	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
 	rootPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
 	hubPEM, _ := os.ReadFile(filepath.Join(pkiDir, "trust", "hub-bundle.pem"))
 	rootPool := x509.NewCertPool()

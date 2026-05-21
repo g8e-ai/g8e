@@ -14,8 +14,8 @@
 
 # g8e Test Runner
 #
-# Runs substrate tests by default and optional app tests only when requested.
-# Supports native Go toolchain for the substrate plus virtualenvs/npm for app targets.
+# Runs Gateway tests by default and optional app tests only when requested.
+# Supports native Go toolchain for the Gateway plus virtualenvs/npm for app targets.
 
 set -e
 
@@ -97,7 +97,7 @@ while [[ $# -gt 0 ]]; do
             if [[ "$DETECTED_COMPONENT" == "g8eo" ]]; then
                 echo "Usage: ./g8e test g8eo [OPTIONS] [-- EXTRA_ARGS]"
                 echo ""
-                echo "Go Operator substrate tests (Policy Execution Point & mTLS translation gateway)."
+                echo "Go Operator Gateway tests (Policy Execution Point & mTLS translation gateway)."
                 echo ""
                 echo "Options:"
                 echo "  --coverage                Generate Go coverage report (coverage.out)"
@@ -185,7 +185,7 @@ while [[ $# -gt 0 ]]; do
                 echo "  1. verify-proto / lint-no-bare-session-id"
                 echo "  2. lint-g8eo / lint-protocol (golangci-lint)"
                 echo "  3. vulncheck-g8eo (govulncheck)"
-                echo "  4. test-g8eo (Substrate unit tests)"
+                echo "  4. test-g8eo (Gateway unit tests)"
                 echo "  5. constants-lint (Verify no raw string literals in Go code where constants exist)"
                 echo "  6. apps-g8ee (Start g8ee application and run Pytest unit tests)"
                 echo ""
@@ -195,7 +195,7 @@ while [[ $# -gt 0 ]]; do
                 echo "Usage: ./g8e test [COMPONENT] [OPTIONS]"
                 echo ""
                 echo "Components:"
-                echo "  g8eo                      Go Operator substrate tests (default component)"
+                echo "  g8eo                      Go Operator Gateway tests (default component)"
                 echo "  g8ee                      Python Engine adapter tests"
                 echo "  chaos                     Run local audit stack Chaos Tester"
                 echo "  ci                        Run full CI pipeline locally"
@@ -246,17 +246,17 @@ fi
 
 _prompt_llm_config() {
     # Skip if already provided via env/flags OR if not interactive
-    [[ -n "${G8E_TEST_LLM_PROVIDER:-}" ]] && return
+    [[ -n "${G8E_TEST_LLM_PRIMARY_PROVIDER:-}" ]] && return
     
     echo ""
     log_warn "LLM credentials not set. AI integration tests will be skipped."
-    log_warn "To enable them, set G8E_TEST_LLM_PROVIDER and G8E_TEST_LLM_API_KEY."
+    log_warn "To enable them, set G8E_TEST_LLM_PRIMARY_PROVIDER and G8E_TEST_LLM_PRIMARY_API_KEY."
     echo ""
 }
 
 _show_llm_config() {
-    if [[ -n "${G8E_TEST_LLM_PROVIDER:-}" ]]; then
-        local provider="${G8E_TEST_LLM_PROVIDER}"
+    if [[ -n "${G8E_TEST_LLM_PRIMARY_PROVIDER:-}" ]]; then
+        local provider="${G8E_TEST_LLM_PRIMARY_PROVIDER}"
         local primary_model="${G8E_TEST_LLM_PRIMARY_MODEL:-}"
         
         # Determine default model if not set
@@ -278,8 +278,8 @@ _show_llm_config() {
         echo -e "  Primary Model:      ${primary_model}"
         [[ -n "${G8E_TEST_LLM_ASSISTANT_MODEL:-}" ]]     && echo -e "  Assistant Model:    ${G8E_TEST_LLM_ASSISTANT_MODEL}"
         [[ -n "${G8E_TEST_LLM_LITE_MODEL:-}" ]]          && echo -e "  Lite Model:         ${G8E_TEST_LLM_LITE_MODEL}"
-        [[ -n "${G8E_TEST_LLM_ENDPOINT_URL:-}" ]]        && echo -e "  Primary Endpoint:   ${G8E_TEST_LLM_ENDPOINT_URL}"
-        [[ -n "${G8E_TEST_LLM_API_KEY:-}" ]]             && echo -e "  Primary API Key:    (set)"
+        [[ -n "${G8E_TEST_LLM_PRIMARY_ENDPOINT_URL:-}" ]]        && echo -e "  Primary Endpoint:   ${G8E_TEST_LLM_PRIMARY_ENDPOINT_URL}"
+        [[ -n "${G8E_TEST_LLM_PRIMARY_API_KEY:-}" ]]             && echo -e "  Primary API Key:    (set)"
         echo ""
     else
         echo ""
@@ -447,7 +447,7 @@ run_ci() {
     fi
 
     # 4. test-g8eo & apps-g8ee (requires platform)
-    log_header "CI: Running substrate and app tests"
+    log_header "CI: Running Gateway and app tests"
     
     # Skip proto generation in sub-steps since we already did it at start of run_tests.sh
     export G8E_SKIP_PROTO=true

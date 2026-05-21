@@ -37,17 +37,11 @@ DEV_MODE=false
 G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$SCRIPT_DIR/.g8e}"
 G8E_PKI_DIR_HOST="${G8E_PKI_DIR:-$G8E_RUNTIME_DIR/pki}"
 G8E_SECRETS_DIR_HOST="${G8E_SECRETS_DIR:-$G8E_RUNTIME_DIR/secrets}"
-OPERATOR_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"
 G8E_CREDENTIALS_DIR="$HOME/.g8e"
 G8E_CREDENTIALS_FILE="$G8E_CREDENTIALS_DIR/credentials"
 
 # Source common helpers for the wrapper itself
 source "$SCRIPT_DIR/scripts/cmd/common.sh"
-
-_ensure_llm_config() {
-    # This is a placeholder for any future environment setup
-    :
-}
 
 _menu() {
     if [[ ! -t 0 ]]; then _help; exit 0; fi
@@ -121,7 +115,7 @@ if [[ "$TOP" == "chat" ]]; then _require_authenticated; fi
 
 # Dispatch to focused scripts
 case "$TOP" in
-    platform)   exec bash "$SCRIPT_DIR/scripts/cmd/platform.sh" "$SUB" "${@:3}" ;;
+    platform)   bash "$SCRIPT_DIR/scripts/cmd/platform.sh" "$SUB" "${@:3}" ;;
     apps)       exec bash "$SCRIPT_DIR/scripts/cmd/apps.sh" "$SUB" "${@:3}" ;;
     operator)   exec bash "$SCRIPT_DIR/scripts/cmd/operator.sh" "$SUB" "${@:3}" ;;
     chat)       exec bash "$SCRIPT_DIR/scripts/cmd/chat.sh" "$SUB" "${@:3}" ;;

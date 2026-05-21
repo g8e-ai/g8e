@@ -57,7 +57,6 @@ class TestSessionEventWireContract:
         wire = SessionEventWire.from_session_event(session_event)
 
         assert wire.web_session_id == "sess-123"
-        assert wire.user_id == "user-abc"
         assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
         assert wire.event.data["message"] == "test"
         assert wire.event.data["web_session_id"] == "sess-123"
@@ -78,7 +77,6 @@ class TestSessionEventWireContract:
         wire = SessionEventWire.from_session_event(session_event)
 
         assert wire.web_session_id == "sess-123"
-        assert wire.user_id == "user-abc"
         assert wire.event.type == EventType.AI_LLM_CHAT_ITERATION_THINKING_STARTED
         assert wire.event.data["message"] == "test"
         assert wire.event.data["web_session_id"] == "sess-123"
@@ -101,7 +99,8 @@ class TestSessionEventWireContract:
 
         assert isinstance(dumped, dict)
         assert dumped["web_session_id"] == "sess-123"
-        assert dumped["user_id"] == "user-abc"
+        assert "user_id" not in dumped
+        assert dumped["event"]["data"]["user_id"] == "user-abc"
         assert dumped["event"]["type"] == "g8e.v1.ai.llm.chat.iteration.thinking.started"
         assert isinstance(dumped["event"]["data"], dict)
         assert dumped["event"]["data"]["message"] == "test"

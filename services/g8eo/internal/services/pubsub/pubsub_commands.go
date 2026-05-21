@@ -328,7 +328,7 @@ func (rs *PubSubCommandService) Start(ctx context.Context) error {
 			rs.listenForCommands(channelName)
 		}()
 	} else {
-		rs.logger.Info("Command service starting in substrate mode (no pub/sub subscription)",
+		rs.logger.Info("Command service starting in Gateway mode (no pub/sub subscription)",
 			"mode", "listen")
 	}
 
@@ -503,7 +503,7 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 }
 
 // ProcessEnvelope is the public, synchronous entry point for fail-closed
-// substrate transaction processing. It is used by the listen-mode HTTP surface
+// Gateway transaction processing. It is used by the listen-mode HTTP surface
 // (POST /api/governance/envelope) to verify a UAP JSON envelope and execute it
 // through the Warden, returning the signed ActionReceipt or a verification
 // error.

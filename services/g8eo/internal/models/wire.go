@@ -30,6 +30,6 @@ type RuntimeConfig struct {
 	LocalStorageEnabled bool   `json:"local_storage_enabled"`
 	NoGit               bool   `json:"no_git"`
 	LogLevel            string `json:"log_level"`
-	WSSPort             int    `json:"wss_port"`
-	HTTPPort            int    `json:"http_port"`
+
+	HTTPPort int `json:"http_port"`
 }

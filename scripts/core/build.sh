@@ -15,7 +15,7 @@
 # Platform lifecycle management for the local g8e environment.
 #
 # Service categories:
-#   Substrate: Operator listen mode (runs as local operator binary)
+#   Gateway: Operator listen mode (runs as local operator binary)
 #   Optional application layer: g8ee (explicit opt-in only)
 #   Data volumes:
 #     .g8e/data     (Operator listen mode -- SQLite DB, users, settings; wiped by reset)
@@ -161,7 +161,7 @@ usage() {
 Usage: $(basename "$0") <command> [options]
 
 Commands:
-  status                          Show substrate and optional app process status
+  status                          Show Gateway and optional app process status
   up [component ...] [-a|--with-apps] Start Operator listen mode by default
                                   Default (no components): operator
                                   Valid: operator g8ee
@@ -347,6 +347,16 @@ _start_g8ee() {
         export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
         export G8E_INTERNAL_HTTP_URL="https://localhost:${OPERATOR_LISTEN_HTTP_PORT}"
         export G8E_INTERNAL_PUBSUB_URL="wss://localhost:${OPERATOR_LISTEN_WSS_PORT}"
+        export G8E_TEST_LLM_PRIMARY_PROVIDER="${G8E_TEST_LLM_PRIMARY_PROVIDER:-}"
+        export G8E_TEST_LLM_PRIMARY_MODEL="${G8E_TEST_LLM_PRIMARY_MODEL:-}"
+        export G8E_TEST_LLM_PRIMARY_API_KEY="${G8E_TEST_LLM_PRIMARY_API_KEY:-}"
+        export G8E_TEST_LLM_ASSISTANT_PROVIDER="${G8E_TEST_LLM_ASSISTANT_PROVIDER:-}"
+        export G8E_TEST_LLM_ASSISTANT_MODEL="${G8E_TEST_LLM_ASSISTANT_MODEL:-}"
+        export G8E_TEST_LLM_ASSISTANT_API_KEY="${G8E_TEST_LLM_ASSISTANT_API_KEY:-}"
+        export G8E_TEST_LLM_LITE_PROVIDER="${G8E_TEST_LLM_LITE_PROVIDER:-}"
+        export G8E_TEST_LLM_LITE_MODEL="${G8E_TEST_LLM_LITE_MODEL:-}"
+        export G8E_TEST_LLM_LITE_API_KEY="${G8E_TEST_LLM_LITE_API_KEY:-}"
+        export G8E_TEST_LLM_LITE_ENDPOINT="${G8E_TEST_LLM_LITE_ENDPOINT:-}"
 
         local cert_name="${G8E_PATH_G8EE_CERT_NAME:-g8ee}"
         setsid "$venv_dir/bin/uvicorn" app.main:app --host 0.0.0.0 --port "${G8EE_HTTP_PORT}" \
@@ -380,7 +390,6 @@ _start_operator_listen() {
     fi
 
     _check_port_available "$OPERATOR_LISTEN_HTTP_PORT" "Governance Gateway HTTP API" || exit 1
-    _check_port_available "$OPERATOR_LISTEN_WSS_PORT" "Governance Gateway Pub/Sub" || exit 1
     _check_port_available "$OPERATOR_LISTEN_BOOTSTRAP_PORT" "Operator Bootstrap" || exit 1
     _check_port_available "$OPERATOR_LISTEN_PUBLIC_PORT" "Operator Public API" || exit 1
 
@@ -424,7 +433,7 @@ _start_operator_listen() {
         --pki-dir "$OPERATOR_LISTEN_PKI_DIR" \
         --secrets-dir "$OPERATOR_LISTEN_SECRETS_DIR" \
         --http-listen-port "$OPERATOR_LISTEN_HTTP_PORT" \
-        --wss-listen-port "$OPERATOR_LISTEN_WSS_PORT" \
+        
         --bootstrap-listen-port "$OPERATOR_LISTEN_BOOTSTRAP_PORT" \
         --public-listen-port "$OPERATOR_LISTEN_PUBLIC_PORT" \
         > "$OPERATOR_LISTEN_LOG_FILE" 2>&1 &
@@ -547,7 +556,7 @@ _load_env
 
 _print_platform_info() {
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  g8e Operator/protocol substrate ready"
+    echo "  g8e Operator/protocol Gateway ready"
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "  Operator mTLS API:     https://localhost:$OPERATOR_LISTEN_HTTP_PORT"
@@ -573,8 +582,14 @@ _print_platform_info() {
         echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "  Provisioning & Login"
         echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "  Login:                  ./g8e login"
-        echo "  New Device Link:        ./g8e data device-links create --email superadmin@g8e.local"
+        # Check if credentials are already loaded (after auto-bootstrap)
+        if [[ -n "${G8E_OPERATOR_SESSION_ID:-}" ]]; then
+            echo "  Status:                 \033[1;32mAuthenticated\033[0m (auto-loaded after bootstrap)"
+            echo "  New Device Link:        ./g8e data device-links create --email superadmin@g8e.local"
+        else
+            echo "  Login:                  ./g8e login"
+            echo "  New Device Link:        ./g8e data device-links create --email superadmin@g8e.local"
+        fi
     else
         echo "  Optional apps:          not running (use ./g8e apps start to enable)"
     fi
@@ -595,9 +610,11 @@ if [[ "$COMMAND" == "status" ]]; then
         || git -C "$PROJECT_ROOT" describe --tags --abbrev=0 2>/dev/null \
         || echo 'unknown')"
     [[ "$_VER" != v* ]] && _VER="v$_VER"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Substrate Status"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    printf "  %-14s %-12s %-8s %-32s %s\n" "Component" "Status" "PID" "Endpoints" "Extra"
+    printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    printf "\n  \033[1m[Gateway]\033[0m\n"
     
     if _operator_listen_running; then
         pid=$(cat "$OPERATOR_LISTEN_PID_FILE")
@@ -614,18 +631,18 @@ if [[ "$COMMAND" == "status" ]]; then
             fi
         fi
         
-        printf "  %-14s  \033[1;32m%-10s\033[0m  (PID: %s, Bootstrapped: %s)\n" "operator" "RUNNING" "$pid" "$bootstrapped"
+        printf "  %-14s \033[1;32m%-12s\033[0m %-8s %-32s %s\n" "operator" "RUNNING" "$pid" "https://localhost:$OPERATOR_LISTEN_PUBLIC_PORT (API)" "Bootstrapped: $bootstrapped"
+        printf "  %-14s %-12s %-8s %-32s %s\n" "" "" "" "wss://localhost:$OPERATOR_LISTEN_WSS_PORT (WSS)" ""
+        printf "  %-14s %-12s %-8s %-32s %s\n" "" "" "" "http://localhost:$OPERATOR_LISTEN_BOOTSTRAP_PORT (Bootstrap)" ""
     else
-        printf "  %-14s  \033[1;31m%-10s\033[0m\n" "operator" "STOPPED"
+        printf "  %-14s \033[1;31m%-12s\033[0m %-8s %-32s %s\n" "operator" "STOPPED" "-" "-" "-"
     fi
 
-    echo ""
-    echo "Optional Application Layer"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    printf "\n  \033[1m[Optional Application Layer]\033[0m\n"
     if _g8ee_running; then
-        printf "  %-14s  \033[1;32m%-10s\033[0m  (PID: %s)\n" "g8ee" "RUNNING" "$(cat "$G8EE_PID_FILE")"
+        printf "  %-14s \033[1;32m%-12s\033[0m %-8s %-32s %s\n" "g8ee" "RUNNING" "$(cat "$G8EE_PID_FILE")" "https://localhost:$G8EE_HTTP_PORT" ""
     else
-        printf "  %-14s  \033[1;31m%-10s\033[0m\n" "g8ee" "NOT RUNNING"
+        printf "  %-14s \033[1;31m%-12s\033[0m %-8s %-32s %s\n" "g8ee" "NOT RUNNING" "-" "-" "-"
     fi
 
     echo ""
@@ -647,7 +664,7 @@ fi
 if [[ "$COMMAND" == "restart" ]]; then
     _preflight
     mapfile -t RESTART_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
-    echo "Restarting substrate components..."
+    echo "Restarting Gateway components..."
     if printf '%s\n' "${RESTART_COMPONENTS[@]}" | grep -qx g8ee; then
         _stop_g8ee
     fi
@@ -693,7 +710,7 @@ if [[ "$COMMAND" == "reset" ]]; then
 
     _preflight
 
-    echo "Starting substrate services..."
+    echo "Starting Gateway services..."
     _start_operator_listen
     for svc in "${RESET_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -789,7 +806,7 @@ if [[ "$COMMAND" == "setup" ]]; then
     _stop_g8ee
     _stop_operator_listen
 
-    echo "Starting substrate services..."
+    echo "Starting Gateway services..."
     _start_operator_listen
     for svc in "${SETUP_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue

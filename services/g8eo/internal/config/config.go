@@ -28,7 +28,6 @@ type LoadOptions struct {
 	// Required
 	APIKey           string
 	OperatorEndpoint string
-	WSSPort          int // WSS port to dial on operator (default: from paths.json)
 	HTTPPort         int // HTTP port to dial on operator for auth proxy (default: from paths.json)
 
 	// Cloud Operator mode
@@ -69,7 +68,6 @@ type LoadOptions struct {
 // No outbound authentication is required - the Operator simply starts and listens.
 type ListenConfig struct {
 	Enabled          bool
-	WSSPort          int    // WSS/TLS port for operator pub/sub connections (default: from paths.json)
 	HTTPPort         int    // TLS/HTTPS port for internal g8ee/client traffic (default: from paths.json)
 	BootstrapPort    int    // Plain-TLS port for bootstrap routes (/.well-known/, /api/auth/device-link/register) (default: from paths.json)
 	PublicPort       int    // Plain-TLS port for browser-based auth and setup (default: from paths.json)
@@ -141,7 +139,6 @@ type Config struct {
 
 	// operator connection ports (operator dials these on the remote host)
 	PubSubURL string // WebSocket base URL for operator pub/sub (e.g., wss://192.168.1.10:443) - no path; client appends /ws/pubsub
-	WSSPort   int    // WSS port used to build PubSubURL (default: from paths.json)
 	HTTPPort  int    // HTTPS port for auth/bootstrap requests via operator proxy (default: from paths.json)
 
 	// Logging
@@ -209,7 +206,7 @@ func FindProjectRoot() string {
 // no outbound connections. The Operator simply starts and listens locally.
 // allowTestPortZero should be true only when called from Go tests; when false,
 // port 0 is rejected to prevent dynamic port assignment in production.
-func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir string, passkeyRpID, passkeyRpName, mcpDownstreamURL, a2aDownstreamURL string, allowTestPortZero bool) (*Config, error) {
+func LoadListen(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir string, passkeyRpID, passkeyRpName, mcpDownstreamURL, a2aDownstreamURL string, allowTestPortZero bool) (*Config, error) {
 	projectRoot := FindProjectRoot()
 
 	if mcpDownstreamURL == "" {
@@ -247,9 +244,7 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 	// Reject port 0 in production (only allowed for Go tests)
 	// This check must happen before default assignment to validate actual input
 	if !allowTestPortZero {
-		if wssPort == 0 {
-			return nil, fmt.Errorf("wssPort cannot be 0 in production")
-		}
+
 		if httpPort == 0 {
 			return nil, fmt.Errorf("httpPort cannot be 0 in production")
 		}
@@ -265,9 +260,7 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 	// If allowTestPortZero is true and ports are 0, we leave them as 0 so net.Listen can bind to a random port.
 	// Default ports must match protocol/constants/paths.json (canonical source of truth).
 	if !allowTestPortZero {
-		if wssPort <= 0 {
-			wssPort = constants.Paths.Ports.OperatorWss
-		}
+
 		if httpPort <= 0 {
 			httpPort = constants.Paths.Ports.OperatorHttp
 		}
@@ -290,8 +283,8 @@ func LoadListen(wssPort, httpPort, bootstrapPort, publicPort int, dataDir, pkiDi
 		PKIDir:        pkiDir,     // Also set top-level for services that use Config.PKIDir
 		SecretsDir:    secretsDir, // Also set top-level for services that use Config.SecretsDir
 		Listen: ListenConfig{
-			Enabled:          true,
-			WSSPort:          wssPort,
+			Enabled: true,
+
 			HTTPPort:         httpPort,
 			BootstrapPort:    bootstrapPort,
 			PublicPort:       publicPort,
@@ -347,9 +340,9 @@ func Load(opts LoadOptions) (*Config, error) {
 		SecretsDir:        opts.SecretsDir,
 
 		// Derived values - ports default to values from paths.json
-		Endpoint:      opts.OperatorEndpoint,
-		PubSubURL:     buildPubSubURL(opts.OperatorEndpoint, opts.WSSPort),
-		WSSPort:       wssPortOrDefault(opts.WSSPort),
+		Endpoint:  opts.OperatorEndpoint,
+		PubSubURL: buildPubSubURL(opts.OperatorEndpoint, opts.HTTPPort),
+
 		HTTPPort:      httpPortOrDefault(opts.HTTPPort),
 		LogLevel:      opts.LogLevel,
 		TLSServerName: tlsServerName(opts.OperatorEndpoint),
@@ -400,20 +393,12 @@ func heartbeatIntervalOrDefault(d time.Duration) time.Duration {
 }
 
 // buildPubSubURL creates a WebSocket URL, omitting port 443 if it is the effective port.
-func buildPubSubURL(endpoint string, wssPort int) string {
-	port := wssPortOrDefault(wssPort)
+func buildPubSubURL(endpoint string, httpPort int) string {
+	port := httpPortOrDefault(httpPort)
 	if port == 443 {
 		return fmt.Sprintf("wss://%s", endpoint)
 	}
 	return fmt.Sprintf("wss://%s:%d", endpoint, port)
-}
-
-// wssPortOrDefault returns p if non-zero, otherwise the default from paths.json.
-func wssPortOrDefault(p int) int {
-	if p > 0 {
-		return p
-	}
-	return constants.Paths.Ports.OperatorWss
 }
 
 // httpPortOrDefault returns p if non-zero, otherwise the default from paths.json.

@@ -29,6 +29,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
@@ -483,7 +484,7 @@ func TestHandleDB(t *testing.T) {
 
 // Regression: g8ee Engine pushes typed events via /api/internal/sse/push and
 // CLI/dashboard consumers poll /api/internal/sse/events with exactly one of
-// web_session_id, cli_session_id, or user_id set. The substrate persists each
+// web_session_id, cli_session_id, or user_id set. The Gateway persists each
 // event under a typed routing column so CLI (BYO frontend) and web sessions
 // occupy disjoint routing namespaces and never receive each other's events.
 func TestInternalSSEBridge(t *testing.T) {
@@ -1198,4 +1199,69 @@ type errorReader struct{}
 
 func (e *errorReader) Read(p []byte) (n int, err error) {
 	return 0, fmt.Errorf("forced read error")
+}
+
+// TestCLICertBoundToOperator is a regression test for the auth path used by
+// `./g8e login` clients (CLI cert + Bearer <operator_session_id> +
+// X-G8E-CLI-Session-ID). The cert URI SAN is a CLI SPIFFE ID and must be
+// accepted on internal routes when the cli session is owned by the bound
+// operator session.
+func TestCLICertBoundToOperator(t *testing.T) {
+	h, _ := setupTestHTTPHandler(t)
+
+	const (
+		userID            = "u-1"
+		cliSessionID      = "cli-bound-1"
+		operatorSessionID = "op-session-bound-1"
+		otherOpSessionID  = "op-session-other"
+	)
+
+	cliSess := models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
+		ExpiresAt:         time.Now().Add(24 * time.Hour),
+	}
+	b, _ := json.Marshal(cliSess)
+	require.NoError(t, h.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
+
+	wid := protocol.NewWorkloadIdentity()
+	cliURI, err := wid.CLISPIFFEURL(userID, cliSessionID)
+	require.NoError(t, err)
+	opURI, err := wid.OperatorSPIFFEURL("org", "op-id", operatorSessionID)
+	require.NoError(t, err)
+
+	t.Run("CLI cert bound to operator session is accepted", func(t *testing.T) {
+		assert.True(t, h.auth.cliCertBoundToOperator(
+			[]*url.URL{cliURI}, cliSessionID, userID, operatorSessionID,
+		))
+	})
+
+	t.Run("CLI cert bound to a different operator session is rejected", func(t *testing.T) {
+		assert.False(t, h.auth.cliCertBoundToOperator(
+			[]*url.URL{cliURI}, cliSessionID, userID, otherOpSessionID,
+		))
+	})
+
+	t.Run("operator URI is not accepted via the CLI path", func(t *testing.T) {
+		assert.False(t, h.auth.cliCertBoundToOperator(
+			[]*url.URL{opURI}, cliSessionID, userID, operatorSessionID,
+		))
+	})
+
+	t.Run("expired CLI session is rejected", func(t *testing.T) {
+		expired := models.CLISession{
+			ID:                "cli-expired",
+			UserID:            userID,
+			OperatorSessionID: operatorSessionID,
+			ExpiresAt:         time.Now().Add(-1 * time.Hour),
+		}
+		eb, _ := json.Marshal(expired)
+		require.NoError(t, h.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-expired", eb))
+		expiredURI, err := wid.CLISPIFFEURL(userID, "cli-expired")
+		require.NoError(t, err)
+		assert.False(t, h.auth.cliCertBoundToOperator(
+			[]*url.URL{expiredURI}, "cli-expired", userID, operatorSessionID,
+		))
+	})
 }

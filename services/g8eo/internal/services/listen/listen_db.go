@@ -803,7 +803,7 @@ func (s *ListenDBService) KVExpire(key string, ttlSeconds int) bool {
 }
 
 // SSERoute is the routing target for an SSE event row. Exactly one of the
-// three id fields MUST be non-empty. The substrate refuses to talk about a
+// three id fields MUST be non-empty. The Gateway refuses to talk about a
 // bare session id - every routing key is tagged at the type level so a
 // web_session_id can never be mis-delivered as a cli_session_id (or vice
 // versa) and a user_id (background fan-out) can never be mistaken for a

@@ -111,7 +111,6 @@ def _load_paths() -> PathsDict:
             },
             "ports": {
                 "operator_http": PathConstants.PORT_OPERATOR_HTTP,
-                "operator_wss": PathConstants.PORT_OPERATOR_WSS,
                 "operator_bootstrap": PathConstants.PORT_OPERATOR_BOOTSTRAP,
                 "operator_public": PathConstants.PORT_OPERATOR_PUBLIC,
                 "g8ee_http": PathConstants.PORT_G8EE_HTTP,

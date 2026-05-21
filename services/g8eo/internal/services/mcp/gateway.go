@@ -235,7 +235,7 @@ func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if g.envProc == nil {
-		g.jsonError(w, http.StatusServiceUnavailable, "governance substrate not ready")
+		g.jsonError(w, http.StatusServiceUnavailable, "governance Gateway not ready")
 		return
 	}
 
@@ -317,7 +317,7 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 	}
 
 	if g.envProc == nil {
-		g.jsonError(w, http.StatusServiceUnavailable, "governance substrate not ready")
+		g.jsonError(w, http.StatusServiceUnavailable, "governance Gateway not ready")
 		return
 	}
 
@@ -396,7 +396,7 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		code, msg := g.mapSubstrateError(err)
+		code, msg := g.mapGatewayError(err)
 		g.jsonRPCError(w, req.ID, code, msg)
 		return
 	}
@@ -461,8 +461,8 @@ func (g *GatewayService) jsonRPCError(w http.ResponseWriter, id interface{}, cod
 	}
 }
 
-// mapSubstrateError maps governance verification errors to granular JSON-RPC codes.
-func (g *GatewayService) mapSubstrateError(err error) (int, string) {
+// mapGatewayError maps governance verification errors to granular JSON-RPC codes.
+func (g *GatewayService) mapGatewayError(err error) (int, string) {
 	if err == nil {
 		return 0, ""
 	}
@@ -507,7 +507,7 @@ func (g *GatewayService) mapSubstrateError(err error) (int, string) {
 		return ErrCodeL3ProofInvalid, msg
 	}
 
-	// Map other substrate errors back to JSON-RPC error
+	// Map other Gateway errors back to JSON-RPC error
 	return -32603, msg
 }
 
@@ -561,16 +561,16 @@ func (g *GatewayService) deleteSuspendedTransaction(txHash string) {
 }
 
 // ResumeWithL3Proof re-submits a suspended transaction with an attached L3
-// WebAuthn proof through the governance substrate. The proof is verified
-// inside the substrate's TransactionVerifier - this method does not perform
+// WebAuthn proof through the governance Gateway. The proof is verified
+// inside the Gateway's TransactionVerifier - this method does not perform
 // independent passkey validation, it only re-wires the envelope and calls
 // the same fail-closed entry point used for primary submission.
 //
-// The signed receipt returned by the substrate is forwarded to the caller so
+// The signed receipt returned by the Gateway is forwarded to the caller so
 // the OOB approval UI can surface the downstream tool result to the user.
 func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID string, proof *commonv1.L3Proof) (*operatorv1.ActionReceipt, error) {
 	if g.envProc == nil {
-		return nil, fmt.Errorf("governance substrate not ready")
+		return nil, fmt.Errorf("governance Gateway not ready")
 	}
 	if proof == nil {
 		return nil, fmt.Errorf("L3 proof required")

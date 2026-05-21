@@ -43,7 +43,7 @@ class SessionEvent(G8eBaseModel):
 
     Use this when the triggering request arrived on a known client session  - 
     either a browser (web_session_id) or a BYO CLI client (cli_session_id).
-    Both are first-class session types and the substrate keeps their routing
+    Both are first-class session types and the Gateway keeps their routing
     namespaces strictly disjoint, so producers MUST set exactly one of the two
     session id fields. Setting neither (anonymous) or both (ambiguous) is a
     construction error caught here, before the wire layer would otherwise
@@ -98,7 +98,6 @@ class _SSEEventBody(G8eBaseModel):
 class SessionEventWire(G8eBaseModel):
     web_session_id: str | None = None
     cli_session_id: str | None = None
-    user_id: str
     event: _SSEEventBody
 
     @classmethod
@@ -118,7 +117,6 @@ class SessionEventWire(G8eBaseModel):
         return cls(
             web_session_id=se.web_session_id,
             cli_session_id=se.cli_session_id,
-            user_id=se.user_id,
             event=_SSEEventBody(type=se.event_type, data=data),
         )
 

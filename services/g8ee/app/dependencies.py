@@ -460,13 +460,13 @@ async def require_authenticated_context(
 
     # Check if this is an exempt path (e.g. operator auth relay)
     is_exempt = request.url.path in [
-        InternalApiPaths.OPERATOR_AUTHENTICATE,
-        InternalApiPaths.OPERATOR_DEVICE_LINKS_REGISTER,
-        InternalApiPaths.OPERATOR_SESSION_VALIDATE,
-        InternalApiPaths.OPERATOR_SESSION_REFRESH,
-        InternalApiPaths.OPERATOR_AUTH_LISTEN,
-        InternalApiPaths.API_KEY_GENERATE,
-        InternalApiPaths.CERTIFICATE_REVOKE,
+        InternalApiPaths.G8EE_OPERATORS_AUTHENTICATE,
+        InternalApiPaths.G8EE_OPERATORS_DEVICE_LINK_REGISTER,
+        InternalApiPaths.G8EE_OPERATORS_VALIDATE_SESSION,
+        InternalApiPaths.G8EE_OPERATORS_REFRESH_SESSION,
+        InternalApiPaths.G8EE_OPERATORS_LISTEN_SESSION_AUTH,
+        InternalApiPaths.G8EE_AUTH_GENERATE_KEY,
+        InternalApiPaths.G8EE_AUTH_REVOKE_CERT,
     ]
 
     g8e_context = G8eHttpContext.from_request_context(request_context, is_exempt_path=is_exempt)

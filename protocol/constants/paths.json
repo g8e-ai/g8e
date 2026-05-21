@@ -13,9 +13,8 @@
   },
   "ports": {
     "operator_http": 8440,
-    "operator_wss": 8440,
     "operator_bootstrap": 8441,
-    "operator_public": 8440,
+    "operator_public": 8442,
     "g8ee_http": 8443,
     "openclaw_gateway": 18789
   },

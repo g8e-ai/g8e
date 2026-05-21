@@ -14,7 +14,7 @@ Release **v0.2.7** separates the **Governance Gateway (`g8eg`)** and the **Gover
 
 ## Key Changes
 
-* **Substrate Role Splitting**: The Go substrate is now explicitly split into the **Governance Gateway (`g8eg`)** acting as the central Policy Decision Point (PDP), and the **Governed Operator (`g8eo`)** acting as the host-side Policy Execution Point (PEP).
+* **Gateway Role Splitting**: The Go Gateway is now explicitly split into the **Governance Gateway (`g8eg`)** acting as the central Policy Decision Point (PDP), and the **Governed Operator (`g8eo`)** acting as the host-side Policy Execution Point (PEP).
 * **MCP & A2A Gateway**: `g8eo` can now act as a standalone admission gate for standard AI clients. It translates standard tool calls into governed transactions and supports out-of-band transaction suspension with WebAuthn approval before execution.
 * **Native Dependencies**: Replaced external CLI dependencies on `git` and `jq` with native Go (`go-git/v5`) and Python implementations to streamline the runtime footprint.
 * **Security Enhancements**: Implemented strict mTLS client-identity verification for Server-Sent Events (SSE) push endpoints.
@@ -34,7 +34,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 ### Changed
 - **CLI & UX Improvements:** Improved login UX, operator-side UX, and trust script stability. Enhanced build output for Mac and Linux.
 - **Protocol Refinement:** Ripped out legacy protobuf definitions, refined boundary structures, and decoupled operator auth from the app layer.
-- **Session Isolation:** Improved session typing and untangled CLI chat sessions to better separate the substrate and app layer.
+- **Session Isolation:** Improved session typing and untangled CLI chat sessions to better separate the Gateway and app layer.
 - **Code Quality & Linting:** Comprehensive code quality passes including Go critic/lint fixes, Ruff, and Pyright typing improvements.
 - **Eval & Testing:** Refactored the eval harness and bench tests. Improved chaos testing with better audit summaries, L1 reporting, and correct DB location.
 - **Documentation:** Reorganized and updated documentation including improved diagrams and README updates.
@@ -56,9 +56,9 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 
 ### Changed
 - **RequestContext Body Migration:** Migrated business context (`web_session_id`, `user_id`, `source_component`, etc.) from HTTP headers to body-embedded `RequestContext` objects for improved security and contract stability.
-- **Directory Reorganization:** Renamed `components/` to `services/` and `shared/` to `protocol/` to align with the mandatory substrate-first architecture.
+- **Directory Reorganization:** Renamed `components/` to `services/` and `shared/` to `protocol/` to align with the mandatory Gateway-first architecture.
 - **g8ed Decommissioning:** Completed the removal of `g8ed` (Dashboard) remnants; migrated all core logic to the `g8eo` operator.
-- **Auth Cleanup:** Refactored `ApiKeyService` and passkey authentication for better consistency and security across the substrate.
+- **Auth Cleanup:** Refactored `ApiKeyService` and passkey authentication for better consistency and security across the Gateway.
 - **CodeQL Refactor:** Optimized CodeQL workflows and addressed findings in `event_service`.
 - **Exit Code Handling:** Standardized exit code handling and improved path validation in `g8eo` execution services.
 - **Event Service:** Consolidated `client_event_service` into a unified `event_service` within `g8eo`.
@@ -80,11 +80,11 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **CLI Login:** Added first-class CLI login support via the operator.
 
 ### Changed
-- **Substrate/App Layer Split:** Formalized `g8eo` as the mandatory substrate and moved `client`/`g8ee` to optional application-layer adapters.
+- **Gateway/App Layer Split:** Formalized `g8eo` as the mandatory Gateway and moved `client`/`g8ee` to optional application-layer adapters.
 - **client Elimination:** Removed `client` Dashboard as a mandatory component; migrated data management scripts to `g8eo` API.
 - **Governance Envelope Hardening:** Improved UAP and proto definitions for better transaction integrity.
 - **Reorganized g8eo:** Directory restructuring for better modularity and maintainability.
-- **Passkey & Setup Refactor:** Migrated passkey and setup logic to the operator substrate.
+- **Passkey & Setup Refactor:** Migrated passkey and setup logic to the operator Gateway.
 
 ### Fixed
 - **Settings Model Paths:** Fixed inconsistencies in settings model resolution.

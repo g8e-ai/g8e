@@ -55,7 +55,7 @@ const (
 	sessionBindSuffix         = ":bind"
 )
 
-// RegistrationService handles substrate-native device enrollment.
+// RegistrationService handles Gateway-native device enrollment.
 // Ported from client/DeviceLinkService and g8ee/OperatorAuthService.
 type RegistrationService struct {
 	db      *ListenDBService
@@ -779,7 +779,13 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 			return nil, fmt.Errorf("invalid CSR PEM format")
 		}
 
-		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, linkData.OrganizationID, operator.ID, "", operatorSessionID)
+		// Use operator.OrganizationID instead of linkData.OrganizationID to ensure
+		// the certificate SPIFFE ID matches the operator document in the database
+		orgID := operator.OrganizationID
+		if orgID == "" {
+			orgID = linkData.OrganizationID
+		}
+		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, constants.LeafTypeOperator, orgID, operator.ID, "", operatorSessionID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign operator CSR: %w", err)
 		}
@@ -829,17 +835,45 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	// Store the binding between operator_session_id and cli_session_id in a first-class
 	// collection to support metadata, expiry, and revocation. Without this binding,
 	// any authenticated operator could drain any cli_session_id's event buffer.
+	cliExpiry := time.Now().UTC().Add(24 * time.Hour)
 	cliSession := models.CLISession{
 		ID:                cliSessionID,
 		UserID:            linkData.UserID,
 		OperatorSessionID: operatorSessionID,
 		SystemFingerprint: sanitizedFingerprint,
 		CreatedAt:         time.Now().UTC(),
-		ExpiresAt:         time.Now().UTC().Add(24 * time.Hour), // Match operator session expiry
+		ExpiresAt:         cliExpiry,
+		AbsoluteExpiresAt: cliExpiry,
+		IdleExpiresAt:     cliExpiry,
+		SessionType:       "cli",
+		IsActive:          true,
+		LoginMethod:       "device_link",
 	}
 	cliSessionBytes, _ := json.Marshal(cliSession)
 	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
 		return nil, fmt.Errorf("failed to persist CLI session: %w", err)
+	}
+
+	// Write an operator_sessions document so g8ee's OperatorSessionService can look up the
+	// session by ID via GET /db/operator_sessions/{operator_session_id}.
+	// Field names match app/models/sessions.py OperatorSessionDocument.
+	sessionExpiry := time.Now().UTC().Add(24 * time.Hour)
+	operatorSessionDoc := map[string]interface{}{
+		"id":                  operatorSessionID,
+		"session_type":        "operator",
+		"user_id":             linkData.UserID,
+		"organization_id":     linkData.OrganizationID,
+		"operator_id":         operator.ID,
+		"is_active":           true,
+		"created_at":          time.Now().UTC().Format(time.RFC3339),
+		"absolute_expires_at": sessionExpiry.Format(time.RFC3339),
+		"idle_expires_at":     sessionExpiry.Format(time.RFC3339),
+		"last_activity":       time.Now().UTC().Format(time.RFC3339),
+		"login_method":        "device_link",
+	}
+	operatorSessionBytes, _ := json.Marshal(operatorSessionDoc)
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID, operatorSessionBytes); err != nil {
+		return nil, fmt.Errorf("failed to persist operator session document: %w", err)
 	}
 
 	return &models.OperatorRegistrationResponse{

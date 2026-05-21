@@ -823,3 +823,90 @@ func TestRegistrationService_Binding(t *testing.T) {
 		assert.Equal(t, "", docFieldString(t, opDoc, "bound_web_session_id"))
 	})
 }
+
+// TestRegistration_SessionDocuments is a regression test ensuring that
+// completeRegistration writes both operator_sessions and cli_sessions documents
+// with all fields required by g8ee's OperatorSessionDocument and CliSessionDocument
+// (which extend SessionDocument and require absolute_expires_at, idle_expires_at,
+// session_type, is_active).
+func TestRegistration_SessionDocuments(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	dbDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	require.NoError(t, err)
+	defer db.Close()
+
+	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
+	err = pki.EnsurePKI(nil)
+	require.NoError(t, err)
+
+	userSvc := NewUserService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc)
+
+	token := "dlk_session_docs_test_12345678901"
+	userID := "user-session-test"
+	orgID := "org-session-test"
+
+	linkData := models.DeviceLinkData{
+		Token:          token,
+		UserID:         userID,
+		OrganizationID: orgID,
+		MaxUses:        1,
+		Status:         "active",
+		CreatedAt:      time.Now(),
+		ExpiresAt:      time.Now().Add(1 * time.Hour),
+	}
+	linkBytes, _ := json.Marshal(linkData)
+	err = db.KVSet("g8e:device-link:"+token, string(linkBytes), 3600)
+	require.NoError(t, err)
+
+	req := models.OperatorRegistrationRequest{
+		CSR:               generateTestCSR(t),
+		SystemFingerprint: "fp-session-docs",
+		Hostname:          "host-session-docs",
+	}
+
+	resp, err := reg.RegisterDevice(token, req)
+	require.NoError(t, err)
+	require.True(t, resp.Success)
+	require.NotEmpty(t, resp.OperatorSessionID)
+	require.NotEmpty(t, resp.CLISessionID)
+
+	docFieldBool := func(t *testing.T, doc *models.Document, field string) bool {
+		t.Helper()
+		raw, ok := doc.Data[field]
+		if !ok {
+			return false
+		}
+		var v bool
+		require.NoError(t, json.Unmarshal(raw, &v))
+		return v
+	}
+
+	t.Run("operator_sessions document has required fields", func(t *testing.T) {
+		doc, err := db.DocGet(string(constants.CollectionOperatorSessions), resp.OperatorSessionID)
+		require.NoError(t, err, "operator_sessions document must exist after registration")
+		require.NotNil(t, doc)
+
+		assert.Equal(t, "operator", docFieldString(t, doc, "session_type"), "session_type must be 'operator'")
+		assert.Equal(t, userID, docFieldString(t, doc, "user_id"), "user_id must match")
+		assert.True(t, docFieldBool(t, doc, "is_active"), "is_active must be true")
+		assert.NotEmpty(t, docFieldString(t, doc, "absolute_expires_at"), "absolute_expires_at is required by g8ee OperatorSessionDocument")
+		assert.NotEmpty(t, docFieldString(t, doc, "idle_expires_at"), "idle_expires_at is required by g8ee OperatorSessionDocument")
+		assert.NotEmpty(t, docFieldString(t, doc, "operator_id"), "operator_id is required by g8ee OperatorSessionDocument")
+	})
+
+	t.Run("cli_sessions document has required fields", func(t *testing.T) {
+		doc, err := db.DocGet(string(constants.CollectionCLISessions), resp.CLISessionID)
+		require.NoError(t, err, "cli_sessions document must exist after registration")
+		require.NotNil(t, doc)
+
+		assert.Equal(t, "cli", docFieldString(t, doc, "session_type"), "session_type must be 'cli'")
+		assert.Equal(t, userID, docFieldString(t, doc, "user_id"), "user_id must match")
+		assert.True(t, docFieldBool(t, doc, "is_active"), "is_active must be true")
+		assert.NotEmpty(t, docFieldString(t, doc, "absolute_expires_at"), "absolute_expires_at is required by g8ee CliSessionDocument")
+		assert.NotEmpty(t, docFieldString(t, doc, "idle_expires_at"), "idle_expires_at is required by g8ee CliSessionDocument")
+		assert.Equal(t, resp.OperatorSessionID, docFieldString(t, doc, "operator_session_id"), "cli session must bind to operator session")
+	})
+}

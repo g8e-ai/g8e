@@ -16,7 +16,7 @@ from rich.table import Table
 from rich.panel import Panel
 from g8e_evals.harness import Aggregate
 
-def render_summary(agg: Aggregate):
+def render_summary(agg: Aggregate, mode: str | None = None):
     console = Console()
     
     table = Table(title=f"Benchmark Results: {agg.suite}")
@@ -31,7 +31,7 @@ def render_summary(agg: Aggregate):
     
     console.print(table)
     
-    if agg.receipt_coverage_pct == 0:
+    if agg.receipt_coverage_pct == 0 and mode != "receipt":
         console.print(Panel(
             "[bold yellow]HINT:[/bold yellow] Receipt coverage is 0.00%. To enable receipts:\n"
             "1. Start the platform: [cyan]./g8e platform start[/cyan] "
@@ -42,7 +42,7 @@ def render_summary(agg: Aggregate):
             "from [cyan]~/.g8e/credentials[/cyan].",
             border_style="yellow"
         ))
-    elif agg.receipt_verification_pct < 100.0:
+    elif agg.receipt_coverage_pct > 0 and agg.receipt_verification_pct < 100.0:
         console.print(Panel("[bold red]WARNING:[/bold red] Some receipts failed verification!", border_style="red"))
-    elif agg.receipt_verification_pct == 100.0:
+    elif agg.receipt_coverage_pct > 0 and agg.receipt_verification_pct == 100.0:
         console.print(Panel("[bold green]SUCCESS:[/bold green] All receipts verified!", border_style="green"))

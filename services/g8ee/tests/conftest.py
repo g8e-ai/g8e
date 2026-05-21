@@ -80,14 +80,14 @@ def _llm_settings_from_env() -> LLMSettings | None:
     Returns None when no --llm-provider flag was supplied, which means
     ai_integration tests should be skipped.
     """
-    provider_str = os.environ.get("G8E_TEST_LLM_PROVIDER", "").strip()
+    provider_str = os.environ.get("G8E_TEST_LLM_PRIMARY_PROVIDER", "").strip()
     if not provider_str:
         return None
 
     try:
         provider = LLMProvider(provider_str)
     except ValueError:
-        logger.warning("G8E_TEST_LLM_PROVIDER=%s is not a valid provider", provider_str)
+        logger.warning("G8E_TEST_LLM_PRIMARY_PROVIDER=%s is not a valid provider", provider_str)
         return None
 
     assistant_provider_str = os.environ.get("G8E_TEST_LLM_ASSISTANT_PROVIDER", "").strip()
@@ -110,8 +110,8 @@ def _llm_settings_from_env() -> LLMSettings | None:
     else:
         lite_provider = assistant_provider
 
-    api_key = os.environ.get("G8E_TEST_LLM_API_KEY", "").strip() or None
-    endpoint = os.environ.get("G8E_TEST_LLM_ENDPOINT_URL", "").strip() or None
+    api_key = os.environ.get("G8E_TEST_LLM_PRIMARY_API_KEY", "").strip() or None
+    endpoint = os.environ.get("G8E_TEST_LLM_PRIMARY_ENDPOINT_URL", "").strip() or None
     assistant_api_key = os.environ.get("G8E_TEST_LLM_ASSISTANT_API_KEY", "").strip() or None
     assistant_endpoint = os.environ.get("G8E_TEST_LLM_ASSISTANT_ENDPOINT_URL", "").strip() or None
     primary = os.environ.get("G8E_TEST_LLM_PRIMARY_MODEL", "").strip() or None
@@ -375,7 +375,7 @@ def pytest_collection_modifyitems(config, items):
     # Don't skip ai_integration tests if G8E_TEST_LLM_* env vars are not set,
     # because tests now load user settings from operator which may have API keys configured
     # Only skip if G8E_TEST_LLM_* env vars are explicitly set but invalid
-    env_llm_provider = os.environ.get("G8E_TEST_LLM_PROVIDER", "").strip()
+    env_llm_provider = os.environ.get("G8E_TEST_LLM_PRIMARY_PROVIDER", "").strip()
 
     # If env var is set, use the credentials check.
     # If env var is NOT set, we check if the platform settings from operator have

@@ -63,7 +63,7 @@ class Response:
     answer: str
     model: str
     transaction_id: Optional[str] = None
-    # receipt can be either ChatEvaluationReceipt (from chat SUT) or ActionReceipt (from substrate)
+    # receipt can be either ChatEvaluationReceipt (from chat SUT) or ActionReceipt (from Gateway)
     receipt: Optional[Union["ChatEvaluationReceipt", ActionReceipt]] = None
     receipt_signature: Optional[str] = None
     receipt_verified: bool = False

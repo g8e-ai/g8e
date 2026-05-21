@@ -71,8 +71,6 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	userSvc := NewUserService(db, logger)
 	auth := NewAuthService(db, pki, logger, userSvc, cfg.Listen.SecretsDir)
 
-	var tlsConfig *tls.Config
-
 	var extraIPs []net.IP
 	if ifaces, err := net.Interfaces(); err == nil {
 		for _, iface := range ifaces {
@@ -95,8 +93,6 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	if err := pki.EnsurePKI(extraIPs); err != nil {
 		return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
 	}
-	tlsConfig = pki.TLSConfig()
-	tlsConfigPlain := pki.TLSConfigPlain()
 
 	reg := NewRegistrationService(db, pki, logger, userSvc)
 
@@ -126,124 +122,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		mcpGateway: mcp.NewGatewayService(logger, db),
 	}
 
-	ls.mcpGateway.SetA2ADependencies(cfg.Listen.A2ADownstreamURL)
-	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Listen.PublicPort)
-	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.mcpGateway, ls.IsReady, ls.IsGovernanceReady)
-
-	// Build a map of ports to identify multiplexing needs
-	portUsage := make(map[int][]string)
-	portUsage[cfg.Listen.HTTPPort] = append(portUsage[cfg.Listen.HTTPPort], "HTTP")
-	portUsage[cfg.Listen.WSSPort] = append(portUsage[cfg.Listen.WSSPort], "WSS")
-	portUsage[cfg.Listen.BootstrapPort] = append(portUsage[cfg.Listen.BootstrapPort], "Bootstrap")
-	portUsage[cfg.Listen.PublicPort] = append(portUsage[cfg.Listen.PublicPort], "Public")
-
-	// Helper to determine TLS config for a port
-	getTLSConfig := func(port int) *tls.Config {
-		usage := portUsage[port]
-		hasMTLS := false
-		hasPublic := false
-		hasBootstrap := false
-		for _, u := range usage {
-			if u == "HTTP" || u == "WSS" {
-				hasMTLS = true
-			}
-			if u == "Public" {
-				hasPublic = true
-			}
-			if u == "Bootstrap" {
-				hasBootstrap = true
-			}
-		}
-
-		if hasBootstrap && len(usage) == 1 {
-			return nil // Plain HTTP for bootstrap-only port
-		}
-		if hasMTLS && hasPublic {
-			return pki.TLSConfigOptional() // Multiplexed mTLS + Public
-		}
-		if hasMTLS {
-			return tlsConfig // Strict mTLS
-		}
-		if hasPublic {
-			return tlsConfigPlain // Public TLS (no mTLS)
-		}
-		return nil // Fallback to plain HTTP
-	}
-
-	// Helper to determine handler for a port
-	getHandler := func(port int) http.Handler {
-		usage := portUsage[port]
-		if len(usage) > 1 {
-			// If WSS and HTTP share a port but nothing else, we can just use ls.handler
-			if len(usage) == 2 && ((usage[0] == "HTTP" && usage[1] == "WSS") || (usage[0] == "WSS" && usage[1] == "HTTP")) {
-				return ls.handler
-			}
-			// For any other combination, use the master multiplexed handler
-			return ls.handler.buildMasterRouter()
-		}
-		switch usage[0] {
-		case "HTTP", "WSS":
-			return ls.handler
-		case "Bootstrap":
-			return ls.handler.buildBootstrapRouter()
-		case "Public":
-			return ls.handler.buildPublicRouter()
-		}
-		return ls.handler
-	}
-
-	ls.server = &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
-		Handler:           getHandler(cfg.Listen.HTTPPort),
-		TLSConfig:         getTLSConfig(cfg.Listen.HTTPPort),
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
-
-	if cfg.Listen.WSSPort == cfg.Listen.HTTPPort {
-		ls.wssServer = ls.server
-	} else {
-		ls.wssServer = &http.Server{
-			Addr:              fmt.Sprintf(":%d", cfg.Listen.WSSPort),
-			Handler:           getHandler(cfg.Listen.WSSPort),
-			TLSConfig:         getTLSConfig(cfg.Listen.WSSPort),
-			ReadHeaderTimeout: 10 * time.Second,
-			IdleTimeout:       120 * time.Second,
-		}
-	}
-
-	switch {
-	case cfg.Listen.BootstrapPort == cfg.Listen.HTTPPort:
-		ls.bootstrapServer = ls.server
-	case cfg.Listen.BootstrapPort == cfg.Listen.WSSPort:
-		ls.bootstrapServer = ls.wssServer
-	default:
-		ls.bootstrapServer = &http.Server{
-			Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
-			Handler:           getHandler(cfg.Listen.BootstrapPort),
-			TLSConfig:         getTLSConfig(cfg.Listen.BootstrapPort),
-			ReadHeaderTimeout: 10 * time.Second,
-			IdleTimeout:       120 * time.Second,
-		}
-	}
-
-	switch {
-	case cfg.Listen.PublicPort == cfg.Listen.HTTPPort:
-		ls.publicServer = ls.server
-	case cfg.Listen.PublicPort == cfg.Listen.WSSPort:
-		ls.publicServer = ls.wssServer
-	case cfg.Listen.PublicPort == cfg.Listen.BootstrapPort:
-		ls.publicServer = ls.bootstrapServer
-	default:
-		ls.publicServer = &http.Server{
-			Addr:              fmt.Sprintf(":%d", cfg.Listen.PublicPort),
-			Handler:           getHandler(cfg.Listen.PublicPort),
-			TLSConfig:         getTLSConfig(cfg.Listen.PublicPort),
-			ReadHeaderTimeout: 10 * time.Second,
-			IdleTimeout:       120 * time.Second,
-		}
-	}
+	ls.initHandlersAndServers()
 
 	return ls, nil
 }
@@ -280,148 +159,95 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		mcpGateway: mcp.NewGatewayService(logger, db),
 	}
 
+	ls.initHandlersAndServers()
+
+	return ls
+}
+
+func (ls *ListenService) initHandlersAndServers() {
+	cfg := ls.cfg
+	logger := ls.logger
+	db := ls.db
+	pubsub := ls.pubsub
+	auth := ls.auth
+	pki := ls.pki
+	reg := ls.reg
+	passkey := ls.passkey
+	userSvc := ls.userSvc
+	apiKeySvc := ls.apiKeySvc
+
 	ls.mcpGateway.SetA2ADependencies(cfg.Listen.A2ADownstreamURL)
 	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Listen.PublicPort)
 	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
 	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.mcpGateway, ls.IsReady, ls.IsGovernanceReady)
 
-	// Build a map of ports to identify multiplexing needs
+	// Build a map of ports to identify port assignments.
+	// Surfaces with different TLS client-auth requirements MUST NOT share a
+	// port; sharing would force tls.VerifyClientCertIfGiven and downgrade
+	// the mTLS execution boundary to an L7 check.
 	portUsage := make(map[int][]string)
 	portUsage[cfg.Listen.HTTPPort] = append(portUsage[cfg.Listen.HTTPPort], "HTTP")
-	portUsage[cfg.Listen.WSSPort] = append(portUsage[cfg.Listen.WSSPort], "WSS")
+
 	portUsage[cfg.Listen.BootstrapPort] = append(portUsage[cfg.Listen.BootstrapPort], "Bootstrap")
 	portUsage[cfg.Listen.PublicPort] = append(portUsage[cfg.Listen.PublicPort], "Public")
 
-	tlsConfig := pki.TLSConfig()
-	tlsConfigPlain := pki.TLSConfigPlain()
-
-	// Helper to determine TLS config for a port
-	getTLSConfig := func(port int) *tls.Config {
-		usage := portUsage[port]
-		hasMTLS := false
-		hasPublic := false
-		hasBootstrap := false
+	// Validate up front so collisions panic during init, not only when a
+	// fresh listener is built. HTTP and WSS may share a port (both mTLS);
+	// every other combination is rejected. Port 0 is reserved for tests
+	// (net.Listen picks a random free port per server) and is exempt.
+	for port, usage := range portUsage {
+		if port == 0 {
+			continue
+		}
+		hasMTLS, hasPublic, hasBootstrap := false, false, false
 		for _, u := range usage {
-			if u == "HTTP" || u == "WSS" {
+			switch u {
+			case "HTTP":
 				hasMTLS = true
-			}
-			if u == "Public" {
+			case "Public":
 				hasPublic = true
-			}
-			if u == "Bootstrap" {
+			case "Bootstrap":
 				hasBootstrap = true
 			}
 		}
-
-		if hasBootstrap && len(usage) == 1 {
-			return nil // Plain HTTP for bootstrap-only port
+		if (hasMTLS && hasPublic) || (hasMTLS && hasBootstrap) || (hasPublic && hasBootstrap) {
+			panic(fmt.Sprintf("listen: port %d binds incompatible surfaces %v; assign distinct ports", port, usage))
 		}
-		if hasMTLS && hasPublic {
-			return pki.TLSConfigOptional() // Multiplexed mTLS + Public
-		}
-		if hasMTLS {
-			return tlsConfig // Strict mTLS
-		}
-		if hasPublic {
-			return tlsConfigPlain // Public TLS (no mTLS)
-		}
-		return nil // Fallback to plain HTTP
 	}
 
-	// Helper to determine handler for a port
-	getHandler := func(port int) http.Handler {
-		usage := portUsage[port]
-		if len(usage) > 1 {
-			if len(usage) == 2 && ((usage[0] == "HTTP" && usage[1] == "WSS") || (usage[0] == "WSS" && usage[1] == "HTTP")) {
-				return ls.handler
-			}
-			return ls.handler.buildMasterRouter()
-		}
-		switch usage[0] {
-		case "HTTP", "WSS":
-			return ls.handler
-		case "Bootstrap":
-			return ls.handler.buildBootstrapRouter()
-		case "Public":
-			return ls.handler.buildPublicRouter()
-		}
-		return ls.handler
-	}
+	tlsConfig := pki.TLSConfig()           // strict mTLS (RequireAndVerifyClientCert)
+	tlsConfigPlain := pki.TLSConfigPlain() // public TLS (no client cert)
 
+	// Each surface gets its own dedicated listener with a TLS config that
+	// matches the surface's authentication contract. The mTLS surface MUST
+	// use RequireAndVerifyClientCert; mixing it with any non-mTLS surface
+	// on the same port would force VerifyClientCertIfGiven and downgrade
+	// the execution boundary to an L7 check.
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
-		Handler:           getHandler(cfg.Listen.HTTPPort),
-		TLSConfig:         getTLSConfig(cfg.Listen.HTTPPort),
+		Handler:           ls.handler,
+		TLSConfig:         tlsConfig,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 
-	if cfg.Listen.WSSPort == cfg.Listen.HTTPPort {
-		ls.wssServer = ls.server
-	} else {
-		ls.wssServer = &http.Server{
-			Addr:              fmt.Sprintf(":%d", cfg.Listen.WSSPort),
-			Handler:           getHandler(cfg.Listen.WSSPort),
-			TLSConfig:         getTLSConfig(cfg.Listen.WSSPort),
-			ReadHeaderTimeout: 10 * time.Second,
-			IdleTimeout:       120 * time.Second,
-		}
+	ls.wssServer = ls.server
+
+	ls.bootstrapServer = &http.Server{
+		Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
+		Handler:           ls.handler.buildBootstrapRouter(),
+		TLSConfig:         nil, // Plain HTTP for bootstrap discovery
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
-	switch {
-	case cfg.Listen.BootstrapPort == cfg.Listen.HTTPPort:
-		ls.bootstrapServer = ls.server
-	case cfg.Listen.BootstrapPort == cfg.Listen.WSSPort:
-		ls.bootstrapServer = ls.wssServer
-	default:
-		ls.bootstrapServer = &http.Server{
-			Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
-			Handler:           getHandler(cfg.Listen.BootstrapPort),
-			TLSConfig:         getTLSConfig(cfg.Listen.BootstrapPort),
-			ReadHeaderTimeout: 10 * time.Second,
-			IdleTimeout:       120 * time.Second,
-		}
+	ls.publicServer = &http.Server{
+		Addr:              fmt.Sprintf(":%d", cfg.Listen.PublicPort),
+		Handler:           ls.handler.buildPublicRouter(),
+		TLSConfig:         tlsConfigPlain,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
-
-	switch {
-	case cfg.Listen.PublicPort == cfg.Listen.HTTPPort:
-		ls.publicServer = ls.server
-	case cfg.Listen.PublicPort == cfg.Listen.WSSPort:
-		ls.publicServer = ls.wssServer
-	case cfg.Listen.PublicPort == cfg.Listen.BootstrapPort:
-		ls.publicServer = ls.bootstrapServer
-	default:
-		ls.publicServer = &http.Server{
-			Addr:              fmt.Sprintf(":%d", cfg.Listen.PublicPort),
-			Handler:           getHandler(cfg.Listen.PublicPort),
-			TLSConfig:         getTLSConfig(cfg.Listen.PublicPort),
-			ReadHeaderTimeout: 10 * time.Second,
-			IdleTimeout:       120 * time.Second,
-		}
-	}
-
-	return ls
-}
-
-func (ls *ListenService) IsRunning() bool {
-	ls.mu.Lock()
-	defer ls.mu.Unlock()
-	return ls.running
-}
-
-func (ls *ListenService) IsReady() bool {
-	ls.mu.Lock()
-	defer ls.mu.Unlock()
-	return ls.ready
-}
-
-func (ls *ListenService) IsGovernanceReady() bool {
-	ready, err := ls.db.HasTrustedSigners()
-	if err != nil {
-		ls.logger.Error("Failed to check if governance is ready", string(constants.ConnectionStateError), err)
-		return false
-	}
-	return ready
 }
 
 // GetDB returns the underlying database service.
@@ -484,6 +310,27 @@ func (ls *ListenService) GetPublicPort() int {
 	return p
 }
 
+func (ls *ListenService) IsRunning() bool {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	return ls.running
+}
+
+func (ls *ListenService) IsReady() bool {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	return ls.ready
+}
+
+func (ls *ListenService) IsGovernanceReady() bool {
+	ready, err := ls.db.HasTrustedSigners()
+	if err != nil {
+		ls.logger.Error("Failed to check if governance is ready", string(constants.ConnectionStateError), err)
+		return false
+	}
+	return ready
+}
+
 // GovernanceDeps holds the governance dependencies required for transaction verification.
 // These interfaces are implemented by ListenDBService (ReplayStore, StateRootProvider,
 // TransactionAuditStore) and PasskeyService (L3Verifier).
@@ -520,11 +367,11 @@ func (ls *ListenService) Start(ctx context.Context) error {
 
 	ls.logger.Info("operator Listen Mode ready",
 		"http_port", ls.cfg.Listen.HTTPPort,
-		"wss_port", ls.cfg.Listen.WSSPort,
+
 		"bootstrap_port", ls.cfg.Listen.BootstrapPort,
 		"data_dir", ls.cfg.Listen.DataDir)
 
-	ls.logger.Info("Listen TLS servers starting", "http_port", ls.cfg.Listen.HTTPPort, "wss_port", ls.cfg.Listen.WSSPort, "bootstrap_port", ls.cfg.Listen.BootstrapPort)
+	ls.logger.Info("Listen TLS servers starting", "http_port", ls.cfg.Listen.HTTPPort, "bootstrap_port", ls.cfg.Listen.BootstrapPort)
 
 	// Start background maintenance for MCP gateway
 	go ls.mcpGateway.RunMaintenance(ctx)

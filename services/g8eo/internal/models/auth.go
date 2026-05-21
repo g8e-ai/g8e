@@ -118,7 +118,7 @@ type OperatorRegistrationRequest struct {
 //     spiffe://g8e.local/cli/<user_id>/<cli_session_id> (see protocol.WorkloadIdentity.CLISPIFFEID).
 //
 // Conflating the two would let an operator session drain another client's
-// event stream - the substrate refuses to do so.
+// event stream - the Gateway refuses to do so.
 type OperatorRegistrationResponse struct {
 	Success                bool            `json:"success"`
 	OperatorSessionID      string          `json:"operator_session_id,omitempty"`
@@ -350,6 +350,11 @@ type CLISession struct {
 	SystemFingerprint string    `json:"system_fingerprint,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 	ExpiresAt         time.Time `json:"expires_at"`
+	AbsoluteExpiresAt time.Time `json:"absolute_expires_at"`
+	IdleExpiresAt     time.Time `json:"idle_expires_at"`
+	SessionType       string    `json:"session_type"`
+	IsActive          bool      `json:"is_active"`
+	LoginMethod       string    `json:"login_method"`
 }
 
 // User represents a platform user with passkey credentials.
@@ -382,7 +387,7 @@ func (u *User) IsActive() bool {
 
 // AdminAuditEntry is a single row in the `auth_admin_audit` collection.
 // New admin-side state changes (retire, disable, role mutation, etc.) MUST
-// append a row here so the lifecycle is auditable from the protocol substrate.
+// append a row here so the lifecycle is auditable from the protocol Gateway.
 type AdminAuditEntry struct {
 	ID         string                 `json:"id"`
 	At         time.Time              `json:"at"`

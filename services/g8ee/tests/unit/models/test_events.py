@@ -59,9 +59,10 @@ class TestSessionEventWireStructure:
 
         wire = SessionEventWire.from_session_event(se).model_dump(mode="json")
 
-        assert set(wire.keys()) == {"web_session_id", "user_id", "event"}
+        assert set(wire.keys()) == {"web_session_id", "event"}
         assert set(wire["event"].keys()) == {"type", "data"}
         assert isinstance(wire["event"]["type"], str)
+        assert wire["event"]["data"]["user_id"] == "user-456"
 
     def test_wire_structure_with_optional_ids(self):
         se = SessionEvent(

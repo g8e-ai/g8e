@@ -19,7 +19,7 @@ export G8E_PROJECT_ROOT="$SCRIPT_DIR"
 
 test_help_g8eo() {
     output=$("$SCRIPT_DIR/g8e" test g8eo -h)
-    if ! echo "$output" | grep -q "Go Operator substrate tests"; then
+    if ! echo "$output" | grep -q "Go Operator Gateway tests"; then
         echo "FAIL: g8eo help output is missing expected content"
         exit 1
     fi
@@ -63,7 +63,7 @@ test_help_ci() {
 
 test_help_general() {
     output=$("$SCRIPT_DIR/g8e" test -h)
-    if ! echo "$output" | grep -q "Go Operator substrate tests"; then
+    if ! echo "$output" | grep -q "Go Operator Gateway tests"; then
         echo "FAIL: general test help output is missing expected content"
         exit 1
     fi

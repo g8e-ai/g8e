@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -126,7 +127,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 
 	// Check if the linked user is active (plan §4.6)
 	// This is the single chokepoint that makes retirement real - without it,
-	// a stale CLI cert can still talk to the substrate.
+	// a stale CLI cert can still talk to the Gateway.
 	if s.userSvc != nil && op.UserID != "" {
 		user, err := s.userSvc.GetByID(op.UserID)
 		if err != nil {
@@ -258,8 +259,8 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		}
 
 		// [PIVOT] Enforce mTLS for all other routes (Phase 6)
-		// Client certificates must be present and verified by the hub/root CA.
-		// tls.VerifyClientCertIfGiven ensures the chain is already verified if present.
+		// The mTLS listener uses tls.RequireAndVerifyClientCert; reaching L7
+		// without a peer cert means an internal misroute, not a client error.
 		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 			s.logger.Warn("mTLS required but no client certificate provided", "path", r.URL.Path)
 			s.jsonError(w, http.StatusUnauthorized, "mTLS client certificate required")
@@ -285,8 +286,13 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			op, err := s.ValidateOperatorSession(operatorSessionID)
 			if err == nil {
 				// [PIVOT] Verify URI SAN identity (Phase 6)
-				// The client cert must bind to the same operator session.
-				// SPIFFE ID format: protocol.WorkloadIdentity.OperatorSPIFFEID()
+				// The client cert must bind to the same operator session, OR
+				// to a CLI session owned by this operator session. CLI clients
+				// (./g8e login) hold a CLI cert and authenticate with their
+				// linked operator session via Bearer; they MUST be allowed to
+				// reach internal APIs scoped by cli_session_id.
+				// SPIFFE ID formats: protocol.WorkloadIdentity.OperatorSPIFFEID()
+				// and protocol.WorkloadIdentity.CLISPIFFEID().
 				if len(r.TLS.PeerCertificates) > 0 {
 					wid := protocol.NewWorkloadIdentity()
 					cert := r.TLS.PeerCertificates[0]
@@ -296,6 +302,9 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 							match = true
 							break
 						}
+					}
+					if !match && cliSessionID != "" {
+						match = s.cliCertBoundToOperator(cert.URIs, cliSessionID, op.UserID, operatorSessionID)
 					}
 					if !match {
 						s.logger.Warn("mTLS URI SAN mismatch for operator session", "path", r.URL.Path, "operator_id", op.ID, "operator_session_id", operatorSessionID)
@@ -412,6 +421,45 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 
 		s.jsonError(w, http.StatusUnauthorized, "protocol authentication required")
 	})
+}
+
+// cliCertBoundToOperator reports whether the presented client certificate is a
+// CLI workload SPIFFE ID whose CLI session is owned by the given operator
+// session. This lets a CLI client (./g8e login) call internal APIs scoped by
+// cli_session_id while presenting its CLI mTLS cert and the linked operator
+// session as a Bearer token.
+func (s *AuthService) cliCertBoundToOperator(certURIs []*url.URL, cliSessionID, userID, operatorSessionID string) bool {
+	if cliSessionID == "" || operatorSessionID == "" {
+		return false
+	}
+	wid := protocol.NewWorkloadIdentity()
+	uriMatch := false
+	for _, uri := range certURIs {
+		if userID != "" && wid.MatchesCLI(uri.String(), userID, cliSessionID) {
+			uriMatch = true
+			break
+		}
+		if wid.MatchesCLISessionOnly(uri.String(), cliSessionID) {
+			uriMatch = true
+			break
+		}
+	}
+	if !uriMatch {
+		return false
+	}
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	if err != nil || doc == nil {
+		return false
+	}
+	var cliSession models.CLISession
+	b, _ := json.Marshal(doc.Data)
+	if err := json.Unmarshal(b, &cliSession); err != nil {
+		return false
+	}
+	if !cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(time.Now()) {
+		return false
+	}
+	return cliSession.OperatorSessionID == operatorSessionID
 }
 
 // WebSocketAuth returns an http.Handler that authenticates WebSocket connections.
