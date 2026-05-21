@@ -25,7 +25,7 @@ from app.models.agent import (
     TurnResult,
 )
 from app.models.settings import G8eeUserSettings, LLMSettings
-from app.services.ai.agent import g8eEngine
+from app.services.ai.agent import g8eEnsemble
 from app.services.ai.agent_turn import process_provider_turn
 from app.services.ai.request_builder import AIRequestBuilder
 from tests.fakes.factories import build_g8e_http_context
@@ -168,13 +168,13 @@ def make_agent_run_args(
 def make_g8e_agent(
     fn_handler=None,
     approval_service=None,
-) -> g8eEngine:
-    """Build a g8eEngine suitable for unit tests."""
+) -> g8eEnsemble:
+    """Build a g8eEnsemble suitable for unit tests."""
     if fn_handler is None:
         fn_handler = MagicMock()
         fn_handler._tool_declarations = {}
 
-    return g8eEngine(
+    return g8eEnsemble(
         tool_executor=fn_handler,
         approval_service=approval_service,
     )
@@ -231,7 +231,7 @@ class FakeMultiTurnStreamProvider:
         return _gen()
 
 
-def patch_stream_response(agent: g8eEngine, chunks: list[StreamChunkFromModel]) -> None:
+def patch_stream_response(agent: g8eEnsemble, chunks: list[StreamChunkFromModel]) -> None:
     """Replace agent.stream_response with an async generator that yields chunks."""
     async def _fake_stream(*args, **kwargs):
         for chunk in chunks:
@@ -240,7 +240,7 @@ def patch_stream_response(agent: g8eEngine, chunks: list[StreamChunkFromModel]) 
 
 
 async def collect_stream_from_model_chunks(
-    agent: g8eEngine,
+    agent: g8eEnsemble,
     inputs: AgentInputs,
     event_service: Any = None,
     llm_provider: Any = None,

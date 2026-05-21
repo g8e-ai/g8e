@@ -88,7 +88,7 @@ case "$SUB" in
             echo "[g8e] Help file not found: $help_file" >&2; exit 1
         fi
         [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
-    up|down|status|clean|health|nginx-check|operators|logs|discover-hosts|stream|vanish|dashboard|devices|broken)
+    up|down|status|clean|health|nginx-check|operators|logs|discover-hosts|stream|vanish|devices|broken)
         _banner "demo $SUB"; exec make -C "$DEMO_DIR" "$SUB" "${demo_args[@]}" ;;
     deploy)
         _banner "demo deploy"
@@ -103,6 +103,6 @@ case "$SUB" in
         _banner "demo shell"; exec make -C "$DEMO_DIR" shell "${demo_args[@]}" ;;
     *)
         echo "[g8e] unknown demo subcommand: '$SUB'" >&2
-        echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, dashboard, devices, broken, profile" >&2
+        echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, devices, broken, profile" >&2
         exit 1 ;;
 esac

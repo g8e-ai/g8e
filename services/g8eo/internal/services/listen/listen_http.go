@@ -141,7 +141,7 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/mcp/v1/tools/call", h.mcp.HandleToolsCall)
 	mux.HandleFunc("/api/a2a/v1/call", h.mcp.HandleA2aCall)
 
-	// Internal SSE event bridge (used by g8ee Engine to publish typed events
+	// Internal SSE event bridge (used by g8ee Ensemble to publish typed events
 	// for browser/CLI subscribers to consume). Producers are authenticated by
 	// mTLS app identity; consumers poll /api/internal/sse/events or stream /api/internal/sse/stream.
 	mux.HandleFunc("/api/internal/sse/push", h.handleInternalSSEPush)
@@ -1326,7 +1326,7 @@ func (h *HTTPHandler) handleSSEEvents(w http.ResponseWriter, r *http.Request, id
 // =============================================================================
 // /api/internal/sse/push, /api/internal/sse/events - Internal SSE event bridge
 //
-// POST /api/internal/sse/push     → Producer (g8ee Engine) appends an event.
+// POST /api/internal/sse/push     → Producer (g8ee Ensemble) appends an event.
 //                                   Body MUST set exactly one of
 //                                   web_session_id, cli_session_id, user_id.
 // GET  /api/internal/sse/events   → Consumer (CLI / dashboard) polls events.

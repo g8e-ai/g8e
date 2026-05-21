@@ -61,7 +61,7 @@ TEST_RUNNER_SERVICES=()
 WITH_APPS=false
 OPTIONAL_COMPONENTS=()
 
-if [[ "${G8E_WITH_APPS:-}" == "1" || "${G8E_WITH_APPS:-}" == "true" ]]; then
+if [[ "${G8E_WITH_G8EE:-}" == "1" || "${G8E_WITH_G8EE:-}" == "true" ]]; then
     WITH_APPS=true
     OPTIONAL_COMPONENTS=("${OPTIONAL_APPS[@]}")
 fi
@@ -172,12 +172,7 @@ while [[ $# -gt 0 ]]; do
             DEV_MODE=true
             shift
             ;;
-        --with-apps|-a)
-            WITH_APPS=true
-            OPTIONAL_COMPONENTS=("${OPTIONAL_APPS[@]}")
-            shift
-            ;;
-        --with-g8ee)
+        --with-g8ee|-a)
             WITH_APPS=true
             OPTIONAL_COMPONENTS+=("g8ee")
             shift
@@ -219,7 +214,7 @@ done
 if [[ "$WITH_APPS" != "true" ]]; then
     for component in "${REBUILD_COMPONENTS[@]}"; do
         if [[ "$component" != "operator" ]]; then
-            echo "Error: optional app '$component' requires --with-apps, --with-$component, or ./g8e apps start $component" >&2
+            echo "Error: optional app '$component' requires --with-g8ee or ./g8e apps start $component" >&2
             exit 1
         fi
     done
@@ -298,7 +293,7 @@ _start_g8ee() {
         return 0
     fi
 
-    _check_port_available "${G8E_G8EE_HTTPS_PORT}" "g8ee Engine API" || exit 1
+    _check_port_available "${G8E_G8EE_HTTPS_PORT}" "g8ee Ensemble API" || exit 1
 
     local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
     if [ ! -d "$venv_dir" ]; then

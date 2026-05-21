@@ -46,7 +46,7 @@ func isUAPMessageID(id string) bool {
 	return true
 }
 
-// PubSubResultsService handles publishing results back to AI Agent Services via operator pub/sub
+// PubSubResultsService handles publishing results back to g8e-Compliant Agentic Ensemble via operator pub/sub
 type PubSubResultsService struct {
 	client     PubSubClient
 	config     *config.Config

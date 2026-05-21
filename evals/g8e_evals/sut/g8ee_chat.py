@@ -308,7 +308,7 @@ class G8eeChatSUT:
     # ---- Helpers --------------------------------------------------------
 
     def _build_chat_request(self, task: Task) -> ChatMessageRequest:
-        """Assemble a strictly typed ChatMessageRequest for the g8ee Engine."""
+        """Assemble a strictly typed ChatMessageRequest for the g8ee Ensemble."""
         primary = self.config.primary
         assistant = self.config.assistant
         lite = self.config.lite

@@ -64,7 +64,7 @@ class LLMSettings(G8eBaseModel):
     lite_endpoint: str | None = Field(default=None)
 
 class G8eeUserSettings(G8eBaseModel):
-    """Per-user settings for g8ee Engine."""
+    """Per-user settings for g8ee Ensemble."""
     llm: LLMSettings
     search: SearchSettings = Field(default_factory=SearchSettings)
     eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)

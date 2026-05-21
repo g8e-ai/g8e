@@ -361,7 +361,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 
 ### Added
 - **Core Platform:** Open-source release of the `g8e` platform for AI-assisted infrastructure operations.
-- **g8ee (AI Engine):** ReAct-based Python orchestration layer with support for Anthropic, OpenAI, and local Ollama models.
+- **g8ee (g8e-Compliant Agentic Ensemble):** ReAct-based Python orchestration layer with support for Anthropic, OpenAI, and local Ollama models.
 - **g8eo (Operator):** ~4MB dependency-free static Go binary for remote host execution. Features zero-inbound ports and outbound-only mTLS.
 - **operator (Data Store):** SQLite-backed persistence layer, KV store, and pub/sub broker running within the Operator framework.
 - **client (Dashboard):** Node.js central management console featuring FIDO2 WebAuthn (passkey) authentication and real-time mTLS gateway proxying.

@@ -523,7 +523,7 @@ func TestSentinelOutputResultSerialization(t *testing.T) {
 
 	scrubbed := sentinel.ScrubForCloudAI(cmdResult)
 
-	// Serialize to JSON (as would happen when sending to AI Agent Services)
+	// Serialize to JSON (as would happen when sending to g8e-Compliant Agentic Ensemble)
 	jsonBytes, err := json.Marshal(scrubbed)
 	require.NoError(t, err)
 

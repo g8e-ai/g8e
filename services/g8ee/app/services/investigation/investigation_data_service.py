@@ -355,7 +355,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         ]
 
     async def get_operator_actions_for_ai_context(self, investigation_id: str) -> str:
-        """Format operator actions for inclusion in AI system prompt."""
+        """Format operator actions for inclusion in Ensemble system prompt."""
         investigation = await self.get_investigation(investigation_id)
         if not investigation or not investigation.history_trail:
             return "No Operator actions recorded yet."

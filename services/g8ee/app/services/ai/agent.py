@@ -75,7 +75,7 @@ from app.utils.ids import generate_command_execution_id
 logger = logging.getLogger(__name__)
 
 
-class g8eEngine:
+class g8eEnsemble:
     """
     Unified g8e AI Agent - orchestrates the ReAct streaming loop.
 
@@ -95,7 +95,7 @@ class g8eEngine:
         self._tool_executor = tool_executor
         self._grounding_service = grounding_service or GroundingService()
         self._approval_service = approval_service
-        logger.info("g8eEngine initialized")
+        logger.info("g8eEnsemble initialized")
 
     @property
     def tool_executor(self) -> AIToolService:

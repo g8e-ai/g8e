@@ -6,7 +6,7 @@ title: Evals
 
 Last Updated: 2026-05-18
 
-The evals harness drives the **real g8ee chat pipeline end-to-end** - Triage, Dash/Sage, Tribunal, Auditor, Actuator - captures every agent stage emitted on the Operator's per-session SSE buffer, and folds the full agent trail into a per-task receipt for offline replay. This is the gold-standard evaluation path: the model under test exercises the same code paths a real user hits via `./g8e chat send`.
+The evals harness drives the **real g8e Agentic Ensemble** chat pipeline end-to-end** - Triage, Dash/Sage, Tribunal, Auditor, Actuator - captures every agent stage emitted on the Operator's per-session SSE buffer, and folds the full agent trail into a per-task receipt for offline replay. This is the gold-standard evaluation path: the model under test exercises the same code paths a real user hits via `./g8e chat send`.
 
 ---
 
@@ -169,4 +169,4 @@ Acceptable for v1; the long-term fix is to consume an Operator-native `text/even
 | All tasks `UNBOUND` with `answer-only turn` | Expected for IFEval-style prompts that never trigger a Actuator mutation. Receipt binding only occurs when the agent stack escalates a typed mutation through Tribunal→Actuator. |
 | Receipt verification failure | Confirm `.g8e/pki/Actuator_pub.pem` was exported by the running Operator and `--operator-url` points at the same instance. |
 
-See also: [Protocol](protocol.md), [Operator](operator.md), [g8ee Service](g8ee_service.md), [Tests](tests.md).
+See also: [Protocol](protocol.md), [Operator](operator.md), [g8e Agentic Ensemble](g8ee.md), [Tests](tests.md).

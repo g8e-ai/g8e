@@ -58,7 +58,7 @@ transaction — and the host verifies that transaction before it executes.
 
 ## Quickstart
 
-**Prerequisites:** Go 1.22+ · Python 3.12+ (only for the optional reference Engine)
+**Prerequisites:** Go 1.22+ · Python 3.12+ (only for the optional reference Ensemble)
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
@@ -66,7 +66,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 # Start the mandatory Operator gateway
 ./g8e platform start
 
-# (Optional) Start the reference AI Engine
+# (Optional) Start the reference g8e-Compliant Agentic Ensemble
 ./g8e apps start g8ee
 ```
 
@@ -114,13 +114,13 @@ A producer forms intent and reaches consensus; the Operator pulls the envelope o
 sequenceDiagram
     autonumber
     participant Principal as Principal<br/>(Human / AI Agent)
-    participant Engine as Producer<br/>(g8ee Engine / BYO / MCP client)
+    participant Ensemble as Producer<br/>(g8ee Ensemble / BYO / MCP client)
     participant Gateway as Governance Gateway<br/>(g8eg)
     participant Operator as Governed Operator<br/>(g8eo)
 
-    Principal->>Engine: Submit intent (MCP / A2A / tool call)
-    Note over Engine: Reach Quorum (L2)<br/>Wrap in signed GovernanceEnvelope
-    Engine->>Gateway: Submit envelope for admission
+    Principal->>Ensemble: Submit intent (MCP / A2A / tool call)
+    Note over Ensemble: Reach Quorum (L2)<br/>Wrap in signed GovernanceEnvelope
+    Ensemble->>Gateway: Submit envelope for admission
 
     Operator->>Gateway: Open outbound-only mTLS tunnel
     Operator->>Gateway: Fetch pending GovernanceEnvelope
@@ -187,7 +187,7 @@ Every component distrusts every other. Execution authority is never ambient.
 
 g8e ships a full reference stack, but the protocol is the only mandatory part — any conforming producer can emit a valid envelope.
 
-- **Engine (`g8ee`)** — optional reference AI app. A ReAct loop over an agent hierarchy: **Triage/Dash** (routing + fast path), **Sage** (reasoner; proposes but cannot execute), a five-seat **Tribunal** (k-of-n consensus), **Warden** (heuristic circuit breaker), **Auditor** (history grounding + signs L2), and **Nemesis** (embedded adversary; recorded, never executed).
+- **Ensemble (`g8ee`)** — optional reference g8e-Compliant Agentic Ensemble. A ReAct loop over an agent hierarchy: **Triage/Dash** (routing + fast path), **Sage** (reasoner; proposes but cannot execute), a five-seat **Tribunal** (k-of-n consensus), **Warden** (heuristic circuit breaker), **Auditor** (history grounding + signs L2), and **Nemesis** (embedded adversary; recorded, never executed).
 - **Gateway (`g8eg`)** — reference policy decision point: admission APIs, mTLS/PKI, replay protection, state-root distribution, fan-out to Operators.
 - **Operator (`g8eo`)** — reference enforcement point and sovereign boundary: local audit authority, Sentinel scrubber, Actuator, MCP server. The 4MB binary.
 
@@ -215,7 +215,7 @@ g8e is built to run entirely inside your perimeter. The Operator has no inbound 
 - **[Position Paper](docs/position-paper.md)** — the full design rationale, threat model, and BFT analysis.
 - **[Protocol](docs/protocol.md)** — wire format, transaction hash, and the Doctrine / Quorum / Notary definitions.
 - **[Operator (g8eo)](docs/g8eo.md)** — execution boundary, listener modes, and host storage.
-- **[Engine (g8ee)](docs/g8ee.md)** — reference AI application and agentic orchestration.
+- **[Ensemble (g8ee)](docs/g8ee.md)** — reference g8e-Compliant Agentic Ensemble and agentic orchestration.
 - **[Troubleshooting](docs/developer/troubleshooting.md)** — common setup failures and recovery checks.
 - **[Contributing](CONTRIBUTING.md)** — build instructions, testing workflows, and standards.
 

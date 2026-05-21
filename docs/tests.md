@@ -12,7 +12,7 @@ g8e is designed to be a **testing environment and a production environment at th
 
 ## Core Engineering Principles
 
-- **Hermetic execution** - Tests run directly on the host via `./g8e test`. Go for the Gateway (`g8eg`/`g8eo`); repo-local Python for explicit app-layer targets (`g8ee`).
+- **Hermetic execution** - Tests run directly on the host via `./g8e test`. Go for the Gateway (`g8eg`/`g8eo`); repo-local Python for explicit agentic ensemble targets (`g8ee`).
 - **Real infrastructure** - Gateway test runs begin with `./g8e platform start` (launching the `g8eg` Gateway). App-layer tests require explicit app startup via `./g8e apps start g8ee` or `./g8e platform start --with-apps`.
 - **No mocks policy** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use the real wire paths.
 - **mTLS by default** - Most internal and Gateway communication requires mTLS. The runner injects certs from `.g8e/pki` automatically when authenticated (`./g8e login`).
@@ -33,16 +33,16 @@ g8e is designed to be a **testing environment and a production environment at th
 ./g8e test g8eo services/pubsub
 ```
 
-Validates the Gateway components (`g8eg` and `g8eo`) and their protocol enforcement (`GovernanceEnvelope`, 3-layer governance, Audit Vault) without requiring Python or g8ee. Uses Gateway listen mode and unified command/result paths. Keeps the required platform boundary small and independently verifiable.
+Validates the Gateway components (`g8eg` and `g8eo`) and their protocol enforcement (`GovernanceEnvelope`, 3-layer governance, Audit Vault) without requiring Python or the agentic ensemble. Uses Gateway listen mode and unified command/result paths. Keeps the required platform boundary small and independently verifiable.
 
-### 2. App Adapter Tests (Explicit Opt-In)
+### 2. App Adapter Tests (g8e Agentic Ensemble)
 
 ```bash
 ./g8e test g8ee --e2e
 ./g8e test g8ee --pyright --ruff
 ```
 
-Validates the optional bundled Engine adapter (`g8ee`). Requires the relevant app adapter to be started explicitly. Verifies bundled clients without making them Gateway dependencies.
+Validates the optional bundled **g8e Agentic Ensemble** (`g8ee`). Requires the relevant app adapter to be started explicitly. Verifies bundled clients without making them Gateway dependencies.
 
 ### 3. Evals (Application-Layer Benchmark Path)
 
@@ -113,7 +113,7 @@ When debugging connectivity (defaults from `services/g8eo/internal/constants/pat
 
 - `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->` - Gateway mTLS API / Pub/Sub / Public (multiplexed onto a single TLS listener)
 - `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->` - Gateway Bootstrap (plain HTTP; isolated from TLS surfaces)
-- `<!-- g8e:port:g8ee_http -->8443<!-- /g8e:port -->` - g8ee Adapter (HTTPS)
+- `<!-- g8e:port:g8ee_http -->8443<!-- /g8e:port -->` - agentic ensemble adapter (HTTPS)
 
 All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the gateway binary or front it with an external port redirect.
 
@@ -137,6 +137,6 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 
 - **`verify-proto`** - Generated Go and Python code is in sync with `.proto` definitions.
 - **`test-g8eo`** (blocking) - Installs Go, starts the platform, runs `./g8e test`.
-- **`apps-g8ee`** (non-blocking, `continue-on-error: true`) - Installs Python, starts g8ee, runs its suite.
+- **`apps-g8ee`** (non-blocking, `continue-on-error: true`) - Installs Python, starts the **agentic ensemble**, runs its suite.
 
 See also: [Evals](evals.md), [Scripts](scripts.md), [Contribution Guide](../CONTRIBUTING.md).

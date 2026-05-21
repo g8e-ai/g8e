@@ -156,9 +156,9 @@ The reference model adds structure beyond raw voting: separation of roles (inten
 
 The protocol is the product. The implementations are replaceable, and describing them concretely is what keeps the abstract roles honest.
 
-### 7.1 The Engine (`g8ee`)
+### 7.1 The g8e Agentic Ensemble (`g8ee`)
 
-`g8ee` is one producer of governed transactions, built as a ReAct loop over a layered hierarchy: **Triage/Dash** for routing and fast-path responses that never touch the mutation boundary; **Sage** as primary reasoner, which stakes reputation on proposals but cannot execute; the **Tribunal**, a five-seat panel requiring threshold consensus (2/5 or 5/5 by policy); **Actuator**, a heuristic circuit breaker that rejects off-the-wall proposals before they spend consensus budget; **Auditor**, which reviews the full investigation history before signing; and **Nemesis**, the embedded adversary. Crucially, `g8ee` has no private channel to the host. It produces the same envelope, subject to the same gauntlet, as any BYO agent, MCP client, or A2A client.
+The **g8e Agentic Ensemble** (`g8ee`) is one producer of governed transactions, built as a ReAct loop over a layered hierarchy: **Triage/Dash** for routing and fast-path responses that never touch the mutation boundary; **Sage** as primary reasoner, which stakes reputation on proposals but cannot execute; the **Tribunal**, a five-seat panel requiring threshold consensus (2/5 or 5/5 by policy); **Actuator**, a heuristic circuit breaker that rejects off-the-wall proposals before they spend consensus budget; **Auditor**, which reviews the full investigation history before signing; and **Nemesis**, the embedded adversary. Crucially, the **agentic ensemble** has no private channel to the host. It produces the same envelope, subject to the same gauntlet, as any BYO agent, MCP client, or A2A client.
 
 ### 7.2 The Gateway (`g8eg`)
 

@@ -149,7 +149,7 @@ class OperatorContext(G8eBaseModel):
 
 
 class AgentInputs(G8eBaseModel):
-    """Immutable, request-scoped inputs to a single g8eEngine run.
+    """Immutable, request-scoped inputs to a single g8eEnsemble run.
 
     Everything in this model is set once when the chat turn is prepared and
     is read-only for the duration of the streaming run. Mutable per-run
@@ -190,7 +190,7 @@ class AgentInputs(G8eBaseModel):
 
 
 class AgentStreamState(G8eBaseModel):
-    """Mutable sinks populated by deliver_via_sse during a g8eEngine run.
+    """Mutable sinks populated by deliver_via_sse during a g8eEnsemble run.
 
     These are the only fields the SSE delivery layer is permitted to write.
     After the run completes, the chat pipeline reads the final values from

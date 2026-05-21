@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Prompts data package for g8ee AI system prompts and tool descriptions."""
+"""Prompts data package for g8ee Ensemble system prompts and tool descriptions."""
 
 from .loader import load_mode_prompts, load_prompt
 

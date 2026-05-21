@@ -21,7 +21,7 @@ Owns:
 
 Does NOT own:
 - Task lifecycle / cancellation  →  ChatTaskManager
-- LLM streaming / ReAct loop    →  g8eEngine
+- LLM streaming / ReAct loop    →  g8eEnsemble
 - Investigation context queries →  InvestigationContextManager
 """
 
@@ -61,7 +61,7 @@ from app.llm.prompts import build_modular_system_prompt
 from app.llm.utils import resolve_model, ModelOverrideResolver
 
 from app.services.infra.event_service import EventService
-from .agent import g8eEngine
+from .agent import g8eEnsemble
 from app.services.investigation.investigation_service import extract_all_operators_context, InvestigationService
 from app.services.investigation.memory_data_service import MemoryDataService
 from .memory_generation_service import MemoryGenerationService
@@ -90,7 +90,7 @@ class ChatPipelineService:
         event_service: EventService,
         investigation_service: InvestigationService,
         request_builder: AIRequestBuilder,
-        g8e_agent: g8eEngine,
+        g8e_agent: g8eEnsemble,
         memory_service: MemoryDataService,
         memory_generation_service: MemoryGenerationService,
         agent_activity_data_service: AgentActivityDataService,

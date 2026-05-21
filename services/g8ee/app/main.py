@@ -13,8 +13,8 @@
 
 """g8ee FastAPI Application - Main Entry Point.
 
-g8e Engine (g8ee) - AI engine for g8e platform. Agentic AI system with
-LLM provider abstraction providing Zero-Trust AI for infrastructure operations.
+g8e-Compliant Agentic Ensemble (g8ee) - Reference AI reasoning system for g8e platform.
+Agentic Ensemble with LLM provider abstraction providing Zero-Trust AI for infrastructure operations.
 
 Bootstrap responsibilities (this file):
     1. SettingsService bootstrap + local settings

@@ -14,12 +14,12 @@
 """Canonical auth + transport wiring for evals HTTP clients.
 
 This is the *only* place the evals harness encodes how to talk to the
-running g8e platform (g8ee Engine + Operator) over mTLS:
+running g8e platform (g8ee Ensemble + Operator) over mTLS:
 
   - trust bundle resolution (via :mod:`g8e_evals.tls`)
   - mTLS client certificate / key (``G8E_CLI_CERT`` / ``G8E_CLI_KEY``)
   - ``g8e_session`` cookie + ``X-G8E-*`` context headers
-  - URL resolution for the g8ee Engine and Operator listen mode
+  - URL resolution for the g8ee Ensemble and Operator listen mode
 
 It exists to converge with the shell-side helpers in
 ``scripts/cmd/common.sh`` (``_build_protocol_curl_args``,
@@ -29,7 +29,7 @@ on either side will trip the parity contract test in
 ``./g8e chat send`` cannot silently diverge.
 
 Canonical header names are imported from
-``app.constants.headers`` (the g8ee Engine's authoritative list) so the
+``app.constants.headers`` (the g8ee Ensemble's authoritative list) so the
 SUT cannot drift from what the server actually validates.
 """
 

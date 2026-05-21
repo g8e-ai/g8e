@@ -127,7 +127,7 @@ func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
 		return fmt.Errorf("service certificate setup failed: %w", err)
 	}
 
-	// Generate or load certificates for reference apps
+	// Generate or load certificates for reference ensembles
 	if err := pki.ensureAppCerts(); err != nil {
 		return fmt.Errorf("app certificates setup failed: %w", err)
 	}
@@ -736,8 +736,8 @@ func (pki *PKIAuthority) ensureAppCerts() error {
 			continue
 		}
 
-		pki.logger.Info("[PKI] Generating certificate for reference app", "app", app)
-		// We use a simplified signing flow for bundled reference apps during bootstrap.
+		pki.logger.Info("[PKI] Generating certificate for reference ensemble", "app", app)
+		// We use a simplified signing flow for bundled reference ensembles during bootstrap.
 		// In a BYO world, they would use the SignCSR API.
 		if err := pki.generateAppCert(app, keyPath, certPath); err != nil {
 			return fmt.Errorf("failed to generate cert for %s: %w", app, err)
