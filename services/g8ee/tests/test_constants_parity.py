@@ -46,7 +46,7 @@ from app.constants.models import (
 
 def _load_json_file(filename: str) -> dict:
     """Load a JSON file from protocol/constants/."""
-    protocol_dir = Path(__file__).parent.parent.parent.parent.parent / "protocol" / "constants"
+    protocol_dir = Path(__file__).parent.parent.parent.parent / "protocol" / "constants"
     path = protocol_dir / filename
     with path.open() as f:
         return json.load(f)
@@ -58,16 +58,16 @@ def test_collections_json_matches_model():
     model = CollectionsConstants.model_validate(data)
     assert model.collections is not None
     # Spot-check a well-known key
-    assert "Users" in model.collections
-    assert model.collections["Users"].value == "users"
+    assert "users" in model.collections
+    assert model.collections["users"].value == "users"
 
 
 def test_events_json_matches_model():
     """events.json must validate against EventsConstants model."""
     data = _load_json_file("events.json")
     model = EventsConstants.model_validate(data)
-    # Spot-check a well-known key
-    assert "EventOperatorCommandCompleted" in data
+    # Spot-check a well-known key (keys are map keys from registry.go)
+    assert "OperatorCommandCompleted" in data["events"]
 
 
 def test_status_json_matches_model():
@@ -75,16 +75,17 @@ def test_status_json_matches_model():
     data = _load_json_file("status.json")
     model = StatusConstants.model_validate(data)
     # Spot-check a well-known key
-    assert "OperatorStatusActive" in data
-    assert data["OperatorStatusActive"] == "active"
+    assert "available" in data["status"]["operator_status"]
+    assert data["status"]["operator_status"]["available"]["value"] == "available"
 
 
 def test_senders_json_matches_model():
     """senders.json must validate against SendersConstants model."""
     data = _load_json_file("senders.json")
     model = SendersConstants.model_validate(data)
-    # senders.json has a nested structure with message.sender and message.type
-    assert "message" in data
+    # senders.json has a nested structure with senders
+    assert "senders" in data
+    assert "AiAssistant" in data["senders"]
 
 
 def test_headers_json_matches_model():
@@ -92,8 +93,8 @@ def test_headers_json_matches_model():
     data = _load_json_file("headers.json")
     model = HeadersConstants.model_validate(data)
     # Spot-check a well-known key
-    assert "HeaderAPIKey" in data
-    assert data["HeaderAPIKey"] == "X-API-Key"
+    assert "APIKey" in data["headers"]
+    assert data["headers"]["APIKey"]["value"] == "X-API-Key"
 
 
 def test_channels_json_matches_model():

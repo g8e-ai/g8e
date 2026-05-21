@@ -22,7 +22,7 @@ The platform operates on a strict zero-trust model where components distrust eac
 sequenceDiagram
     autonumber
     
-    actor Principal as The Principal<br/>(Human / AI Tool)
+    participant Principal as The Principal<br/>(Human / AI Tool)
     participant Engine as Application Layer<br/>(g8ee Engine)
     participant Operator as Sovereign Operator<br/>(g8eo Execution Gateway)
 
