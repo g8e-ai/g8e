@@ -347,6 +347,10 @@ _run_host_script() {
     export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/protocol${PYTHONPATH:+:$PYTHONPATH}"
     [[ -n "${G8E_OPERATOR_SESSION_ID:-}" ]] && export G8E_OPERATOR_SESSION_ID
     [[ -n "${G8E_CLI_SESSION_ID:-}" ]] && export G8E_CLI_SESSION_ID
+    [[ -n "${G8E_USER_ID:-}" ]] && export G8E_USER_ID
+    [[ -n "${G8E_OPERATOR_ID:-}" ]] && export G8E_OPERATOR_ID
+    [[ -n "${G8E_CLI_CERT:-}" ]] && export G8E_CLI_CERT
+    [[ -n "${G8E_CLI_KEY:-}" ]] && export G8E_CLI_KEY
     exec "$@"
 }
 

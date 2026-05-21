@@ -126,6 +126,15 @@ case "$TOP" in
     user)       exec bash "$SCRIPT_DIR/scripts/cmd/user.sh" "$SUB" "${@:3}" ;;
     setup)      exec bash "$SCRIPT_DIR/scripts/core/local_setup.sh" "$SUB" "${@:3}" ;;
     vars|login|logout|ssh|aws|search|llm|security|data|mcp)
+                # Export auth credentials before exec since exec replaces the shell
+                [[ -n "$G8E_OPERATOR_SESSION_ID" ]] && export G8E_OPERATOR_SESSION_ID
+                [[ -n "$G8E_CLI_SESSION_ID" ]] && export G8E_CLI_SESSION_ID
+                [[ -n "$G8E_USER_ID" ]] && export G8E_USER_ID
+                [[ -n "$G8E_OPERATOR_ID" ]] && export G8E_OPERATOR_ID
+                [[ -n "$G8E_CLI_CERT" ]] && export G8E_CLI_CERT
+                [[ -n "$G8E_CLI_KEY" ]] && export G8E_CLI_KEY
+                [[ -n "$G8E_OPERATOR_CERT" ]] && export G8E_OPERATOR_CERT
+                [[ -n "$G8E_OPERATOR_KEY" ]] && export G8E_OPERATOR_KEY
                 exec bash "$SCRIPT_DIR/scripts/cmd/infra.sh" "$TOP" "$SUB" "${@:3}" ;;
     *)
         echo "[g8e] unknown command: '$TOP'" >&2

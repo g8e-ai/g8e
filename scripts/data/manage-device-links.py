@@ -39,7 +39,7 @@ from _lib import (
     operator_request,
 )
 
-DEVICE_LINKS_API = f'{OPERATOR_HTTPS_URL}/api/device-links'
+DEVICE_LINKS_API = '/api/device-links'
 
 TOKEN_RE_PREFIX = 'dlk_'
 
@@ -109,7 +109,7 @@ class DeviceLinkManager:
         if max_uses is None or max_uses < 1 or max_uses > 100:
             raise RuntimeError('max_uses must be between 1 and 100')
 
-        body: Dict[str, Any] = {'max_uses': max_uses}
+        body: Dict[str, Any] = {'user_id': uid, 'max_uses': max_uses}
         if name:
             body['name'] = name
         if expires_in_hours is not None:
