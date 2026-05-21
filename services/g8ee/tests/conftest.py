@@ -81,7 +81,7 @@ def _llm_settings_from_env() -> LLMSettings | None:
     Returns None when no --llm-provider flag was supplied, which means
     ai_integration tests should be skipped.
     """
-    provider_str = os.environ.get(EnvVar.TEST_LLM_PROVIDER, "").strip()
+    provider_str = os.environ.get(EnvVar.TEST_LLM_PRIMARY_PROVIDER, "").strip()
     if not provider_str:
         return None
 

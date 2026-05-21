@@ -55,8 +55,8 @@ _list() {
         "G8E_LOG_LEVEL"
         "G8E_INTERNAL_API_KEY"
         "G8E_OPERATOR_API_KEY"
-        "G8E_TEST_LLM_PROVIDER"
-        "G8E_TEST_LLM_API_KEY"
+        "G8E_TEST_LLM_PRIMARY_PROVIDER"
+        "G8E_TEST_LLM_PRIMARY_API_KEY"
     )
 
     printf "%-30s %s\n" "VARIABLE" "VALUE"
