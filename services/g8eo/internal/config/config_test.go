@@ -181,7 +181,7 @@ func TestLoadListen_Defaults(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	cfg, err := LoadListen(0, 0, 0, "", "", "", "", "", "", "", true)
+	cfg, err := LoadListen(ListenOptions{AllowTestPortZero: true})
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
@@ -194,19 +194,17 @@ func TestLoadListen_Defaults(t *testing.T) {
 }
 
 func TestLoadListen_ExplicitValues(t *testing.T) {
-	cfg, err := LoadListen(
-		443,
-		80,
-		8443,
-		"/var/data",
-		"/var/pki",
-		"/var/secrets",
-		"example.com",
-		"Example RP",
-		"",
-		"",
-		true,
-	)
+	cfg, err := LoadListen(ListenOptions{
+		HTTPPort:          443,
+		BootstrapPort:     80,
+		PublicPort:        8443,
+		DataDir:           "/var/data",
+		PKIDir:            "/var/pki",
+		SecretsDir:        "/var/secrets",
+		PasskeyRpID:       "example.com",
+		PasskeyRpName:     "Example RP",
+		AllowTestPortZero: true,
+	})
 	require.NoError(t, err)
 
 	assert.Equal(t, 443, cfg.Listen.HTTPPort)
@@ -220,14 +218,14 @@ func TestLoadListen_ExplicitValues(t *testing.T) {
 func TestLoadListen_PartialDefaults(t *testing.T) {
 
 	t.Run("only data dir overridden", func(t *testing.T) {
-		cfg, err := LoadListen(0, 0, 0, "/custom/data", "", "", "", "", "", "", true)
+		cfg, err := LoadListen(ListenOptions{DataDir: "/custom/data", AllowTestPortZero: true})
 		require.NoError(t, err)
 
 		assert.Equal(t, "/custom/data", cfg.Listen.DataDir)
 	})
 
 	t.Run("no operator fields set", func(t *testing.T) {
-		cfg, err := LoadListen(0, 0, 0, "", "", "", "", "", "", "", true)
+		cfg, err := LoadListen(ListenOptions{AllowTestPortZero: true})
 		require.NoError(t, err)
 		assert.Empty(t, cfg.APIKey)
 		assert.Empty(t, cfg.Endpoint)
@@ -236,32 +234,52 @@ func TestLoadListen_PartialDefaults(t *testing.T) {
 }
 
 func TestLoadListen_SucceedsWithAllDefaults(t *testing.T) {
-	_, err := LoadListen(0, 0, 0, "", "", "", "", "", "", "", true)
+	_, err := LoadListen(ListenOptions{AllowTestPortZero: true})
 	require.NoError(t, err)
 }
 
 func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 
 	t.Run("reject httpPort 0", func(t *testing.T) {
-		_, err := LoadListen(0, constants.Paths.Ports.OperatorBootstrap, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(ListenOptions{
+			HTTPPort:          0,
+			BootstrapPort:     constants.Paths.Ports.OperatorBootstrap,
+			PublicPort:        constants.Paths.Ports.OperatorPublic,
+			AllowTestPortZero: false,
+		})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "httpPort cannot be 0 in production")
 	})
 
 	t.Run("reject bootstrapPort 0", func(t *testing.T) {
-		_, err := LoadListen(constants.Paths.Ports.OperatorHttp, 0, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(ListenOptions{
+			HTTPPort:          constants.Paths.Ports.OperatorHttp,
+			BootstrapPort:     0,
+			PublicPort:        constants.Paths.Ports.OperatorPublic,
+			AllowTestPortZero: false,
+		})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "bootstrapPort cannot be 0 in production")
 	})
 
 	t.Run("reject publicPort 0", func(t *testing.T) {
-		_, err := LoadListen(constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorBootstrap, 0, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(ListenOptions{
+			HTTPPort:          constants.Paths.Ports.OperatorHttp,
+			BootstrapPort:     constants.Paths.Ports.OperatorBootstrap,
+			PublicPort:        0,
+			AllowTestPortZero: false,
+		})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "publicPort cannot be 0 in production")
 	})
 
 	t.Run("accept all non-zero ports in production", func(t *testing.T) {
-		_, err := LoadListen(constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorBootstrap, constants.Paths.Ports.OperatorPublic, "", "", "", "", "", "", "", false)
+		_, err := LoadListen(ListenOptions{
+			HTTPPort:          constants.Paths.Ports.OperatorHttp,
+			BootstrapPort:     constants.Paths.Ports.OperatorBootstrap,
+			PublicPort:        constants.Paths.Ports.OperatorPublic,
+			AllowTestPortZero: false,
+		})
 		require.NoError(t, err)
 	})
 }
@@ -272,7 +290,13 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 
 func TestLoadOpenClaw_Valid(t *testing.T) {
 	gatewayURL := fmt.Sprintf("wss://gateway.example.com:%d", constants.Paths.Ports.OpenclawGateway)
-	cfg, err := LoadOpenClaw(gatewayURL, "token123", "node-1", "My Node", "", "debug")
+	cfg, err := LoadOpenClaw(OpenClawOptions{
+		GatewayURL:  gatewayURL,
+		Token:       "token123",
+		NodeID:      "node-1",
+		DisplayName: "My Node",
+		LogLevel:    "debug",
+	})
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
@@ -284,13 +308,18 @@ func TestLoadOpenClaw_Valid(t *testing.T) {
 }
 
 func TestLoadOpenClaw_LogLevelDefaultsToInfo(t *testing.T) {
-	cfg, err := LoadOpenClaw("wss://gateway.example.com", "", "", "", "", "")
+	cfg, err := LoadOpenClaw(OpenClawOptions{GatewayURL: "wss://gateway.example.com"})
 	require.NoError(t, err)
 	assert.Equal(t, "info", cfg.LogLevel)
 }
 
 func TestLoadOpenClaw_MissingGatewayURL(t *testing.T) {
-	cfg, err := LoadOpenClaw("", "tok", "node", "label", "", "info")
+	cfg, err := LoadOpenClaw(OpenClawOptions{
+		Token:       "tok",
+		NodeID:      "node",
+		DisplayName: "label",
+		LogLevel:    "info",
+	})
 	require.Error(t, err)
 	assert.Nil(t, cfg)
 	assert.Contains(t, err.Error(), "--openclaw-url")
@@ -298,7 +327,7 @@ func TestLoadOpenClaw_MissingGatewayURL(t *testing.T) {
 
 func TestLoadOpenClaw_OptionalFieldsEmpty(t *testing.T) {
 	gatewayURL := fmt.Sprintf("ws://gateway:%d", constants.Paths.Ports.OpenclawGateway)
-	cfg, err := LoadOpenClaw(gatewayURL, "", "", "", "", "")
+	cfg, err := LoadOpenClaw(OpenClawOptions{GatewayURL: gatewayURL})
 	require.NoError(t, err)
 
 	assert.Empty(t, cfg.Token)

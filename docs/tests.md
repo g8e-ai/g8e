@@ -111,9 +111,9 @@ Available flags: `-p` (provider), `-m` (primary model), `-a` (assistant model), 
 
 When debugging connectivity (defaults from `protocol/constants/paths.json`):
 
-- `8440` - Gateway mTLS API / Pub/Sub / Public (multiplexed onto a single TLS listener)
-- `8441` - Gateway Bootstrap (plain HTTP; isolated from TLS surfaces)
-- `8443` - g8ee Adapter (HTTPS)
+- `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->` - Gateway mTLS API / Pub/Sub / Public (multiplexed onto a single TLS listener)
+- `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->` - Gateway Bootstrap (plain HTTP; isolated from TLS surfaces)
+- `<!-- g8e:port:g8ee_http -->8443<!-- /g8e:port -->` - g8ee Adapter (HTTPS)
 
 All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the gateway binary or front it with an external port redirect.
 

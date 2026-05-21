@@ -301,7 +301,9 @@ case "$TOP" in
                 _banner "data device-links ${@:3}"; _ensure_operator
                 _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-device-links.py" "${@:3}" ;;
             audit)
-                _banner "data audit ${@:3}"; _ensure_operator
+                _banner "data audit ${@:3}"
+                # manage-lfaa.py interacts with the SQLite audit vault directly and
+                # does not require the Operator API to be running for local summary.
                 _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-lfaa.py" "${@:3}" ;;
             *)
                 echo "[g8e] unknown data subcommand: '$SUB'" >&2; exit 1 ;;

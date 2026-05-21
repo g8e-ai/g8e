@@ -92,20 +92,31 @@ type OpenClawConfig struct {
 	LogLevel    string
 }
 
+// OpenClawOptions contains configuration values for LoadOpenClaw.
+type OpenClawOptions struct {
+	GatewayURL  string
+	Token       string
+	NodeID      string
+	DisplayName string
+	PathEnv     string
+	LogLevel    string
+}
+
 // LoadOpenClaw creates configuration for --openclaw mode.
-func LoadOpenClaw(gatewayURL, token, nodeID, displayName, pathEnv, logLevel string) (*OpenClawConfig, error) {
-	if gatewayURL == "" {
+func LoadOpenClaw(opts OpenClawOptions) (*OpenClawConfig, error) {
+	if opts.GatewayURL == "" {
 		return nil, fmt.Errorf("gateway URL is required (--openclaw-url)")
 	}
+	logLevel := opts.LogLevel
 	if logLevel == "" {
 		logLevel = "info"
 	}
 	return &OpenClawConfig{
-		GatewayURL:  gatewayURL,
-		Token:       token,
-		NodeID:      nodeID,
-		DisplayName: displayName,
-		PathEnv:     pathEnv,
+		GatewayURL:  opts.GatewayURL,
+		Token:       opts.Token,
+		NodeID:      opts.NodeID,
+		DisplayName: opts.DisplayName,
+		PathEnv:     opts.PathEnv,
 		LogLevel:    logLevel,
 	}, nil
 }
@@ -201,21 +212,40 @@ func FindProjectRoot() string {
 	return ""
 }
 
+// ListenOptions contains configuration values for LoadListen.
+type ListenOptions struct {
+	HTTPPort         int
+	BootstrapPort    int
+	PublicPort       int
+	DataDir          string
+	PKIDir           string
+	SecretsDir       string
+	PasskeyRpID      string
+	PasskeyRpName    string
+	MCPDownstreamURL string
+	A2ADownstreamURL string
+
+	// AllowTestPortZero should be true only when called from Go tests; when false,
+	// port 0 is rejected to prevent dynamic port assignment in production.
+	AllowTestPortZero bool
+}
+
 // LoadListen creates configuration for --listen mode.
 // Listen mode skips all operator-mode validation - no API key, no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
-// allowTestPortZero should be true only when called from Go tests; when false,
-// port 0 is rejected to prevent dynamic port assignment in production.
-func LoadListen(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir string, passkeyRpID, passkeyRpName, mcpDownstreamURL, a2aDownstreamURL string, allowTestPortZero bool) (*Config, error) {
+func LoadListen(opts ListenOptions) (*Config, error) {
 	projectRoot := FindProjectRoot()
 
+	mcpDownstreamURL := opts.MCPDownstreamURL
 	if mcpDownstreamURL == "" {
 		mcpDownstreamURL = os.Getenv("G8E_MCP_DOWNSTREAM_URL")
 	}
+	a2aDownstreamURL := opts.A2ADownstreamURL
 	if a2aDownstreamURL == "" {
 		a2aDownstreamURL = os.Getenv("G8E_A2A_DOWNSTREAM_URL")
 	}
 
+	dataDir := opts.DataDir
 	if dataDir == "" {
 		if projectRoot != "" {
 			dataDir = filepath.Join(projectRoot, ".g8e", "data")
@@ -224,6 +254,7 @@ func LoadListen(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secret
 			dataDir = filepath.Join(cwd, ".g8e", "data")
 		}
 	}
+	pkiDir := opts.PKIDir
 	if pkiDir == "" {
 		if projectRoot != "" {
 			pkiDir = filepath.Join(projectRoot, ".g8e", "pki")
@@ -232,6 +263,7 @@ func LoadListen(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secret
 			pkiDir = filepath.Join(cwd, ".g8e", "pki")
 		}
 	}
+	secretsDir := opts.SecretsDir
 	if secretsDir == "" {
 		if projectRoot != "" {
 			secretsDir = filepath.Join(projectRoot, ".g8e", "secrets")
@@ -241,9 +273,13 @@ func LoadListen(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secret
 		}
 	}
 
+	httpPort := opts.HTTPPort
+	bootstrapPort := opts.BootstrapPort
+	publicPort := opts.PublicPort
+
 	// Reject port 0 in production (only allowed for Go tests)
 	// This check must happen before default assignment to validate actual input
-	if !allowTestPortZero {
+	if !opts.AllowTestPortZero {
 
 		if httpPort == 0 {
 			return nil, fmt.Errorf("httpPort cannot be 0 in production")
@@ -259,7 +295,7 @@ func LoadListen(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secret
 	// Assign default ports only if they are still 0 AND we are not in test-port-zero mode.
 	// If allowTestPortZero is true and ports are 0, we leave them as 0 so net.Listen can bind to a random port.
 	// Default ports must match protocol/constants/paths.json (canonical source of truth).
-	if !allowTestPortZero {
+	if !opts.AllowTestPortZero {
 
 		if httpPort <= 0 {
 			httpPort = constants.Paths.Ports.OperatorHttp
@@ -271,9 +307,11 @@ func LoadListen(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secret
 			publicPort = constants.Paths.Ports.OperatorPublic
 		}
 	}
+	passkeyRpID := opts.PasskeyRpID
 	if passkeyRpID == "" {
 		passkeyRpID = "localhost"
 	}
+	passkeyRpName := opts.PasskeyRpName
 	if passkeyRpName == "" {
 		passkeyRpName = "g8e"
 	}

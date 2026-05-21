@@ -48,7 +48,6 @@ type ListenService struct {
 	apiKeySvc       *ApiKeyService
 	mcpGateway      *mcp.GatewayService
 	server          *http.Server
-	wssServer       *http.Server
 	bootstrapServer *http.Server
 	publicServer    *http.Server
 
@@ -231,8 +230,6 @@ func (ls *ListenService) initHandlersAndServers() {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	ls.wssServer = ls.server
-
 	ls.bootstrapServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
 		Handler:           ls.handler.buildBootstrapRouter(),
@@ -281,13 +278,9 @@ func (ls *ListenService) GetHTTPPort() int {
 }
 
 // GetWSSPort returns the assigned port for the WSS server.
+// Deprecated: WSS is merged into HTTP; callers should use GetHTTPPort.
 func (ls *ListenService) GetWSSPort() int {
-	if ls.wssServer == nil || ls.wssServer.Addr == "" {
-		return 0
-	}
-	_, portStr, _ := net.SplitHostPort(ls.wssServer.Addr)
-	p, _ := strconv.Atoi(portStr)
-	return p
+	return ls.GetHTTPPort()
 }
 
 // GetBootstrapPort returns the assigned port for the bootstrap server.
@@ -384,11 +377,6 @@ func (ls *ListenService) Start(ctx context.Context) error {
 	if ls.server != nil {
 		uniqueServers[ls.server] = "HTTP"
 	}
-	if ls.wssServer != nil {
-		if _, ok := uniqueServers[ls.wssServer]; !ok {
-			uniqueServers[ls.wssServer] = "WSS"
-		}
-	}
 	if ls.bootstrapServer != nil {
 		if _, ok := uniqueServers[ls.bootstrapServer]; !ok {
 			uniqueServers[ls.bootstrapServer] = "Bootstrap"
@@ -470,11 +458,10 @@ func (ls *ListenService) Stop(ctx context.Context) error {
 	if err := ls.server.Shutdown(ctx); err != nil {
 		ls.logger.Error("HTTP server shutdown error", string(constants.ConnectionStateError), err)
 	}
-	if err := ls.wssServer.Shutdown(ctx); err != nil {
-		ls.logger.Error("WSS server shutdown error", string(constants.ConnectionStateError), err)
-	}
-	if err := ls.bootstrapServer.Shutdown(ctx); err != nil {
-		ls.logger.Error("Bootstrap server shutdown error", string(constants.ConnectionStateError), err)
+	if ls.bootstrapServer != nil {
+		if err := ls.bootstrapServer.Shutdown(ctx); err != nil {
+			ls.logger.Error("Bootstrap server shutdown error", string(constants.ConnectionStateError), err)
+		}
 	}
 	if err := ls.publicServer.Shutdown(ctx); err != nil {
 		ls.logger.Error("Public server shutdown error", string(constants.ConnectionStateError), err)

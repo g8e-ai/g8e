@@ -75,7 +75,7 @@ The `./g8e platform start` command (invoked via `scripts/core/build.sh`) manages
 1. **Gateway binary check/build** → Governance Gateway (`g8eg`) starts in `--listen` mode.
 2. **Root of trust generation** (first boot only) - ECDSA P-384 CA hierarchy, intermediate CAs, and trust bundles in `.g8e/pki/`; `session_encryption_key`, `warden_signing_key` in `.g8e/secrets/`.
 3. **Optional service initialization** - `g8ee` starts under its venv with mTLS + URI SAN identity.
-4. **Asynchronous convergence** - Services poll health endpoints (e.g., Engine polls the Governance Gateway's mTLS API at `https://localhost:<operator_http>/health`; default `8440`).
+4. **Asynchronous convergence** - Services poll health endpoints (e.g., Engine polls the Governance Gateway's mTLS API at `https://localhost:<operator_http>/health`; default `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->`).
 
 ## State & Data Strategy
 

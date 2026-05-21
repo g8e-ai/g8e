@@ -553,7 +553,19 @@ func runListenMode(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, sec
 
 	logger.Info("g8e Operator - Listen Mode (operator)", "version", version, "build", buildID)
 
-	cfg, err := config.LoadListen(httpPort, bootstrapPort, publicPort, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName, "", "", false)
+	cfg, err := config.LoadListen(config.ListenOptions{
+		HTTPPort:          httpPort,
+		BootstrapPort:     bootstrapPort,
+		PublicPort:        publicPort,
+		DataDir:           dataDir,
+		PKIDir:            pkiDir,
+		SecretsDir:        secretsDir,
+		PasskeyRpID:       passkeyRpID,
+		PasskeyRpName:     passkeyRpName,
+		MCPDownstreamURL:  "",
+		A2ADownstreamURL:  "",
+		AllowTestPortZero: false,
+	})
 	if err != nil {
 		logger.Error("Failed to load listen configuration", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
@@ -785,7 +797,14 @@ func runOpenClawMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 		os.Exit(constants.ExitConfigError)
 	}
 
-	cfg, err := config.LoadOpenClaw(gatewayURL, token, nodeID, displayName, pathEnv, logLevel)
+	cfg, err := config.LoadOpenClaw(config.OpenClawOptions{
+		GatewayURL:  gatewayURL,
+		Token:       token,
+		NodeID:      nodeID,
+		DisplayName: displayName,
+		PathEnv:     pathEnv,
+		LogLevel:    logLevel,
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "OpenClaw configuration error: %v\n", err)
 		os.Exit(constants.ExitConfigError)

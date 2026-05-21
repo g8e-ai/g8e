@@ -32,6 +32,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import re
+
 # Paths
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
@@ -1477,6 +1479,12 @@ def generate_python():
     # Generate env_vars.py
     content = generate_python_env_vars()
     write_python_file("env_vars.py", content)
+    
+    # Also generate env_vars.py for protocol wrapper
+    protocol_env_vars_path = PROTOCOL_PYTHON_DIR / "env_vars.py"
+    with open(protocol_env_vars_path, "w") as f:
+        f.write(content)
+    print(f"Generated {protocol_env_vars_path}")
 
     # Generate headers.py
     content = generate_python_headers()
@@ -1572,12 +1580,49 @@ def generate_shell():
     print("Shell constants generation complete.")
 
 
+def generate_docs():
+    """Update ports in documentation files using sync markers."""
+    print("Updating documentation ports...")
+    paths_data = load_json("paths.json")
+    ports = paths_data.get("ports", {})
+    
+    docs_dir = REPO_ROOT / "docs"
+    if not docs_dir.exists():
+        print(f"Warning: Docs directory {docs_dir} not found")
+        return
+
+    # Pattern: <!-- g8e:port:key -->current_value<!-- /g8e:port -->
+    pattern = re.compile(r"<!-- g8e:port:(\w+) -->.*?<!-- /g8e:port -->")
+
+    updated_files = 0
+    for md_file in docs_dir.glob("*.md"):
+        with open(md_file, "r") as f:
+            content = f.read()
+
+        def replace_port(match):
+            key = match.group(1)
+            if key in ports:
+                return f"<!-- g8e:port:{key} -->{ports[key]}<!-- /g8e:port -->"
+            print(f"Warning: Port key '{key}' not found in paths.json (file: {md_file.name})")
+            return match.group(0)
+
+        new_content = pattern.sub(replace_port, content)
+        if new_content != content:
+            with open(md_file, "w") as f:
+                f.write(new_content)
+            updated_files += 1
+            print(f"Updated {md_file.relative_to(REPO_ROOT)}")
+
+    print(f"Documentation update complete. {updated_files} files updated.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate constants from protocol JSON files")
     parser.add_argument("--go", action="store_true", help="Generate Go constants")
     parser.add_argument("--python", action="store_true", help="Generate Python constants")
     parser.add_argument("--shell", action="store_true", help="Generate Shell constants")
-    parser.add_argument("--all", action="store_true", help="Generate all (Go, Python, Shell) constants")
+    parser.add_argument("--docs", action="store_true", help="Update documentation ports")
+    parser.add_argument("--all", action="store_true", help="Generate all (Go, Python, Shell) and update docs")
     
     args = parser.parse_args()
     
@@ -1585,12 +1630,15 @@ def main():
         generate_go()
         generate_python()
         generate_shell()
+        generate_docs()
     elif args.go:
         generate_go()
     elif args.python:
         generate_python()
     elif args.shell:
         generate_shell()
+    elif args.docs:
+        generate_docs()
     else:
         parser.print_help()
         sys.exit(1)
