@@ -30,7 +30,7 @@ import pytest
 import pytest_asyncio
 
 from app.constants.env_vars import EnvVar
-from app.constants.generated_paths import PathConstants
+from app.constants.generated_paths import PathConstants, PortConstants
 from app.clients.db_client import DBClient
 from app.clients.kv_cache_client import KVCacheClient
 from app.constants import (
@@ -258,7 +258,7 @@ def _is_operator_online(host: str | None = None, port: int | None = None, timeou
     parsed = urlparse(listen.http_url)
 
     target_host = host or parsed.hostname or "localhost"
-    target_port = port or parsed.port or PathConstants.PORT_OPERATOR_HTTP
+    target_port = port or parsed.port or PortConstants.PORT_OPERATOR_HTTP
 
     try:
         with socket.create_connection((target_host, target_port), timeout=timeout):
@@ -327,7 +327,7 @@ def pytest_configure(config):
     # Check if operator is online once at the start
     listen = ListenSettings()
     parsed = urlparse(listen.http_url)
-    target_port = parsed.port or PathConstants.PORT_OPERATOR_HTTP
+    target_port = parsed.port or PortConstants.PORT_OPERATOR_HTTP
 
     is_online = _is_operator_online()
     config.stash[pytest.StashKey[bool]()] = is_online

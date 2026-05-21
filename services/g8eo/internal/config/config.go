@@ -298,13 +298,13 @@ func LoadListen(opts ListenOptions) (*Config, error) {
 	if !opts.AllowTestPortZero {
 
 		if httpPort <= 0 {
-			httpPort = constants.Paths.Ports.OperatorHttp
+			httpPort = constants.Ports.OperatorHttp
 		}
 		if bootstrapPort <= 0 {
-			bootstrapPort = constants.Paths.Ports.OperatorBootstrap
+			bootstrapPort = constants.Ports.OperatorBootstrap
 		}
 		if publicPort <= 0 {
-			publicPort = constants.Paths.Ports.OperatorPublic
+			publicPort = constants.Ports.OperatorPublic
 		}
 	}
 	passkeyRpID := opts.PasskeyRpID
@@ -444,7 +444,7 @@ func httpPortOrDefault(p int) int {
 	if p > 0 {
 		return p
 	}
-	return constants.Paths.Ports.OperatorHttp
+	return constants.Ports.OperatorHttp
 }
 
 // tlsServerName returns the TLS ServerName override to use when endpoint is a

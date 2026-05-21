@@ -21,7 +21,7 @@ from typing import Optional
 import click
 from rich.console import Console
 
-from g8e_protocol.generated_paths import PathConstants
+from g8e_protocol.generated_paths import PathConstants, PortConstants
 from g8e_evals.harness import RowResult, BindingType, SUTConfig, LLMRoleConfig
 from g8e_evals.sut.g8ee_chat import G8eeChatSUT, AuthenticationError, ChatEvaluationReceipt
 from g8e_evals.agent_trail_renderer import TurnRenderer
@@ -52,7 +52,7 @@ def main():
               help="Stream the agent's response text inline as chunks arrive")
 @click.option("--idle-timeout", type=float, default=180.0,
               help="Seconds without an SSE event before declaring a task idle")
-@click.option("--operator-url", default=f"https://localhost:{PathConstants.PORT_OPERATOR_HTTP}")
+@click.option("--operator-url", default=f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}")
 @click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID",
               help="Operator session id. Auto-loaded from ~/.g8e/credentials after `./g8e login`; "
                    "only pass this flag to override the cached session.")

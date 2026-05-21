@@ -16,14 +16,11 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "${SCRIPT_DIR}/../../scripts/core/path_utils.sh"
-G8E_PROJECT_ROOT="$(resolve_g8e_root)"
-export G8E_PROJECT_ROOT
+. "${SCRIPT_DIR}/../../scripts/core/config.sh"
 
-G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-${G8E_PROJECT_ROOT:-}/.g8e}"
-DATA_DIR="${OPERATOR_LISTEN_DATA_DIR:-${G8E_RUNTIME_DIR:-}/data}"
-PKI_DIR="${OPERATOR_LISTEN_PKI_DIR:-${G8E_RUNTIME_DIR:-}/pki}"
-SECRETS_DIR="${OPERATOR_LISTEN_SECRETS_DIR:-${G8E_RUNTIME_DIR:-}/secrets}"
+DATA_DIR="$G8E_DATA_DIR"
+PKI_DIR="$G8E_PKI_DIR"
+SECRETS_DIR="$G8E_SECRETS_DIR"
 
 GATEWAY_BIN="${G8E_PROJECT_ROOT}/services/g8eo/build/linux-amd64/g8e.gateway"
 
@@ -34,13 +31,12 @@ if [ ! -f "$GATEWAY_BIN" ]; then
 fi
 
 # Ensure ports match values from paths.json constants
-. "${G8E_PROJECT_ROOT}/scripts/cmd/paths.sh"
-HTTP_PORT="${G8E_PORT_OPERATOR_HTTP:-443}"
-WSS_PORT="${G8E_PORT_OPERATOR_HTTP:-443}"
-BOOTSTRAP_PORT="${G8E_PORT_OPERATOR_BOOTSTRAP:-80}"
+HTTP_PORT="$G8E_OPERATOR_HTTP_PORT"
+WSS_PORT="$G8E_OPERATOR_WSS_PORT"
+BOOTSTRAP_PORT="$G8E_OPERATOR_BOOTSTRAP_PORT"
 # Public TLS surface must NOT collide with the mTLS surface (443) — sharing
 # a port would force VerifyClientCertIfGiven and downgrade the mTLS gate.
-PUBLIC_PORT="${G8E_PORT_OPERATOR_PUBLIC:-8442}"
+PUBLIC_PORT="$G8E_OPERATOR_PUBLIC_PORT"
 
 echo "Starting g8eg Governance Gateway (listen mode) on ports HTTP:${HTTP_PORT}..."
 exec "$GATEWAY_BIN" --listen \

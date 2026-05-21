@@ -1,4 +1,76 @@
 {
+  "G8E_OPERATOR_HTTP_PORT": {
+    "value": "G8E_OPERATOR_HTTP_PORT",
+    "config_key": "listen.http_port",
+    "_go_const": "OperatorHTTPPort",
+    "_python_const": "G8E_OPERATOR_HTTP_PORT"
+  },
+  "G8E_OPERATOR_BOOTSTRAP_PORT": {
+    "value": "G8E_OPERATOR_BOOTSTRAP_PORT",
+    "config_key": "listen.bootstrap_port",
+    "_go_const": "OperatorBootstrapPort",
+    "_python_const": "G8E_OPERATOR_BOOTSTRAP_PORT"
+  },
+  "G8E_OPERATOR_PUBLIC_PORT": {
+    "value": "G8E_OPERATOR_PUBLIC_PORT",
+    "config_key": "listen.public_port",
+    "_go_const": "OperatorPublicPort",
+    "_python_const": "G8E_OPERATOR_PUBLIC_PORT"
+  },
+  "G8E_OPERATOR_WSS_PORT": {
+    "value": "G8E_OPERATOR_WSS_PORT",
+    "config_key": "listen.wss_port",
+    "_go_const": "OperatorWSSPort",
+    "_python_const": "G8E_OPERATOR_WSS_PORT"
+  },
+  "G8E_G8EE_HTTP_PORT": {
+    "value": "G8E_G8EE_HTTP_PORT",
+    "config_key": "g8ee.http_port",
+    "_go_const": "G8EEHTTPPort",
+    "_python_const": "G8E_G8EE_HTTP_PORT"
+  },
+  "G8E_PID_DIR": {
+    "value": "G8E_PID_DIR",
+    "config_key": "platform.pid_dir",
+    "_go_const": "PIDDir",
+    "_python_const": "G8E_PID_DIR"
+  },
+  "G8E_LOG_DIR": {
+    "value": "G8E_LOG_DIR",
+    "config_key": "platform.log_dir",
+    "_go_const": "LogDir",
+    "_python_const": "G8E_LOG_DIR"
+  },
+  "G8E_OPERATOR_PID_FILE": {
+    "value": "G8E_OPERATOR_PID_FILE",
+    "config_key": "listen.pid_file",
+    "_go_const": "OperatorPIDFile",
+    "_python_const": "G8E_OPERATOR_PID_FILE"
+  },
+  "G8E_OPERATOR_LOG_FILE": {
+    "value": "G8E_OPERATOR_LOG_FILE",
+    "config_key": "listen.log_file",
+    "_go_const": "OperatorLogFile",
+    "_python_const": "G8E_OPERATOR_LOG_FILE"
+  },
+  "G8E_G8EE_PID_FILE": {
+    "value": "G8E_G8EE_PID_FILE",
+    "config_key": "g8ee.pid_file",
+    "_go_const": "G8EEPIDFile",
+    "_python_const": "G8E_G8EE_PID_FILE"
+  },
+  "G8E_G8EE_LOG_FILE": {
+    "value": "G8E_G8EE_LOG_FILE",
+    "config_key": "g8ee.log_file",
+    "_go_const": "G8EELogFile",
+    "_python_const": "G8E_G8EE_LOG_FILE"
+  },
+  "G8E_LOG_MAX_BACKUPS": {
+    "value": "G8E_LOG_MAX_BACKUPS",
+    "config_key": "platform.log_max_backups",
+    "_go_const": "LogMaxBackups",
+    "_python_const": "G8E_LOG_MAX_BACKUPS"
+  },
   "G8E_LLM_MAX_TOKENS": {
     "value": "G8E_LLM_MAX_TOKENS",
     "config_key": "llm.max_tokens",
@@ -29,17 +101,11 @@
     "_go_const": "SessionEncryptionKey",
     "_python_const": "SESSION_ENCRYPTION_KEY"
   },
-  "G8E_API_KEY": {
-    "value": "G8E_API_KEY",
+  "G8E_INTERNAL_API_KEY": {
+    "value": "G8E_INTERNAL_API_KEY",
     "config_key": "auth.g8e_api_key",
-    "_go_const": "APIKey",
-    "_python_const": "API_KEY"
-  },
-  "G8E_APP_URL": {
-    "value": "G8E_APP_URL",
-    "config_key": "general.app_url",
-    "_go_const": "AppURL",
-    "_python_const": "APP_URL"
+    "_go_const": "InternalAPIKey",
+    "_python_const": "INTERNAL_API_KEY"
   },
   "G8E_ALLOWED_ORIGINS": {
     "value": "G8E_ALLOWED_ORIGINS",
@@ -113,17 +179,17 @@
     "_go_const": "GoogleSearchEngineID",
     "_python_const": "GOOGLE_SEARCH_ENGINE_ID"
   },
-  "G8E_INTERNAL_HTTP_URL": {
-    "value": "G8E_INTERNAL_HTTP_URL",
+  "G8E_OPERATOR_URL": {
+    "value": "G8E_OPERATOR_URL",
     "config_key": "listen.http_url",
-    "_go_const": "InternalHTTPURL",
-    "_python_const": "INTERNAL_HTTP_URL"
+    "_go_const": "OperatorURL",
+    "_python_const": "OPERATOR_URL"
   },
-  "G8E_INTERNAL_PUBSUB_URL": {
-    "value": "G8E_INTERNAL_PUBSUB_URL",
+  "G8E_OPERATOR_PUBSUB_URL": {
+    "value": "G8E_OPERATOR_PUBSUB_URL",
     "config_key": "listen.pubsub_url",
-    "_go_const": "InternalPubSubURL",
-    "_python_const": "INTERNAL_PUBSUB_URL"
+    "_go_const": "OperatorPubSubURL",
+    "_python_const": "OPERATOR_PUBSUB_URL"
   },
   "G8E_OPERATOR_BLOB_URL": {
     "value": "G8E_OPERATOR_BLOB_URL",
@@ -136,24 +202,6 @@
     "config_key": "platform.docker_gid",
     "_go_const": "DockerGID",
     "_python_const": "DOCKER_GID"
-  },
-  "G8E_HTTPS_PORT": {
-    "value": "G8E_HTTPS_PORT",
-    "config_key": "platform.https_port",
-    "_go_const": "HTTPSPort",
-    "_python_const": "HTTPS_PORT"
-  },
-  "G8E_HTTP_PORT": {
-    "value": "G8E_HTTP_PORT",
-    "config_key": "platform.http_port",
-    "_go_const": "HTTPPort",
-    "_python_const": "HTTP_PORT"
-  },
-  "G8E_PORT": {
-    "value": "G8E_PORT",
-    "config_key": "platform.port",
-    "_go_const": "Port",
-    "_python_const": "PORT"
   },
   "G8E_SESSION_TTL": {
     "value": "G8E_SESSION_TTL",
@@ -185,23 +233,17 @@
     "_go_const": "DocsDir",
     "_python_const": "DOCS_DIR"
   },
-  "G8E_SUPERVISOR_PORT": {
-    "value": "G8E_SUPERVISOR_PORT",
-    "config_key": "platform.supervisor_port",
-    "_go_const": "SupervisorPort",
-    "_python_const": "SUPERVISOR_PORT"
-  },
   "G8E_G8EE_URL": {
     "value": "G8E_G8EE_URL",
     "config_key": "component_urls.g8ee_url",
     "_go_const": "G8EEURL",
     "_python_const": "G8EE_URL"
   },
-  "G8E_CLIENT_URL": {
-    "value": "G8E_CLIENT_URL",
+  "G8E_DASHBOARD_URL": {
+    "value": "G8E_DASHBOARD_URL",
     "config_key": "component_urls.client_url",
-    "_go_const": "ClientURL",
-    "_python_const": "CLIENT_URL"
+    "_go_const": "DashboardURL",
+    "_python_const": "DASHBOARD_URL"
   },
   "G8E_OPERATOR_ENDPOINT": {
     "value": "G8E_OPERATOR_ENDPOINT",
@@ -225,7 +267,7 @@
     "value": "G8E_PKI_DIR",
     "config_key": "ssl.pki_dir",
     "_go_const": "PKIDir",
-    "_python_const": "PKIDir"
+    "_python_const": "PKI_DIR"
   },
   "G8E_SECRETS_DIR": {
     "value": "G8E_SECRETS_DIR",
@@ -430,20 +472,25 @@
     "_go_const": "ProjectRoot",
     "_python_const": "PROJECT_ROOT"
   },
-  "G8E_TEST_LLM_PRIMARY_PROVIDER": {
-    "value": "G8E_TEST_LLM_PRIMARY_PROVIDER",
+  "G8E_TEST_LLM_PROVIDER": {
+    "value": "G8E_TEST_LLM_PROVIDER",
     "_go_const": "TestLLMProvider",
     "_python_const": "TEST_LLM_PROVIDER"
   },
-  "G8E_TEST_LLM_PRIMARY_API_KEY": {
-    "value": "G8E_TEST_LLM_PRIMARY_API_KEY",
+  "G8E_TEST_LLM_API_KEY": {
+    "value": "G8E_TEST_LLM_API_KEY",
     "_go_const": "TestLLMAPIKey",
     "_python_const": "TEST_LLM_API_KEY"
   },
-  "G8E_TEST_LLM_PRIMARY_MODEL": {
-    "value": "G8E_TEST_LLM_PRIMARY_MODEL",
-    "_go_const": "TestLLMPrimaryModel",
-    "_python_const": "TEST_LLM_PRIMARY_MODEL"
+  "G8E_TEST_LLM_MODEL": {
+    "value": "G8E_TEST_LLM_MODEL",
+    "_go_const": "TestLLMModel",
+    "_python_const": "TEST_LLM_MODEL"
+  },
+  "G8E_TEST_LLM_ENDPOINT_URL": {
+    "value": "G8E_TEST_LLM_ENDPOINT_URL",
+    "_go_const": "TestLLMEndpointURL",
+    "_python_const": "TEST_LLM_ENDPOINT_URL"
   },
   "G8E_TEST_LLM_ASSISTANT_PROVIDER": {
     "value": "G8E_TEST_LLM_ASSISTANT_PROVIDER",
@@ -484,11 +531,6 @@
     "value": "G8E_TEST_LLM_LITE_ENDPOINT_URL",
     "_go_const": "TestLLMLiteEndpointURL",
     "_python_const": "TEST_LLM_LITE_ENDPOINT_URL"
-  },
-  "G8E_TEST_LLM_PRIMARY_ENDPOINT_URL": {
-    "value": "G8E_TEST_LLM_PRIMARY_ENDPOINT_URL",
-    "_go_const": "TestLLMEndpointURL",
-    "_python_const": "TEST_LLM_ENDPOINT_URL"
   },
   "G8E_TEST_LLM_MAX_TOKENS": {
     "value": "G8E_TEST_LLM_MAX_TOKENS",

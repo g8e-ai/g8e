@@ -1300,53 +1300,49 @@ def generate_go_events() -> str:
 def generate_go_paths() -> str:
     """Generate Go constants from paths.json."""
     data = load_json("paths.json")
-    lines = [go_header("paths.json", "constants"), "\n"]
     
-    lines.append("// Path constants generated from paths.json\n")
-    lines.append("var Paths = struct {\n")
-    lines.append("\tInfra struct {\n")
+    # Generate paths.go
+    paths_lines = [go_header("paths.json", "constants"), "\n"]
+    paths_lines.append("// Paths defines canonical G8E filesystem paths.\n")
+    paths_lines.append("var Paths = struct {\n")
+    paths_lines.append("\tInfra struct {\n")
     for key in data.get("infra", {}).keys():
         parts = key.split("_")
         name = "".join(p.capitalize() for p in parts)
-        lines.append(f"\t\t{name} string\n")
-    lines.append("\t}\n")
-    
-    lines.append("\tPorts struct {\n")
-    for key in data.get("ports", {}).keys():
-        parts = key.split("_")
-        name = "".join(p.capitalize() for p in parts)
-        lines.append(f"\t\t{name} int\n")
-    lines.append("\t}\n")
-    
-    lines.append("}{\n")
-    
-    lines.append("\tInfra: struct {\n")
+        paths_lines.append(f"\t\t{name} string\n")
+    paths_lines.append("\t}\n")
+    paths_lines.append("}{\n")
+    paths_lines.append("\tInfra: struct {\n")
     for key in data.get("infra", {}).keys():
         parts = key.split("_")
         name = "".join(p.capitalize() for p in parts)
-        lines.append(f"\t\t{name} string\n")
-    lines.append("\t}{\n")
+        paths_lines.append(f"\t\t{name} string\n")
+    paths_lines.append("\t}{\n")
     for key, value in data.get("infra", {}).items():
         parts = key.split("_")
         name = "".join(p.capitalize() for p in parts)
-        lines.append(f'\t\t{name}: "{value}",\n')
-    lines.append("\t},\n")
-    
-    lines.append("\tPorts: struct {\n")
+        paths_lines.append(f'\t\t{name}: "{value}",\n')
+    paths_lines.append("\t},\n")
+    paths_lines.append("}\n")
+    write_go_file("paths.go", "".join(paths_lines))
+
+    # Generate ports.go
+    ports_lines = [go_header("paths.json", "constants"), "\n"]
+    ports_lines.append("// Ports defines canonical G8E networking ports.\n")
+    ports_lines.append("var Ports = struct {\n")
     for key in data.get("ports", {}).keys():
         parts = key.split("_")
         name = "".join(p.capitalize() for p in parts)
-        lines.append(f"\t\t{name} int\n")
-    lines.append("\t}{\n")
+        ports_lines.append(f"\t{name} int\n")
+    ports_lines.append("}{\n")
     for key, value in data.get("ports", {}).items():
         parts = key.split("_")
         name = "".join(p.capitalize() for p in parts)
-        lines.append(f"\t\t{name}: {value},\n")
-    lines.append("\t},\n")
+        ports_lines.append(f"\t{name}: {value},\n")
+    ports_lines.append("}\n")
+    write_go_file("ports.go", "".join(ports_lines))
     
-    lines.append("}\n")
-    
-    return "".join(lines)
+    return "" # Handled by direct writes
 
 
 def generate_go():
@@ -1381,9 +1377,8 @@ def generate_go():
     content = generate_go_intents()
     write_go_file("intents.go", content)
     
-    # Generate paths.go
-    content = generate_go_paths()
-    write_go_file("paths.go", content)
+    # Generate paths.go and ports.go
+    generate_go_paths()
     
     # Generate mappings.go
     content = generate_go_mappings()
@@ -1453,13 +1448,16 @@ def generate_python_paths() -> str:
     lines = [PYTHON_HEADER.format(filename="paths.json"), "\n"]
     
     lines.append("class PathConstants:\n")
-    lines.append('    """Collection of canonical G8E paths and ports."""\n')
+    lines.append('    """Collection of canonical G8E paths."""\n')
     
     # 1. Infrastructure paths
     for key, value in data.get("infra", {}).items():
         const_name = f"PATH_{key.upper()}"
         lines.append(f'    {const_name} = "{value}"\n')
     
+    lines.append("\n\nclass PortConstants:\n")
+    lines.append('    """Collection of canonical G8E ports."""\n')
+
     # 2. Ports
     for key, value in data.get("ports", {}).items():
         const_name = f"PORT_{key.upper()}"

@@ -65,19 +65,19 @@ case "$SUB" in
                 exit 1
             }
         fi
-        export $G8E_ENV_OPERATOR_SESSION_ID="$G8E_OPERATOR_SESSION_ID"
-        export $G8E_ENV_CLI_SESSION_ID="$G8E_CLI_SESSION_ID"
-        export $G8E_ENV_USER_ID="$G8E_USER_ID"
-        export $G8E_ENV_OPERATOR_ID="$G8E_OPERATOR_ID"
+        export G8E_OPERATOR_SESSION_ID="$G8E_OPERATOR_SESSION_ID"
+        export G8E_CLI_SESSION_ID="$G8E_CLI_SESSION_ID"
+        export G8E_USER_ID="$G8E_USER_ID"
+        export G8E_OPERATOR_ID="$G8E_OPERATOR_ID"
         # Use operator certificate for Operator endpoints (SSE stream requires operator session auth)
         export G8E_CLI_CERT="${G8E_OPERATOR_CERT:-$G8E_OPERATOR_CERT_FILE}"
         export G8E_CLI_KEY="${G8E_OPERATOR_KEY:-$G8E_OPERATOR_KEY_FILE}"
-        export "$G8E_ENV_G8EE_URL"="${G8E_G8EE_URL:-https://localhost:$G8E_PORT_G8EE_HTTP}"
-        export "$G8E_ENV_INTERNAL_HTTP_URL"="${G8E_INTERNAL_HTTP_URL:-$OPERATOR_HTTP_URL}"
+        export G8E_G8EE_URL="${G8E_G8EE_URL:-https://localhost:$G8E_G8EE_HTTP_PORT}"
+        export G8E_INTERNAL_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-$OPERATOR_HTTP_URL}"
         export G8E_TRUST_BUNDLE="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
         cd "$EVALS_PROJECT_DIR"
-        export "$G8E_ENV_PKIDir"="${G8E_PKI_DIR:-$G8E_PKI_DIR_HOST}"
-        export "$G8E_ENV_PROTOCOL_DIR"="$SCRIPT_DIR/protocol"
+        export G8E_PKI_DIR="${G8E_PKI_DIR:-$G8E_PKI_DIR_HOST}"
+        export G8E_PROTOCOL_DIR="$SCRIPT_DIR/protocol"
         export PYTHONPATH="$EVALS_PYTHONPATH"
         exec "$EVALS_VENV/bin/python" -m g8e_evals.cli run "${REMAINING_ARGS[@]}"
         ;;
@@ -85,8 +85,8 @@ case "$SUB" in
         _ensure_evals_venv
         _banner "evals verify-receipts"
         cd "$EVALS_PROJECT_DIR"
-        export "$G8E_ENV_PKIDir"="${G8E_PKI_DIR:-$G8E_PKI_DIR_HOST}"
-        export "$G8E_ENV_PROTOCOL_DIR"="$SCRIPT_DIR/protocol"
+        export G8E_PKI_DIR="${G8E_PKI_DIR:-$G8E_PKI_DIR_HOST}"
+        export G8E_PROTOCOL_DIR="$SCRIPT_DIR/protocol"
         export PYTHONPATH="$EVALS_PYTHONPATH"
         exec "$EVALS_VENV/bin/python" -m g8e_evals.cli verify-receipts "${REMAINING_ARGS[@]}"
         ;;

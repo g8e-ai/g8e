@@ -27,12 +27,11 @@ source "$SCRIPT_DIR/scripts/cmd/paths.sh"
 source "$SCRIPT_DIR/scripts/core/config.sh"
 
 # Host-native runtime layout
-G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-${SCRIPT_DIR:-}/.g8e}"
-G8E_PKI_DIR_HOST="${G8E_PKI_DIR:-${SCRIPT_DIR:-}/${G8E_PATH_PKI_DIR:-}}"
-G8E_SECRETS_DIR_HOST="${G8E_SECRETS_DIR:-${SCRIPT_DIR:-}/${G8E_PATH_SECRETS_DIR:-}}"
-OPERATOR_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:${G8E_PORT_OPERATOR_HTTP:-443}}"
-_OPERATOR_PID_FILE="$G8E_RUNTIME_DIR/pids/operator-listen.pid"
-_G8EE_PID_FILE="$G8E_RUNTIME_DIR/pids/g8ee.pid"
+G8E_PKI_DIR_HOST="$G8E_PKI_DIR"
+G8E_SECRETS_DIR_HOST="$G8E_SECRETS_DIR"
+OPERATOR_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:${G8E_OPERATOR_HTTP_PORT}}"
+_OPERATOR_PID_FILE="$G8E_OPERATOR_PID_FILE"
+_G8EE_PID_FILE="$G8E_G8EE_PID_FILE"
 
 # Local credential store
 G8E_CREDENTIALS_DIR="$HOME/.g8e"
@@ -92,7 +91,7 @@ _generate_workload_csrs() {
 _operator_bootstrap() {
     local email="${G8E_BOOTSTRAP_EMAIL:-superadmin@g8e.local}"
     local name="${G8E_BOOTSTRAP_NAME:-Superadmin}"
-    local public_port="${G8E_OPERATOR_LISTEN_PUBLIC_PORT:-$G8E_PORT_OPERATOR_PUBLIC}"
+    local public_port="${G8E_OPERATOR_PUBLIC_PORT:-$G8E_PORT_OPERATOR_PUBLIC}"
     local public_url="https://localhost:$public_port"
     local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
 
@@ -359,10 +358,10 @@ _save_credentials() {
     # Ensure directory has restricted permissions
     chmod 700 "$G8E_CREDENTIALS_DIR"
     cat > "$G8E_CREDENTIALS_FILE" <<EOF
-export $G8E_ENV_OPERATOR_SESSION_ID="$operator_session_id"
-export $G8E_ENV_CLI_SESSION_ID="$cli_session_id"
-export $G8E_ENV_USER_ID="$user_id"
-export $G8E_ENV_OPERATOR_ID="$operator_id"
+export G8E_OPERATOR_SESSION_ID="$operator_session_id"
+export G8E_CLI_SESSION_ID="$cli_session_id"
+export G8E_USER_ID="$user_id"
+export G8E_OPERATOR_ID="$operator_id"
 export G8E_AUTH_TIMESTAMP="$(date +%s)"
 export G8E_CLI_CERT="$G8E_CLI_CERT_FILE"
 export G8E_CLI_KEY="$G8E_CLI_KEY_FILE"
@@ -378,7 +377,7 @@ _clear_credentials() {
         rm -f "$G8E_CREDENTIALS_FILE"
     fi
     rm -f "$G8E_CLI_CERT_FILE" "$G8E_CLI_KEY_FILE" "$G8E_OPERATOR_CERT_FILE" "$G8E_OPERATOR_KEY_FILE"
-    unset $G8E_ENV_OPERATOR_SESSION_ID $G8E_ENV_CLI_SESSION_ID $G8E_ENV_USER_ID $G8E_ENV_OPERATOR_ID G8E_AUTH_TIMESTAMP G8E_CLI_CERT G8E_CLI_KEY G8E_OPERATOR_CERT G8E_OPERATOR_KEY
+    unset G8E_OPERATOR_SESSION_ID G8E_CLI_SESSION_ID G8E_USER_ID G8E_OPERATOR_ID G8E_AUTH_TIMESTAMP G8E_CLI_CERT G8E_CLI_KEY G8E_OPERATOR_CERT G8E_OPERATOR_KEY
 }
 
 _check_g8e_error() {
@@ -444,7 +443,7 @@ _require_authenticated() {
             _clear_credentials
             exit 1
         fi
-        export $G8E_ENV_OPERATOR_SESSION_ID $G8E_ENV_USER_ID $G8E_ENV_OPERATOR_ID G8E_CLI_CERT G8E_CLI_KEY G8E_OPERATOR_CERT G8E_OPERATOR_KEY
+        export G8E_OPERATOR_SESSION_ID G8E_USER_ID G8E_OPERATOR_ID G8E_CLI_CERT G8E_CLI_KEY G8E_OPERATOR_CERT G8E_OPERATOR_KEY
         return 0
     fi
     echo "[g8e] Not authenticated. Run: ./g8e login" >&2

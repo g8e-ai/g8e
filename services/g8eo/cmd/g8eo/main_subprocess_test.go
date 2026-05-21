@@ -414,7 +414,7 @@ func TestRunListenMode_BadLogLevel_Subprocess(t *testing.T) {
 
 func TestRunOpenClawMode_BadLogLevel_Subprocess(t *testing.T) {
 	if os.Getenv("G8E_TEST_OPENCLAW_BAD_LOG") == "1" {
-		runOpenClawMode(fmt.Sprintf("ws://localhost:%d", constants.Paths.Ports.OpenclawGateway), "", "", "", "", "notavalidlevel")
+		runOpenClawMode(fmt.Sprintf("ws://localhost:%d", constants.Ports.OpenclawGateway), "", "", "", "", "notavalidlevel")
 		return
 	}
 
