@@ -34,7 +34,7 @@ def setup_exception_handlers(app: FastAPI) -> None:
         g8e_context = getattr(request.state, "g8e_context", None)
         trace_id = "unknown"
         execution_id = "unknown"
-        
+
         if g8e_context:
             execution_id = g8e_context.execution_id
             # trace_id is currently synonymous with execution_id in this substrate

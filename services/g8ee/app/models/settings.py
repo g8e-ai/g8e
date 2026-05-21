@@ -520,10 +520,10 @@ class G8eePlatformSettings(G8eBaseModel):
         default_factory=lambda: os.environ.get(EnvVar.ALLOWED_ORIGINS, "") or ""
     )
     passkey_rp_name: str = Field(
-        default_factory=lambda: os.environ.get(EnvVar.PASSKEY_RP_NAME, PATHS.get('host', 'localhost')) or PATHS.get('host', 'localhost')
+        default_factory=lambda: os.environ.get(EnvVar.PASSKEY_RP_NAME, PATHS.get("host", "localhost")) or PATHS.get("host", "localhost")
     )
     passkey_rp_id: str = Field(
-        default_factory=lambda: os.environ.get(EnvVar.PASSKEY_RP_ID, PATHS.get('host', 'localhost')) or PATHS.get('host', 'localhost')
+        default_factory=lambda: os.environ.get(EnvVar.PASSKEY_RP_ID, PATHS.get("host", "localhost")) or PATHS.get("host", "localhost")
     )
     passkey_origin: str = Field(
         default_factory=lambda: os.environ.get(

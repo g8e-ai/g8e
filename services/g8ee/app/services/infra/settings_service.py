@@ -217,15 +217,15 @@ class SettingsService:
         """Update user settings in the database and invalidate the local cache."""
         if not self._cache_aside:
              raise ConfigurationError("CacheAsideService required for writing settings")
-             
+
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-        
+
         doc = UserSettingsDocument(
             id=user_doc_id,
             user_id=user_id,
             settings=new_settings
         )
-        
+
         await self._cache_aside.update_document(
             collection=DB_COLLECTION_SETTINGS,
             document_id=user_doc_id,
@@ -255,18 +255,18 @@ class SettingsService:
             overrides.llm_lite_api_key,
             overrides.llm_lite_endpoint,
         ])
-        
+
         search_overrides = any([
             overrides.web_search_project,
             overrides.web_search_app,
             overrides.web_search_api_key,
         ])
-        
+
         if not llm_overrides and not search_overrides:
             return False
 
         self._logger.info("[SettingsService] Storing request config overrides into user settings for user %s", user_id)
-        
+
         # Update LLM settings
         if overrides.llm_primary_model:
             user_settings.llm.primary_model = overrides.llm_primary_model
@@ -274,14 +274,14 @@ class SettingsService:
             user_settings.llm.assistant_model = overrides.llm_assistant_model
         if overrides.llm_lite_model:
             user_settings.llm.lite_model = overrides.llm_lite_model
-            
+
         if overrides.llm_primary_provider:
             user_settings.llm.primary_provider = overrides.llm_primary_provider
         if overrides.llm_assistant_provider:
             user_settings.llm.assistant_provider = overrides.llm_assistant_provider
         if overrides.llm_lite_provider:
             user_settings.llm.lite_provider = overrides.llm_lite_provider
-            
+
         # Provider-specific keys/endpoints
         for role, key, endpoint, prov in [
             ("primary", overrides.llm_primary_api_key, overrides.llm_primary_endpoint, overrides.llm_primary_provider or user_settings.llm.primary_provider),
@@ -290,10 +290,10 @@ class SettingsService:
         ]:
             if not prov:
                 continue
-            
+
             # Using strings for provider comparison as they might be strings or enums
-            p_str = prov.value if hasattr(prov, 'value') else str(prov)
-            
+            p_str = prov.value if hasattr(prov, "value") else str(prov)
+
             if p_str == "openai":
                 if key: user_settings.llm.openai_api_key = key
                 if endpoint: user_settings.llm.openai_endpoint = endpoint

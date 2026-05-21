@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 def _has_llm_credentials(llm) -> bool:
     """Return True if the given LLMSettings has the credentials it needs."""
     from app.constants import LLMProvider
-    
+
     if llm is None:
         return False
     provider = llm.primary_provider
@@ -68,7 +68,7 @@ def _llm_settings_from_env():
     from app.constants.env_vars import EnvVar
     from app.constants import LLMProvider
     from app.models.settings import LLMSettings
-    
+
     provider_str = os.environ.get(EnvVar.TEST_LLM_PRIMARY_PROVIDER, "").strip()
     if not provider_str:
         return None
@@ -221,7 +221,7 @@ def _web_search_settings_from_env():
     requires_web_search tests should be skipped.
     """
     from app.models.settings import SearchSettings
-    
+
     project_id = os.environ.get("G8E_TEST_WEB_SEARCH_PROJECT_ID", "").strip()
     engine_id = os.environ.get("G8E_TEST_WEB_SEARCH_ENGINE_ID", "").strip()
     api_key = os.environ.get("G8E_TEST_WEB_SEARCH_API_KEY", "").strip()
@@ -245,7 +245,7 @@ def _is_operator_online(host: str | None = None, port: int | None = None, timeou
 
     from app.models.settings import ListenSettings
     from app.constants.generated_paths import PortConstants
-    
+
     listen = ListenSettings()
     parsed = urlparse(listen.http_url)
 
@@ -269,7 +269,7 @@ async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = T
     from app.models.settings import G8eePlatformSettings
     from app.services.cache.cache_aside import CacheAsideService
     from app.services.infra.settings_service import SettingsService
-    
+
     import asyncio
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
@@ -324,10 +324,10 @@ def pytest_configure(config):
             f"constants out of date; run 'make constants'. Error: {e}",
             returncode=2
         )
-    
+
     from app.llm.factory import set_llm_settings, set_search_settings, set_settings
     from app.models.settings import ListenSettings
-    
+
     import asyncio
     from urllib.parse import urlparse
 
@@ -374,7 +374,7 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     from app.llm.factory import get_llm_settings, get_search_settings, get_settings
-    
+
     get_settings()
     llm = get_llm_settings()
     search_settings = get_search_settings()
@@ -785,7 +785,7 @@ async def cache_aside_service(test_settings):
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
     from app.services.cache.cache_aside import CacheAsideService
-    
+
     if not _OPERATOR_ONLINE:
         pytest.skip("Operator is offline - skipping integration fixture")
 
@@ -836,7 +836,7 @@ async def db_client(cache_aside_service):
 async def pubsub_service(test_settings):
     from app.clients.pubsub_client import PubSubClient
     from app.constants import ComponentName
-    
+
     if not _OPERATOR_ONLINE:
         pytest.skip("Operator is offline - skipping integration fixture")
 

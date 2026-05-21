@@ -54,7 +54,7 @@ async def auto_approve_pending(approval_service) -> None:
     approval), use ``auto_approve_inline_callback`` instead.
     """
     from app.utils.timestamp import now
-    
+
     pending = approval_service.get_pending_approvals()
     for approval_id, pending_approval in pending.items():
         pending_approval.resolve(
@@ -113,7 +113,7 @@ def auto_approve_inline_callback(
 
     def _callback(approval_id: str, pending) -> None:
         from app.utils.timestamp import now
-        
+
         tracker.record(pending.approval_type)
         pending.resolve(
             approved=tracker.approved,
@@ -187,7 +187,7 @@ async def all_services(cache_aside_service, test_settings):
     ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
     from unittest.mock import MagicMock
-    
+
     import os
     from app.clients.db_client import DBClient
     from app.constants.paths import PATHS
@@ -272,7 +272,7 @@ async def cleanup(cache_aside_service, all_services):
     Awaits all background tasks before document deletion to prevent race conditions.
     """
     from tests.integration.cleanup import IntegrationCleanupTracker
-    
+
     tracker = IntegrationCleanupTracker(cache_aside_service)
     yield tracker
 

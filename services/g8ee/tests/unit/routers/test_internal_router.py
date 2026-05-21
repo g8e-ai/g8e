@@ -650,7 +650,7 @@ async def test_internal_chat_settings_service_di_regression(request_context, g8e
     mock_investigation_service = MagicMock()
     mock_attachment_service = MagicMock()
     mock_event_service = MagicMock()
-    
+
     # Create a real mock that has the update_user_settings method
     mock_settings_service = MagicMock()
     mock_settings_service.update_user_settings = AsyncMock()
