@@ -219,7 +219,7 @@ _chat_stream_events() {
         fi
 
         # Connect to standard SSE stream endpoint. If curl exits, we reconnect.
-        if curl "${args[@]}" "$OPERATOR_HTTP_URL/api/internal/sse/stream?cli_session_id=${cli_session_id}&since_id=${last_id}" 2>/dev/null | python3 -u "$G8E_PROJECT_ROOT/scripts/core/stream_events.py" --cursor-file "$_chat_cursor_file"; then
+        if curl "${args[@]}" "$OPERATOR_HTTPS_URL/api/internal/sse/stream?cli_session_id=${cli_session_id}&since_id=${last_id}" 2>/dev/null | python3 -u "$G8E_PROJECT_ROOT/scripts/core/stream_events.py" --cursor-file "$_chat_cursor_file"; then
             # If the stream exited cleanly on a terminal event, return success
             return 0
         fi

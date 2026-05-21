@@ -52,9 +52,14 @@ Commands:
   list
       List benchmark suites and bundled gold sets.
 
+  deploy [-d <token>] [-n <nodes>]
+      Deploy operators to the demo fleet for evaluation.
+      If no token is provided, a temporary device link is automatically created.
+
 Workflow (new harness):
   1. ./g8e login (zero-arg in sandbox; mints CLI mTLS cert + session)
-  2. ./g8e evals bench --suite ifeval --mode baseline
+  2. ./g8e data device-links create --count 10
+  3. ./g8e evals bench --suite ifeval --mode baseline
   3. ./g8e evals bench --suite ifeval --mode receipt
   4. ./g8e evals verify-receipts reports/ifeval-<ts>
 
@@ -93,7 +98,7 @@ EOF
         export G8E_CLI_CERT="${G8E_OPERATOR_CERT:-$G8E_OPERATOR_CERT_FILE}"
         export G8E_CLI_KEY="${G8E_OPERATOR_KEY:-$G8E_OPERATOR_KEY_FILE}"
         export G8E_G8EE_URL="${G8E_G8EE_URL:-https://localhost:$G8E_G8EE_HTTP_PORT}"
-        export G8E_INTERNAL_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-$OPERATOR_HTTP_URL}"
+        export G8E_INTERNAL_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-$OPERATOR_HTTPS_URL}"
         export G8E_TRUST_BUNDLE="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
         cd "$EVALS_PROJECT_DIR"
         export G8E_PKI_DIR="${G8E_PKI_DIR:-$G8E_PKI_DIR_HOST}"
@@ -120,7 +125,70 @@ EOF
             ( cd "$EVALS_PROJECT_DIR" && find gold_sets -mindepth 2 -type f \( -name '*.jsonl' -o -name '*.json' \) | sort | sed 's/^/  /' )
         fi
         ;;
+    deploy)
+        _banner "evals deploy"
+        _device_token=""
+        _nodes=""
+        i=0
+        while [[ $i -lt ${#REMAINING_ARGS[@]} ]]; do
+            arg="${REMAINING_ARGS[$i]}"
+            if [[ "$arg" == "-d" ]]; then
+                if [[ $((i + 1)) -lt ${#REMAINING_ARGS[@]} ]]; then
+                    _device_token="${REMAINING_ARGS[$((i + 1))]}"
+                    unset "REMAINING_ARGS[$i]" "REMAINING_ARGS[$((i + 1))]"
+                    REMAINING_ARGS=("${REMAINING_ARGS[@]}")
+                    i=0; continue
+                else
+                    echo "[evals] -d flag requires a token value" >&2; exit 1
+                fi
+            elif [[ "$arg" == "-n" ]]; then
+                if [[ $((i + 1)) -lt ${#REMAINING_ARGS[@]} ]]; then
+                    _nodes="${REMAINING_ARGS[$((i + 1))]}"
+                    unset "REMAINING_ARGS[$i]" "REMAINING_ARGS[$((i + 1))]"
+                    REMAINING_ARGS=("${REMAINING_ARGS[@]}")
+                    i=0; continue
+                else
+                    echo "[evals] -n flag requires a node count value" >&2; exit 1
+                fi
+            fi
+            i=$((i + 1))
+        done
+
+        if [[ -z "$_device_token" ]]; then
+            if ! _load_credentials; then
+                echo "[evals] No cached credentials found. Run './g8e login' first, or provide -d <token> explicitly." >&2
+                exit 1
+            fi
+            if ! _operator_running; then
+                echo "[evals] Operator is not running - start it: ./g8e platform start" >&2
+                exit 1
+            fi
+            _dl_output=$(python3 "$SCRIPT_DIR/scripts/data/manage-device-links.py" create --user-id "$G8E_USER_ID" --name "evals-auto-deploy" --max-uses 100 --expires-in-hours 1 2>&1)
+            if [[ $? -ne 0 ]]; then
+                echo "[evals] Failed to automatically create device link." >&2
+                echo "$_dl_output" >&2
+                exit 1
+            fi
+            _device_token=$(echo "$_dl_output" | grep "Token:" | awk '{print $2}')
+            if [[ -z "$_device_token" ]]; then
+                echo "[evals] Could not extract token from device-link output." >&2
+                echo "$_dl_output" >&2
+                exit 1
+            fi
+        fi
+
+        _deploy_args=("DEVICE_TOKEN=$_device_token")
+        if [[ -n "$_nodes" ]]; then
+            _deploy_args+=("NODES=$_nodes" "N=$_nodes")
+        fi
+
+        if ! make -C "$SCRIPT_DIR/demo" status | grep -q "devices running: [1-9]"; then
+            make -C "$SCRIPT_DIR/demo" up "${_deploy_args[@]}"
+        fi
+
+        exec make -C "$SCRIPT_DIR/demo" deploy "${_deploy_args[@]}"
+        ;;
     *) echo "[g8e] unknown evals subcommand: '$SUB'" >&2
-       echo "  Valid: bench, verify-receipts, list" >&2
+       echo "  Valid: bench, verify-receipts, list, deploy" >&2
        exit 1 ;;
 esac

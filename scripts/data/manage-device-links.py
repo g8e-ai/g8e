@@ -33,13 +33,13 @@ import sys
 from typing import Dict, Any, List
 
 from _lib import (
-    OPERATOR_BASE_URL,
+    OPERATOR_HTTPS_URL,
     print_banner,
     resolve_user_id,
     operator_request,
 )
 
-DEVICE_LINKS_API = f'{OPERATOR_BASE_URL}/api/device-links'
+DEVICE_LINKS_API = f'{OPERATOR_HTTPS_URL}/api/device-links'
 
 TOKEN_RE_PREFIX = 'dlk_'
 
@@ -69,9 +69,15 @@ class DeviceLinkManager:
     def list_links(self, user_id: str | None, email: str | None) -> List[Dict]:
         uid = resolve_user_id(user_id, email)
         if not uid:
-            raise RuntimeError('Provide --user-id or --email')
+            # Frictionless: fallback to environment variables if no user provided
+            import os
+            uid = os.environ.get('G8E_USER_ID')
+            if not uid:
+                raise RuntimeError('Provide --user-id, --email, or ensure G8E_USER_ID is in environment')
         # Query device_links collection directly
-        result = operator_request('POST', '/db/device_links/_query', {'user_id': uid})
+        result = operator_request('POST', '/db/device_links/_query', {
+            'filters': [{'field': 'user_id', 'op': '==', 'value': json.dumps(uid)}]
+        })
         if not isinstance(result, list):
             result = []
         print(f"\nDevice Links for user {uid} ({len(result)} total)")
@@ -94,7 +100,11 @@ class DeviceLinkManager:
     ) -> Dict | None:
         uid = resolve_user_id(user_id, email)
         if not uid:
-            raise RuntimeError('Provide --user-id or --email')
+            # Frictionless: fallback to environment variables if no user provided
+            import os
+            uid = os.environ.get('G8E_USER_ID')
+            if not uid:
+                raise RuntimeError('Provide --user-id, --email, or ensure G8E_USER_ID is in environment')
 
         if max_uses is None or max_uses < 1 or max_uses > 100:
             raise RuntimeError('max_uses must be between 1 and 100')
@@ -167,7 +177,7 @@ class DeviceLinkManager:
 
 
 def _add_user_args(p: argparse.ArgumentParser) -> None:
-    group = p.add_mutually_exclusive_group(required=True)
+    group = p.add_mutually_exclusive_group(required=False)
     group.add_argument('--user-id', dest='user_id', help='User ID')
     group.add_argument('--email', help='User email')
 
@@ -196,8 +206,8 @@ Examples:
     sp = subparsers.add_parser('create', help='Create a new device link')
     _add_user_args(sp)
     sp.add_argument('--name', help='Human-readable label for this link')
-    sp.add_argument('--max-uses', type=int, required=True,
-                    help='Max number of devices that can claim this link (required, min: 1, max: 100)')
+    sp.add_argument('--count', type=int, default=1, dest='max_uses',
+                    help='Max number of devices that can claim this link (default: 1, max: 100)')
     sp.add_argument('--expires-in-hours', type=int, default=None,
                     help='Token lifetime in hours (default: 1 hour)')
 

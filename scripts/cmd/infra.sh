@@ -54,7 +54,7 @@ case "$TOP" in
         fi
 
         _trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
-        _bootstrap_port="${G8E_OPERATOR_BOOTSTRAP_PORT:-$G8E_PORT_OPERATOR_BOOTSTRAP}"
+        _bootstrap_port="${G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT:-$G8E_PORT_OPERATOR_BOOTSTRAP}"
         _bootstrap_url="${G8E_BOOTSTRAP_URL:-http://localhost:$_bootstrap_port}"
 
         if [[ ! -f "$_trust_bundle" ]]; then
@@ -168,7 +168,8 @@ case "$TOP" in
         echo -e "\n\033[1mDeploy to a remote host (optional):\033[0m"
         echo -e "  \033[1;34m./g8e operator deploy <user@host> --endpoint $(hostname -I | awk '{print $1}') --device-token $_dl_token\033[0m"
 
-        echo -e "\n\033[1mNext steps (no flags needed - credentials auto-loaded from ~/.g8e):\033[0m"
+        echo -e "\n\033[1mNext steps:\033[0m"
+        echo -e "  - Create device links:    \033[1;34m./g8e data device-links create --count 10\033[0m"
         echo -e "  - Run benchmarks:         \033[1;34m./g8e evals bench --suite ifeval --mode receipt\033[0m"
         echo -e "  - Start chatting:         \033[1;34m./g8e chat\033[0m"
         echo -e "  - Check platform status:  \033[1;34m./g8e platform status\033[0m"
@@ -352,7 +353,7 @@ case "$TOP" in
                 _ensure_operator
                 exec "$(_operator_bin)" \
                     --mcp-serve \
-                    --endpoint "${OPERATOR_HTTP_URL#https://}" \
+                    --endpoint "${OPERATOR_HTTPS_URL#https://}" \
                     --pki-dir "$G8E_PKI_DIR_HOST" \
                     --log "error"
                 ;;

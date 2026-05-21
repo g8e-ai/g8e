@@ -318,7 +318,7 @@ _start_g8ee() {
         export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol/python"
         export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
         export G8E_INTERNAL_HTTP_URL="https://localhost:${G8E_OPERATOR_HTTP_PORT}"
-        export G8E_INTERNAL_PUBSUB_URL="wss://localhost:${G8E_OPERATOR_WSS_PORT}"
+        export G8E_INTERNAL_PUBSUB_URL="wss://localhost:${G8E_OPERATOR_PUBLIC_WSS_PORT}"
         export G8E_TEST_LLM_PRIMARY_PROVIDER="${G8E_TEST_LLM_PRIMARY_PROVIDER:-}"
         export G8E_TEST_LLM_PRIMARY_MODEL="${G8E_TEST_LLM_PRIMARY_MODEL:-}"
         export G8E_TEST_LLM_PRIMARY_API_KEY="${G8E_TEST_LLM_PRIMARY_API_KEY:-}"
@@ -395,8 +395,8 @@ _start_operator_listen() {
     fi
 
     _check_port_available "$G8E_OPERATOR_HTTP_PORT" "Governance Gateway HTTP API" || exit 1
-    _check_port_available "$G8E_OPERATOR_BOOTSTRAP_PORT" "Operator Bootstrap" || exit 1
-    _check_port_available "$G8E_OPERATOR_PUBLIC_PORT" "Operator Public API" || exit 1
+    _check_port_available "$G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT" "Operator Bootstrap" || exit 1
+    _check_port_available "$G8E_OPERATOR_PUBLIC_HTTPS_PORT" "Operator Public API" || exit 1
 
     local host_arch="amd64"
     case "$(uname -m)" in
@@ -438,8 +438,8 @@ _start_operator_listen() {
         --pki-dir "$G8E_PKI_DIR" \
         --secrets-dir "$G8E_SECRETS_DIR" \
         --http-listen-port "$G8E_OPERATOR_HTTP_PORT" \
-        --bootstrap-listen-port "$G8E_OPERATOR_BOOTSTRAP_PORT" \
-        --public-listen-port "$G8E_OPERATOR_PUBLIC_PORT" \
+        --bootstrap-listen-port "$G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT" \
+        --public-listen-port "$G8E_OPERATOR_PUBLIC_HTTPS_PORT" \
         > "$G8E_OPERATOR_LOG_FILE" 2>&1 &
 
     local pid=$!
@@ -578,10 +578,8 @@ _print_platform_info() {
         op_pid=$(cat "$G8E_OPERATOR_PID_FILE")
     fi
 
-    local g8ee_status="offline"
     local g8ee_pid="-"
     if _g8ee_running; then
-        g8ee_status="online on port $G8E_G8EE_HTTP_PORT (mTLS)"
         g8ee_pid=$(cat "$G8E_G8EE_PID_FILE")
     fi
 
@@ -590,57 +588,89 @@ _print_platform_info() {
     local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR/trust/hub-bundle.pem}"
     if [[ -f "$trust_bundle" ]]; then
         local status_resp
-        status_resp=$(curl -sS --cacert "$trust_bundle" "https://localhost:$G8E_OPERATOR_PUBLIC_PORT/api/auth/bootstrap/status" 2>/dev/null)
+        status_resp=$(curl -sS --cacert "$trust_bundle" "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/api/auth/bootstrap/status" 2>/dev/null)
         if [[ -n "$status_resp" ]]; then
             state_root=$(echo "$status_resp" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - state_merkle_root --default "0x0")
         fi
     fi
 
     echo ""
-    echo " ┌── Services Lifecycle ────────────────────────────────────────────────────────┐"
-    echo -e " │  \033[1;32m[OK]\033[0m Core Operator Gateway (g8eo) : running (PID: $op_pid)                     │"
-    echo -e " │  \033[1;32m[OK]\033[0m Local-First Audit Vault     : initialized & verified                      │"
-    if _g8ee_running; then
-        echo -e " │  \033[1;32m[OK]\033[0m Reference AI Engine (g8ee)  : $g8ee_status                  │"
+    if [[ "$WITH_APPS" == "true" ]]; then
+        # ─── Full Platform Welcome (with -a) ──────────────────────────────────
+        echo " ┌── Full-Stack Agentic Infrastructure Lifecycle ───────────────────────────────┐"
+        echo -e " │  \033[1;32m[OK]\033[0m BFT Governance Gateway  (g8eg) : listening (PID: $op_pid)                  │"
+        echo -e " │  \033[1;32m[OK]\033[0m Reference AI Engine     (g8ee) : online (PID: $g8ee_pid)                   │"
+        echo -e " │  \033[1;32m[OK]\033[0m Local-First Audit Vault        : initialized & verified               │"
+        echo " └──────────────────────────────────────────────────────────────────────────────┘"
+        echo ""
+        echo "────────────────────────────────────────────────────────────────────────────────"
+        echo " 1. REFERENCE AGENTIC STACK (g8e + g8ee)"
+        echo "────────────────────────────────────────────────────────────────────────────────"
+        echo "  The complete g8e execution environment is active. g8ee provides the reference "
+        echo "  ReAct-loop agent, allowing end-to-end governed tool calling out of the box."
+        echo ""
+        echo "────────────────────────────────────────────────────────────────────────────────"
+        echo " 2. SECURE ENDPOINTS & DISPATCH"
+        echo "────────────────────────────────────────────────────────────────────────────────"
+        echo "  Platform Hub Core  : https://localhost:$G8E_OPERATOR_HTTP_PORT"
+        echo "  Engine API (mTLS)  : https://localhost:$G8E_G8EE_HTTP_PORT"
+        echo "  Audit Ledger State : [UNLOCKED] AES-256-GCM encrypted database active"
+        echo -e "  Current State Root : [*] state_merkle: ${state_root:0:12}..."
     else
-        echo -e " │  \033[1;31m[--]\033[0m Reference AI Engine (g8ee)  : offline                                     │"
+        # ─── g8eg Gateway Welcome (without -a) ────────────────────────────────
+        echo " ┌── BFT Governance Substrate Lifecycle ────────────────────────────────────────┐"
+        echo -e " │  \033[1;32m[OK]\033[0m Governance Gateway  (g8eg) : listening (PID: $op_pid)                  │"
+        echo -e " │  \033[1;32m[OK]\033[0m Local-First Audit Vault    : initialized & verified                    │"
+        echo -e " │  \033[1;31m[--]\033[0m Reference AI Engine (g8ee) : offline (BYO Client mode)                 │"
+        echo " └──────────────────────────────────────────────────────────────────────────────┘"
+        echo ""
+        echo "────────────────────────────────────────────────────────────────────────────────"
+        echo " 1. ZERO-TRUST EXECUTION BOUNDARY (g8eg)"
+        echo "────────────────────────────────────────────────────────────────────────────────"
+        echo "  g8e is serving as the mandatory admission boundary for agentic infrastructure."
+        echo "  It intercepts standard tool calls (MCP, A2A, etc.) and forces them into a "
+        echo "  typed, signed, state-bound GovernanceEnvelope before execution."
+        echo ""
+        echo "────────────────────────────────────────────────────────────────────────────────"
+        echo " 2. BFT VERIFICATION GAUNTLET (L1 / L2 / L3)"
+        echo "────────────────────────────────────────────────────────────────────────────────"
+        echo "  Every mutation is verified against three independent gates:"
+        echo "    L1 Doctrine : Deterministic policy hard-gates (sudo, blacklist, etc.)."
+        echo "    L2 Quorum   : k-of-n threshold consensus from heterogeneous agents."
+        echo "    L3 Notary   : Hardware-bound human approval (WebAuthn/FIDO2)."
+        echo ""
+        echo "────────────────────────────────────────────────────────────────────────────────"
+        echo " 3. BYO FRONTEND / MCP GATEWAY"
+        echo "────────────────────────────────────────────────────────────────────────────────"
+        echo "  Wrap any standard AI client or MCP server in g8e governance:"
+        echo "    Public API: https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT"
+        echo "    WSS Stream: wss://localhost:$G8E_OPERATOR_PUBLIC_WSS_PORT"
     fi
-    echo " └──────────────────────────────────────────────────────────────────────────────┘"
+
     echo ""
     echo "────────────────────────────────────────────────────────────────────────────────"
-    echo " 1. SECURE GATEWAY ENDPOINTS & CRYPTOGRAPHIC REALITY"
+    echo " BOOTSTRAP: PROVISION LOCAL TRUST PORTAL"
     echo "────────────────────────────────────────────────────────────────────────────────"
-    echo "  Platform Hub Core  : https://localhost:$G8E_OPERATOR_HTTP_PORT  <-- Inbound mTLS & WSS Control"
-    echo "  Local Runtime Dir  : $G8E_RUNTIME_DIR      <-- Local-First LFAA Vaults"
-    echo "  Audit Ledger State : [UNLOCKED] AES-256-GCM encrypted database active"
-    echo -e "  Current State Root : [*] state_merkle: ${state_root:0:12}... [Deterministic BFT Anchor]"
-    echo ""
-    echo "────────────────────────────────────────────────────────────────────────────────"
-    echo " 2. SECURITY BOOTSTRAP: PROVISION LOCAL TRUST PORTAL"
-    echo "────────────────────────────────────────────────────────────────────────────────"
-    echo "  The Dashboard serves an automated trust script on Port $G8E_OPERATOR_BOOTSTRAP_PORT to install the "
+    echo "  The Dashboard serves an automated trust script on Port $G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT to install the "
     echo "  Platform Root CA and provision local workload mTLS certificates."
     echo ""
     echo "  --> Run on Windows (Elevated PowerShell):"
-    echo "     irm http://${HOST_IPS%%,*}:$G8E_OPERATOR_BOOTSTRAP_PORT/trust | iex"
+    echo "     irm http://${HOST_IPS%%,*}:$G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT/trust | iex"
     echo ""
     echo "  --> Run on macOS / Linux (Terminal):"
-    echo "     curl -fsSL http://${HOST_IPS%%,*}:$G8E_OPERATOR_BOOTSTRAP_PORT/trust | sudo sh"
+    echo "     curl -fsSL http://${HOST_IPS%%,*}:$G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT/trust | sudo sh"
     echo ""
     echo "────────────────────────────────────────────────────────────────────────────────"
-    echo " 3. NEXT STEPS [CHOOSE ONE]"
+    echo " NEXT STEPS [CHOOSE ONE]"
     echo "────────────────────────────────────────────────────────────────────────────────"
-    echo "  To start executing governed agentic tool calls, authorize your environment:"
-    echo ""
-    echo "  A) AUTHENTICATE YOUR LOCAL CLI PROCESS (mTLS)"
-    echo "     $ ./g8e login"
-    echo ""
-    echo "  B) PROVISION A NEW OUTBOUND REMOTE OPERATOR SATELLITE"
-    echo "     $ ./g8e data device-links create --email superadmin@g8e.local"
-    echo ""
-    echo "  C) INTERACT VIA BROWSER / BYO CLIENT SURFACE"
-    echo "     URL: https://localhost:$G8E_OPERATOR_PUBLIC_PORT [Trust Bundle Required]"
-    echo ""
+    if [[ "$WITH_APPS" == "true" ]]; then
+        echo "  A) Authenticate (--email optional):    $ ./g8e login"
+        echo "  B) Use the Reference Engine directly:  https://localhost:$G8E_G8EE_HTTP_PORT"
+    else
+        echo "  A) Authenticate (--email optional):    $ ./g8e login"
+        echo "  B) Generate Device Links for Remote Operator Authentication:"
+        echo "     $ ./g8e data device-links create --email superadmin@g8e.local"
+    fi
     echo "────────────────────────────────────────────────────────────────────────────────"
     echo "[g8e] System ready. Control plane is listening."
 }
@@ -673,7 +703,7 @@ if [[ "$COMMAND" == "status" ]]; then
         bootstrapped="UNKNOWN"
         trust_bundle="$G8E_PKI_DIR/trust/hub-bundle.pem"
         if [[ -f "$trust_bundle" ]]; then
-            status_resp=$(curl -sS --cacert "$trust_bundle" "https://localhost:$G8E_OPERATOR_PUBLIC_PORT/api/auth/bootstrap/status" 2>/dev/null)
+            status_resp=$(curl -sS --cacert "$trust_bundle" "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/api/auth/bootstrap/status" 2>/dev/null)
             if [[ $(echo "$status_resp" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - bootstrapped 2>/dev/null) == "true" ]]; then
                 bootstrapped="YES"
             else
@@ -681,9 +711,9 @@ if [[ "$COMMAND" == "status" ]]; then
             fi
         fi
         
-        printf "  %-14s \033[1;32m%-12s\033[0m %-8s %-32s %s\n" "operator" "RUNNING" "$pid" "https://localhost:$G8E_OPERATOR_PUBLIC_PORT (API)" "Bootstrapped: $bootstrapped"
-        printf "  %-14s %-12s %-8s %-32s %s\n" "" "" "" "wss://localhost:$G8E_OPERATOR_WSS_PORT (WSS)" ""
-        printf "  %-14s %-12s %-8s %-32s %s\n" "" "" "" "http://localhost:$G8E_OPERATOR_BOOTSTRAP_PORT (Bootstrap)" ""
+        printf "  %-14s \033[1;32m%-12s\033[0m %-8s %-32s %s\n" "operator" "RUNNING" "$pid" "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT (API)" "Bootstrapped: $bootstrapped"
+        printf "  %-14s %-12s %-8s %-32s %s\n" "" "" "" "wss://localhost:$G8E_OPERATOR_PUBLIC_WSS_PORT (WSS)" ""
+        printf "  %-14s %-12s %-8s %-32s %s\n" "" "" "" "http://localhost:$G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT (Bootstrap)" ""
     else
         printf "  %-14s \033[1;31m%-12s\033[0m %-8s %-32s %s\n" "operator" "STOPPED" "-" "-" "-"
     fi
@@ -726,7 +756,7 @@ if [[ "$COMMAND" == "restart" ]]; then
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_PORT/health" 60 1
+    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 60 1
     for svc in "${RESTART_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
         _wait_optional_app_healthy "$svc"
@@ -764,7 +794,7 @@ if [[ "$COMMAND" == "reset" ]]; then
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_PORT/health" 300 2
+    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 300 2
 
     for svc in "${RESET_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -824,7 +854,7 @@ if [[ "$COMMAND" == "up" ]]; then
     fi
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_PORT/health" 60 1
+    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 60 1
     
     for svc in "${UP_COMPONENTS[@]}"; do
         _wait_optional_app_healthy "$svc"
@@ -854,7 +884,7 @@ if [[ "$COMMAND" == "setup" ]]; then
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_PORT/health" 300 2
+    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 300 2
 
     for svc in "${SETUP_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -890,7 +920,7 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     fi
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_PORT/health" 300 2
+    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 300 2
 
     for svc in "${REBUILD_COMPONENTS[@]}"; do
         _wait_optional_app_healthy "$svc"

@@ -433,9 +433,6 @@ func heartbeatIntervalOrDefault(d time.Duration) time.Duration {
 // buildPubSubURL creates a WebSocket URL, omitting port 443 if it is the effective port.
 func buildPubSubURL(endpoint string, httpPort int) string {
 	port := httpPortOrDefault(httpPort)
-	if port == 443 {
-		return fmt.Sprintf("wss://%s", endpoint)
-	}
 	return fmt.Sprintf("wss://%s:%d", endpoint, port)
 }
 
