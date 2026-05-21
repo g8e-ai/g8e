@@ -189,7 +189,7 @@ while [[ $# -gt 0 ]]; do
                 echo ""
                 echo "Workflow Steps:"
                 echo "  1. verify-proto / lint-no-bare-session-id"
-                echo "  2. lint-g8eo / lint-protocol (golangci-lint)"
+                echo "  2. lint-g8eo / lint-protocol (run separately via 'make lint-g8eo')"
                 echo "  3. vulncheck-g8eo (govulncheck)"
                 echo "  4. test-g8eo (Gateway unit tests)"
                 echo "  5. constants-lint (Verify no raw string literals in Go code where constants exist)"
@@ -371,17 +371,7 @@ run_g8eo() {
     # Ensure GOPATH/bin is in PATH for Go tools
     local gopath="$(go env GOPATH 2>/dev/null || echo "$HOME/go")"
     export PATH="$gopath/bin:$PATH"
-    
-    # Run golangci-lint before tests
-    log_header "Running golangci-lint"
-    if ! command -v golangci-lint >/dev/null 2>&1; then
-        log_warn "golangci-lint not found in PATH. Run 'cd services/g8eo && make install-tools' to install."
-        log_warn "Skipping golangci-lint for now..."
-    elif ! golangci-lint run --path-prefix=services/g8eo; then
-        log_err "golangci-lint failed"
-        return 1
-    fi
-    
+
     local test_target="./..."
     local pass_through_args=()
 
@@ -445,8 +435,6 @@ run_ci() {
 
     # 2. lint-g8eo
     log_header "CI: lint-g8eo"
-    (cd services/g8eo && golangci-lint run) || log_warn "golangci-lint (g8eo) failed or not installed"
-    (cd protocol && golangci-lint run) || log_warn "golangci-lint (protocol) failed or not installed"
     
     # 3. vulncheck-g8eo
     log_header "CI: vulncheck-g8eo"
