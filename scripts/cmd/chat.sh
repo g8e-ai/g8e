@@ -201,92 +201,32 @@ if [[ -z "$CASE_ID" && -z "$INVESTIGATION_ID" && "$SUB" == "send" ]]; then
     NEW_CASE=true
 fi
 
-# --- Stream helper: poll the Operator's internal SSE buffer -----------------
+# --- Stream helper: stream from the Operator's internal SSE stream -----------------
 _chat_stream_events() {
     local cli_session_id="$1" since="$2" timeout="$3"
     local last_id="$since"
-    local idle=0
-    local interval=0.5
+    local interval=1
+
     while :; do
         local args=()
         _build_protocol_curl_args args || return 1
-        args+=(-X GET)
-        # Operator auth requires either an Operator-Session-ID header bound to
-        # the mTLS URI SAN, or a /app/<id> SAN. CLI certs carry the operator
-        # session SAN, so we must include the matching session header for the
-        # Operator middleware to accept this request.
+        args+=(-X GET -N)
         _append_g8e_auth_headers args
-        local resp
-        # CLI is a first-class BYO session type: poll only the cli namespace so
-        # we never accidentally drain a colliding web session id. The Gateway
-        # refuses to talk about a bare session id - every routing target is
-        # tagged at the type level.
-        if ! resp=$(curl "${args[@]}" "$OPERATOR_HTTP_URL/api/internal/sse/events?cli_session_id=${cli_session_id}&since_id=${last_id}&limit=200" 2>/dev/null); then
-            # curl failed (network issue, or Operator down)
-            sleep "$interval"
-            continue
-        fi
-        local count
-        count=$(python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - count --default 0 <<<"$resp")
-        if [[ "$count" -gt 0 ]]; then
-            idle=0
-            # Stream each event to stdout and save cursor
-            while IFS= read -r line; do
-                if [[ "$line" == ID_CURSOR:* ]]; then
-                    echo "${line#ID_CURSOR:}" > "$_chat_cursor_file"
-                else
-                    printf "%s\n" "$line"
-                fi
-            done < <(python3 -c "import json, sys
-try:
-    resp = json.loads(sys.argv[1])
-    events = resp.get('events', [])
-    for event in events:
-        etype = event.get('event_type')
-        payload = event.get('payload', {})
-        eid = event.get('id')
-        
-        print(f'ID_CURSOR:{eid}')
-        
-        if etype == 'g8e.v1.ai.llm.chat.iteration.text.chunk.received':
-            content = payload.get('event', {}).get('data', {}).get('content', '')
-            sys.stdout.write(content)
-        elif etype in ('g8e.v1.ai.llm.chat.iteration.failed', 'g8e.v1.ai.llm.chat.iteration.stopped'):
-            err = payload.get('event', {}).get('data', {}).get('error', 'Unknown error')
-            sys.stdout.write(f'\n\033[1;31m[{etype}]\033[0m {err}\n')
-        elif etype == 'g8e.v1.ai.llm.chat.iteration.thinking.started':
-            thinking = payload.get('event', {}).get('data', {}).get('thinking', '')
-            action = payload.get('event', {}).get('data', {}).get('action_type', 'UPDATE')
-            if action == 'START':
-                sys.stdout.write('\n\033[1;30mThinking...\033[0m ')
-            elif thinking and thinking != 'null':
-                sys.stdout.write('\033[1;30m.\033[0m')
-        elif etype == 'g8e.v1.ai.llm.chat.iteration.text.completed':
-            sys.stdout.write('\n')
-        elif 'tool' in etype:
-            tool_name = payload.get('event', {}).get('data', {}).get('tool_name', 'unknown')
-            status = payload.get('event', {}).get('data', {}).get('status', '')
-            if status == 'STARTED':
-                sys.stdout.write(f'\n\033[1;34m[Tool: {tool_name}]\033[0m ')
-    sys.stdout.flush()
-except Exception as e:
-    pass" "$resp")
 
-            if [[ -s "$_chat_cursor_file" ]]; then
-                last_id=$(cat "$_chat_cursor_file")
-            fi
-            # If we saw a terminal event, exit
-            if python3 -c "import json, sys; d = json.loads(sys.argv[1]); print(any(e.get('event_type') in ('g8e.v1.ai.llm.chat.iteration.text.completed', 'g8e.v1.ai.llm.chat.iteration.failed', 'g8e.v1.ai.llm.chat.iteration.stopped') for e in d.get('events', [])))" "$resp" | grep -q True; then
-                return 0
-            fi
-        else
-            idle=$(awk -v i="$idle" -v step="$interval" 'BEGIN{printf "%.1f", i+step}')
-            if [[ "$timeout" -gt 0 ]]; then
-                if awk -v i="$idle" -v t="$timeout" 'BEGIN{exit !(i+0 >= t+0)}'; then
-                    echo "[chat] no new events in ${timeout}s - stopping" >&2
-                    return 0
-                fi
-            fi
+        # Standard SSE reconnection: send Last-Event-ID header if last_id > 0
+        if [[ "$last_id" -gt 0 ]]; then
+            args+=(-H "Last-Event-ID: $last_id")
+        fi
+
+        # Connect to standard SSE stream endpoint. If curl exits, we reconnect.
+        if curl "${args[@]}" "$OPERATOR_HTTP_URL/api/internal/sse/stream?cli_session_id=${cli_session_id}&since_id=${last_id}" 2>/dev/null | python3 -u "$G8E_PROJECT_ROOT/scripts/core/stream_events.py" --cursor-file "$_chat_cursor_file"; then
+            # If the stream exited cleanly on a terminal event, return success
+            return 0
+        fi
+
+        # If interrupted or connection dropped, read the latest event ID and reconnect
+        if [[ -s "$_chat_cursor_file" ]]; then
+            last_id=$(cat "$_chat_cursor_file")
         fi
         sleep "$interval"
     done
@@ -347,7 +287,7 @@ print(json.dumps(out))" \
         fi
 
         _banner "sending chat to g8ee..."
-        resp=$(_g8ee_curl POST "/api/internal/chat" "$body") || {
+        resp=$(_g8ee_curl POST "chat" "$body") || {
             echo "[chat] g8ee connection failed" >&2; exit 1
         }
         _check_g8e_error "$resp" "chat"

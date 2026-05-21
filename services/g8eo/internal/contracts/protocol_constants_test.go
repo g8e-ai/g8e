@@ -459,6 +459,54 @@ func loadEnvVarsJSON(t *testing.T) protocolEnvVarsJSON {
 	return e
 }
 
+type protocolApiPathsJSON struct {
+	InternalPrefix string            `json:"internal_prefix"`
+	OperatorPrefix string            `json:"operator_prefix"`
+	G8ee           map[string]string `json:"g8ee"`
+	Client         map[string]string `json:"client"`
+}
+
+func loadApiPathsJSON(t *testing.T) protocolApiPathsJSON {
+	t.Helper()
+	var ap protocolApiPathsJSON
+	require.NoError(t, json.Unmarshal(loadProtocolFile(t, "api_paths.json"), &ap), "api_paths.json must unmarshal into protocolApiPathsJSON")
+	return ap
+}
+
+// =============================================================================
+// API Paths
+// =============================================================================
+
+func TestProtocolApiPathsMatchGoConstants(t *testing.T) {
+	ap := loadApiPathsJSON(t)
+
+	t.Run("prefixes", func(t *testing.T) {
+		assert.Equal(t, ap.InternalPrefix, constants.ApiPaths.InternalPrefix)
+		assert.Equal(t, ap.OperatorPrefix, constants.ApiPaths.OperatorPrefix)
+	})
+
+	t.Run("client.sse", func(t *testing.T) {
+		assert.Equal(t, ap.Client["sse_events"], constants.ApiPaths.Client["sse_events"])
+		assert.Equal(t, ap.Client["sse_stream"], constants.ApiPaths.Client["sse_stream"])
+	})
+
+	t.Run("g8ee", func(t *testing.T) {
+		for key, expected := range ap.G8ee {
+			actual, ok := constants.ApiPaths.G8ee[key]
+			assert.True(t, ok, "g8ee route key %s must exist in Go constants", key)
+			assert.Equal(t, expected, actual, "g8ee route %s mismatch", key)
+		}
+	})
+
+	t.Run("client", func(t *testing.T) {
+		for key, expected := range ap.Client {
+			actual, ok := constants.ApiPaths.Client[key]
+			assert.True(t, ok, "client route key %s must exist in Go constants", key)
+			assert.Equal(t, expected, actual, "client route %s mismatch", key)
+		}
+	})
+}
+
 // =============================================================================
 // Events
 // =============================================================================

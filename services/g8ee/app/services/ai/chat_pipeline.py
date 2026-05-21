@@ -445,11 +445,9 @@ class ChatPipelineService:
         otherwise it is fired as a detached asyncio task with a done-callback
         that surfaces failures at WARNING level.
         """
-        from app.constants.collections import SENTINEL_ID_UNKNOWN
-
         logger.info(
             "[SSE-CHAT] _persist_ai_response started: investigation_id=%s response_len=%d",
-            getattr(g8e_context, "investigation_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
+            getattr(g8e_context, "investigation_id", None) if g8e_context else "None",
             len(state.response_text) if state.response_text is not None else 0,
         )
 
@@ -498,13 +496,13 @@ class ChatPipelineService:
             event_type=EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS,
             payload=TriageClarificationQuestionsPayload(
                 questions=questions,
-                complexity=inputs.triage_result.complexity if inputs.triage_result else "unknown",
-                complexity_confidence=str(inputs.triage_result.complexity_confidence) if inputs.triage_result else "0",
-                intent=inputs.triage_result.intent_summary if inputs.triage_result else "unknown",
-                intent_confidence=str(inputs.triage_result.intent_confidence) if inputs.triage_result else "0",
-                intent_summary=inputs.triage_result.intent_summary if inputs.triage_result else "unknown",
-                request_posture=inputs.triage_result.request_posture if inputs.triage_result else "unknown",
-                posture_confidence=str(inputs.triage_result.posture_confidence) if inputs.triage_result else "0",
+                complexity=inputs.triage_result.complexity if inputs.triage_result else None,
+                complexity_confidence=str(inputs.triage_result.complexity_confidence) if inputs.triage_result else None,
+                intent=inputs.triage_result.intent_summary if inputs.triage_result else None,
+                intent_confidence=str(inputs.triage_result.intent_confidence) if inputs.triage_result else None,
+                intent_summary=inputs.triage_result.intent_summary if inputs.triage_result else None,
+                request_posture=inputs.triage_result.request_posture if inputs.triage_result else None,
+                posture_confidence=str(inputs.triage_result.posture_confidence) if inputs.triage_result else None,
             ),
             web_session_id=g8e_context.web_session_id,
             cli_session_id=g8e_context.cli_session_id,
@@ -674,14 +672,12 @@ class ChatPipelineService:
         Optionally registers the current asyncio task with ChatTaskManager so it
         can be cancelled via the stop endpoint.
         """
-        from app.constants.collections import SENTINEL_ID_UNKNOWN
-
         logger.info(
             "[SSE-CHAT] run_chat started: new_case=%s case_id=%s investigation_id=%s web_session_id=%s",
-            getattr(g8e_context, "new_case", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
-            getattr(g8e_context, "case_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
-            getattr(g8e_context, "investigation_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
-            getattr(g8e_context, "web_session_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
+            getattr(g8e_context, "new_case", None) if g8e_context else "None",
+            getattr(g8e_context, "case_id", None) if g8e_context else "None",
+            getattr(g8e_context, "investigation_id", None) if g8e_context else "None",
+            getattr(g8e_context, "web_session_id", None) if g8e_context else "None",
         )
 
         investigation_id = g8e_context.investigation_id if g8e_context else ""

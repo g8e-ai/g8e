@@ -66,6 +66,7 @@ PUBSUB = _load_protocol_json("pubsub.json")
 INTENTS = _load_protocol_json("intents.json")
 PROMPTS = _load_protocol_json("prompts.json")
 TIMESTAMP = _load_protocol_json("timestamp.json")
+API_PATHS = _load_protocol_json("api_paths.json")
 _raw_headers = _load_protocol_json("headers.json")
 HEADERS = {k: v["value"] if isinstance(v, dict) and "value" in v else v for k, v in _raw_headers.items()}
 DOCUMENT_IDS = _load_protocol_json("document_ids.json")

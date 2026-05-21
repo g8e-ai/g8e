@@ -68,7 +68,7 @@ case "$TOP" in
         _dl_body=$(python3 -c "import json, sys; print(json.dumps({'email': sys.argv[1], 'name': sys.argv[2], 'max_uses': int(sys.argv[3]), 'ttl_seconds': int(sys.argv[4])}))" \
             "$_login_email" "cli-$(hostname)" "$_dl_count" "$_dl_ttl")
         _dl_resp=$( curl -sS \
-            -X POST -H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json" \
+            -X POST -H "${G8E_HEADER_CONTENT_TYPE}: application/json" \
             -d "$_dl_body" \
             "$_bootstrap_url/api/auth/device-link/request" 2>&1 )
         _dl_token=$(echo "$_dl_resp" | python3 "$G8E_PROJECT_ROOT/scripts/core/json_query.py" - token 2>/dev/null)
@@ -100,8 +100,8 @@ case "$TOP" in
             'cli_csr_pem': sys.argv[6]
         }))" "$_fingerprint" "$(hostname)" "$(uname -m)" "${USER:-$LOGNAME}" "$_op_csr_pem" "$_cli_csr_pem")
         _reg_resp=$( curl -sS \
-            -X POST -H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json" \
-            -H "${G8E_HEADER_DEVICE_TOKEN_HEADER}: $_dl_token" \
+            -X POST -H "${G8E_HEADER_CONTENT_TYPE}: application/json" \
+            -H "${G8E_HEADER_DEVICE_TOKEN}: $_dl_token" \
             -d "$_reg_body" \
             "$_bootstrap_url/api/auth/device-link/register" 2>&1 )
 

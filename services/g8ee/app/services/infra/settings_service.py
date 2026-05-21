@@ -44,6 +44,7 @@ from app.services.infra.bootstrap_service import BootstrapService, BootstrapServ
 
 if TYPE_CHECKING:
     from app.services.cache.cache_aside import CacheAsideService
+    from app.models.internal_api import RequestOverrides
 
 
 @runtime_checkable
@@ -231,6 +232,96 @@ class SettingsService:
             data=doc.model_dump(mode="json"),
             merge=False
         )
+
+    async def sync_settings_overrides(
+        self,
+        user_id: str,
+        user_settings: G8eeUserSettings,
+        overrides: RequestOverrides
+    ) -> bool:
+        """Extract LLM and Search overrides from a request and update user settings if needed."""
+        # Check if any overrides are provided
+        llm_overrides = any([
+            overrides.llm_primary_model,
+            overrides.llm_assistant_model,
+            overrides.llm_lite_model,
+            overrides.llm_primary_provider,
+            overrides.llm_assistant_provider,
+            overrides.llm_lite_provider,
+            overrides.llm_primary_api_key,
+            overrides.llm_primary_endpoint,
+            overrides.llm_assistant_api_key,
+            overrides.llm_assistant_endpoint,
+            overrides.llm_lite_api_key,
+            overrides.llm_lite_endpoint,
+        ])
+        
+        search_overrides = any([
+            overrides.web_search_project,
+            overrides.web_search_app,
+            overrides.web_search_api_key,
+        ])
+        
+        if not llm_overrides and not search_overrides:
+            return False
+
+        self._logger.info("[SettingsService] Storing request config overrides into user settings for user %s", user_id)
+        
+        # Update LLM settings
+        if overrides.llm_primary_model:
+            user_settings.llm.primary_model = overrides.llm_primary_model
+        if overrides.llm_assistant_model:
+            user_settings.llm.assistant_model = overrides.llm_assistant_model
+        if overrides.llm_lite_model:
+            user_settings.llm.lite_model = overrides.llm_lite_model
+            
+        if overrides.llm_primary_provider:
+            user_settings.llm.primary_provider = overrides.llm_primary_provider
+        if overrides.llm_assistant_provider:
+            user_settings.llm.assistant_provider = overrides.llm_assistant_provider
+        if overrides.llm_lite_provider:
+            user_settings.llm.lite_provider = overrides.llm_lite_provider
+            
+        # Provider-specific keys/endpoints
+        for role, key, endpoint, prov in [
+            ("primary", overrides.llm_primary_api_key, overrides.llm_primary_endpoint, overrides.llm_primary_provider or user_settings.llm.primary_provider),
+            ("assistant", overrides.llm_assistant_api_key, overrides.llm_assistant_endpoint, overrides.llm_assistant_provider or user_settings.llm.assistant_provider),
+            ("lite", overrides.llm_lite_api_key, overrides.llm_lite_endpoint, overrides.llm_lite_provider or user_settings.llm.lite_provider)
+        ]:
+            if not prov:
+                continue
+            
+            # Using strings for provider comparison as they might be strings or enums
+            p_str = prov.value if hasattr(prov, 'value') else str(prov)
+            
+            if p_str == "openai":
+                if key: user_settings.llm.openai_api_key = key
+                if endpoint: user_settings.llm.openai_endpoint = endpoint
+            elif p_str == "anthropic":
+                if key: user_settings.llm.anthropic_api_key = key
+                if endpoint: user_settings.llm.anthropic_endpoint = endpoint
+            elif p_str == "gemini":
+                if key: user_settings.llm.gemini_api_key = key
+            elif p_str == "ollama":
+                if key: user_settings.llm.ollama_api_key = key
+                if endpoint: user_settings.llm.ollama_endpoint = endpoint
+            elif p_str == "llamacpp":
+                if key: user_settings.llm.llamacpp_api_key = key
+                if endpoint: user_settings.llm.llamacpp_endpoint = endpoint
+
+        # Update Search settings
+        if search_overrides:
+            if overrides.web_search_project:
+                user_settings.search.project_id = overrides.web_search_project
+            if overrides.web_search_app:
+                user_settings.search.engine_id = overrides.web_search_app
+            if overrides.web_search_api_key:
+                user_settings.search.api_key = overrides.web_search_api_key
+            # If any search overrides provided, ensure search is enabled in user settings
+            user_settings.search.enabled = True
+
+        await self.update_user_settings(user_id, user_settings)
+        return True
 
     def _build_search_settings(self, settings: G8eePlatformSettings | G8eeUserSettings) -> SearchSettings:
         """Build SearchSettings from platform or user settings."""

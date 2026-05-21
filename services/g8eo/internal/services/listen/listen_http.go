@@ -1538,7 +1538,11 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 		CLISessionID: strings.TrimSpace(q.Get("cli_session_id")),
 		UserID:       strings.TrimSpace(q.Get("user_id")),
 	}
-	sinceID, _ := strconv.ParseInt(q.Get("since_id"), 10, 64)
+	sinceIDStr := q.Get("since_id")
+	if lastEventID := r.Header.Get("Last-Event-ID"); lastEventID != "" {
+		sinceIDStr = lastEventID
+	}
+	sinceID, _ := strconv.ParseInt(sinceIDStr, 10, 64)
 
 	// 1. Authorization (re-use logic from handleInternalSSEEvents)
 	operatorSessionID := h.auth.ExtractOperatorSessionID(r)

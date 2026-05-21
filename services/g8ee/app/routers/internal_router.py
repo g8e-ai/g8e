@@ -40,7 +40,6 @@ from app.constants import (
     InternalApiPaths,
 )
 from app.constants.collections import (
-    SENTINEL_ID_UNKNOWN,
     DB_COLLECTION_SETTINGS,
     USER_SETTINGS_DOC_PREFIX,
 )
@@ -96,6 +95,7 @@ from app.models.internal_api import (
     StopOperatorRequest,
     UserSettingsUpdateResponse,
     SettingsGetRequest,
+    SettingsSyncRequest,
 )
 from app.models.triage_api import (
     TriageAnswerRequest,
@@ -163,6 +163,7 @@ from app.dependencies import (
     get_g8ee_user_settings,
     require_authenticated_context,
 )
+from app.models.internal_api import RequestOverrides
 
 logger = logging.getLogger(__name__)
 
@@ -246,65 +247,6 @@ async def internal_chat(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
-    # Check if CLI provided any LLM overrides, and if so, update user settings.
-    llm_overrides_provided = any([
-        request.llm_primary_model,
-        request.llm_assistant_model,
-        request.llm_lite_model,
-        request.llm_primary_provider,
-        request.llm_assistant_provider,
-        request.llm_lite_provider,
-        request.llm_primary_api_key,
-        request.llm_primary_endpoint,
-        request.llm_assistant_api_key,
-        request.llm_assistant_endpoint,
-        request.llm_lite_api_key,
-        request.llm_lite_endpoint,
-    ])
-
-    if llm_overrides_provided and g8e_context.user_id:
-        logger.info("[INTERNAL-HTTP] Storing CLI LLM config overrides into user settings")
-        if request.llm_primary_model:
-            user_settings.llm.primary_model = request.llm_primary_model
-        if request.llm_assistant_model:
-            user_settings.llm.assistant_model = request.llm_assistant_model
-        if request.llm_lite_model:
-            user_settings.llm.lite_model = request.llm_lite_model
-            
-        if request.llm_primary_provider:
-            user_settings.llm.primary_provider = request.llm_primary_provider
-        if request.llm_assistant_provider:
-            user_settings.llm.assistant_provider = request.llm_assistant_provider
-        if request.llm_lite_provider:
-            user_settings.llm.lite_provider = request.llm_lite_provider
-            
-        # Try to infer provider for keys/endpoints if not explicitly set but keys are
-        for role, key, endpoint, prov in [
-            ("primary", request.llm_primary_api_key, request.llm_primary_endpoint, request.llm_primary_provider or user_settings.llm.primary_provider),
-            ("assistant", request.llm_assistant_api_key, request.llm_assistant_endpoint, request.llm_assistant_provider or user_settings.llm.assistant_provider),
-            ("lite", request.llm_lite_api_key, request.llm_lite_endpoint, request.llm_lite_provider or user_settings.llm.lite_provider)
-        ]:
-            if not prov:
-                # Can't set provider-specific keys without knowing provider
-                continue
-            
-            if prov == "openai":
-                if key: user_settings.llm.openai_api_key = key
-                if endpoint: user_settings.llm.openai_endpoint = endpoint
-            elif prov == "anthropic":
-                if key: user_settings.llm.anthropic_api_key = key
-                if endpoint: user_settings.llm.anthropic_endpoint = endpoint
-            elif prov == "gemini":
-                if key: user_settings.llm.gemini_api_key = key
-            elif prov == "ollama":
-                if key: user_settings.llm.ollama_api_key = key
-                if endpoint: user_settings.llm.ollama_endpoint = endpoint
-            elif prov == "llamacpp":
-                if key: user_settings.llm.llamacpp_api_key = key
-                if endpoint: user_settings.llm.llamacpp_endpoint = endpoint
-
-        await settings_service.update_user_settings(g8e_context.user_id, user_settings)
-
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,
@@ -324,6 +266,19 @@ async def internal_chat(
 
     resource_creation = request.resource_creation
     create_new_case = resource_creation.create_case if resource_creation else False
+
+    # Validate investigation_id exists before proceeding, UNLESS we are creating a new case
+    if not create_new_case:
+        if not g8e_context.investigation_id:
+            logger.error(
+                "[INTERNAL-HTTP] Cannot start chat - investigation_id is missing",
+                extra={"case_id": g8e_context.case_id, "web_session_id": (g8e_context.web_session_id[:8] + "...") if g8e_context.web_session_id else None}
+            )
+            return ChatStartedResponse(
+                success=False,
+                case_id=g8e_context.case_id or "",
+                investigation_id=g8e_context.investigation_id or "",
+            )
 
     logger.info(
         "[INTERNAL-HTTP] Non-streaming chat request received",
@@ -347,6 +302,7 @@ async def internal_chat(
         )
         case = await case_service.create_case(case_create_data, generated_title=None)
 
+        from app.models.investigations import InvestigationCreateRequest
         investigation_request = InvestigationCreateRequest(
             case_id=case.id,
             case_title=case.title,
@@ -366,9 +322,8 @@ async def internal_chat(
             "investigation_id": investigation.id,
         })
 
+        from app.models.events import SessionEvent
         # Publish CASE_CREATED event immediately after inline creation.
-        # This MUST happen BEFORE title generation and its CASE_UPDATED event,
-        # so the frontend receives creation before update.
         try:
             await event_service.publish(
                 SessionEvent(
@@ -420,18 +375,6 @@ async def internal_chat(
             resolved_attachments = await attachment_service.process_attachments(raw_attachments)
         except Exception as att_err:
             logger.error("[INTERNAL-HTTP] Failed to retrieve attachments: %s", att_err)
-
-    # Validate investigation_id exists before proceeding
-    if not g8e_context.investigation_id or g8e_context.investigation_id == SENTINEL_ID_UNKNOWN:
-        logger.error(
-            "[INTERNAL-HTTP] Cannot start chat - investigation_id is missing or unknown",
-            extra={"case_id": g8e_context.case_id, "web_session_id": (g8e_context.web_session_id[:8] + "...") if g8e_context.web_session_id else None}
-        )
-        return ChatStartedResponse(
-            success=False,
-            case_id=g8e_context.case_id or "",
-            investigation_id=g8e_context.investigation_id or "",
-        )
 
     chat_task = asyncio.create_task(
         chat_pipeline.run_chat(
@@ -485,65 +428,6 @@ async def internal_triage_answer(
     """
     # Fetch user settings manually using user_id from context to eliminate header dependency
     user_settings = await settings_service.get_user_settings(g8e_context.user_id)
-
-    # Check if CLI provided any LLM overrides, and if so, update user settings.
-    llm_overrides_provided = any([
-        request.llm_primary_model,
-        request.llm_assistant_model,
-        request.llm_lite_model,
-        request.llm_primary_provider,
-        request.llm_assistant_provider,
-        request.llm_lite_provider,
-        request.llm_primary_api_key,
-        request.llm_primary_endpoint,
-        request.llm_assistant_api_key,
-        request.llm_assistant_endpoint,
-        request.llm_lite_api_key,
-        request.llm_lite_endpoint,
-    ])
-
-    if llm_overrides_provided and g8e_context.user_id:
-        logger.info("[INTERNAL-HTTP] Storing CLI LLM config overrides into user settings")
-        if request.llm_primary_model:
-            user_settings.llm.primary_model = request.llm_primary_model
-        if request.llm_assistant_model:
-            user_settings.llm.assistant_model = request.llm_assistant_model
-        if request.llm_lite_model:
-            user_settings.llm.lite_model = request.llm_lite_model
-            
-        if request.llm_primary_provider:
-            user_settings.llm.primary_provider = request.llm_primary_provider
-        if request.llm_assistant_provider:
-            user_settings.llm.assistant_provider = request.llm_assistant_provider
-        if request.llm_lite_provider:
-            user_settings.llm.lite_provider = request.llm_lite_provider
-            
-        # Try to infer provider for keys/endpoints if not explicitly set but keys are
-        for role, key, endpoint, prov in [
-            ("primary", request.llm_primary_api_key, request.llm_primary_endpoint, request.llm_primary_provider or user_settings.llm.primary_provider),
-            ("assistant", request.llm_assistant_api_key, request.llm_assistant_endpoint, request.llm_assistant_provider or user_settings.llm.assistant_provider),
-            ("lite", request.llm_lite_api_key, request.llm_lite_endpoint, request.llm_lite_provider or user_settings.llm.lite_provider)
-        ]:
-            if not prov:
-                # Can't set provider-specific keys without knowing provider
-                continue
-            
-            if prov == "openai":
-                if key: user_settings.llm.openai_api_key = key
-                if endpoint: user_settings.llm.openai_endpoint = endpoint
-            elif prov == "anthropic":
-                if key: user_settings.llm.anthropic_api_key = key
-                if endpoint: user_settings.llm.anthropic_endpoint = endpoint
-            elif prov == "gemini":
-                if key: user_settings.llm.gemini_api_key = key
-            elif prov == "ollama":
-                if key: user_settings.llm.ollama_api_key = key
-                if endpoint: user_settings.llm.ollama_endpoint = endpoint
-            elif prov == "llamacpp":
-                if key: user_settings.llm.llamacpp_api_key = key
-                if endpoint: user_settings.llm.llamacpp_endpoint = endpoint
-
-        await settings_service.update_user_settings(g8e_context.user_id, user_settings)
 
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
@@ -618,65 +502,6 @@ async def internal_triage_skip(
     """
     # Fetch user settings manually using user_id from context to eliminate header dependency
     user_settings = await settings_service.get_user_settings(g8e_context.user_id)
-
-    # Check if CLI provided any LLM overrides, and if so, update user settings.
-    llm_overrides_provided = any([
-        request.llm_primary_model,
-        request.llm_assistant_model,
-        request.llm_lite_model,
-        request.llm_primary_provider,
-        request.llm_assistant_provider,
-        request.llm_lite_provider,
-        request.llm_primary_api_key,
-        request.llm_primary_endpoint,
-        request.llm_assistant_api_key,
-        request.llm_assistant_endpoint,
-        request.llm_lite_api_key,
-        request.llm_lite_endpoint,
-    ])
-
-    if llm_overrides_provided and g8e_context.user_id:
-        logger.info("[INTERNAL-HTTP] Storing CLI LLM config overrides into user settings")
-        if request.llm_primary_model:
-            user_settings.llm.primary_model = request.llm_primary_model
-        if request.llm_assistant_model:
-            user_settings.llm.assistant_model = request.llm_assistant_model
-        if request.llm_lite_model:
-            user_settings.llm.lite_model = request.llm_lite_model
-            
-        if request.llm_primary_provider:
-            user_settings.llm.primary_provider = request.llm_primary_provider
-        if request.llm_assistant_provider:
-            user_settings.llm.assistant_provider = request.llm_assistant_provider
-        if request.llm_lite_provider:
-            user_settings.llm.lite_provider = request.llm_lite_provider
-            
-        # Try to infer provider for keys/endpoints if not explicitly set but keys are
-        for role, key, endpoint, prov in [
-            ("primary", request.llm_primary_api_key, request.llm_primary_endpoint, request.llm_primary_provider or user_settings.llm.primary_provider),
-            ("assistant", request.llm_assistant_api_key, request.llm_assistant_endpoint, request.llm_assistant_provider or user_settings.llm.assistant_provider),
-            ("lite", request.llm_lite_api_key, request.llm_lite_endpoint, request.llm_lite_provider or user_settings.llm.lite_provider)
-        ]:
-            if not prov:
-                # Can't set provider-specific keys without knowing provider
-                continue
-            
-            if prov == "openai":
-                if key: user_settings.llm.openai_api_key = key
-                if endpoint: user_settings.llm.openai_endpoint = endpoint
-            elif prov == "anthropic":
-                if key: user_settings.llm.anthropic_api_key = key
-                if endpoint: user_settings.llm.anthropic_endpoint = endpoint
-            elif prov == "gemini":
-                if key: user_settings.llm.gemini_api_key = key
-            elif prov == "ollama":
-                if key: user_settings.llm.ollama_api_key = key
-                if endpoint: user_settings.llm.ollama_endpoint = endpoint
-            elif prov == "llamacpp":
-                if key: user_settings.llm.llamacpp_api_key = key
-                if endpoint: user_settings.llm.llamacpp_endpoint = endpoint
-
-        await settings_service.update_user_settings(g8e_context.user_id, user_settings)
 
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
@@ -1932,6 +1757,24 @@ async def get_user_settings(
         extra={"user_id": user_id}
     )
     return await settings_service.get_user_settings(user_id)
+
+
+@router.post(InternalApiPaths.G8EE_SETTINGS_SYNC, response_model=UserSettingsUpdateResponse)
+async def settings_sync(
+    request: SettingsSyncRequest,
+    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+):
+    """
+    Persist LLM and Search settings overrides into user settings.
+
+    This replaces the legacy "sync-on-chat" behavior to avoid side-effects
+    during inference and ensure settings are committed before chat starts.
+    """
+    user_id = request.context.user_id
+    user_settings = await settings_service.get_user_settings(user_id)
+
+    success = await settings_service.sync_settings_overrides(user_id, user_settings, request)
+    return UserSettingsUpdateResponse(success=success)
 
 
 @router.patch(InternalApiPaths.G8EE_SETTINGS_USER, response_model=UserSettingsUpdateResponse)
