@@ -14,8 +14,9 @@
 from pydantic import Field
 from app.models.base import G8eBaseModel
 from app.models.http_context import RequestContext
+from app.models.internal_api import RequestOverrides
 
-class TriageAnswerRequest(G8eBaseModel):
+class TriageAnswerRequest(RequestOverrides):
     """Request model for answering a triage clarifying question.
 
     Identity and business context (case_id, investigation_id, web_session_id,
@@ -25,7 +26,7 @@ class TriageAnswerRequest(G8eBaseModel):
     question_index: int = Field(description="The 0-indexed position of the question being answered.")
     answer: bool = Field(description="The yes/no answer.")
 
-class TriageSkipRequest(G8eBaseModel):
+class TriageSkipRequest(RequestOverrides):
     """Request model for skipping triage clarifying questions.
 
     Identity and business context (case_id, investigation_id, web_session_id,

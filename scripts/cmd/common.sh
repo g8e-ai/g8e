@@ -133,7 +133,7 @@ _operator_bootstrap() {
     # Perform bootstrap over loopback
     local resp
     resp=$(curl -sS --cacert "$trust_bundle" \
-        -X POST -H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json" \
+        -X POST -H "${G8E_HEADER_CONTENT_TYPE}: application/json" \
         -d "$bootstrap_body" \
         "$public_url/api/auth/bootstrap")
 
@@ -247,12 +247,12 @@ _operator_curl() {
     fi
 
     if [[ -n "$G8E_OPERATOR_SESSION_ID" ]]; then
-        args+=(-H "${G8E_HEADER_HTTP_AUTHORIZATION_HEADER}: Bearer $G8E_OPERATOR_SESSION_ID")
+        args+=(-H "${G8E_HEADER_AUTHORIZATION}: Bearer $G8E_OPERATOR_SESSION_ID")
         # Also send as a cookie for web-authenticated routes
         args+=(--cookie "g8e_session=$G8E_OPERATOR_SESSION_ID")
     fi
 
-    args+=(-H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json")
+    args+=(-H "${G8E_HEADER_CONTENTTYPE}: application/json")
     [[ -n "$body" ]] && args+=(-d "$body")
     curl "${args[@]}" "$OPERATOR_HTTP_URL$path"
 }
@@ -296,29 +296,44 @@ _build_protocol_curl_args() {
 _append_g8e_auth_headers() {
     local _outvar="$1"
     eval "local __auth_args=(\"\${${_outvar}[@]}\")"
-    __auth_args+=(-H "${G8E_HEADER_HTTP_CONTENT_TYPE_HEADER}: application/json")
+    __auth_args+=(-H "${G8E_HEADER_CONTENT_TYPE}: application/json")
     if [[ -n "${G8E_OPERATOR_SESSION_ID:-}" ]]; then
         # Gateway uses Authorization: Bearer <token>.
-        __auth_args+=(-H "${G8E_HEADER_HTTP_AUTHORIZATION_HEADER}: Bearer $G8E_OPERATOR_SESSION_ID")
+        __auth_args+=(-H "${G8E_HEADER_AUTHORIZATION}: Bearer $G8E_OPERATOR_SESSION_ID")
         __auth_args+=(--cookie "g8e_session=$G8E_OPERATOR_SESSION_ID")
     fi
     if [[ -n "${G8E_CLI_SESSION_ID:-}" ]]; then
-        __auth_args+=(-H "${G8E_HEADER_CLI_SESSION_ID_HEADER}: $G8E_CLI_SESSION_ID")
+        __auth_args+=(-H "${G8E_HEADER_CLI_SESSION_ID}: $G8E_CLI_SESSION_ID")
     fi
     eval "$_outvar=(\"\${__auth_args[@]}\")"
 }
 
 
 # POST/GET to g8ee using mTLS + g8e auth headers.
-# Usage: _g8ee_curl <method> <path> [body]
+# Usage: _g8ee_curl <method> <path_key> [body]
 _g8ee_curl() {
-    local method="$1" path="$2" body="${3:-}"
+    local method="$1" path_key="$2" body="${3:-}"
+    
+    # Source generated API paths if not already loaded
+    if [[ -z "${G8E_API_INTERNAL_PREFIX:-}" ]]; then
+        source "$SCRIPT_DIR/scripts/cmd/api_paths.sh"
+    fi
+
+    # Resolve the full path from the key
+    local var_name="G8E_API_G8EE_$(echo "$path_key" | tr '[:lower:]' '[:upper:]' | tr '-' '_')_FULL"
+    local full_path="${!var_name:-}"
+    
+    if [[ -z "$full_path" ]]; then
+        echo "[g8e] Error: Unknown g8ee API path key '$path_key'" >&2
+        return 1
+    fi
+
     local args=()
     _build_protocol_curl_args args || return 1
     args+=(-X "$method")
     _append_g8e_auth_headers args
     [[ -n "$body" ]] && args+=(-d "$body")
-    curl "${args[@]}" "$(_g8ee_url)$path"
+    curl "${args[@]}" "$(_g8ee_url)$full_path"
 }
 
 _run_host_script() {

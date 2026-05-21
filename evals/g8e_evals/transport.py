@@ -187,6 +187,9 @@ class AuthContext:
             # Gateway uses Authorization: Bearer <token>.
             headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX} {self.operator_session_id}"
         
+        if self.cli_session_id:
+            headers[HTTP_CLI_SESSION_ID_HEADER] = self.cli_session_id
+        
         return headers
 
     def to_request_context(

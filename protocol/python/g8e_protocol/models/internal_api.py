@@ -43,6 +43,9 @@ class ChatMessageRequest(G8eBaseModel):
     llm_assistant_endpoint: str | None = Field(default=None)
     llm_lite_api_key: str | None = Field(default=None)
     llm_lite_endpoint: str | None = Field(default=None)
+    web_search_project: str | None = Field(default=None)
+    web_search_app: str | None = Field(default=None)
+    web_search_api_key: str | None = Field(default=None)
 
 class ChatStartedResponse(G8eBaseModel):
     """Response for POST /chat."""

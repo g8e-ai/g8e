@@ -50,11 +50,32 @@ from g8e_evals.transport import (
     AuthContext,
 )
 from g8e_protocol.models import BoundOperator
-from g8e_protocol.constants import ComponentName
+from g8e_protocol.constants import ComponentName, API_PATHS
+from app.constants.api_paths import InternalApiPaths
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 COMMON_SH = REPO_ROOT / "scripts" / "cmd" / "common.sh"
+API_PATHS_SH = REPO_ROOT / "scripts" / "cmd" / "api_paths.sh"
+
+
+def _shell_path_resolve(path_key: str, env: dict[str, str]) -> str:
+    """Source common.sh and api_paths.sh, resolve the path from the key."""
+    script = f"""
+source "{API_PATHS_SH}"
+source "{COMMON_SH}"
+# Resolve the full path from the key like _g8ee_curl does
+var_name="G8E_API_G8EE_$(echo "{path_key}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')_FULL"
+printf '%s' "${{!var_name:-}}"
+"""
+    proc = subprocess.run(
+        ["bash", "-c", script],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return proc.stdout.strip()
 
 
 def _shell_curl_argv(env: dict[str, str]) -> list[str]:
@@ -233,6 +254,40 @@ def test_auth_wiring_matches_shell_helpers(fake_pki):
     assert "X-G8E-Source-Component" not in h
     assert "X-G8E-User-ID" not in h
     assert h["Authorization"] == f"Bearer {env['G8E_OPERATOR_SESSION_ID']}"
+
+
+def test_api_path_parity_g8ee_chat(fake_pki):
+    """Ensure shell and Python both resolve the same full path for G8EE_CHAT."""
+    env = _baseline_env(fake_pki)
+    
+    # 1. Shell resolution
+    shell_path = _shell_path_resolve("chat", env)
+    
+    # 2. Python resolution (InternalApiPaths)
+    py_path = InternalApiPaths.G8EE_CHAT
+    
+    # 3. Protocol constants direct resolution
+    proto_path = API_PATHS["g8ee_full"]["chat"]
+    
+    assert shell_path == "/api/v1/chat"
+    assert py_path == shell_path
+    assert proto_path == shell_path
+
+
+def test_api_path_parity_client_sse_stream(fake_pki):
+    """Ensure shell and Python both resolve the same full path for CLIENT_SSE_STREAM."""
+    env = _baseline_env(fake_pki)
+    
+    # Manually resolve the shell env var for client paths since _g8ee_curl is g8ee-specific
+    script = f'source "{API_PATHS_SH}"; printf "%s" "$G8E_API_CLIENT_SSE_STREAM_FULL"'
+    shell_path = subprocess.run(["bash", "-c", script], capture_output=True, text=True).stdout.strip()
+    
+    py_path = InternalApiPaths.CLIENT_SSE_STREAM
+    proto_path = API_PATHS["client_full"]["sse_stream"]
+    
+    assert shell_path == "/api/internal/sse/stream"
+    assert py_path == shell_path
+    assert proto_path == shell_path
 
 
 def test_configurable_contexts_match_when_set(fake_pki):

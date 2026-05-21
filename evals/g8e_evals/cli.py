@@ -13,6 +13,7 @@
 
 import asyncio
 import json
+import logging
 import os
 from pathlib import Path
 from datetime import datetime
@@ -34,23 +35,35 @@ from g8e_evals.report.cli_renderer import render_summary
 from g8e_evals.models import ActionReceipt, ScoreDetails
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 @click.group()
 def main():
     """g8e High-Fidelity AI Evaluation Harness"""
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(handler)
+    
+    # Silence noisy loggers
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    
+    logger.info("evals CLI initialized")
     pass
 
 @main.command()
 @click.option("--suite", type=click.Choice(["ifeval"]), required=True)
-@click.option("--provider", type=click.Choice(["openai", "anthropic", "gemini", "ollama", "llamacpp"]), help="Primary LLM provider")
-@click.option("--model", help="Primary model name (e.g., gpt-4o)")
-@click.option("--assistant-provider", type=click.Choice(["openai", "anthropic", "gemini", "ollama", "llamacpp"]), help="Assistant LLM provider")
-@click.option("--assistant-model", help="Assistant model name")
-@click.option("--lite-provider", type=click.Choice(["openai", "anthropic", "gemini", "ollama", "llamacpp"]), help="Lite LLM provider")
-@click.option("--lite-model", help="Lite model name")
+@click.option("--provider", type=click.Choice(["openai", "anthropic", "gemini", "ollama", "llamacpp"]), envvar="G8E_TEST_LLM_PRIMARY_PROVIDER", help="Primary LLM provider")
+@click.option("--model", envvar="G8E_TEST_LLM_PRIMARY_MODEL", help="Primary model name (e.g., gpt-4o)")
+@click.option("--assistant-provider", type=click.Choice(["openai", "anthropic", "gemini", "ollama", "llamacpp"]), envvar="G8E_TEST_LLM_ASSISTANT_PROVIDER", help="Assistant LLM provider")
+@click.option("--assistant-model", envvar="G8E_TEST_LLM_ASSISTANT_MODEL", help="Assistant model name")
+@click.option("--lite-provider", type=click.Choice(["openai", "anthropic", "gemini", "ollama", "llamacpp"]), envvar="G8E_TEST_LLM_LITE_PROVIDER", help="Lite LLM provider")
+@click.option("--lite-model", envvar="G8E_TEST_LLM_LITE_MODEL", help="Lite model name")
 @click.option("--verbose-text/--no-verbose-text", default=False,
               help="Stream the agent's response text inline as chunks arrive")
-@click.option("--idle-timeout", type=float, default=180.0,
+@click.option("--idle-timeout", type=float, default=10.0,
               help="Seconds without an SSE event before declaring a task idle")
 @click.option("--operator-url", default=f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}")
 @click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID",
@@ -64,13 +77,16 @@ def main():
 @click.option("--limit", type=int, help="Limit number of tasks to run")
 @click.option("--l2-key", help="L2 private key hex")
 @click.option("--l2-key-id", help="L2 key ID")
-@click.option("--primary-api-key", help="API key for the primary provider")
-@click.option("--primary-endpoint", help="Endpoint URL for the primary provider")
-@click.option("--assistant-api-key", help="API key for the assistant provider")
-@click.option("--assistant-endpoint", help="Endpoint URL for the assistant provider")
-@click.option("--lite-api-key", help="API key for the lite provider")
-@click.option("--lite-endpoint", help="Endpoint URL for the lite provider")
-def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, verbose_text, idle_timeout, operator_url, operator_session_id, mode, state_root, output_dir, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint):
+@click.option("--primary-api-key", envvar="G8E_TEST_LLM_PRIMARY_API_KEY", help="API key for the primary provider")
+@click.option("--primary-endpoint", envvar="G8E_TEST_LLM_PRIMARY_ENDPOINT", help="Endpoint URL for the primary provider")
+@click.option("--assistant-api-key", envvar="G8E_TEST_LLM_ASSISTANT_API_KEY", help="API key for the assistant provider")
+@click.option("--assistant-endpoint", envvar="G8E_TEST_LLM_ASSISTANT_ENDPOINT", help="Endpoint URL for the assistant provider")
+@click.option("--lite-api-key", envvar="G8E_TEST_LLM_LITE_API_KEY", help="API key for the lite provider")
+@click.option("--lite-endpoint", envvar="G8E_TEST_LLM_LITE_ENDPOINT", help="Endpoint URL for the lite provider")
+@click.option("--web-search-project", envvar="G8E_WEB_SEARCH_PROJECT", help="Web search project ID")
+@click.option("--web-search-app", envvar="G8E_WEB_SEARCH_APP", help="Web search app ID")
+@click.option("--web-search-api-key", envvar="G8E_WEB_SEARCH_API_KEY", help="Web search API key")
+def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, verbose_text, idle_timeout, operator_url, operator_session_id, mode, state_root, output_dir, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, web_search_project, web_search_app, web_search_api_key):
     """Run a benchmark suite"""
     if mode == "receipt" and not operator_session_id:
         raise click.UsageError(

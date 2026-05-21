@@ -35,6 +35,7 @@ from app.models.internal_api import (
     OperatorSlotCreationRequest,
     OperatorUnbindRequest,
     StopAIRequest,
+    SettingsSyncRequest,
 )
 from app.routers.internal_router import (
     _generate_and_update_title,
@@ -50,6 +51,7 @@ from app.routers.internal_router import (
     update_case,
     get_case,
     get_user_settings,
+    settings_sync,
 )
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from tests.fakes.factories import build_case_model, create_investigation_data
@@ -622,9 +624,6 @@ async def test_internal_chat_with_llm_overrides(request_context, g8e_context, ta
             settings_service=mock_settings_service,
         )
 
-    # Verify settings_service.update_user_settings was called (DI regression test)
-    mock_settings_service.update_user_settings.assert_called_once_with("user-123", mock_user_settings)
-
     # Verify chat_pipeline.run_chat was called with overrides
     mock_chat_pipeline.run_chat.assert_called_once()
     call_kwargs = mock_chat_pipeline.run_chat.call_args.kwargs
@@ -671,10 +670,29 @@ async def test_internal_chat_settings_service_di_regression(request_context, g8e
             settings_service=mock_settings_service,
         )
 
-    # Critical regression check: verify update_user_settings was called on the resolved service
-    # If settings_service were a Depends() sentinel, this would fail with AttributeError
+    # Verify internal_chat returns success
+    # settings_service.update_user_settings is no longer called in internal_chat
+    # as we moved to a dedicated /settings/sync endpoint.
     assert response.success is True
-    mock_settings_service.update_user_settings.assert_called_once()
-    call_args = mock_settings_service.update_user_settings.call_args
-    assert call_args[0][0] == "user-123"
-    assert call_args[0][1] is mock_user_settings
+
+
+@pytest.mark.asyncio
+async def test_settings_sync_success(request_context):
+    request = SettingsSyncRequest(
+        context=request_context,
+        llm_primary_model="gpt-4o",
+        llm_primary_provider="openai"
+    )
+
+    mock_settings_service = MagicMock()
+    mock_settings_service.get_user_settings = AsyncMock()
+    mock_settings_service.sync_settings_overrides = AsyncMock(return_value=True)
+
+    response = await settings_sync(
+        request=request,
+        settings_service=mock_settings_service
+    )
+
+    assert response.success is True
+    mock_settings_service.get_user_settings.assert_called_once_with("user-123")
+    mock_settings_service.sync_settings_overrides.assert_called_once()

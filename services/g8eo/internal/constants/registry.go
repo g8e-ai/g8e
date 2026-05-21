@@ -71,6 +71,7 @@ type Snapshot struct {
 	Ports       map[string]int      `json:"ports"`
 	EnvVars     map[string]string   `json:"env_vars"`
 	Timestamp   map[string]string   `json:"timestamp"`
+	ApiPaths    interface{}         `json:"api_paths"`
 }
 
 // Registry returns the complete constants snapshot.
@@ -524,5 +525,6 @@ func Registry() Snapshot {
 		Timestamp: map[string]string{
 			"FormatRFC3339": TimestampFormatRFC3339,
 		},
+		ApiPaths: ApiPaths,
 	}
 }

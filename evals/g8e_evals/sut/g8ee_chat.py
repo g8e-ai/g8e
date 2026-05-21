@@ -60,6 +60,7 @@ from g8e_protocol.models import (
     RequestContext,
     SettingsGetRequest,
 )
+from g8e_protocol.constants import API_PATHS
 from g8e_evals.harness import BindingType, Response, SUTConfig, Task
 from g8e_evals.models import ActionReceipt
 from g8e_evals.sut.wire import SSEWireEnvelope
@@ -145,11 +146,12 @@ class G8eeChatSUT:
 
     async def check_settings(self) -> G8eeUserSettings | None:
         """Fetch current user settings from g8ee for pre-flight validation."""
+        path = API_PATHS["g8ee_full"]["settings_user"]
         async with self._client() as client:
             request = SettingsGetRequest(context=self.env.to_request_context())
             try:
                 resp = await client.post(
-                    f"{self.env.g8ee_url}/api/internal/settings/user/get",
+                    f"{self.env.g8ee_url}{path}/get",
                     headers=self._g8ee_headers(),
                     content=request.model_dump_json(),
                 )
@@ -182,9 +184,10 @@ class G8eeChatSUT:
             # 2. POST chat - creates a fresh case+investigation and fires
             #    run_chat as a g8ee background task.
             request = self._build_chat_request(task)
+            path = API_PATHS["g8ee_full"]["chat"]
             try:
                 resp = await client.post(
-                    f"{self.env.g8ee_url}/api/internal/chat",
+                    f"{self.env.g8ee_url}{path}",
                     headers=self._g8ee_headers(),
                     content=request.model_dump_json(),
                 )
@@ -328,13 +331,17 @@ class G8eeChatSUT:
             llm_assistant_endpoint=assistant.endpoint,
             llm_lite_api_key=lite.api_key,
             llm_lite_endpoint=lite.endpoint,
+            web_search_project=self.config.web_search_project,
+            web_search_app=self.config.web_search_app,
+            web_search_api_key=self.config.web_search_api_key,
         )
 
     async def _current_cursor(self, client: httpx.AsyncClient) -> int:
         """Return the highest SSE event id currently in the operator buffer for our session."""
+        path = API_PATHS["client_full"]["sse_events"]
         try:
             resp = await client.get(
-                f"{self.env.operator_url}/api/internal/sse/events",
+                f"{self.env.operator_url}{path}",
                 params={
                     "cli_session_id": self.env.cli_session_id,
                     "since_id": 0,
@@ -372,76 +379,77 @@ class G8eeChatSUT:
             "since_id": since_id,
         }
 
+        path = API_PATHS["client_full"]["sse_stream"]
+
+        logger.info("[SSE] Draining events for investigation_id=%s since_id=%d", investigation_id, since_id)
+        
         try:
-            async with aconnect_sse(
-                client,
-                "GET",
-                f"{self.env.operator_url}/api/internal/sse/stream",
-                params=params,
-                headers=self.env.auth_headers(),
-            ) as event_source:
-                event_iter = event_source.aiter_sse().__aiter__()
-                while True:
-                    idle_remaining = self.idle_timeout_s - (time.time() - last_event_at)
-                    if idle_remaining <= 0:
-                        break
-                    try:
-                        event = await asyncio.wait_for(event_iter.__anext__(), timeout=idle_remaining)
-                    except StopAsyncIteration:
-                        break
-                    except asyncio.TimeoutError:
-                        break
-
-                    if event.event == "heartbeat":
-                        continue
-
-                    try:
-                        payload_obj = json.loads(event.data)
-                    except json.JSONDecodeError:
-                        payload_obj = {"_raw": event.data}
-
-                    row_id = int(event.id) if event.id else 0
-                    event_type = event.event or "unknown"
-
-                    envelope = SSEWireEnvelope.parse(payload_obj)
-
-                    # Filter on the current investigation when available
-                    if investigation_id and envelope is not None:
-                        evt_inv = envelope.investigation_id()
-                        if evt_inv and evt_inv != investigation_id:
+            # Hard timeout for the entire drain operation
+            async with asyncio.timeout(self.idle_timeout_s + 10):
+                async with aconnect_sse(
+                    client,
+                    "GET",
+                    f"{self.env.operator_url}{path}",
+                    params=params,
+                    headers=self.env.auth_headers(),
+                ) as event_source:
+                    async for event in event_source.aiter_sse():
+                        if event.event == "heartbeat":
+                            if time.time() - last_event_at > self.idle_timeout_s:
+                                logger.warning("[SSE] Idle timeout (no actual events) reached during heartbeat-only stream")
+                                return ("".join(text_buf), trail, terminal, None)
                             continue
+                        
+                        last_event_at = time.time()
 
-                    last_event_at = time.time()
-
-                    trail.append(AgentTrailEvent(
-                        id=row_id,
-                        event_type=event_type,
-                        payload=payload_obj,
-                    ))
-
-                    # Accumulate response text.
-                    if event_type == "g8e.v1.ai.llm.chat.iteration.text.chunk.received" and envelope is not None:
-                        chunk = envelope.text_chunk()
-                        if chunk:
-                            text_buf.append(chunk)
-
-                    if self.on_event is not None:
                         try:
-                            r = self.on_event(event_type, payload_obj)
-                            if asyncio.iscoroutine(r):
-                                await r
-                        except Exception as e:
-                            logger.debug("Renderer callback exception: %s", e, exc_info=True)
+                            payload_obj = json.loads(event.data)
+                        except json.JSONDecodeError:
+                            payload_obj = {"_raw": event.data}
 
-                    if event_type in _TERMINAL_EVENTS:
-                        terminal = event_type
-                        return ("".join(text_buf), trail, terminal, None)
+                        row_id = int(event.id) if event.id else 0
+                        event_type = event.event or "unknown"
 
+                        envelope = SSEWireEnvelope.parse(payload_obj)
+
+                        # Filter on the current investigation when available
+                        if investigation_id and envelope is not None:
+                            evt_inv = envelope.investigation_id()
+                            if evt_inv and evt_inv != investigation_id:
+                                continue
+
+                        trail.append(AgentTrailEvent(
+                            id=row_id,
+                            event_type=event_type,
+                            payload=payload_obj,
+                        ))
+
+                        # Accumulate response text.
+                        if event_type == "g8e.v1.ai.llm.chat.iteration.text.chunk.received" and envelope is not None:
+                            chunk = envelope.text_chunk()
+                            if chunk:
+                                text_buf.append(chunk)
+
+                        if self.on_event is not None:
+                            try:
+                                r = self.on_event(event_type, payload_obj)
+                                if asyncio.iscoroutine(r):
+                                    await r
+                            except Exception as e:
+                                logger.debug("Renderer callback exception: %s", e, exc_info=True)
+
+                        if event_type in _TERMINAL_EVENTS:
+                            terminal = event_type
+                            return ("".join(text_buf), trail, terminal, None)
+
+        except asyncio.TimeoutError:
+            logger.warning("[SSE] Idle timeout or hard deadline reached for investigation %s", investigation_id)
+            error_reason = f"idle_timeout_{self.idle_timeout_s}s"
         except httpx.HTTPStatusError as e:
-            logger.warning("SSE Stream auth/transport failure: %s", e)
+            logger.warning("[SSE] Stream auth/transport failure: %s", e)
             error_reason = f"sse_auth_failed: {e.response.status_code}"
         except Exception as e:
-            logger.warning("SSE Stream interrupted: %s", e)
+            logger.warning("[SSE] Stream interrupted: %s", e)
             error_reason = f"sse_interrupted: {e}"
 
         return ("".join(text_buf), trail, terminal, error_reason)

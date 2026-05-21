@@ -213,10 +213,10 @@ class ChatTurnCompletePayload(G8eBaseModel):
 
 class TriageClarificationQuestionsPayload(G8eBaseModel):
     questions: list[str]
-    complexity: str
-    complexity_confidence: str
-    intent: str
-    intent_confidence: str
-    intent_summary: str
-    request_posture: str
-    posture_confidence: str
+    complexity: str | None = None
+    complexity_confidence: str | None = None
+    intent: str | None = None
+    intent_confidence: str | None = None
+    intent_summary: str | None = None
+    request_posture: str | None = None
+    posture_confidence: str | None = None

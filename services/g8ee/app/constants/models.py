@@ -38,8 +38,11 @@ class DocumentIdsConstants(G8eBaseModel):
 class ApiPathsConstants(G8eBaseModel):
     """Internal API paths for g8ee and client."""
     internal_prefix: str
+    operator_prefix: str
     g8ee: dict[str, str]
+    g8ee_full: dict[str, str] = Field(default_factory=dict)
     client: dict[str, str]
+    client_full: dict[str, str] = Field(default_factory=dict)
 
 class StatusConstants(G8eBaseModel):
     """Canonical status values."""

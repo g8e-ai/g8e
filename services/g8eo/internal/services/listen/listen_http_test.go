@@ -15,6 +15,7 @@ package listen
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -732,6 +733,31 @@ func TestInternalSSEBridge(t *testing.T) {
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 		assert.Contains(t, rr.Body.String(), "missing operator session id")
+	})
+
+	t.Run("stream endpoint and Last-Event-ID", func(t *testing.T) {
+		seedCLISession("cli-stream", "op-session-1")
+		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-stream"}, "stream-init", `{"event":{"type":"stream-init"}}`)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/stream?cli_session_id=cli-stream", nil)
+		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
+		req.Header.Set("Last-Event-ID", "1") // Replays since ID 1
+
+		rr := httptest.NewRecorder()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		req = req.WithContext(ctx)
+
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			cancel()
+		}()
+
+		h.handleInternalSSEStream(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Header().Get("Content-Type"), "text/event-stream")
+		assert.Contains(t, rr.Body.String(), "event: stream-init")
 	})
 }
 

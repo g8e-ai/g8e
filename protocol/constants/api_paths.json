@@ -73,12 +73,14 @@
     "chat": "/chat",
     "health": "/health",
     "sse_events": "/internal/sse/events",
+    "sse_push": "/internal/sse/push",
     "sse_stream": "/internal/sse/stream"
   },
   "client_full": {
     "chat": "/api/chat",
     "health": "/api/health",
     "sse_events": "/api/internal/sse/events",
+    "sse_push": "/api/internal/sse/push",
     "sse_stream": "/api/internal/sse/stream"
   }
 }

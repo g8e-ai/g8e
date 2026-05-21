@@ -36,7 +36,39 @@ class SettingsGetRequest(G8eBaseModel):
     context: RequestContext = Field(..., description="Request context with session/user/organization identity")
 
 
-class ChatMessageRequest(G8eBaseModel):
+class RequestOverrides(G8eBaseModel):
+    """Mixin for models that support LLM and Search configuration overrides.
+
+    These overrides are typically sourced from CLI environment variables (G8E_TEST_LLM_*)
+    or benchmark configs and persisted into user settings on-the-fly to ensure
+    consistent evaluation conditions without manual UI setup.
+    """
+    llm_primary_provider: str | None = Field(default=None, description="Primary LLM provider override for complex tasks - null uses server default")
+    llm_assistant_provider: str | None = Field(default=None, description="Assistant LLM provider override for simple tasks - null uses server default")
+    llm_lite_provider: str | None = Field(default=None, description="Lite LLM provider override for quick tasks - null uses server default")
+    llm_primary_model: str | None = Field(default=None, description="Primary LLM model override for complex tasks - null uses server default")
+    llm_assistant_model: str | None = Field(default=None, description="Assistant LLM model override for simple tasks - null uses server default")
+    llm_lite_model: str | None = Field(default=None, description="Lite LLM model override for quick tasks - null uses server default")
+    llm_primary_api_key: str | None = Field(default=None, description="Primary LLM API key override")
+    llm_primary_endpoint: str | None = Field(default=None, description="Primary LLM endpoint override")
+    llm_assistant_api_key: str | None = Field(default=None, description="Assistant LLM API key override")
+    llm_assistant_endpoint: str | None = Field(default=None, description="Assistant LLM endpoint override")
+    llm_lite_api_key: str | None = Field(default=None, description="Lite LLM API key override")
+    llm_lite_endpoint: str | None = Field(default=None, description="Lite LLM endpoint override")
+    web_search_project: str | None = Field(default=None, description="Web search project ID override")
+    web_search_app: str | None = Field(default=None, description="Web search app ID override")
+    web_search_api_key: str | None = Field(default=None, description="Web search API key override")
+
+
+class SettingsSyncRequest(RequestOverrides):
+    """Request model for /settings/sync.
+
+    Includes context for user identification and settings overrides to be persisted.
+    """
+    context: RequestContext = Field(..., description="Request context with session/user identity")
+
+
+class ChatMessageRequest(RequestOverrides):
     """Request model for chat messages.
 
     Identity and business context (case_id, investigation_id, web_session_id,
@@ -50,18 +82,6 @@ class ChatMessageRequest(G8eBaseModel):
     attachments: list[AttachmentMetadata] | None = Field(default_factory=list, description="File attachments")
     sentinel_mode: bool = Field(default=True, description="Sentinel mode - when True, data is scrubbed before storage and AI sees redacted data")
     resource_creation: ResourceCreationRequest | None = Field(default=None, description="Resource creation configuration - when set with create_case=True, creates new case and investigation")
-    llm_primary_provider: str | None = Field(default=None, description="Primary LLM provider override for complex tasks - null uses server default")
-    llm_assistant_provider: str | None = Field(default=None, description="Assistant LLM provider override for simple tasks - null uses server default")
-    llm_lite_provider: str | None = Field(default=None, description="Lite LLM provider override for quick tasks - null uses server default")
-    llm_primary_model: str | None = Field(default=None, description="Primary LLM model override for complex tasks - null uses server default")
-    llm_assistant_model: str | None = Field(default=None, description="Assistant LLM model override for simple tasks - null uses server default")
-    llm_lite_model: str | None = Field(default=None, description="Lite LLM model override for quick tasks - null uses server default")
-    llm_primary_api_key: str | None = Field(default=None, description="Primary LLM API key override")
-    llm_primary_endpoint: str | None = Field(default=None, description="Primary LLM endpoint override")
-    llm_assistant_api_key: str | None = Field(default=None, description="Assistant LLM API key override")
-    llm_assistant_endpoint: str | None = Field(default=None, description="Assistant LLM endpoint override")
-    llm_lite_api_key: str | None = Field(default=None, description="Lite LLM API key override")
-    llm_lite_endpoint: str | None = Field(default=None, description="Lite LLM endpoint override")
 
 
 class ChatStartedResponse(G8eBaseModel):
