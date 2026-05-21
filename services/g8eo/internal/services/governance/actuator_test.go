@@ -53,10 +53,10 @@ func (m *mockAuditStore) DocSet(collection, id string, data json.RawMessage) err
 	return nil
 }
 
-func newTestWarden(t *testing.T) (*Warden, ed25519.PublicKey) {
+func newTestActuator(t *testing.T) (*Actuator, ed25519.PublicKey) {
 	t.Helper()
 
-	// Generate Warden signing key
+	// Generate Actuator signing key
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
@@ -67,22 +67,22 @@ func newTestWarden(t *testing.T) (*Warden, ed25519.PublicKey) {
 
 	logger := slog.Default()
 
-	warden := &Warden{
+	Actuator := &Actuator{
 		Logger:            logger,
 		SigningKey:        privKey,
-		KeyID:             "test-warden-key",
+		KeyID:             "test-Actuator-key",
 		ExecutionHandler:  mockHandler,
 		AuditStore:        mockAuditStore,
 		StateRootProvider: mockStateRoot,
 	}
 
-	return warden, pubKey
+	return Actuator, pubKey
 }
 
-func TestWardenExecuteHappyPath(t *testing.T) {
-	warden, pubKey := newTestWarden(t)
+func TestActuatorExecuteHappyPath(t *testing.T) {
+	Actuator, pubKey := newTestActuator(t)
 
-	// Configure handler to succeed (already set in newTestWarden)
+	// Configure handler to succeed (already set in newTestActuator)
 
 	// Create verified transaction
 	envelope := &uap.UAPEnvelope{
@@ -100,7 +100,7 @@ func TestWardenExecuteHappyPath(t *testing.T) {
 	}
 
 	// Execute
-	receipt, err := warden.Execute(context.Background(), vt, nil)
+	receipt, err := Actuator.Execute(context.Background(), vt, nil)
 	require.NoError(t, err)
 	require.NotNil(t, receipt)
 
@@ -111,7 +111,7 @@ func TestWardenExecuteHappyPath(t *testing.T) {
 	require.Equal(t, "completed", receipt.ResultSummary)
 	require.Equal(t, "test-state-root-123", receipt.StateRootBefore)
 	require.Equal(t, "test-state-root-123", receipt.StateRootAfter)
-	require.Equal(t, "test-warden-key", receipt.SignerKeyId)
+	require.Equal(t, "test-Actuator-key", receipt.SignerKeyId)
 	require.NotEmpty(t, receipt.Signature)
 
 	// Verify signature
@@ -122,10 +122,10 @@ func TestWardenExecuteHappyPath(t *testing.T) {
 	require.NoError(t, err)
 
 	valid := ed25519.Verify(pubKey, canonical, sigBytes)
-	require.True(t, valid, "Receipt signature should verify against Warden public key")
+	require.True(t, valid, "Receipt signature should verify against Actuator public key")
 
 	// Verify audit store was called twice (initial EXECUTING receipt + final COMPLETED receipt)
-	auditStore := warden.AuditStore.(*mockAuditStore)
+	auditStore := Actuator.AuditStore.(*mockAuditStore)
 	require.Len(t, auditStore.calls, 2)
 
 	// Verify both calls were to console_audit collection
@@ -147,11 +147,11 @@ func TestWardenExecuteHappyPath(t *testing.T) {
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, finalRecord.Status)
 }
 
-func TestWardenExecuteHandlerError(t *testing.T) {
-	warden, pubKey := newTestWarden(t)
+func TestActuatorExecuteHandlerError(t *testing.T) {
+	Actuator, pubKey := newTestActuator(t)
 
 	// Configure handler to return error
-	handler := warden.ExecutionHandler.(*mockExecutionHandler)
+	handler := Actuator.ExecutionHandler.(*mockExecutionHandler)
 	handler.err = errors.New("handler execution failed")
 
 	envelope := &uap.UAPEnvelope{
@@ -169,7 +169,7 @@ func TestWardenExecuteHandlerError(t *testing.T) {
 	}
 
 	// Execute
-	receipt, err := warden.Execute(context.Background(), vt, nil)
+	receipt, err := Actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "handler execution failed")
 	require.NotNil(t, receipt)
@@ -189,7 +189,7 @@ func TestWardenExecuteHandlerError(t *testing.T) {
 	require.True(t, valid, "Receipt signature should verify even when handler fails")
 
 	// Verify audit store was called twice
-	auditStore := warden.AuditStore.(*mockAuditStore)
+	auditStore := Actuator.AuditStore.(*mockAuditStore)
 	require.Len(t, auditStore.calls, 2)
 
 	// Verify final receipt has FAILED status
@@ -199,11 +199,11 @@ func TestWardenExecuteHandlerError(t *testing.T) {
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, finalRecord.Status)
 }
 
-func TestWardenExecuteAuditWriteFailInitial(t *testing.T) {
-	warden, _ := newTestWarden(t)
+func TestActuatorExecuteAuditWriteFailInitial(t *testing.T) {
+	Actuator, _ := newTestActuator(t)
 
 	// Configure audit store to fail on first call (initial receipt)
-	auditStore := warden.AuditStore.(*mockAuditStore)
+	auditStore := Actuator.AuditStore.(*mockAuditStore)
 	callCount := 0
 	auditStore.docSetFunc = func(collection, id string, data json.RawMessage) error {
 		callCount++
@@ -228,7 +228,7 @@ func TestWardenExecuteAuditWriteFailInitial(t *testing.T) {
 	}
 
 	// Execute - should fail before handler is invoked
-	receipt, err := warden.Execute(context.Background(), vt, nil)
+	receipt, err := Actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to log initial action receipt")
 	require.Nil(t, receipt)
@@ -237,11 +237,11 @@ func TestWardenExecuteAuditWriteFailInitial(t *testing.T) {
 	require.Equal(t, 1, callCount)
 }
 
-func TestWardenExecuteReceiptPersistFail(t *testing.T) {
-	warden, _ := newTestWarden(t)
+func TestActuatorExecuteReceiptPersistFail(t *testing.T) {
+	Actuator, _ := newTestActuator(t)
 
 	// Configure audit store to fail on DocSet
-	auditStore := warden.AuditStore.(*mockAuditStore)
+	auditStore := Actuator.AuditStore.(*mockAuditStore)
 	auditStore.docSetFunc = func(collection, id string, data json.RawMessage) error {
 		return errors.New("doc set failed")
 	}
@@ -261,15 +261,15 @@ func TestWardenExecuteReceiptPersistFail(t *testing.T) {
 	}
 
 	// Execute - should fail before handler is invoked
-	receipt, err := warden.Execute(context.Background(), vt, nil)
+	receipt, err := Actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to log initial action receipt")
 	require.Nil(t, receipt)
 }
 
-func TestWardenExecuteMissingSigningKey(t *testing.T) {
-	warden, _ := newTestWarden(t)
-	warden.SigningKey = nil
+func TestActuatorExecuteMissingSigningKey(t *testing.T) {
+	Actuator, _ := newTestActuator(t)
+	Actuator.SigningKey = nil
 
 	envelope := &uap.UAPEnvelope{
 		Id:                uuid.New().String(),
@@ -286,15 +286,15 @@ func TestWardenExecuteMissingSigningKey(t *testing.T) {
 	}
 
 	// Execute - should fail immediately
-	receipt, err := warden.Execute(context.Background(), vt, nil)
+	receipt, err := Actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Warden signing key missing")
+	require.Contains(t, err.Error(), "Actuator signing key missing")
 	require.Nil(t, receipt)
 }
 
-func TestWardenExecuteMissingExecutionHandler(t *testing.T) {
-	warden, _ := newTestWarden(t)
-	warden.ExecutionHandler = nil
+func TestActuatorExecuteMissingExecutionHandler(t *testing.T) {
+	Actuator, _ := newTestActuator(t)
+	Actuator.ExecutionHandler = nil
 
 	envelope := &uap.UAPEnvelope{
 		Id:                uuid.New().String(),
@@ -311,9 +311,9 @@ func TestWardenExecuteMissingExecutionHandler(t *testing.T) {
 	}
 
 	// Execute - should fail immediately
-	receipt, err := warden.Execute(context.Background(), vt, nil)
+	receipt, err := Actuator.Execute(context.Background(), vt, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "Warden ExecutionHandler not set")
+	require.Contains(t, err.Error(), "Actuator ExecutionHandler not set")
 	require.Nil(t, receipt)
 }
 

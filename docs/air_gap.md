@@ -49,7 +49,7 @@ When the mTLS and Public surfaces share a port, the gateway serves them through 
 
 To execute mutations on the local air-gapped host, a **Governed Operator (`g8eo` / `g8e.operator`)** daemon runs in standard mode on the target machine:
 - Connects outbound-only over local mTLS WSS to the local `g8eg` gateway.
-- Subscribes to command events, processes them via local Warden boundaries, and writes history to a host-local ledger.
+- Subscribes to command events, processes them via local Actuator boundaries, and writes history to a host-local ledger.
 - Exposes tools to standard local clients as a Model Context Protocol (MCP) Server.
 
 ---

@@ -94,22 +94,22 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
 	fileSvc := execution.NewFileEditService(cfg, testutil.NewTestLogger())
 	govDeps := ls.GetGovernanceDeps()
-	wardenPriv, wardenKeyID, err := ls.GetSecretManager().GetWardenKey()
+	ActuatorPriv, ActuatorKeyID, err := ls.GetSecretManager().GetActuatorKey()
 	require.NoError(t, err)
 	cmdSvc, err := pubsub.NewPubSubCommandService(pubsub.CommandServiceConfig{
-		Config:            cfg,
-		Logger:            testutil.NewTestLogger(),
-		Execution:         execSvc,
-		FileEdit:          fileSvc,
-		PubSubClient:      pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
-		Sentinel:          sentinel.NewSentinel(services.ProductionSentinelConfig(), testutil.NewTestLogger()),
-		ReplayStore:       govDeps.ReplayStore,
-		StateRootProvider: govDeps.StateRootProvider,
-		TransactionAudit:  govDeps.TransactionAudit,
-		SignerStore:       govDeps.SignerStore,
-		L3Verifier:        acceptingL3Verifier{},
-		WardenSigningKey:  wardenPriv,
-		WardenKeyID:       wardenKeyID,
+		Config:             cfg,
+		Logger:             testutil.NewTestLogger(),
+		Execution:          execSvc,
+		FileEdit:           fileSvc,
+		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
+		Sentinel:           sentinel.NewSentinel(services.ProductionSentinelConfig(), testutil.NewTestLogger()),
+		ReplayStore:        govDeps.ReplayStore,
+		StateRootProvider:  govDeps.StateRootProvider,
+		TransactionAudit:   govDeps.TransactionAudit,
+		SignerStore:        govDeps.SignerStore,
+		L3Verifier:         acceptingL3Verifier{},
+		ActuatorSigningKey: ActuatorPriv,
+		ActuatorKeyID:      ActuatorKeyID,
 	})
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
@@ -374,7 +374,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	}
 	resBytes, _ := proto.Marshal(executorResult)
 
-	// Construct a GovernanceEnvelope for the result (simulating Warden's output)
+	// Construct a GovernanceEnvelope for the result (simulating Actuator's output)
 	// Canonical JSON wire format: envelope is protojson-encoded directly
 	resEnvelope := &commonv1.GovernanceEnvelope{
 		Id:                "res-1",

@@ -108,14 +108,14 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
 	fileSvc := execution.NewFileEditService(cfg, testutil.NewTestLogger())
 	govDeps := ls.GetGovernanceDeps()
-	wardenPriv, wardenKeyID, err := ls.GetSecretManager().GetWardenKey()
+	ActuatorPriv, ActuatorKeyID, err := ls.GetSecretManager().GetActuatorKey()
 	require.NoError(t, err)
 
-	// Add Warden key to SignerStore so Implicit L2 signatures from the gateway are trusted
-	wardenPub := wardenPriv.Public().(ed25519.PublicKey)
+	// Add Actuator key to SignerStore so Implicit L2 signatures from the gateway are trusted
+	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
-		ID:        wardenKeyID,
-		PublicKey: hex.EncodeToString(wardenPub),
+		ID:        ActuatorKeyID,
+		PublicKey: hex.EncodeToString(ActuatorPub),
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	})
@@ -125,20 +125,20 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	require.NotNil(t, mcpGateway)
 
 	cmdSvc, err := pubsub.NewPubSubCommandService(pubsub.CommandServiceConfig{
-		Config:            cfg,
-		Logger:            testutil.NewTestLogger(),
-		Execution:         execSvc,
-		FileEdit:          fileSvc,
-		PubSubClient:      pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
-		Sentinel:          sentinel.NewSentinel(services.ProductionSentinelConfig(), testutil.NewTestLogger()),
-		ReplayStore:       govDeps.ReplayStore,
-		StateRootProvider: govDeps.StateRootProvider,
-		TransactionAudit:  govDeps.TransactionAudit,
-		SignerStore:       govDeps.SignerStore,
-		L3Verifier:        gatewayAcceptingL3Verifier{},
-		WardenSigningKey:  wardenPriv,
-		WardenKeyID:       wardenKeyID,
-		MCPGateway:        mcpGateway,
+		Config:             cfg,
+		Logger:             testutil.NewTestLogger(),
+		Execution:          execSvc,
+		FileEdit:           fileSvc,
+		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
+		Sentinel:           sentinel.NewSentinel(services.ProductionSentinelConfig(), testutil.NewTestLogger()),
+		ReplayStore:        govDeps.ReplayStore,
+		StateRootProvider:  govDeps.StateRootProvider,
+		TransactionAudit:   govDeps.TransactionAudit,
+		SignerStore:        govDeps.SignerStore,
+		L3Verifier:         gatewayAcceptingL3Verifier{},
+		ActuatorSigningKey: ActuatorPriv,
+		ActuatorKeyID:      ActuatorKeyID,
+		MCPGateway:         mcpGateway,
 	})
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
@@ -370,14 +370,14 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
 	fileSvc := execution.NewFileEditService(cfg, testutil.NewTestLogger())
 	govDeps := ls.GetGovernanceDeps()
-	wardenPriv, wardenKeyID, err := ls.GetSecretManager().GetWardenKey()
+	ActuatorPriv, ActuatorKeyID, err := ls.GetSecretManager().GetActuatorKey()
 	require.NoError(t, err)
 
-	// Add Warden key to SignerStore so Implicit L2 signatures from the gateway are trusted
-	wardenPub := wardenPriv.Public().(ed25519.PublicKey)
+	// Add Actuator key to SignerStore so Implicit L2 signatures from the gateway are trusted
+	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
-		ID:        wardenKeyID,
-		PublicKey: hex.EncodeToString(wardenPub),
+		ID:        ActuatorKeyID,
+		PublicKey: hex.EncodeToString(ActuatorPub),
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	})
@@ -387,20 +387,20 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	require.NotNil(t, mcpGateway)
 
 	cmdSvc, err := pubsub.NewPubSubCommandService(pubsub.CommandServiceConfig{
-		Config:            cfg,
-		Logger:            testutil.NewTestLogger(),
-		Execution:         execSvc,
-		FileEdit:          fileSvc,
-		PubSubClient:      pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
-		Sentinel:          sentinel.NewSentinel(services.ProductionSentinelConfig(), testutil.NewTestLogger()),
-		ReplayStore:       govDeps.ReplayStore,
-		StateRootProvider: govDeps.StateRootProvider,
-		TransactionAudit:  govDeps.TransactionAudit,
-		SignerStore:       govDeps.SignerStore,
-		L3Verifier:        gatewayAcceptingL3Verifier{},
-		WardenSigningKey:  wardenPriv,
-		WardenKeyID:       wardenKeyID,
-		MCPGateway:        mcpGateway,
+		Config:             cfg,
+		Logger:             testutil.NewTestLogger(),
+		Execution:          execSvc,
+		FileEdit:           fileSvc,
+		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
+		Sentinel:           sentinel.NewSentinel(services.ProductionSentinelConfig(), testutil.NewTestLogger()),
+		ReplayStore:        govDeps.ReplayStore,
+		StateRootProvider:  govDeps.StateRootProvider,
+		TransactionAudit:   govDeps.TransactionAudit,
+		SignerStore:        govDeps.SignerStore,
+		L3Verifier:         gatewayAcceptingL3Verifier{},
+		ActuatorSigningKey: ActuatorPriv,
+		ActuatorKeyID:      ActuatorKeyID,
+		MCPGateway:         mcpGateway,
 	})
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)

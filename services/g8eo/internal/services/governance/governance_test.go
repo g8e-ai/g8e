@@ -48,7 +48,7 @@ func TestGovernanceFlow(t *testing.T) {
 		PrivateKey: priv,
 	}
 
-	warden := &Warden{
+	Actuator := &Actuator{
 		Logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
 		SignerStore: &SimpleSignerStore{
 			Signers: map[string]ed25519.PublicKey{
@@ -80,26 +80,26 @@ func TestGovernanceFlow(t *testing.T) {
 		t.Errorf("Expected 1 agent ID in L2, got %v", env.Governance)
 	}
 
-	// Ensure status is validated for Warden
+	// Ensure status is validated for Actuator
 	env.Governance.L1.Validated = true
 	sig, _ := tribunal.SignDecision(env.Id, true)
 	env.Governance.L2.TribunalSignature = sig
 
 	handler := &mockExecutionHandler{}
-	warden.ExecutionHandler = handler
-	warden.SigningKey = priv
-	warden.KeyID = nodeID
-	warden.Ctx = context.Background()
+	Actuator.ExecutionHandler = handler
+	Actuator.SigningKey = priv
+	Actuator.KeyID = nodeID
+	Actuator.Ctx = context.Background()
 
 	vt := &VerifiedTransaction{
 		Envelope:   env,
 		ActionType: constants.ActionTypeFetchLogs,
 	}
 
-	// 3. Warden Execution
-	receipt, err := warden.Execute(context.Background(), vt, nil)
+	// 3. Actuator Execution
+	receipt, err := Actuator.Execute(context.Background(), vt, nil)
 	if err != nil {
-		t.Fatalf("Warden execution failed: %v", err)
+		t.Fatalf("Actuator execution failed: %v", err)
 	}
 
 	if !handler.executed {

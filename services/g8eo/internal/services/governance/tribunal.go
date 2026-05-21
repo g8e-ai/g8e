@@ -68,14 +68,14 @@ func (t *Tribunal) EvaluatePayload(env *uap.UAPEnvelope) error {
 
 	isSafe := t.RunMITREChecks(env.TargetResource, cmdData)
 
-	// L1 Intent Validation: ensure the requested intent is in the allowlist
+	// Doctrine (L1) Intent Validation: ensure the requested intent is in the allowlist
 	if intent != "" && t.Sentinel != nil {
 		if !t.Sentinel.ValidateIntent(intent) {
 			isSafe = false
 		}
 	}
 
-	// 3. Append Vote
+	// 3. Append Vote (Quorum (L2))
 	// Note: We are using GovernanceMetadata instead of ConsensusState
 	if env.Governance == nil {
 		env.Governance = &commonv1.GovernanceMetadata{

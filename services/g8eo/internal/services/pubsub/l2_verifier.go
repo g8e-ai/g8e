@@ -33,6 +33,6 @@ var (
 	ErrTransactionReplay    = errors.New("Protocol: transaction replay detected")
 )
 
-// L2 and L3 verification for UAP JSON envelopes is handled by the Tribunal and Warden services.
+// L2 and L3 verification for UAP JSON envelopes is handled by the Tribunal and Actuator services.
 // This file保留 error definitions for consistency but the actual verification logic
-// is in services/g8eo/services/governance/tribunal.go and warden.go.
+// is in services/g8eo/services/governance/tribunal.go and Actuator.go.

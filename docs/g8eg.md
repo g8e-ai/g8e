@@ -159,7 +159,7 @@ graph TD
         PruneTx --> LocalDB
     end
 
-    EgressPath["Proceed to Egress & Response<br/>(Warden Downstream Dispatch)"]:::target
+    EgressPath["Proceed to Egress & Response<br/>(Actuator Downstream Dispatch)"]:::target
 
     Client -- "1. Mutation (tools/call)" --> CheckL3
     ReturnURL -- "2. Challenge Link" --> Client
@@ -171,7 +171,7 @@ graph TD
     ResumeTx -- "5. Fully Verified" --> EgressPath
 ```
 
-Direct `/db/` mutations are restricted to bootstrap and Operator-owned collections required to initialize governance and persist Warden/audit records. Mutations to non-bootstrap collections return `409 Conflict` with `{"error":"submit via POST /api/governance/envelope"}`. `/db/` reads and `_query` remain available because they do not mutate state.
+Direct `/db/` mutations are restricted to bootstrap and Operator-owned collections required to initialize governance and persist Actuator/audit records. Mutations to non-bootstrap collections return `409 Conflict` with `{"error":"submit via POST /api/governance/envelope"}`. `/db/` reads and `_query` remain available because they do not mutate state.
 
 `/pubsub/publish` remains available for non-mutation fan-out (`heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*`). Mutation channels such as `cmd:*` and `auditor:*` return the same `409 Conflict` redirect so callers cannot bypass the governed execution boundary.
 
@@ -268,7 +268,7 @@ Hub state is anchored by a Merkle state root computed deterministically across a
     - **Intermediate CAs** - Hub CA, Operator CA, Bootstrap CA.
     - **Trust Bundles** - `trust/hub-bundle.pem` (Root + Hub Intermediate).
 - **.g8e/secrets/** stores tamper-evident bootstrap material:
-    - `session_encryption_key`, `warden_signing_key`, `warden_key_id`.
+    - `session_encryption_key`, `Actuator_signing_key`, `Actuator_key_id`.
     - `bootstrap_digest.json` - SHA-256 digests of every secret. Mismatch fails startup hard.
 
 ---

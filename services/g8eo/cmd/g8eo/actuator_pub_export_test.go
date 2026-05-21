@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func TestExportWardenPublicKey(t *testing.T) {
+func TestExportActuatorPublicKey(t *testing.T) {
 	// Create a temporary directory for testing
 	tmpDir := t.TempDir()
 
@@ -34,14 +34,14 @@ func TestExportWardenPublicKey(t *testing.T) {
 
 	keyID := hex.EncodeToString(pubKey)
 
-	// Call exportWardenPublicKey with nil logger (logging is optional)
-	err = exportWardenPublicKey(tmpDir, pubKey, keyID, nil)
+	// Call exportActuatorPublicKey with nil logger (logging is optional)
+	err = exportActuatorPublicKey(tmpDir, pubKey, keyID, nil)
 	if err != nil {
-		t.Fatalf("exportWardenPublicKey failed: %v", err)
+		t.Fatalf("exportActuatorPublicKey failed: %v", err)
 	}
 
 	// Verify PEM file exists and contains the correct key
-	pemPath := filepath.Join(tmpDir, "warden_pub.pem")
+	pemPath := filepath.Join(tmpDir, "Actuator_pub.pem")
 	pemData, err := os.ReadFile(pemPath)
 	if err != nil {
 		t.Fatalf("Failed to read PEM file: %v", err)
@@ -58,7 +58,7 @@ func TestExportWardenPublicKey(t *testing.T) {
 	}
 
 	// Verify JSON file exists and contains the correct data
-	jsonPath := filepath.Join(tmpDir, "warden_pub.json")
+	jsonPath := filepath.Join(tmpDir, "Actuator_pub.json")
 	jsonData, err := os.ReadFile(jsonPath)
 	if err != nil {
 		t.Fatalf("Failed to read JSON file: %v", err)
@@ -87,7 +87,7 @@ func TestExportWardenPublicKey(t *testing.T) {
 	}
 }
 
-func TestExportWardenPublicKeyCreatesDirectory(t *testing.T) {
+func TestExportActuatorPublicKeyCreatesDirectory(t *testing.T) {
 	// Create a temporary directory
 	tmpDir := t.TempDir()
 
@@ -102,10 +102,10 @@ func TestExportWardenPublicKeyCreatesDirectory(t *testing.T) {
 
 	keyID := hex.EncodeToString(pubKey)
 
-	// Call exportWardenPublicKey with a non-existent directory
-	err = exportWardenPublicKey(subDir, pubKey, keyID, nil)
+	// Call exportActuatorPublicKey with a non-existent directory
+	err = exportActuatorPublicKey(subDir, pubKey, keyID, nil)
 	if err != nil {
-		t.Fatalf("exportWardenPublicKey failed: %v", err)
+		t.Fatalf("exportActuatorPublicKey failed: %v", err)
 	}
 
 	// Verify the directory was created
@@ -119,7 +119,7 @@ func TestExportWardenPublicKeyCreatesDirectory(t *testing.T) {
 	}
 
 	// Verify files were created in the new directory
-	pemPath := filepath.Join(subDir, "warden_pub.pem")
+	pemPath := filepath.Join(subDir, "Actuator_pub.pem")
 	if _, err := os.Stat(pemPath); err != nil {
 		t.Errorf("PEM file not created in new directory: %v", err)
 	}

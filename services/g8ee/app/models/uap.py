@@ -16,15 +16,18 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 class L1Metadata(BaseModel):
+    """Doctrine (L1) Metadata: Technical Bedrock (Hard Gates)"""
     validated: bool = True
     violations: list[str] = Field(default_factory=list)
 
 class L2Metadata(BaseModel):
+    """Quorum (L2) Metadata: Consensus (Tribunal)"""
     tribunal_signature: str | None = None
     agent_ids: list[str] = Field(default_factory=list)
     key_id: str | None = None
 
 class L3Metadata(BaseModel):
+    """Notary (L3) Metadata: Authorization (Human-in-the-loop)"""
     human_signature: str | None = None
     public_key: str | None = None
     auto_approved: bool = False

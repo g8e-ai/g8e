@@ -49,7 +49,7 @@ An embedded SQLite database (`./.g8e/data/g8e.db`) that stores all operator sess
 
 ## Auditor
 
-A verifier persona within the g8ee Tribunal stage (L2 Governance). The Auditor evaluates the consensus command winner against the original intent **after** the Warden has cleared it for risk; if Warden blocks, the Auditor never runs. The Auditor sees the request, operator context, and anonymized candidate clusters (not full conversation history). Verdicts are `ok`, `swap:<cluster_id>` to promote a dissenting cluster, or `revised:<command>`. On pass, the Auditor binds the verdict to a SHA-256 **Merkle Commitment** over the **Reputation Scoreboard**, chained via `prev_root` HMAC-SHA256 - a tamper-evident cryptographic chain of agent performance. Reputation-commitment failure is fatal: the verdict cannot proceed.
+A verifier persona within the g8ee Tribunal stage (L2 Governance). The Auditor evaluates the consensus command winner against the original intent **after** the Actuator has cleared it for risk; if Actuator blocks, the Auditor never runs. The Auditor sees the request, operator context, and anonymized candidate clusters (not full conversation history). Verdicts are `ok`, `swap:<cluster_id>` to promote a dissenting cluster, or `revised:<command>`. On pass, the Auditor binds the verdict to a SHA-256 **Merkle Commitment** over the **Reputation Scoreboard**, chained via `prev_root` HMAC-SHA256 - a tamper-evident cryptographic chain of agent performance. Reputation-commitment failure is fatal: the verdict cannot proceed.
 
 ---
 
@@ -187,7 +187,7 @@ The central, BFT-governed Policy Decision Point (PDP) running in `--listen` mode
 
 ## Governed Operator (g8eo)
 
-The host-resident execution agent and Policy Execution Point (PEP) (built as the `g8e.operator` binary from the Go Gateway codebase). Running on target hosts, `g8eo` connects outbound-only over mTLS WSS to `g8eg`. It exposes host tools as a Model Context Protocol (MCP) Server, verifies incoming UAP transactions against local L1/L2/L3 gates, executes actions strictly through the Warden boundary, and records tamper-evident local audit logs (Audit Vault, Scrubbed Vault, and git-backed session ledgers).
+The host-resident execution agent and Policy Execution Point (PEP) (built as the `g8e.operator` binary from the Go Gateway codebase). Running on target hosts, `g8eo` connects outbound-only over mTLS WSS to `g8eg`. It exposes host tools as a Model Context Protocol (MCP) Server, verifies incoming UAP transactions against local L1/L2/L3 gates, executes actions strictly through the Actuator boundary, and records tamper-evident local audit logs (Audit Vault, Scrubbed Vault, and git-backed session ledgers).
 
 ---
 
@@ -301,7 +301,7 @@ The first and foundation layer of g8e governance. It implements hard-coded techn
 
 ## L2 Consensus (Tribunal)
 
-The second layer of g8e governance. A heterogeneous multi-model ensemble of 5 independent agents (Axiom, Concord, Variance, Pragma, Nemesis) that produces and votes on command candidates. The ordered cascade is: **Generation → Voting (R1) → [R2 anonymized peer review on consensus failure] → Warden risk analysis → Auditor verification → Merkle commitment**. Warden runs *before* Auditor; if Warden classifies HIGH risk, Auditor never runs (first strike returns to Sage; second strike forces human intervention). Voting uses uniform 1-vote-per-member weighting with a minimum consensus of 2; tie-breaks apply in order shortest → exclude-Nemesis-cluster → round 2. Nemesis votes are *not* auto-discarded - they only lose tie-breaks. L2 ensures that every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output.
+The second layer of g8e governance. A heterogeneous multi-model ensemble of 5 independent agents (Axiom, Concord, Variance, Pragma, Nemesis) that produces and votes on command candidates. The ordered cascade is: **Generation → Voting (R1) → [R2 anonymized peer review on consensus failure] → Actuator risk analysis → Auditor verification → Merkle commitment**. Actuator runs *before* Auditor; if Actuator classifies HIGH risk, Auditor never runs (first strike returns to Sage; second strike forces human intervention). Voting uses uniform 1-vote-per-member weighting with a minimum consensus of 2; tie-breaks apply in order shortest → exclude-Nemesis-cluster → round 2. Nemesis votes are *not* auto-discarded - they only lose tie-breaks. L2 ensures that every command executed is the result of a rigorous consensus process backed by a single L2 Ed25519 signature over the transaction hash, rather than a single model's output.
 
 ---
 
@@ -545,7 +545,7 @@ The core trust model of g8e. Every component treats every other component as a p
 - **The Principal (User)** does not trust any single AI provider/model (heterogeneous tiering across reasoning agents) or any host running an Operator (mTLS, fingerprinting, device-link tokens, slot accounting, key rotation, revocation).
 - **The Engine (g8ee)** does not trust the user (L1 forbidden patterns block dangerous instructions before any model sees them) or the Operator (Sentinel ingress scrubbing of PII/credentials, scoped sessions, mTLS).
 - **The Operator (g8eo)** does not trust the user or the AI (full fail-closed admission gauntlet on every inbound mutation: envelope integrity, typed payload, L1 reflected forbidden patterns, hash binding, freshness, state-root match, L2 trusted signer, L3 WebAuthn).
-- **The Engine's internal pipeline** does not trust itself (the Byzantine cascade in `services/g8ee/app/services/ai/generator.py` runs Triage → Dash/Sage → Tribunal generation → voting → Warden → Auditor before a command is even *eligible* for the protocol gauntlet).
+- **The Engine's internal pipeline** does not trust itself (the Byzantine cascade in `services/g8ee/app/services/ai/generator.py` runs Triage → Dash/Sage → Tribunal generation → voting → Actuator → Auditor before a command is even *eligible* for the protocol gauntlet).
 
 See `docs/position_paper.md` §2.1 and `docs/g8ee.md` "Governance & Safety - The Engine-Internal Byzantine Cascade".
 
@@ -569,11 +569,11 @@ The Protobuf root container for cross-component operator protocol messages. It b
 
 ---
 
-## Warden
+## Actuator
 
 A defensive coordination agent in g8ee that performs pre-execution risk assessment (LOW/MEDIUM/HIGH) for the consensus winner. It enforces the **Two-Strike Circuit Breaker**:
-- **Strike 1**: If a command is classified as HIGH risk, the Warden blocks execution and provides contextual feedback to the reasoning agent to suggest a safer alternative.
-- **Strike 2**: If a second HIGH risk command is proposed in the same turn, the Warden triggers an `AGENT_CONFLICT` error, halting the pipeline and requiring human intervention.
+- **Strike 1**: If a command is classified as HIGH risk, the Actuator blocks execution and provides contextual feedback to the reasoning agent to suggest a safer alternative.
+- **Strike 2**: If a second HIGH risk command is proposed in the same turn, the Actuator triggers an `AGENT_CONFLICT` error, halting the pipeline and requiring human intervention.
 Successful command execution resets the strike counter.
 
 ---

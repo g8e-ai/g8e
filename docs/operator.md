@@ -6,7 +6,7 @@ title: g8e Operator
 
 Last Updated: 2026-05-20
 
-The **g8e Operator** is the host-side, sovereign agent role defined by the [g8e Protocol](protocol.md): a daemon or piece of software that speaks the protocol to perform remote operations under the security guarantees the protocol enables. An Operator receives signed transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+The **g8e Operator** is the host-side, sovereign agent role defined by the [g8e Protocol](protocol.md): a daemon or piece of software that speaks the protocol to perform remote operations under the security guarantees the protocol enables. An Operator receives signed transactions, enforces Doctrine (L1), Quorum (L2), and Notary (L3) verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
 The reference Operator is **`g8eo`** (built as the `g8e.operator` binary). It functions as a sovereign, **Governed Operator** and **Model Context Protocol (MCP) Server** (the Policy Execution Point).
 
@@ -25,8 +25,8 @@ An Operator is the only component that can mutate the host. It executes ordinary
 Concretely, the reference Operator:
 
 - Connects outbound-only over mTLS WSS to the Hub (no inbound ports required).
-- Verifies every inbound `GovernanceEnvelope` against L1, L2, L3, integrity, freshness, and state-root gates.
-- Runs the **Warden** as the sole execution boundary, signing pre- and post-execution `ActionReceipt`s.
+- Verifies every inbound `GovernanceEnvelope` against Doctrine (L1), Quorum (L2), Notary (L3), integrity, freshness, and state-root gates.
+- Runs the **Actuator** as the sole execution boundary, signing pre- and post-execution `ActionReceipt`s.
 - Records every accepted mutation to a host-local, encrypted, append-only audit vault and a per-session git-backed ledger.
 - Scrubs sensitive data (PII, secrets) at the host boundary so AI never sees unscrubbed data.
 - Self-deploys to remote hosts (cross-compiled binaries pulled from the Hub blob store over SSH).
@@ -40,21 +40,21 @@ The Operator distrusts every upstream input. Before any code runs on the host, t
 1. **Integrity** - `id == transaction_hash == SHA256(canonical_fields)`.
 2. **Freshness** - `expires_at` not passed; `nonce` not in the replay store.
 3. **State binding** - `state_merkle_root` matches the host's current ledger root.
-4. **L1 hard gates** - Reflected `forbidden_patterns` over the typed protobuf payload, plus Sentinel pre-execution threat analysis (90+ MITRE ATT&CK patterns).
-5. **L2 consensus** - Ed25519 Tribunal signature verified against the Operator-owned `SignerStore`. Missing or unknown signers → reject.
-6. **L3 authorization** - WebAuthn proof verified for every mutation. Auto-approval policy may suppress the human prompt for benign verbs only after L1 and L2 have passed.
+4. **Doctrine (L1) hard gates** - Reflected `forbidden_patterns` over the typed protobuf payload, plus Sentinel pre-execution threat analysis (90+ MITRE ATT&CK patterns).
+5. **Quorum (L2) consensus** - Ed25519 Tribunal signature verified against the Operator-owned `SignerStore`. Missing or unknown signers → reject.
+6. **Notary (L3) authorization** - WebAuthn proof verified for every mutation. Auto-approval policy may suppress the human prompt for benign verbs only after Doctrine (L1) and Quorum (L2) have passed.
 
-If any gate fails, the envelope is rejected, a `BLOCKED` receipt is recorded, and no execution occurs. There are no fallbacks.
+If any gate fails, the envelope is rejected, a `BLOCKED` receipt is recorded, and no execution (via the Actuator) occurs. There are no fallbacks.
 
 ---
 
-## Defense at Execution: The Warden
+## Defense at Execution: The Actuator
 
-The **Warden** is the Operator's execution boundary and the only service permitted to mutate host state.
+The **Actuator** is the Operator's execution boundary and the only service permitted to mutate host state.
 
-1. **Pre-execution receipt** - Warden signs an `ActionReceipt` with status `EXECUTING` and writes it to the AuditVault. If the audit write fails, execution is aborted.
-2. **Dispatch** - Warden routes the typed payload to its handler (shell executor, file editor, port checker, etc.).
-3. **Post-execution receipt** - Warden updates the receipt with `COMPLETED` or `FAILED`, captures `state_root_after`, signs again, and publishes the result envelope.
+1. **Pre-execution receipt** - Actuator signs an `ActionReceipt` with status `EXECUTING` and writes it to the AuditVault. If the audit write fails, execution is aborted.
+2. **Dispatch** - Actuator routes the typed payload to its handler (shell executor, file editor, port checker, etc.).
+3. **Post-execution receipt** - Actuator updates the receipt with `COMPLETED` or `FAILED`, captures `state_root_after`, signs again, and publishes the result envelope.
 
 The dual-receipt model guarantees that every attempt to change reality is cryptographically recorded - even if the process crashes mid-execution. Reputation slashing for missed risk or over-cautious blocking is anchored to these receipts.
 
@@ -110,7 +110,7 @@ The Operator runs entirely under mTLS with workload identity bound to SPIFFE-sty
 
 Revocation is enforced on every handshake against the `revoked_certificates` collection, with signed revocation bundles available for external verification.
 
-The Warden's Ed25519 signing key lives in `.g8e/secrets/warden_signing_key`; its public key is exported on every Hub startup to `.g8e/pki/warden_pub.pem` and `.g8e/pki/warden_pub.json` for offline receipt verification (used by evals and external auditors).
+The Actuator's Ed25519 signing key lives in `.g8e/secrets/Actuator_signing_key`; its public key is exported on every Hub startup to `.g8e/pki/Actuator_pub.pem` and `.g8e/pki/Actuator_pub.json` for offline receipt verification (used by evals and external auditors).
 
 ---
 
@@ -122,7 +122,7 @@ The Warden's Ed25519 signing key lives in `.g8e/secrets/warden_signing_key`; its
 4. **mTLS upgrade** - Switch all transport to TLS 1.3 + mTLS WSS.
 5. **Vault unlock** - API key unlocks the local Encryption Vault to retrieve the DEK.
 6. **Steady state** - Subscribe to `cmd:{operator_id}:{operator_session_id}`; await governed envelopes.
-7. **Verify and execute** - Run the verification gates; on success, the Warden executes; in all cases a signed receipt is published.
+7. **Verify and execute** - Run the verification gates; on success, the Actuator executes; in all cases a signed receipt is published.
 
 ### Operating modes
 
@@ -185,7 +185,7 @@ The Operator is fully self-contained. There are no runtime internet dependencies
 | Concern | Authoritative file |
 |---|---|
 | Verification gates | `@/home/bob/g8e/services/g8eo/internal/services/governance/transaction_verifier.go` |
-| Warden / receipts | `@/home/bob/g8e/services/g8eo/internal/services/governance/warden.go` |
+| Actuator / receipts | `@/home/bob/g8e/services/g8eo/internal/services/governance/warden.go` |
 | Sentinel | `@/home/bob/g8e/services/g8eo/internal/services/sentinel/sentinel.go` |
 | Audit vault | `@/home/bob/g8e/services/g8eo/internal/services/storage/audit_vault.go` |
 | Ledger (git) | `@/home/bob/g8e/services/g8eo/internal/services/storage/ledger.go` |

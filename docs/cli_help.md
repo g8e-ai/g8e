@@ -22,7 +22,7 @@ Alternatively, use direct commands for automation and specific tasks:
 
 The platform is built on security-first architectural invariants that cannot be bypassed:
 
-- **3-Layer Governance Bedrock**: Every action is gated by a hierarchical validation system: L1 (Technical Bedrock), L2 (Consensus/Tribunal), and L3 (Human Authorization).
+- **3-Layer Governance Bedrock**: Every action is gated by a hierarchical validation system: Doctrine (L1) Technical Bedrock, Quorum (L2) Consensus/Tribunal, and Notary (L3) Human Authorization.
 - **Zero Trust**: No standing credentials. Privileges are ephemeral and mathematically bound to locally verifiable protocol proofs.
 - **Binary Safety**: Security is enforced at the binary and network layers, not via fragile LLM prompts.
 - **Data Sovereignty**: Operational data stays on the remote host; only scrubbed context reaches the AI.
@@ -37,7 +37,7 @@ The default Gateway is the Operator plus the shared protocol. Bundled apps remai
 | Layer | Component | Language | Purpose |
 |-----------|-----------|----------|---------|
 | **Gateway (Gateway)** | **g8eg** | Go | Policy Decision Point (PDP): Protocol hub, CA/PKI, persistence, and pub/sub broker in listen mode. |
-| **Gateway (Operator)**| **g8eo** | Go | Policy Execution Point (PEP): Sovereign host execution (Warden), local git ledger, and MCP Server. |
+| **Gateway (Operator)**| **g8eo** | Go | Policy Execution Point (PEP): Sovereign host execution (Actuator), local git ledger, and MCP Server. |
 | **Protocol** | **protocol/proto** | Protobuf | Canonical transaction schemas, typed payloads, and envelope contracts. |
 | **Application Layer** | **g8ee** | Python | Optional reference Engine adapter for agentic proposal and L2 proof generation. |
 
@@ -49,7 +49,7 @@ The AI reasoning engine uses specialized agents with distinct roles:
 - **Dash**: High-efficiency responder for simple, single-step requests.
 - **Sage**: Senior reasoning agent for complex, multi-step investigations and command orchestration.
 - **Tribunal**: 5-member ensemble (Axiom, Concord, Variance, Pragma, Nemesis) that translates Sage's intent into hardened shell commands through consensus.
-- **Warden**: Defensive circuit breaker that performs risk assessment. Triggers a two-strike lockout on repeated high-risk detections.
+- **Actuator**: Defensive circuit breaker that performs risk assessment. Triggers a two-strike lockout on repeated high-risk detections.
 - **Auditor**: The final technical gatekeeper that verifies Tribunal output against Sage's intent and manages agent reputation.
 
 ## The Request Lifecycle
@@ -58,9 +58,9 @@ A user request moves through the **3-Layer Governance Bedrock**:
 
 1. **Ingress**: A bundled or BYO client builds a typed transaction proposal for the Operator protocol.
 2. **Triage**: The message is classified as `simple` (Dash) or `complex` (Sage).
-3. **L1: Technical Bedrock**: Initial scrubbing and validation against forbidden patterns (sudo, etc.).
-4. **L2: Consensus (Tribunal)**: Intent is translated into commands by the ensemble. The Warden checks for risk, and the Auditor verifies technical correctness.
-5. **L3: Authorization**: State-changing operations halt for human approval. Benign commands may use auto-approval if configured.
+3. **Doctrine (L1): Technical Bedrock**: Initial scrubbing and validation against forbidden patterns (sudo, etc.).
+4. **Quorum (L2): Consensus (Tribunal)**: Intent is translated into commands by the ensemble. The Actuator checks for risk, and the Auditor verifies technical correctness.
+5. **Notary (L3): Authorization**: State-changing operations halt for human approval. Benign commands may use auto-approval if configured.
 6. **Execution**: The Governed Operator (`g8eo`) verifies protocol proofs locally, executes accepted work, and commits receipts to the host-authoritative audit ledger.
 
 ## Operational Modes

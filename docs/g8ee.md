@@ -14,7 +14,7 @@ If you are building a BYO client, you do not need g8ee - anything that produces 
 
 ## Position in the Platform
 
-- **Mandatory Gateway**: `g8eg` Governance Gateway (Listen mode via `--listen`) and `g8eo` Governed Operator (runs on target hosts). The gateway owns platform-level PKI, coordination, Pub/Sub, and transaction validation/suspension. The operator owns local validation, local git-backed ledger, and host-level Warden tool execution.
+- **Mandatory Gateway**: `g8eg` Governance Gateway (Listen mode via `--listen`) and `g8eo` Governed Operator (runs on target hosts). The gateway owns platform-level PKI, coordination, Pub/Sub, and transaction validation/suspension. The operator owns local validation, local git-backed ledger, and host-level Actuator tool execution.
 - **Optional reference application layer**: `g8ee` (this component, AI engine / L2 producer). It consumes the Gateway protocol surface and has no privileged Gateway role.
 - **Default start (`./g8e platform start`)**: Operator only. g8ee is started explicitly via `./g8e platform start --with-apps` or `./g8e apps start g8ee`.
 - **Wire format**: canonical JSON (protojson) `GovernanceEnvelope` on all client-facing surfaces (HTTP, pub/sub, receipts). Signing is computed over a deterministic transaction hash; wire encoding is independent of the security invariant.
@@ -87,15 +87,15 @@ Every host-mutating tool call flows through an ordered cascade. Each stage is in
 2. **Tribunal generation**: Sage's intent is dispatched in isolation to five members - Axiom (composition), Concord (safety), Variance (edge cases), Pragma (convention), Nemesis (calibrated adversary). The *Amnesia Principle* means no member sees another's candidate and no member knows which seat Nemesis occupies. Each emits exactly one shell command string and stakes reputation on it.
 3. **Tribunal voting (Round 1)**: Uniform 1-vote-per-member weighting. Minimum consensus is 2 votes (default 5 members). Tie-breaks apply in order: shortest command, non-Nemesis cluster wins over Nemesis-including cluster, round 2. Nemesis votes are *not* auto-discarded - they only lose tie-breaks; reputation slashing applies if Nemesis raised a false flag or abstained on a real flaw.
 4. **Round 2 (only on R1 consensus failure)**: Members re-emit with anonymized R1 clusters as peer-review context. If R2 also fails, `TribunalConsensusFailedError` is raised back to Sage so it can re-articulate intent.
-5. **Warden risk analysis (runs *before* Auditor)**: The Warden coordinator orchestrates command-risk / error / file-risk sub-agents and classifies the winner LOW / MEDIUM / HIGH. The **Two-Strike Circuit Breaker**: a first HIGH returns contextual feedback to Sage so it can propose a safer alternative; a second HIGH in the same investigation raises `AGENT_CONFLICT_DETECTED` and forces human intervention. Successful execution resets the strike counter.
-6. **Auditor verification**: If Warden clears the command, the Auditor (primary tier) sees the request, the operator context, and the anonymized candidate clusters - *not* full conversation history. Verdicts are `ok`, `swap:<cluster_id>` (promote a dissenter), or `revised:<command>`. On pass, the verdict is bound to a SHA-256 **Merkle commitment** over the agent reputation scoreboard, chained by `prev_root` HMAC-SHA256. Reputation-commitment failure is fatal - the verdict cannot proceed.
+5. **Actuator risk analysis (runs *before* Auditor)**: The Actuator coordinator orchestrates command-risk / error / file-risk sub-agents and classifies the winner LOW / MEDIUM / HIGH. The **Two-Strike Circuit Breaker**: a first HIGH returns contextual feedback to Sage so it can propose a safer alternative; a second HIGH in the same investigation raises `AGENT_CONFLICT_DETECTED` and forces human intervention. Successful execution resets the strike counter.
+6. **Auditor verification**: If Actuator clears the command, the Auditor (primary tier) sees the request, the operator context, and the anonymized candidate clusters - *not* full conversation history. Verdicts are `ok`, `swap:<cluster_id>` (promote a dissenter), or `revised:<command>`. On pass, the verdict is bound to a SHA-256 **Merkle commitment** over the agent reputation scoreboard, chained by `prev_root` HMAC-SHA256. Reputation-commitment failure is fatal - the verdict cannot proceed.
 7. **L1 re-validation**: Any command produced via swap or revision is re-checked against `validate_command_safety` (forbidden patterns, blacklist, whitelist) before it can leave the Engine.
 8. **L2/L3 envelope wrap**: The verified command is packaged as a typed `CommandRequested` payload inside a `GovernanceEnvelope`, signed by the L2 Tribunal key.
 9. **Approval Pipeline**: State-changing operations trigger an `OPERATOR_COMMAND_APPROVAL_REQUESTED` event, halting execution until a human approves via the UI (or `auto_approved.json` policy applies). L3 auto-approval never bypasses L1 or L2.
 10. **Gateway admission gauntlet**: The signed envelope is submitted over mTLS to the Governance Gateway (`g8eg`) and subsequent Governed Operator (`g8eo`), which independently re-run the entire fail-closed validation and execution gauntlets. The Engine has no privileged channel.
 11. **Sentinel egress scrub**: After execution the Operator scrubs every byte of stdout/stderr before publishing the result envelope back to the Engine.
 
-**Failure routing**: Tribunal consensus failure (after R2) and Warden first-strike both feed back to Sage to re-articulate intent. Warden second-strike and Auditor catastrophic failure both surface as agent-conflict events that demand human intervention.
+**Failure routing**: Tribunal consensus failure (after R2) and Actuator first-strike both feed back to Sage to re-articulate intent. Actuator second-strike and Auditor catastrophic failure both surface as agent-conflict events that demand human intervention.
 
 ### 5. Streaming & Delivery
 Responses are delivered via **Server-Sent Events (SSE)**:
@@ -137,7 +137,7 @@ Context is stage-specific:
 - **Triage**: Receives the current user message, prior conversation history, attachments metadata, request settings, and agent mode. It classifies complexity, intent, and posture. It does not generate commands or mutate state.
 - **Dash / Sage**: Receive the modular system prompt, scrubbed conversation contents, selected operator metadata, triage context, investigation context, learned context, tool declarations, attachments for the current turn, and output-token configuration.
 - **Tribunal members**: Receive Sage's natural-language intent, optional guidelines, the target operator context anchor, command policy constraints, current investigation state, and concise case context. They do not receive each other's candidates.
-- **Warden AI analyzers**: Receive the candidate command or file operation plus narrow risk context. Their role is risk classification, not broad investigation reasoning.
+- **Actuator AI analyzers**: Receive the candidate command or file operation plus narrow risk context. Their role is risk classification, not broad investigation reasoning.
 - **Auditor**: Receives the request, operator context, anonymized command clusters, and reputation state commitment inputs. It does not receive full chat history.
 - **Codex**: Runs after the turn and receives the current memory state plus the most recent bounded conversation slice. In the current implementation, memory generation inspects the latest 20 non-thinking messages.
 
@@ -176,7 +176,7 @@ The Operator delivers context through typed, session-bound envelopes:
 1. g8ee builds a natural-language intent or typed tool request from the current turn.
 2. For host-mutating actions, the Tribunal converts intent into a command and g8ee wraps the selected command as a typed `GovernanceEnvelope`.
 3. g8eg and g8eo verify identity, freshness, state binding, L1 policy, L2 signature, and L3 authorization.
-4. g8eo executes through Warden only after verification passes.
+4. g8eo executes through Actuator only after verification passes.
 5. g8eo records local audit/ledger state, scrubs result data, and returns a typed result envelope.
 6. g8ee delivers only that result projection back into the current ReAct turn.
 
@@ -191,7 +191,7 @@ For mutating operations, context and intent are not informal prompt text by the 
 - **Consensus binding**: L2 signs the transaction with the Tribunal key. The Operator verifies the signature against trusted signers.
 - **State binding**: The transaction carries state-root and freshness material. g8eo rejects stale, replayed, or state-mismatched envelopes.
 - **Authorization binding**: L3 approval, including auto-approval policy where allowed, is evaluated after L1 and L2. Auto-approval never bypasses those gates.
-- **Audit binding**: Warden emits signed receipts before and after execution. The Audit Vault rejects events with missing or unknown `operator_session_id`; sessions must exist before audit writes are accepted.
+- **Audit binding**: Actuator emits signed receipts before and after execution. The Audit Vault rejects events with missing or unknown `operator_session_id`; sessions must exist before audit writes are accepted.
 - **Reputation binding**: Auditor verdicts are committed to the agent reputation scoreboard through Merkle commitments chained by `prev_root`.
 
 The audit trail can answer what context was available, which agent stage acted, what intent was translated, which command was selected, which proof admitted it, which operator executed it, what result was returned, what was scrubbed or truncated, and which local ledger state changed.
@@ -207,15 +207,15 @@ The g8e platform utilizes a tiered agent persona system that separates **Gateway
 | Layer | Agent | Code ID | Role | Tier | Purpose |
 |---|---|---|---|---|---|
 | **Gateway** | **Governance Gateway** | `g8eg` | `gateway` | `N/A` | Central Policy Decision Point (PDP); owns PKI and pub/sub. |
-| **Gateway** | **Governed Operator** | `g8eo` | `executor` | `N/A` | Sovereign host Policy Execution Point (PEP); runs Warden. |
-| **Gateway** | **Warden (Gateway)** | `warden` | `boundary` | `N/A` | Host-side execution boundary on `g8eo`; enforces state root and emits receipts. |
+| **Gateway** | **Governed Operator** | `g8eo` | `executor` | `N/A` | Sovereign host Policy Execution Point (PEP); runs Actuator. |
+| **Gateway** | **Actuator (Gateway)** | `Actuator` | `boundary` | `N/A` | Host-side execution boundary on `g8eo`; enforces state root and emits receipts. |
 | **Reasoning** | **Triage** | `triage` | `classifier` | `lite` | Initial classification of complexity, intent, and posture. |
 | **Reasoning** | **Sage** | `sage` | `reasoner` | `primary` | Senior reasoning authority for complex investigations. |
 | **Reasoning** | **Dash** | `dash` | `responder` | `assistant` | Fast-path responder for simple, single-turn tasks. |
 | **Consensus** | **The Tribunal** | `tribunal` | `arbitrator` | `lite` | Collective ensemble of five specialized translators. |
 | **Consensus** | **Auditor** | `auditor` | `auditor` | `primary` | Final judge of Tribunal candidates against Sage's intent. |
-| **Defense** | **Warden (AI)** | `warden` | `coordinator` | `lite` | AI-layer coordinator for pre-execution risk analysis. |
-| **Defense** | **Risk Analyzers** | `warden_*` | `defender` | `lite` | Specialized analyzers for command, file, and error risk. |
+| **Defense** | **Actuator (AI)** | `Actuator` | `coordinator` | `lite` | AI-layer coordinator for pre-execution risk analysis. |
+| **Defense** | **Risk Analyzers** | `Actuator_*` | `defender` | `lite` | Specialized analyzers for command, file, and error risk. |
 | **Utility** | **Scribe** | `scribe` | `summarizer` | `lite` | Generates concise, specific investigation titles. |
 | **Utility** | **Codex** | `codex` | `analyzer` | `lite` | Extracts durable preferences and scrubbed summaries. |
 | **Utility** | **Judge** | `judge` | `evaluator` | `primary` | Dispassionate evaluator for gold-standard benchmarks. |
@@ -296,7 +296,7 @@ flowchart LR
 
     subgraph Gateway ["Mandatory Gateway"]
         g8eg["g8eg (Governance Gateway)<br/>Listen mode: --listen<br/>PDP, PKI, SQLite, Pub/Sub"]
-        g8eo["g8eo (Governed Operator)<br/>PEP, Warden, local git ledger"]
+        g8eo["g8eo (Governed Operator)<br/>PEP, Actuator, local git ledger"]
     end
 
     subgraph App ["Optional Reference Application Layer"]
@@ -310,13 +310,13 @@ flowchart LR
 ```
 
 ### The Tribunal (Ensemble Command Generation)
-The Tribunal is a five-member panel that converts Sage's intent into executable commands. The Tribunal uses uniform 1-vote-per-member weighting (minimum consensus 2 of 5) with a deterministic tie-break ladder (shortest → exclude-Nemesis cluster → round 2). On consensus failure a Round 2 anonymized peer review runs before the pipeline gives up and routes back to Sage. **Warden** runs *before* Auditor: only commands cleared by Warden risk analysis reach the Auditor for the final consistency check and Merkle commitment.
+The Tribunal is a five-member panel that converts Sage's intent into executable commands. The Tribunal uses uniform 1-vote-per-member weighting (minimum consensus 2 of 5) with a deterministic tie-break ladder (shortest → exclude-Nemesis cluster → round 2). On consensus failure a Round 2 anonymized peer review runs before the pipeline gives up and routes back to Sage. **Actuator** runs *before* Auditor: only commands cleared by Actuator risk analysis reach the Auditor for the final consistency check and Merkle commitment.
 
 ### LFAA (Local-First Audit Architecture)
 `OperatorLFAAService` ensures every action taken by the AI is recorded on the target system. This provides an immutable audit trail that persists even if the control plane is compromised or inaccessible.
 
-### Warden (Defensive Coordination)
-The `warden` agent coordinates defensive analysis, classifying the risk of commands, errors, and file operations. The Warden validates the safety of a command *before* the Auditor cryptographically commits to the results.
+### Actuator (Defensive Coordination)
+The `Actuator` agent coordinates defensive analysis, classifying the risk of commands, errors, and file operations. The Actuator validates the safety of a command *before* the Auditor cryptographically commits to the results.
 
 ### LLM Interface (`LLMProvider`)
 g8ee abstracts LLM providers through a unified interface (`app/llm/provider.py`).
@@ -324,7 +324,7 @@ g8ee abstracts LLM providers through a unified interface (`app/llm/provider.py`)
 | Tier | Usage | Configuration |
 |------|-------|---------------|
 | **Primary** | Complex reasoning (Sage), Auditor, Judge. | `primary_provider` |
-| **Lite** | Triage, Tribunal members, Scribe, Codex, Warden. | `lite_provider` |
+| **Lite** | Triage, Tribunal members, Scribe, Codex, Actuator. | `lite_provider` |
 | **Assistant** | Fast-path responder (Dash), Scribe, Codex. | `assistant_provider` |
 
 ---
@@ -417,7 +417,7 @@ All LLM model configurations are defined in `services/g8ee/app/models/model_conf
 | Role | Provider Setting | Used For |
 |------|------------------|----------|
 | **Primary** | `primary_provider` | Complex reasoning, Sage, Auditor, Judge |
-| **Lite** | `lite_provider` | Triage, Tribunal, Dash, Scribe, Codex, Warden |
+| **Lite** | `lite_provider` | Triage, Tribunal, Dash, Scribe, Codex, Actuator |
 | **Assistant** | `assistant_provider` | Dash, Scribe, Codex |
 
 The lite tier always has thinking disabled. The primary tier supports thinking when the model capability allows it.

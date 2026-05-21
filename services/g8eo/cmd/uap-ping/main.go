@@ -43,7 +43,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	serverCert, serverPriv, err := generateCert(caCert, caPriv, "Warden Server")
+	serverCert, serverPriv, err := generateCert(caCert, caPriv, "Actuator Server")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func main() {
 	caPool := x509.NewCertPool()
 	caPool.AddCert(caCert)
 
-	// 2. Start Warden Server
+	// 2. Start Actuator Server
 	go func() {
 		tlsConfig := &tls.Config{
 			ClientAuth: tls.RequireAndVerifyClientCert,
@@ -80,12 +80,12 @@ func main() {
 
 			var env uap.UAPEnvelope
 			if err := json.NewDecoder(r.Body).Decode(&env); err != nil {
-				log.Printf("Warden: Failed to decode envelope: %v", err)
+				log.Printf("Actuator: Failed to decode envelope: %v", err)
 				http.Error(w, "Bad request", http.StatusBadRequest)
 				return
 			}
 
-			fmt.Println("\n--- Warden Received UAP Envelope ---")
+			fmt.Println("\n--- Actuator Received UAP Envelope ---")
 			fmt.Printf("ID:      %s\n", env.Id)
 			fmt.Printf("Sender:  %s\n", env.OperatorId)
 			fmt.Printf("Action:  %s\n", env.ActionType)
@@ -93,12 +93,12 @@ func main() {
 			fmt.Println("-----------------------------------")
 
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("Warden: Envelope authorized and logged."))
+			w.Write([]byte("Actuator: Envelope authorized and logged."))
 		})
 
-		log.Printf("Warden Server listening on https://localhost:%d/uap (mTLS required)", constants.Ports.G8eeHttp)
+		log.Printf("Actuator Server listening on https://localhost:%d/uap (mTLS required)", constants.Ports.G8eeHttp)
 		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Warden Server failed: %v", err)
+			log.Fatalf("Actuator Server failed: %v", err)
 		}
 	}()
 
@@ -139,7 +139,7 @@ func main() {
 		},
 	}
 
-	log.Printf("Sage Client: Sending UAP envelope to Warden...")
+	log.Printf("Sage Client: Sending UAP envelope to Actuator...")
 	resp, err := client.Post(fmt.Sprintf("https://localhost:%d/uap", constants.Ports.G8eeHttp), "application/json", bytes.NewBuffer(payload))
 	if err != nil {
 		log.Fatalf("Sage Client: Request failed: %v", err)
@@ -152,7 +152,7 @@ func main() {
 		log.Fatalf("Sage Client: Ping FAILED. Status: %s", resp.Status)
 	}
 
-	// Wait briefly to see Warden output
+	// Wait briefly to see Actuator output
 	time.Sleep(500 * time.Millisecond)
 	log.Printf("Phase 1: Proof of Life Complete.")
 }

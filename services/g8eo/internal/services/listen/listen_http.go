@@ -67,7 +67,7 @@ type HTTPHandler struct {
 	// envProc is the synchronous fail-closed Gateway mutation gate. It is
 	// nil until SetEnvelopeProcessor is called by the boot sequence after
 	// the in-process command service has initialized the verifier and
-	// Warden. While nil, /api/governance/envelope returns 503.
+	// Actuator. While nil, /api/governance/envelope returns 503.
 	envProc governance.EnvelopeProcessor
 }
 
@@ -3038,7 +3038,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 			orgID,
 			operatorID,
 			req.SystemFingerprint,
-			"bootstrap",
+			string(constants.HeartbeatTypeBootstrap),
 		)
 		if err != nil {
 			h.logger.Error("Failed to persist sessions during bootstrap", string(constants.ConnectionStateError), err)

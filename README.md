@@ -7,8 +7,8 @@ g8e is a zero-trust execution protocol and outbound-only gateway that forces AI 
 ## Architectural Highlights
 
 * **Outbound-Only Reverse Tunnel:** The host-resident Operator (`g8eo`) connects via an outbound-only tunnel to the platform hub. This bypasses NAT and enterprise firewalls, eliminating the need for inbound listening ports.
-* **3-Layer Inline Governance:** Every mutation must sequentially pass L1 Technical Bedrock (Hard Gates), L2 Consensus (Tribunal), and L3 Authorization (WebAuthn) at the Operator boundary before execution.
-* **Multi-Model BFT Resilience:** Agentic automation is treated as a distributed consensus problem. The L2 Tribunal is provider-agnostic, combining heterogeneous models (e.g., Anthropic, OpenAI, local models) to outvote individual hallucinations or poisonings.
+* **3-Layer Inline Governance:** Every mutation must sequentially pass Doctrine (L1) Technical Bedrock (Hard Gates), Quorum (L2) Consensus (Tribunal), and Notary (L3) Authorization (WebAuthn) at the Operator boundary before execution.
+* **Multi-Model BFT Resilience:** Agentic automation is treated as a distributed consensus problem. The Quorum (L2) Tribunal is provider-agnostic, combining heterogeneous models (e.g., Anthropic, OpenAI, local models) to outvote individual hallucinations or poisonings.
 * **Local-First Data Sovereignty (LFAA):** All raw data, system roots, and execution histories are isolated locally on the managed host. A two-phase Git-backed commit architecture provides a tamper-evident history trail and instant rollbacks.
 * **Zero Standing Dependencies:** The reference Operator is a single, statically compiled Go binary. The entire platform supports air-gapped deployments in isolated infrastructure perimeters.
 
@@ -28,13 +28,13 @@ sequenceDiagram
 
     %% Intent Generation (External to Operator)
     Principal->>Engine: Submit Untrusted Intent (MCP / A2A)
-    Note over Engine: Reach BFT Consensus (L2)<br/>Wrap in GovernanceEnvelope
+    Note over Engine: Reach BFT Consensus (Quorum (L2))<br/>Wrap in GovernanceEnvelope
     
     %% Operator Outbound-Only Interaction
     Operator->>Engine: Establish Outbound Reverse Tunnel (mTLS)
     Operator->>Engine: Fetch Pending GovernanceEnvelope (Wire Contract)
     
-    Note over Operator: Enforce L1 / L2 / L3 Gates (Fail-Closed)<br/>Execute Command Locally<br/>Anchor to LFAA Vault
+    Note over Operator: Enforce Doctrine (L1) / Quorum (L2) / Notary (L3) Gates (Fail-Closed)<br/>Execute Command Locally<br/>Anchor to LFAA Vault
     
     Operator->>Engine: Push Sentinel-Scrubbed Action Receipt
     
@@ -59,13 +59,13 @@ graph TD
 
     subgraph Verification ["Operator Verification - protocol-mandated"]
         direction TB
-        L1{"L1: Technical Bedrock<br/>Forbidden Patterns?"}
-        L2{"L2: Consensus<br/>Tribunal Signature?"}
-        L3{"L3: Authorization<br/>Human Presence?"}
+        L1{"Doctrine (L1): Technical Bedrock<br/>Forbidden Patterns?"}
+        L2{"Quorum (L2): Consensus<br/>Tribunal Signature?"}
+        L3{"Notary (L3): Authorization<br/>Human Presence?"}
         State{"State Check<br/>Merkle Root Fresh?"}
         
         FailClosed["Fail Closed<br/>Error + Audit Entry"]
-        Warden["Signed Action Receipt<br/>Audit Commitment"]
+        Actuator["Signed Action Receipt<br/>Audit Commitment"]
         LocalVault([Local Vault])
 
         L1 -- "Passed" --> L2
@@ -77,10 +77,10 @@ graph TD
         L3 -- "Authorized" --> State
         L3 -- "Denied" --> FailClosed
         
-        State -- "Fresh" --> Warden
+        State -- "Fresh" --> Actuator
         State -- "Stale" --> FailClosed
 
-        Warden --> LocalVault
+        Actuator --> LocalVault
         FailClosed --> LocalVault
     end
 
@@ -111,11 +111,11 @@ graph TD
         subgraph Tribunal ["Tribunal (L2 Producer)"]
             direction TB
             Panel["5-Member Agent Panel"]:::engine
-            Warden["Warden (Two-Strike Circuit Breaker)"]:::engine
+            Actuator["Actuator (Two-Strike Circuit Breaker)"]:::engine
             Auditor["Auditor (L2 Verifier)"]:::engine
             
-            Panel --> Warden
-            Warden --> Auditor
+            Panel --> Actuator
+            Actuator --> Auditor
         end
         
         Triage --> Dash
@@ -123,7 +123,7 @@ graph TD
         Sage --> Panel
         
         %% Short Circuits (Feedback Loops)
-        Warden -. "Risk Feedback (Short Circuit)" .-> Sage
+        Actuator -. "Risk Feedback (Short Circuit)" .-> Sage
         Auditor -. "Rejection / Revision (Short Circuit)" .-> Sage
     end
 
@@ -154,9 +154,9 @@ Every mutation must pass all three layers in sequence at the gateway boundary.
 
 | Layer | Name | Mechanism | Responsibility |
 | --- | --- | --- | --- |
-| **L1** | **Technical Bedrock** | Static Analysis / Reflection | Forbidden patterns, regex threat matching, and policy enforcement. |
-| **L2** | **Consensus** | Ed25519 Signatures | Cryptographic proof that an independent ensemble (Tribunal) co-validated the intent. |
-| **L3** | **Authorization** | WebAuthn / FIDO2 | Hardware-bound proof of human presence for mutations. |
+| **Doctrine (L1)** | **Technical Bedrock** | Static Analysis / Reflection | Forbidden patterns, regex threat matching, and policy enforcement. |
+| **Quorum (L2)** | **Consensus** | Ed25519 Signatures | Cryptographic proof that an independent ensemble (Tribunal) co-validated the intent. |
+| **Notary (L3)** | **Authorization** | WebAuthn / FIDO2 | Hardware-bound proof of human presence for mutations. |
 
 ---
 
@@ -183,7 +183,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 
 ## Documentation
 
-* **[Protocol Gateway](https://www.google.com/search?q=docs/protocol.md)**: Wire format, transaction hashes, and L1/L2/L3 definitions.
+* **[Protocol Gateway](https://www.google.com/search?q=docs/protocol.md)**: Wire format, transaction hashes, and Doctrine (L1)/Quorum (L2)/Notary (L3) definitions.
 * **[Operator (g8eo)](https://www.google.com/search?q=docs/g8eo.md)**: Execution boundary, listener modes, and host storage.
 * **[Engine (g8ee)](https://www.google.com/search?q=docs/g8ee.md)**: Reference AI application and agentic orchestration.
 * **[Developer Troubleshooting](https://www.google.com/search?q=docs/developer/troubleshooting.md)**: Common setup failures and recovery checks.

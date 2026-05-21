@@ -595,16 +595,16 @@ func runListenMode(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, sec
 	govDeps := svc.GetGovernanceDeps()
 	sm := svc.GetSecretManager()
 
-	wardenPriv, wardenKeyID, err := sm.GetWardenKey()
+	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
 	if err != nil {
-		logger.Error("Failed to load Warden signing key - mutations will fail", string(constants.ConnectionStateError), err)
+		logger.Error("Failed to load Actuator signing key - mutations will fail", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 
-	// Export Warden public key for receipt verification by evals harness
-	wardenPub := wardenPriv.Public().(ed25519.PublicKey)
-	if err := exportWardenPublicKey(cfg.PKIDir, wardenPub, wardenKeyID, logger); err != nil {
-		logger.Error("Failed to export Warden public key", string(constants.ConnectionStateError), err)
+	// Export Actuator public key for receipt verification by evals harness
+	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
+	if err := exportActuatorPublicKey(cfg.PKIDir, ActuatorPub, ActuatorKeyID, logger); err != nil {
+		logger.Error("Failed to export Actuator public key", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -612,29 +612,29 @@ func runListenMode(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, sec
 	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetHTTPHandler().GetPubSubBroker())
 
 	// Resolve the MCP gateway up-front so the pubsub command service can
-	// reach it for Warden egress dispatch on verified MCP_CALL transactions.
+	// reach it for Actuator egress dispatch on verified MCP_CALL transactions.
 	mcpSvc := svc.GetHTTPHandler().GetMCPGateway()
 
 	psConfig := pubsub.CommandServiceConfig{
-		Config:            cfg,
-		Logger:            logger,
-		Execution:         execSvc,
-		FileEdit:          fileSvc,
-		PubSubClient:      loopbackClient,
-		ResultsService:    nil, // Results handled via direct loopback publish if needed
-		LocalStore:        nil, // Not used in listen mode
-		RawVault:          nil, // Not used in listen mode
-		AuditVault:        nil, // Handled by Warden direct audit
-		Ledger:            nil, // P1: Ledger in listen mode
-		HistoryHandler:    nil, // P1: History in listen mode
-		Sentinel:          sentinel.NewSentinel(services.ProductionSentinelConfig(), logger),
-		ReplayStore:       govDeps.ReplayStore,
-		StateRootProvider: govDeps.StateRootProvider,
-		TransactionAudit:  govDeps.TransactionAudit,
-		L3Verifier:        govDeps.L3Verifier,
-		WardenSigningKey:  wardenPriv,
-		WardenKeyID:       wardenKeyID,
-		MCPGateway:        mcpSvc,
+		Config:             cfg,
+		Logger:             logger,
+		Execution:          execSvc,
+		FileEdit:           fileSvc,
+		PubSubClient:       loopbackClient,
+		ResultsService:     nil, // Results handled via direct loopback publish if needed
+		LocalStore:         nil, // Not used in listen mode
+		RawVault:           nil, // Not used in listen mode
+		AuditVault:         nil, // Handled by Actuator direct audit
+		Ledger:             nil, // P1: Ledger in listen mode
+		HistoryHandler:     nil, // P1: History in listen mode
+		Sentinel:           sentinel.NewSentinel(services.ProductionSentinelConfig(), logger),
+		ReplayStore:        govDeps.ReplayStore,
+		StateRootProvider:  govDeps.StateRootProvider,
+		TransactionAudit:   govDeps.TransactionAudit,
+		L3Verifier:         govDeps.L3Verifier,
+		ActuatorSigningKey: ActuatorPriv,
+		ActuatorKeyID:      ActuatorKeyID,
+		MCPGateway:         mcpSvc,
 	}
 
 	cmdSvc, err := pubsub.NewPubSubCommandService(psConfig)
@@ -649,10 +649,10 @@ func runListenMode(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, sec
 	svc.SetEnvelopeProcessor(cmdSvc)
 
 	// Wire MCP gateway -> Gateway processor. Egress dispatch back to the
-	// downstream MCP server is invoked from the Warden via cmdSvc, so the
+	// downstream MCP server is invoked from the Actuator via cmdSvc, so the
 	// gateway only needs the Gateway processor + signing identity here.
 	if mcpSvc != nil {
-		mcpSvc.SetDependencies(cmdSvc, govDeps.StateRootProvider, wardenPriv, wardenKeyID, cfg.Listen.MCPDownstreamURL)
+		mcpSvc.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, cfg.Listen.MCPDownstreamURL)
 	}
 
 	go func() {
@@ -870,28 +870,28 @@ func handleResetVault(vault *vault.Vault, logger *slog.Logger) {
 	os.Exit(constants.ExitSuccess)
 }
 
-// exportWardenPublicKey writes the Warden's public key to both PEM and JSON formats
+// exportActuatorPublicKey writes the Actuator's public key to both PEM and JSON formats
 // in the PKI directory for receipt verification by the evals harness.
-func exportWardenPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
+func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
 	if err := os.MkdirAll(pkiDir, 0700); err != nil {
 		return fmt.Errorf("create PKI directory: %w", err)
 	}
 
 	// Write PEM format
-	pemPath := filepath.Join(pkiDir, "warden_pub.pem")
+	pemPath := filepath.Join(pkiDir, "Actuator_pub.pem")
 	pemData := pem.EncodeToMemory(&pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: pubKey,
 	})
 	if err := os.WriteFile(pemPath, pemData, 0600); err != nil {
-		return fmt.Errorf("write warden_pub.pem: %w", err)
+		return fmt.Errorf("write Actuator_pub.pem: %w", err)
 	}
 	if logger != nil {
-		logger.Info("Warden public key exported", "path", pemPath, "format", "PEM")
+		logger.Info("Actuator public key exported", "path", pemPath, "format", "PEM")
 	}
 
 	// Write JSON format
-	jsonPath := filepath.Join(pkiDir, "warden_pub.json")
+	jsonPath := filepath.Join(pkiDir, "Actuator_pub.json")
 	jsonData := map[string]string{
 		"key_id":     keyID,
 		"public_key": hex.EncodeToString(pubKey),
@@ -899,13 +899,13 @@ func exportWardenPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string
 	}
 	jsonBytes, err := json.MarshalIndent(jsonData, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal warden_pub.json: %w", err)
+		return fmt.Errorf("marshal Actuator_pub.json: %w", err)
 	}
 	if err := os.WriteFile(jsonPath, jsonBytes, 0600); err != nil {
-		return fmt.Errorf("write warden_pub.json: %w", err)
+		return fmt.Errorf("write Actuator_pub.json: %w", err)
 	}
 	if logger != nil {
-		logger.Info("Warden public key exported", "path", jsonPath, "format", "JSON")
+		logger.Info("Actuator public key exported", "path", jsonPath, "format", "JSON")
 	}
 
 	return nil

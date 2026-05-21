@@ -164,7 +164,7 @@ func TestGovernanceEnvelope_Success_Returns200WithSignedReceipt(t *testing.T) {
 		StateRootBefore:  "root-before",
 		StateRootAfter:   "root-after",
 		ExecutedAtUnixMs: 1234567890,
-		SignerKeyId:      "warden-key-id",
+		SignerKeyId:      "Actuator-key-id",
 		Signature:        "deadbeef",
 	}
 	proc := &fakeEnvelopeProcessor{receipt: receipt}
@@ -186,7 +186,7 @@ func TestGovernanceEnvelope_Success_Returns200WithSignedReceipt(t *testing.T) {
 	require.Equal(t, "tx-abc", got["transaction_id"])
 	require.Equal(t, "abc123", got["transaction_hash"])
 	require.Equal(t, "deadbeef", got["signature"])
-	require.Equal(t, "warden-key-id", got["signer_key_id"])
+	require.Equal(t, "Actuator-key-id", got["signer_key_id"])
 }
 
 func TestGovernanceEnvelope_FailedExecution_StillReturns200(t *testing.T) {
@@ -197,9 +197,9 @@ func TestGovernanceEnvelope_FailedExecution_StillReturns200(t *testing.T) {
 		Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 		ResultSummary: "failed: handler error",
 		Signature:     "cafef00d",
-		SignerKeyId:   "warden-key-id",
+		SignerKeyId:   "Actuator-key-id",
 	}
-	// Warden returns (receipt, execErr) when a handler fails. ProcessEnvelope
+	// Actuator returns (receipt, execErr) when a handler fails. ProcessEnvelope
 	// propagates that pair. The HTTP layer treats a non-nil receipt as
 	// authoritative - execErr alone is not 5xx territory.
 	proc := &fakeEnvelopeProcessor{receipt: receipt, err: nil}

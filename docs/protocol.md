@@ -6,7 +6,7 @@ title: g8e Protocol
 
 Last Updated: 2026-05-21
 
-The **g8e Protocol** is a governance and compliance standard. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) at the Governance Gateway's admission boundary and forces them through a fail-closed verification gauntlet - envelope integrity, typed-payload decode, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the Gateway boundary: they never reach the execution boundary (the Warden) and they never touch the host. Admitted payloads produce a cryptographically provable audit trail with local-first persistence at the site of execution.
+The **g8e Protocol** is a governance and compliance standard. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) at the Governance Gateway's admission boundary and forces them through a fail-closed verification gauntlet - envelope integrity, typed-payload decode, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the Gateway boundary: they never reach the execution boundary (the Actuator) and they never touch the host. Admitted payloads produce a cryptographically provable audit trail with local-first persistence at the site of execution.
 
 Rather than competing with tool-calling standards, g8e functions as a secure perimeter. It treats standard JSON-RPC tools as unverified payloads (the "what") and wraps them in a strict, canonical `GovernanceEnvelope` (the "how").
 
@@ -18,9 +18,9 @@ The protocol is the only mandatory layer of g8e. Any conforming implementation -
 
 *   **Outbound-Only Reverse Tunnel:** The host-resident Operator binary (`g8eo`) connects via an outbound-only tunnel to the platform hub. This architecture completely bypasses NAT and enterprise firewalls, eliminating the operational necessity of opening dangerous inbound listening ports.
 *   **Protocol-First Zero Trust:** Every system component inherently distrusts all other components. The execution gateway boundary actively handles workloads via mTLS and device-link tokens, ensuring no unauthenticated or unverified component holds privileged trust.
-*   **Byzantine Fault Tolerant (BFT) Safety:** Agentic automation is treated as a distributed consensus problem. The L2 Tribunal is fully provider-agnostic, combining heterogeneous models (e.g., Anthropic, OpenAI, local models) to outvote individual hallucinations or poisonings.
+*   **Byzantine Fault Tolerant (BFT) Safety:** Agentic automation is treated as a distributed consensus problem. The Quorum (L2) Tribunal is fully provider-agnostic, combining heterogeneous models (e.g., Anthropic, OpenAI, local models) to outvote individual hallucinations or poisonings.
 *   **Deterministic Intent Validation:** Execution authority does not rely on fluid natural language strings. The protocol enforces that explicit execution intent is serialized into a typed Protobuf payload, base64-encoded, and locked into the transaction hash of the envelope.
-*   **3-Layer Inline Governance Gate:** Every mutation must sequentially pass L1 Technical Bedrock (Hard Gates), L2 Consensus (Tribunal), and L3 Authorization (WebAuthn/Passkey) at the Operator boundary before hitting the host shell.
+*   **3-Layer Inline Governance Gate:** Every mutation must sequentially pass Doctrine (L1) Technical Bedrock (Hard Gates), Quorum (L2) Consensus (Tribunal), and Notary (L3) Authorization (WebAuthn/Passkey) at the Operator boundary before hitting the host shell.
 *   **Local-First Data Sovereignty (LFAA):** All raw data, system roots, and execution histories are isolated locally on the managed host. Every file mutation triggers a two-phase Git-backed commit tracking pre-mutation and post-mutation states, guaranteeing a tamper-evident history trail and instant rollbacks.
 *   **Zero Standing Dependencies:** The reference Operator is a single, statically compiled Go binary. The entire platform can deploy in highly hostile, isolated, or air-gapped infrastructure perimeters.
 
@@ -33,7 +33,7 @@ The protocol is the only mandatory layer of g8e. Any conforming implementation -
 3. **Fail-closed verification** - Any malformed envelope, expired transaction, reused nonce, stale state root, or missing proof is rejected immediately. The system never fails open.
 4. **Body-embedded context** - Business and execution context (`web_session_id`, `cli_session_id`, `operator_session_id`, `user_id`, `case_id`, `investigation_id`, etc.) lives inside the envelope body via a typed `RequestContext`. HTTP headers are reserved for protocol-level metadata and mTLS-bound identity.
 5. **BFT state binding** - Mutations carry a `state_merkle_root` that the Operator compares against its current host state. Stale-state transactions are rejected.
-6. **Signed receipts** - Every accepted mutation produces a Warden-signed `ActionReceipt` containing status, `state_root_before`, `state_root_after`, and a key-id-bound Ed25519 signature.
+6. **Signed receipts** - Every accepted mutation produces a Actuator-signed `ActionReceipt` containing status, `state_root_before`, `state_root_after`, and a key-id-bound Ed25519 signature.
 7. **Operator sovereignty** - No bundled component has privileged channels. The Governed Operator (`g8eo`) is the only execution boundary, and its rules apply uniformly to BYO and reference clients.
 
 ---
@@ -54,7 +54,7 @@ The system utilizes specialized AI agents defined in `services/g8eo/internal/con
 | **Pragma** | Conventional | `pragma` | Tribunal member: focuses on idiomatic tools and community standards. |
 | **Nemesis** | Adversary | `nemesis` | Calibrated adversary: proposes subtly flawed candidates to test the system. |
 | **Auditor** | Verifier | `auditor` | Final quality gate; verifies intent fidelity and syntax; disambiguates votes. |
-| **Warden** | Defender | `warden` | Orchestrates risk assessment and execution. Final gate for all mutations. |
+| **Actuator** | Defender | `Actuator` | Orchestrates risk assessment and execution. Final gate for all mutations. |
 | **Codex** | Memory | `codex` | Extracts durable user preferences and scrubbed summaries from history. |
 | **Judge** | Evaluator | `judge` | Dispassionate grader of agent performance against gold-standard rubrics. |
 | **User** | Co-validator | `user` | Human domain validator; provides hardware-bound signature to verify intent. |
@@ -72,7 +72,7 @@ The `GovernanceEnvelope` is the single canonical container for every g8e mutatio
 | `payload` | Base64-encoded binary protobuf message - the **sole authority for execution**. |
 | `intent_data` | `google.protobuf.Struct` view for visibility/audit. Never used as a fallback for execution. |
 | `transaction_hash` | SHA-256 over: `action_type | target_resource | payload_base64 | state_root | nonce | expires_at | intent_data`. |
-| `governance` | L1 status, L2 Tribunal signature, L3 human proof. |
+| `governance` | Doctrine (L1) status, Quorum (L2) Tribunal signature, Notary (L3) human proof. |
 | `state_merkle_root` | Expected host state root at signing time. |
 | `nonce` | Unique replay-protection token. |
 | `expires_at` | UTC timestamp after which the envelope is void. |
@@ -81,7 +81,7 @@ The schema source of truth lives under `@/home/bob/g8e/protocol/proto/`:
 
 | File | Purpose |
 |---|---|
-| `common.proto` | `GovernanceEnvelope`, `GovernanceMetadata`, L1/L2/L3 substructures. |
+| `common.proto` | `GovernanceEnvelope`, `GovernanceMetadata`, Doctrine (L1)/Quorum (L2)/Notary (L3) substructures. |
 - `operator.proto` | Typed mutation payloads (`CommandRequested`, `FileEditRequested`, `ActionReceipt`, etc.).
 - `pubsub.proto` | Envelope-aware pub/sub message types.
 
@@ -98,11 +98,11 @@ For BYO clients using the MCP or A2A protocol translation gateway, `g8eg` (servi
 | `-32002` | `ERR_EXPIRED` | `expires_at` timestamp has passed. |
 | `-32003` | `ERR_REPLAY` | `nonce` has already been used within the expiry window. |
 | `-32004` | `ERR_STATE_MISMATCH` | `state_merkle_root` does not match the current host state. |
-| `-32005` | `ERR_L1_FAILED` | Typed payload violates L1 forbidden patterns or Sentinel rules. |
-| `-32006` | `ERR_L2_FAILED` | L2 Tribunal signature is missing, invalid, or from an untrusted key. |
-| `-32007` | `ERR_L3_FAILED` | L3 WebAuthn proof is missing or failed verification. |
+| `-32005` | `ERR_L1_FAILED` | Typed payload violates Doctrine (L1) forbidden patterns or Sentinel rules. |
+| `-32006` | `ERR_L2_FAILED` | Quorum (L2) Tribunal signature is missing, invalid, or from an untrusted key. |
+| `-32007` | `ERR_L3_FAILED` | Notary (L3) WebAuthn proof is missing or failed verification. |
 | `-32008` | `ERR_PAYLOAD_DECODE` | Failed to decode the base64 `payload` into its typed protobuf message. |
-| `-32101` | `ERR_Gateway_NOT_READY` | Governance Gateway (Warden/Verifier) is not initialized. |
+| `-32101` | `ERR_Gateway_NOT_READY` | Governance Gateway (Actuator/Verifier) is not initialized. |
 | `-32603` | `INTERNAL_ERROR` | Unhandled internal error or execution failure. |
 
 ---
@@ -111,7 +111,7 @@ For BYO clients using the MCP or A2A protocol translation gateway, `g8eg` (servi
 
 Every mutation must pass three independent layers in order. A failure at any layer is an immediate rejection.
 
-### L1: Technical Bedrock (Hard Gates)
+### Doctrine (L1): Technical Bedrock (Hard Gates)
 
 Static, deterministic checks enforced before any code executes.
 
@@ -119,21 +119,21 @@ Static, deterministic checks enforced before any code executes.
 - **Sentinel pre-execution analysis** - Regex matching against 90+ threat patterns (reverse shells, privilege escalation, exfiltration).
 - **Allow/deny lists** - Per-host policy in `services/g8eo/internal/constants/` and per-user `command_validation` settings.
 
-### L2: Consensus (Tribunal)
+### Quorum (L2): Consensus (Tribunal)
 
 A cryptographic proof that an independent ensemble agreed on the instruction.
 
 - **Mechanism** - Ed25519 signature over `transaction_hash | decision`.
 - **Trust** - The Governed Operator maintains an Operator-owned `SignerStore`; missing or unknown keys cause rejection.
-- **Producer** - Any conforming L2 producer (the bundled Engine, a BYO multi-agent system, or a single signer for low-stakes flows).
-- **Reference Engine producer** - g8ee runs its own internal Byzantine cascade upstream of the L2 signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Warden risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Engine signs only after Auditor passes. The Gateway gateway and operator do not assume any of this; they re-run every gate below independently. See [g8ee Governance & Safety](g8ee.md) and [position paper §2.3](position_paper.md).
+- **Producer** - Any conforming Quorum (L2) producer (the bundled Engine, a BYO multi-agent system, or a single signer for low-stakes flows).
+- **Reference Engine producer** - g8ee runs its own internal Byzantine cascade upstream of the Quorum (L2) signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Actuator risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Engine signs only after Auditor passes. The Gateway gateway and operator do not assume any of this; they re-run every gate below independently. See [g8ee Governance & Safety](g8ee.md) and [position paper §2.3](position_paper.md).
 
-### L3: Authorization (Human)
+### Notary (L3): Authorization (Human)
 
 Hardware-bound proof of human presence, except where policy explicitly permits auto-approval.
 
 - **Mechanism** - Real WebAuthn/FIDO2 `L3Proof` (clientDataJSON, authenticatorData, signature) with the transaction hash as the assertion challenge.
-- **Auto-approval** - Benign diagnostic verbs (e.g., `uptime`, `df`) may be marked L3-authorized via policy. **L3 auto-approval never bypasses L1 or L2.**
+- **Auto-approval** - Benign diagnostic verbs (e.g., `uptime`, `df`) may be marked Notary (L3)-authorized via policy. **Notary (L3) auto-approval never bypasses Doctrine (L1) or Quorum (L2).**
 
 ---
 
@@ -143,8 +143,8 @@ Hardware-bound proof of human presence, except where policy explicitly permits a
 
 1. Client builds a typed protobuf payload (e.g., `CommandRequested`).
 2. Client embeds the payload in a `GovernanceEnvelope`, populating `nonce`, `expires_at`, and `state_merkle_root`.
-3. The L2 producer computes `transaction_hash` and attaches a Tribunal signature.
-4. The L3 actor (human) signs the same hash via WebAuthn.
+3. The Quorum (L2) producer computes `transaction_hash` and attaches a Tribunal signature.
+4. The Notary (L3) actor (human) signs the same hash via WebAuthn.
 5. Client submits canonical-JSON envelope over mTLS to the Governance Gateway (`g8eg`), which validates, records/suspends as needed, and dispatches to the target Governed Operator (`g8eo`) over secure mTLS WSS.
 
 ### Verification Phase (Gateway & Operator)
@@ -154,15 +154,15 @@ The `TransactionVerifier` on both `g8eg` and `g8eo` runs the following gates in 
 1. **Integrity** - `id == transaction_hash == SHA256(canonical_fields)`.
 2. **Freshness** - `expires_at` not passed; `nonce` not in the replay store.
 3. **State** - `state_merkle_root` matches local ledger root.
-4. **L1** - Reflected `forbidden_patterns` over the typed payload + Sentinel threat analysis.
-5. **L2** - Tribunal signature verified against the trusted `SignerStore`.
-6. **L3** - WebAuthn `L3Proof` verified for mutations (or auto-approval policy applied after L1/L2 pass).
+4. **Doctrine (L1)** - Reflected `forbidden_patterns` over the typed payload + Sentinel threat analysis.
+5. **Quorum (L2)** - Tribunal signature verified against the trusted `SignerStore`.
+6. **Notary (L3)** - WebAuthn `L3Proof` verified for mutations (or auto-approval policy applied after Doctrine (L1)/Quorum (L2) pass).
 
 ### Execution & Receipt Phase (Operator → Client)
 
-The **Warden** on the Governed Operator signs an executing-state `ActionReceipt` and writes it to the AuditVault. If logging fails, execution is aborted.
-2. The Warden dispatches the typed payload to its execution handler (e.g., shell executor, file edit handler).
-3. The Warden updates the receipt with the final status (`COMPLETED` / `FAILED`), the post-state root, and a fresh signature.
+The **Actuator** on the Governed Operator signs an executing-state `ActionReceipt` and writes it to the AuditVault. If logging fails, execution is aborted.
+2. The Actuator dispatches the typed payload to its execution handler (e.g., shell executor, file edit handler).
+3. The Actuator updates the receipt with the final status (`COMPLETED` / `FAILED`), the post-state root, and a fresh signature.
 4. The Governed Operator publishes a result envelope (also a `GovernanceEnvelope`) carrying the typed result and the signed receipt back to the Gateway.
 
 ---
@@ -242,7 +242,7 @@ Platform broadcast: `operator_heartbeats`, `sse_events`, `system_events`.
 
 - **Zero-Trust Networking**: Operators require outbound WSS connectivity. No inbound ports are opened; all inputs are distrusted until verified.
 - **Bounded Parsing**: Use `SplitN(channel, ":", 3)` when parsing channels to handle session IDs that may contain separators.
-- **Fail-Closed Execution**: If the `Warden` service or `TransactionVerifier` is missing/nil, all inbound commands are rejected.
+- **Fail-Closed Execution**: If the `Actuator` service or `TransactionVerifier` is missing/nil, all inbound commands are rejected.
 
 ---
 
@@ -291,7 +291,7 @@ Agent performance is tracked via an EMA scalar `[0.0, 1.0]` in the `reputation_s
 | **Nemesis** | Adversary | False alarm, Abstaining on real flaw |
 | **Sage** | Intent | Consensus failure, Heavy Auditor revision |
 | **Auditor** | Verification | Destructive approval failure, Auditor error |
-| **Warden** | Defense | Missed risk, Over-caution (blocking LOW) |
+| **Actuator** | Defense | Missed risk, Over-caution (blocking LOW) |
 
 ---
 

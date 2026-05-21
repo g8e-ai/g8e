@@ -13,7 +13,7 @@
 
 // chaos_tester generates a realistic distribution of governance events against
 // the local g8e audit stack.  It bypasses network/TLS by driving the
-// TransactionVerifier + Warden stack directly in-process, which is the same
+// TransactionVerifier + Actuator stack directly in-process, which is the same
 // path exercised by the live operator when payloads arrive over pub/sub.
 //
 // Distribution:
@@ -436,7 +436,7 @@ func main() {
 		knownActionTypes,
 	)
 
-	warden := &governance.Warden{
+	Actuator := &governance.Actuator{
 		Logger:            logger,
 		SignerStore:       &governance.SimpleSignerStore{Signers: trustedSigners},
 		AuditVault:        av,
@@ -530,7 +530,7 @@ func main() {
 				return
 			}
 
-			fireOne(id, c, env, currentRoot, verifier, warden, logger, &cnt, rejectionBatch)
+			fireOne(id, c, env, currentRoot, verifier, Actuator, logger, &cnt, rejectionBatch)
 		}(idx, catCopy, sessionID)
 	}
 
@@ -593,7 +593,7 @@ func fireOne(
 	env *uap.UAPEnvelope,
 	stateRoot string,
 	verifier *governance.TransactionVerifier,
-	warden *governance.Warden,
+	Actuator *governance.Actuator,
 	logger *slog.Logger,
 	cnt *counters,
 	batchWriter *batchEventWriter,
@@ -625,12 +625,12 @@ func fireOne(
 		Timestamp:         env.Timestamp.AsTime(),
 	}
 
-	// In chaos tester, we want to bypass the Warden's synchronous SQLite write for successes too
+	// In chaos tester, we want to bypass the Actuator's synchronous SQLite write for successes too
 	// so we use a custom execution flow that still hits the handler but batches the audit log.
 
 	// Execute through the handler
 	eventType := constants.MapActionTypeToEventType(constants.ActionType(env.ActionType))
-	_, err := warden.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, cmdMsg)
+	_, err := Actuator.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, cmdMsg)
 
 	if err != nil {
 		logger.Warn("execution error", "id", id, "error", err)

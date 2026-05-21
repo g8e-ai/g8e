@@ -40,12 +40,12 @@ var (
 	ErrTransactionReplay       = errors.New("TX_REPLAY: nonce already used")
 	ErrStateRootMissing        = errors.New("TX_STATE_MISSING: state_merkle_root required but missing")
 	ErrStateRootMismatch       = errors.New("TX_STATE_MISMATCH: state_merkle_root does not match current state")
-	ErrL2SignatureMissing      = errors.New("TX_L2_SIG_MISSING: L2 tribunal_signature required but missing")
-	ErrL2SignatureInvalid      = errors.New("TX_L2_SIG_INVALID: L2 tribunal_signature failed verification")
-	ErrL2KeyNotConfigured      = errors.New("TX_L2_KEY_MISSING: trusted L2 signer key not configured")
-	ErrL3ProofMissing          = errors.New("TX_L3_PROOF_MISSING: L3 WebAuthn proof required but missing")
-	ErrL3ProofInvalid          = errors.New("TX_L3_PROOF_INVALID: L3 WebAuthn proof failed verification")
-	ErrL3VerifierNotConfigured = errors.New("TX_L3_VERIFIER_MISSING: L3 verifier required but not configured")
+	ErrL2SignatureMissing      = errors.New("TX_QUORUM_L2_SIG_MISSING: Quorum (L2) tribunal_signature required but missing")
+	ErrL2SignatureInvalid      = errors.New("TX_QUORUM_L2_SIG_INVALID: Quorum (L2) tribunal_signature failed verification")
+	ErrL2KeyNotConfigured      = errors.New("TX_QUORUM_L2_KEY_MISSING: trusted Quorum (L2) signer key not configured")
+	ErrL3ProofMissing          = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3) WebAuthn proof required but missing")
+	ErrL3ProofInvalid          = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3) WebAuthn proof failed verification")
+	ErrL3VerifierNotConfigured = errors.New("TX_NOTARY_L3_VERIFIER_MISSING: Notary (L3) verifier required but not configured")
 	ErrTransactionHashMissing  = errors.New("TX_HASH_MISSING: transaction_hash required")
 	ErrTransactionIDMissing    = errors.New("TX_ID_MISSING: id required")
 	ErrExpiresAtMissing        = errors.New("TX_EXPIRES_AT_MISSING: expires_at required")
@@ -54,7 +54,7 @@ var (
 	ErrStateRootRequired       = errors.New("TX_STATE_REQUIRED: state_merkle_root required")
 	ErrPayloadMissing          = errors.New("TX_PAYLOAD_MISSING: typed protobuf payload required")
 	ErrPayloadActionMismatch   = errors.New("TX_PAYLOAD_ACTION_MISMATCH: action type does not match typed payload")
-	ErrL1ValidationFailed      = errors.New("TX_L1_FAILED: typed payload violates L1 forbidden patterns")
+	ErrL1ValidationFailed      = errors.New("TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1) forbidden patterns")
 )
 
 // ReplayStore defines the interface for nonce replay protection.
@@ -171,7 +171,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		return nil, ErrPayloadDecodeFailed
 	}
 	if violations := tv.validateL1Governance(decodedPayload); len(violations) > 0 {
-		tv.logger.Error("L1 validation failed", "action_type", envelope.ActionType, "violations", violations)
+		tv.logger.Error("Doctrine (L1) validation failed", "action_type", envelope.ActionType, "violations", violations)
 		return nil, fmt.Errorf("%w: %s", ErrL1ValidationFailed, strings.Join(violations, ", "))
 	}
 
@@ -211,7 +211,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		return nil, ErrReplayStoreMissing
 	}
 	// Nonce consumption is deferred until after all other gates pass so a
-	// transaction that legitimately suspends on L3_PROOF_MISSING can be
+	// transaction that legitimately suspends on NOTARY_L3_PROOF_MISSING can be
 	// resumed once the human supplies WebAuthn proof without forcing the
 	// upstream client to re-issue the call with a fresh nonce.
 
@@ -256,7 +256,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		return nil, ErrL2KeyNotConfigured
 	}
 	if pubKey == nil {
-		tv.logger.Error("L2 signer key not found in trusted signers", "key_id", envelope.Governance.L2.KeyId)
+		tv.logger.Error("Quorum (L2) signer key not found in trusted signers", "key_id", envelope.Governance.L2.KeyId)
 		return nil, ErrL2KeyNotConfigured
 	}
 	if !tv.verifyL2Signature(pubKey, envelope.Governance.L2.TribunalSignature, computedHash, true) {
@@ -276,7 +276,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 			envelope.Governance.L3.Proof,
 		)
 		if err != nil || !ok {
-			tv.logger.Error("L3 verification failed", string(constants.ConnectionStateError), err)
+			tv.logger.Error("Notary (L3) verification failed", string(constants.ConnectionStateError), err)
 			return nil, ErrL3ProofInvalid
 		}
 	}
