@@ -59,7 +59,7 @@ class InternalHttpClient:
                 recovery_time=60,
             ),
             auth_token="",
-            api_key=settings.auth.g8e_api_key or "",
+            api_key=settings.auth.internal_api_key or "",
             headers={},
             ca_cert_path=settings.ca_cert_path or "",
             client_cert_path=settings.client_cert_path,

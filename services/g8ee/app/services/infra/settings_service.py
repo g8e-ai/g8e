@@ -25,7 +25,7 @@ from app.constants.collections import (
     PLATFORM_SETTINGS_DOC,
     USER_SETTINGS_DOC_PREFIX,
 )
-from app.constants.generated_paths import PathConstants
+from app.constants.generated_paths import PathConstants, PortConstants
 from app.errors import ConfigurationError
 from app.models.settings import (
     LLMSettings,
@@ -76,18 +76,18 @@ class SettingsService:
         bootstrap service (operator volume)."""
         settings = G8eePlatformSettings(
             host="0.0.0.0",
-            port=PathConstants.PORT_G8EE_HTTP,
+            port=PortConstants.PORT_G8EE_HTTP,
             log_level=LogLevel.INFO,
             enable_logging=True,
             docker_gid="988",
             session_ttl=3600,
             absolute_session_timeout=86400,
             docs_dir=PathConstants.PATH_DOCS_DIR,
-            app_url=f"http://localhost:{PathConstants.PORT_G8EE_HTTP}",
+            app_url=f"http://localhost:{PortConstants.PORT_G8EE_HTTP}",
             allowed_origins="*",
             passkey_rp_name="g8e",
             passkey_rp_id="g8e",
-            passkey_origin=f"http://localhost:{PathConstants.PORT_G8EE_HTTP}",
+            passkey_origin=f"http://localhost:{PortConstants.PORT_G8EE_HTTP}",
         )
 
         # Load secrets from bootstrap service

@@ -90,7 +90,7 @@ func setupTestListenService(t *testing.T) (*ListenService, *config.Config) {
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	cfg.Listen.BootstrapPort = constants.Paths.Ports.OperatorBootstrap
+	cfg.Listen.BootstrapPort = constants.Ports.OperatorBootstrap
 
 	ls := newListenServiceFromComponents(cfg, logger, db, pubsub)
 	return ls, cfg

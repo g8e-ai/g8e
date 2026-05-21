@@ -16,7 +16,7 @@
 
 package constants
 
-// Path constants generated from paths.json
+// Paths defines canonical G8E filesystem paths.
 var Paths = struct {
 	Infra struct {
 		DbPath string
@@ -29,13 +29,6 @@ var Paths = struct {
 		ProtocolConstantsDir string
 		ProtocolModelsDir string
 		SshConfigPath string
-	}
-	Ports struct {
-		OperatorHttp int
-		OperatorBootstrap int
-		OperatorPublic int
-		G8eeHttp int
-		OpenclawGateway int
 	}
 }{
 	Infra: struct {
@@ -60,18 +53,5 @@ var Paths = struct {
 		ProtocolConstantsDir: "/app/protocol/constants",
 		ProtocolModelsDir: "/app/protocol/models",
 		SshConfigPath: "/etc/g8e/ssh_config",
-	},
-	Ports: struct {
-		OperatorHttp int
-		OperatorBootstrap int
-		OperatorPublic int
-		G8eeHttp int
-		OpenclawGateway int
-	}{
-		OperatorHttp: 8440,
-		OperatorBootstrap: 8441,
-		OperatorPublic: 8442,
-		G8eeHttp: 8443,
-		OpenclawGateway: 18789,
 	},
 }

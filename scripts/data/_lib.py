@@ -73,11 +73,14 @@ _PROTOCOL_CONSTANTS = PROJECT_ROOT / 'protocol' / 'constants'
 with open(_PROTOCOL_CONSTANTS / 'collections.json') as _f:
     _COLLECTIONS_DATA = json.load(_f)
 
+with open(_PROTOCOL_CONSTANTS / 'paths.json') as _f:
+    _PATHS_DATA = json.load(_f)
+
 _DEFAULT_PKI_DIR = str(PROJECT_ROOT / '.g8e' / 'pki')
 _DEFAULT_SECRETS_DIR = str(PROJECT_ROOT / '.g8e' / 'secrets')
 _DEFAULT_CREDENTIALS_DIR = str(Path.home() / '.g8e')
 
-OPERATOR_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', 'https://localhost:443')
+OPERATOR_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', f"https://localhost:{_PATHS_DATA['ports']['operator_http']}")
 COLLECTIONS: List[str] = sorted([v['value'] for v in _COLLECTIONS_DATA['collections'].values()])
 PRESERVE_COLLECTIONS = {'settings'}
 

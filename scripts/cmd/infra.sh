@@ -54,7 +54,7 @@ case "$TOP" in
         fi
 
         _trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
-        _bootstrap_port="${OPERATOR_LISTEN_BOOTSTRAP_PORT:-$G8E_PORT_OPERATOR_BOOTSTRAP}"
+        _bootstrap_port="${G8E_OPERATOR_BOOTSTRAP_PORT:-$G8E_PORT_OPERATOR_BOOTSTRAP}"
         _bootstrap_url="${G8E_BOOTSTRAP_URL:-http://localhost:$_bootstrap_port}"
 
         if [[ ! -f "$_trust_bundle" ]]; then
@@ -327,7 +327,7 @@ case "$TOP" in
       \"command\": \"$G8E_PROJECT_ROOT/g8e\",
       \"args\": [\"mcp\", \"serve\"],
       \"env\": {
-        \"G8E_OPERATOR_URL\": \"https://localhost:443\"
+        \"G8E_OPERATOR_URL\": \"https://localhost:$G8E_PORT_OPERATOR_PUBLIC\"
       }
     }
   }

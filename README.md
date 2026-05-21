@@ -4,7 +4,13 @@
 
 g8e is a zero-trust execution protocol and outbound-only gateway that forces AI tool calls into a strict governance envelope. It physically separates intent generation from execution, requiring a compliant agentic system to reach structural consensus before mutating state.
 
-Designed for universal interoperability, g8e provides a mandatory security perimeter for standard JSON-based protocols like Anthropic's **Model Context Protocol (MCP)** and **Agent-to-Agent (A2A)**. While these protocols define the "what" (the payload), g8e serves as the **Universal Protocol Router and Admission Gate** - ensuring every transaction is typed, signed, and state-bound before it touches the host.
+## Architectural Highlights
+
+* **Outbound-Only Reverse Tunnel:** The host-resident Operator (`g8eo`) connects via an outbound-only tunnel to the platform hub. This bypasses NAT and enterprise firewalls, eliminating the need for inbound listening ports.
+* **3-Layer Inline Governance:** Every mutation must sequentially pass L1 Technical Bedrock (Hard Gates), L2 Consensus (Tribunal), and L3 Authorization (WebAuthn) at the Operator boundary before execution.
+* **Multi-Model BFT Resilience:** Agentic automation is treated as a distributed consensus problem. The L2 Tribunal is provider-agnostic, combining heterogeneous models (e.g., Anthropic, OpenAI, local models) to outvote individual hallucinations or poisonings.
+* **Local-First Data Sovereignty (LFAA):** All raw data, system roots, and execution histories are isolated locally on the managed host. A two-phase Git-backed commit architecture provides a tamper-evident history trail and instant rollbacks.
+* **Zero Standing Dependencies:** The reference Operator is a single, statically compiled Go binary. The entire platform supports air-gapped deployments in isolated infrastructure perimeters.
 
 ---
 
@@ -43,7 +49,7 @@ The system is architected for universal distrust between all actors:
 
 * **Principal / User:** Distrusts any single AI provider (enforces multi-model workflows) and any host running an Operator (verified via fingerprinting, mTLS, and device links).
 * **Engine (g8ee):** Distrusts the User (blocks malicious operations) and the Operator (enforces scoped sessions and scrubs data before delivery to AI).
-* **Operator (g8eo):** Distrusts both User and AI, enforcing outbound-only communication (a reverse tunnel) via signed protocol envelopes, Sentinel gates, and mTLS.
+* **Operator (g8eo):** Distrusts both User and AI, enforcing outbound-only communication via a reverse tunnel using signed protocol envelopes, Sentinel gates, and mTLS. Execution authority is tied to deterministic intent validation: execution intent is serialized into a typed Protobuf payload, base64-encoded, and locked into the transaction hash of the envelope.
 
 * **The Protocol (Wire Contract)**: A typed, signed, state-bound transaction layer. It is the single source of truth for all system mutations and the only mandatory component for interoperability. See [GovernanceEnvelope](https://www.google.com/search?q=protocol/proto/common.proto) (protojson).
 

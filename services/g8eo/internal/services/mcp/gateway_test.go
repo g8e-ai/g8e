@@ -169,7 +169,7 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 		suspendedStore: store,
 		signingKey:     privKey,
 		keyID:          "test-key",
-		publicBaseURL:  "http://localhost:443",
+		publicBaseURL:  "https://localhost:8442",
 	}
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{"foo":"bar"}}}`
@@ -191,7 +191,7 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 
 	require.Len(t, result.Content, 1)
 	require.Contains(t, result.Content[0].Text, "Execution paused")
-	require.Contains(t, result.Content[0].Text, "http://localhost:443/approve/")
+	require.Contains(t, result.Content[0].Text, "https://localhost:8442/approve/")
 
 	// Verify it was stored
 	require.Len(t, store.txs, 1)

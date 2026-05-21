@@ -170,7 +170,7 @@ func TestNewOpenClawNodeService_RequiresURL(t *testing.T) {
 }
 
 func TestNewOpenClawNodeService_DefaultsNodeID(t *testing.T) {
-	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Paths.Ports.OpenclawGateway), "", "", "", "", newTestLogger())
+	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.OpenclawGateway), "", "", "", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestNewOpenClawNodeService_DefaultsNodeID(t *testing.T) {
 }
 
 func TestNewOpenClawNodeService_DisplayNameFallsBackToNodeID(t *testing.T) {
-	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Paths.Ports.OpenclawGateway), "", "my-node", "", "", newTestLogger())
+	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.OpenclawGateway), "", "my-node", "", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestNewOpenClawNodeService_DisplayNameFallsBackToNodeID(t *testing.T) {
 }
 
 func TestNewOpenClawNodeService_ExplicitDisplayName(t *testing.T) {
-	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Paths.Ports.OpenclawGateway), "", "my-node", "My Server", "", newTestLogger())
+	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.OpenclawGateway), "", "my-node", "My Server", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -649,7 +649,7 @@ func TestTruncateOutput_ExactSize(t *testing.T) {
 // ────────────────────────────────────────────────────────────────
 
 func TestStop_BeforeStart_DoesNotPanic(t *testing.T) {
-	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Paths.Ports.OpenclawGateway), "", "node-stop", "", "", newTestLogger())
+	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.OpenclawGateway), "", "node-stop", "", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("NewOpenClawNodeService: %v", err)
 	}

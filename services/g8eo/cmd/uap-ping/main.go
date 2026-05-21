@@ -68,7 +68,7 @@ func main() {
 		}
 
 		server := &http.Server{
-			Addr:      fmt.Sprintf(":%d", constants.Paths.Ports.G8eeHttp),
+			Addr:      fmt.Sprintf(":%d", constants.Ports.G8eeHttp),
 			TLSConfig: tlsConfig,
 		}
 
@@ -96,7 +96,7 @@ func main() {
 			w.Write([]byte("Warden: Envelope authorized and logged."))
 		})
 
-		log.Printf("Warden Server listening on https://localhost:%d/uap (mTLS required)", constants.Paths.Ports.G8eeHttp)
+		log.Printf("Warden Server listening on https://localhost:%d/uap (mTLS required)", constants.Ports.G8eeHttp)
 		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Warden Server failed: %v", err)
 		}
@@ -140,7 +140,7 @@ func main() {
 	}
 
 	log.Printf("Sage Client: Sending UAP envelope to Warden...")
-	resp, err := client.Post(fmt.Sprintf("https://localhost:%d/uap", constants.Paths.Ports.G8eeHttp), "application/json", bytes.NewBuffer(payload))
+	resp, err := client.Post(fmt.Sprintf("https://localhost:%d/uap", constants.Ports.G8eeHttp), "application/json", bytes.NewBuffer(payload))
 	if err != nil {
 		log.Fatalf("Sage Client: Request failed: %v", err)
 	}

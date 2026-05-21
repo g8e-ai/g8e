@@ -52,7 +52,7 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, 30*time.Second, cfg.HeartbeatInterval)
 	assert.Equal(t, int64(1024), cfg.LocalStoreMaxSizeMB)
 	assert.Equal(t, 30, cfg.LocalStoreRetentionDays)
-	assert.Equal(t, constants.Paths.Ports.OperatorHttp, cfg.HTTPPort)
+	assert.Equal(t, constants.Ports.OperatorHttp, cfg.HTTPPort)
 
 	// WorkDir defaults to the project root when --working-dir is not supplied
 	assert.Equal(t, wantWorkDir, cfg.WorkDir)
@@ -91,10 +91,10 @@ func TestLoad_HTTPPortOverride(t *testing.T) {
 	cfg, err := Load(LoadOptions{
 		APIKey:           "k",
 		OperatorEndpoint: constants.DefaultEndpoint,
-		HTTPPort:         constants.Paths.Ports.G8eeHttp,
+		HTTPPort:         constants.Ports.G8eeHttp,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, constants.Paths.Ports.G8eeHttp, cfg.HTTPPort)
+	assert.Equal(t, constants.Ports.G8eeHttp, cfg.HTTPPort)
 }
 
 func TestLoad_TLSServerName(t *testing.T) {
@@ -243,8 +243,8 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 	t.Run("reject httpPort 0", func(t *testing.T) {
 		_, err := LoadListen(ListenOptions{
 			HTTPPort:          0,
-			BootstrapPort:     constants.Paths.Ports.OperatorBootstrap,
-			PublicPort:        constants.Paths.Ports.OperatorPublic,
+			BootstrapPort:     constants.Ports.OperatorBootstrap,
+			PublicPort:        constants.Ports.OperatorPublic,
 			AllowTestPortZero: false,
 		})
 		require.Error(t, err)
@@ -253,9 +253,9 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 
 	t.Run("reject bootstrapPort 0", func(t *testing.T) {
 		_, err := LoadListen(ListenOptions{
-			HTTPPort:          constants.Paths.Ports.OperatorHttp,
+			HTTPPort:          constants.Ports.OperatorHttp,
 			BootstrapPort:     0,
-			PublicPort:        constants.Paths.Ports.OperatorPublic,
+			PublicPort:        constants.Ports.OperatorPublic,
 			AllowTestPortZero: false,
 		})
 		require.Error(t, err)
@@ -264,8 +264,8 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 
 	t.Run("reject publicPort 0", func(t *testing.T) {
 		_, err := LoadListen(ListenOptions{
-			HTTPPort:          constants.Paths.Ports.OperatorHttp,
-			BootstrapPort:     constants.Paths.Ports.OperatorBootstrap,
+			HTTPPort:          constants.Ports.OperatorHttp,
+			BootstrapPort:     constants.Ports.OperatorBootstrap,
 			PublicPort:        0,
 			AllowTestPortZero: false,
 		})
@@ -275,9 +275,9 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 
 	t.Run("accept all non-zero ports in production", func(t *testing.T) {
 		_, err := LoadListen(ListenOptions{
-			HTTPPort:          constants.Paths.Ports.OperatorHttp,
-			BootstrapPort:     constants.Paths.Ports.OperatorBootstrap,
-			PublicPort:        constants.Paths.Ports.OperatorPublic,
+			HTTPPort:          constants.Ports.OperatorHttp,
+			BootstrapPort:     constants.Ports.OperatorBootstrap,
+			PublicPort:        constants.Ports.OperatorPublic,
 			AllowTestPortZero: false,
 		})
 		require.NoError(t, err)
@@ -289,7 +289,7 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadOpenClaw_Valid(t *testing.T) {
-	gatewayURL := fmt.Sprintf("wss://gateway.example.com:%d", constants.Paths.Ports.OpenclawGateway)
+	gatewayURL := fmt.Sprintf("wss://gateway.example.com:%d", constants.Ports.OpenclawGateway)
 	cfg, err := LoadOpenClaw(OpenClawOptions{
 		GatewayURL:  gatewayURL,
 		Token:       "token123",
@@ -326,7 +326,7 @@ func TestLoadOpenClaw_MissingGatewayURL(t *testing.T) {
 }
 
 func TestLoadOpenClaw_OptionalFieldsEmpty(t *testing.T) {
-	gatewayURL := fmt.Sprintf("ws://gateway:%d", constants.Paths.Ports.OpenclawGateway)
+	gatewayURL := fmt.Sprintf("ws://gateway:%d", constants.Ports.OpenclawGateway)
 	cfg, err := LoadOpenClaw(OpenClawOptions{GatewayURL: gatewayURL})
 	require.NoError(t, err)
 
@@ -398,11 +398,11 @@ func TestHTTPPortOrDefault(t *testing.T) {
 		input int
 		want  int
 	}{
-		{0, constants.Paths.Ports.OperatorHttp},
-		{-1, constants.Paths.Ports.OperatorHttp},
+		{0, constants.Ports.OperatorHttp},
+		{-1, constants.Ports.OperatorHttp},
 		{1, 1},
-		{constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorHttp},
-		{constants.Paths.Ports.OperatorHttp, constants.Paths.Ports.OperatorHttp},
+		{constants.Ports.OperatorHttp, constants.Ports.OperatorHttp},
+		{constants.Ports.OperatorHttp, constants.Ports.OperatorHttp},
 	}
 
 	for _, tt := range tests {

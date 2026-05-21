@@ -4,11 +4,25 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-05-18
+Last Updated: 2026-05-21
 
 The **g8e Protocol** is a governance and compliance standard. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) at the Governance Gateway's admission boundary and forces them through a fail-closed verification gauntlet - envelope integrity, typed-payload decode, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the Gateway boundary: they never reach the execution boundary (the Warden) and they never touch the host. Admitted payloads produce a cryptographically provable audit trail with local-first persistence at the site of execution.
 
+Rather than competing with tool-calling standards, g8e functions as a secure perimeter. It treats standard JSON-RPC tools as unverified payloads (the "what") and wraps them in a strict, canonical `GovernanceEnvelope` (the "how").
+
 The protocol is the only mandatory layer of g8e. Any conforming implementation - Governance Gateway, Governed Operator, client, or BYO frontend - interoperates by speaking this contract. The reference Governance Gateway (`g8eg`), Governed Operator (`g8eo`), and reference Engine (`g8ee`) are interchangeable with anything that produces and verifies the same envelopes.
+
+---
+
+## Architectural Differentiators
+
+*   **Outbound-Only Reverse Tunnel:** The host-resident Operator binary (`g8eo`) connects via an outbound-only tunnel to the platform hub. This architecture completely bypasses NAT and enterprise firewalls, eliminating the operational necessity of opening dangerous inbound listening ports.
+*   **Protocol-First Zero Trust:** Every system component inherently distrusts all other components. The execution gateway boundary actively handles workloads via mTLS and device-link tokens, ensuring no unauthenticated or unverified component holds privileged trust.
+*   **Byzantine Fault Tolerant (BFT) Safety:** Agentic automation is treated as a distributed consensus problem. The L2 Tribunal is fully provider-agnostic, combining heterogeneous models (e.g., Anthropic, OpenAI, local models) to outvote individual hallucinations or poisonings.
+*   **Deterministic Intent Validation:** Execution authority does not rely on fluid natural language strings. The protocol enforces that explicit execution intent is serialized into a typed Protobuf payload, base64-encoded, and locked into the transaction hash of the envelope.
+*   **3-Layer Inline Governance Gate:** Every mutation must sequentially pass L1 Technical Bedrock (Hard Gates), L2 Consensus (Tribunal), and L3 Authorization (WebAuthn/Passkey) at the Operator boundary before hitting the host shell.
+*   **Local-First Data Sovereignty (LFAA):** All raw data, system roots, and execution histories are isolated locally on the managed host. Every file mutation triggers a two-phase Git-backed commit tracking pre-mutation and post-mutation states, guaranteeing a tamper-evident history trail and instant rollbacks.
+*   **Zero Standing Dependencies:** The reference Operator is a single, statically compiled Go binary. The entire platform can deploy in highly hostile, isolated, or air-gapped infrastructure perimeters.
 
 ---
 

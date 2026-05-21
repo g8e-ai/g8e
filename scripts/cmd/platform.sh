@@ -32,7 +32,6 @@ case "$SUB" in
     status|start|stop|restart|reset|clean|settings|logs)
         case "$SUB" in
             start)
-            _banner "platform start"
             bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up "${@:2}"
             # Auto-load credentials after bootstrap if they exist
             if [[ -f "$G8E_CREDENTIALS_FILE" ]]; then

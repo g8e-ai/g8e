@@ -83,7 +83,7 @@ The harness is fail-closed without canonical mTLS + session credentials:
 2. `./g8e login` - mints client cert/key, captures session id, exports the env vars `scripts/cmd/evals.sh` re-exports for the bench:
    - `G8E_OPERATOR_SESSION_ID`, `G8E_USER_ID`
    - `G8E_CLI_CERT`, `G8E_CLI_KEY`, `G8E_TRUST_BUNDLE`
-   - `G8E_G8EE_URL`, `G8E_INTERNAL_HTTP_URL`, `G8E_PKI_DIR`
+   - `G8E_G8EE_URL`, `G8E_OPERATOR_URL`, `G8E_PKI_DIR`
 3. **LLM API keys** must be available to g8ee for any provider you select. The chat request body forwards `llm_<role>_provider`, `llm_<role>_model`, `llm_<role>_api_key`, and `llm_<role>_endpoint` for `primary`, `assistant`, and `lite`. The CLI performs a pre-flight check against `GET /api/internal/settings/user`; missing keys abort the run before any tasks post.
 
 ---

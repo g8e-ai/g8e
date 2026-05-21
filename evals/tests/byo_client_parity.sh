@@ -39,8 +39,8 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 TEST_EMAIL="byo-test@g8e.local"
 TEST_NAME="BYO Test User"
 TRUST_BUNDLE="$G8E_PKI_DIR_HOST/trust/hub-bundle.pem"
-OPERATOR_URL="https://localhost:$G8E_PORT_OPERATOR_PUBLIC"
-G8EE_URL="https://localhost:$G8E_PORT_G8EE_HTTP"
+OPERATOR_URL="https://localhost:$G8E_OPERATOR_PUBLIC_PORT"
+G8EE_URL="https://localhost:$G8E_G8EE_HTTP_PORT"
 
 # 3. Generate CSRs
 _generate_workload_csrs "$TMP_DIR"

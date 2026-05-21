@@ -16,7 +16,7 @@
 # Source: protocol/constants/paths.json
 
 class PathConstants:
-    """Collection of canonical G8E paths and ports."""
+    """Collection of canonical G8E paths."""
     PATH_DB_PATH = ".g8e/data/g8e.db"
     PATH_PKI_DIR = ".g8e/pki"
     PATH_SECRETS_DIR = ".g8e/secrets"
@@ -27,6 +27,10 @@ class PathConstants:
     PATH_PROTOCOL_CONSTANTS_DIR = "/app/protocol/constants"
     PATH_PROTOCOL_MODELS_DIR = "/app/protocol/models"
     PATH_SSH_CONFIG_PATH = "/etc/g8e/ssh_config"
+
+
+class PortConstants:
+    """Collection of canonical G8E ports."""
     PORT_OPERATOR_HTTP = 8440
     PORT_OPERATOR_BOOTSTRAP = 8441
     PORT_OPERATOR_PUBLIC = 8442

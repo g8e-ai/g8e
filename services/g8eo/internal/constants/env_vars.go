@@ -21,13 +21,24 @@ type EnvVarKey string
 
 // EnvVar groups all environment variable name constants consumed by g8eo.
 var EnvVar = struct {
+	OperatorHTTPPort EnvVarKey
+	OperatorBootstrapPort EnvVarKey
+	OperatorPublicPort EnvVarKey
+	OperatorWSSPort EnvVarKey
+	G8EEHTTPPort EnvVarKey
+	PIDDir EnvVarKey
+	LogDir EnvVarKey
+	OperatorPIDFile EnvVarKey
+	OperatorLogFile EnvVarKey
+	G8EEPIDFile EnvVarKey
+	G8EELogFile EnvVarKey
+	LogMaxBackups EnvVarKey
 	LLMMaxTokens EnvVarKey
 	LLMCommandGenEnabled EnvVarKey
 	LLMCommandGenAuditor EnvVarKey
 	LLMCommandGenPasses EnvVarKey
 	SessionEncryptionKey EnvVarKey
-	APIKey EnvVarKey
-	AppURL EnvVarKey
+	InternalAPIKey EnvVarKey
 	AllowedOrigins EnvVarKey
 	PasskeyRPName EnvVarKey
 	PasskeyRPID EnvVarKey
@@ -40,21 +51,17 @@ var EnvVar = struct {
 	GoogleSearchEnabled EnvVarKey
 	GoogleSearchAPIKey EnvVarKey
 	GoogleSearchEngineID EnvVarKey
-	InternalHTTPURL EnvVarKey
-	InternalPubSubURL EnvVarKey
+	OperatorURL EnvVarKey
+	OperatorPubSubURL EnvVarKey
 	OperatorBlobURL EnvVarKey
 	DockerGID EnvVarKey
-	HTTPSPort EnvVarKey
-	HTTPPort EnvVarKey
-	Port EnvVarKey
 	SessionTTL EnvVarKey
 	AbsoluteSessionTimeout EnvVarKey
 	Environment EnvVarKey
 	UploadPath EnvVarKey
 	DocsDir EnvVarKey
-	SupervisorPort EnvVarKey
 	G8EEURL EnvVarKey
-	ClientURL EnvVarKey
+	DashboardURL EnvVarKey
 	OperatorEndpoint EnvVarKey
 	EnableCommandWhitelisting EnvVarKey
 	EnableCommandBlacklisting EnvVarKey
@@ -96,7 +103,8 @@ var EnvVar = struct {
 	ProjectRoot EnvVarKey
 	TestLLMProvider EnvVarKey
 	TestLLMAPIKey EnvVarKey
-	TestLLMPrimaryModel EnvVarKey
+	TestLLMModel EnvVarKey
+	TestLLMEndpointURL EnvVarKey
 	TestLLMAssistantProvider EnvVarKey
 	TestLLMAssistantModel EnvVarKey
 	TestLLMLiteProvider EnvVarKey
@@ -105,17 +113,27 @@ var EnvVar = struct {
 	TestLLMAssistantEndpointURL EnvVarKey
 	TestLLMLiteAPIKey EnvVarKey
 	TestLLMLiteEndpointURL EnvVarKey
-	TestLLMEndpointURL EnvVarKey
 	TestLLMMaxTokens EnvVarKey
 	AuditorHMACKey EnvVarKey
 }{
+	OperatorHTTPPort: "G8E_OPERATOR_HTTP_PORT",
+	OperatorBootstrapPort: "G8E_OPERATOR_BOOTSTRAP_PORT",
+	OperatorPublicPort: "G8E_OPERATOR_PUBLIC_PORT",
+	OperatorWSSPort: "G8E_OPERATOR_WSS_PORT",
+	G8EEHTTPPort: "G8E_G8EE_HTTP_PORT",
+	PIDDir: "G8E_PID_DIR",
+	LogDir: "G8E_LOG_DIR",
+	OperatorPIDFile: "G8E_OPERATOR_PID_FILE",
+	OperatorLogFile: "G8E_OPERATOR_LOG_FILE",
+	G8EEPIDFile: "G8E_G8EE_PID_FILE",
+	G8EELogFile: "G8E_G8EE_LOG_FILE",
+	LogMaxBackups: "G8E_LOG_MAX_BACKUPS",
 	LLMMaxTokens: "G8E_LLM_MAX_TOKENS",
 	LLMCommandGenEnabled: "G8E_LLM_COMMAND_GEN_ENABLED",
 	LLMCommandGenAuditor: "G8E_LLM_COMMAND_GEN_AUDITOR",
 	LLMCommandGenPasses: "G8E_LLM_COMMAND_GEN_PASSES",
 	SessionEncryptionKey: "G8E_SESSION_ENCRYPTION_KEY",
-	APIKey: "G8E_API_KEY",
-	AppURL: "G8E_APP_URL",
+	InternalAPIKey: "G8E_INTERNAL_API_KEY",
 	AllowedOrigins: "G8E_ALLOWED_ORIGINS",
 	PasskeyRPName: "G8E_PASSKEY_RP_NAME",
 	PasskeyRPID: "G8E_PASSKEY_RP_ID",
@@ -128,21 +146,17 @@ var EnvVar = struct {
 	GoogleSearchEnabled: "G8E_GOOGLE_SEARCH_ENABLED",
 	GoogleSearchAPIKey: "G8E_GOOGLE_SEARCH_API_KEY",
 	GoogleSearchEngineID: "G8E_GOOGLE_SEARCH_ENGINE_ID",
-	InternalHTTPURL: "G8E_INTERNAL_HTTP_URL",
-	InternalPubSubURL: "G8E_INTERNAL_PUBSUB_URL",
+	OperatorURL: "G8E_OPERATOR_URL",
+	OperatorPubSubURL: "G8E_OPERATOR_PUBSUB_URL",
 	OperatorBlobURL: "G8E_OPERATOR_BLOB_URL",
 	DockerGID: "G8E_DOCKER_GID",
-	HTTPSPort: "G8E_HTTPS_PORT",
-	HTTPPort: "G8E_HTTP_PORT",
-	Port: "G8E_PORT",
 	SessionTTL: "G8E_SESSION_TTL",
 	AbsoluteSessionTimeout: "G8E_ABSOLUTE_SESSION_TIMEOUT",
 	Environment: "G8E_ENVIRONMENT",
 	UploadPath: "G8E_UPLOAD_PATH",
 	DocsDir: "G8E_DOCS_DIR",
-	SupervisorPort: "G8E_SUPERVISOR_PORT",
 	G8EEURL: "G8E_G8EE_URL",
-	ClientURL: "G8E_CLIENT_URL",
+	DashboardURL: "G8E_DASHBOARD_URL",
 	OperatorEndpoint: "G8E_OPERATOR_ENDPOINT",
 	EnableCommandWhitelisting: "G8E_ENABLE_COMMAND_WHITELISTING",
 	EnableCommandBlacklisting: "G8E_ENABLE_COMMAND_BLACKLISTING",
@@ -182,9 +196,10 @@ var EnvVar = struct {
 	RuntimeDir: "G8E_RUNTIME_DIR",
 	SSHConfigPath: "G8E_SSH_CONFIG_PATH",
 	ProjectRoot: "G8E_PROJECT_ROOT",
-	TestLLMProvider: "G8E_TEST_LLM_PRIMARY_PROVIDER",
-	TestLLMAPIKey: "G8E_TEST_LLM_PRIMARY_API_KEY",
-	TestLLMPrimaryModel: "G8E_TEST_LLM_PRIMARY_MODEL",
+	TestLLMProvider: "G8E_TEST_LLM_PROVIDER",
+	TestLLMAPIKey: "G8E_TEST_LLM_API_KEY",
+	TestLLMModel: "G8E_TEST_LLM_MODEL",
+	TestLLMEndpointURL: "G8E_TEST_LLM_ENDPOINT_URL",
 	TestLLMAssistantProvider: "G8E_TEST_LLM_ASSISTANT_PROVIDER",
 	TestLLMAssistantModel: "G8E_TEST_LLM_ASSISTANT_MODEL",
 	TestLLMLiteProvider: "G8E_TEST_LLM_LITE_PROVIDER",
@@ -193,7 +208,6 @@ var EnvVar = struct {
 	TestLLMAssistantEndpointURL: "G8E_TEST_LLM_ASSISTANT_ENDPOINT_URL",
 	TestLLMLiteAPIKey: "G8E_TEST_LLM_LITE_API_KEY",
 	TestLLMLiteEndpointURL: "G8E_TEST_LLM_LITE_ENDPOINT_URL",
-	TestLLMEndpointURL: "G8E_TEST_LLM_PRIMARY_ENDPOINT_URL",
 	TestLLMMaxTokens: "G8E_TEST_LLM_MAX_TOKENS",
 	AuditorHMACKey: "G8E_AUDITOR_HMAC_KEY",
 }

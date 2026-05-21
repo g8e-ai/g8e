@@ -9,11 +9,18 @@ if [[ -z "${G8E_PROJECT_ROOT:-}" ]]; then
     _config_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
     source "$_config_script_dir/path_utils.sh"
     G8E_PROJECT_ROOT="$(resolve_g8e_root)"
+    export G8E_PROJECT_ROOT
 fi
 
 # Configuration directory
 G8E_CONFIG_DIR="$G8E_PROJECT_ROOT/.g8e"
 G8E_ENV_FILE="$G8E_CONFIG_DIR/.env"
+
+# Source paths and constants
+if [[ -f "$G8E_PROJECT_ROOT/scripts/cmd/paths.sh" ]]; then
+    # shellcheck disable=SC1090
+    source "$G8E_PROJECT_ROOT/scripts/cmd/paths.sh"
+fi
 
 # Load environment file if it exists
 if [[ -f "$G8E_ENV_FILE" ]]; then
@@ -47,27 +54,40 @@ export G8E_ENV_PROTOCOL_DIR="${G8E_ENV_PROTOCOL_DIR:-G8E_PROTOCOL_DIR}"
 # These variables should be used instead of indirect expansion.
 
 # Auth / Sessions
-G8E_OPERATOR_SESSION_ID="${!G8E_ENV_OPERATOR_SESSION_ID:-}"
-G8E_CLI_SESSION_ID="${!G8E_ENV_CLI_SESSION_ID:-}"
-G8E_USER_ID="${!G8E_ENV_USER_ID:-}"
-G8E_OPERATOR_ID="${!G8E_ENV_OPERATOR_ID:-}"
+export G8E_OPERATOR_SESSION_ID="${G8E_OPERATOR_SESSION_ID:-}"
+export G8E_CLI_SESSION_ID="${G8E_CLI_SESSION_ID:-}"
+export G8E_USER_ID="${G8E_USER_ID:-}"
+export G8E_OPERATOR_ID="${G8E_OPERATOR_ID:-}"
 
 # URLs
-G8E_G8EE_URL="${!G8E_ENV_G8EE_URL:-}"
-G8E_INTERNAL_HTTP_URL="${!G8E_ENV_INTERNAL_HTTP_URL:-}"
+export G8E_G8EE_URL="${G8E_G8EE_URL:-}"
+export G8E_INTERNAL_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-}"
 
 # Paths
-G8E_PKI_DIR="${!G8E_ENV_PKIDir:-}"
-G8E_SECRETS_DIR="${!G8E_ENV_SECRETS_DIR:-}"
-G8E_PROTOCOL_DIR="${!G8E_ENV_PROTOCOL_DIR:-}"
+export G8E_PKI_DIR="${G8E_PKI_DIR:-}"
+export G8E_SECRETS_DIR="${G8E_SECRETS_DIR:-}"
+export G8E_PROTOCOL_DIR="${G8E_PROTOCOL_DIR:-}"
 
-# Export these so they are available to sub-processes
-export G8E_OPERATOR_SESSION_ID
-export G8E_CLI_SESSION_ID
-export G8E_USER_ID
-export G8E_OPERATOR_ID
-export G8E_G8EE_URL
-export G8E_INTERNAL_HTTP_URL
-export G8E_PKI_DIR
-export G8E_SECRETS_DIR
-export G8E_PROTOCOL_DIR
+# ─── Runtime / Platform Defaults ─────────────────────────────────────────────
+# These define the local host runtime environment (pids, logs, ports, data).
+
+export G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$G8E_PROJECT_ROOT/.g8e}"
+
+export G8E_DATA_DIR="${G8E_DATA_DIR:-$G8E_RUNTIME_DIR/data}"
+export G8E_PKI_DIR="${G8E_PKI_DIR:-$G8E_RUNTIME_DIR/pki}"
+export G8E_SECRETS_DIR="${G8E_SECRETS_DIR:-$G8E_RUNTIME_DIR/secrets}"
+export G8E_PID_DIR="${G8E_PID_DIR:-$G8E_RUNTIME_DIR/pids}"
+export G8E_LOG_DIR="${G8E_LOG_DIR:-$G8E_RUNTIME_DIR/logs}"
+
+export G8E_OPERATOR_PID_FILE="$G8E_PID_DIR/operator-listen.pid"
+export G8E_OPERATOR_LOG_FILE="$G8E_LOG_DIR/operator-listen.log"
+export G8E_G8EE_PID_FILE="$G8E_PID_DIR/g8ee.pid"
+export G8E_G8EE_LOG_FILE="$G8E_LOG_DIR/g8ee.log"
+
+export G8E_OPERATOR_HTTP_PORT="${G8E_OPERATOR_HTTP_PORT:-${G8E_PORT_OPERATOR_HTTP:-8440}}"
+export G8E_OPERATOR_WSS_PORT="${G8E_OPERATOR_WSS_PORT:-$G8E_OPERATOR_HTTP_PORT}"
+export G8E_OPERATOR_BOOTSTRAP_PORT="${G8E_OPERATOR_BOOTSTRAP_PORT:-${G8E_PORT_OPERATOR_BOOTSTRAP:-8441}}"
+export G8E_OPERATOR_PUBLIC_PORT="${G8E_OPERATOR_PUBLIC_PORT:-${G8E_PORT_OPERATOR_PUBLIC:-8442}}"
+
+export G8E_G8EE_HTTP_PORT="${G8E_G8EE_HTTP_PORT:-${G8E_PORT_G8EE_HTTP:-8443}}"
+export G8E_LOG_MAX_BACKUPS="${G8E_LOG_MAX_BACKUPS:-5}"

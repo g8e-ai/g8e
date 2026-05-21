@@ -9,7 +9,17 @@ g8e is a zero-trust execution Gateway for agentic infrastructure. It gives AI sy
 
 The core invariant is narrow: every mutation is a typed, signed, state-bound `GovernanceEnvelope`, and every envelope must clear a fail-closed L1/L2/L3 verification gauntlet before the host executes.
 
-MCP, A2A, OpenAI-style tool calls, and future agent protocols are payload formats. g8e is the governance envelope and sovereign execution boundary around those payloads.
+Rather than competing with tool-calling standards like Anthropic’s Model Context Protocol (MCP) or A2A, g8e functions as a secure perimeter. It treats standard JSON-RPC tools as unverified payloads (the "what") and wraps them in a strict, canonical `GovernanceEnvelope` (the "how").
+
+## Architectural Differentiators
+
+*   **Outbound-Only Reverse Tunnel:** The host-resident Operator binary (`g8eo`) connects via an outbound-only tunnel to the platform hub. This architecture completely bypasses NAT and enterprise firewalls, eliminating the operational necessity of opening dangerous inbound listening ports.
+*   **Protocol-First Zero Trust:** Every system component inherently distrusts all other components. The execution gateway boundary actively handles workloads via mTLS and device-link tokens, ensuring no unverified component holds privileged trust.
+*   **Byzantine Fault Tolerant (BFT) Safety:** Agentic automation is treated as a distributed consensus problem. The L2 Tribunal is fully provider-agnostic, running multiple independent agents in parallel and blind to each other. By combining heterogeneous models (e.g., Anthropic, OpenAI, local open-source models), a single poisoned or hallucinating model is simply outvoted by the ensemble.
+*   **Deterministic Intent Validation:** Execution authority does not rely on fluid natural language strings. The protocol enforces that explicit execution intent is serialized into a typed Protobuf payload, base64-encoded, and locked into the transaction hash of the envelope.
+*   **3-Layer Inline Governance Gate:** Every mutation must sequentially pass L1 Technical Bedrock (Hard Gates), L2 Consensus (Tribunal), and L3 Authorization (WebAuthn/Passkey) at the Operator boundary before hitting the host shell.
+*   **Local-First Data Sovereignty (LFAA):** All raw data, system roots, and execution histories are isolated locally on the managed host. Every file mutation triggers a two-phase Git-backed commit tracking pre-mutation and post-mutation states, guaranteeing a tamper-evident history trail and instant rollbacks.
+*   **Zero Standing Dependencies:** The reference Operator is a single, statically compiled Go binary, making the entire platform air-gap capable for deployment in highly hostile, isolated infrastructure perimeters.
 
 ## Core Architecture
 
