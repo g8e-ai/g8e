@@ -25,7 +25,7 @@ Separation of Concerns:
 - AIEventPublisher: HOW to publish events to frontend
 - AIResponseAnalyzer: HOW to analyze AI responses
 - AIToolExecutor: HOW to execute AI tool calls
-- g8eEngine: Core streaming loop (uses all above)
+- g8eEnsemble: Core streaming loop (uses all above)
 """
 
 import logging

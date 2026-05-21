@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# g8ee Engine Makefile
+# g8ee Ensemble Makefile
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -34,7 +34,7 @@ PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo .venv/bin/pyright; els
 # =============================================================================
 .PHONY: help
 help:
-	@echo "g8ee Engine Makefile"
+	@echo "g8ee Ensemble Makefile"
 	@echo ""
 	@echo "Quality:"
 	@echo "  test          Run tests"

@@ -80,7 +80,7 @@ EOF
             exit 1
         fi
         if ! _g8ee_running; then
-            echo "[g8e] g8ee Engine is not running - start it: ./g8e apps start g8ee" >&2
+            echo "[g8e] g8ee Ensemble is not running - start it: ./g8e apps start g8ee" >&2
             exit 1
         fi
         if ! _load_credentials; then

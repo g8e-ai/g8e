@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "g8ee"
 version = "0.2.6"
-description = "g8e Engine - AI engine for g8e infrastructure operations"
+description = "g8e-Compliant Agentic Ensemble (g8ee) - Reference AI reasoning system for g8e infrastructure operations"
 requires-python = ">=3.14"
 
 # ============================================================================
@@ -34,7 +34,7 @@ markers = [
     "smoke: Quick smoke tests for CI",
     "ai: Tests involving AI/LLM functionality",
     "aws: Tests requiring LocalStack AWS emulation",
-    "intent_workflow: Tests for intent-based permission workflow with g8eEngine",
+    "intent_workflow: Tests for intent-based permission workflow with g8eEnsemble",
     "requires_api: Tests requiring a live external API (e.g. Google Search API)",
     "thinking: Tests requiring LLM thinking/reasoning capability",
     "tools: Tests requiring LLM tool calling/function calling capability",

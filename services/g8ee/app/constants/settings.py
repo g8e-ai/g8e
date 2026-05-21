@@ -540,8 +540,8 @@ FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = tuple(
     )
 )
 
-G8EE_APP_TITLE                       = "g8e Engine"
-G8EE_APP_DESCRIPTION                 = "g8e Engine (g8ee) - AI engine for the g8e platform. Agentic AI system with LLM provider abstraction providing Zero-Trust AI for infrastructure operations."
+G8EE_APP_TITLE                       = "g8ee Ensemble"
+G8EE_APP_DESCRIPTION                 = "g8e-Compliant Agentic Ensemble (g8ee) - Reference AI reasoning system for the g8e platform. Agentic Ensemble with LLM provider abstraction providing Zero-Trust AI for infrastructure operations."
 G8EE_APP_CONTACT_NAME                = "g8e Support"
 G8EE_APP_CONTACT_EMAIL               = "help@g8e.ai"
 G8EE_APP_LICENSE_NAME                = "Proprietary"

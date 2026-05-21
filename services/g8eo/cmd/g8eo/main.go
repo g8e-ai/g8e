@@ -254,7 +254,7 @@ func main() {
 	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir)
 	if !trustLoaded {
 		if endpointURL != "" {
-			trustURL := fmt.Sprintf("https://%s/.well-known/g8e/pki/hub-bundle.pem", endpointURL)
+			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/hub-bundle.pem", endpointURL, constants.Ports.OperatorBootstrapHttps)
 			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
 			if err := certs.FetchAndSetCA(context.Background(), trustURL); err != nil {
 				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, string(constants.ConnectionStateError), err)

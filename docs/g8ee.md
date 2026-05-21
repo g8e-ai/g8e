@@ -3,40 +3,40 @@ title: g8ee
 parent: Components
 ---
 
-# g8ee
+# g8e Agentic Ensemble (g8ee)
 
 Last Updated: 2026-05-20
 Version: v0.4.0
 
-g8ee is the **optional reference AI engine** of the g8e platform. It is one concrete application-layer adapter built on top of the [g8e Protocol](protocol.md); the protocol Gateway (`g8eg` and `g8eo`) is the only mandatory component. g8ee demonstrates how a Tribunal-based, multi-provider LLM reasoning system can act as a **Layer 2 (Consensus) producer** that emits typed, signed `GovernanceEnvelope` (UAP) transactions to a Governance Gateway (`g8eg`) for validation/approval and subsequent execution by a Governed Operator (`g8eo`).
+g8ee is the **g8e Agentic Ensemble** (the optional reference AI reasoning system) of the g8e platform. It is a **g8e-compliant agentic ensemble** and application-layer adapter built on top of the [g8e Protocol](protocol.md); the protocol Gateway (`g8eg` and `g8eo`) is the only mandatory component. g8ee demonstrates how a Tribunal-based, multi-provider LLM reasoning system can act as a **Layer 2 (Consensus) producer** that emits typed, signed `GovernanceEnvelope` (UAP) transactions to a Governance Gateway (`g8eg`) for validation/approval and subsequent execution by a Governed Operator (`g8eo`).
 
 If you are building a BYO client, you do not need g8ee - anything that produces protocol-conformant transactions is interchangeable with it. g8ee is shipped in-tree as the first reference consumer of that same public contract.
 
 ## Position in the Platform
 
 - **Mandatory Gateway**: `g8eg` Governance Gateway (Listen mode via `--listen`) and `g8eo` Governed Operator (runs on target hosts). The gateway owns platform-level PKI, coordination, Pub/Sub, and transaction validation/suspension. The operator owns local validation, local git-backed ledger, and host-level Actuator tool execution.
-- **Optional reference application layer**: `g8ee` (this component, AI engine / L2 producer). It consumes the Gateway protocol surface and has no privileged Gateway role.
+- **Optional reference application layer**: `g8ee` (this component, the g8e Agentic Ensemble / L2 producer). It consumes the Gateway protocol surface and has no privileged Gateway role.
 - **Default start (`./g8e platform start`)**: Operator only. g8ee is started explicitly via `./g8e platform start --with-apps` or `./g8e apps start g8ee`.
 - **Wire format**: canonical JSON (protojson) `GovernanceEnvelope` on all client-facing surfaces (HTTP, pub/sub, receipts). Signing is computed over a deterministic transaction hash; wire encoding is independent of the security invariant.
 
 ---
 
-## AI Agent Architecture
+## Agentic Ensemble Architecture
 
-The g8e platform utilizes a specialized multi-agent system designed for autonomous infrastructure management. The architecture enforces a strict separation between **Reasoning** (the application layer, e.g., g8ee) and the **Gateway** (the mandatory g8eg Gateway and g8eo Governed Operator). This ensures that no action reaches a host without cryptographic proof of intent, consensus, and human authorization.
+The g8e platform utilizes a specialized **agentic ensemble** designed for autonomous infrastructure management. The architecture enforces a strict separation between **Reasoning** (the application layer, e.g., the g8e Agentic Ensemble) and the **Gateway** (the mandatory g8eg Gateway and g8eo Governed Operator). This ensures that no action reaches a host without cryptographic proof of intent, consensus, and human authorization.
 
 ### Core Principles
 
 - **3-Layer Governance Bedrock**: Every action is gated by a hierarchical validation system (L1 Technical Bedrock, L2 Consensus, L3 Authorization).
 - **Intent-Driven Execution**: Reasoning agents (Sage/Dash) never write shell commands directly; they articulate natural language intent to the Tribunal.
-- **Ensemble Consensus**: The Tribunal uses an independent multi-member ensemble with unique technical "lenses" to translate intent into commands.
+- **Ensemble Consensus**: The Tribunal uses an independent multi-member **agentic ensemble** with unique technical "lenses" to translate intent into commands. The ensemble ensures that no single model has mutation authority.
 - **Host Sovereignty**: The Governed Operator (g8eo) distrusts all upstream inputs. It verifies every transaction against the protocol before execution.
 - **Fail-Closed Verification**: Any missing signature, stale state root, or L1 violation results in immediate transaction rejection.
 - **Interrogation Gate**: Agents can pause execution to ask clarifying questions via structured `<interrogation>` blocks, preventing "guessing" when context is missing.
 
 ---
 
-## The AI Lifecycle
+## The Agentic Ensemble Lifecycle
 
 g8ee follows a strict "Traceable Pipeline" model for every message. A single user request moves through six distinct phases:
 
@@ -68,7 +68,7 @@ Before invoking the primary LLM, the `TriageAgent` classifies the message:
 Posture is also gauged (`normal`, `escalated`, `adversarial`, `confused`) to calibrate downstream behavior. *Note: Triage is a classifier only. It does not generate questions or interact with the user.*
 
 ### 3. Orchestration (The ReAct Loop)
-The `g8eEngine` runs the core agentic loop:
+The `g8eEnsemble` runs the core agentic loop:
 - **Provider Turn**: Communicates with the configured `LLMProvider` (Gemini, Anthropic, Ollama, etc.).
 - **Tool Dispatch**: If the LLM requests a tool, `AIToolService` routes it. Universal tools (like `web_search`) run locally; gated tools (like `run_commands_with_operator`) route through the **Tribunal**.
 - **Iteration**: The loop continues until the LLM provides a final text response or hits the `AGENT_MAX_TOOL_TURNS` limit.
@@ -79,7 +79,7 @@ If Dash or Sage encounters ambiguity, they must use the Interrogation Protocol:
 - Questions must be strictly binary to maximize information gain.
 - The `<interrogation>` block must be the entire response; tool execution is suppressed until the user answers.
 
-### 4. Governance & Safety - The Engine-Internal Byzantine Cascade
+### 4. Governance & Safety - The **Agentic Ensemble**-Internal Byzantine Cascade
 
 Every host-mutating tool call flows through an ordered cascade. Each stage is independently configurable across providers/models so a single compromised model cannot drive a mutation end-to-end. The cascade is implemented in `services/g8ee/app/services/ai/` and orchestrated by `generator.py:generate_command`.
 
@@ -89,11 +89,11 @@ Every host-mutating tool call flows through an ordered cascade. Each stage is in
 4. **Round 2 (only on R1 consensus failure)**: Members re-emit with anonymized R1 clusters as peer-review context. If R2 also fails, `TribunalConsensusFailedError` is raised back to Sage so it can re-articulate intent.
 5. **Actuator risk analysis (runs *before* Auditor)**: The Actuator coordinator orchestrates command-risk / error / file-risk sub-agents and classifies the winner LOW / MEDIUM / HIGH. The **Two-Strike Circuit Breaker**: a first HIGH returns contextual feedback to Sage so it can propose a safer alternative; a second HIGH in the same investigation raises `AGENT_CONFLICT_DETECTED` and forces human intervention. Successful execution resets the strike counter.
 6. **Auditor verification**: If Actuator clears the command, the Auditor (primary tier) sees the request, the operator context, and the anonymized candidate clusters - *not* full conversation history. Verdicts are `ok`, `swap:<cluster_id>` (promote a dissenter), or `revised:<command>`. On pass, the verdict is bound to a SHA-256 **Merkle commitment** over the agent reputation scoreboard, chained by `prev_root` HMAC-SHA256. Reputation-commitment failure is fatal - the verdict cannot proceed.
-7. **L1 re-validation**: Any command produced via swap or revision is re-checked against `validate_command_safety` (forbidden patterns, blacklist, whitelist) before it can leave the Engine.
+7. **L1 re-validation**: Any command produced via swap or revision is re-checked against `validate_command_safety` (forbidden patterns, blacklist, whitelist) before it can leave the Ensemble.
 8. **L2/L3 envelope wrap**: The verified command is packaged as a typed `CommandRequested` payload inside a `GovernanceEnvelope`, signed by the L2 Tribunal key.
 9. **Approval Pipeline**: State-changing operations trigger an `OPERATOR_COMMAND_APPROVAL_REQUESTED` event, halting execution until a human approves via the UI (or `auto_approved.json` policy applies). L3 auto-approval never bypasses L1 or L2.
-10. **Gateway admission gauntlet**: The signed envelope is submitted over mTLS to the Governance Gateway (`g8eg`) and subsequent Governed Operator (`g8eo`), which independently re-run the entire fail-closed validation and execution gauntlets. The Engine has no privileged channel.
-11. **Sentinel egress scrub**: After execution the Operator scrubs every byte of stdout/stderr before publishing the result envelope back to the Engine.
+10. **Gateway admission gauntlet**: The signed envelope is submitted over mTLS to the Governance Gateway (`g8eg`) and subsequent Governed Operator (`g8eo`), which independently re-run the entire fail-closed validation and execution gauntlets. The Ensemble has no privileged channel.
+11. **Sentinel egress scrub**: After execution the Operator scrubs every byte of stdout/stderr before publishing the result envelope back to the Ensemble.
 
 **Failure routing**: Tribunal consensus failure (after R2) and Actuator first-strike both feed back to Sage to re-articulate intent. Actuator second-strike and Auditor catastrophic failure both surface as agent-conflict events that demand human intervention.
 
@@ -112,13 +112,13 @@ After the stream completes:
 
 ## Context Delivery, Storage Tiers, and Data Sovereignty
 
-g8ee agents are stateless with respect to platform truth. They do not own durable memory, host state, approvals, operator identity, or audit state. Each agent turn receives a typed, request-scoped projection assembled from authoritative stores, and the projection is discarded after the provider call completes. The durable state remains in g8eg/g8eo-owned stores and g8ee's application data services.
+g8ee agents are stateless with respect to platform truth. They do not own durable memory, host state, approvals, operator identity, or audit state. Each agent turn receives a typed, request-scoped projection assembled from authoritative stores, and the projection is discarded after the provider call completes. The durable state remains in g8eg/g8eo-owned stores and the agentic ensemble's application data services.
 
 ### Storage tiers used for context
 
 | Tier | Owner | Data | Agent visibility |
 |---|---|---|---|
-| **RequestContext** | Client / g8ee API boundary | `user_id`, `organization_id`, `case_id`, `investigation_id`, `task_id`, session routing fields, bound operator references, `source_component`. | Used to resolve data and route events. Delivered as typed metadata, not as arbitrary headers. |
+| **RequestContext** | Client / agentic ensemble API boundary | `user_id`, `organization_id`, `case_id`, `investigation_id`, `task_id`, session routing fields, bound operator references, `source_component`. | Used to resolve data and route events. Delivered as typed metadata, not as arbitrary headers. |
 | **Investigation store** | g8ee data service | Case title, case description, investigation status, current state, persisted chat messages, pending approvals, attachment metadata. | Main Sage/Dash context, after Sentinel scrubbing when `sentinel_mode` is enabled. |
 | **Memory store** | g8ee memory service | User memories and case memories generated by Codex. | Injected as learned context. Codex itself only inspects the latest bounded conversation slice during background update. |
 | **Operator heartbeat snapshot** | g8eo / Operator lifecycle | Operator identity, session, OS, architecture, shell, working directory, resource telemetry, cloud subtype, granted intents. | Injected as `OperatorContext`; this is operational metadata, not a raw host dump. |
@@ -128,7 +128,7 @@ g8ee agents are stateless with respect to platform truth. They do not own durabl
 | **Operator Raw Vault** | g8eo | Unscrubbed forensic records. | Never AI-readable. Customer/host-sovereign access only. |
 | **Git-backed ledger** | g8eo | Per-session file mutation history, pre/post state hashes, diffs, restore points. | Exposed only through typed file-history/diff tools, not bulk mounted into the model context. |
 
-The practical invariant is that g8ee reconstructs the prompt from references and summaries, not by handing a model a database, filesystem, or host session. The AI receives the minimum useful projection for the current turn.
+The practical invariant is that the agentic ensemble reconstructs the prompt from references and summaries, not by handing a model a database, filesystem, or host session. The AI receives the minimum useful projection for the current turn.
 
 ### What each agent sees
 
@@ -165,7 +165,7 @@ Host-private state stays on the host unless a typed, governed request asks for a
 - **User-message scrubbing**: g8ee's Python Sentinel scrubs user and terminal text before LLM delivery when Sentinel mode is enabled. It targets credentials, API keys, private keys, bearer tokens, connection strings, and common PII.
 - **Raw data separation**: Raw host evidence belongs to the Operator Raw Vault and local ledger. AI-facing history comes from the Scrubbed Vault or typed result payloads.
 - **Ephemeral provider exposure**: The external AI provider receives only the assembled request payload for that call. It does not receive direct credentials, host vault access, database handles, operator sockets, or filesystem mounts from g8ee.
-- **No privileged app channel**: g8ee is an L2 producer and reference application. It cannot bypass g8eg/g8eo verification to mutate a host.
+- **No privileged app channel**: g8ee is an L2 producer and g8e-compliant agentic ensemble. It cannot bypass g8eg/g8eo verification to mutate a host.
 
 Sentinel mode is the privacy-preserving default expected for cloud-model operation. Disabling it changes the provider exposure boundary and should be treated as a local policy exception, not as the normal operating mode.
 
@@ -212,7 +212,7 @@ The g8e platform utilizes a tiered agent persona system that separates **Gateway
 | **Reasoning** | **Triage** | `triage` | `classifier` | `lite` | Initial classification of complexity, intent, and posture. |
 | **Reasoning** | **Sage** | `sage` | `reasoner` | `primary` | Senior reasoning authority for complex investigations. |
 | **Reasoning** | **Dash** | `dash` | `responder` | `assistant` | Fast-path responder for simple, single-turn tasks. |
-| **Consensus** | **The Tribunal** | `tribunal` | `arbitrator` | `lite` | Collective ensemble of five specialized translators. |
+| **Consensus** | **The Tribunal** | `tribunal` | `arbitrator` | `lite` | Collective **agentic ensemble** of five specialized translators. |
 | **Consensus** | **Auditor** | `auditor` | `auditor` | `primary` | Final judge of Tribunal candidates against Sage's intent. |
 | **Defense** | **Actuator (AI)** | `Actuator` | `coordinator` | `lite` | AI-layer coordinator for pre-execution risk analysis. |
 | **Defense** | **Risk Analyzers** | `Actuator_*` | `defender` | `lite` | Specialized analyzers for command, file, and error risk. |
@@ -234,7 +234,7 @@ The g8e platform utilizes a tiered agent persona system that separates **Gateway
 To preserve diversity and technical honesty, agents operate under the **Amnesia Principle**:
 - **Tribunal Members** are blind to each other's candidates.
 - **The Auditor** receives anonymized candidates to prevent source bias.
-- **The Engine** only passes the minimum required context to each stage of the pipeline.
+- **The Ensemble** only passes the minimum required context to each stage of the pipeline.
 
 ---
 
@@ -301,7 +301,7 @@ flowchart LR
 
     subgraph App ["Optional Reference Application Layer"]
         direction TB
-        g8ee["g8ee<br/>AI Engine / L2 Producer"]
+        g8ee["g8ee<br/>g8e-compliant agentic ensemble / L2 Producer"]
     end
 
     Client -- "TLS 1.3 / mTLS" --> g8eg
@@ -309,7 +309,7 @@ flowchart LR
     g8eo -- "mTLS WSS" --> g8eg
 ```
 
-### The Tribunal (Ensemble Command Generation)
+### The Tribunal (**Agentic Ensemble** Command Generation)
 The Tribunal is a five-member panel that converts Sage's intent into executable commands. The Tribunal uses uniform 1-vote-per-member weighting (minimum consensus 2 of 5) with a deterministic tie-break ladder (shortest → exclude-Nemesis cluster → round 2). On consensus failure a Round 2 anonymized peer review runs before the pipeline gives up and routes back to Sage. **Actuator** runs *before* Auditor: only commands cleared by Actuator risk analysis reach the Auditor for the final consistency check and Merkle commitment.
 
 ### LFAA (Local-First Audit Architecture)

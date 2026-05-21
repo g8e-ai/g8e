@@ -1593,7 +1593,7 @@ func (s *Sentinel) ExtractSafeMetrics(stdout string) map[string]int {
 	return metrics
 }
 
-// ScrubForCloudAI is the main entry point for preparing data for AI Agent Services
+// ScrubForCloudAI is the main entry point for preparing data for g8e-Compliant Agentic Ensemble
 // It applies maximum scrubbing to ensure no sensitive data leaks
 func (s *Sentinel) ScrubForCloudAI(result *CommandResult) *ScrubbedResult {
 	s.logger.Info("Scrubbing command result for cloud AI transmission",

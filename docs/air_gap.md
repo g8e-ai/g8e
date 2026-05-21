@@ -17,7 +17,7 @@ g8e is designed for high-security environments where internet connectivity is st
 The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In this mode, the platform operates as a completely sealed unit:
 
 - **No Telemetry:** Zero outbound usage, health, or error data is sent to Lateralus Labs.
-- **Local Assets:** All frontend assets (fonts, icons, JS libraries) are served locally by the application layer.
+- **Local Assets:** All frontend assets (fonts, icons, JS libraries) are served locally by the **agentic ensemble**.
 - **Local Persistence:** All platform state, including chat history, settings, and secrets, is stored in a unified SQLite database managed by the Governance Gateway (`g8eg`) in Listen Mode.
 
 ---
@@ -56,12 +56,12 @@ To execute mutations on the local air-gapped host, a **Governed Operator (`g8eo`
 
 ## Local LLM Inference
 
-For air-gapped reasoning, g8e supports external local inference via the `g8ee` (Engine) component's `LlamaCppProvider`.
+For air-gapped reasoning, g8e supports external local inference via the `g8ee` (g8e-Compliant Agentic Ensemble) component's `LlamaCppProvider`.
 
-- **Engine:** HTTP client to external `llama.cpp` server via OpenAI-compatible API.
+- **Ensemble:** HTTP client to external `llama.cpp` server via OpenAI-compatible API.
 - **Default Model:** `Gemma 4 E2B` (optimized for local reasoning).
 - **Interface:** Configured via `llamacpp_endpoint` setting (default: `http://localhost:11444`).
-- **Provisioning:** Model GGUF files must be pre-staged on the external llama.cpp server. The Engine does not download models; it is a client only.
+- **Provisioning:** Model GGUF files must be pre-staged on the external llama.cpp server. The Ensemble does not download models; it is a client only.
 
 ---
 
@@ -81,7 +81,7 @@ For air-gapped reasoning, g8e supports external local inference via the `g8ee` (
 - Build tools declared in `services/g8eo/go.mod` (protoc-gen-go, protoc-gen-go-grpc).
 - Protocol generation uses local `buf` and `protoc` (no remote BSR dependency).
 
-**Python Runtime (g8ee):**
+**Python Runtime (**g8e Agentic Ensemble**):**
 - Direct dependencies frozen in `services/g8ee/requirements.txt`.
 - Categories: web framework (fastapi, uvicorn), LLM providers (google-genai, anthropic, openai), protocol (protobuf, grpcio), storage (sqlalchemy, alembic), utilities (tenacity, python-dateutil).
 - No vendoring; use pre-staged virtual environment or Docker image.
@@ -92,7 +92,7 @@ For air-gapped reasoning, g8e supports external local inference via the `g8ee` (
 
 **Evals Suite:**
 - Dependencies in `evals/pyproject.toml` (pytest, httpx, pydantic).
-- Separate from runtime g8ee dependencies.
+- Separate from runtime **agentic ensemble** dependencies.
 
 **Build-Time Tools:**
 - `buf` (Buf CLI) for protobuf schema management.
@@ -123,6 +123,6 @@ For air-gapped reasoning, g8e supports external local inference via the `g8ee` (
 ## Security Invariants
 
 1. **No Outbound Dialing:** In Listen Mode, the Governance Gateway (`g8eg`) is forbidden from initiating connections to any address outside the local platform.
-2. **Mutual Trust:** All internal traffic between Governance Gateway, Engine, and Operator is encrypted using the Operator's internal CA.
+2. **Mutual Trust:** All internal traffic between the Governance Gateway, the **agentic ensemble**, and the Operator is encrypted using the Operator's internal CA.
 3. **Data Sovereignty:** All audit logs, chat history, and telemetry remain strictly on the host's filesystem in the `.g8e` directory.
 4. **Fail-Closed Privacy:** If a component requires an external resource that is unavailable, it must fail with a clear error rather than attempting a fallback to insecure or public endpoints.

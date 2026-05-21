@@ -23,7 +23,7 @@ _chat_help() {
 Usage: ./g8e chat [send|tail] [options]
 
 Subcommands:
-  send <message>      Send a chat message to the g8ee Engine and stream events
+  send <message>      Send a chat message to the g8ee Ensemble and stream events
   tail                Stream new SSE events for the current session (no message)
 
 Options for `send`:
@@ -56,7 +56,7 @@ Options for `tail`:
 Authentication: requires `./g8e login` (uses mTLS + OPERATOR_SESSION_ID).
 SSE event routing uses CLI_SESSION_ID, a strictly disjoint session id minted at
 login and persisted in ~/.g8e/credentials.
-The g8ee Engine must be running: `./g8e apps start g8ee`.
+The g8ee Ensemble must be running: `./g8e apps start g8ee`.
 EOF
 }
 
@@ -74,7 +74,7 @@ if [[ -z "${G8E_CLI_SESSION_ID:-}" ]]; then
 fi
 
 if ! _g8ee_running; then
-    echo "[g8e] g8ee Engine is not running - start it: ./g8e apps start g8ee" >&2
+    echo "[g8e] g8ee Ensemble is not running - start it: ./g8e apps start g8ee" >&2
     exit 1
 fi
 
@@ -133,7 +133,7 @@ MESSAGE="${MESSAGE%% }"
 # not supplied. Precedence (high to low): CLI flag > G8E_<TIER>_<FIELD> >
 # provider-specific G8E_<PROVIDER>_API_KEY / G8E_<PROVIDER>_ENDPOINT.
 #
-# The Engine's per-request override surface is tier-shaped (primary/assistant/
+# The Ensemble's per-request override surface is tier-shaped (primary/assistant/
 # lite), but operators typically configure credentials provider-shaped
 # (G8E_GEMINI_API_KEY, G8E_OLLAMA_ENDPOINT). This block bridges the two by
 # selecting credentials based on the effective tier provider.

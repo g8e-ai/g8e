@@ -19,7 +19,7 @@ response analysis, tool execution, streaming agent, memory,
 and investigation context.
 """
 
-from .agent import g8eEngine
+from .agent import g8eEnsemble
 from .chat_pipeline import ChatPipelineService
 from .chat_task_manager import BackgroundTaskManager
 from .generation_config_builder import AIGenerationConfigBuilder
@@ -42,6 +42,6 @@ __all__ = [
     "WebSearchProvider",
     "extract_all_operators_context",
     "extract_system_context",
-    "g8eEngine",
+    "g8eEnsemble",
     "generate_case_title",
 ]

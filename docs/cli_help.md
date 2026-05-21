@@ -7,7 +7,7 @@ title: g8e CLI
 Last Updated: 2026-05-19
 Version: v0.2.6
 
-The `g8e` command is the unified entry point for the g8e platform. The platform is built on the **g8e Protocol** as Gateway; this CLI manages the Gateway (`g8eg` and `g8eo`) by default and exposes the reference Engine app (`g8ee`) only as an optional application-layer adapter.
+The `g8e` command is the unified entry point for the g8e platform. The platform is built on the **g8e Protocol**; this CLI manages the Protocol + Local Operator (`g8eg`) by default and exposes the reference **g8e Agentic Ensemble** (`g8ee`) only as an optional application-layer adapter.
 
 ## Usage
 
@@ -32,23 +32,23 @@ The platform is built on security-first architectural invariants that cannot be 
 
 ## Gateway and Application Layer
 
-The default Gateway is the Operator plus the shared protocol. Bundled apps remain in-tree as opt-in reference adapters and must use the same public protocol surface as BYO clients.
+The default platform is the Local Operator plus the shared protocol. Bundled apps remain in-tree as opt-in reference adapters and must use the same public protocol surface as BYO clients.
 
 | Layer | Component | Language | Purpose |
 |-----------|-----------|----------|---------|
-| **Gateway (Gateway)** | **g8eg** | Go | Policy Decision Point (PDP): Protocol hub, CA/PKI, persistence, and pub/sub broker in listen mode. |
-| **Gateway (Operator)**| **g8eo** | Go | Policy Execution Point (PEP): Sovereign host execution (Actuator), local git ledger, and MCP Server. |
+| **Protocol (Local)** | **g8eg** | Go | **Local Operator**: Protocol hub, CA/PKI, persistence, and pub/sub broker in listen mode. |
+| **Protocol (Remote)**| **g8eo** | Go | **Remote Operator**: Sovereign host execution (Actuator), local git ledger, and MCP Server. |
 | **Protocol** | **protocol/proto** | Protobuf | Canonical transaction schemas, typed payloads, and envelope contracts. |
-| **Application Layer** | **g8ee** | Python | Optional reference Engine adapter for agentic proposal and L2 proof generation. |
+| **Application Layer** | **g8ee** | Python | Optional reference **g8e-compliant agentic ensemble** adapter for agentic proposal and L2 proof generation. |
 
 ### Agent Terminology
 
-The AI reasoning engine uses specialized agents with distinct roles:
+The **g8e Agentic Ensemble** uses specialized agents with distinct roles:
 
 - **Triage**: The initial classifier that determines complexity, intent, and user posture.
 - **Dash**: High-efficiency responder for simple, single-step requests.
 - **Sage**: Senior reasoning agent for complex, multi-step investigations and command orchestration.
-- **Tribunal**: 5-member ensemble (Axiom, Concord, Variance, Pragma, Nemesis) that translates Sage's intent into hardened shell commands through consensus.
+- **Tribunal**: 5-member **agentic ensemble** (Axiom, Concord, Variance, Pragma, Nemesis) that translates Sage's intent into hardened shell commands through consensus.
 - **Actuator**: Defensive circuit breaker that performs risk assessment. Triggers a two-strike lockout on repeated high-risk detections.
 - **Auditor**: The final technical gatekeeper that verifies Tribunal output against Sage's intent and manages agent reputation.
 
@@ -80,11 +80,12 @@ When no operator is connected:
 
 ### Daily Operations
 ```bash
-./g8e platform start    # Start Governance Gateway (g8eg) in listen mode (default ports: <!-- g8e:port:operator_http -->8440<!-- /g8e:port --> multiplexed TLS, <!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port --> plain Bootstrap)
+./g8e setup             # Configure local environment (Protocol + Local Operator vs **g8e Agentic Ensemble**)
+./g8e platform start    # Start Local Operator (g8eg) in listen mode (default ports: <!-- g8e:port:operator_http -->8440<!-- /g8e:port --> multiplexed TLS, <!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port --> plain Bootstrap)
 ./g8e platform status   # Check service health and PIDs (shows all four endpoints)
 ./g8e platform logs     # Stream aggregated logs
 ./g8e platform settings # View or update platform configuration
-./g8e apps start all    # Start optional bundled Engine adapter
+./g8e apps start g8ee   # Start optional reference **g8e-compliant agentic ensemble** app
 ```
 
 ### Operator Deployment
@@ -96,15 +97,20 @@ When no operator is connected:
 
 ### Testing & Development
 ```bash
-./g8e test           # Go Operator Gateway tests
-./g8e test g8eo      # Go Operator Gateway tests
-./g8e test g8ee      # Optional Python Engine adapter tests
+./g8e test           # Remote Operator tests
+./g8e test g8eo      # Remote Operator tests
+./g8e test g8ee      # Optional Python Ensemble adapter tests
 ```
 
 ## Command Reference
 
+### setup
+- `[--quick|--advanced]`: Launch the Environment Setup wizard.
+  - `quick`: Set up Protocol + Local Operator (Listen Mode) or Protocol + Local Operator + **g8e Agentic Ensemble** (g8ee).
+  - `advanced`: Configure custom paths and external provider settings.
+
 ### chat
-- `[prompt]`: Start an interactive web session with the AI Engine. Supports optional initial prompt.
+- `[prompt]`: Start an interactive web session with the **g8e Agentic Ensemble**. Supports optional initial prompt.
 
 ### identity
 - `login [--email <email>] [--count <n>] [--ttl <seconds>]`: Authenticate and save operator session to `~/.g8e/credentials`. In sandbox mode `--email` is optional and defaults to the bootstrap superuser (`superadmin@g8e.local`); pass it explicitly only to switch to a non-default user. Optional count (default 1) and TTL (default 3600).
@@ -117,21 +123,21 @@ When no operator is connected:
 - `unset <key>`: Remove a variable from `.g8e/.env`
 
 ### platform
-- `start [-a|--with-apps|--with-g8ee]`: Start Governance Gateway (`g8eg`) listen mode by default; optional apps require explicit opt-in
-- `stop`: Stop Governance Gateway and any optional app processes
-- `restart [-a|--with-apps|--with-g8ee]`: Restart Governance Gateway listen mode by default; optional apps require explicit opt-in
-- `status`: Show Gateway health first and optional application-layer status separately
-- `reset`: Destructive. Wipes Engine data, Gateway listen-mode data, and bootstrap secrets while preserving PKI material in `.g8e/pki` (prompts for confirmation; bypass with `-y`, `--yes`, or `--force`)
+- `start [-a|--with-g8ee]`: Start Local Operator (`g8eg`) listen mode by default; optional **g8e Agentic Ensemble** (g8ee) requires explicit opt-in
+- `stop`: Stop Local Operator and any optional app processes
+- `restart [-a|--with-g8ee]`: Restart Local Operator listen mode by default; optional **g8e Agentic Ensemble** (g8ee) requires explicit opt-in
+- `status`: Show Local Operator health first and optional **g8e Agentic Ensemble** status separately
+- `reset`: Destructive. Wipes Ensemble data, Local Operator listen-mode data, and bootstrap secrets while preserving PKI material in `.g8e/pki` (prompts for confirmation; bypass with `-y`, `--yes`, or `--force`)
 - `clean`: Nuke all processes and the `.g8e` runtime directory (prompts for confirmation; bypass with `-y`, `--yes`, or `--force`)
 - `logs`: Stream logs from all components
 - `settings`: Manage platform configuration (sections: general, llm, etc.)
 
 ### apps
-- `start [g8ee|all]`: Start optional bundled app adapter
-- `stop [g8ee|all]`: Stop optional bundled app adapter
-- `restart [g8ee|all]`: Restart optional bundled app adapter
-- `status`: Show optional app status alongside Gateway status
-- `build [g8ee|all]`: Install optional app dependencies
+- `start [g8ee]`: Start optional reference **g8e-compliant agentic ensemble** app
+- `stop [g8ee]`: Stop optional reference **g8e-compliant agentic ensemble** app
+- `restart [g8ee]`: Restart optional reference **g8e-compliant agentic ensemble** app
+- `status`: Show optional g8ee status alongside Local Operator status
+- `build [g8ee]`: Install optional **g8e-compliant agentic ensemble** dependencies
 
 ### operator
 - `init`: Build local operator binary
@@ -143,9 +149,9 @@ When no operator is connected:
 - `ssh-config`: Manage SSH identities for fleet operations
 
 ### test
-- `g8eo [path]`: Go Operator Gateway tests with race detection. Run `./g8e test g8eo -h` for unique options. This is the default when no component is provided.
-- `g8ee [path]`: Optional Python Engine adapter tests with LLM provider support. Run `./g8e test g8ee -h` for unique options.
-- `ci`: Run all CI workflow steps locally (proto verify, lint, vulncheck, Gateway tests, app tests). Run `./g8e test ci -h` for details.
+- `g8eo [path]`: Remote Operator tests with race detection. Run `./g8e test g8eo -h` for unique options. This is the default when no component is provided.
+- `g8ee [path]`: Optional Python Ensemble adapter tests with LLM provider support. Run `./g8e test g8ee -h` for unique options.
+- `ci`: Run all CI workflow steps locally (proto verify, lint, vulncheck, Operator tests, app tests). Run `./g8e test ci -h` for details.
 - `chaos [options]`: Run the g8eo Chaos Tester against the local audit stack. Run `./g8e test chaos -h` for options.
 
 ### security
@@ -172,7 +178,7 @@ Usage:
 ### llm
 - `setup`: Interactive provider configuration
 - `show|get|set`: View or update LLM variables
-- `restart`: Restart inference engine to apply settings
+- `restart`: Restart Ensemble to apply settings
 
 ### demo
 - `deploy [-n <count>] -d <token>`: Start and authenticate a simulated fleet of N devices

@@ -19,7 +19,7 @@ Use a POSIX shell such as Linux, macOS Terminal, WSL, or Git Bash. The root
 At minimum, install the tools for the component you are touching:
 
 - Go for `g8eo` and protocol work.
-- Python for the optional `g8ee` adapter and evals.
+- Python for the optional **g8e Agentic Ensemble** (`g8ee`) and evals.
 - Docker only for demo fleet workflows.
 
 ## `./g8e` fails with missing `curl`
@@ -126,9 +126,9 @@ Stop the managed process before retrying:
 Use `./g8e platform reset` or `./g8e platform clean` only for disposable local
 state. They intentionally remove runtime data under `.g8e/`.
 
-## `g8ee` virtualenv is missing
+## **g8e Agentic Ensemble** (`g8ee`) virtualenv is missing
 
-The Python engine is optional. Engine and eval commands expect the local
+The **agentic ensemble** is optional. Ensemble and eval commands expect the local
 virtualenv under `services/g8ee/.venv`.
 
 To maximize developer ergonomics, **both the platform start script and the test runner will automatically bootstrap this virtualenv for you** if it is not found.
@@ -139,7 +139,7 @@ You can also manually build it or start the platform with optional apps pre-enab
 ./g8e platform start --with-apps
 ```
 
-If you only need the Operator, skip `g8ee` and run:
+If you only need the Operator, skip the **agentic ensemble** (`g8ee`) and run:
 
 ```bash
 ./g8e test g8eo

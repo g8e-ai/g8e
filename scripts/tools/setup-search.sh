@@ -201,7 +201,7 @@ if [[ "$NON_INTERACTIVE" == false && "$_is_configured" == false ]]; then
     echo "    Click 'Create credentials' -> 'API key'."
     echo ""
     echo "    Recommendation: keep it simple - restrict the key to these two APIs only:"
-    echo "      - Gemini for Google Cloud API  (used by the AI engine)"
+    echo "      - Gemini for Google Cloud API  (used by the Ensemble)"
     echo "      - Discovery Engine API          (used by web search)"
     echo ""
     echo "    This single key is used for both GEMINI_API_KEY and VERTEX_SEARCH_API_KEY."

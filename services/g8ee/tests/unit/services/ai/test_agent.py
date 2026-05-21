@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-Unit tests for g8eEngine (agent.py).
+Unit tests for g8eEnsemble (agent.py).
 
 Tests:
 - Constructor initialization with required and optional dependencies
@@ -50,7 +50,7 @@ from app.models.agent import (
 )
 from app.models.grounding import GroundingMetadata
 from app.models.tool_results import SearchWebResult
-from app.services.ai.agent import g8eEngine
+from app.services.ai.agent import g8eEnsemble
 from app.services.ai.agent_tool_loop import ToolCallResponse
 from tests.fakes.agent_helpers import (
     make_agent_inputs,
@@ -68,11 +68,11 @@ pytestmark = pytest.mark.unit
 # TEST: Constructor
 # =============================================================================
 
-class Testg8eEngineConstructor:
+class Testg8eEnsembleConstructor:
 
     def test_constructor_with_required_dependencies(self):
         tool_executor = MagicMock()
-        agent = g8eEngine(tool_executor=tool_executor)
+        agent = g8eEnsemble(tool_executor=tool_executor)
 
         assert agent._tool_executor is tool_executor
         assert agent._grounding_service is not None
@@ -80,7 +80,7 @@ class Testg8eEngineConstructor:
     def test_constructor_with_optional_grounding_service(self):
         tool_executor = MagicMock()
         grounding_service = MagicMock()
-        agent = g8eEngine(
+        agent = g8eEnsemble(
             tool_executor=tool_executor,
             grounding_service=grounding_service,
         )
@@ -89,7 +89,7 @@ class Testg8eEngineConstructor:
 
     def test_constructor_creates_default_grounding_service_when_none(self):
         tool_executor = MagicMock()
-        agent = g8eEngine(
+        agent = g8eEnsemble(
             tool_executor=tool_executor,
             grounding_service=None,
         )
@@ -102,7 +102,7 @@ class Testg8eEngineConstructor:
 # TEST: Property Accessors
 # =============================================================================
 
-class Testg8eEngineProperties:
+class Testg8eEnsembleProperties:
 
     def test_tool_executor_property_returns_executor(self):
         tool_executor = MagicMock()

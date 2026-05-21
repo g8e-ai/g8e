@@ -484,7 +484,7 @@ func TestHandleDB(t *testing.T) {
 	})
 }
 
-// Regression: g8ee Engine pushes typed events via /api/internal/sse/push and
+// Regression: g8ee Ensemble pushes typed events via /api/internal/sse/push and
 // CLI/dashboard consumers poll /api/internal/sse/events with exactly one of
 // web_session_id, cli_session_id, or user_id set. The Gateway persists each
 // event under a typed routing column so CLI (BYO frontend) and web sessions

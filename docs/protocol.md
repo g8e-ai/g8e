@@ -6,11 +6,11 @@ title: g8e Protocol
 
 Last Updated: 2026-05-21
 
-The **g8e Protocol** is a governance and compliance standard. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) at the Governance Gateway's admission boundary and forces them through a fail-closed verification gauntlet - envelope integrity, typed-payload decode, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the Gateway boundary: they never reach the execution boundary (the Actuator) and they never touch the host. Admitted payloads produce a cryptographically provable audit trail with local-first persistence at the site of execution.
+The **g8e Protocol** is a governance and compliance standard. It ingests payloads from open ecosystems (MCP, A2A, OpenAI tool calls, LangChain, etc.) at the Local Operator's admission boundary and forces them through a fail-closed verification gauntlet - envelope integrity, typed-payload decode, L1 forbidden patterns, hash binding, freshness (`expires_at` + nonce/replay), host state-root match, L2 Tribunal signature against a trusted signer, and (for mutations) an L3 WebAuthn proof bound to the same hash. Non-conformant payloads are rejected at the boundary: they never reach the execution boundary (the Actuator) and they never touch the host. Admitted payloads produce a cryptographically provable audit trail with local-first persistence at the site of execution.
 
 Rather than competing with tool-calling standards, g8e functions as a secure perimeter. It treats standard JSON-RPC tools as unverified payloads (the "what") and wraps them in a strict, canonical `GovernanceEnvelope` (the "how").
 
-The protocol is the only mandatory layer of g8e. Any conforming implementation - Governance Gateway, Governed Operator, client, or BYO frontend - interoperates by speaking this contract. The reference Governance Gateway (`g8eg`), Governed Operator (`g8eo`), and reference Engine (`g8ee`) are interchangeable with anything that produces and verifies the same envelopes.
+The protocol is the only mandatory layer of g8e. Any conforming implementation - Local Operator, Remote Operator, client, or BYO frontend - interoperates by speaking this contract. The reference Local Operator (`g8eg`), Remote Operator (`g8eo`), and the reference **g8e Agentic Ensemble** (`g8ee`) are interchangeable with anything that produces and verifies the same envelopes.
 
 ---
 
@@ -34,7 +34,7 @@ The protocol is the only mandatory layer of g8e. Any conforming implementation -
 4. **Body-embedded context** - Business and execution context (`web_session_id`, `cli_session_id`, `operator_session_id`, `user_id`, `case_id`, `investigation_id`, etc.) lives inside the envelope body via a typed `RequestContext`. HTTP headers are reserved for protocol-level metadata and mTLS-bound identity.
 5. **BFT state binding** - Mutations carry a `state_merkle_root` that the Operator compares against its current host state. Stale-state transactions are rejected.
 6. **Signed receipts** - Every accepted mutation produces a Actuator-signed `ActionReceipt` containing status, `state_root_before`, `state_root_after`, and a key-id-bound Ed25519 signature.
-7. **Operator sovereignty** - No bundled component has privileged channels. The Governed Operator (`g8eo`) is the only execution boundary, and its rules apply uniformly to BYO and reference clients.
+7. **Operator sovereignty** - No bundled component has privileged channels. The Remote Operator (`g8eo`) is the only execution boundary, and its rules apply uniformly to BYO and reference clients.
 
 ---
 
@@ -125,8 +125,8 @@ A cryptographic proof that an independent ensemble agreed on the instruction.
 
 - **Mechanism** - Ed25519 signature over `transaction_hash | decision`.
 - **Trust** - The Governed Operator maintains an Operator-owned `SignerStore`; missing or unknown keys cause rejection.
-- **Producer** - Any conforming Quorum (L2) producer (the bundled Engine, a BYO multi-agent system, or a single signer for low-stakes flows).
-- **Reference Engine producer** - g8ee runs its own internal Byzantine cascade upstream of the Quorum (L2) signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Actuator risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Engine signs only after Auditor passes. The Gateway gateway and operator do not assume any of this; they re-run every gate below independently. See [g8ee Governance & Safety](g8ee.md) and [position paper §2.3](position_paper.md).
+- **Producer** - Any conforming Quorum (L2) producer (the bundled **agentic ensemble**, a BYO multi-agent system, or a single signer for low-stakes flows).
+- **Reference agentic ensemble producer** - The **agentic ensemble** (`g8ee`) runs its own internal Byzantine cascade upstream of the Quorum (L2) signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Actuator risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Ensemble signs only after Auditor passes. The Gateway gateway and operator do not assume any of this; they re-run every gate below independently. See [g8ee Governance & Safety](g8ee.md) and [position paper §2.3](position_paper.md).
 
 ### Notary (L3): Authorization (Human)
 
@@ -160,10 +160,10 @@ The `TransactionVerifier` on both `g8eg` and `g8eo` runs the following gates in 
 
 ### Execution & Receipt Phase (Operator → Client)
 
-The **Actuator** on the Governed Operator signs an executing-state `ActionReceipt` and writes it to the AuditVault. If logging fails, execution is aborted.
+The **Actuator** on the Remote Operator signs an executing-state `ActionReceipt` and writes it to the AuditVault. If logging fails, execution is aborted.
 2. The Actuator dispatches the typed payload to its execution handler (e.g., shell executor, file edit handler).
 3. The Actuator updates the receipt with the final status (`COMPLETED` / `FAILED`), the post-state root, and a fresh signature.
-4. The Governed Operator publishes a result envelope (also a `GovernanceEnvelope`) carrying the typed result and the signed receipt back to the Gateway.
+4. The Remote Operator publishes a result envelope (also a `GovernanceEnvelope`) carrying the typed result and the signed receipt back to the Local Operator.
 
 ---
 
@@ -307,4 +307,4 @@ Agent performance is tracked via an EMA scalar `[0.0, 1.0]` in the `reputation_s
 | Audit storage | `@/home/bob/g8e/services/g8eo/internal/services/storage/audit_vault.go` |
 | Workload identity | `@/home/bob/g8e/protocol/workload_identity.go` |
 
-For the reference Operator implementation see [Operator](operator.md). For the reference Engine application see [g8ee Engine](g8ee.md). For Hub/data-backplane behavior see [Governance Gateway (g8eg)](g8eg.md).
+For the reference Remote Operator implementation see [Operator](operator.md). For the reference **g8e Agentic Ensemble** application see [g8e Agentic Ensemble](g8ee.md). For Hub/data-backplane behavior see [Local Operator (g8eg)](g8eg.md).

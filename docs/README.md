@@ -27,7 +27,7 @@ The reference Go implementation compiles from a single codebase into two role-sp
 ## 3. Reference Applications
 Optional producers and consumers demonstrating the protocol in action.
 
-- [**g8ee Engine**](g8ee.md) - Reference AI reasoning and Tribunal orchestration.
+- [**g8e Agentic Ensemble**](g8ee.md) - Reference **g8e-compliant agentic ensemble** and Tribunal orchestration.
 
 ## 4. Developer Resources
 Guides for setting up, testing, and contributing to the platform.

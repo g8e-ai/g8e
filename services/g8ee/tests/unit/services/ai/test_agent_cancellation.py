@@ -26,7 +26,7 @@ from tests.fakes.agent_helpers import (
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 class TestAgentCancellation:
-    """Tests for immediate and graceful cancellation in g8eEngine."""
+    """Tests for immediate and graceful cancellation in g8eEnsemble."""
 
     async def test_stream_with_tool_loop_cancels_immediately_during_llm_call(self):
         """Verify that a cancellation during the LLM call is propagated immediately."""

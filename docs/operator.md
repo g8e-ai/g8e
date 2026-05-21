@@ -192,4 +192,4 @@ The Operator is fully self-contained. There are no runtime internet dependencies
 | Listen mode entry | `@/home/bob/g8e/services/g8eo/cmd/g8eo/main.go` |
 | PKI / CertStore | `@/home/bob/g8e/services/g8eo/internal/services/listen/listen_certs.go` |
 
-See also: [Protocol](protocol.md), [Governance Gateway (g8eg)](g8eg.md), [g8ee Engine](g8ee.md).
+See also: [Protocol](protocol.md), [Governance Gateway (g8eg)](g8eg.md), [g8e Agentic Ensemble](g8ee.md).

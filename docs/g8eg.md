@@ -28,7 +28,7 @@ The g8e platform is built on the g8e Protocol as Gateway. Conforming gateway and
 - **Protocol (Gateway)**: The wire contract, schemas, and L1/L2/L3 verification rules. Mandatory and immutable for any client or implementation.
 - **Governance Gateway (`g8eg`)**: Built as `g8e.gateway` and run in **Listen Mode** (`--listen`). It acts as the platform's backbone - protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
 - **Governed Operator (`g8eo`)**: Built as `g8e.operator` and run in **Standard Mode** or **MCP Mode** (`--mcp-serve`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease.
-- **Reference Application Layer (Optional)**: Reference components like the Engine (`g8ee`) consume the public Gateway/Operator protocol surface. They have no privileged Gateway responsibilities and no private access channels.
+- **Reference Application Layer (Optional)**: Reference components like the **g8e Agentic Ensemble** (`g8ee`) consume the public Gateway/Operator protocol surface. They have no privileged Gateway responsibilities and no private access channels.
 
 ```mermaid
 flowchart TD
@@ -47,7 +47,7 @@ flowchart TD
     end
 
     subgraph Apps ["Reference Application Layer"]
-        g8ee["g8ee Engine Adapter"]
+        g8ee["g8e Agentic Ensemble"]
     end
 
     g8ee -. "mTLS UAP JSON" .-> listen
@@ -185,7 +185,7 @@ The g8e Protocol enforces strict separation between disjoint session types to pr
 |---|---|---|---|
 | **Operator Session** | `operator_session_id` | Authenticates a specific host-side **governed operator** (`g8eo`). Bound to the machine fingerprint. | mTLS (Operator Cert) |
 | **CLI Session** | `cli_session_id` | Authenticates a specific **BYO/CLI client** (e.g., `./g8e chat`). Used for receiving real-time events. | mTLS (CLI Cert) |
-| **Web Session** | `web_session_id` | Authenticates a **browser-based client** (e.g., Dashboard). Bound to a secure session cookie. | Passkey (WebAuthn) |
+| **Web Session** | `web_session_id` | Authenticates a **browser-based client**. Bound to a secure session cookie. | Passkey (WebAuthn) |
 
 **Key Invariants:**
 - **Disjoint Routing**: The Gateway (SSE/PubSub) routes events based on these identifiers. A `web_session_id` can never receive events intended for a `cli_session_id`.
@@ -327,4 +327,4 @@ The Hub keeps an authoritative encrypted audit vault keyed by `transaction_hash`
 
 - [**g8e Protocol**](protocol.md) - The wire contract and governance hierarchy.
 - [**g8eo Operator**](operator.md) - Sovereign host-side execution agent and MCP server.
-- [**g8ee Engine**](g8ee.md) - Reference AI reasoning application.
+- [**g8ee Ensemble**](g8ee.md) - Reference **g8e-compliant agentic ensemble** application.

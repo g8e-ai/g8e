@@ -17,21 +17,20 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 SUB="${1:-}"
 _APP_ACTION="$SUB"
-_APP_TARGET="${2:-all}"
+_APP_TARGET="${2:-g8ee}"
 
 case "$_APP_ACTION" in
     -h|--help|"")
-        echo "Usage: ./g8e apps {start|stop|restart|status|build} [g8ee|all]"
+        echo "Usage: ./g8e apps {start|stop|restart|status|build} [g8ee]"
         echo ""
-        echo "Optional bundled apps are application-layer adapters and are not part of the default Gateway lifecycle."
+        echo "Optional reference ensembles are application-layer adapters and are not part of the default platform lifecycle."
         [[ -z "$_APP_ACTION" ]] && exit 1 || exit 0
         ;;
 esac
 
 case "$_APP_TARGET" in
-    all) _APP_FLAGS=(--with-apps) ;;
     g8ee) _APP_FLAGS=(--with-g8ee) ;;
-    *) echo "[g8e] unknown app target: '$_APP_TARGET'" >&2; echo "  Valid: g8ee, all" >&2; exit 1 ;;
+    *) echo "[g8e] unknown app target: '$_APP_TARGET'" >&2; echo "  Valid: g8ee" >&2; exit 1 ;;
 esac
 
 case "$_APP_ACTION" in
@@ -41,7 +40,6 @@ case "$_APP_ACTION" in
     stop)
         _banner "apps stop $_APP_TARGET"
         case "$_APP_TARGET" in
-            all) exec bash "$SCRIPT_DIR/scripts/core/build.sh" down ;;
             g8ee)
                 if [[ -f "$_G8EE_PID_FILE" ]]; then
                     kill "$(cat "$_G8EE_PID_FILE")" 2>/dev/null || true
@@ -57,12 +55,6 @@ case "$_APP_ACTION" in
         exec bash "$SCRIPT_DIR/scripts/core/build.sh" status ;;
     build)
         case "$_APP_TARGET" in
-            all)
-                _banner "apps build all"
-                python3 -m venv "$SCRIPT_DIR/services/g8ee/.venv"
-                "$SCRIPT_DIR/services/g8ee/.venv/bin/pip" install --upgrade pip
-                "$SCRIPT_DIR/services/g8ee/.venv/bin/pip" install -r "$SCRIPT_DIR/services/g8ee/requirements.txt"
-                ;;
             g8ee)
                 _banner "apps build g8ee"
                 python3 -m venv "$SCRIPT_DIR/services/g8ee/.venv"
