@@ -83,7 +83,7 @@ type PubSubCommandService struct {
 
 	// UAP governance services for Phase 3 integration
 	tribunal            *governance.Tribunal
-	warden              *governance.Warden
+	Actuator            *governance.Actuator
 	transactionVerifier *governance.TransactionVerifier
 	signerStore         governance.SignerStore
 
@@ -111,9 +111,9 @@ type CommandServiceConfig struct {
 	TransactionAudit  governance.TransactionAuditStore
 	SignerStore       governance.SignerStore
 
-	// Warden configuration
-	WardenSigningKey ed25519.PrivateKey
-	WardenKeyID      string
+	// Actuator configuration
+	ActuatorSigningKey ed25519.PrivateKey
+	ActuatorKeyID      string
 
 	// MCP gateway for protocol translation egress
 	MCPGateway *mcp.GatewayService
@@ -213,8 +213,8 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		// PrivateKey would be loaded from PKI directory in production
 	}
 
-	// Initialize Warden with trusted nodes and audit vault
-	rs.warden = &governance.Warden{
+	// Initialize Actuator with trusted nodes and audit vault
+	rs.Actuator = &governance.Actuator{
 		Logger:            c.Logger,
 		SignerStore:       rs.signerStore,
 		Execution:         c.Execution,
@@ -224,8 +224,8 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		StateRootProvider: c.StateRootProvider,
 		Ctx:               serviceCtx,
 		ExecutionHandler:  rs, // PubSubCommandService implements ExecutionHandler
-		SigningKey:        c.WardenSigningKey,
-		KeyID:             c.WardenKeyID,
+		SigningKey:        c.ActuatorSigningKey,
+		KeyID:             c.ActuatorKeyID,
 	}
 
 	// Initialize TransactionVerifier for strict pre-dispatch verification
@@ -255,7 +255,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 	// Wire MCP gateway with dependencies if configured.
 	// MCPGateway is used as the egress dispatcher for protocol translation.
 	if rs.mcpGateway != nil {
-		rs.mcpGateway.SetDependencies(rs, c.StateRootProvider, c.WardenSigningKey, c.WardenKeyID, c.Config.Listen.MCPDownstreamURL)
+		rs.mcpGateway.SetDependencies(rs, c.StateRootProvider, c.ActuatorSigningKey, c.ActuatorKeyID, c.Config.Listen.MCPDownstreamURL)
 		rs.mcpGateway.SetA2ADependencies(c.Config.Listen.A2ADownstreamURL)
 	}
 
@@ -505,7 +505,7 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 // ProcessEnvelope is the public, synchronous entry point for fail-closed
 // Gateway transaction processing. It is used by the listen-mode HTTP surface
 // (POST /api/governance/envelope) to verify a UAP JSON envelope and execute it
-// through the Warden, returning the signed ActionReceipt or a verification
+// through the Actuator, returning the signed ActionReceipt or a verification
 // error.
 //
 // The receipt is returned even on execution failure (status=FAILED) so callers
@@ -534,8 +534,8 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 		return nil, err
 	}
 
-	if rs.warden == nil {
-		return nil, errors.New("warden not configured")
+	if rs.Actuator == nil {
+		return nil, errors.New("Actuator not configured")
 	}
 
 	eventType := constants.MapActionTypeToEventType(verified.ActionType)
@@ -553,11 +553,11 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 		Timestamp:         envelope.Timestamp.AsTime(),
 	}
 
-	receipt, execErr := rs.warden.Execute(ctx, verified, cmdMsg)
+	receipt, execErr := rs.Actuator.Execute(ctx, verified, cmdMsg)
 	return receipt, execErr
 }
 
-// handleUAPEnvelope processes a UAPEnvelope using the TransactionVerifier, Tribunal and Warden services.
+// handleUAPEnvelope processes a UAPEnvelope using the TransactionVerifier, Tribunal and Actuator services.
 func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 	var verified *governance.VerifiedTransaction
 
@@ -580,7 +580,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		return
 	}
 
-	// Convert UAPEnvelope to PubSubCommandMessage for execution through Warden
+	// Convert UAPEnvelope to PubSubCommandMessage for execution through Actuator
 	// Map UAP action types back to protobuf event types for handler dispatch
 	eventType := constants.MapActionTypeToEventType(verified.ActionType)
 
@@ -604,21 +604,21 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		Timestamp:         env.Timestamp.AsTime(),
 	}
 
-	// Execute through Warden (execution boundary)
-	if rs.warden != nil {
-		receipt, err := rs.warden.Execute(rs.ctx, verified, cmdMsg)
+	// Execute through Actuator (execution boundary)
+	if rs.Actuator != nil {
+		receipt, err := rs.Actuator.Execute(rs.ctx, verified, cmdMsg)
 		if err != nil {
-			rs.logger.Error("Warden execution failed",
+			rs.logger.Error("Actuator execution failed",
 				string(constants.ConnectionStateError), err,
 				"message_id", env.Id,
 				"receipt_status", receipt.Status.String())
 			return
 		}
-		rs.logger.Info("Warden execution succeeded",
+		rs.logger.Info("Actuator execution succeeded",
 			"message_id", env.Id,
 			"receipt_status", receipt.Status.String())
 	} else {
-		rs.logger.Error("FATAL: Warden service missing - cannot execute", "message_id", env.Id)
+		rs.logger.Error("FATAL: Actuator service missing - cannot execute", "message_id", env.Id)
 		return
 	}
 }
@@ -633,7 +633,7 @@ func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
 }
 
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler.
-// This is called by Warden to execute verified transactions, making Warden the execution boundary.
+// This is called by Actuator to execute verified transactions, making Actuator the execution boundary.
 func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
 	handler, ok := rs.handlers[eventType]
 	if !ok {
@@ -648,7 +648,7 @@ func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, 
 		return "", fmt.Errorf("invalid cmdMsg type: %T", cmdMsg)
 	}
 
-	rs.logger.Info("Executing verified transaction through Warden", "event_type", eventType)
+	rs.logger.Info("Executing verified transaction through Actuator", "event_type", eventType)
 
 	// Special case for EVAL_ANSWER which is synchronous and returns the answer as summary
 	if eventType == constants.Event.Operator.Eval.AnswerRequested {
@@ -668,9 +668,9 @@ func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, 
 	return "", nil
 }
 
-// handleMcpCallRequestSync is the Warden egress for MCP_CALL transactions:
+// handleMcpCallRequestSync is the Actuator egress for MCP_CALL transactions:
 // it decodes the typed payload, dispatches to the configured downstream MCP
-// server via the gateway, and returns the textual result so the Warden can
+// server via the gateway, and returns the textual result so the Actuator can
 // stamp it into the signed ActionReceipt.
 func (rs *PubSubCommandService) handleMcpCallRequestSync(ctx context.Context, msg PubSubCommandMessage) (string, error) {
 	if rs.mcpGateway == nil {
@@ -710,9 +710,9 @@ func (rs *PubSubCommandService) handleMcpCallRequestSync(ctx context.Context, ms
 	return summary, nil
 }
 
-// handleA2aCallRequestSync is the Warden egress for A2A_CALL transactions:
+// handleA2aCallRequestSync is the Actuator egress for A2A_CALL transactions:
 // it decodes the typed payload, dispatches to the configured downstream A2A
-// server via the gateway, and returns the textual result so the Warden can
+// server via the gateway, and returns the textual result so the Actuator can
 // stamp it into the signed ActionReceipt.
 func (rs *PubSubCommandService) handleA2aCallRequestSync(ctx context.Context, msg PubSubCommandMessage) (string, error) {
 	if rs.mcpGateway == nil {
@@ -815,7 +815,7 @@ func (rs *PubSubCommandService) SendAutomaticHeartbeat() {
 }
 
 // logBlockedTransaction records a blocked/rejected transaction using the ActionReceiptRecord schema.
-// This ensures consistency with accepted/failed Warden receipts - all transaction outcomes use the same canonical schema.
+// This ensures consistency with accepted/failed Actuator receipts - all transaction outcomes use the same canonical schema.
 func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, rejectionReason error) {
 	if rs.audit == nil || rs.audit.auditVault == nil {
 		return
@@ -834,7 +834,7 @@ func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, reje
 		StateRootBefore:   "", // Not available for blocked transactions
 		StateRootAfter:    "", // Not available for blocked transactions
 		ExecutedAt:        time.Now().UTC(),
-		SignerKeyID:       "", // No Warden signature for blocked transactions
+		SignerKeyID:       "", // No Actuator signature for blocked transactions
 		Signature:         "", // No signature for blocked transactions
 		Timestamp:         time.Now().UTC(),
 	}

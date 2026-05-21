@@ -60,7 +60,7 @@ func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID
 		ExpiresAt:         cliExpiry,
 		AbsoluteExpiresAt: cliExpiry,
 		IdleExpiresAt:     cliExpiry,
-		SessionType:       "cli",
+		SessionType:       string(constants.SessionTypeCLI),
 		IsActive:          true,
 		LoginMethod:       loginMethod,
 	}
@@ -80,7 +80,7 @@ func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID
 	sessionExpiry := time.Now().UTC().Add(24 * time.Hour)
 	operatorSessionDoc := map[string]interface{}{
 		"id":                  operatorSessionID,
-		"session_type":        "operator",
+		"session_type":        string(constants.SessionTypeOperator),
 		"user_id":             userID,
 		"organization_id":     orgID,
 		"operator_id":         operatorID,

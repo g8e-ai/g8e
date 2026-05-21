@@ -26,20 +26,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWardenPublicKeyExport(t *testing.T) {
+func TestActuatorPublicKeyExport(t *testing.T) {
 	tmpDir := t.TempDir()
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 
-	keyID := "test-warden-key"
+	keyID := "test-Actuator-key"
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	// Write public key using the same logic as main.go's exportWardenPublicKey
-	err = exportWardenPublicKey(tmpDir, pubKey, keyID, logger)
+	// Write public key using the same logic as main.go's exportActuatorPublicKey
+	err = exportActuatorPublicKey(tmpDir, pubKey, keyID, logger)
 	require.NoError(t, err)
 
 	// 1. Verify PEM file
-	pemPath := filepath.Join(tmpDir, "warden_pub.pem")
+	pemPath := filepath.Join(tmpDir, "Actuator_pub.pem")
 	pemData, err := os.ReadFile(pemPath)
 	require.NoError(t, err)
 
@@ -49,7 +49,7 @@ func TestWardenPublicKeyExport(t *testing.T) {
 	require.Equal(t, []byte(pubKey), block.Bytes)
 
 	// 2. Verify JSON file
-	jsonPath := filepath.Join(tmpDir, "warden_pub.json")
+	jsonPath := filepath.Join(tmpDir, "Actuator_pub.json")
 	jsonData, err := os.ReadFile(jsonPath)
 	require.NoError(t, err)
 
@@ -62,15 +62,15 @@ func TestWardenPublicKeyExport(t *testing.T) {
 	require.Equal(t, "ed25519", parsed["algorithm"])
 }
 
-// exportWardenPublicKey is a copy of the function in main.go to allow testing.
-// In a real refactor, this should move to internal/services/governance/warden.go.
-func exportWardenPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
+// exportActuatorPublicKey is a copy of the function in main.go to allow testing.
+// In a real refactor, this should move to internal/services/governance/Actuator.go.
+func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
 	if err := os.MkdirAll(pkiDir, 0700); err != nil {
 		return err
 	}
 
 	// Write PEM format
-	pemPath := filepath.Join(pkiDir, "warden_pub.pem")
+	pemPath := filepath.Join(pkiDir, "Actuator_pub.pem")
 	pemData := pem.EncodeToMemory(&pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: pubKey,
@@ -80,7 +80,7 @@ func exportWardenPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string
 	}
 
 	// Write JSON format
-	jsonPath := filepath.Join(pkiDir, "warden_pub.json")
+	jsonPath := filepath.Join(pkiDir, "Actuator_pub.json")
 	jsonData := map[string]string{
 		"key_id":     keyID,
 		"public_key": hex.EncodeToString(pubKey),

@@ -5,7 +5,7 @@ This document defines the technical standards, architectural invariants, and con
 ## Core Architectural Invariants
 
 1. **Human agency is absolute.** Every state-changing operation surfaces its own approval prompt. Automatic Function Calling is permanently disabled.
-2. **3-layer governance bedrock.** L1 hard gates (forbidden patterns) via protobuf reflection; L2 multi-agent Tribunal consensus with reputation staking; L3 human-in-the-loop with hardware-bound WebAuthn proofs (auto-approval for benign diagnostics only after L1+L2 pass).
+2. **3-layer governance bedrock.** Doctrine (L1) hard gates (forbidden patterns) via protobuf reflection; Quorum (L2) multi-agent Tribunal consensus with reputation staking; Notary (L3) human-in-the-loop with hardware-bound WebAuthn proofs (auto-approval for benign diagnostics only after Doctrine (L1)+Quorum (L2) pass).
 3. **Data sovereignty.** Raw command output and file contents stay on the Operator host, encrypted, and never persist platform-side. Platform state is host-native under `.g8e/`.
 4. **Security by structure.** All changes adhere to the Security Review Checklist. The Operator is the only execution boundary.
 5. **BYO Frontend.** The platform is UI-less by design. The **CLI (`./g8e`) is the default out-of-the-box UI**. The Operator provides a minimal bootstrap web interface, but primary interaction is via the CLI, BYO clients, or the optional `g8ee` reasoning engine.
@@ -57,7 +57,7 @@ g8e is split into the **Protocol (Gateway)**, the **Governance Gateway (g8eg)**,
 
 - **Protocol (Gateway)** - Shared `.proto` schemas plus the canonical-JSON wire contract; the source of truth for what every operator and client must honor.
 - **Governance Gateway (`g8eg`)** - The central, BFT-governed Policy Decision Point (PDP) running in `--listen` mode. It provides the platform's central persistence, PKI, and protocol API (including a minimal bootstrap interface).
-- **Governed Operator (`g8eo`)** - The host-side Policy Execution Point (PEP) and MCP Server. It enforces protocol compliance, verifies L1/L2/L3 signatures, and executes transactions via the Warden stage.
+- **Governed Operator (`g8eo`)** - The host-side Policy Execution Point (PEP) and MCP Server. It enforces protocol compliance, verifies Doctrine (L1), Quorum (L2), and Notary (L3) signatures, and executes transactions via the Actuator stage.
 - **Reference Application Layer (optional)** - Optional adapters like `g8ee` that extend the platform's reasoning capabilities. All interaction flows through the CLI by default.
 - **Host-native execution** - Core components run as native processes.
 - **Zero-config discovery** - Services use a standardized local runtime directory (`.g8e/`) for discovery and configuration sharing.
@@ -73,7 +73,7 @@ g8e is split into the **Protocol (Gateway)**, the **Governance Gateway (g8eg)**,
 
 The `./g8e platform start` command (invoked via `scripts/core/build.sh`) manages the sequence:
 1. **Gateway binary check/build** → Governance Gateway (`g8eg`) starts in `--listen` mode.
-2. **Root of trust generation** (first boot only) - ECDSA P-384 CA hierarchy, intermediate CAs, and trust bundles in `.g8e/pki/`; `session_encryption_key`, `warden_signing_key` in `.g8e/secrets/`.
+2. **Root of trust generation** (first boot only) - ECDSA P-384 CA hierarchy, intermediate CAs, and trust bundles in `.g8e/pki/`; `session_encryption_key`, `Actuator_signing_key` in `.g8e/secrets/`.
 3. **Optional service initialization** - `g8ee` starts under its venv with mTLS + URI SAN identity.
 4. **Asynchronous convergence** - Services poll health endpoints (e.g., Engine polls the Governance Gateway's mTLS API at `https://localhost:<operator_http>/health`; default `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->`).
 
@@ -145,7 +145,7 @@ AI agents tend to wrap poorly understood code in new abstractions. This is stric
 - **LFAA payload stamping** - All LFAA results include an `execution_id`.
 - **Concurrency** - Goroutines have explicit cancellation contexts and clear channel ownership.
 - **Protocol boundary** - Any capability needed by bundled apps or BYO clients is exposed through the public gateway protocol.
-- **Execution boundary** - Warden is the sole circuit breaker before dispatch. Every accepted mutation emits a signed `ActionReceipt`.
+- **Execution boundary** - Actuator is the sole circuit breaker before dispatch. Every accepted mutation emits a signed `ActionReceipt`.
 
 ### g8ee (Python/FastAPI, optional adapter)
 - **Pydantic enforcement** - Domain objects extend `G8eBaseModel`. Pydantic enforces type checking and rejects extra fields.
@@ -173,7 +173,7 @@ All tests are orchestrated via the `./g8e` CLI. **Never call `pytest` or `go tes
 
 ## Evals (AI Benchmarks)
 
-The evals harness drives the **real g8ee chat pipeline end-to-end** - Triage, Dash/Sage, Tribunal, Auditor, Warden - and fold the full agent trail into a per-task receipt.
+The evals harness drives the **real g8ee chat pipeline end-to-end** - Triage, Dash/Sage, Tribunal, Auditor, Actuator - and fold the full agent trail into a per-task receipt.
 
 ```bash
 # 1. Start the platform and login
@@ -187,7 +187,7 @@ The evals harness drives the **real g8ee chat pipeline end-to-end** - Triage, Da
 ./g8e evals verify-receipts reports/ifeval-<timestamp>/
 ```
 
-`g8e_evals.receipts.verify.verify_receipt_signature` performs offline Ed25519 verification using the Warden public key from `.g8e/pki/warden_pub.pem`.
+`g8e_evals.receipts.verify.verify_receipt_signature` performs offline Ed25519 verification using the Actuator public key from `.g8e/pki/Actuator_pub.pem`.
 
 ## Documentation Guidelines
 

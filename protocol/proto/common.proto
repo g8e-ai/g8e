@@ -35,20 +35,20 @@ enum Component {
   COMPONENT_CLIENT = 3;
 }
 
-// L1 Governance: Technical Bedrock (Hard Gates)
+// Doctrine (L1) Governance: Technical Bedrock (Hard Gates)
 message L1Metadata {
   bool validated = 1;
   repeated string violations = 2;
 }
 
-// L2 Governance: Consensus (Tribunal)
+// Quorum (L2) Governance: Consensus (Tribunal)
 message L2Metadata {
   string tribunal_signature = 1; // ED25519 signature over transaction_hash|decision
   repeated string agent_ids = 2; // IDs of agents that voted
   string key_id = 3;             // ID of the key used for signature
 }
 
-// L3 Governance: Authorization (Human-in-the-loop)
+// Notary (L3) Governance: Authorization (Human-in-the-loop)
 message L3Proof {
   string client_data_json = 1;
   string authenticator_data = 2;

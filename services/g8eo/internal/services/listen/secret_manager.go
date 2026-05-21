@@ -33,8 +33,8 @@ import (
 
 var requiredBootstrapSecrets = []string{
 	"session_encryption_key",
-	"warden_signing_key",
-	"warden_key_id",
+	"Actuator_signing_key",
+	"Actuator_key_id",
 	"auditor_hmac_key",
 }
 
@@ -125,15 +125,15 @@ func (m *SecretManager) createPlatformSettings(now time.Time) error {
 		return fmt.Errorf("create bootstrap secrets directory %s: %w", m.secretsDir, err)
 	}
 
-	// Generate Warden signing key and compute its KeyID once
-	wardenSeedBytes, err := m.generateSecureTokenBytes(ed25519.SeedSize)
+	// Generate Actuator signing key and compute its KeyID once
+	ActuatorSeedBytes, err := m.generateSecureTokenBytes(ed25519.SeedSize)
 	if err != nil {
 		return err
 	}
-	wardenSeed := hex.EncodeToString(wardenSeedBytes)
-	wardenPriv := ed25519.NewKeyFromSeed(wardenSeedBytes)
-	wardenPub := wardenPriv.Public().(ed25519.PublicKey)
-	wardenKeyID := hex.EncodeToString(wardenPub)
+	ActuatorSeed := hex.EncodeToString(ActuatorSeedBytes)
+	ActuatorPriv := ed25519.NewKeyFromSeed(ActuatorSeedBytes)
+	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
+	ActuatorKeyID := hex.EncodeToString(ActuatorPub)
 	sessionEncryptionKey, err := m.generateSecureToken(32)
 	if err != nil {
 		return err
@@ -145,16 +145,16 @@ func (m *SecretManager) createPlatformSettings(now time.Time) error {
 
 	secrets := map[string]string{
 		"session_encryption_key": sessionEncryptionKey,
-		"warden_signing_key":     wardenSeed, // Seed for ED25519
-		"warden_key_id":          wardenKeyID,
+		"Actuator_signing_key":   ActuatorSeed, // Seed for ED25519
+		"Actuator_key_id":        ActuatorKeyID,
 		"auditor_hmac_key":       auditorHMACKey,
 	}
 
 	platformSettings := models.SettingsDocument{}
 	platformSettings.Settings = map[string]interface{}{
 		"session_encryption_key": secrets["session_encryption_key"],
-		"warden_signing_key":     secrets["warden_signing_key"],
-		"warden_key_id":          secrets["warden_key_id"],
+		"Actuator_signing_key":   secrets["Actuator_signing_key"],
+		"Actuator_key_id":        secrets["Actuator_key_id"],
 		"auditor_hmac_key":       secrets["auditor_hmac_key"],
 	}
 	platformSettings.CreatedAt = now
@@ -421,36 +421,36 @@ func (m *SecretManager) generateSecureTokenBytes(bytes int) ([]byte, error) {
 	return tokenBytes, nil
 }
 
-// GetWardenKey retrieves the Warden's ED25519 signing key and its KeyID.
+// GetActuatorKey retrieves the Actuator's ED25519 signing key and its KeyID.
 // The KeyID is stored explicitly in platform_settings to avoid recomputation.
-func (m *SecretManager) GetWardenKey() (ed25519.PrivateKey, string, error) {
+func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
 	secrets, err := m.loadRequiredDBSecrets()
 	if err != nil {
 		return nil, "", err
 	}
 
-	seedHex, ok := secrets["warden_signing_key"]
+	seedHex, ok := secrets["Actuator_signing_key"]
 	if !ok {
-		return nil, "", fmt.Errorf("warden_signing_key not found in platform_settings")
+		return nil, "", fmt.Errorf("Actuator_signing_key not found in platform_settings")
 	}
 
 	seed, err := hex.DecodeString(seedHex)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to decode warden_signing_key: %w", err)
+		return nil, "", fmt.Errorf("failed to decode Actuator_signing_key: %w", err)
 	}
 	if len(seed) != ed25519.SeedSize {
-		return nil, "", fmt.Errorf("warden_signing_key decoded to %d bytes; expected %d; delete and recreate runtime state", len(seed), ed25519.SeedSize)
+		return nil, "", fmt.Errorf("Actuator_signing_key decoded to %d bytes; expected %d; delete and recreate runtime state", len(seed), ed25519.SeedSize)
 	}
 
 	priv := ed25519.NewKeyFromSeed(seed)
 
-	keyID, ok := secrets["warden_key_id"]
+	keyID, ok := secrets["Actuator_key_id"]
 	if !ok {
-		return nil, "", fmt.Errorf("warden_key_id not found in platform_settings")
+		return nil, "", fmt.Errorf("Actuator_key_id not found in platform_settings")
 	}
 	expectedKeyID := hex.EncodeToString(priv.Public().(ed25519.PublicKey))
 	if keyID != expectedKeyID {
-		return nil, "", fmt.Errorf("warden_key_id does not match warden_signing_key; delete and recreate runtime state")
+		return nil, "", fmt.Errorf("Actuator_key_id does not match Actuator_signing_key; delete and recreate runtime state")
 	}
 
 	return priv, keyID, nil

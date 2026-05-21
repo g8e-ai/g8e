@@ -615,7 +615,7 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 }
 
 // DispatchToDownstream forwards a verified MCP tool call to the downstream MCP server.
-// This implements the Warden Egress phase for MCP protocol translation.
+// This implements the Actuator Egress phase for MCP protocol translation.
 func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName string, toolArgs json.RawMessage) (string, error) {
 	if g.downstreamURL == "" {
 		return "", fmt.Errorf("no downstream MCP server configured")

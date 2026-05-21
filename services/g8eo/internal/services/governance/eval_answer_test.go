@@ -30,7 +30,7 @@ import (
 )
 
 // TestEvalAnswerVerification tests that EVAL_ANSWER envelopes are accepted by the verifier
-// and can be executed by the Warden with a signed receipt.
+// and can be executed by the Actuator with a signed receipt.
 func TestEvalAnswerVerification(t *testing.T) {
 	// Generate test key
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
@@ -124,9 +124,9 @@ func TestEvalAnswerVerification(t *testing.T) {
 		t.Errorf("Expected model openai:gpt-4, got %s", evalPayload.Model)
 	}
 
-	// 4. Execute through Warden
+	// 4. Execute through Actuator
 	keyID := "test-key-id"
-	warden := &Warden{
+	Actuator := &Actuator{
 		Logger:            slog.Default(),
 		SignerStore:       &SimpleSignerStore{Signers: map[string]ed25519.PublicKey{keyID: pubKey}},
 		StateRootProvider: &mockStateRootProvider{root: "test-state-root-v1"},
@@ -139,9 +139,9 @@ func TestEvalAnswerVerification(t *testing.T) {
 		KeyID:      keyID,
 	}
 
-	receipt, err := warden.Execute(context.Background(), verified, nil)
+	receipt, err := Actuator.Execute(context.Background(), verified, nil)
 	if err != nil {
-		t.Fatalf("Warden execution failed: %v", err)
+		t.Fatalf("Actuator execution failed: %v", err)
 	}
 
 	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {

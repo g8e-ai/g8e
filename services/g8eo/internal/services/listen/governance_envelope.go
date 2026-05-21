@@ -33,7 +33,7 @@ func (ls *ListenService) SetEnvelopeProcessor(p governance.EnvelopeProcessor) {
 // handleGovernanceEnvelope is the canonical synchronous mutation entry point
 // for BYO Gateway clients. It accepts a UAP JSON envelope, verifies it
 // through the Gateway's fail-closed gate (id, hash, expiry, nonce, state
-// root, L2/L3 governance), executes it through the Warden, and returns the
+// root, L2/L3 governance), executes it through the Actuator, and returns the
 // signed ActionReceipt.
 //
 // Status semantics:

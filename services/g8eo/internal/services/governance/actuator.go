@@ -47,8 +47,8 @@ type TransactionAuditStore interface {
 	DocSet(collection, id string, data json.RawMessage) error
 }
 
-// Warden is the execution gateway. It is the final stop for all UAP envelopes.
-type Warden struct {
+// Actuator is the execution gateway. It is the final stop for all UAP envelopes.
+type Actuator struct {
 	Logger            *slog.Logger
 	SignerStore       SignerStore
 	Execution         *execution.ExecutionService
@@ -59,7 +59,7 @@ type Warden struct {
 	Ctx               context.Context
 	ExecutionHandler  ExecutionHandler
 
-	// Warden's own signing identity for ActionReceipts
+	// Actuator's own signing identity for ActionReceipts
 	SigningKey ed25519.PrivateKey
 	KeyID      string
 }
@@ -69,12 +69,12 @@ type Warden struct {
 // signs and persists an ActionReceipt, and returns it.
 //
 // Fail-closed: if receipt signing or initial audit logging fails, the handler is NOT executed.
-func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg interface{}) (*operatorv1.ActionReceipt, error) {
+func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg interface{}) (*operatorv1.ActionReceipt, error) {
 	if w.ExecutionHandler == nil {
-		return nil, errors.New("Warden ExecutionHandler not set")
+		return nil, errors.New("Actuator ExecutionHandler not set")
 	}
 	if len(w.SigningKey) == 0 {
-		return nil, errors.New("Warden signing key missing - cannot execute mutations")
+		return nil, errors.New("Actuator signing key missing - cannot execute mutations")
 	}
 
 	stateBefore := ""
@@ -89,12 +89,13 @@ func (w *Warden) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg in
 	// Map action type to event type for handler lookup
 	eventType := constants.MapActionTypeToEventType(vt.ActionType)
 
-	w.Logger.Info("Warden preparing to execute transaction",
+	w.Logger.Info("Actuator preparing to execute transaction",
 		"message_id", vt.Envelope.Id,
 		"action_type", vt.ActionType,
 		"event_type", eventType)
 
 	// 1. Prepare initial receipt
+	// Receipt is signed by the Actuator (Authorized Dispatch) identity.
 	implicitL2 := false
 	if vt.Envelope.Governance != nil {
 		implicitL2 = vt.Envelope.Governance.ImplicitL2Signature
@@ -195,7 +196,7 @@ func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 	return payload, nil
 }
 
-func (w *Warden) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
+func (w *Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 	if len(w.SigningKey) == 0 {
 		return "", errors.New("signing key missing")
 	}
@@ -211,7 +212,7 @@ func (w *Warden) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 }
 
 // LogReceipt records the signed action receipt in the audit vault and console_audit.
-func (w *Warden) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
+func (w *Actuator) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
 	docErr := w.logReceiptDocument(env, r)
 
 	if w.AuditVault == nil {
@@ -249,7 +250,7 @@ func (w *Warden) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) e
 	return docErr
 }
 
-func (w *Warden) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
+func (w *Actuator) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt) error {
 	if w.AuditStore == nil || env == nil {
 		return nil
 	}

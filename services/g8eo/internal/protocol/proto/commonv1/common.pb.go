@@ -90,7 +90,7 @@ func (Component) EnumDescriptor() ([]byte, []int) {
 	return file_common_proto_rawDescGZIP(), []int{0}
 }
 
-// L1 Governance: Technical Bedrock (Hard Gates)
+// Doctrine (L1) Governance: Technical Bedrock (Hard Gates)
 type L1Metadata struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Validated     bool                   `protobuf:"varint,1,opt,name=validated,proto3" json:"validated,omitempty"`
@@ -143,7 +143,7 @@ func (x *L1Metadata) GetViolations() []string {
 	return nil
 }
 
-// L2 Governance: Consensus (Tribunal)
+// Quorum (L2) Governance: Consensus (Tribunal)
 type L2Metadata struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	TribunalSignature string                 `protobuf:"bytes,1,opt,name=tribunal_signature,json=tribunalSignature,proto3" json:"tribunal_signature,omitempty"` // ED25519 signature over transaction_hash|decision
@@ -204,7 +204,7 @@ func (x *L2Metadata) GetKeyId() string {
 	return ""
 }
 
-// L3 Governance: Authorization (Human-in-the-loop)
+// Notary (L3) Governance: Authorization (Human-in-the-loop)
 type L3Proof struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	ClientDataJson    string                 `protobuf:"bytes,1,opt,name=client_data_json,json=clientDataJson,proto3" json:"client_data_json,omitempty"`

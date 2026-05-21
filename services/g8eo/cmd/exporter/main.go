@@ -227,8 +227,7 @@ func main() {
 			constName := "PATH_" + strings.ToUpper(strings.ReplaceAll(key, "-", "_"))
 			lines = append(lines, fmt.Sprintf("%s = %q", constName, value))
 		}
-		lines = append(lines, "")
-		lines = append(lines, "# Port constants")
+		lines = append(lines, "", "# Port constants")
 		for key, value := range snapshot.Paths.Ports {
 			// Convert lowercase key to uppercase constant name
 			// Add G8E_ prefix for g8ee-specific ports
@@ -239,18 +238,12 @@ func main() {
 			constName := prefix + strings.ToUpper(strings.ReplaceAll(key, "-", "_"))
 			lines = append(lines, fmt.Sprintf("%s = %d", constName, value))
 		}
-		lines = append(lines, "")
-
-		// Create PathConstants class
-		lines = append(lines, "class PathConstants:")
+		lines = append(lines, "", "class PathConstants:")
 		for key, value := range snapshot.Paths.Infra {
 			constName := "PATH_" + strings.ToUpper(strings.ReplaceAll(key, "-", "_"))
 			lines = append(lines, fmt.Sprintf("    %s = %q", constName, value))
 		}
-		lines = append(lines, "")
-
-		// Create PortConstants class
-		lines = append(lines, "class PortConstants:")
+		lines = append(lines, "", "class PortConstants:")
 		for key, value := range snapshot.Paths.Ports {
 			// Convert lowercase key to uppercase constant name
 			// Add G8E_ prefix for g8ee-specific ports

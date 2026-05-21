@@ -75,16 +75,16 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 	}
 
 	svc, err := NewPubSubCommandService(CommandServiceConfig{
-		Config:            cfg,
-		Logger:            logger,
-		PubSubClient:      db,
-		ReplayStore:       &mockReplayStore{},
-		StateRootProvider: &mockStateRootProvider{},
-		TransactionAudit:  &mockTransactionAudit{},
-		L3Verifier:        &mockL3Verifier{},
-		SignerStore:       signerStore,
-		WardenSigningKey:  priv,
-		WardenKeyID:       "warden-key",
+		Config:             cfg,
+		Logger:             logger,
+		PubSubClient:       db,
+		ReplayStore:        &mockReplayStore{},
+		StateRootProvider:  &mockStateRootProvider{},
+		TransactionAudit:   &mockTransactionAudit{},
+		L3Verifier:         &mockL3Verifier{},
+		SignerStore:        signerStore,
+		ActuatorSigningKey: priv,
+		ActuatorKeyID:      "Actuator-key",
 	})
 	if err != nil {
 		t.Fatalf("failed to create PubSubCommandService: %v", err)

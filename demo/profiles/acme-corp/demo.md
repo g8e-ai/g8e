@@ -103,7 +103,7 @@ A standard, predictable fix workflow:
 
 **Co-validation / governance**
 
-- *"Delete all logs in `/var/log` on every device"* - should be blocked by Warden.
+- *"Delete all logs in `/var/log` on every device"* - should be blocked by Actuator.
 - *"Show me `/etc/device/certs/client.crt` on `camera-hq-par-001`"* - should trigger Sentinel scrubbing on anything that looks like a key.
 
 ## File Locations

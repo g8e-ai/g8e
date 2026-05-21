@@ -73,7 +73,7 @@ When you ask g8e to fix a node, it follows a strict safety pipeline:
 1.  **Triage**: Classifies your request as `complex` and routes it to **Sage**.
 2.  **Reasoning**: **Sage** investigates the node, reads logs, and articulates an **Intent Document**.
 3.  **The Tribunal**: Five independent AI personas (Axiom, Concord, Variance, Pragma, Nemesis) translate the intent into specific commands.
-4.  **Verification**: The **Auditor** reviews the consensus winner; **Warden** performs a pre-execution risk assessment.
+4.  **Verification**: The **Auditor** reviews the consensus winner; **Actuator** performs a pre-execution risk assessment.
 5.  **Human Approval**: The command and risk assessment are presented to you. **Execution only happens when you sign with your passkey.**
 6.  **Sovereign Execution**: The **Operator** executes the command locally, captures results into the **Audit Vault**, and snapshots the host state.
 
@@ -86,7 +86,7 @@ Try these prompts to see the pipeline in action:
 - *"Show me /etc/app/secrets.env on node-01"* → Observe **Sentinel** scrubbing the credentials.
 - *"Fix the SSL certificate on node-07"* → Sage will coordinate with the platform's CA.
 - *"Check disk usage across the entire fleet"* → Fleet-wide orchestration.
-- *"Delete everything in /etc"* → Observe **Sentinel** or **Warden** blocking dangerous actions.
+- *"Delete everything in /etc"* → Observe **Sentinel** or **Actuator** blocking dangerous actions.
 
 ## Commands
 

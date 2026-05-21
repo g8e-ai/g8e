@@ -108,7 +108,7 @@ class CommandValidationSettings(G8eBaseModel):
 
     - ``enable_whitelisting``: HARD ALLOW-LIST. When enabled, only whitelisted
       commands are permitted to run AT ALL. Any non-listed command is blocked at
-      L1 safety validation, regardless of human approval. This is a *generation*
+      Doctrine (L1) safety validation, regardless of human approval. This is a *generation*
       and *execution* constraint.
 
       Two mutually exclusive whitelist sources exist:
@@ -128,7 +128,7 @@ class CommandValidationSettings(G8eBaseModel):
       whitelisted_commands empty to use JSON mode, or populate it to use CSV mode.
 
     - ``enable_blacklisting``: HARD BLOCK-LIST. Commands matching blacklist
-      entries are blocked at L1 safety validation. **This is enabled by default**
+      entries are blocked at Doctrine (L1) safety validation. **This is enabled by default**
       as a recommended boundary to ensure maximum safety and system integrity.
 
     - ``enable_auto_approve`` / ``auto_approved_commands``: SKIP-APPROVAL list.

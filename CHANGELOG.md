@@ -48,7 +48,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 ### Added
 - **CLI Chat Wiring:** Implemented full CLI chat functionality (`./g8e chat`) with backend wiring to `g8ee` and unified stream handling.
 - **Multi-Ledger Audit:** Implemented session-isolated Git audit ledgers for per-investigation transaction tracing.
-- **Warden Execution Boundary:** Established `g8eo` Warden as the authoritative execution boundary with signed action receipts.
+- **Actuator Execution Boundary:** Established `g8eo` Actuator as the authoritative execution boundary with signed action receipts.
 - **Governance APIs:** Added first-class governance APIs for audit export and trust management.
 - **Protobuf Module:** Introduced a unified `protocol/` directory with formal Protobuf module definitions.
 - **Commitment Ledger:** Added definitions for the commitment ledger to support reputation staking.
@@ -159,7 +159,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **L1/L2/L3 Governance:** Integrated a 3-layer command validation hierarchy (L1 Technical Bedrock, L2 Consensus/Tribunal, L3 Authorization/Human) directly into the message envelope.
 - **Recursive Grep Tool:** Introduced `recursive_grep_search` for high-efficiency filesystem exploration across operator fleets.
 - **Interrogation Gate:** Implemented a new gate in the agent loop that detects `<interrogation>` blocks and suppresses pending tool calls to prioritize user input.
-- **Warden Risk Analysis:** Enhanced risk classification logic for Warden sub-agents with improved reputation staking and file-read security.
+- **Actuator Risk Analysis:** Enhanced risk classification logic for Actuator sub-agents with improved reputation staking and file-read security.
 - **LFAA Audit Enhancements:** Refactored the Low-Fidelity Agentic Assistance audit recording to use typed Protobuf schemas.
 
 ### Changed
@@ -172,7 +172,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **Standardized Cloud Subtype:** Standardized operator identification using `cloud_subtype` for consistency across cloud providers.
 
 ### Fixed
-- **Warden Risk Regression:** Resolved a regression where Warden risk levels were incorrectly calculated in certain agent turns.
+- **Actuator Risk Regression:** Resolved a regression where Actuator risk levels were incorrectly calculated in certain agent turns.
 - **Interrogation Plumbing:** Fixed response handling and user interaction flow for the device interrogation pipeline.
 - **G8EO Execution ID:** Fixed a bug where `FsGrepResultPayload` was missing `ExecutionID` propagation, breaking correlation for recursive searches.
 - **Fingerprint Recording:** Resolved issues with system fingerprint recording and included missing events in the audit trail.
@@ -190,7 +190,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **Nginx Demo Profile:** Reorganized and enhanced the Nginx demo profile with regional deployments.
 
 ### Changed
-- **Warden Prompts & Pathing:** Improved Warden sub-agent prompts and corrected file pathing behavior.
+- **Actuator Prompts & Pathing:** Improved Actuator sub-agent prompts and corrected file pathing behavior.
 - **Read-Only Tools UX:** Enhanced the user experience for read-only tools and terminal results alignment.
 - **Tribunal Logging:** Improved logging detail and clarity for the Tribunal consensus pipeline.
 - **Tribunal Voting:** Enforced a mandatory two-round minimum for Tribunal voting to ensure rigorous consensus.
@@ -216,7 +216,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 ### Changed
 - **Information Isolation:** Formalized the "Information Isolation Principle" (formerly Vortex Principle) for enhanced multi-agent safety.
 - **Tribunal Consensus:** Refined consensus logic (Plurality Consensus) with deterministic tie-breaking and circuit breaker for deadlocks.
-- **Warden Reputation Staking:** Warden sub-agents now stake reputation on risk classifications.
+- **Actuator Reputation Staking:** Actuator sub-agents now stake reputation on risk classifications.
 - **Setup UX:** Improvements to the onboarding wizard, ensuring validation visibility and cleaner summary view.
 - **Python Modernization:** Migrated to `StrEnum` for improved type safety and performance across `g8ee`.
 
@@ -228,11 +228,11 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 ## [0.1.7] - 2026-05-01
 
 ### Added
-- **Warden Reputation Staking Improvements:** Enhanced reputation staking logic for Warden's risk assessments, including file read fixes and order handling.
+- **Actuator Reputation Staking Improvements:** Enhanced reputation staking logic for Actuator's risk assessments, including file read fixes and order handling.
 - **Agent Cancellation:** Added support for cancelling agent tasks with dedicated UI controls and tests.
 
 ### Changed
-- **Warden Personas & Context:** Refined Warden's context and personas for better risk evaluation.
+- **Actuator Personas & Context:** Refined Actuator's context and personas for better risk evaluation.
 - **Tool Call Event Delivery:** Improved reliability and performance of tool call event delivery.
 - **Onboarding UX:** Enhancements to the onboarding flow for a smoother user experience.
 - **Node Package Updates:** Updated dependencies in `client` for security and performance.

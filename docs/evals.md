@@ -6,7 +6,7 @@ title: Evals
 
 Last Updated: 2026-05-18
 
-The evals harness drives the **real g8ee chat pipeline end-to-end** - Triage, Dash/Sage, Tribunal, Auditor, Warden - captures every agent stage emitted on the Operator's per-session SSE buffer, and folds the full agent trail into a per-task receipt for offline replay. This is the gold-standard evaluation path: the model under test exercises the same code paths a real user hits via `./g8e chat send`.
+The evals harness drives the **real g8ee chat pipeline end-to-end** - Triage, Dash/Sage, Tribunal, Auditor, Actuator - captures every agent stage emitted on the Operator's per-session SSE buffer, and folds the full agent trail into a per-task receipt for offline replay. This is the gold-standard evaluation path: the model under test exercises the same code paths a real user hits via `./g8e chat send`.
 
 ---
 
@@ -40,7 +40,7 @@ evals/
 2. SUT POSTs `/api/internal/chat` on g8ee with `resource_creation.create_case=true` and per-role provider/model/api-key overrides from `SUTConfig`. g8ee creates a fresh case+investigation and runs the chat pipeline as a background task.
 3. SUT polls `GET /api/internal/sse/events?since_id=<cursor>` every `poll_interval_s` (default 0.25s), accumulating `AgentTrailEvent` rows filtered by `investigation_id` until a terminal event or `idle_timeout_s`.
 4. `text.chunk` payloads concatenate into the final `answer` string.
-5. The trail is scanned for `g8e.v1.ai.governance.warden.receipt.signed`. If present, its `transaction_hash` becomes the Gateway `transaction_id` and `ReceiptCollector` polls `/api/audit/receipts?tx_id=...` for the signed `ActionReceipt`.
+5. The trail is scanned for `g8e.v1.ai.governance.Actuator.receipt.signed`. If present, its `transaction_hash` becomes the Gateway `transaction_id` and `ReceiptCollector` polls `/api/audit/receipts?tx_id=...` for the signed `ActionReceipt`.
 6. Per-task results (full agent trail + optional Gateway receipt) are written to `reports/<suite>-<ts>/results.jsonl`.
 
 ---
@@ -51,8 +51,8 @@ The Operator's audit vault keys ActionReceipts by **UAP envelope `transaction_ha
 
 | Outcome | `transaction_id` | `binding` |
 |---|---|---|
-| Answer-only turn (no Tribunal→Warden mutation) | `None` | `UNBOUND` |
-| Warden signed an ActionReceipt during the turn | receipt `transaction_hash` | `RECEIPT_BOUND` |
+| Answer-only turn (no Tribunal→Actuator mutation) | `None` | `UNBOUND` |
+| Actuator signed an ActionReceipt during the turn | receipt `transaction_hash` | `RECEIPT_BOUND` |
 | Pipeline failed (`iteration.failed`, dead-lettered) | Gateway hash if any | `UNBOUND` |
 | Idle timeout, no terminal event | Gateway hash if any | `UNBOUND` |
 
@@ -62,10 +62,10 @@ Regression coverage: `evals/tests/test_g8ee_chat_sut.py` pins `_extract_Gateway_
 
 ## Receipt Verification
 
-`g8e_evals.receipts.verify.verify_receipt_signature(receipt, warden_pub)` performs offline Ed25519 verification:
+`g8e_evals.receipts.verify.verify_receipt_signature(receipt, Actuator_pub)` performs offline Ed25519 verification:
 
-- Loads the Warden public key from `${G8E_PKI_DIR:-.g8e/pki}/warden_pub.pem` (exported by Listen Mode startup in `services/g8eo/cmd/g8eo/main.go`).
-- Verifies the signature over `transaction_hash + "|true"` with the receipt's declared `key_id` matching the Warden key id.
+- Loads the Actuator public key from `${G8E_PKI_DIR:-.g8e/pki}/Actuator_pub.pem` (exported by Listen Mode startup in `services/g8eo/cmd/g8eo/main.go`).
+- Verifies the signature over `transaction_hash + "|true"` with the receipt's declared `key_id` matching the Actuator key id.
 
 Inline verification runs during `bench`. To re-verify a saved report directory offline:
 
@@ -166,7 +166,7 @@ Acceptable for v1; the long-term fix is to consume an Operator-native `text/even
 |---|---|
 | `AuthenticationError: missing G8E_OPERATOR_SESSION_ID / G8E_USER_ID` | Re-run `./g8e login`. |
 | `Pre-flight validation failed: missing API key for primary provider` | Pass `--primary-api-key` (and equivalents) or configure the keys in g8ee user settings. |
-| All tasks `UNBOUND` with `answer-only turn` | Expected for IFEval-style prompts that never trigger a Warden mutation. Receipt binding only occurs when the agent stack escalates a typed mutation through Tribunal→Warden. |
-| Receipt verification failure | Confirm `.g8e/pki/warden_pub.pem` was exported by the running Operator and `--operator-url` points at the same instance. |
+| All tasks `UNBOUND` with `answer-only turn` | Expected for IFEval-style prompts that never trigger a Actuator mutation. Receipt binding only occurs when the agent stack escalates a typed mutation through Tribunal→Actuator. |
+| Receipt verification failure | Confirm `.g8e/pki/Actuator_pub.pem` was exported by the running Operator and `--operator-url` points at the same instance. |
 
 See also: [Protocol](protocol.md), [Operator](operator.md), [g8ee Service](g8ee_service.md), [Tests](tests.md).

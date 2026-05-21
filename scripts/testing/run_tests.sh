@@ -490,7 +490,7 @@ run_ci() {
         test_exit_code=1
     fi
     
-    "$PROJECT_ROOT/g8e" platform stop
+    "$PROJECT_ROOT/g8e" platform stop || true
     
     if [[ $test_exit_code -ne 0 ]]; then
         log_err "CI workflow failed"
