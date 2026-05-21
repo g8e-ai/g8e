@@ -27,7 +27,7 @@ The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In th
 In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the Governance Gateway (`g8eg` / `g8e.gateway` binary) in **Listen Mode** (`--listen`). In this mode, the Governance Gateway acts as the platform's central persistence and messaging backbone rather than an outbound execution agent.
 
 ### Architecture & Ports
-The Governance Gateway in Listen Mode exposes four logical surfaces. Defaults are sourced from `protocol/constants/paths.json`. The TLS surfaces multiplex onto a single port when configured equal; Bootstrap must remain on its own port to be served as plain HTTP.
+The Governance Gateway in Listen Mode exposes four logical surfaces. Defaults are sourced from `services/g8eo/internal/constants/paths.go`. The TLS surfaces multiplex onto a single port when configured equal; Bootstrap must remain on its own port to be served as plain HTTP.
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|

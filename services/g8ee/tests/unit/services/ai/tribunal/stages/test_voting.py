@@ -102,3 +102,28 @@ class TestRunVotingStage:
         assert len(vote_breakdown.winner_supporters) == 2
         assert tied_candidates is not None
         assert len(tied_candidates) == 2
+
+    async def test_tie_force_round_2_when_equal_length_and_no_nemesis(self, mock_g8e_context):
+        # Two clusters of 2, same length, no Nemesis in either cluster
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="ls -al", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="ls -al", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="ls -l", pass_index=4, member=TribunalMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, mock_g8e_context)
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates, request="list files", emitter=emitter, total_members=5,
+        )
+
+        # Should force Round 2 (winner is None)
+        assert winner is None
+        assert score == 0.4
+        assert vote_breakdown.consensus_strength == 0.4
+        assert vote_breakdown.tie_broken is False
+        assert vote_breakdown.tie_break_reason is None
+        assert tied_candidates is not None
+        assert len(tied_candidates) == 2
+        assert {c.command for c in tied_candidates} == {"ls -la", "ls -al"}

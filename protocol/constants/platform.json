@@ -1,11 +1,89 @@
 {
-  "operator": {
-    "default_slots": 20,
-    "default_slot_cost": 1
-  },
-  "device_link": {
-    "default_max_uses": 1,
-    "max_uses_min": 1,
-    "max_uses_max": 10000
+  "platform": {
+    "AuthLoginFailed": {
+      "value": "g8e.v1.platform.auth.login.failed",
+      "_go_const": "PlatformAuthLoginFailed",
+      "_python_const": "AUTH_LOGIN_FAILED"
+    },
+    "AuthLoginRequested": {
+      "value": "g8e.v1.platform.auth.login.requested",
+      "_go_const": "PlatformAuthLoginRequested",
+      "_python_const": "AUTH_LOGIN_REQUESTED"
+    },
+    "AuthLoginSucceeded": {
+      "value": "g8e.v1.platform.auth.login.succeeded",
+      "_go_const": "PlatformAuthLoginSucceeded",
+      "_python_const": "AUTH_LOGIN_SUCCEEDED"
+    },
+    "AuthLogoutFailed": {
+      "value": "g8e.v1.platform.auth.logout.failed",
+      "_go_const": "PlatformAuthLogoutFailed",
+      "_python_const": "AUTH_LOGOUT_FAILED"
+    },
+    "AuthLogoutRequested": {
+      "value": "g8e.v1.platform.auth.logout.requested",
+      "_go_const": "PlatformAuthLogoutRequested",
+      "_python_const": "AUTH_LOGOUT_REQUESTED"
+    },
+    "AuthLogoutSucceeded": {
+      "value": "g8e.v1.platform.auth.logout.succeeded",
+      "_go_const": "PlatformAuthLogoutSucceeded",
+      "_python_const": "AUTH_LOGOUT_SUCCEEDED"
+    },
+    "ConsoleLogEntryReceived": {
+      "value": "g8e.v1.platform.console.log.entry.received",
+      "_go_const": "PlatformConsoleLogEntryReceived",
+      "_python_const": "CONSOLE_LOG_ENTRY_RECEIVED"
+    },
+    "Notification": {
+      "value": "g8e.v1.platform.notification",
+      "_go_const": "PlatformNotification",
+      "_python_const": "NOTIFICATION"
+    },
+    "SentinelModeChanged": {
+      "value": "g8e.v1.platform.sentinel.mode.changed",
+      "_go_const": "PlatformSentinelModeChanged",
+      "_python_const": "SENTINEL_MODE_CHANGED"
+    },
+    "SseConnectionClosed": {
+      "value": "g8e.v1.platform.sse.connection.closed",
+      "_go_const": "PlatformSseConnectionClosed",
+      "_python_const": "SSE_CONNECTION_CLOSED"
+    },
+    "SseConnectionEstablished": {
+      "value": "g8e.v1.platform.sse.connection.established",
+      "_go_const": "PlatformSseConnectionEstablished",
+      "_python_const": "SSE_CONNECTION_ESTABLISHED"
+    },
+    "SseConnectionOpened": {
+      "value": "g8e.v1.platform.sse.connection.opened",
+      "_go_const": "PlatformSseConnectionOpened",
+      "_python_const": "SSE_CONNECTION_OPENED"
+    },
+    "SseKeepaliveSent": {
+      "value": "g8e.v1.platform.sse.keepalive.sent",
+      "_go_const": "PlatformSseKeepaliveSent",
+      "_python_const": "SSE_KEEPALIVE_SENT"
+    },
+    "TelemetryHealthReported": {
+      "value": "g8e.v1.platform.telemetry.health.reported",
+      "_go_const": "PlatformTelemetryHealthReported",
+      "_python_const": "TELEMETRY_HEALTH_REPORTED"
+    },
+    "TerminalClosed": {
+      "value": "g8e.v1.platform.terminal.closed",
+      "_go_const": "PlatformTerminalClosed",
+      "_python_const": "TERMINAL_CLOSED"
+    },
+    "TerminalOpened": {
+      "value": "g8e.v1.platform.terminal.opened",
+      "_go_const": "PlatformTerminalOpened",
+      "_python_const": "TERMINAL_OPENED"
+    },
+    "UsageUpdated": {
+      "value": "g8e.v1.platform.usage.updated",
+      "_go_const": "PlatformUsageUpdated",
+      "_python_const": "USAGE_UPDATED"
+    }
   }
 }

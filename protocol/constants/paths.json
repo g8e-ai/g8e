@@ -1,36 +1,28 @@
 {
   "infra": {
-    "db_path": ".g8e/data/g8e.db",
-    "pki_dir": ".g8e/pki",
-    "secrets_dir": ".g8e/secrets",
-    "ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
     "app_cert_dir": ".g8e/pki/issued/apps",
+    "ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
+    "db_path": ".g8e/data/g8e.db",
     "docs_dir": "/docs",
-    "protocol_dir": "/app/protocol",
+    "pki_dir": ".g8e/pki",
     "protocol_constants_dir": "/app/protocol/constants",
+    "protocol_dir": "/app/protocol",
     "protocol_models_dir": "/app/protocol/models",
+    "secrets_dir": ".g8e/secrets",
     "ssh_config_path": "/etc/g8e/ssh_config"
   },
-  "ports": {
-    "operator_http": 8440,
-    "operator_bootstrap": 8441,
-    "operator_public": 8442,
-    "g8ee_http": 8443,
-    "openclaw_gateway": 18789
-  },
-  "host": "localhost",
   "g8ee": {
     "app_dir": "/app/services/g8ee",
-    "config_dir": "/app/services/g8ee/config",
-    "tests_dir": "/app/services/g8ee/tests",
     "cert_name": "g8ee",
-    "evals": {
-      "reports_dir": "/app/services/g8ee/reports/evals"
-    }
+    "config_dir": "/app/services/g8ee/config",
+    "tests_dir": "/app/services/g8ee/tests"
   },
-  "": {
-    "app_dir": "/app/services/",
-    "views_dir": "/app/services//views",
-    "node_modules_dir": "/app/services//node_modules"
-  }
+  "ports": {
+    "g8ee_http": 8443,
+    "openclaw_gateway": 18789,
+    "operator_bootstrap": 8441,
+    "operator_http": 8440,
+    "operator_public": 8442
+  },
+  "host": "localhost"
 }

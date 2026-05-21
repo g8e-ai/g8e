@@ -207,7 +207,7 @@ The evals harness drives the **real g8ee chat pipeline end-to-end** - Triage, Da
 | Concern | Location |
 |---|---|
 | Protobuf schemas | `protocol/proto/` |
-| Constants registries | `protocol/constants/` |
+| Constants registries | `services/g8eo/internal/constants/` |
 | Operator implementation | `services/g8eo/` |
 | Engine implementation | `services/g8ee/` |
 | Evaluation harness | `evals/` |

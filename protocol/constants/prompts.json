@@ -1,88 +1,94 @@
 {
-  "_comment": "Canonical prompt file paths and AI mode constants for g8ee. All values are relative to the prompts_data/ directory. Consumers: g8ee (Python).",
-
-  "agent.mode": {
-    "operator.bound": "g8e.bound",
-    "operator.not.bound": "g8e.not.bound",
-    "cloud.operator.bound": "g8e.cloud.bound"
-  },
-
-  "prompt.section": {
-    "identity": "identity",
-    "safety": "safety",
-    "loyalty": "loyalty",
-    "dissent": "dissent",
-    "capabilities": "capabilities",
-    "execution": "execution",
-    "tools": "tools",
-    "docs": "docs",
-    "system.context": "system_context",
-    "sentinel.mode": "sentinel_mode",
-    "triage.context": "triage_context",
-    "investigation.context": "investigation_context",
-    "response.constraints": "response_constraints",
-    "learned.context": "learned_context",
-    "agent.persona": "agent_persona"
-  },
-
-  "prompt.file": {
-    "core": {
-      "identity": "core/identity.txt",
-      "safety": "core/safety.txt",
-      "loyalty": "core/loyalty.txt",
-      "dissent": "core/dissent.txt"
+  "prompts": {
+    "AgentModeCloudOperatorBound": {
+      "value": "g8e.cloud.bound",
+      "_go_const": "AgentModeCloudOperatorBound",
+      "_python_const": "CLOUD_OPERATOR_BOUND"
     },
-    "system": {
-      "response.constraints": "system/response_constraints.txt",
-      "sentinel.mode": "system/sentinel_mode.txt"
+    "AgentModeG8eBound": {
+      "value": "g8e.bound",
+      "_go_const": "AgentModeG8eBound",
+      "_python_const": "G8E_BOUND"
     },
-    "modes": {
-      "operator.bound": {
-        "capabilities": "modes/operator_bound/capabilities.txt",
-        "execution": "modes/operator_bound/execution.txt",
-        "tools": "modes/operator_bound/tools.txt"
-      },
-      "operator.not.bound": {
-        "capabilities": "modes/operator_not_bound/capabilities.txt",
-        "execution": "modes/operator_not_bound/execution.txt",
-        "tools": "modes/operator_not_bound/tools.txt",
-        "capabilities.no.search": "modes/operator_not_bound/capabilities_no_search.txt",
-        "execution.no.search": "modes/operator_not_bound/execution_no_search.txt"
-      },
-      "cloud.operator.bound": {
-        "capabilities": "modes/cloud_operator_bound/capabilities.txt",
-        "execution": "modes/cloud_operator_bound/execution.txt",
-        "tools": "modes/cloud_operator_bound/tools.txt"
-      }
+    "AgentModeG8eNotBound": {
+      "value": "g8e.not.bound",
+      "_go_const": "AgentModeG8eNotBound",
+      "_python_const": "G8E_NOT_BOUND"
     },
-    "tools": {
-      "run.commands": "tools/run_commands_with_operator.txt",
-      "file.create": "tools/file_create_on_operator.txt",
-      "file.write": "tools/file_write_on_operator.txt",
-      "file.read": "tools/file_read_on_operator.txt",
-      "file.update": "tools/file_update_on_operator.txt",
-      "g8e.web.search": "tools/g8e_web_search.txt",
-      "check.port": "tools/check_port_status.txt",
-      "list.files": "tools/list_files_and_directories_with_detailed_metadata.txt",
-      "recursive.grep": "tools/recursive_grep_search.txt",
-      "grant.intent": "tools/grant_intent_permission.txt",
-      "revoke.intent": "tools/revoke_intent_permission.txt",
-      "fetch.file.history": "tools/fetch_file_history.txt",
-      "fetch.file.diff": "tools/fetch_file_diff.txt",
-      "query.investigation.context": "tools/query_investigation_context.txt",
-      "get.command.constraints": "tools/get_command_constraints.txt",
-      "ssh.inventory": "tools/list_ssh_inventory.txt",
-      "stream.operator": "tools/stream_operator_to_ssh_fleet.txt"
+    "SectionAgentPersona": {
+      "value": "agent_persona",
+      "_go_const": "PromptSectionAgentPersona",
+      "_python_const": "AGENT_PERSONA"
     },
-    "tribunal": {
-      "generator": "tribunal/generator.txt",
-      "generator.round.2": "tribunal/generator_round_2.txt",
-      "round.2.axiom": "tribunal/round_2/axiom.txt",
-      "round.2.concord": "tribunal/round_2/concord.txt",
-      "round.2.variance": "tribunal/round_2/variance.txt",
-      "round.2.pragma": "tribunal/round_2/pragma.txt",
-      "round.2.nemesis": "tribunal/round_2/nemesis.txt",
-      "auditor": "tribunal/auditor.txt"
+    "SectionCapabilities": {
+      "value": "capabilities",
+      "_go_const": "PromptSectionCapabilities",
+      "_python_const": "CAPABILITIES"
+    },
+    "SectionDissent": {
+      "value": "dissent",
+      "_go_const": "PromptSectionDissent",
+      "_python_const": "DISSENT"
+    },
+    "SectionDocs": {
+      "value": "docs",
+      "_go_const": "PromptSectionDocs",
+      "_python_const": "DOCS"
+    },
+    "SectionExecution": {
+      "value": "execution",
+      "_go_const": "PromptSectionExecution",
+      "_python_const": "EXECUTION"
+    },
+    "SectionIdentity": {
+      "value": "identity",
+      "_go_const": "PromptSectionIdentity",
+      "_python_const": "IDENTITY"
+    },
+    "SectionInvestigationContext": {
+      "value": "investigation_context",
+      "_go_const": "PromptSectionInvestigationContext",
+      "_python_const": "INVESTIGATION_CONTEXT"
+    },
+    "SectionLearnedContext": {
+      "value": "learned_context",
+      "_go_const": "PromptSectionLearnedContext",
+      "_python_const": "LEARNED_CONTEXT"
+    },
+    "SectionLoyalty": {
+      "value": "loyalty",
+      "_go_const": "PromptSectionLoyalty",
+      "_python_const": "LOYALTY"
+    },
+    "SectionResponseConstraints": {
+      "value": "response_constraints",
+      "_go_const": "PromptSectionResponseConstraints",
+      "_python_const": "RESPONSE_CONSTRAINTS"
+    },
+    "SectionSafety": {
+      "value": "safety",
+      "_go_const": "PromptSectionSafety",
+      "_python_const": "SAFETY"
+    },
+    "SectionSentinelMode": {
+      "value": "sentinel_mode",
+      "_go_const": "PromptSectionSentinelMode",
+      "_python_const": "SENTINEL_MODE"
+    },
+    "SectionSystemContext": {
+      "value": "system_context",
+      "_go_const": "PromptSectionSystemContext",
+      "_python_const": "SYSTEM_CONTEXT"
+    },
+    "SectionTools": {
+      "value": "tools",
+      "_go_const": "PromptSectionTools",
+      "_python_const": "TOOLS"
+    },
+    "SectionTriageContext": {
+      "value": "triage_context",
+      "_go_const": "PromptSectionTriageContext",
+      "_python_const": "TRIAGE_CONTEXT"
     }
   }
 }

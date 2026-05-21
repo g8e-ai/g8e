@@ -17,6 +17,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: services/g8eo/go.mod
+          cache-dependency-path: services/g8eo/go.sum
+
       - name: Set up Buf
         uses: bufbuild/buf-setup-action@v1
         with:
@@ -27,7 +33,7 @@ jobs:
 
       - name: Verify Constants
         run: |
-          python3 scripts/data/generate_constants.py --all
+          make constants
           CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.go$|^\s*M.*\.py$|^\s*M.*\.sh$" || true)
           if [ -n "$CHANGES" ]; then
             echo "Error: Generated constant files are out of sync with protocol/constants/*.json"

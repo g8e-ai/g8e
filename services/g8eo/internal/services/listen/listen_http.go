@@ -1000,9 +1000,9 @@ func (h *HTTPHandler) handleReauth(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		string(constants.SessionTypeOperator):    op,
+	jsonResponse(w, http.StatusOK, models.ReauthResponse{
+		Success:  true,
+		Operator: op,
 	})
 }
 
@@ -1173,9 +1173,9 @@ func (h *HTTPHandler) handleAuditReceipts(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		"receipts":                               receipts,
+	jsonResponse(w, http.StatusOK, models.AuditReceiptsResponse{
+		Success:  true,
+		Receipts: receipts,
 	})
 }
 
@@ -1229,9 +1229,9 @@ func (h *HTTPHandler) handleTrustedSigners(w http.ResponseWriter, r *http.Reques
 			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			string(constants.AuthAuditResultSuccess): true,
-			"signers":                                signers,
+		jsonResponse(w, http.StatusOK, models.TrustedSignersResponse{
+			Success: true,
+			Signers: signers,
 		})
 
 	case http.MethodPost:
@@ -1434,9 +1434,9 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		h.pubsub.Publish(channel, body)
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]any{
-		string(constants.AuthAuditResultSuccess): true,
-		"delivered":                              1,
+	jsonResponse(w, http.StatusOK, models.SSEPushResponse{
+		Success:   true,
+		Delivered: 1,
 	})
 }
 
@@ -1520,9 +1520,9 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 		jsonError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, map[string]any{
-		"events": rows,
-		"count":  len(rows),
+	jsonResponse(w, http.StatusOK, models.SSEEventsResponse{
+		Events: rows,
+		Count:  len(rows),
 	})
 }
 
@@ -2186,16 +2186,16 @@ func (h *HTTPHandler) handlePasskeyRegisterVerify(w http.ResponseWriter, r *http
 	cred, err := h.passkey.VerifyRegistration(req.UserID, r)
 	if err != nil {
 		h.logger.Warn("Passkey register verify failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
-		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			string(constants.AuthAuditResultSuccess): false,
-			string(constants.ConnectionStateError):   err.Error(),
+		jsonResponse(w, http.StatusOK, models.PasskeyVerifyResponse{
+			Success: false,
+			Error:   err.Error(),
 		})
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		"credential":                             cred,
+	jsonResponse(w, http.StatusOK, models.PasskeyVerifyResponse{
+		Success:    true,
+		Credential: cred,
 	})
 }
 
@@ -2238,17 +2238,17 @@ func (h *HTTPHandler) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.
 	options, err := h.passkey.GenerateAuthenticationChallenge(userID)
 	if err != nil {
 		h.logger.Warn("Passkey auth challenge failed", string(constants.ConnectionStateError), err, "userID", userID)
-		jsonResponse(w, http.StatusOK, map[string]interface{}{
-			string(constants.AuthAuditResultSuccess): false,
-			string(constants.ConnectionStateError):   err.Error(),
-			"needs_setup":                            err.Error() == "no passkeys registered",
+		jsonResponse(w, http.StatusOK, models.PasskeyChallengeResponse{
+			Success:    false,
+			Error:      err.Error(),
+			NeedsSetup: err.Error() == "no passkeys registered",
 		})
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		"options":                                options,
+	jsonResponse(w, http.StatusOK, models.PasskeyChallengeResponse{
+		Success: true,
+		Options: options,
 	})
 }
 
@@ -2340,9 +2340,9 @@ func (h *HTTPHandler) handlePasskeyCredentials(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		"credentials":                            creds,
+	jsonResponse(w, http.StatusOK, models.PasskeyCredentialsResponse{
+		Success:     true,
+		Credentials: creds,
 	})
 }
 
@@ -2372,10 +2372,10 @@ func (h *HTTPHandler) handlePasskeyRevokeCredential(w http.ResponseWriter, r *ht
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		"found":                                  found,
-		"remaining":                              remaining,
+	jsonResponse(w, http.StatusOK, models.PasskeyRevokeResponse{
+		Success:   true,
+		Found:     found,
+		Remaining: remaining,
 	})
 }
 
@@ -2760,10 +2760,10 @@ func (h *HTTPHandler) handleAuthLoginChallenge(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		"user_id":                                user.ID,
-		"options":                                options,
+	jsonResponse(w, http.StatusOK, models.AuthLoginChallengeResponse{
+		Success: true,
+		UserID:  user.ID,
+		Options: options,
 	})
 }
 
@@ -2812,10 +2812,10 @@ func (h *HTTPHandler) handleAuthLoginVerify(w http.ResponseWriter, r *http.Reque
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		"user_id":                                req.UserID,
-		string(constants.SessionKeyPrefixWeb):    webSession,
+	jsonResponse(w, http.StatusOK, models.AuthLoginVerifyResponse{
+		Success:      true,
+		UserID:       req.UserID,
+		WebSessionID: webSession.ID,
 	})
 }
 
@@ -2838,7 +2838,7 @@ func (h *HTTPHandler) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{string(constants.AuthAuditResultSuccess): true})
+	jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.ListenMode.StatusOK})
 }
 
 // handleBootstrap creates the first user in the system and optionally issues a CLI mTLS cert.
@@ -3077,8 +3077,8 @@ func (h *HTTPHandler) handleBootstrapStatus(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"bootstrapped": hasUsers,
+	jsonResponse(w, http.StatusOK, models.BootstrapStatusResponse{
+		Bootstrapped: hasUsers,
 	})
 }
 
@@ -3100,9 +3100,9 @@ func (h *HTTPHandler) handleUserMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		string(constants.HistoryActorUser):       user,
+	jsonResponse(w, http.StatusOK, models.UserMeResponse{
+		Success: true,
+		User:    user,
 	})
 }
 
@@ -3120,9 +3120,9 @@ func (h *HTTPHandler) handleWebSession(w http.ResponseWriter, r *http.Request) {
 		webSessionID = cookie.Value
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		string(constants.AuthAuditResultSuccess): true,
-		"user_id":                                userID,
-		string(constants.SessionKeyPrefixWeb):    webSessionID,
+	jsonResponse(w, http.StatusOK, models.WebSessionResponse{
+		Success:      true,
+		UserID:       userID,
+		WebSessionID: webSessionID,
 	})
 }

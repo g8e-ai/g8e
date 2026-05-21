@@ -146,17 +146,15 @@ def weighted_vote(candidates: list[CandidateCommand], total_members: int) -> tup
             tie_break_reason=TieBreakReason.EXCLUDED_NEMESIS,
         ), tied_candidates
 
-    # 3. Alphabetical fallback
-    winner = sorted(top_candidates)[0]
-    dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
+    # 3. Round 2 (Return None to signal consensus failure and trigger Round 2)
     tied_candidates = [CandidateCommand(command=cmd, pass_index=0, member=TribunalMember.AXIOM) for cmd in top_candidates]
-    return winner, max_votes / total_members, VoteBreakdown(
+    return None, max_votes / total_members, VoteBreakdown(
         candidates_by_member=candidates_by_member,
         candidates_by_command=candidates_by_command,
-        winner=winner,
-        winner_supporters=candidates_by_command[winner],
-        dissenters_by_command=dissenters,
+        winner=None,
+        winner_supporters=[],
+        dissenters_by_command=candidates_by_command,
         consensus_strength=max_votes / total_members,
-        tie_broken=True,
-        tie_break_reason=TieBreakReason.ALPHABETICAL,
+        tie_broken=False,
+        tie_break_reason=None,
     ), tied_candidates

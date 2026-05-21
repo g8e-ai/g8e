@@ -88,7 +88,7 @@ By passing `--listen`, the binary transforms into the platform's central backbon
 
 The Governance Gateway (`g8eg`) exposes four logical protocol surfaces. Operators may bind each surface to its own TCP port or collapse multiple surfaces onto a single shared port. The Gateway automatically detects port overlaps and promotes the shared listener to a **Multiplexed Handler** with **Optional mTLS**.
 
-Default ports are sourced from `protocol/constants/paths.json`:
+Default ports are sourced from `services/g8eo/internal/constants/paths.go`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
@@ -304,7 +304,7 @@ The Hub keeps an authoritative encrypted audit vault keyed by `transaction_hash`
 | Secret Manager | `services/g8eo/internal/services/listen/secret_manager.go` |
 | Audit Vault | `services/g8eo/internal/services/storage/audit_vault.go` |
 | Workload identity | `protocol/workload_identity.go` |
-| Collections registry | `protocol/constants/collections.json` |
+| Collections registry | `services/g8eo/internal/constants/collections.go` |
 
 ---
 

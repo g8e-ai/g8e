@@ -40,7 +40,7 @@ The protocol is the only mandatory layer of g8e. Any conforming implementation -
 
 ## The Players
 
-The system utilizes specialized AI agents defined in `protocol/constants/agents.json`, each with a distinct lens and responsibility within the co-validated infrastructure.
+The system utilizes specialized AI agents defined in `services/g8eo/internal/constants/agents.go`, each with a distinct lens and responsibility within the co-validated infrastructure.
 
 | Player | Role | ID | Lens / Capability |
 |---|---|---|---|
@@ -68,7 +68,7 @@ The `GovernanceEnvelope` is the single canonical container for every g8e mutatio
 | Field | Purpose |
 |---|---|
 | `id` | Transaction identifier; must match `transaction_hash`. |
-| `event_type` | Canonical event name from `protocol/constants/events.json`. |
+| `event_type` | Canonical event name from `services/g8eo/internal/constants/events.go`. |
 | `payload` | Base64-encoded binary protobuf message - the **sole authority for execution**. |
 | `intent_data` | `google.protobuf.Struct` view for visibility/audit. Never used as a fallback for execution. |
 | `transaction_hash` | SHA-256 over: `action_type | target_resource | payload_base64 | state_root | nonce | expires_at | intent_data`. |
@@ -117,7 +117,7 @@ Static, deterministic checks enforced before any code executes.
 
 - **Forbidden patterns** - Custom protobuf field option `(g8e.common.v1.forbidden_patterns)` is reflected at runtime to scan typed payloads (e.g., `command` field) for `sudo`, `su`, `rm -rf /`, etc.
 - **Sentinel pre-execution analysis** - Regex matching against 90+ threat patterns (reverse shells, privilege escalation, exfiltration).
-- **Allow/deny lists** - Per-host policy in `protocol/constants/` and per-user `command_validation` settings.
+- **Allow/deny lists** - Per-host policy in `services/g8eo/internal/constants/` and per-user `command_validation` settings.
 
 ### L2: Consensus (Tribunal)
 
@@ -184,13 +184,13 @@ g8e.v1.<domain>.<resource>[.<sub-resource>...].<action>
 
 Canonical truth lives in:
 
-- `@/home/bob/g8e/protocol/constants/events.json` - string names
+- `@/home/bob/g8e/services/g8eo/internal/constants/events.go` - string names
 - `@/home/bob/g8e/protocol/proto/` - typed payload schemas
-- `@/home/bob/g8e/protocol/constants/channels.json` - pub/sub channel prefixes
+- `@/home/bob/g8e/services/g8eo/internal/constants/channels.go` - pub/sub channel prefixes
 
 ### Adding a new event
 
-1. Add the string to `protocol/constants/events.json`.
+1. Add the string to `services/g8eo/internal/constants/events.go`.
 2. Define a typed payload in `protocol/proto/`.
 3. If it is a mutation, add an action-type mapping in `services/g8eo/internal/mappings/action_types.go`.
 4. Register a handler in `services/g8eo/internal/services/pubsub/pubsub_commands.go`.
@@ -300,8 +300,8 @@ Agent performance is tracked via an EMA scalar `[0.0, 1.0]` in the `reputation_s
 | Concern | Authoritative file |
 |---|---|
 | Protobuf schemas | `@/home/bob/g8e/protocol/proto/` |
-| Event registry | `@/home/bob/g8e/protocol/constants/events.json` |
-| Channel prefixes | `@/home/bob/g8e/protocol/constants/channels.json` |
+| Event registry | `@/home/bob/g8e/services/g8eo/internal/constants/events.go` |
+| Channel prefixes | `@/home/bob/g8e/services/g8eo/internal/constants/channels.go` |
 | Envelope types (Go) | `@/home/bob/g8e/services/g8eo/pkg/uap/types.go` |
 | Verification logic | `@/home/bob/g8e/services/g8eo/internal/services/governance/transaction_verifier.go` |
 | Audit storage | `@/home/bob/g8e/services/g8eo/internal/services/storage/audit_vault.go` |

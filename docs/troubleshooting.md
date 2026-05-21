@@ -112,7 +112,7 @@ tail -n 80 .g8e/logs/operator-listen.log
 
 Common causes:
 
-- One of the local ports from `protocol/constants/paths.json` is already in use (the startup script performs an automatic preflight check and reports conflicting PIDs).
+- One of the local ports from `services/g8eo/internal/constants/paths.go` is already in use (the startup script performs an automatic preflight check and reports conflicting PIDs).
 - The Go toolchain is missing or below the version expected by the current Developer Guidelines.
 - Runtime PKI or secrets were created by an older incompatible checkout.
 

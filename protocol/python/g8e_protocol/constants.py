@@ -276,7 +276,6 @@ class AuditorReason(StrEnum):
 class TieBreakReason(StrEnum):
     SHORTEST = "shortest"
     EXCLUDED_NEMESIS = "excluded_nemesis"
-    ALPHABETICAL = "alphabetical"
 
 # HTTP headers - loaded from JSON (protocol/constants/headers.json)
 # Use HEADERS dict directly or access via these convenience constants

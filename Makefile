@@ -55,8 +55,9 @@ generate: proto constants
 
 .PHONY: constants
 constants:
-	@echo "Generating protocol constants and syncing docs..."
-	@python3 scripts/data/generate_constants.py --all
+	@echo "Building constants exporter from Go SSOT..."
+	@cd services/g8eo && go build -o ../../bin/g8e.exporter ./cmd/exporter
+	@./bin/g8e.exporter --root .
 
 .PHONY: proto
 proto: buf-install
@@ -146,11 +147,22 @@ first-issues:
 		--exclude={*.pb.go,*_pb2.py,*_pb2_grpc.py,*.pyc,Makefile} \
 		-I || echo "No TODOs found."
 
+.PHONY: clean-constants
+clean-constants:
+	@echo "Cleaning generated constants..."
+	@rm -rf protocol/constants/*.json
+	@rm -rf protocol/python/g8e_protocol/generated_*.py
+	@rm -rf services/g8ee/app/constants/generated_*.py
+	@rm -rf scripts/cmd/env_vars.sh scripts/cmd/paths.sh scripts/cmd/headers.sh
+	@rm -rf ./bin/g8e.exporter
+	@echo "Constants clean complete."
+
 .PHONY: clean
 clean:
 	@echo "Cleaning up build artifacts and runtime state..."
 	@$(MAKE) -C services/g8eo clean
 	@$(MAKE) -C services/g8eg clean
+	@$(MAKE) clean-constants
 	@rm -rf .g8e/
 	@find . -name "*.pyc" -delete
 	@find . -name "__pycache__" -type d -exec rm -rf {} +
