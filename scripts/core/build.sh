@@ -368,7 +368,7 @@ _stop_g8ee() {
 
     # Fallback to pgrep for any remaining g8ee processes (uvicorn app.main:app)
     local found_pids
-    found_pids=$(pgrep -f "uvicorn app.main:app" 2>/dev/null)
+    found_pids=$(pgrep -f "uvicorn app.main:app" 2>/dev/null || true)
     for f_pid in $found_pids; do
         if [[ "$f_pid" != "$pid" ]]; then
             echo "  Stopping g8ee (PID: $f_pid, found via pgrep)..."
@@ -481,10 +481,10 @@ _stop_operator_listen() {
     for pattern in "${patterns[@]}"; do
         local found_pids
         # Try matching with project root first for specificity
-        found_pids=$(pgrep -f "$PROJECT_ROOT/.*$pattern" 2>/dev/null)
+        found_pids=$(pgrep -f "$PROJECT_ROOT/.*$pattern" 2>/dev/null || true)
         # If none found, fall back to global match as a safety measure
         if [ -z "$found_pids" ]; then
-            found_pids=$(pgrep -f "$pattern" 2>/dev/null)
+            found_pids=$(pgrep -f "$pattern" 2>/dev/null || true)
         fi
         
         for f_pid in $found_pids; do
