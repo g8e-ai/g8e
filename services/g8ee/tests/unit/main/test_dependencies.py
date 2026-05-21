@@ -50,7 +50,6 @@ from app.errors import (
 )
 from app.models.settings import G8eePlatformSettings
 from tests.fakes.factories import build_authenticated_user
-from tests.fakes.headers import TEST_G8E_HEADERS
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 

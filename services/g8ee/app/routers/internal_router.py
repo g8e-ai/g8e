@@ -231,7 +231,8 @@ async def internal_chat(
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     attachment_service: AttachmentService = Depends(get_g8ee_attachment_service),
     event_service: EventService = Depends(get_g8ee_event_service),
-    g8e_context: G8eHttpContext = Depends(require_authenticated_context)
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
+    settings_service: SettingsService = Depends(get_g8ee_settings_service_write)
 ):
     """
     Non-streaming chat endpoint - default path for browser sessions.
@@ -245,6 +246,65 @@ async def internal_chat(
     Context is extracted from request body (RequestContext) instead of headers,
     eliminating the fragile header-as-state pattern.
     """
+    # Check if CLI provided any LLM overrides, and if so, update user settings.
+    llm_overrides_provided = any([
+        request.llm_primary_model,
+        request.llm_assistant_model,
+        request.llm_lite_model,
+        request.llm_primary_provider,
+        request.llm_assistant_provider,
+        request.llm_lite_provider,
+        request.llm_primary_api_key,
+        request.llm_primary_endpoint,
+        request.llm_assistant_api_key,
+        request.llm_assistant_endpoint,
+        request.llm_lite_api_key,
+        request.llm_lite_endpoint,
+    ])
+
+    if llm_overrides_provided and g8e_context.user_id:
+        logger.info("[INTERNAL-HTTP] Storing CLI LLM config overrides into user settings")
+        if request.llm_primary_model:
+            user_settings.llm.primary_model = request.llm_primary_model
+        if request.llm_assistant_model:
+            user_settings.llm.assistant_model = request.llm_assistant_model
+        if request.llm_lite_model:
+            user_settings.llm.lite_model = request.llm_lite_model
+            
+        if request.llm_primary_provider:
+            user_settings.llm.primary_provider = request.llm_primary_provider
+        if request.llm_assistant_provider:
+            user_settings.llm.assistant_provider = request.llm_assistant_provider
+        if request.llm_lite_provider:
+            user_settings.llm.lite_provider = request.llm_lite_provider
+            
+        # Try to infer provider for keys/endpoints if not explicitly set but keys are
+        for role, key, endpoint, prov in [
+            ("primary", request.llm_primary_api_key, request.llm_primary_endpoint, request.llm_primary_provider or user_settings.llm.primary_provider),
+            ("assistant", request.llm_assistant_api_key, request.llm_assistant_endpoint, request.llm_assistant_provider or user_settings.llm.assistant_provider),
+            ("lite", request.llm_lite_api_key, request.llm_lite_endpoint, request.llm_lite_provider or user_settings.llm.lite_provider)
+        ]:
+            if not prov:
+                # Can't set provider-specific keys without knowing provider
+                continue
+            
+            if prov == "openai":
+                if key: user_settings.llm.openai_api_key = key
+                if endpoint: user_settings.llm.openai_endpoint = endpoint
+            elif prov == "anthropic":
+                if key: user_settings.llm.anthropic_api_key = key
+                if endpoint: user_settings.llm.anthropic_endpoint = endpoint
+            elif prov == "gemini":
+                if key: user_settings.llm.gemini_api_key = key
+            elif prov == "ollama":
+                if key: user_settings.llm.ollama_api_key = key
+                if endpoint: user_settings.llm.ollama_endpoint = endpoint
+            elif prov == "llamacpp":
+                if key: user_settings.llm.llamacpp_api_key = key
+                if endpoint: user_settings.llm.llamacpp_endpoint = endpoint
+
+        await settings_service.update_user_settings(g8e_context.user_id, user_settings)
+
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,
@@ -426,6 +486,65 @@ async def internal_triage_answer(
     # Fetch user settings manually using user_id from context to eliminate header dependency
     user_settings = await settings_service.get_user_settings(g8e_context.user_id)
 
+    # Check if CLI provided any LLM overrides, and if so, update user settings.
+    llm_overrides_provided = any([
+        request.llm_primary_model,
+        request.llm_assistant_model,
+        request.llm_lite_model,
+        request.llm_primary_provider,
+        request.llm_assistant_provider,
+        request.llm_lite_provider,
+        request.llm_primary_api_key,
+        request.llm_primary_endpoint,
+        request.llm_assistant_api_key,
+        request.llm_assistant_endpoint,
+        request.llm_lite_api_key,
+        request.llm_lite_endpoint,
+    ])
+
+    if llm_overrides_provided and g8e_context.user_id:
+        logger.info("[INTERNAL-HTTP] Storing CLI LLM config overrides into user settings")
+        if request.llm_primary_model:
+            user_settings.llm.primary_model = request.llm_primary_model
+        if request.llm_assistant_model:
+            user_settings.llm.assistant_model = request.llm_assistant_model
+        if request.llm_lite_model:
+            user_settings.llm.lite_model = request.llm_lite_model
+            
+        if request.llm_primary_provider:
+            user_settings.llm.primary_provider = request.llm_primary_provider
+        if request.llm_assistant_provider:
+            user_settings.llm.assistant_provider = request.llm_assistant_provider
+        if request.llm_lite_provider:
+            user_settings.llm.lite_provider = request.llm_lite_provider
+            
+        # Try to infer provider for keys/endpoints if not explicitly set but keys are
+        for role, key, endpoint, prov in [
+            ("primary", request.llm_primary_api_key, request.llm_primary_endpoint, request.llm_primary_provider or user_settings.llm.primary_provider),
+            ("assistant", request.llm_assistant_api_key, request.llm_assistant_endpoint, request.llm_assistant_provider or user_settings.llm.assistant_provider),
+            ("lite", request.llm_lite_api_key, request.llm_lite_endpoint, request.llm_lite_provider or user_settings.llm.lite_provider)
+        ]:
+            if not prov:
+                # Can't set provider-specific keys without knowing provider
+                continue
+            
+            if prov == "openai":
+                if key: user_settings.llm.openai_api_key = key
+                if endpoint: user_settings.llm.openai_endpoint = endpoint
+            elif prov == "anthropic":
+                if key: user_settings.llm.anthropic_api_key = key
+                if endpoint: user_settings.llm.anthropic_endpoint = endpoint
+            elif prov == "gemini":
+                if key: user_settings.llm.gemini_api_key = key
+            elif prov == "ollama":
+                if key: user_settings.llm.ollama_api_key = key
+                if endpoint: user_settings.llm.ollama_endpoint = endpoint
+            elif prov == "llamacpp":
+                if key: user_settings.llm.llamacpp_api_key = key
+                if endpoint: user_settings.llm.llamacpp_endpoint = endpoint
+
+        await settings_service.update_user_settings(g8e_context.user_id, user_settings)
+
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
         user_settings=user_settings,
@@ -499,6 +618,65 @@ async def internal_triage_skip(
     """
     # Fetch user settings manually using user_id from context to eliminate header dependency
     user_settings = await settings_service.get_user_settings(g8e_context.user_id)
+
+    # Check if CLI provided any LLM overrides, and if so, update user settings.
+    llm_overrides_provided = any([
+        request.llm_primary_model,
+        request.llm_assistant_model,
+        request.llm_lite_model,
+        request.llm_primary_provider,
+        request.llm_assistant_provider,
+        request.llm_lite_provider,
+        request.llm_primary_api_key,
+        request.llm_primary_endpoint,
+        request.llm_assistant_api_key,
+        request.llm_assistant_endpoint,
+        request.llm_lite_api_key,
+        request.llm_lite_endpoint,
+    ])
+
+    if llm_overrides_provided and g8e_context.user_id:
+        logger.info("[INTERNAL-HTTP] Storing CLI LLM config overrides into user settings")
+        if request.llm_primary_model:
+            user_settings.llm.primary_model = request.llm_primary_model
+        if request.llm_assistant_model:
+            user_settings.llm.assistant_model = request.llm_assistant_model
+        if request.llm_lite_model:
+            user_settings.llm.lite_model = request.llm_lite_model
+            
+        if request.llm_primary_provider:
+            user_settings.llm.primary_provider = request.llm_primary_provider
+        if request.llm_assistant_provider:
+            user_settings.llm.assistant_provider = request.llm_assistant_provider
+        if request.llm_lite_provider:
+            user_settings.llm.lite_provider = request.llm_lite_provider
+            
+        # Try to infer provider for keys/endpoints if not explicitly set but keys are
+        for role, key, endpoint, prov in [
+            ("primary", request.llm_primary_api_key, request.llm_primary_endpoint, request.llm_primary_provider or user_settings.llm.primary_provider),
+            ("assistant", request.llm_assistant_api_key, request.llm_assistant_endpoint, request.llm_assistant_provider or user_settings.llm.assistant_provider),
+            ("lite", request.llm_lite_api_key, request.llm_lite_endpoint, request.llm_lite_provider or user_settings.llm.lite_provider)
+        ]:
+            if not prov:
+                # Can't set provider-specific keys without knowing provider
+                continue
+            
+            if prov == "openai":
+                if key: user_settings.llm.openai_api_key = key
+                if endpoint: user_settings.llm.openai_endpoint = endpoint
+            elif prov == "anthropic":
+                if key: user_settings.llm.anthropic_api_key = key
+                if endpoint: user_settings.llm.anthropic_endpoint = endpoint
+            elif prov == "gemini":
+                if key: user_settings.llm.gemini_api_key = key
+            elif prov == "ollama":
+                if key: user_settings.llm.ollama_api_key = key
+                if endpoint: user_settings.llm.ollama_endpoint = endpoint
+            elif prov == "llamacpp":
+                if key: user_settings.llm.llamacpp_api_key = key
+                if endpoint: user_settings.llm.llamacpp_endpoint = endpoint
+
+        await settings_service.update_user_settings(g8e_context.user_id, user_settings)
 
     # Fail-fast if no LLM models are configured
     chat_pipeline.validate_llm_config(
