@@ -90,8 +90,8 @@ class ComponentURLsSettings(G8eBaseModel):
     g8ee_url: str = Field(
         default_factory=lambda: os.environ.get(
             EnvVar.G8EE_URL,
-            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_G8EE_HTTP}",
-        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_G8EE_HTTP}"
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTP}",
+        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTP}"
     )
     client_url: str = Field(
         default_factory=lambda: os.environ.get(
@@ -495,7 +495,7 @@ class ReputationSettings(G8eBaseModel):
 
 class G8eePlatformSettings(G8eBaseModel):
     """Platform-level deployment configuration."""
-    port: int = Field(PortConstants.PORT_G8EE_HTTP)
+    port: int = Field(PortConstants.G8E_PORT_G8EE_HTTP)
     host: str = Field("0.0.0.0")
     log_level: LogLevel = Field(LogLevel.INFO)
     enable_logging: bool = Field(True)

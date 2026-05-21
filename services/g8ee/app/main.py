@@ -317,4 +317,4 @@ app = _build_app()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("components.g8ee.app.main:app", host="0.0.0.0", port=PortConstants.PORT_G8EE_HTTP, reload=True)
+    uvicorn.run("components.g8ee.app.main:app", host="0.0.0.0", port=PortConstants.G8E_PORT_G8EE_HTTP, reload=True)

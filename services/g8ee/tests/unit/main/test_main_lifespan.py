@@ -73,7 +73,7 @@ def _configure_settings(mocks):
     settings.ca_cert_path = "/tmp/ca.crt"
     settings.operator_session_id = "session"
     settings.listen.default_ttl = 3600
-    settings.port = PortConstants.PORT_G8EE_HTTP
+    settings.port = PortConstants.G8E_PORT_G8EE_HTTP
 
     mocks["initialize_g8e_service"].side_effect = AsyncMock(return_value=settings)
 

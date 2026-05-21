@@ -13,12 +13,12 @@
 
 package constants
 
-const HeaderDeviceToken = "X-G8E-Device-Token"
+const HeaderDeviceToken = "X-G8E-Device-Token" // #nosec G101 - constant string, not credential
 const HeaderAccept = "Accept"
 const HeaderAcceptLanguage = "Accept-Language"
 const HeaderContentLanguage = "Content-Language"
 const HeaderAuthorization = "Authorization"
-const HeaderAPIKey = "X-API-Key"
+const HeaderAPIKey = "X-API-Key" // #nosec G101 - constant string, not credential
 const HeaderRequestedWith = "X-Requested-With"
 const HeaderUserAgent = "User-Agent"
 const HeaderCacheControl = "Cache-Control"
@@ -45,7 +45,7 @@ const HeaderXProxyOrganizationID = "X-Proxy-Organization-Id"
 const HeaderWebSessionID = "X-G8E-Web-Session-ID"
 const HeaderOperatorSessionID = "X-G8E-Operator-Session-ID"
 const HeaderOperatorID = "X-G8E-Operator-ID"
-const HeaderOperatorAPIKey = "X-G8E-Operator-API-Key"
+const HeaderOperatorAPIKey = "X-G8E-Operator-API-Key" // #nosec G101 - constant string, not credential
 const HeaderSystemFingerprint = "X-G8E-System-Fingerprint"
 const HeaderRequestID = "X-G8E-Request-ID"
 const HeaderUserID = "X-G8E-User-ID"

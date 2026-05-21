@@ -66,6 +66,9 @@ def _load_protocol_json[T](filename: str, model_cls: type[T] | None = None) -> A
 
 _EVENTS = _load_protocol_json("events.json", EventsConstants)
 _STATUS = _load_protocol_json("status.json", StatusConstants)
+# Flatten status structure for easier access
+if isinstance(_STATUS, dict) and "status" in _STATUS:
+    _STATUS = _STATUS["status"]
 _MSG = _load_protocol_json("senders.json", SendersConstants)
 _COLLECTIONS = _load_protocol_json("collections.json", CollectionsConstants)
 _KV = _load_protocol_json("kv_keys.json", KVKeysConstants)

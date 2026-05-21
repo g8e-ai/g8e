@@ -14,12 +14,12 @@
 package constants
 
 const (
-	SourceUserChat      = "g8e.v1.source.user.chat"
-	SourceUserTerminal  = "g8e.v1.source.user.terminal"
-	SourceAiPrimary     = "g8e.v1.source.ai.primary"
-	SourceAiAssistant   = "g8e.v1.source.ai.assistant"
-	SourceAiTriage      = "g8e.v1.source.ai.triage"
-	SourceSystem        = "g8e.v1.source.system"
+	SourceUserChat     = "g8e.v1.source.user.chat"
+	SourceUserTerminal = "g8e.v1.source.user.terminal"
+	SourceAiPrimary    = "g8e.v1.source.ai.primary"
+	SourceAiAssistant  = "g8e.v1.source.ai.assistant"
+	SourceAiTriage     = "g8e.v1.source.ai.triage"
+	SourceSystem       = "g8e.v1.source.system"
 )
 
 const (
