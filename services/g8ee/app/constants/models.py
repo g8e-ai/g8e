@@ -32,9 +32,8 @@ class CollectionsConstants(G8eBaseModel):
     collections: dict[str, ProtocolConstantValue]
 
 class DocumentIdsConstants(G8eBaseModel):
-    """Canonical document IDs and sentinel IDs."""
+    """Canonical document IDs."""
     document_ids: dict[str, ProtocolConstantValue]
-    sentinel_id: dict[str, ProtocolConstantValue]
 
 class ApiPathsConstants(G8eBaseModel):
     """Internal API paths for g8ee and client."""

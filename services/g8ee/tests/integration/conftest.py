@@ -32,16 +32,13 @@ and avoid code duplication.
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
 
-from app.models.operators import ApprovalType, PendingApproval
-from app.models.settings import G8eeUserSettings
-from app.services.service_factory import ServiceFactory
-from app.utils.timestamp import now
-from tests.integration.cleanup import IntegrationCleanupTracker
+# Lazy imports for protocol-dependent modules to prevent pytest collection crashes
+# when protocol JSON files are missing or malformed.
+# These are imported inside functions/fixtures where they're actually needed.
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +53,8 @@ async def auto_approve_pending(approval_service) -> None:
     hitting ``AGENT_MAX_TOOL_TURNS`` and requesting an ``AGENT_CONTINUE``
     approval), use ``auto_approve_inline_callback`` instead.
     """
+    from app.utils.timestamp import now
+    
     pending = approval_service.get_pending_approvals()
     for approval_id, pending_approval in pending.items():
         pending_approval.resolve(
@@ -76,14 +75,14 @@ class ApprovalCallbackTracker:
     """
     approved: bool = True
     reason: str = "Auto-approved by integration test runner"
-    counts: dict[ApprovalType, int] = field(default_factory=dict)
+    counts: dict = field(default_factory=dict)
     total: int = 0
 
-    def record(self, approval_type: ApprovalType) -> None:
+    def record(self, approval_type) -> None:
         self.counts[approval_type] = self.counts.get(approval_type, 0) + 1
         self.total += 1
 
-    def count(self, approval_type: ApprovalType) -> int:
+    def count(self, approval_type) -> int:
         return self.counts.get(approval_type, 0)
 
 
@@ -112,7 +111,9 @@ def auto_approve_inline_callback(
     tracker = ApprovalCallbackTracker(approved=approved, reason=reason)
     previous = getattr(approval_service, "_on_approval_requested", None)
 
-    def _callback(approval_id: str, pending: PendingApproval) -> None:
+    def _callback(approval_id: str, pending) -> None:
+        from app.utils.timestamp import now
+        
         tracker.record(pending.approval_type)
         pending.resolve(
             approved=tracker.approved,
@@ -185,12 +186,15 @@ async def all_services(cache_aside_service, test_settings):
     Injects a real WebSearchProvider if search settings are configured,
     ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
+    from unittest.mock import MagicMock
+    
     import os
+    from app.clients.db_client import DBClient
+    from app.constants.paths import PATHS
     from app.llm.factory import get_search_settings
     from app.services.ai.grounding.web_search_provider import WebSearchProvider
-    from app.constants.paths import PATHS
-    from app.clients.db_client import DBClient
     from app.services.infra.settings_service import SettingsService
+    from app.services.service_factory import ServiceFactory
 
     # Check if CA certificate exists
     ca_cert_path = PATHS["infra"]["ca_cert_path"]
@@ -267,6 +271,8 @@ async def cleanup(cache_aside_service, all_services):
 
     Awaits all background tasks before document deletion to prevent race conditions.
     """
+    from tests.integration.cleanup import IntegrationCleanupTracker
+    
     tracker = IntegrationCleanupTracker(cache_aside_service)
     yield tracker
 
@@ -281,8 +287,8 @@ async def user_settings(cache_aside_service, test_settings):
     otherwise loads user settings from operator.
     """
     from app.llm.factory import get_llm_settings, get_search_settings
+    from app.models.settings import G8eeUserSettings, LLMSettings
     from app.services.infra.settings_service import SettingsService
-    from app.models.settings import LLMSettings
 
     # Use TEST_LLM settings if available
     llm = get_llm_settings()

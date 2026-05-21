@@ -109,7 +109,7 @@ Available flags: `-p` (provider), `-m` (primary model), `-a` (assistant model), 
 
 ## Infrastructure Ports
 
-When debugging connectivity (defaults from `protocol/constants/paths.json`):
+When debugging connectivity (defaults from `services/g8eo/internal/constants/paths.go`):
 
 - `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->` - Gateway mTLS API / Pub/Sub / Public (multiplexed onto a single TLS listener)
 - `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->` - Gateway Bootstrap (plain HTTP; isolated from TLS surfaces)

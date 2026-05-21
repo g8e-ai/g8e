@@ -1,0 +1,10 @@
+{
+  "ExitAuthFailure": "2",
+  "ExitCertTrustFailure": "7",
+  "ExitConfigError": "5",
+  "ExitGeneralError": "1",
+  "ExitNetworkError": "4",
+  "ExitPermissionDenied": "3",
+  "ExitStorageError": "6",
+  "ExitSuccess": "0"
+}

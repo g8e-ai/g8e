@@ -601,6 +601,7 @@ async def test_internal_chat_with_llm_overrides(request_context, g8e_context, ta
     mock_investigation_service = MagicMock()
     mock_attachment_service = MagicMock()
     mock_event_service = MagicMock()
+    mock_settings_service = AsyncMock()
 
     # Setup mocks for background title generation which is triggered by internal_chat
     mock_case = build_case_model(case_id="case-123", user_id="user-123")
@@ -618,10 +619,62 @@ async def test_internal_chat_with_llm_overrides(request_context, g8e_context, ta
             attachment_service=mock_attachment_service,
             event_service=mock_event_service,
             g8e_context=g8e_context,
+            settings_service=mock_settings_service,
         )
+
+    # Verify settings_service.update_user_settings was called (DI regression test)
+    mock_settings_service.update_user_settings.assert_called_once_with("user-123", mock_user_settings)
 
     # Verify chat_pipeline.run_chat was called with overrides
     mock_chat_pipeline.run_chat.assert_called_once()
     call_kwargs = mock_chat_pipeline.run_chat.call_args.kwargs
     assert call_kwargs["llm_primary_api_key"] == "sk-test-key"
     assert call_kwargs["llm_primary_endpoint"] == "https://test-endpoint.com"
+
+
+@pytest.mark.asyncio
+async def test_internal_chat_settings_service_di_regression(request_context, g8e_context, task_tracker):
+    """Regression test for DI bug: ensure settings_service is resolved, not the Depends sentinel."""
+    request = ChatMessageRequest(
+        context=request_context,
+        message="test message",
+        sentinel_mode=True,
+        llm_primary_model="gpt-4",
+    )
+
+    # Mock dependencies with proper AsyncMock for async methods
+    mock_platform_settings = MagicMock()
+    mock_user_settings = MagicMock()
+    mock_chat_pipeline = MagicMock()
+    mock_chat_task_manager = MagicMock()
+    mock_case_service = MagicMock()
+    mock_investigation_service = MagicMock()
+    mock_attachment_service = MagicMock()
+    mock_event_service = MagicMock()
+    
+    # Create a real mock that has the update_user_settings method
+    mock_settings_service = MagicMock()
+    mock_settings_service.update_user_settings = AsyncMock()
+
+    with task_tracker.patch_create_task("app.routers.internal_router"):
+        response = await internal_chat(
+            request=request,
+            platform_settings=mock_platform_settings,
+            user_settings=mock_user_settings,
+            chat_pipeline=mock_chat_pipeline,
+            chat_task_manager=mock_chat_task_manager,
+            case_service=mock_case_service,
+            investigation_service=mock_investigation_service,
+            attachment_service=mock_attachment_service,
+            event_service=mock_event_service,
+            g8e_context=g8e_context,
+            settings_service=mock_settings_service,
+        )
+
+    # Critical regression check: verify update_user_settings was called on the resolved service
+    # If settings_service were a Depends() sentinel, this would fail with AttributeError
+    assert response.success is True
+    mock_settings_service.update_user_settings.assert_called_once()
+    call_args = mock_settings_service.update_user_settings.call_args
+    assert call_args[0][0] == "user-123"
+    assert call_args[0][1] is mock_user_settings

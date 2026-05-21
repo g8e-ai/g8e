@@ -1,0 +1,9 @@
+{
+  "ports": {
+    "G8eeHttp": 8443,
+    "OpenclawGateway": 18789,
+    "OperatorBootstrap": 8441,
+    "OperatorHttp": 8440,
+    "OperatorPublic": 8442
+  }
+}

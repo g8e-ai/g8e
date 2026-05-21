@@ -877,20 +877,12 @@ func (s *ListenDBService) SSEEventsCount() (int64, error) {
 
 // SSEEventRow is a single row from the sse_events table. Exactly one of the
 // three routing id fields will be populated per row.
-type SSEEventRow struct {
-	ID           int64  `json:"id"`
-	WebSessionID string `json:"web_session_id,omitempty"`
-	CLISessionID string `json:"cli_session_id,omitempty"`
-	UserID       string `json:"user_id,omitempty"`
-	EventType    string `json:"event_type"`
-	Payload      string `json:"payload"`
-	CreatedAt    string `json:"created_at"`
-}
+// Deprecated: use models.SSEEventRow
 
 // SSEEventsListSince returns up to `limit` events with id > sinceID, ordered by
 // id ascending. The route MUST set exactly one of WebSessionID, CLISessionID,
 // UserID. SSEEventsListAllSince is the admin-only "all routes" variant.
-func (s *ListenDBService) SSEEventsListSince(route SSERoute, sinceID int64, limit int) ([]SSEEventRow, error) {
+func (s *ListenDBService) SSEEventsListSince(route SSERoute, sinceID int64, limit int) ([]models.SSEEventRow, error) {
 	if err := route.validate(); err != nil {
 		return nil, err
 	}
@@ -928,7 +920,7 @@ func (s *ListenDBService) SSEEventsListSince(route SSERoute, sinceID int64, limi
 // SSEEventsListAllSince is an admin/debug helper that returns events across
 // every routing target with id > sinceID. Production paths MUST use
 // SSEEventsListSince with a typed route.
-func (s *ListenDBService) SSEEventsListAllSince(sinceID int64, limit int) ([]SSEEventRow, error) {
+func (s *ListenDBService) SSEEventsListAllSince(sinceID int64, limit int) ([]models.SSEEventRow, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
@@ -943,10 +935,10 @@ func (s *ListenDBService) SSEEventsListAllSince(sinceID int64, limit int) ([]SSE
 	return scanSSEEventRows(rows)
 }
 
-func scanSSEEventRows(rows *sql.Rows) ([]SSEEventRow, error) {
-	out := make([]SSEEventRow, 0)
+func scanSSEEventRows(rows *sql.Rows) ([]models.SSEEventRow, error) {
+	out := make([]models.SSEEventRow, 0)
 	for rows.Next() {
-		var r SSEEventRow
+		var r models.SSEEventRow
 		var web, cli, user sql.NullString
 		if err := rows.Scan(&r.ID, &web, &cli, &user, &r.EventType, &r.Payload, &r.CreatedAt); err != nil {
 			return nil, err

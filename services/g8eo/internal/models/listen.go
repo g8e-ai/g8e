@@ -19,6 +19,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
+	"github.com/go-webauthn/webauthn/protocol"
 )
 
 // Document is the internal representation of a stored document.
@@ -168,6 +169,111 @@ type BlobMetaResponse struct {
 // BlobDeleteResponse is the typed response for DELETE /blob/{namespace}/{id} and DELETE /blob/{namespace}.
 type BlobDeleteResponse struct {
 	Deleted int64 `json:"deleted"`
+}
+
+// SSEEventRow is a single row from the sse_events table. Exactly one of the
+// three routing id fields will be populated per row.
+type SSEEventRow struct {
+	ID           int64  `json:"id"`
+	WebSessionID string `json:"web_session_id,omitempty"`
+	CLISessionID string `json:"cli_session_id,omitempty"`
+	UserID       string `json:"user_id,omitempty"`
+	EventType    string `json:"event_type"`
+	Payload      string `json:"payload"`
+	CreatedAt    string `json:"created_at"`
+}
+
+// SSEPushResponse is the typed response for POST /api/internal/sse/push.
+type SSEPushResponse struct {
+	Success   bool `json:"success"`
+	Delivered int  `json:"delivered"`
+}
+
+// SSEEventsResponse is the typed response for GET /api/internal/sse/events.
+type SSEEventsResponse struct {
+	Events []SSEEventRow `json:"events"`
+	Count  int           `json:"count"`
+}
+
+// ReauthResponse is the typed response for POST /api/operators/reauth.
+type ReauthResponse struct {
+	Success  bool                `json:"success"`
+	Operator *OperatorDocumentGo `json:"operator"`
+}
+
+// AuditReceiptsResponse is the typed response for GET /api/audit/receipts.
+type AuditReceiptsResponse struct {
+	Success  bool                   `json:"success"`
+	Receipts []*ActionReceiptRecord `json:"receipts"`
+}
+
+// TrustedSignersResponse is the typed response for GET /api/governance/signers.
+type TrustedSignersResponse struct {
+	Success bool            `json:"success"`
+	Signers []TrustedSigner `json:"signers"`
+}
+
+// PasskeyChallengeResponse is the typed response for passkey challenge endpoints.
+type PasskeyChallengeResponse struct {
+	Success    bool                          `json:"success"`
+	Options    *protocol.CredentialAssertion `json:"options,omitempty"`
+	NeedsSetup bool                          `json:"needs_setup,omitempty"`
+	Error      string                        `json:"error,omitempty"`
+}
+
+// PasskeyVerifyResponse is the typed response for passkey verify endpoints.
+type PasskeyVerifyResponse struct {
+	Success      bool               `json:"success"`
+	Credential   *PasskeyCredential `json:"credential,omitempty"`
+	UserID       string             `json:"user_id,omitempty"`
+	WebSessionID string             `json:"web_session_id,omitempty"`
+	Error        string             `json:"error,omitempty"`
+}
+
+// PasskeyCredentialsResponse is the typed response for GET /api/auth/passkey/credentials.
+type PasskeyCredentialsResponse struct {
+	Success     bool                `json:"success"`
+	Credentials []PasskeyCredential `json:"credentials"`
+}
+
+// PasskeyRevokeResponse is the typed response for DELETE /api/auth/passkey/credentials/{id}.
+type PasskeyRevokeResponse struct {
+	Success   bool `json:"success"`
+	Found     bool `json:"found"`
+	Remaining int  `json:"remaining"`
+}
+
+// AuthLoginChallengeResponse is the typed response for POST /api/auth/login/challenge.
+type AuthLoginChallengeResponse struct {
+	Success bool                          `json:"success"`
+	UserID  string                        `json:"user_id,omitempty"`
+	Options *protocol.CredentialAssertion `json:"options,omitempty"`
+}
+
+// AuthLoginVerifyResponse is the typed response for POST /api/auth/login/verify.
+type AuthLoginVerifyResponse struct {
+	Success      bool   `json:"success"`
+	UserID       string `json:"user_id,omitempty"`
+	WebSessionID string `json:"web_session_id,omitempty"`
+	Error        string `json:"error,omitempty"`
+}
+
+// BootstrapStatusResponse is the typed response for GET /api/auth/bootstrap/status.
+type BootstrapStatusResponse struct {
+	Bootstrapped bool `json:"bootstrapped"`
+}
+
+// UserMeResponse is the typed response for GET /api/user/me.
+type UserMeResponse struct {
+	Success bool  `json:"success"`
+	User    *User `json:"user"`
+}
+
+// WebSessionResponse is the typed response for GET /api/auth/web-session.
+type WebSessionResponse struct {
+	Success      bool   `json:"success"`
+	UserID       string `json:"user_id"`
+	WebSessionID string `json:"web_session_id"`
 }
 
 // SettingsDocument represents the platform_settings document structure.

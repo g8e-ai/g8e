@@ -29,36 +29,20 @@ import socket
 import pytest
 import pytest_asyncio
 
-from app.constants.env_vars import EnvVar
-from app.constants.generated_paths import PathConstants, PortConstants
-from app.clients.db_client import DBClient
-from app.clients.kv_cache_client import KVCacheClient
-from app.constants import (
-    CloudSubtype,
-    ComponentName,
-    InvestigationStatus,
-    LLMProvider,
-    OperatorType,
-)
-from app.db.db_service import DBService
-from app.db.kv_service import KVService
-from app.models.settings import G8eePlatformSettings, ListenSettings, LLMSettings, SearchSettings
-from app.services.cache.cache_aside import CacheAsideService
-from app.services.infra.settings_service import SettingsService
-from tests.fakes.builder import (
-    create_mock_cache_aside_service,
-)
-from tests.fakes.factories import (
-    build_enriched_context,
-)
 import contextlib
+
+# Lazy imports for protocol-dependent modules to prevent pytest collection crashes
+# when protocol JSON files are missing or malformed.
+# These are imported inside functions/fixtures where they're actually needed.
 
 logger = logging.getLogger(__name__)
 
 
 
-def _has_llm_credentials(llm: LLMSettings | None) -> bool:
+def _has_llm_credentials(llm) -> bool:
     """Return True if the given LLMSettings has the credentials it needs."""
+    from app.constants import LLMProvider
+    
     if llm is None:
         return False
     provider = llm.primary_provider
@@ -75,12 +59,16 @@ def _has_llm_credentials(llm: LLMSettings | None) -> bool:
     return False
 
 
-def _llm_settings_from_env() -> LLMSettings | None:
+def _llm_settings_from_env():
     """Build LLMSettings from G8E_TEST_LLM_* env vars set by ./g8e test flags.
 
     Returns None when no --llm-provider flag was supplied, which means
     ai_integration tests should be skipped.
     """
+    from app.constants.env_vars import EnvVar
+    from app.constants import LLMProvider
+    from app.models.settings import LLMSettings
+    
     provider_str = os.environ.get(EnvVar.TEST_LLM_PRIMARY_PROVIDER, "").strip()
     if not provider_str:
         return None
@@ -226,12 +214,14 @@ def _llm_settings_from_env() -> LLMSettings | None:
     return LLMSettings(**kwargs)
 
 
-def _web_search_settings_from_env() -> SearchSettings | None:
+def _web_search_settings_from_env():
     """Build SearchSettings from G8E_TEST_WEB_SEARCH_* env vars set by ./g8e test flags.
 
     Returns None when no --web-search-* flags were supplied, which means
     requires_web_search tests should be skipped.
     """
+    from app.models.settings import SearchSettings
+    
     project_id = os.environ.get("G8E_TEST_WEB_SEARCH_PROJECT_ID", "").strip()
     engine_id = os.environ.get("G8E_TEST_WEB_SEARCH_ENGINE_ID", "").strip()
     api_key = os.environ.get("G8E_TEST_WEB_SEARCH_API_KEY", "").strip()
@@ -254,6 +244,8 @@ def _is_operator_online(host: str | None = None, port: int | None = None, timeou
     from urllib.parse import urlparse
 
     from app.models.settings import ListenSettings
+    from app.constants.generated_paths import PortConstants
+    
     listen = ListenSettings()
     parsed = urlparse(listen.http_url)
 
@@ -267,8 +259,17 @@ def _is_operator_online(host: str | None = None, port: int | None = None, timeou
         return False
 
 
-async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = True) -> G8eePlatformSettings:
+async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = True):
     """Load platform settings via SettingsService with a timeout."""
+    from app.clients.db_client import DBClient
+    from app.clients.kv_cache_client import KVCacheClient
+    from app.constants import ComponentName
+    from app.db.db_service import DBService
+    from app.db.kv_service import KVService
+    from app.models.settings import G8eePlatformSettings
+    from app.services.cache.cache_aside import CacheAsideService
+    from app.services.infra.settings_service import SettingsService
+    
     import asyncio
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
@@ -316,11 +317,19 @@ async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = T
 
 
 def pytest_configure(config):
-    import asyncio
-    from urllib.parse import urlparse
-
+    try:
+        from app.constants.generated_paths import PortConstants
+    except Exception as e:
+        pytest.exit(
+            f"constants out of date; run 'make constants'. Error: {e}",
+            returncode=2
+        )
+    
     from app.llm.factory import set_llm_settings, set_search_settings, set_settings
     from app.models.settings import ListenSettings
+    
+    import asyncio
+    from urllib.parse import urlparse
 
     logger.info("Pytest configure started.")
 
@@ -365,6 +374,7 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     from app.llm.factory import get_llm_settings, get_search_settings, get_settings
+    
     get_settings()
     llm = get_llm_settings()
     search_settings = get_search_settings()
@@ -584,7 +594,7 @@ def test_settings():
     If settings are not properly configured, returns a default G8eePlatformSettings.
     """
     from app.llm.factory import get_settings
-    from app.models.settings import AuthSettings, ListenSettings
+    from app.models.settings import AuthSettings, G8eePlatformSettings, ListenSettings
 
     settings = get_settings()
     if settings is None or not hasattr(settings, "auth"):
@@ -602,6 +612,7 @@ def mock_cache_aside_service():
 @pytest.fixture
 def fake_cache_aside_service():
     """Real CacheAsideService backed by MagicMock clients for unit tests."""
+    from tests.fakes.builder import create_mock_cache_aside_service
     return create_mock_cache_aside_service()
 
 
@@ -622,7 +633,7 @@ def mock_event_service():
 
 @pytest.fixture
 def mock_settings():
-    from app.models.settings import AuthSettings
+    from app.models.settings import AuthSettings, G8eePlatformSettings, ListenSettings
     return G8eePlatformSettings(auth=AuthSettings(), listen=ListenSettings())
 
 
@@ -650,11 +661,13 @@ def mock_db_service():
 
 @pytest.fixture
 def enriched_investigation():
+    from tests.fakes.factories import build_enriched_context
     return build_enriched_context()
 
 
 @pytest.fixture
 def cloud_operator_doc():
+    from app.constants import CloudSubtype, OperatorType
     from app.models.operators import (
         HeartbeatDiskDetails,
         HeartbeatEnvironment,
@@ -695,6 +708,7 @@ def cloud_operator_doc():
 
 @pytest.fixture
 def binary_operator_doc():
+    from app.constants import OperatorType
     from app.models.operators import (
         HeartbeatDiskDetails,
         HeartbeatEnvironment,
@@ -732,6 +746,8 @@ def binary_operator_doc():
 
 @pytest.fixture
 def multi_operator_investigation(cloud_operator_doc, binary_operator_doc):
+    from app.constants import InvestigationStatus
+    from tests.fakes.factories import build_enriched_context
     return build_enriched_context(
         investigation_id="inv-test-123",
         case_id="case-test-123",
@@ -763,13 +779,15 @@ def provider_config():
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def cache_aside_service(test_settings):
-    if not _OPERATOR_ONLINE:
-        pytest.skip("Operator is offline - skipping integration fixture")
-
-    from app.db import DBClient
+    from app.clients.db_client import DBClient
+    from app.clients.kv_cache_client import KVCacheClient
+    from app.constants import ComponentName
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
     from app.services.cache.cache_aside import CacheAsideService
+    
+    if not _OPERATOR_ONLINE:
+        pytest.skip("Operator is offline - skipping integration fixture")
 
     settings = test_settings
 
@@ -816,10 +834,11 @@ async def db_client(cache_aside_service):
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def pubsub_service(test_settings):
+    from app.clients.pubsub_client import PubSubClient
+    from app.constants import ComponentName
+    
     if not _OPERATOR_ONLINE:
         pytest.skip("Operator is offline - skipping integration fixture")
-
-    from app.clients.pubsub_client import PubSubClient
 
     settings = test_settings
 

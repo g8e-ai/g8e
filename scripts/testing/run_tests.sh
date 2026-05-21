@@ -511,7 +511,7 @@ log_header "run_tests.sh ${COMPONENT} $*"
 # 0. Preparation: ensure proto/constants are up to date (done by default)
 if [[ "$COMPONENT" != "chaos" && "${G8E_SKIP_PROTO:-}" != "true" ]]; then
     log_ok "Synchronizing proto and constants..."
-    (cd "$PROJECT_ROOT" && make proto > /dev/null && python3 scripts/data/generate_constants.py --all > /dev/null)
+    (cd "$PROJECT_ROOT" && make proto > /dev/null && make constants > /dev/null)
 fi
 
 if [[ "$COMPONENT" == "g8ee" ]]; then
