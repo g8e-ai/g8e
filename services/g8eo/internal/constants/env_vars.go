@@ -101,20 +101,20 @@ var EnvVar = struct {
 	RuntimeDir EnvVarKey
 	SSHConfigPath EnvVarKey
 	ProjectRoot EnvVarKey
-	TestLLMProvider EnvVarKey
-	TestLLMAPIKey EnvVarKey
-	TestLLMModel EnvVarKey
-	TestLLMEndpointURL EnvVarKey
 	TestLLMAssistantProvider EnvVarKey
 	TestLLMAssistantModel EnvVarKey
 	TestLLMLiteProvider EnvVarKey
 	TestLLMLiteModel EnvVarKey
 	TestLLMAssistantAPIKey EnvVarKey
-	TestLLMAssistantEndpointURL EnvVarKey
 	TestLLMLiteAPIKey EnvVarKey
-	TestLLMLiteEndpointURL EnvVarKey
 	TestLLMMaxTokens EnvVarKey
 	AuditorHMACKey EnvVarKey
+	TestLLMPrimaryProvider EnvVarKey
+	TestLLMPrimaryAPIKey EnvVarKey
+	TestLLMPrimaryModel EnvVarKey
+	TestLLMPrimaryEndpoint EnvVarKey
+	TestLLMAssistantEndpoint EnvVarKey
+	TestLLMLiteEndpoint EnvVarKey
 }{
 	OperatorHTTPPort: "G8E_OPERATOR_HTTP_PORT",
 	OperatorBootstrapPort: "G8E_OPERATOR_BOOTSTRAP_PORT",
@@ -196,18 +196,18 @@ var EnvVar = struct {
 	RuntimeDir: "G8E_RUNTIME_DIR",
 	SSHConfigPath: "G8E_SSH_CONFIG_PATH",
 	ProjectRoot: "G8E_PROJECT_ROOT",
-	TestLLMProvider: "G8E_TEST_LLM_PROVIDER",
-	TestLLMAPIKey: "G8E_TEST_LLM_API_KEY",
-	TestLLMModel: "G8E_TEST_LLM_MODEL",
-	TestLLMEndpointURL: "G8E_TEST_LLM_ENDPOINT_URL",
 	TestLLMAssistantProvider: "G8E_TEST_LLM_ASSISTANT_PROVIDER",
 	TestLLMAssistantModel: "G8E_TEST_LLM_ASSISTANT_MODEL",
 	TestLLMLiteProvider: "G8E_TEST_LLM_LITE_PROVIDER",
 	TestLLMLiteModel: "G8E_TEST_LLM_LITE_MODEL",
 	TestLLMAssistantAPIKey: "G8E_TEST_LLM_ASSISTANT_API_KEY",
-	TestLLMAssistantEndpointURL: "G8E_TEST_LLM_ASSISTANT_ENDPOINT_URL",
 	TestLLMLiteAPIKey: "G8E_TEST_LLM_LITE_API_KEY",
-	TestLLMLiteEndpointURL: "G8E_TEST_LLM_LITE_ENDPOINT_URL",
 	TestLLMMaxTokens: "G8E_TEST_LLM_MAX_TOKENS",
 	AuditorHMACKey: "G8E_AUDITOR_HMAC_KEY",
+	TestLLMPrimaryProvider: "G8E_TEST_LLM_PRIMARY_PROVIDER",
+	TestLLMPrimaryAPIKey: "G8E_TEST_LLM_PRIMARY_API_KEY",
+	TestLLMPrimaryModel: "G8E_TEST_LLM_PRIMARY_MODEL",
+	TestLLMPrimaryEndpoint: "G8E_TEST_LLM_PRIMARY_ENDPOINT",
+	TestLLMAssistantEndpoint: "G8E_TEST_LLM_ASSISTANT_ENDPOINT",
+	TestLLMLiteEndpoint: "G8E_TEST_LLM_LITE_ENDPOINT",
 }
