@@ -92,10 +92,9 @@ Default ports are sourced from `protocol/constants/paths.json`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **Bootstrap** | `8441` (plain HTTP) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
-| **Public Port** | `8440` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
-| **mTLS API** | `8440` (mTLS) | mTLS + URI SAN | `/api/governance/envelope`, `/db/*` (reads + bootstrap writes), `/kv/*`, `/blob/*`, `/pubsub/publish`, `/api/operators/*`, `/api/device-links/*`, `/api/pki/{sign-csr,revoke,revocation-bundle}`, `/api/auth/passkey/*`. |
-| **Pub/Sub** | `8440` (mTLS WSS) | mTLS + URI SAN | `/ws/pubsub` real-time fan-out. |
+| **Bootstrap** | `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->` (plain HTTP) | None | `/.well-known/g8e/pki/hub-bundle.pem`, `/ca.crt`, `/trust`, device-link enrollment, CSR signing. |
+| **Public Port** | `<!-- g8e:port:operator_public -->8442<!-- /g8e:port -->` (TLS) | Web session (passkey) | Login challenge/verify, web-session API, PKI discovery for browser/BYO bootstrap. |
+| **mTLS API + Pub/Sub** | `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->` (mTLS) | mTLS + URI SAN | `/api/governance/envelope`, `/db/*`, `/kv/*`, `/blob/*`, `/pubsub/publish`, and `/ws/pubsub` real-time fan-out. |
 
 #### Multiplexing rules
 
@@ -106,7 +105,7 @@ The gateway selects a TLS configuration and HTTP handler per port based on which
 - **Public only on a port**: TLS without client-cert request.
 - **Bootstrap only on a port**: plain HTTP (no TLS).
 
-When two or more TLS-bearing surfaces share a port, the gateway serves them through a single `MasterRouter` that dispatches by route prefix. When `HTTPPort == WSSPort` and nothing else shares the port, the standard handler is reused directly.
+When Public and mTLS surfaces share a port, the gateway serves them through a single `MasterRouter` that dispatches by route prefix. WebSocket connections are natively upgraded over the same listener.
 
 #### Constraints
 

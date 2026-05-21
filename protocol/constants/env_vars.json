@@ -465,6 +465,26 @@
     "_go_const": "TestLLMLiteModel",
     "_python_const": "TEST_LLM_LITE_MODEL"
   },
+  "G8E_TEST_LLM_ASSISTANT_API_KEY": {
+    "value": "G8E_TEST_LLM_ASSISTANT_API_KEY",
+    "_go_const": "TestLLMAssistantAPIKey",
+    "_python_const": "TEST_LLM_ASSISTANT_API_KEY"
+  },
+  "G8E_TEST_LLM_ASSISTANT_ENDPOINT_URL": {
+    "value": "G8E_TEST_LLM_ASSISTANT_ENDPOINT_URL",
+    "_go_const": "TestLLMAssistantEndpointURL",
+    "_python_const": "TEST_LLM_ASSISTANT_ENDPOINT_URL"
+  },
+  "G8E_TEST_LLM_LITE_API_KEY": {
+    "value": "G8E_TEST_LLM_LITE_API_KEY",
+    "_go_const": "TestLLMLiteAPIKey",
+    "_python_const": "TEST_LLM_LITE_API_KEY"
+  },
+  "G8E_TEST_LLM_LITE_ENDPOINT_URL": {
+    "value": "G8E_TEST_LLM_LITE_ENDPOINT_URL",
+    "_go_const": "TestLLMLiteEndpointURL",
+    "_python_const": "TEST_LLM_LITE_ENDPOINT_URL"
+  },
   "G8E_TEST_LLM_PRIMARY_ENDPOINT_URL": {
     "value": "G8E_TEST_LLM_PRIMARY_ENDPOINT_URL",
     "_go_const": "TestLLMEndpointURL",

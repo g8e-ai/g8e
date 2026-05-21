@@ -29,6 +29,7 @@ import socket
 import pytest
 import pytest_asyncio
 
+from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PathConstants
 from app.clients.db_client import DBClient
 from app.clients.kv_cache_client import KVCacheClient
@@ -80,7 +81,7 @@ def _llm_settings_from_env() -> LLMSettings | None:
     Returns None when no --llm-provider flag was supplied, which means
     ai_integration tests should be skipped.
     """
-    provider_str = os.environ.get("G8E_TEST_LLM_PRIMARY_PROVIDER", "").strip()
+    provider_str = os.environ.get(EnvVar.TEST_LLM_PROVIDER, "").strip()
     if not provider_str:
         return None
 
@@ -90,7 +91,7 @@ def _llm_settings_from_env() -> LLMSettings | None:
         logger.warning("G8E_TEST_LLM_PRIMARY_PROVIDER=%s is not a valid provider", provider_str)
         return None
 
-    assistant_provider_str = os.environ.get("G8E_TEST_LLM_ASSISTANT_PROVIDER", "").strip()
+    assistant_provider_str = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_PROVIDER, "").strip()
     if assistant_provider_str:
         try:
             assistant_provider = LLMProvider(assistant_provider_str)
@@ -100,7 +101,7 @@ def _llm_settings_from_env() -> LLMSettings | None:
     else:
         assistant_provider = provider
 
-    lite_provider_str = os.environ.get("G8E_TEST_LLM_LITE_PROVIDER", "").strip()
+    lite_provider_str = os.environ.get(EnvVar.TEST_LLM_LITE_PROVIDER, "").strip()
     if lite_provider_str:
         try:
             lite_provider = LLMProvider(lite_provider_str)
@@ -110,13 +111,15 @@ def _llm_settings_from_env() -> LLMSettings | None:
     else:
         lite_provider = assistant_provider
 
-    api_key = os.environ.get("G8E_TEST_LLM_PRIMARY_API_KEY", "").strip() or None
-    endpoint = os.environ.get("G8E_TEST_LLM_PRIMARY_ENDPOINT_URL", "").strip() or None
-    assistant_api_key = os.environ.get("G8E_TEST_LLM_ASSISTANT_API_KEY", "").strip() or None
-    assistant_endpoint = os.environ.get("G8E_TEST_LLM_ASSISTANT_ENDPOINT_URL", "").strip() or None
-    primary = os.environ.get("G8E_TEST_LLM_PRIMARY_MODEL", "").strip() or None
-    assistant = os.environ.get("G8E_TEST_LLM_ASSISTANT_MODEL", "").strip() or None
-    lite = os.environ.get("G8E_TEST_LLM_LITE_MODEL", "").strip() or None
+    api_key = os.environ.get(EnvVar.TEST_LLM_API_KEY, "").strip() or None
+    endpoint = os.environ.get(EnvVar.TEST_LLM_ENDPOINT_URL, "").strip() or None
+    assistant_api_key = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_API_KEY, "").strip() or None
+    assistant_endpoint = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_ENDPOINT_URL, "").strip() or None
+    lite_api_key = os.environ.get(EnvVar.TEST_LLM_LITE_API_KEY, "").strip() or None
+    lite_endpoint = os.environ.get(EnvVar.TEST_LLM_LITE_ENDPOINT_URL, "").strip() or None
+    primary = os.environ.get(EnvVar.TEST_LLM_PRIMARY_MODEL, "").strip() or None
+    assistant = os.environ.get(EnvVar.TEST_LLM_ASSISTANT_MODEL, "").strip() or None
+    lite = os.environ.get(EnvVar.TEST_LLM_LITE_MODEL, "").strip() or None
 
     # Fallback to defaults if not provided but provider is set
     if not primary:
@@ -141,7 +144,7 @@ def _llm_settings_from_env() -> LLMSettings | None:
 
     if not lite:
         lite = assistant
-    max_tokens_str = os.environ.get("G8E_TEST_LLM_MAX_TOKENS", "").strip() or None
+    max_tokens_str = os.environ.get(EnvVar.TEST_LLM_MAX_TOKENS, "").strip() or None
 
     kwargs: dict = {"primary_provider": provider, "assistant_provider": assistant_provider, "lite_provider": lite_provider}
     if primary:
@@ -216,8 +219,8 @@ def _llm_settings_from_env() -> LLMSettings | None:
             kwargs[mod_field] = assistant
 
     # Lite key/endpoint/model fallback
-    kwargs["lite_api_key"] = assistant_api_key or api_key
-    kwargs["lite_endpoint"] = assistant_endpoint or endpoint
+    kwargs["lite_api_key"] = lite_api_key or assistant_api_key or api_key
+    kwargs["lite_endpoint"] = lite_endpoint or assistant_endpoint or endpoint
     kwargs["lite_model"] = lite or assistant or primary
 
     return LLMSettings(**kwargs)

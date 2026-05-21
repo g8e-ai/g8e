@@ -31,7 +31,9 @@ help:
 	@echo "g8e Platform Root Makefile"
 	@echo ""
 	@echo "Development:"
+	@echo "  generate      Generate all protocol artifacts (proto + constants + docs)"
 	@echo "  proto         Generate all Protobuf code (Go and Python)"
+	@echo "  constants     Generate all constants and sync documentation ports"
 	@echo "  buf-install   Install Buf CLI locally if not found"
 	@echo "  lint-no-bare-session-id  Check for bare session_id regression"
 	@echo "  first-issues  Find good first issues in the codebase"
@@ -48,6 +50,14 @@ help:
 # =============================================================================
 # PROTOBUF GENERATION
 # =============================================================================
+.PHONY: generate
+generate: proto constants
+
+.PHONY: constants
+constants:
+	@echo "Generating protocol constants and syncing docs..."
+	@python3 scripts/data/generate_constants.py --all
+
 .PHONY: proto
 proto: buf-install
 	@if command -v buf &> /dev/null || [ -f "./buf" ]; then \

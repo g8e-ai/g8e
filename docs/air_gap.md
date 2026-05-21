@@ -31,12 +31,11 @@ The Governance Gateway in Listen Mode exposes four logical surfaces. Defaults ar
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **Bootstrap** | `8441` (plain HTTP) | None | Download trust bundles, device-link enrollment, and CSR signing. |
-| **Public Port** | `8440` (TLS) | Web session | Browser login, WebAuthn challenge, and PKI discovery. |
-| **mTLS API** | `8440` | mTLS + URI SAN | Central `/api/governance/envelope` mutation endpoint and `/db` persistence. |
-| **Pub/Sub** | `8440` (mTLS WSS) | mTLS + URI SAN | Real-time WebSocket event fan-out. |
+| **Bootstrap** | `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->` (plain HTTP) | None | Download trust bundles, device-link enrollment, and CSR signing. |
+| **Public Port** | `<!-- g8e:port:operator_public -->8442<!-- /g8e:port -->` (TLS) | Web session | Browser login, WebAuthn challenge, and PKI discovery. |
+| **mTLS API + Pub/Sub** | `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->` | mTLS + URI SAN | Central `/api/governance/envelope` mutation endpoint, `/db` persistence, and `/ws/pubsub` real-time event fan-out. |
 
-When the mTLS, Public, and Pub/Sub surfaces share a port, the gateway serves them through a single `MasterRouter` with `tls.VerifyClientCertIfGiven`; per-route handlers enforce mTLS and URI SAN on Gateway routes. To deploy on privileged ports (for example, `443` and `80`), grant the gateway binary `CAP_NET_BIND_SERVICE` or use an external port redirect; the unprivileged defaults above require no out-of-band setup. See `docs/g8eg.md` for the full multiplex contract.
+When the mTLS and Public surfaces share a port, the gateway serves them through a single `MasterRouter` with `tls.VerifyClientCertIfGiven`; per-route handlers enforce mTLS and URI SAN on Gateway routes. WebSocket connections are upgraded natively over the shared listener.
 
 ### Core Responsibilities
 - **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file in `.g8e/data`.

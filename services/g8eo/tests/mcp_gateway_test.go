@@ -91,7 +91,14 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	defer downstreamServer.Close()
 
 	// 2. Setup Operator with MCP configuration
-	cfg, err := config.LoadListen(0, 0, 0, dataDir, pkiDir, secretsDir, "localhost", "g8e", "", "", true)
+	cfg, err := config.LoadListen(config.ListenOptions{
+		DataDir:           dataDir,
+		PKIDir:            pkiDir,
+		SecretsDir:        secretsDir,
+		PasskeyRpID:       "localhost",
+		PasskeyRpName:     "g8e",
+		AllowTestPortZero: true,
+	})
 	require.NoError(t, err)
 	cfg.Listen.MCPDownstreamURL = downstreamServer.URL
 
@@ -346,7 +353,14 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	defer downstreamServer.Close()
 
 	// 2. Setup Operator with A2A configuration
-	cfg, err := config.LoadListen(0, 0, 0, dataDir, pkiDir, secretsDir, "localhost", "g8e", "", "", true)
+	cfg, err := config.LoadListen(config.ListenOptions{
+		DataDir:           dataDir,
+		PKIDir:            pkiDir,
+		SecretsDir:        secretsDir,
+		PasskeyRpID:       "localhost",
+		PasskeyRpName:     "g8e",
+		AllowTestPortZero: true,
+	})
 	require.NoError(t, err)
 	cfg.Listen.A2ADownstreamURL = downstreamServer.URL
 

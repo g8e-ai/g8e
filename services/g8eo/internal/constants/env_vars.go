@@ -101,6 +101,10 @@ var EnvVar = struct {
 	TestLLMAssistantModel EnvVarKey
 	TestLLMLiteProvider EnvVarKey
 	TestLLMLiteModel EnvVarKey
+	TestLLMAssistantAPIKey EnvVarKey
+	TestLLMAssistantEndpointURL EnvVarKey
+	TestLLMLiteAPIKey EnvVarKey
+	TestLLMLiteEndpointURL EnvVarKey
 	TestLLMEndpointURL EnvVarKey
 	TestLLMMaxTokens EnvVarKey
 	AuditorHMACKey EnvVarKey
@@ -185,6 +189,10 @@ var EnvVar = struct {
 	TestLLMAssistantModel: "G8E_TEST_LLM_ASSISTANT_MODEL",
 	TestLLMLiteProvider: "G8E_TEST_LLM_LITE_PROVIDER",
 	TestLLMLiteModel: "G8E_TEST_LLM_LITE_MODEL",
+	TestLLMAssistantAPIKey: "G8E_TEST_LLM_ASSISTANT_API_KEY",
+	TestLLMAssistantEndpointURL: "G8E_TEST_LLM_ASSISTANT_ENDPOINT_URL",
+	TestLLMLiteAPIKey: "G8E_TEST_LLM_LITE_API_KEY",
+	TestLLMLiteEndpointURL: "G8E_TEST_LLM_LITE_ENDPOINT_URL",
 	TestLLMEndpointURL: "G8E_TEST_LLM_PRIMARY_ENDPOINT_URL",
 	TestLLMMaxTokens: "G8E_TEST_LLM_MAX_TOKENS",
 	AuditorHMACKey: "G8E_AUDITOR_HMAC_KEY",

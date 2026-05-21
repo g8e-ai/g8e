@@ -375,12 +375,45 @@ _start_g8ee() {
 }
 
 _stop_g8ee() {
+    local pid=""
     if [ -f "$G8EE_PID_FILE" ]; then
-        local pid=$(cat "$G8EE_PID_FILE")
+        pid=$(cat "$G8EE_PID_FILE")
+    fi
+
+    if [ -n "$pid" ] && ps -p "$pid" > /dev/null 2>&1; then
         echo "  Stopping g8ee (PID: $pid)..."
         kill "$pid" 2>/dev/null || true
-        rm -f "$G8EE_PID_FILE"
+        local waited=0
+        while ps -p "$pid" > /dev/null 2>&1 && [ $waited -lt 10 ]; do
+            sleep 1
+            waited=$((waited + 1))
+        done
+        if ps -p "$pid" > /dev/null 2>&1; then
+            echo "  Force stopping g8ee (PID: $pid)..."
+            kill -9 "$pid" 2>/dev/null || true
+        fi
     fi
+
+    # Fallback to pgrep for any remaining g8ee processes (uvicorn app.main:app)
+    local found_pids
+    found_pids=$(pgrep -f "uvicorn app.main:app" 2>/dev/null)
+    for f_pid in $found_pids; do
+        if [[ "$f_pid" != "$pid" ]]; then
+            echo "  Stopping g8ee (PID: $f_pid, found via pgrep)..."
+            kill "$f_pid" 2>/dev/null || true
+            local waited=0
+            while ps -p "$f_pid" > /dev/null 2>&1 && [ $waited -lt 10 ]; do
+                sleep 1
+                waited=$((waited + 1))
+            done
+            if ps -p "$f_pid" > /dev/null 2>&1; then
+                echo "  Force stopping g8ee (PID: $f_pid)..."
+                kill -9 "$f_pid" 2>/dev/null || true
+            fi
+        fi
+    done
+
+    rm -f "$G8EE_PID_FILE"
 }
 
 _start_operator_listen() {
@@ -468,25 +501,39 @@ _stop_operator_listen() {
             echo "  Force stopping Operator listen mode..."
             kill -9 "$pid" 2>/dev/null || true
         fi
-        rm -f "$OPERATOR_LISTEN_PID_FILE"
-    else
-        local found_pid
-        found_pid=$(pgrep -f "g8e.operator --listen" | head -1)
-        if [ -n "$found_pid" ]; then
-            echo "  Stopping Operator listen mode (PID: $found_pid, found via pgrep)..."
-            kill "$found_pid" 2>/dev/null || true
-            local waited=0
-            while ps -p "$found_pid" > /dev/null 2>&1 && [ $waited -lt 10 ]; do
-                sleep 1
-                waited=$((waited + 1))
-            done
-            if ps -p "$found_pid" > /dev/null 2>&1; then
-                echo "  Force stopping Operator listen mode..."
-                kill -9 "$found_pid" 2>/dev/null || true
-            fi
-        fi
-        rm -f "$OPERATOR_LISTEN_PID_FILE"
     fi
+
+    # Fallback search for any remaining g8e.gateway or g8e.operator processes
+    # We look for both because g8e.gateway is the newer name but g8e.operator may still be used
+    # We try to be specific to this project root to avoid killing processes from other workspaces
+    local patterns=("g8e.gateway --listen" "g8e.operator --listen")
+    for pattern in "${patterns[@]}"; do
+        local found_pids
+        # Try matching with project root first for specificity
+        found_pids=$(pgrep -f "$PROJECT_ROOT/.*$pattern" 2>/dev/null)
+        # If none found, fall back to global match as a safety measure
+        if [ -z "$found_pids" ]; then
+            found_pids=$(pgrep -f "$pattern" 2>/dev/null)
+        fi
+        
+        for f_pid in $found_pids; do
+            if [[ "$f_pid" != "$pid" ]]; then
+                echo "  Stopping Operator listen mode (PID: $f_pid, found via pgrep '$pattern')..."
+                kill "$f_pid" 2>/dev/null || true
+                local waited=0
+                while ps -p "$f_pid" > /dev/null 2>&1 && [ $waited -lt 10 ]; do
+                    sleep 1
+                    waited=$((waited + 1))
+                done
+                if ps -p "$f_pid" > /dev/null 2>&1; then
+                    echo "  Force stopping Operator listen mode (PID: $f_pid)..."
+                    kill -9 "$f_pid" 2>/dev/null || true
+                fi
+            fi
+        done
+    done
+
+    rm -f "$OPERATOR_LISTEN_PID_FILE"
 }
 
 _wait_operator_listen_healthy() {
