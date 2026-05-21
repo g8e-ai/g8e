@@ -55,6 +55,9 @@ def _load_protocol_json(filename: str) -> dict[str, Any]:
 # Exported constants - all loaded from JSON (single source of truth)
 EVENTS = _load_protocol_json("events.json")
 STATUS = _load_protocol_json("status.json")
+# Flatten status structure for easier access
+if "status" in STATUS:
+    STATUS = STATUS["status"]
 MSG = _load_protocol_json("senders.json")
 COLLECTIONS = _load_protocol_json("collections.json")
 KV = _load_protocol_json("kv_keys.json")
@@ -68,7 +71,7 @@ HEADERS = {k: v["value"] if isinstance(v, dict) and "value" in v else v for k, v
 DOCUMENT_IDS = _load_protocol_json("document_ids.json")
 PLATFORM = _load_protocol_json("platform.json")
 AGENTS = _load_protocol_json("agents.json")
-ERRORS = _load_protocol_json("errors.json")
+# Error constants are hardcoded below, not loaded from JSON
 
 from enum import StrEnum
 

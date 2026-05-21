@@ -13,8 +13,6 @@
 
 package constants
 
-import "strings"
-
 // Entry represents a constant with its value and naming metadata.
 type Entry struct {
 	Value       string `json:"value"`
@@ -44,11 +42,14 @@ type DocumentIdsSnapshot struct {
 
 // StatusSnapshot represents the nested structure for status values.
 type StatusSnapshot struct {
-	AttachmentType  map[string]Entry `json:"attachment.type"`
-	UserRole        map[string]Entry `json:"user_role"`
-	UserStatus      map[string]Entry `json:"user_status"`
-	OperatorStatus  map[string]Entry `json:"operator_status"`
-	ExecutionStatus map[string]Entry `json:"execution_status"`
+	AttachmentType    map[string]Entry `json:"attachment.type"`
+	UserRole          map[string]Entry `json:"user_role"`
+	UserStatus        map[string]Entry `json:"user_status"`
+	OperatorStatus    map[string]Entry `json:"operator_status"`
+	ExecutionStatus   map[string]Entry `json:"execution_status"`
+	TribunalOutcome   map[string]Entry `json:"tribunal.outcome"`
+	ApprovalErrorType map[string]Entry `json:"approval.error.type"`
+	LlmModels         map[string]Entry `json:"llm.models"`
 }
 
 // Snapshot is the complete constants registry snapshot.
@@ -70,22 +71,6 @@ type Snapshot struct {
 	Ports       map[string]int      `json:"ports"`
 	EnvVars     map[string]string   `json:"env_vars"`
 	Timestamp   map[string]string   `json:"timestamp"`
-}
-
-// toPythonConst converts a Go constant name to SCREAMING_SNAKE_CASE,
-// stripping the provided group prefix first.
-func toPythonConst(goConst, groupPrefix string) string {
-	// Strip group prefix
-	name := strings.TrimPrefix(goConst, groupPrefix)
-	// Convert CamelCase to UPPER_SNAKE_CASE
-	var result []rune
-	for i, r := range name {
-		if i > 0 && r >= 'A' && r <= 'Z' {
-			result = append(result, '_')
-		}
-		result = append(result, r)
-	}
-	return strings.ToUpper(string(result))
 }
 
 // Registry returns the complete constants snapshot.
@@ -426,6 +411,22 @@ func Registry() Snapshot {
 				"executing": {Value: string(ExecutionStatusExecuting), GoConst: "ExecutionStatusExecuting", PythonConst: "EXECUTING"},
 				"completed": {Value: string(ExecutionStatusCompleted), GoConst: "ExecutionStatusCompleted", PythonConst: "COMPLETED"},
 				"failed":    {Value: string(ExecutionStatusFailed), GoConst: "ExecutionStatusFailed", PythonConst: "FAILED"},
+			},
+			TribunalOutcome: map[string]Entry{
+				"consensus":           {Value: string(TribunalOutcomeConsensus), GoConst: "TribunalOutcomeConsensus", PythonConst: "CONSENSUS"},
+				"verified":            {Value: string(TribunalOutcomeVerified), GoConst: "TribunalOutcomeVerified", PythonConst: "VERIFIED"},
+				"verification_failed": {Value: string(TribunalOutcomeVerificationFailed), GoConst: "TribunalOutcomeVerificationFailed", PythonConst: "VERIFICATION_FAILED"},
+				"consensus_failed":    {Value: string(TribunalOutcomeConsensusFailed), GoConst: "TribunalOutcomeConsensusFailed", PythonConst: "CONSENSUS_FAILED"},
+			},
+			ApprovalErrorType: map[string]Entry{
+				"approval.publish.failure":  {Value: string(ApprovalErrorTypeApprovalPublishFailure), GoConst: "ApprovalErrorTypeApprovalPublishFailure", PythonConst: "APPROVAL_PUBLISH_FAILURE"},
+				"approval.exception":        {Value: string(ApprovalErrorTypeApprovalException), GoConst: "ApprovalErrorTypeApprovalException", PythonConst: "APPROVAL_EXCEPTION"},
+				"approval.timeout":          {Value: string(ApprovalErrorTypeApprovalTimeout), GoConst: "ApprovalErrorTypeApprovalTimeout", PythonConst: "APPROVAL_TIMEOUT"},
+				"invalid.intent":            {Value: string(ApprovalErrorTypeInvalidIntent), GoConst: "ApprovalErrorTypeInvalidIntent", PythonConst: "INVALID_INTENT"},
+				"intent.approval.exception": {Value: string(ApprovalErrorTypeIntentApprovalException), GoConst: "ApprovalErrorTypeIntentApprovalException", PythonConst: "INTENT_APPROVAL_EXCEPTION"},
+			},
+			LlmModels: map[string]Entry{
+				"llamacpp.gemma4.e2b": {Value: string(LLMModelsLlamacppGemma4E2b), GoConst: "LLMModelsLlamacppGemma4E2b", PythonConst: "LLAMACPP_GEMMA4_E2B"},
 			},
 		},
 		Senders: map[string]Entry{

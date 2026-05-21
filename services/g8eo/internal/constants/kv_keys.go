@@ -18,29 +18,29 @@ const (
 )
 
 const (
-	KVKeyCacheDoc            = "g8e:cache:doc:{collection}:{id}"
-	KVKeyCacheQuery          = "g8e:cache:query:{collection}:{hash}"
-	KVKeySessionWeb          = "g8e:session:{session.type}:{session.id}"
-	KVKeySessionOperatorBind = "g8e:session:operator:{operator.session.id}:bind"
-	KVKeySessionWebBind      = "g8e:session:web:{web.session.id}:bind"
-	KVKeyOperatorFirstDeployed = "g8e:operator:{operator.id}:first.deployed"
-	KVKeyOperatorTrackedStatus = "g8e:operator:{operator.id}:tracked.status"
-	KVKeyUserOperators       = "g8e:user:{user.id}:operators"
-	KVKeyUserWebSessions     = "g8e:user:{user.id}:web_sessions"
-	KVKeyUserMemories        = "g8e:user:{user.id}:memories"
-	KVKeyInvestigationAttachment = "g8e:investigation:{investigation.id}:attachment:{attachment.id}"
+	KVKeyCacheDoc                     = "g8e:cache:doc:{collection}:{id}"
+	KVKeyCacheQuery                   = "g8e:cache:query:{collection}:{hash}"
+	KVKeySessionWeb                   = "g8e:session:{session.type}:{session.id}"
+	KVKeySessionOperatorBind          = "g8e:session:operator:{operator.session.id}:bind"
+	KVKeySessionWebBind               = "g8e:session:web:{web.session.id}:bind"
+	KVKeyOperatorFirstDeployed        = "g8e:operator:{operator.id}:first.deployed"
+	KVKeyOperatorTrackedStatus        = "g8e:operator:{operator.id}:tracked.status"
+	KVKeyUserOperators                = "g8e:user:{user.id}:operators"
+	KVKeyUserWebSessions              = "g8e:user:{user.id}:web_sessions"
+	KVKeyUserMemories                 = "g8e:user:{user.id}:memories"
+	KVKeyInvestigationAttachment      = "g8e:investigation:{investigation.id}:attachment:{attachment.id}"
 	KVKeyInvestigationAttachmentIndex = "g8e:investigation:{investigation.id}:attachment.index"
-	KVKeyAuthNonce           = "g8e:auth:nonce:{nonce}"
-	KVKeyAuthTokenDownload   = "g8e:auth:token:download:{token}"
-	KVKeyAuthTokenDevice     = "g8e:auth:token:device:{token}"
-	KVKeyAuthTokenDeviceUses = "g8e:auth:token:device:{token}:uses"
-	KVKeyAuthTokenDeviceFingerprints = "g8e:auth:token:device:{token}:fingerprints"
-	KVKeyAuthTokenDeviceRegLock = "g8e:auth:token:device:{token}:reg.lock"
-	KVKeyAuthDeviceList       = "g8e:auth:device.list:{user.id}"
-	KVKeyAuthLoginFailed      = "g8e:auth:login:{identifier}:failed"
-	KVKeyAuthLoginLock        = "g8e:auth:login:{identifier}:lock"
-	KVKeyAuthLoginIPAccounts  = "g8e:auth:login:ip:{ip}:accounts"
-	KVKeyExecutionPendingCmd  = "g8e:execution:{execution.id}:pending.cmd"
+	KVKeyAuthNonce                    = "g8e:auth:nonce:{nonce}"
+	KVKeyAuthTokenDownload            = "g8e:auth:token:download:{token}"            // #nosec G101 - constant string, not credential
+	KVKeyAuthTokenDevice              = "g8e:auth:token:device:{token}"              // #nosec G101 - constant string, not credential
+	KVKeyAuthTokenDeviceUses          = "g8e:auth:token:device:{token}:uses"         // #nosec G101 - constant string, not credential
+	KVKeyAuthTokenDeviceFingerprints  = "g8e:auth:token:device:{token}:fingerprints" // #nosec G101 - constant string, not credential
+	KVKeyAuthTokenDeviceRegLock       = "g8e:auth:token:device:{token}:reg.lock"     // #nosec G101 - constant string, not credential
+	KVKeyAuthDeviceList               = "g8e:auth:device.list:{user.id}"
+	KVKeyAuthLoginFailed              = "g8e:auth:login:{identifier}:failed"
+	KVKeyAuthLoginLock                = "g8e:auth:login:{identifier}:lock"
+	KVKeyAuthLoginIPAccounts          = "g8e:auth:login:ip:{ip}:accounts"
+	KVKeyExecutionPendingCmd          = "g8e:execution:{execution.id}:pending.cmd"
 )
 
 const (

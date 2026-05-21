@@ -638,7 +638,7 @@ const (
 	HistoryEventTypeUnbound              OperatorHistoryEventType = "unbound"
 	HistoryEventTypeHeartbeatReceived    OperatorHistoryEventType = "heartbeat.received"
 	HistoryEventTypeStatusChanged        OperatorHistoryEventType = "status.changed"
-	HistoryEventTypeAPIKeyRefreshed      OperatorHistoryEventType = "api.key.refreshed"
+	HistoryEventTypeAPIKeyRefreshed      OperatorHistoryEventType = "api.key.refreshed" // #nosec G101 - constant string, not credential
 	HistoryEventTypeCreatedFromRefresh   OperatorHistoryEventType = "created.from.refresh"
 	HistoryEventTypeTerminatedForRefresh OperatorHistoryEventType = "terminated.for.refresh"
 	HistoryEventTypeReset                OperatorHistoryEventType = "reset"

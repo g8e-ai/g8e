@@ -14,8 +14,8 @@
 package constants
 
 const (
-	AgentModeG8eBound      = "g8e.bound"
-	AgentModeG8eNotBound   = "g8e.not.bound"
+	AgentModeG8eBound           = "g8e.bound"
+	AgentModeG8eNotBound        = "g8e.not.bound"
 	AgentModeCloudOperatorBound = "g8e.cloud.bound"
 )
 
@@ -28,7 +28,7 @@ const (
 	PromptSectionExecution            = "execution"
 	PromptSectionTools                = "tools"
 	PromptSectionDocs                 = "docs"
-	PromptSectionSystemContext         = "system_context"
+	PromptSectionSystemContext        = "system_context"
 	PromptSectionSentinelMode         = "sentinel_mode"
 	PromptSectionTriageContext        = "triage_context"
 	PromptSectionInvestigationContext = "investigation_context"

@@ -1,3 +1,0 @@
-{
-  "TruncatedOutputFormat": "%s\\n\\n[TRUNCATED: %d bytes skipped]\\n\\n%s"
-}

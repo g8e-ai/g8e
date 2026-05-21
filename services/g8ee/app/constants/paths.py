@@ -113,7 +113,7 @@ def _load_paths() -> PathsDict:
                 "operator_http": PortConstants.PORT_OPERATOR_HTTP,
                 "operator_bootstrap": PortConstants.PORT_OPERATOR_BOOTSTRAP,
                 "operator_public": PortConstants.PORT_OPERATOR_PUBLIC,
-                "g8ee_http": PortConstants.PORT_G8EE_HTTP,
+                "g8ee_http": PortConstants.G8E_PORT_G8EE_HTTP,
             },
             "g8ee": {
                 "cert_name": "g8ee",

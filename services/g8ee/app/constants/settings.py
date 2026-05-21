@@ -204,14 +204,14 @@ class CommandGenerationOutcome(StrEnum):
     and the tool call fails.
 
     These values are emitted in Tribunal SSE payloads and must match
-    the protocol constants in protocol/constants/agents.json.
+    the protocol constants in protocol/constants/status.json.
     """
     def __str__(self) -> str:
         return self.value
-    CONSENSUS           = _AGENTS["tribunal.outcome"]["consensus"]
-    VERIFIED            = _AGENTS["tribunal.outcome"]["verified"]
-    VERIFICATION_FAILED = _AGENTS["tribunal.outcome"]["verification_failed"]
-    CONSENSUS_FAILED    = _AGENTS["tribunal.outcome"]["consensus_failed"]
+    CONSENSUS           = _STATUS["tribunal.outcome"]["consensus"]["value"]
+    VERIFIED            = _STATUS["tribunal.outcome"]["verified"]["value"]
+    VERIFICATION_FAILED = _STATUS["tribunal.outcome"]["verification_failed"]["value"]
+    CONSENSUS_FAILED    = _STATUS["tribunal.outcome"]["consensus_failed"]["value"]
 
 
 class ToolDisplayCategory(StrEnum):
@@ -552,7 +552,7 @@ G8EE_APP_LICENSE_URL                 = "https://github.com/g8e-ai/g8e/blob/main/
 from app.constants.paths import PATHS
 _DYNAMIC_HOST = PATHS.get('host', 'localhost')
 G8EE_APP_CONTACT_URL                 = f"https://{_DYNAMIC_HOST}"
-CORS_ALLOWED_ORIGIN_G8EE             = f"https://{_DYNAMIC_HOST}:{PortConstants.PORT_G8EE_HTTP}"
+CORS_ALLOWED_ORIGIN_G8EE             = f"https://{_DYNAMIC_HOST}:{PortConstants.G8E_PORT_G8EE_HTTP}"
 CORS_ALLOWED_ORIGIN_CLIENT_HTTP       = f"http://{_DYNAMIC_HOST}:{PortConstants.PORT_OPERATOR_BOOTSTRAP}"
 CORS_ALLOWED_ORIGIN_CLIENT_HTTPS      = f"https://{_DYNAMIC_HOST}:{PortConstants.PORT_OPERATOR_HTTP}"
 CORS_ALLOWED_ORIGIN_LOCALHOST       = f"https://{_DYNAMIC_HOST}"

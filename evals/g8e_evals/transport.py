@@ -151,7 +151,7 @@ class AuthContext:
 
         trust_bundle = resolve_trust_bundle()
 
-        g8ee_url = (os.environ.get("G8E_G8EE_URL") or f"https://localhost:{PortConstants.PORT_G8EE_HTTP}").rstrip("/")
+        g8ee_url = (os.environ.get("G8E_G8EE_URL") or f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTP}").rstrip("/")
         op_url = (
             operator_url
             or os.environ.get("G8E_OPERATOR_URL")
