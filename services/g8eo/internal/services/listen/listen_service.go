@@ -45,6 +45,7 @@ type ListenService struct {
 	reg             *RegistrationService
 	passkey         *PasskeyService
 	userSvc         *UserService
+	sessionSvc      *SessionService
 	apiKeySvc       *ApiKeyService
 	mcpGateway      *mcp.GatewayService
 	server          *http.Server
@@ -69,6 +70,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	pki := newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, db, logger)
 	userSvc := NewUserService(db, logger)
 	auth := NewAuthService(db, pki, logger, userSvc, cfg.Listen.SecretsDir)
+	sessionSvc := NewSessionService(db, logger)
 
 	var extraIPs []net.IP
 	if ifaces, err := net.Interfaces(); err == nil {
@@ -93,7 +95,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
 	}
 
-	reg := NewRegistrationService(db, pki, logger, userSvc)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 
 	// Initialize passkey service for L3 brokerage
 	passkeyCfg := &PasskeyConfig{
@@ -132,7 +134,8 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 	pki := newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, db, logger)
 	userSvc := NewUserService(db, logger)
 	auth := NewAuthService(db, pki, logger, userSvc, cfg.Listen.SecretsDir)
-	reg := NewRegistrationService(db, pki, logger, userSvc)
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 
 	// Initialize passkey service for L3 brokerage (test configuration)
 	passkeyCfg := &PasskeyConfig{
@@ -170,6 +173,7 @@ func (ls *ListenService) initHandlersAndServers() {
 	pubsub := ls.pubsub
 	auth := ls.auth
 	pki := ls.pki
+	sessionSvc := ls.sessionSvc
 	reg := ls.reg
 	passkey := ls.passkey
 	userSvc := ls.userSvc
@@ -178,7 +182,7 @@ func (ls *ListenService) initHandlersAndServers() {
 	ls.mcpGateway.SetA2ADependencies(cfg.Listen.A2ADownstreamURL)
 	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Listen.PublicPort)
 	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, apiKeySvc, ls.mcpGateway, ls.IsReady, ls.IsGovernanceReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, sessionSvc, reg, passkey, userSvc, apiKeySvc, ls.mcpGateway, ls.IsReady, ls.IsGovernanceReady)
 
 	// Build a map of ports to identify port assignments.
 	// Surfaces with different TLS client-auth requirements MUST NOT share a

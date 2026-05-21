@@ -18,6 +18,7 @@
     "g8ee_http": 8443,
     "openclaw_gateway": 18789
   },
+  "host": "localhost",
   "g8ee": {
     "app_dir": "/app/services/g8ee",
     "config_dir": "/app/services/g8ee/config",

@@ -167,7 +167,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def delete_investigation(self, investigation_id: str) -> None:
         """Hard-delete an investigation document."""
-        result = await self.cache.db.delete_document(
+        result = await self.cache.delete_document(
             collection=self.collection,
             document_id=investigation_id,
         )
@@ -178,9 +178,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
                 details={"investigation_id": investigation_id},
                 component=ComponentName.G8EE
             )
-        key = self.cache.make_key(self.collection, investigation_id)
-        await self.cache.kv.delete(key)
-        await self.cache.invalidate_query_cache(self.collection)
         logger.info("Deleted investigation %s", investigation_id)
 
     async def add_chat_message(

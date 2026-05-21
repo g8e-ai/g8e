@@ -14,9 +14,5 @@
 """
 g8ee Middleware Package
 
-Contains middleware for authorization and request processing.
+Middleware for request processing.
 """
-
-from .authorization import AuthorizationMiddleware
-
-__all__ = ["AuthorizationMiddleware"]

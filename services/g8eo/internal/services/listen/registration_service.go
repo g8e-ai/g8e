@@ -58,19 +58,21 @@ const (
 // RegistrationService handles Gateway-native device enrollment.
 // Ported from client/DeviceLinkService and g8ee/OperatorAuthService.
 type RegistrationService struct {
-	db      *ListenDBService
-	pki     *PKIAuthority
-	logger  *slog.Logger
-	userSvc *UserService
+	db         *ListenDBService
+	pki        *PKIAuthority
+	logger     *slog.Logger
+	userSvc    *UserService
+	sessionSvc *SessionService
 }
 
 // NewRegistrationService creates a new RegistrationService.
-func NewRegistrationService(db *ListenDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService) *RegistrationService {
+func NewRegistrationService(db *ListenDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, sessionSvc *SessionService) *RegistrationService {
 	return &RegistrationService{
-		db:      db,
-		pki:     pki,
-		logger:  logger,
-		userSvc: userSvc,
+		db:         db,
+		pki:        pki,
+		logger:     logger,
+		userSvc:    userSvc,
+		sessionSvc: sessionSvc,
 	}
 }
 
@@ -832,48 +834,17 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 	finalCertPEM := update["operator_cert"].(string)
 	finalChainPEM := update["operator_cert_chain"].(string)
 
-	// Store the binding between operator_session_id and cli_session_id in a first-class
-	// collection to support metadata, expiry, and revocation. Without this binding,
-	// any authenticated operator could drain any cli_session_id's event buffer.
-	cliExpiry := time.Now().UTC().Add(24 * time.Hour)
-	cliSession := models.CLISession{
-		ID:                cliSessionID,
-		UserID:            linkData.UserID,
-		OperatorSessionID: operatorSessionID,
-		SystemFingerprint: sanitizedFingerprint,
-		CreatedAt:         time.Now().UTC(),
-		ExpiresAt:         cliExpiry,
-		AbsoluteExpiresAt: cliExpiry,
-		IdleExpiresAt:     cliExpiry,
-		SessionType:       "cli",
-		IsActive:          true,
-		LoginMethod:       "device_link",
-	}
-	cliSessionBytes, _ := json.Marshal(cliSession)
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
-		return nil, fmt.Errorf("failed to persist CLI session: %w", err)
-	}
-
-	// Write an operator_sessions document so g8ee's OperatorSessionService can look up the
-	// session by ID via GET /db/operator_sessions/{operator_session_id}.
-	// Field names match app/models/sessions.py OperatorSessionDocument.
-	sessionExpiry := time.Now().UTC().Add(24 * time.Hour)
-	operatorSessionDoc := map[string]interface{}{
-		"id":                  operatorSessionID,
-		"session_type":        "operator",
-		"user_id":             linkData.UserID,
-		"organization_id":     linkData.OrganizationID,
-		"operator_id":         operator.ID,
-		"is_active":           true,
-		"created_at":          time.Now().UTC().Format(time.RFC3339),
-		"absolute_expires_at": sessionExpiry.Format(time.RFC3339),
-		"idle_expires_at":     sessionExpiry.Format(time.RFC3339),
-		"last_activity":       time.Now().UTC().Format(time.RFC3339),
-		"login_method":        "device_link",
-	}
-	operatorSessionBytes, _ := json.Marshal(operatorSessionDoc)
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID, operatorSessionBytes); err != nil {
-		return nil, fmt.Errorf("failed to persist operator session document: %w", err)
+	err = s.sessionSvc.PersistSessions(
+		cliSessionID,
+		operatorSessionID,
+		linkData.UserID,
+		linkData.OrganizationID,
+		operator.ID,
+		sanitizedFingerprint,
+		"device_link",
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	return &models.OperatorRegistrationResponse{

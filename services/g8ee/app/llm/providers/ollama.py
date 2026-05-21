@@ -201,6 +201,24 @@ class OllamaProvider(LLMProvider):
             await self._client.close()
 
     @staticmethod
+    def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
+        """Validate Ollama provider configuration.
+
+        Ollama requires an endpoint URL but does not require an API key.
+
+        Args:
+            api_key: The API key for the provider (unused by Ollama)
+            endpoint: The endpoint URL for the provider
+
+        Returns:
+            List of validation error messages. Empty if configuration is valid.
+        """
+        errors = []
+        if not endpoint:
+            errors.append("Provider 'ollama' requires an endpoint URL.")
+        return errors
+
+    @staticmethod
     def _build_primary_chat_kwargs(
         *,
         model: str,

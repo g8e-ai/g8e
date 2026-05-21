@@ -645,14 +645,14 @@ func TestSentinel_ScrubText_G8EAPIKey(t *testing.T) {
 	t.Run("standalone key output", func(t *testing.T) {
 		input := "g8e_cm1241_0889f747327ff462500fba691894edbc415e81d145869757e9c2e75647defbf1"
 		result := sentinel.ScrubText(input)
-		assert.Contains(t, result, "[G8E_API_KEY]")
+		assert.Contains(t, result, "[G8E_INTERNAL_API_KEY]")
 		assert.NotContains(t, result, "g8e_cm1241_0889f747")
 	})
 
 	t.Run("key embedded in text", func(t *testing.T) {
 		input := "Your key is g8e_test99_aabbccdd00112233445566778899aabbccddeeff00112233445566778899aabb end"
 		result := sentinel.ScrubText(input)
-		assert.Contains(t, result, "[G8E_API_KEY]")
+		assert.Contains(t, result, "[G8E_INTERNAL_API_KEY]")
 		assert.NotContains(t, result, "aabbccdd0011")
 	})
 

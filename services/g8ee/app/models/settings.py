@@ -87,8 +87,18 @@ class ComponentURLsSettings(G8eBaseModel):
     same host. Override with the ``G8E_DASHBOARD_URL`` env var if you front the
     Operator behind a different ingress.
     """
-    g8ee_url: str = Field(f"https://localhost:{PortConstants.PORT_G8EE_HTTP}")
-    client_url: str = Field(f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}")
+    g8ee_url: str = Field(
+        default_factory=lambda: os.environ.get(
+            EnvVar.G8EE_URL,
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_G8EE_HTTP}",
+        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_G8EE_HTTP}"
+    )
+    client_url: str = Field(
+        default_factory=lambda: os.environ.get(
+            EnvVar.DASHBOARD_URL,
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}",
+        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}"
+    )
 
 class CommandValidationSettings(G8eBaseModel):
     """Operator command safety and validation configuration.
@@ -218,9 +228,9 @@ class DatabaseSettings(G8eBaseModel):
 
 class ListenSettings(G8eBaseModel):
     """operator (Operator --listen mode) configuration."""
-    http_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_URL, f"https://localhost:{PATHS['ports']['operator_http']}") or f"https://localhost:{PATHS['ports']['operator_http']}")
-    pubsub_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_PUBSUB_URL, f"wss://localhost:{PATHS['ports']['operator_http']}") or f"wss://localhost:{PATHS['ports']['operator_http']}")
-    blob_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_URL, f"https://localhost:{PATHS['ports']['operator_http']}") or f"https://localhost:{PATHS['ports']['operator_http']}")
+    http_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_http']}") or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_http']}")
+    pubsub_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_PUBSUB_URL, f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_http']}") or f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_http']}")
+    blob_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_http']}") or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_http']}")
     default_ttl: int = Field(CACHE_TTL_DEFAULT)
     enable_cache_read: bool = Field(False)
 
@@ -500,11 +510,27 @@ class G8eePlatformSettings(G8eBaseModel):
     absolute_session_timeout: int = Field(86400)
     docs_dir: str = Field(PATHS["infra"]["docs_dir"])
 
-    app_url: str = Field("https://localhost")
-    allowed_origins: str = Field("")
-    passkey_rp_name: str = Field("localhost")
-    passkey_rp_id: str = Field("localhost")
-    passkey_origin: str = Field("https://localhost")
+    app_url: str = Field(
+        default_factory=lambda: os.environ.get(
+            EnvVar.OPERATOR_URL,
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}",
+        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}"
+    )
+    allowed_origins: str = Field(
+        default_factory=lambda: os.environ.get(EnvVar.ALLOWED_ORIGINS, "") or ""
+    )
+    passkey_rp_name: str = Field(
+        default_factory=lambda: os.environ.get(EnvVar.PASSKEY_RP_NAME, PATHS.get('host', 'localhost')) or PATHS.get('host', 'localhost')
+    )
+    passkey_rp_id: str = Field(
+        default_factory=lambda: os.environ.get(EnvVar.PASSKEY_RP_ID, PATHS.get('host', 'localhost')) or PATHS.get('host', 'localhost')
+    )
+    passkey_origin: str = Field(
+        default_factory=lambda: os.environ.get(
+            EnvVar.PASSKEY_ORIGIN,
+            f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}",
+        ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}"
+    )
 
     command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
     search: SearchSettings = Field(default_factory=SearchSettings)

@@ -121,6 +121,26 @@ class OpenAIProvider(LLMProvider):
         """Return the service name for error reporting."""
         return "openai"
 
+    @staticmethod
+    def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
+        """Validate OpenAI provider configuration.
+
+        OpenAI requires both an API key and an endpoint URL.
+
+        Args:
+            api_key: The API key for the provider
+            endpoint: The endpoint URL for the provider
+
+        Returns:
+            List of validation error messages. Empty if configuration is valid.
+        """
+        errors = []
+        if not api_key:
+            errors.append("Provider 'openai' requires an API key.")
+        if not endpoint:
+            errors.append("Provider 'openai' requires an endpoint URL.")
+        return errors
+
     async def _close_resources(self):
         """Clean up provider resources."""
         if hasattr(self._client, "close"):

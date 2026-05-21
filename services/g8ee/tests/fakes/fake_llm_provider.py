@@ -41,6 +41,11 @@ class FakeLLMProvider(LLMProvider):
         self.stream_chunks: list[list[StreamChunkFromModel]] = []
         self.call_log: list[dict[str, Any]] = []
 
+    @staticmethod
+    def validate_config(api_key: str | None, endpoint: str | None) -> list[str]:
+        """Fake provider validation - always valid for testing."""
+        return []
+
     def add_response(self, text: str, finish_reason: str = "STOP"):
         """Queue a standard text response."""
         response = GenerateContentResponse(

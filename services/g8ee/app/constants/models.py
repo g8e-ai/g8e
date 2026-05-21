@@ -186,3 +186,4 @@ class PathsConstants(G8eBaseModel):
     infra: InfraPaths
     g8ee: G8eePaths
     ports: dict[str, int] | None = None
+    host: str = "localhost"

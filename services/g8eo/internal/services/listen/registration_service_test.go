@@ -67,7 +67,8 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc)
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 
 	token := "dlk_test_token_12345678901234567890"
 	userID := "user-1"
@@ -471,7 +472,8 @@ func TestRegistrationService_DeviceLinks(t *testing.T) {
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	userSvc := NewUserService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc)
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 
 	resp, err := reg.CreateDeviceLink(models.CreateDeviceLinkRequest{
 		UserID:         "user-1",
@@ -511,7 +513,8 @@ func TestRegistrationService_CreateDeviceLinkRejectsWrongOperatorOwner(t *testin
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	userSvc := NewUserService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc)
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 	op := &models.OperatorDocumentGo{
 		ID:        "op-1",
 		UserID:    "other-user",
@@ -557,7 +560,8 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	userSvc := NewUserService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc)
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 
 	userID := "user-1"
 	opID := "op-1"
@@ -609,7 +613,8 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	userSvc := NewUserService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc)
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 
 	userID := "user-1"
 
@@ -655,7 +660,8 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	userSvc := NewUserService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc)
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 
 	userID := "user-1"
 	opID := "op-terminate-1"
@@ -736,7 +742,8 @@ func TestRegistrationService_Binding(t *testing.T) {
 
 	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	userSvc := NewUserService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc)
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 
 	userID := "user-1"
 	sessionID := "sess-1"
@@ -842,7 +849,8 @@ func TestRegistration_SessionDocuments(t *testing.T) {
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc)
+	sessionSvc := NewSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 
 	token := "dlk_session_docs_test_12345678901"
 	userID := "user-session-test"

@@ -45,6 +45,11 @@ GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null || ([ -f "$$(go en
 GOVULNCHECK := $(shell command -v govulncheck 2>/dev/null || ([ -f "$$(go env GOPATH)/bin/govulncheck" ] && echo "$$(go env GOPATH)/bin/govulncheck"))
 
 # =============================================================================
+# BUILD CONFIGURATION
+# =============================================================================
+COMPRESS ?= 0
+
+# =============================================================================
 # HELP
 # =============================================================================
 .PHONY: help
@@ -100,6 +105,13 @@ build:
 		-o build/linux-amd64/g8e.gateway ./cmd/g8eo
 	@echo 'Built: build/linux-amd64/g8e.operator'
 	@echo 'Built: build/linux-amd64/g8e.gateway'
+	@if [ "$(COMPRESS)" = "1" ] && command -v upx >/dev/null 2>&1; then \
+		echo "Compressing binaries with upx..."; \
+		upx --best --lzma build/linux-amd64/g8e.operator || exit 1; \
+		upx --best --lzma build/linux-amd64/g8e.gateway || exit 1; \
+	elif [ "$(COMPRESS)" = "1" ]; then \
+		echo "Warning: COMPRESS=1 set but upx not found, skipping compression."; \
+	fi
 	@SIZE=$$(ls -lh build/linux-amd64/g8e.operator | awk '{print $$5}') && \
 		echo "  Size: $$SIZE"
 
@@ -122,7 +134,7 @@ build-all:
 		SIZE=$$(ls -lh $(BUILD_DIR)/linux-$$arch/g8e.operator | awk '{print $$5}'); \
 		echo "  linux/$$arch: $$SIZE (uncompressed)"; \
 	done
-	@if command -v upx >/dev/null 2>&1; then \
+	@if [ "$(COMPRESS)" = "1" ] && command -v upx >/dev/null 2>&1; then \
 		echo "Compressing binaries with upx..."; \
 		for arch in amd64 arm64 386; do \
 			upx --best --lzma $(BUILD_DIR)/linux-$$arch/g8e.operator || exit 1; \
@@ -130,8 +142,10 @@ build-all:
 			SIZE=$$(ls -lh $(BUILD_DIR)/linux-$$arch/g8e.operator | awk '{print $$5}'); \
 			echo "  linux/$$arch: $$SIZE (compressed)"; \
 		done; \
+	elif [ "$(COMPRESS)" = "1" ]; then \
+		echo "Warning: COMPRESS=1 set but upx not found, skipping compression."; \
 	else \
-		echo "UPX not available - skipping compression (binaries are already stripped)"; \
+		echo "COMPRESS=1 not set - skipping compression (binaries are already stripped)"; \
 	fi
 	@echo ""
 	@echo "All architectures built successfully."
@@ -158,6 +172,13 @@ _build-local-binary:
 		-o build/linux-amd64/g8e.gateway ./cmd/g8eo
 	@echo "Built: build/linux-amd64/$(BINARY_NAME)"
 	@echo "Built: build/linux-amd64/g8e.gateway"
+	@if [ "$(COMPRESS)" = "1" ] && command -v upx >/dev/null 2>&1; then \
+		echo "Compressing binaries with upx..."; \
+		upx --best --lzma build/linux-amd64/$(BINARY_NAME) || exit 1; \
+		upx --best --lzma build/linux-amd64/g8e.gateway || exit 1; \
+	elif [ "$(COMPRESS)" = "1" ]; then \
+		echo "Warning: COMPRESS=1 set but upx not found, skipping compression."; \
+	fi
 
 
 .PHONY: build-local-all
@@ -203,6 +224,13 @@ _build-release:
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$(ARCH)'" \
 		-o build/linux-$(ARCH)/g8e.gateway ./cmd/g8eo
+	@if [ "$(COMPRESS)" = "1" ] && command -v upx >/dev/null 2>&1; then \
+		echo "Compressing binaries with upx..."; \
+		upx --best --lzma build/linux-$(ARCH)/$(BINARY_NAME) || exit 1; \
+		upx --best --lzma build/linux-$(ARCH)/g8e.gateway || exit 1; \
+	elif [ "$(COMPRESS)" = "1" ]; then \
+		echo "Warning: COMPRESS=1 set but upx not found, skipping compression."; \
+	fi
 
 # =============================================================================
 # CODE QUALITY

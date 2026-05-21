@@ -38,7 +38,6 @@ from app.models.http_context import RequestContext, G8eHttpContext
 from app.services.cache.cache_aside import CacheAsideService
 from app.security.auth import (
     is_infrastructure_health_check_ip,
-    authenticate_proxy_or_internal,
 )
 from app.services.infra.health_service import HealthService
 
@@ -65,6 +64,7 @@ from .services.operator.operator_session_service import OperatorSessionService
 from .services.operator.operator_auth_service import OperatorAuthService
 from .services.operator.session_auth_listener import SessionAuthListener
 from .services.auth.api_key_service import ApiKeyService
+from .services.auth.auth_service import AuthService
 from .services.auth.certificate_service import CertificateService
 from .services.infra.settings_service import SettingsService
 logger = logging.getLogger(__name__)
@@ -314,6 +314,15 @@ async def get_g8ee_session_auth_listener(request: Request) -> SessionAuthListene
     return service
 
 
+async def get_g8ee_auth_service(request: Request) -> AuthService:
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.auth_service
+    if not service:
+        logger.error("Auth Service not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("Auth Service not available")
+    return service
+
+
 async def get_g8ee_api_key_service(request: Request) -> ApiKeyService:
     state = cast(G8eeAppState, request.app.state)
     service = state.services.api_key_service
@@ -400,64 +409,22 @@ async def get_g8ee_current_active_user(request: Request) -> AuthenticatedUser:
 async def require_authenticated_user(
     request: Request,
     settings: G8eePlatformSettings = Depends(get_g8ee_platform_settings),
-    operator_data_service: OperatorDataService = Depends(get_g8ee_operator_data_service),
-    operator_session_service: OperatorSessionService = Depends(get_g8ee_operator_session_service),
+    auth_service: AuthService = Depends(get_g8ee_auth_service),
 ) -> AuthenticatedUser:
-    user = await authenticate_proxy_or_internal(request, settings, operator_session_service)
-
-    # [PIVOT] Validate session bindings for CLI sessions (Plan §4.6)
-    # If a CLI session ID is provided, it must be bound to the authenticated
-    # operator session. This prevents cross-session routing leaks.
-    if user.cli_session_id:
-        if not user.operator_session_id:
-            from app.errors import AuthenticationError
-            from app.constants import ComponentName
-            raise AuthenticationError("CLI session requires operator session", component=ComponentName.G8EE)
-
-        if not await operator_data_service.validate_cli_session_ownership(
-            user.cli_session_id, user.operator_session_id
-        ):
-            from app.errors import AuthenticationError
-            from app.constants import ComponentName
-            raise AuthenticationError("CLI session ownership mismatch", component=ComponentName.G8EE)
-
-    return user
+    return await auth_service.authenticate_request(request, settings)
 
 
 async def require_authenticated_context(
     request: Request,
-    user: AuthenticatedUser = Depends(require_authenticated_user)
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    auth_service: AuthService = Depends(get_g8ee_auth_service),
 ) -> G8eHttpContext:
     """Unified authentication and context validation dependency.
 
-    1. Authenticates user via proxy headers, operator session Bearer, or web session cookie (using require_authenticated_user).
-    2. Extracts RequestContext from the request body.
-    3. Validates that the body context matches the authenticated user.
-    4. Returns a validated G8eHttpContext.
+    1. Authenticates user (using require_authenticated_user).
+    2. Extracts and validates context from the request body.
+    3. Returns a validated G8eHttpContext.
     """
-    # Try to extract context from request body
-    context_data = None
-    try:
-        # FastAPI's Request.json() handles caching of the body
-        body = await request.json()
-        if isinstance(body, dict):
-            context_data = body.get("context")
-    except Exception:
-        # Body might not be JSON or already consumed (shouldn't happen with FastAPI's cache)
-        pass
-
-    if not context_data:
-        # No context in body, return context derived from authenticated headers
-        return G8eHttpContext(
-            user_id=user.uid,
-            web_session_id=user.web_session_id,
-            cli_session_id=user.cli_session_id,
-            source_component=ComponentName.G8EE,  # Default for internal relay
-        )
-
-    # Context found, validate it against the authenticated user
-    request_context = RequestContext.model_validate(context_data)
-
     # Check if this is an exempt path (e.g. operator auth relay)
     is_exempt = request.url.path in [
         InternalApiPaths.G8EE_OPERATORS_AUTHENTICATE,
@@ -469,10 +436,7 @@ async def require_authenticated_context(
         InternalApiPaths.G8EE_AUTH_REVOKE_CERT,
     ]
 
-    g8e_context = G8eHttpContext.from_request_context(request_context, is_exempt_path=is_exempt)
-    g8e_context.validate_against_user(user)
-
-    return g8e_context
+    return await auth_service.get_validated_context(request, user, is_exempt_path=is_exempt)
 
 
 async def health_check_dependencies(request: Request) -> HealthCheckResult:
@@ -484,6 +448,7 @@ __all__ = [
     "get_g8ee_api_key_service",
     "get_g8ee_approval_service",
     "get_g8ee_attachment_service",
+    "get_g8ee_auth_service",
     "get_g8ee_blob_client",
     "get_g8ee_blob_service",
     "get_g8ee_cache_aside_service",
