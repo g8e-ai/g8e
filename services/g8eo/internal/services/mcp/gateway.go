@@ -288,7 +288,7 @@ func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 
 	receipt, err := g.envProc.ProcessEnvelope(r.Context(), uapBytes)
 	if err != nil {
-		if strings.Contains(err.Error(), "TX_L3_PROOF_MISSING") {
+		if errors.Is(err, governance.ErrL3ProofMissing) {
 			userID := r.Header.Get(constants.HeaderUserID)
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
 
@@ -377,7 +377,7 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 
 	receipt, err := g.envProc.ProcessEnvelope(r.Context(), uapBytes)
 	if err != nil {
-		if strings.Contains(err.Error(), "TX_L3_PROOF_MISSING") {
+		if errors.Is(err, governance.ErrL3ProofMissing) {
 			userID := r.Header.Get(constants.HeaderUserID)
 			operatorID := r.Header.Get(constants.HeaderOperatorID)
 
