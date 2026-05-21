@@ -406,7 +406,7 @@ class TestG8eHTTPClientPrepareRequest:
         # Execution ID is in the trace object
         assert trace.execution_id is not None
 
-    async def test_prepare_request_g8e_context_headers_propagated(self, client):
+    async def test_prepare_request_g8e_context_embedded_in_body(self, client):
         ctx = G8eHttpContext(
             web_session_id="sess-abc",
             user_id="user-123",

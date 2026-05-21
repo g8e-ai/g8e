@@ -30,9 +30,15 @@ def setup_exception_handlers(app: FastAPI) -> None:
         status_code = exc.get_http_status()
         error_detail = exc.error_detail
 
-        # Extract trace/execution IDs if available in context/headers
-        trace_id = request.headers.get("X-G8E-Trace-ID", "unknown")
-        execution_id = request.headers.get(G8eHeaders.EXECUTION_ID, "unknown")
+        # Extract trace/execution IDs if available in context
+        g8e_context = getattr(request.state, "g8e_context", None)
+        trace_id = "unknown"
+        execution_id = "unknown"
+        
+        if g8e_context:
+            execution_id = g8e_context.execution_id
+            # trace_id is currently synonymous with execution_id in this substrate
+            trace_id = execution_id
 
         error_body = ErrorBody(
             code=error_detail.code,
@@ -75,8 +81,13 @@ def setup_exception_handlers(app: FastAPI) -> None:
         # Log the full exception for internal debugging
         logger.exception("[EXCEPTION-HANDLER] Unhandled exception caught: %s", exc)
 
-        trace_id = request.headers.get("X-G8E-Trace-ID", "unknown")
-        execution_id = request.headers.get("X-G8E-Execution-ID", "unknown")
+        g8e_context = getattr(request.state, "g8e_context", None)
+        trace_id = "unknown"
+        execution_id = "unknown"
+
+        if g8e_context:
+            execution_id = g8e_context.execution_id
+            trace_id = execution_id
 
         # Return a generic 500 error in production-safe format
         from app.constants import ErrorCode, ErrorCategory, ErrorSeverity

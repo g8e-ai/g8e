@@ -532,6 +532,7 @@ class G8eePlatformSettings(G8eBaseModel):
         ) or f"https://{PATHS.get('host', 'localhost')}:{PortConstants.PORT_OPERATOR_HTTP}"
     )
 
+    llm: LLMSettings = Field(default_factory=LLMSettings)
     command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
     search: SearchSettings = Field(default_factory=SearchSettings)
     eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)

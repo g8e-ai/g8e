@@ -85,7 +85,15 @@ class AuthService:
                 bearer_token = auth_header[len(HTTP_BEARER_PREFIX) :]
                 session = await self._operator_session_service.validate_operator_session(bearer_token)
                 if session and session.user_id:
-                    cli_session_id = request.headers.get(G8eHeaders.CLI_SESSION_ID)
+                    # Prefer cli_session_id from body-embedded context if available
+                    g8e_context = getattr(request.state, "g8e_context", None)
+                    cli_session_id = None
+                    if g8e_context:
+                        cli_session_id = g8e_context.cli_session_id
+                    
+                    if not cli_session_id:
+                        cli_session_id = request.headers.get(G8eHeaders.CLI_SESSION_ID)
+
                     logger.debug(
                         "[AuthService] Authenticated via operator session Bearer token",
                         extra={"user_id": session.user_id, "operator_session_id": bearer_token[:8]},
@@ -124,30 +132,18 @@ class AuthService:
         """Unified context validation: extracts from body and checks against auth user.
 
         If no context is found in the body, a default context is derived from the
-        authenticated user headers.
+        authenticated user.
         """
-        context_data = None
-        try:
-            # FastAPI's Request.json() handles caching of the body
-            body = await request.json()
-            if isinstance(body, dict):
-                context_data = body.get("context")
-        except Exception:
-            # Body might not be JSON or already consumed
-            pass
+        # Check if middleware already extracted context
+        g8e_context = getattr(request.state, "g8e_context", None)
+        if g8e_context:
+            g8e_context.validate_against_user(user)
+            return g8e_context
 
-        if not context_data:
-            # No context in body, return context derived from authenticated headers
-            return G8eHttpContext(
-                user_id=user.uid,
-                web_session_id=user.web_session_id,
-                cli_session_id=user.cli_session_id,
-                source_component=ComponentName.G8EE,  # Default for internal relay
-            )
-
-        # Context found, validate it against the authenticated user
-        request_context = RequestContext.model_validate(context_data)
-        g8e_context = G8eHttpContext.from_request_context(request_context, is_exempt_path=is_exempt_path)
-        g8e_context.validate_against_user(user)
-
-        return g8e_context
+        # No context in body, return context derived from authenticated user
+        return G8eHttpContext(
+            user_id=user.uid,
+            web_session_id=user.web_session_id,
+            cli_session_id=user.cli_session_id,
+            source_component=ComponentName.G8EE,  # Default for internal relay
+        )

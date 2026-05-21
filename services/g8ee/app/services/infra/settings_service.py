@@ -25,9 +25,12 @@ from app.constants.collections import (
     PLATFORM_SETTINGS_DOC,
     USER_SETTINGS_DOC_PREFIX,
 )
+from app.constants.env_vars import EnvVar
 from app.constants.generated_paths import PathConstants, PortConstants
+from app.constants.paths import PATHS
 from app.errors import ConfigurationError
 from app.models.settings import (
+    AuthSettings,
     LLMSettings,
     G8eePlatformSettings,
     G8eeUserSettings,
@@ -35,6 +38,7 @@ from app.models.settings import (
     UserSettingsDocument,
     SearchSettings,
 )
+from app.models.base import G8eBaseModel
 
 from app.services.infra.bootstrap_service import BootstrapService, BootstrapServiceProtocol
 
@@ -111,12 +115,9 @@ class SettingsService:
         """Overlay platform DB settings onto local bootstrap settings.
 
         Model-driven by design: each nested settings model is overlaid as a
-        whole object, and the auth merge iterates ``AuthSettings`` fields
-        rather than hand-listing them. Adding a new field on any of these
-        nested models therefore flows through automatically - hand-listing
-        fields here is the bug class that previously dropped new fields
-        (e.g. command_validation auto-approve, auth auditor_hmac_key) on
-        the platform-bootstrap path.
+        whole object, except for AuthSettings which merges. This ensures
+        any new fields or nested models added to G8eePlatformSettings
+        automatically flow through without manual code updates here.
 
         Auth is the only sub-model that merges instead of being replaced,
         because bootstrap-loaded secrets (verified against the on-disk
@@ -124,26 +125,26 @@ class SettingsService:
         platform document carries; the DB only fills gaps when the
         bootstrap volume hasn't surfaced a value yet.
         """
-        # Whole-object overlay for nested models where the platform DB
-        # document is authoritative. Any new field added inside these
-        # models flows through with no change here.
-        settings.command_validation = platform_settings.command_validation
-        settings.search = platform_settings.search
-        settings.reputation = platform_settings.reputation
-        settings.batch_execution = platform_settings.batch_execution
-        settings.component_urls = platform_settings.component_urls
-        settings.listen = platform_settings.listen
-
-        # Auth: bootstrap value wins when present; platform DB fills gaps.
-        # Iterating AuthSettings.model_fields makes this structural - newly
-        # added auth tokens (e.g. future signing keys) overlay automatically
-        # without revisiting this method.
-        for field_name in type(settings.auth).model_fields:
-            platform_value = getattr(platform_settings.auth, field_name, None)
-            if not platform_value:
+        for field_name in type(settings).model_fields:
+            if field_name.startswith("_"):
                 continue
-            if not getattr(settings.auth, field_name, None):
-                setattr(settings.auth, field_name, platform_value)
+
+            local_value = getattr(settings, field_name)
+            platform_value = getattr(platform_settings, field_name)
+
+            # We only overlay nested models that are G8eBaseModels.
+            if not isinstance(local_value, G8eBaseModel):
+                continue
+
+            if isinstance(local_value, AuthSettings):
+                # Auth: bootstrap value wins when present; platform DB fills gaps.
+                for auth_field in type(local_value).model_fields:
+                    p_val = getattr(platform_value, auth_field, None)
+                    if p_val and not getattr(local_value, auth_field, None):
+                        setattr(local_value, auth_field, p_val)
+            else:
+                # Whole-object overlay for all other nested models.
+                setattr(settings, field_name, platform_value)
 
         return settings
 
@@ -193,7 +194,7 @@ class SettingsService:
             )
             platform_settings = await self.get_platform_settings()
             return G8eeUserSettings(
-                llm=LLMSettings(),
+                llm=platform_settings.llm,
                 search=platform_settings.search,
                 eval_judge=platform_settings.eval_judge,
                 command_validation=platform_settings.command_validation,
@@ -209,6 +210,26 @@ class SettingsService:
             eval_judge=data.eval_judge,
             command_validation=data.command_validation,
             batch_execution=data.batch_execution,
+        )
+
+    async def update_user_settings(self, user_id: str, new_settings: G8eeUserSettings) -> None:
+        """Update user settings in the database and invalidate the local cache."""
+        if not self._cache_aside:
+             raise ConfigurationError("CacheAsideService required for writing settings")
+             
+        user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
+        
+        doc = UserSettingsDocument(
+            id=user_doc_id,
+            user_id=user_id,
+            settings=new_settings
+        )
+        
+        await self._cache_aside.update_document(
+            collection=DB_COLLECTION_SETTINGS,
+            document_id=user_doc_id,
+            data=doc.model_dump(mode="json"),
+            merge=False
         )
 
     def _build_search_settings(self, settings: G8eePlatformSettings | G8eeUserSettings) -> SearchSettings:

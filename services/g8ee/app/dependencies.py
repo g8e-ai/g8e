@@ -386,10 +386,26 @@ async def get_g8ee_user_settings(
 ) -> G8eeUserSettings:
     """Load per-request G8eeUserSettings following Platform Settings < User Settings.
 
-    Extracts user_id from proxy headers and overlays user-specific settings on top of
+    Extracts user_id from context/state and overlays user-specific settings on top of
     the platform settings loaded at startup.
     """
-    user_id = request.headers.get(PROXY_USER_ID_HEADER)
+    user_id = None
+    
+    # 1. Try body-embedded context
+    g8e_context = getattr(request.state, "g8e_context", None)
+    if g8e_context:
+        user_id = g8e_context.user_id
+    
+    # 2. Try authenticated user state
+    if not user_id:
+        user = getattr(request.state, "user", None)
+        if user:
+            user_id = user.uid
+
+    # 3. Fallback to proxy headers
+    if not user_id:
+        user_id = request.headers.get(PROXY_USER_ID_HEADER)
+
     if not user_id:
         # We need to return G8eeUserSettings, so we'll get it via the service
         # which will handle the merging logic.
