@@ -40,7 +40,7 @@ pytestmark = pytest.mark.unit
 class TestUrlUsesTls:
 
     def test_https_returns_true(self):
-        assert _url_uses_tls("https://localhost:8443") is True
+        assert _url_uses_tls("https://localhost:8440") is True
 
     def test_wss_returns_true(self):
         assert _url_uses_tls("wss://localhost:443") is True
@@ -98,7 +98,7 @@ class TestNewKvHttpSession:
     async def test_returns_new_session_when_none(self):
         s = new_kv_http_session(
             None,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=aiohttp.ClientTimeout(total=10),
             ca_cert_path="/tmp/ca.crt",
             headers={},
@@ -111,7 +111,7 @@ class TestNewKvHttpSession:
     async def test_reuses_open_session(self):
         s = new_kv_http_session(
             None,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=aiohttp.ClientTimeout(total=10),
             ca_cert_path="/tmp/ca.crt",
             headers={},
@@ -119,7 +119,7 @@ class TestNewKvHttpSession:
         try:
             same = new_kv_http_session(
                 s,
-                base_url="https://localhost:8443",
+                base_url="https://localhost:8440",
                 timeout=aiohttp.ClientTimeout(total=10),
                 ca_cert_path="/tmp/ca.crt",
                 headers={},
@@ -131,7 +131,7 @@ class TestNewKvHttpSession:
     async def test_recreates_after_close(self):
         s = new_kv_http_session(
             None,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=aiohttp.ClientTimeout(total=10),
             ca_cert_path="/tmp/ca.crt",
             headers={},
@@ -139,7 +139,7 @@ class TestNewKvHttpSession:
         await s.close()
         s2 = new_kv_http_session(
             s,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=aiohttp.ClientTimeout(total=10),
             ca_cert_path="/tmp/ca.crt",
             headers={},
@@ -153,7 +153,7 @@ class TestNewKvHttpSession:
     async def test_sets_content_type_header(self):
         s = new_kv_http_session(
             None,
-            base_url="https://localhost:8443",
+            base_url="https://localhost:8440",
             timeout=aiohttp.ClientTimeout(total=10),
             ca_cert_path="/tmp/ca.crt",
             headers={},
@@ -171,7 +171,7 @@ class TestNewKvHttpSessionSsl:
         with patch("app.utils.aiohttp_session._resolve_ssl_context", return_value=False) as mock_resolve:
             s = new_kv_http_session(
                 None,
-                base_url="https://localhost:8443",
+                base_url="https://localhost:8440",
                 timeout=aiohttp.ClientTimeout(total=10),
                 ca_cert_path="/some/ca.pem",
                 headers={},
@@ -183,7 +183,7 @@ class TestNewKvHttpSessionSsl:
         with patch("app.utils.aiohttp_session._resolve_ssl_context", return_value=None) as mock_resolve:
             s = new_kv_http_session(
                 None,
-                base_url="https://localhost:8443",
+                base_url="https://localhost:8440",
                 timeout=aiohttp.ClientTimeout(total=10),
                 ca_cert_path="/some/ca.pem",
                 headers={},
@@ -195,7 +195,7 @@ class TestNewKvHttpSessionSsl:
         with patch("app.utils.aiohttp_session._resolve_ssl_context", return_value=None) as mock_resolve:
             s = new_kv_http_session(
                 None,
-                base_url="https://localhost:8443",
+                base_url="https://localhost:8440",
                 timeout=aiohttp.ClientTimeout(total=10),
                 ca_cert_path="/nonexistent/ca.pem",
                 headers={},

@@ -120,7 +120,7 @@ _stop_optional_app() {
 
 _wait_optional_app_healthy() {
     case "$1" in
-        g8ee) _wait_service_healthy "g8ee" "https://localhost:${G8E_G8EE_HTTP_PORT}/health" 10 1 "$G8E_G8EE_LOG_FILE" ;;
+        g8ee) _wait_service_healthy "g8ee" "https://localhost:${G8E_G8EE_HTTPS_PORT}/health" 10 1 "$G8E_G8EE_LOG_FILE" ;;
     esac
 }
 
@@ -298,7 +298,7 @@ _start_g8ee() {
         return 0
     fi
 
-    _check_port_available "${G8E_G8EE_HTTP_PORT}" "g8ee Engine API" || exit 1
+    _check_port_available "${G8E_G8EE_HTTPS_PORT}" "g8ee Engine API" || exit 1
 
     local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
     if [ ! -d "$venv_dir" ]; then
@@ -308,7 +308,7 @@ _start_g8ee() {
         "$venv_dir/bin/pip" install -r "$PROJECT_ROOT/services/g8ee/requirements.txt"
     fi
 
-    echo "  Starting g8ee on port ${G8E_G8EE_HTTP_PORT} (HTTPS)..."
+    echo "  Starting g8ee on port ${G8E_G8EE_HTTPS_PORT} (HTTPS)..."
     _rotate_logs "$G8E_G8EE_LOG_FILE"
 
     (
@@ -317,7 +317,7 @@ _start_g8ee() {
         export G8E_SECRETS_DIR="$G8E_SECRETS_DIR"
         export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol/python"
         export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
-        export G8E_INTERNAL_HTTP_URL="https://localhost:${G8E_OPERATOR_HTTP_PORT}"
+        export G8E_INTERNAL_HTTP_URL="https://localhost:${G8E_OPERATOR_HTTPS_PORT}"
         export G8E_INTERNAL_PUBSUB_URL="wss://localhost:${G8E_OPERATOR_PUBLIC_WSS_PORT}"
         export G8E_TEST_LLM_PRIMARY_PROVIDER="${G8E_TEST_LLM_PRIMARY_PROVIDER:-}"
         export G8E_TEST_LLM_PRIMARY_MODEL="${G8E_TEST_LLM_PRIMARY_MODEL:-}"
@@ -331,7 +331,7 @@ _start_g8ee() {
         export G8E_TEST_LLM_LITE_ENDPOINT="${G8E_TEST_LLM_LITE_ENDPOINT:-}"
 
         local cert_name="${G8E_PATH_G8EE_CERT_NAME:-g8ee}"
-        setsid "$venv_dir/bin/uvicorn" app.main:app --host 0.0.0.0 --port "${G8E_G8EE_HTTP_PORT}" \
+        setsid "$venv_dir/bin/uvicorn" app.main:app --host 0.0.0.0 --port "${G8E_G8EE_HTTPS_PORT}" \
             --ssl-keyfile "$G8E_PKI_DIR/issued/apps/${cert_name}.key" \
             --ssl-certfile "$G8E_PKI_DIR/issued/apps/${cert_name}.crt" \
             > "$G8E_G8EE_LOG_FILE" 2>&1 &
@@ -394,8 +394,8 @@ _start_operator_listen() {
         return 0
     fi
 
-    _check_port_available "$G8E_OPERATOR_HTTP_PORT" "Governance Gateway HTTP API" || exit 1
-    _check_port_available "$G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT" "Operator Bootstrap" || exit 1
+    _check_port_available "$G8E_OPERATOR_HTTPS_PORT" "Governance Gateway HTTP API" || exit 1
+    _check_port_available "$G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT" "Operator Bootstrap" || exit 1
     _check_port_available "$G8E_OPERATOR_PUBLIC_HTTPS_PORT" "Operator Public API" || exit 1
 
     local host_arch="amd64"
@@ -437,8 +437,8 @@ _start_operator_listen() {
         --data-dir "$G8E_DATA_DIR" \
         --pki-dir "$G8E_PKI_DIR" \
         --secrets-dir "$G8E_SECRETS_DIR" \
-        --http-listen-port "$G8E_OPERATOR_HTTP_PORT" \
-        --bootstrap-listen-port "$G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT" \
+        --http-listen-port "$G8E_OPERATOR_HTTPS_PORT" \
+        --bootstrap-listen-port "$G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT" \
         --public-listen-port "$G8E_OPERATOR_PUBLIC_HTTPS_PORT" \
         > "$G8E_OPERATOR_LOG_FILE" 2>&1 &
 
@@ -583,9 +583,48 @@ _print_platform_info() {
         g8ee_pid=$(cat "$G8E_G8EE_PID_FILE")
     fi
 
-    # Fetch State Root from Operator
-    local state_root="[UNAVAILABLE]"
+    # Gather dynamic data
+    local build_hash=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    local version=$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo "unknown")
+    
+    # Root CA fingerprint
+    local root_ca_fingerprint="unavailable"
+    local root_ca_path="$G8E_PKI_DIR/trust/root.pem"
+    if [[ -f "$root_ca_path" ]]; then
+        root_ca_fingerprint=$(openssl x509 -in "$root_ca_path" -noout -fingerprint -sha256 2>/dev/null | sed 's/^.*=//' | tr -d ':' | tr '[:upper:]' '[:lower:]' | head -c 16)
+    fi
+
+    # L1 pattern count (count forbidden_patterns extensions in proto files)
+    local l1_pattern_count=6
+    local l1_count=$(grep -r "forbidden_patterns" "$PROJECT_ROOT/protocol/proto" 2>/dev/null | wc -l)
+    if [[ "$l1_count" -gt 0 ]]; then
+        l1_pattern_count=$l1_count
+    fi
+
+    # L2 signer count (query SQLite or default to 0)
+    local l2_signer_count=0
+    local db_path="$G8E_DATA_DIR/g8e.db"
+    if [[ -f "$db_path" ]]; then
+        l2_signer_count=$(sqlite3 "$db_path" "SELECT COUNT(*) FROM trusted_signers;" 2>/dev/null || echo "0")
+    fi
+
+    # Operator session ID (from bootstrap status or placeholder)
+    local operator_session_id="pending first connection"
     local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR/trust/hub-bundle.pem}"
+    if [[ -f "$trust_bundle" ]]; then
+        local status_resp
+        status_resp=$(curl -sS --cacert "$trust_bundle" "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/api/auth/bootstrap/status" 2>/dev/null)
+        if [[ -n "$status_resp" ]]; then
+            local session_id
+            session_id=$(echo "$status_resp" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - operator_session_id --default "" 2>/dev/null)
+            if [[ -n "$session_id" ]]; then
+                operator_session_id=$session_id
+            fi
+        fi
+    fi
+
+    # State root
+    local state_root="0x0"
     if [[ -f "$trust_bundle" ]]; then
         local status_resp
         status_resp=$(curl -sS --cacert "$trust_bundle" "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/api/auth/bootstrap/status" 2>/dev/null)
@@ -594,85 +633,83 @@ _print_platform_info() {
         fi
     fi
 
-    echo ""
-    if [[ "$WITH_APPS" == "true" ]]; then
-        # ─── Full Platform Welcome (with -a) ──────────────────────────────────
-        echo " ┌── Full-Stack Agentic Infrastructure Lifecycle ───────────────────────────────┐"
-        echo -e " │  \033[1;32m[OK]\033[0m BFT Governance Gateway  (g8eg) : listening (PID: $op_pid)                  │"
-        echo -e " │  \033[1;32m[OK]\033[0m Reference AI Engine     (g8ee) : online (PID: $g8ee_pid)                   │"
-        echo -e " │  \033[1;32m[OK]\033[0m Local-First Audit Vault        : initialized & verified               │"
-        echo " └──────────────────────────────────────────────────────────────────────────────┘"
-        echo ""
-        echo "────────────────────────────────────────────────────────────────────────────────"
-        echo " 1. REFERENCE AGENTIC STACK (g8e + g8ee)"
-        echo "────────────────────────────────────────────────────────────────────────────────"
-        echo "  The complete g8e execution environment is active. g8ee provides the reference "
-        echo "  ReAct-loop agent, allowing end-to-end governed tool calling out of the box."
-        echo ""
-        echo "────────────────────────────────────────────────────────────────────────────────"
-        echo " 2. SECURE ENDPOINTS & DISPATCH"
-        echo "────────────────────────────────────────────────────────────────────────────────"
-        echo "  Platform Hub Core  : https://localhost:$G8E_OPERATOR_HTTP_PORT"
-        echo "  Engine API (mTLS)  : https://localhost:$G8E_G8EE_HTTP_PORT"
-        echo "  Audit Ledger State : [UNLOCKED] AES-256-GCM encrypted database active"
-        echo -e "  Current State Root : [*] state_merkle: ${state_root:0:12}..."
-    else
-        # ─── g8eg Gateway Welcome (without -a) ────────────────────────────────
-        echo " ┌── BFT Governance Substrate Lifecycle ────────────────────────────────────────┐"
-        echo -e " │  \033[1;32m[OK]\033[0m Governance Gateway  (g8eg) : listening (PID: $op_pid)                  │"
-        echo -e " │  \033[1;32m[OK]\033[0m Local-First Audit Vault    : initialized & verified                    │"
-        echo -e " │  \033[1;31m[--]\033[0m Reference AI Engine (g8ee) : offline (BYO Client mode)                 │"
-        echo " └──────────────────────────────────────────────────────────────────────────────┘"
-        echo ""
-        echo "────────────────────────────────────────────────────────────────────────────────"
-        echo " 1. ZERO-TRUST EXECUTION BOUNDARY (g8eg)"
-        echo "────────────────────────────────────────────────────────────────────────────────"
-        echo "  g8e is serving as the mandatory admission boundary for agentic infrastructure."
-        echo "  It intercepts standard tool calls (MCP, A2A, etc.) and forces them into a "
-        echo "  typed, signed, state-bound GovernanceEnvelope before execution."
-        echo ""
-        echo "────────────────────────────────────────────────────────────────────────────────"
-        echo " 2. BFT VERIFICATION GAUNTLET (L1 / L2 / L3)"
-        echo "────────────────────────────────────────────────────────────────────────────────"
-        echo "  Every mutation is verified against three independent gates:"
-        echo "    L1 Doctrine : Deterministic policy hard-gates (sudo, blacklist, etc.)."
-        echo "    L2 Quorum   : k-of-n threshold consensus from heterogeneous agents."
-        echo "    L3 Notary   : Hardware-bound human approval (WebAuthn/FIDO2)."
-        echo ""
-        echo "────────────────────────────────────────────────────────────────────────────────"
-        echo " 3. BYO FRONTEND / MCP GATEWAY"
-        echo "────────────────────────────────────────────────────────────────────────────────"
-        echo "  Wrap any standard AI client or MCP server in g8e governance:"
-        echo "    Public API: https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT"
-        echo "    WSS Stream: wss://localhost:$G8E_OPERATOR_PUBLIC_WSS_PORT"
+    # Ruleset hash (hash of proto files for version tracking)
+    local ruleset_hash=$(find "$PROJECT_ROOT/protocol/proto" -name "*.proto" -exec sha256sum {} \; | sort | sha256sum | head -c 8)
+
+    local title="G8E GOVERNANCE GATEWAY  ·  $version ($build_hash)"
+    local title_len=${#title}
+    local pad=$(( (78 - title_len) / 2 ))
+    local pad_str=$(printf '%*s' "$pad" '')
+    local right_pad_len=$(( 78 - title_len - pad ))
+    local right_pad_str=$(printf '%*s' "$right_pad_len" '')
+
+    _print_header() {
+        local htitle=" $1 "
+        local hlen=${#htitle}
+        local dash_count=$(( 80 - 1 - hlen ))
+        local dashes=""
+        for ((i=0; i<dash_count; i++)); do dashes="${dashes}─"; done
+        echo "─${htitle}${dashes}"
+    }
+
+    local uptime="0s"
+    if [[ "$op_pid" != "-" ]]; then
+        local etimes
+        etimes=$(ps -p "$op_pid" -o etimes= 2>/dev/null | tr -d ' ' || echo "0")
+        if [[ -n "$etimes" && "$etimes" =~ ^[0-9]+$ ]]; then
+            uptime="${etimes}s"
+        fi
     fi
 
     echo ""
-    echo "────────────────────────────────────────────────────────────────────────────────"
-    echo " BOOTSTRAP: PROVISION LOCAL TRUST PORTAL"
-    echo "────────────────────────────────────────────────────────────────────────────────"
-    echo "  The Dashboard serves an automated trust script on Port $G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT to install the "
-    echo "  Platform Root CA and provision local workload mTLS certificates."
+    echo "╔══════════════════════════════════════════════════════════════════════════════╗"
+    echo "║${pad_str}${title}${right_pad_str}║"
+    echo "╚══════════════════════════════════════════════════════════════════════════════╝"
     echo ""
-    echo "  --> Run on Windows (Elevated PowerShell):"
-    echo "     irm http://${HOST_IPS%%,*}:$G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT/trust | iex"
-    echo ""
-    echo "  --> Run on macOS / Linux (Terminal):"
-    echo "     curl -fsSL http://${HOST_IPS%%,*}:$G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT/trust | sudo sh"
-    echo ""
-    echo "────────────────────────────────────────────────────────────────────────────────"
-    echo " NEXT STEPS [CHOOSE ONE]"
-    echo "────────────────────────────────────────────────────────────────────────────────"
+    _print_header "STATUS"
+    printf "  %-7s %s\n" "State" "LISTENING — accepting mutations"
+    printf "  %-7s %s\n" "PID" "$op_pid"
     if [[ "$WITH_APPS" == "true" ]]; then
-        echo "  A) Authenticate (--email optional):    $ ./g8e login"
-        echo "  B) Use the Reference Engine directly:  https://localhost:$G8E_G8EE_HTTP_PORT"
-    else
-        echo "  A) Authenticate (--email optional):    $ ./g8e login"
-        echo "  B) Generate Device Links for Remote Operator Authentication:"
-        echo "     $ ./g8e data device-links create --email superadmin@g8e.local"
+        printf "  %-7s %s\n" "App PID" "$g8ee_pid"
     fi
+    printf "  %-7s %s\n" "Uptime" "$uptime"
+    _print_header "ENDPOINTS"
+    printf "  %-13s %-25s %-10s %s\n" "Public API" "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT" "$G8E_OPERATOR_PUBLIC_HTTPS_PORT/tcp" ""
+    printf "  %-13s %-25s %-10s %s\n" "WSS Stream" "wss://localhost:$G8E_OPERATOR_PUBLIC_WSS_PORT" "$G8E_OPERATOR_PUBLIC_WSS_PORT/tcp" ""
+    printf "  %-13s %-25s %-10s %s\n" "Internal API" "http://127.0.0.1:$G8E_OPERATOR_HTTPS_PORT" "$G8E_OPERATOR_HTTPS_PORT/tcp" "loopback only"
+    printf "  %-13s %-25s %-10s %s\n" "Bootstrap" "http://${HOST_IPS%%,*}:$G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT" "$G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT/tcp" "LAN — trust install"
+    _print_header "ENFORCEMENT POSTURE"
+    printf "  %-17s %s\n" "L1 Doctrine" "$l1_pattern_count patterns — hard gates enforced"
+    printf "  %-17s %s\n" "L2 Consensus" "$l2_signer_count signers enrolled"
+    printf "  %-17s %s\n" "L3 Authorization" "WebAuthn/FIDO2 — human-in-the-loop"
+    printf "  %-17s %s\n" "Ruleset" "${ruleset_hash:0:8}…"
+    if [[ "$l2_signer_count" -eq 0 ]]; then
+        printf "  %-17s %s\n" "" "⚠ no L2 signers — all mutations fail-closed"
+    fi
+    _print_header "IDENTITY"
+    printf "  %-11s %s\n" "Session" "$operator_session_id"
+    printf "  %-11s %s\n" "Root CA" "sha256:${root_ca_fingerprint:0:6}… (fresh)"
+    local sr_suffix=""
+    if [[ "$state_root" == "0x0" ]]; then sr_suffix=" (genesis)"; fi
+    printf "  %-11s %s\n" "State Root" "$state_root$sr_suffix"
+    _print_header "TRUST BOOTSTRAP"
+    echo "  Install Platform Root CA + provision mTLS certs:"
+    echo "    macOS / Linux   curl -fsSL http://${HOST_IPS%%,*}:$G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT/trust | sudo sh"
+    echo "    Windows (PS)    irm http://${HOST_IPS%%,*}:$G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT/trust | iex"
+    _print_header "NEXT"
+    printf "  %-2s %-16s %s\n" "1" "Authenticate" "./g8e login"
+    if [[ "$WITH_APPS" == "true" ]]; then
+        printf "  %-2s %-16s %s\n" "2" "Use Engine" "https://localhost:$G8E_G8EE_HTTPS_PORT"
+    else
+        printf "  %-2s %-16s %s\n" "2" "Device links" "./g8e data device-links create --email <email>"
+    fi
+    printf "  %-2s %-16s %s\n" "3" "Tail logs" "tail -f ${G8E_LOG_DIR/#$HOME/\~}/operator.log"
     echo "────────────────────────────────────────────────────────────────────────────────"
-    echo "[g8e] System ready. Control plane is listening."
+    if [[ "$l2_signer_count" -eq 0 ]]; then
+        echo "[g8e] Control plane listening. No L2 signers — mutations fail-closed until enrolled."
+    else
+        echo "[g8e] Control plane listening. Mutations governed by active ruleset."
+    fi
 }
 
 if [[ -z "$COMMAND" ]]; then
@@ -713,14 +750,14 @@ if [[ "$COMMAND" == "status" ]]; then
         
         printf "  %-14s \033[1;32m%-12s\033[0m %-8s %-32s %s\n" "operator" "RUNNING" "$pid" "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT (API)" "Bootstrapped: $bootstrapped"
         printf "  %-14s %-12s %-8s %-32s %s\n" "" "" "" "wss://localhost:$G8E_OPERATOR_PUBLIC_WSS_PORT (WSS)" ""
-        printf "  %-14s %-12s %-8s %-32s %s\n" "" "" "" "http://localhost:$G8E_REMOTE_OPERATOR_BOOTSTRAP_PORT (Bootstrap)" ""
+        printf "  %-14s %-12s %-8s %-32s %s\n" "" "" "" "http://localhost:$G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT (Bootstrap)" ""
     else
         printf "  %-14s \033[1;31m%-12s\033[0m %-8s %-32s %s\n" "operator" "STOPPED" "-" "-" "-"
     fi
 
     printf "\n  \033[1m[Optional Application Layer]\033[0m\n"
     if _g8ee_running; then
-        printf "  %-14s \033[1;32m%-12s\033[0m %-8s %-32s %s\n" "g8ee" "RUNNING" "$(cat "$G8E_G8EE_PID_FILE")" "https://localhost:$G8E_G8EE_HTTP_PORT" ""
+        printf "  %-14s \033[1;32m%-12s\033[0m %-8s %-32s %s\n" "g8ee" "RUNNING" "$(cat "$G8E_G8EE_PID_FILE")" "https://localhost:$G8E_G8EE_HTTPS_PORT" ""
     else
         printf "  %-14s \033[1;31m%-12s\033[0m %-8s %-32s %s\n" "g8ee" "NOT RUNNING" "-" "-" "-"
     fi

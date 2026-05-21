@@ -53,7 +53,7 @@ import (
 func TestMCPRealOperator_Smoke(t *testing.T) {
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttp)
+		operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -112,7 +112,7 @@ func TestMCPRealOperator_Smoke(t *testing.T) {
 		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootPool}},
 	}
 
-	httpReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/api/auth/bootstrap", constants.Ports.OperatorBootstrap), bytes.NewReader(reqBody))
+	httpReq, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/api/auth/bootstrap", constants.Ports.OperatorBootstrapHttps), bytes.NewReader(reqBody))
 	require.NoError(t, err)
 	httpReq.Header.Set("Content-Type", "application/json")
 

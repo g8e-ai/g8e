@@ -47,7 +47,7 @@ class SUTConfig:
     web_search_app: Optional[str] = None
     web_search_api_key: Optional[str] = None
     
-    operator_url: str = f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}"
+    operator_url: str = f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}"
     operator_session_id: Optional[str] = None
     state_root: str = "test-state-root-v1"
     

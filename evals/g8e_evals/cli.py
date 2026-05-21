@@ -65,7 +65,7 @@ def main():
               help="Stream the agent's response text inline as chunks arrive")
 @click.option("--idle-timeout", type=float, default=10.0,
               help="Seconds without an SSE event before declaring a task idle")
-@click.option("--operator-url", default=f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}")
+@click.option("--operator-url", default=f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}")
 @click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID",
               help="Operator session id. Auto-loaded from ~/.g8e/credentials after `./g8e login`; "
                    "only pass this flag to override the cached session.")

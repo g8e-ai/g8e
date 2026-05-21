@@ -18,11 +18,11 @@
     "tests_dir": "/app/services/g8ee/tests"
   },
   "ports": {
-    "g8ee_http": 8443,
+    "g8ee_https": 8443,
     "openclaw_gateway": 18789,
-    "operator_bootstrap": 8441,
-    "operator_http": 8440,
-    "operator_public": 8442
+    "operator_bootstrap_https": 8441,
+    "operator_https": 8440,
+    "operator_public_https": 8442
   },
   "host": "localhost"
 }

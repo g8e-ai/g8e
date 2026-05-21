@@ -81,18 +81,18 @@ class SettingsService:
         bootstrap service (operator volume)."""
         settings = G8eePlatformSettings(
             host="0.0.0.0",
-            port=PortConstants.G8E_PORT_G8EE_HTTP,
+            port=PortConstants.G8E_PORT_G8EE_HTTPS,
             log_level=LogLevel.INFO,
             enable_logging=True,
             docker_gid="988",
             session_ttl=3600,
             absolute_session_timeout=86400,
             docs_dir=PathConstants.PATH_DOCS_DIR,
-            app_url=f"http://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTP}",
+            app_url=f"http://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}",
             allowed_origins="*",
             passkey_rp_name="g8e",
             passkey_rp_id="g8e",
-            passkey_origin=f"http://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTP}",
+            passkey_origin=f"http://{PATHS.get('host', 'localhost')}:{PortConstants.G8E_PORT_G8EE_HTTPS}",
         )
 
         # Load secrets from bootstrap service

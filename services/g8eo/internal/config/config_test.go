@@ -52,7 +52,7 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, 30*time.Second, cfg.HeartbeatInterval)
 	assert.Equal(t, int64(1024), cfg.LocalStoreMaxSizeMB)
 	assert.Equal(t, 30, cfg.LocalStoreRetentionDays)
-	assert.Equal(t, constants.Ports.OperatorHttp, cfg.HTTPPort)
+	assert.Equal(t, constants.Ports.OperatorHttps, cfg.HTTPPort)
 
 	// WorkDir defaults to the project root when --working-dir is not supplied
 	assert.Equal(t, wantWorkDir, cfg.WorkDir)
@@ -91,10 +91,10 @@ func TestLoad_HTTPPortOverride(t *testing.T) {
 	cfg, err := Load(LoadOptions{
 		APIKey:           "k",
 		OperatorEndpoint: constants.DefaultEndpoint,
-		HTTPPort:         constants.Ports.G8eeHttp,
+		HTTPPort:         constants.Ports.G8eeHttps,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, constants.Ports.G8eeHttp, cfg.HTTPPort)
+	assert.Equal(t, constants.Ports.G8eeHttps, cfg.HTTPPort)
 }
 
 func TestLoad_TLSServerName(t *testing.T) {
@@ -243,8 +243,8 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 	t.Run("reject httpPort 0", func(t *testing.T) {
 		_, err := LoadListen(ListenOptions{
 			HTTPPort:          0,
-			BootstrapPort:     constants.Ports.OperatorBootstrap,
-			PublicPort:        constants.Ports.OperatorPublic,
+			BootstrapPort:     constants.Ports.OperatorBootstrapHttps,
+			PublicPort:        constants.Ports.OperatorPublicHttps,
 			AllowTestPortZero: false,
 		})
 		require.Error(t, err)
@@ -253,9 +253,9 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 
 	t.Run("reject bootstrapPort 0", func(t *testing.T) {
 		_, err := LoadListen(ListenOptions{
-			HTTPPort:          constants.Ports.OperatorHttp,
+			HTTPPort:          constants.Ports.OperatorHttps,
 			BootstrapPort:     0,
-			PublicPort:        constants.Ports.OperatorPublic,
+			PublicPort:        constants.Ports.OperatorPublicHttps,
 			AllowTestPortZero: false,
 		})
 		require.Error(t, err)
@@ -264,8 +264,8 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 
 	t.Run("reject publicPort 0", func(t *testing.T) {
 		_, err := LoadListen(ListenOptions{
-			HTTPPort:          constants.Ports.OperatorHttp,
-			BootstrapPort:     constants.Ports.OperatorBootstrap,
+			HTTPPort:          constants.Ports.OperatorHttps,
+			BootstrapPort:     constants.Ports.OperatorBootstrapHttps,
 			PublicPort:        0,
 			AllowTestPortZero: false,
 		})
@@ -275,9 +275,9 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 
 	t.Run("accept all non-zero ports in production", func(t *testing.T) {
 		_, err := LoadListen(ListenOptions{
-			HTTPPort:          constants.Ports.OperatorHttp,
-			BootstrapPort:     constants.Ports.OperatorBootstrap,
-			PublicPort:        constants.Ports.OperatorPublic,
+			HTTPPort:          constants.Ports.OperatorHttps,
+			BootstrapPort:     constants.Ports.OperatorBootstrapHttps,
+			PublicPort:        constants.Ports.OperatorPublicHttps,
 			AllowTestPortZero: false,
 		})
 		require.NoError(t, err)
@@ -398,11 +398,11 @@ func TestHTTPPortOrDefault(t *testing.T) {
 		input int
 		want  int
 	}{
-		{0, constants.Ports.OperatorHttp},
-		{-1, constants.Ports.OperatorHttp},
+		{0, constants.Ports.OperatorHttps},
+		{-1, constants.Ports.OperatorHttps},
 		{1, 1},
-		{constants.Ports.OperatorHttp, constants.Ports.OperatorHttp},
-		{constants.Ports.OperatorHttp, constants.Ports.OperatorHttp},
+		{constants.Ports.OperatorHttps, constants.Ports.OperatorHttps},
+		{constants.Ports.OperatorHttps, constants.Ports.OperatorHttps},
 	}
 
 	for _, tt := range tests {

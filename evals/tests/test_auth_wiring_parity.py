@@ -51,10 +51,13 @@ from g8e_evals.transport import (
 )
 from g8e_protocol.models import BoundOperator
 from g8e_protocol.constants import ComponentName, API_PATHS
-from app.constants.api_paths import InternalApiPaths
 
 
+import sys
+import os
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO_ROOT / "services" / "g8ee"))
+from app.constants.api_paths import InternalApiPaths
 COMMON_SH = REPO_ROOT / "scripts" / "cmd" / "common.sh"
 API_PATHS_SH = REPO_ROOT / "scripts" / "cmd" / "api_paths.sh"
 
@@ -186,8 +189,8 @@ def _baseline_env(fake_pki: dict[str, Path]) -> dict[str, str]:
         "G8E_CLI_KEY": str(fake_pki["key"]),
         "G8E_TRUST_BUNDLE": str(fake_pki["bundle"]),
         "G8E_PKI_DIR": str(fake_pki["pki"]),
-        "G8E_G8EE_URL": f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTP}",
-        "G8E_INTERNAL_HTTP_URL": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTP}",
+        "G8E_G8EE_URL": f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTPS}",
+        "G8E_INTERNAL_HTTP_URL": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
         # Make sure no stray optional headers leak in from the dev env.
         "G8E_CASE_ID": "",
         "G8E_INVESTIGATION_ID": "",

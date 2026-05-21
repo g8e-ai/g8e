@@ -28,6 +28,6 @@ fi
 # operator readiness is gated by docker-compose `depends_on: operator: service_healthy`.
 # Execute the main application - bootstrap service handles secret loading
 CERT_NAME="${G8E_PATH_G8EE_CERT_NAME:-g8ee}"
-exec uvicorn app.main:app --host 0.0.0.0 --port "${G8E_G8EE_HTTP_PORT}" \
+exec uvicorn app.main:app --host 0.0.0.0 --port "${G8E_G8EE_HTTPS_PORT}" \
     --ssl-keyfile "${G8E_PKI_DIR}/issued/apps/${CERT_NAME}.key" \
     --ssl-certfile "${G8E_PKI_DIR}/issued/apps/${CERT_NAME}.crt"

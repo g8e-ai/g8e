@@ -97,7 +97,7 @@ EOF
         # Use operator certificate for Operator endpoints (SSE stream requires operator session auth)
         export G8E_CLI_CERT="${G8E_OPERATOR_CERT:-$G8E_OPERATOR_CERT_FILE}"
         export G8E_CLI_KEY="${G8E_OPERATOR_KEY:-$G8E_OPERATOR_KEY_FILE}"
-        export G8E_G8EE_URL="${G8E_G8EE_URL:-https://localhost:$G8E_G8EE_HTTP_PORT}"
+        export G8E_G8EE_URL="${G8E_G8EE_URL:-https://localhost:$G8E_G8EE_HTTPS_PORT}"
         export G8E_INTERNAL_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-$OPERATOR_HTTPS_URL}"
         export G8E_TRUST_BUNDLE="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
         cd "$EVALS_PROJECT_DIR"
