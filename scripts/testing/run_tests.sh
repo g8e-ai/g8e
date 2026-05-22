@@ -424,22 +424,50 @@ run_ci() {
     log_header "Running full CI workflow locally"
     cd "$PROJECT_ROOT"
     
-    # 1. verify-proto (Hard gates only)
+    # 1. verify-proto & drift-check
     log_header "CI: verify-proto"
     
-    # We skip the git drift check locally because it blocks test execution 
-    # and run_tests.sh already synchronized protocols at startup.
+    # We already synchronized at the start of run_tests.sh, so any changes 
+    # in 'git status' now are the result of drift that was just fixed.
+    
+    # Check for proto/constants drift (as done in CI)
+    local drift_changes
+    # Precise regex for ONLY generated files. No .proto, .py, or .sh source files.
+    drift_changes=$(git status --porcelain | grep -E "^\s*M.*(\.pb\.go|_pb2.*\.py|generated_.*\.py|scripts/cmd/(env_vars|paths|headers)\.sh|protocol/constants/.*\.json)$" || true)
+    
+    if [[ -n "$drift_changes" ]]; then
+        if [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
+            log_err "Generated protocol files are out of sync with source (run 'make generate' and commit)"
+            echo "$drift_changes"
+            exit 1
+        else
+            log_ok "Synchronized protocol files (local run)"
+            echo "$drift_changes"
+        fi
+    else
+        log_ok "Protocol files are in sync"
+    fi
     
     make lint-no-bare-session-id
     log_ok "verify-proto passed"
 
-    # 2. lint-g8eo
-    log_header "CI: lint-g8eo"
-    
+    # 2. lint-g8eo & lint-protocol
+    log_header "CI: linting"
+    if command -v golangci-lint >/dev/null 2>&1; then
+        log_header "CI: golangci-lint (g8eo)"
+        (cd services/g8eo && golangci-lint run --path-prefix=services/g8eo)
+        log_header "CI: golangci-lint (protocol)"
+        (cd protocol && golangci-lint run)
+        log_ok "linting passed"
+    else
+        log_warn "golangci-lint not found, skipping"
+    fi
+
     # 3. vulncheck-g8eo
     log_header "CI: vulncheck-g8eo"
     if command -v govulncheck >/dev/null 2>&1; then
         (cd services/g8eo && govulncheck ./...)
+        log_ok "vulncheck passed"
     else
         log_warn "govulncheck not found, skipping"
     fi
@@ -452,20 +480,44 @@ run_ci() {
     
     # Ensure platform is stopped before starting a fresh one
     "$PROJECT_ROOT/g8e" platform stop || true
+    
+    # Start platform and wait for it to be ready
     "$PROJECT_ROOT/g8e" platform start
+    
+    # Wait for operator to be ready
+    local max_retries=30
+    local retry_count=0
+    log_header "Waiting for platform readiness..."
+    while ! curl -sk https://localhost:9000/health > /dev/null; do
+        if [[ $retry_count -ge $max_retries ]]; then
+            log_err "Platform failed to start in time"
+            exit 1
+        fi
+        sleep 1
+        ((retry_count++))
+    done
+    log_ok "Platform ready"
     
     local test_exit_code=0
     
-    # test-g8eo
-    log_header "CI: test-g8eo"
+    # test-g8eo (Standard)
+    log_header "CI: test-g8eo (standard)"
     if ! run_g8eo; then
         log_err "test-g8eo failed"
         test_exit_code=1
     fi
+
+    # test-g8eo (Integration)
+    log_header "CI: test-g8eo (integration tags)"
+    cd "$PROJECT_ROOT/services/g8eo"
+    if ! go test -v -race -tags integration ./...; then
+        log_err "test-g8eo integration failed"
+        test_exit_code=1
+    fi
     
-    # constants-lint
+    # constants-lint (Strict Enforcement)
     log_header "CI: constants-lint"
-    if ! (cd "$PROJECT_ROOT/services/g8eo" && G8E_STRICT_CONSTANTS_LINT="1" go test -v -run TestNoRawStringLiteralsWhereConstantsExist ./internal/contracts); then
+    if ! (cd "$PROJECT_ROOT/services/g8eo" && G8E_STRICT_CONSTANTS_LINT="1" go test -v ./internal/contracts); then
         log_err "constants-lint failed"
         test_exit_code=1
     fi
@@ -473,6 +525,8 @@ run_ci() {
     # apps-g8ee
     log_header "CI: apps-g8ee"
     "$PROJECT_ROOT/g8e" apps start g8ee
+    
+    # In CI mode, we want to run with verbose output and possibly more flags
     if ! run_g8ee; then
         log_err "apps-g8ee failed"
         test_exit_code=1

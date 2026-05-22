@@ -281,7 +281,7 @@ func jsonResponse(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 func jsonError(w http.ResponseWriter, status int, msg string) {
@@ -413,7 +413,7 @@ func (h *HTTPHandler) handlePKIRoot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
-	w.Write(pem)
+	_, _ = w.Write(pem)
 }
 
 func (h *HTTPHandler) handlePKIHubBundle(w http.ResponseWriter, r *http.Request) {
@@ -430,7 +430,7 @@ func (h *HTTPHandler) handlePKIHubBundle(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
-	w.Write(pem)
+	_, _ = w.Write(pem)
 }
 
 func (h *HTTPHandler) handlePKIFingerprint(w http.ResponseWriter, r *http.Request) {
@@ -750,7 +750,7 @@ func (h *HTTPHandler) handleG8eDeploy(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(script))
+	_, _ = w.Write([]byte(script))
 }
 
 func (h *HTTPHandler) handleTrustScript(w http.ResponseWriter, r *http.Request) {
@@ -776,7 +776,7 @@ func (h *HTTPHandler) handleTrustScript(w http.ResponseWriter, r *http.Request) 
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(script))
+		_, _ = w.Write([]byte(script))
 		return
 	}
 
@@ -785,7 +785,7 @@ func (h *HTTPHandler) handleTrustScript(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(script))
+	_, _ = w.Write([]byte(script))
 }
 
 func (h *HTTPHandler) handleTrustScriptPS1(w http.ResponseWriter, r *http.Request) {
@@ -808,7 +808,7 @@ func (h *HTTPHandler) handleTrustScriptPS1(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(script))
+	_, _ = w.Write([]byte(script))
 }
 
 func (h *HTTPHandler) handleTrustScriptBat(w http.ResponseWriter, r *http.Request) {
@@ -831,7 +831,7 @@ func (h *HTTPHandler) handleTrustScriptBat(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(script))
+	_, _ = w.Write([]byte(script))
 }
 
 func (h *HTTPHandler) handleRotateAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -2720,7 +2720,7 @@ func (h *HTTPHandler) handleApprovalPage(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(html))
+	_, _ = w.Write([]byte(html))
 }
 
 // =============================================================================

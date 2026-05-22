@@ -59,7 +59,9 @@ func promptForAPIKey() (string, error) {
 		return strings.TrimSpace(apiKey), nil
 	}
 
-	defer syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd), syscall.TCSETS, uintptr(unsafe.Pointer(&oldState)), 0, 0, 0)
+	defer func() {
+		_, _, _ = syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd), syscall.TCSETS, uintptr(unsafe.Pointer(&oldState)), 0, 0, 0)
+	}()
 
 	return readObfuscatedInput(os.Stdin, os.Stdout)
 }

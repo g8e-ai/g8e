@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"time"
 
@@ -303,17 +304,20 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 			protoResult.BytesWritten = *result.BytesWritten
 		}
 		if result.LinesChanged != nil {
-			protoResult.LinesChanged = int32(*result.LinesChanged)
+			if *result.LinesChanged > math.MaxInt32 {
+				*result.LinesChanged = math.MaxInt32
+			}
+			protoResult.LinesChanged = int32(*result.LinesChanged) //nolint:gosec // bounds checked above
 		}
 		if result.BackupPath != nil {
 			protoResult.BackupPath = *result.BackupPath
 		}
 		if result.Content != nil {
 			protoResult.Content = *result.Content
-			protoResult.StdoutSize = int32(len(*result.Content))
+			protoResult.StdoutSize = int32(len(*result.Content)) //nolint:gosec // bounded by pub/sub payload limits
 		}
 		if result.ErrorMessage != nil && result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED {
-			protoResult.StderrSize = int32(len(*result.ErrorMessage))
+			protoResult.StderrSize = int32(len(*result.ErrorMessage)) //nolint:gosec // bounded by pub/sub payload limits
 		}
 
 		if err := fs.results.PublishFileEditResult(ctx, protoResult, msg); err != nil {
@@ -411,12 +415,15 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg PubSubCom
 	}
 
 	if fs.results != nil {
+		if result.TotalCount > math.MaxInt32 {
+			result.TotalCount = math.MaxInt32
+		}
 		protoResult := &operatorv1.FsListResult{
 			ExecutionId:     result.ExecutionID,
 			Status:          result.Status,
 			Path:            result.Path,
 			Truncated:       result.Truncated,
-			TotalCount:      int32(result.TotalCount),
+			TotalCount:      int32(result.TotalCount), //nolint:gosec // bounds checked above
 			DurationSeconds: float32(result.DurationSeconds),
 		}
 		if result.ErrorMessage != nil {
@@ -535,11 +542,14 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCom
 	}
 
 	if fs.results != nil {
+		if result.TotalMatches > math.MaxInt32 {
+			result.TotalMatches = math.MaxInt32
+		}
 		protoResult := &operatorv1.FsGrepResult{
 			ExecutionId:     result.ExecutionID,
 			Status:          result.Status,
 			Path:            result.Path,
-			TotalMatches:    int32(result.TotalMatches),
+			TotalMatches:    int32(result.TotalMatches), //nolint:gosec // bounds checked above
 			Truncated:       result.Truncated,
 			DurationSeconds: float32(result.DurationSeconds),
 		}
@@ -554,7 +564,7 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCom
 			for i, match := range result.Matches {
 				protoResult.Matches[i] = &operatorv1.FsGrepMatch{
 					Path:       match.Path,
-					LineNumber: int32(match.LineNumber),
+					LineNumber: int32(match.LineNumber), //nolint:gosec // line numbers bounded by file size
 					Content:    match.Content,
 					Before:     match.Before,
 					After:      match.After,

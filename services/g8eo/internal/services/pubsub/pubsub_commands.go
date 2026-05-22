@@ -26,7 +26,6 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
-	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	execution "github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
@@ -489,7 +488,7 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 	// Decode as UAP JSON envelope - this is the only canonical mutation transport.
 	// Binary protobuf bytes and other formats are explicitly rejected.
 	envelope := &uap.UAPEnvelope{}
-	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, (*commonv1.GovernanceEnvelope)(envelope)); err != nil {
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, envelope); err != nil {
 		rs.logger.Error("envelope: non-JSON payload rejected",
 			string(constants.ConnectionStateError), err,
 			"action", "use canonical JSON (protojson) GovernanceEnvelope")
@@ -499,7 +498,7 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 	rs.logger.Info("Decoded request as UAP JSON envelope",
 		"message_id", envelope.Id,
 		"protocol_version", envelope.ProtocolVersion)
-	rs.handleUAPEnvelope((*uap.UAPEnvelope)(envelope))
+	rs.handleUAPEnvelope(envelope)
 }
 
 // ProcessEnvelope is the public, synchronous entry point for fail-closed
@@ -521,7 +520,7 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 	}
 
 	envelope := &uap.UAPEnvelope{}
-	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, (*commonv1.GovernanceEnvelope)(envelope)); err != nil {
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, envelope); err != nil {
 		return nil, fmt.Errorf("invalid UAP JSON envelope: %w", err)
 	}
 
@@ -541,7 +540,7 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 	eventType := constants.MapActionTypeToEventType(verified.ActionType)
 	cmdMsg := PubSubCommandMessage{
 		ID:                envelope.Id,
-		EventType:         constants.EventType(eventType),
+		EventType:         eventType,
 		CaseID:            envelope.CaseId,
 		TaskID:            &envelope.TaskId,
 		InvestigationID:   envelope.InvestigationId,
@@ -592,7 +591,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 
 	cmdMsg := PubSubCommandMessage{
 		ID:                env.Id,
-		EventType:         constants.EventType(eventType),
+		EventType:         eventType,
 		CaseID:            env.CaseId,
 		TaskID:            &env.TaskId,
 		InvestigationID:   env.InvestigationId,

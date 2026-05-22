@@ -501,6 +501,81 @@ class LFAAManager:
             'db_size_bytes': db_size_bytes,
         }
 
+    def chaos_summary(self) -> None:
+        """Print chaos test summary from the chaos_events table."""
+
+        total = self.conn.execute('SELECT COUNT(*) FROM chaos_events').fetchone()[0]
+
+        if total == 0:
+            print('\nNo chaos events found in the audit vault.')
+            print('Chaos tests write to the chaos_events table, separate from the main events table.\n')
+            return
+
+        # Category counts
+        category_counts = self.conn.execute("""
+            SELECT category, outcome, COUNT(*) as count
+            FROM chaos_events
+            GROUP BY category, outcome
+            ORDER BY category, outcome
+        """).fetchall()
+
+        # Time window
+        oldest = self.conn.execute('SELECT MIN(timestamp) FROM chaos_events').fetchone()[0]
+        newest = self.conn.execute('SELECT MAX(timestamp) FROM chaos_events').fetchone()[0]
+
+        # ANSI Colors
+        BOLD = '\033[1m'
+        GREEN = '\033[32m'
+        YELLOW = '\033[33m'
+        RED = '\033[31m'
+        DIM = '\033[2m'
+        CYAN = '\033[36m'
+        RESET = '\033[0m'
+
+        LINE = "=" * 100
+        print(f'\n{DIM}{LINE}{RESET}')
+        print(f' {BOLD}{CYAN}g8e CHAOS TEST AUDIT SUMMARY{RESET}')
+        print(f'{DIM}{LINE}{RESET}')
+
+        print(f' {BOLD}[SYSTEM CONTEXT]{RESET}')
+        print(f'  ├─ Host/Vault Path : {self._local_db_path}')
+        print(f'  ├─ Time Window     : {self._fmt_ts(oldest)} UTC -> {self._fmt_ts(newest)} UTC')
+        print(f'  └─ Event Volume    : {BOLD}{total:,}{RESET} chaos test payloads\n')
+
+        print(f' {BOLD}{"CATEGORY":<20} {"OUTCOME":<15} {"COUNT":>10}{RESET}')
+        print(f' {DIM}{"─" * 100}{RESET}')
+
+        for row in category_counts:
+            category = row['category']
+            outcome = row['outcome']
+            count = row['count']
+
+            outcome_color = GREEN if outcome == 'COMPLETED' or outcome == 'EXECUTED' else YELLOW
+            if outcome in ('L1_BLOCKED', 'HASH_FAIL', 'REJECTED'):
+                outcome_color = RED
+
+            print(f'  {BOLD}{category:<20}{RESET} {outcome_color}{outcome:<15}{RESET} {BOLD}{count:>10,}{RESET}')
+
+        print(f' {DIM}{"─" * 100}{RESET}')
+        print(f' {BOLD}{"TOTAL":<20} {"":<15} {BOLD}{total:>10,}{RESET}\n')
+
+        # Show recent events
+        recent = self.conn.execute("""
+            SELECT chaos_id, category, outcome, content_text, timestamp
+            FROM chaos_events
+            ORDER BY timestamp DESC
+            LIMIT 10
+        """).fetchall()
+
+        if recent:
+            print(f' {BOLD}[RECENT CHAOS EVENTS]{RESET}')
+            print(f' {DIM}{"─" * 100}{RESET}')
+            for row in recent:
+                preview = (row['content_text'] or '')[:60].replace('\n', ' ')
+                print(f'  [{row["chaos_id"]:>3}] {row["category"]:<15} {row["outcome"]:<12} {self._fmt_ts(row["timestamp"])}')
+                print(f'       {DIM}{preview}{RESET}')
+            print()
+
     def summary(self) -> None:
         """Print comprehensive governance summary reports."""
 
@@ -980,6 +1055,9 @@ Examples:
     # summary
     subparsers.add_parser('summary', help='Show comprehensive governance summary reports')
 
+    # chaos-summary
+    subparsers.add_parser('chaos-summary', help='Show chaos test summary from chaos_events table')
+
     # ledger
     sp = subparsers.add_parser('ledger', help='Git Ledger operations')
     sp.add_argument('action', choices=['log', 'show', 'grep', 'verify'], help='Ledger action')
@@ -1039,6 +1117,8 @@ def run(argv: List[str]) -> int:
             manager.stats()
         elif args.command == 'summary':
             manager.summary()
+        elif args.command == 'chaos-summary':
+            manager.chaos_summary()
         elif args.command == 'ledger':
             manager.ledger(args.action, limit=args.limit, pattern=args.pattern, commit=args.commit)
         elif args.command == 'export':

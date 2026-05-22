@@ -69,7 +69,7 @@ func (db *DB) RunMigrations(migrations []Migration) error {
 		}
 
 		if _, err := tx.Exec(m.SQL); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("migration %d (%s) failed: %w", m.Version, m.Description, err)
 		}
 
@@ -79,7 +79,7 @@ func (db *DB) RunMigrations(migrations []Migration) error {
 			m.Version, m.Description, NowTimestamp(),
 		)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("failed to record migration %d: %w", m.Version, err)
 		}
 

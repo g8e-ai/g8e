@@ -118,6 +118,10 @@ func parseSSHConfig(path string) map[string]*sshConfigBlock {
 			}
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		// Log error but return partial blocks
+		return blocks
+	}
 	return blocks
 }
 

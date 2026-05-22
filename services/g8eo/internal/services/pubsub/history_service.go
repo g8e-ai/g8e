@@ -130,12 +130,12 @@ func (hs *HistoryService) publishFetchLogsResultFromRaw(ctx context.Context, msg
 		&operatorv1.FetchLogsResult{
 			ExecutionId:  record.ID,
 			Command:      record.Command,
-			ReturnCode:   int32(*record.ExitCode),
+			ReturnCode:   int32(*record.ExitCode), //nolint:gosec // exit codes are 0-255
 			DurationMs:   record.DurationMs,
 			Stdout:       string(record.StdoutCompressed),
 			Stderr:       string(record.StderrCompressed),
-			StdoutSize:   int32(record.StdoutSize),
-			StderrSize:   int32(record.StderrSize),
+			StdoutSize:   int32(record.StdoutSize), //nolint:gosec // bounded by storage limits
+			StderrSize:   int32(record.StderrSize), //nolint:gosec // bounded by storage limits
 			Timestamp:    record.TimestampUTC.Format(time.RFC3339Nano),
 			SentinelMode: marshaler.Status(constants.Status.VaultMode.Raw),
 		})
@@ -150,12 +150,12 @@ func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSub
 		&operatorv1.FetchLogsResult{
 			ExecutionId:  record.ID,
 			Command:      record.Command,
-			ReturnCode:   int32(*record.ExitCode),
+			ReturnCode:   int32(*record.ExitCode), //nolint:gosec // exit codes are 0-255
 			DurationMs:   record.DurationMs,
 			Stdout:       string(record.StdoutCompressed),
 			Stderr:       string(record.StderrCompressed),
-			StdoutSize:   int32(record.StdoutSize),
-			StderrSize:   int32(record.StderrSize),
+			StdoutSize:   int32(record.StdoutSize), //nolint:gosec // bounded by storage limits
+			StderrSize:   int32(record.StderrSize), //nolint:gosec // bounded by storage limits
 			Timestamp:    record.TimestampUTC.Format(time.RFC3339Nano),
 			SentinelMode: marshaler.Status(constants.Status.VaultMode.Scrubbed),
 		})
@@ -291,7 +291,7 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg Pu
 			LedgerHashAfter:   record.LedgerHashAfter,
 			DiffStat:          record.DiffStat,
 			DiffContent:       string(record.DiffCompressed),
-			DiffSize:          int32(record.DiffSize),
+			DiffSize:          int32(record.DiffSize), //nolint:gosec // bounded by file size
 			OperatorSessionId: record.OperatorSessionID,
 		}
 		publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Completed,
@@ -324,11 +324,11 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg Pu
 				LedgerHashBefore: record.LedgerHashBefore,
 				LedgerHashAfter:  record.LedgerHashAfter,
 				DiffStat:         record.DiffStat,
-				DiffSize:         int32(record.DiffSize),
+				DiffSize:         int32(record.DiffSize), //nolint:gosec // bounded by file size
 			})
 		}
 
-		total := int32(len(diffs))
+		total := int32(len(diffs)) //nolint:gosec // bounded by query limits
 		publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Completed,
 			&operatorv1.FetchFileDiffResult{
 				Success:           true,

@@ -59,6 +59,7 @@ func main() {
 	// 2. Start Actuator Server
 	go func() {
 		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS13,
 			ClientAuth: tls.RequireAndVerifyClientCert,
 			ClientCAs:  caPool,
 			Certificates: []tls.Certificate{{
@@ -68,8 +69,9 @@ func main() {
 		}
 
 		server := &http.Server{
-			Addr:      fmt.Sprintf(":%d", constants.Ports.G8eeHttps),
-			TLSConfig: tlsConfig,
+			Addr:              fmt.Sprintf(":%d", constants.Ports.G8eeHttps),
+			TLSConfig:         tlsConfig,
+			ReadHeaderTimeout: 10 * time.Second,
 		}
 
 		http.HandleFunc("/uap", func(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +95,7 @@ func main() {
 			fmt.Println("-----------------------------------")
 
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("Actuator: Envelope authorized and logged."))
+			_, _ = w.Write([]byte("Actuator: Envelope authorized and logged."))
 		})
 
 		log.Printf("Actuator Server listening on https://localhost:%d/uap (mTLS required)", constants.Ports.G8eeHttps)
@@ -126,7 +128,8 @@ func main() {
 	payload, _ := json.Marshal(env)
 
 	tlsConfig := &tls.Config{
-		RootCAs: caPool,
+		MinVersion: tls.VersionTLS13,
+		RootCAs:    caPool,
 		Certificates: []tls.Certificate{{
 			Certificate: [][]byte{clientCert.Raw},
 			PrivateKey:  clientPriv,
@@ -144,12 +147,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Sage Client: Request failed: %v", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
+	status := resp.StatusCode
+	_ = resp.Body.Close()
+
+	if status == http.StatusOK {
 		log.Printf("Sage Client: Ping SUCCESS. Server responded: 200 OK")
 	} else {
-		log.Fatalf("Sage Client: Ping FAILED. Status: %s", resp.Status)
+		log.Fatalf("Sage Client: Ping FAILED. Status: %d", status)
 	}
 
 	// Wait briefly to see Actuator output

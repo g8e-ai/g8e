@@ -269,12 +269,15 @@ func (s *OpenClawNodeService) dial(ctx context.Context) (*websocket.Conn, error)
 	// If the URL is ws:// (localhost dev gateway) we skip TLS entirely.
 	if strings.HasPrefix(s.gatewayURL, "wss://") {
 		dialer.TLSClientConfig = &tls.Config{
-			MinVersion: tls.VersionTLS12,
+			MinVersion: tls.VersionTLS13,
 		}
 	}
 
-	conn, _, err := dialer.DialContext(ctx, s.gatewayURL, header)
+	conn, resp, err := dialer.DialContext(ctx, s.gatewayURL, header)
 	if err != nil {
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
 		return nil, err
 	}
 	return conn, nil

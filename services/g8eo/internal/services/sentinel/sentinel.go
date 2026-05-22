@@ -82,7 +82,7 @@ type ThreatCategory string
 const (
 	ThreatCategoryReverseShell        ThreatCategory = "reverse_shell"
 	ThreatCategoryPrivilegeEsc        ThreatCategory = "privilege_escalation"
-	ThreatCategoryCredentialAccess    ThreatCategory = "credential_access"
+	ThreatCategoryCredentialAccess    ThreatCategory = "credential_access" //nolint:gosec // threat category name, not a credential
 	ThreatCategoryExfiltration        ThreatCategory = "data_exfiltration"
 	ThreatCategoryCryptominer         ThreatCategory = "cryptominer"
 	ThreatCategoryPersistence         ThreatCategory = "persistence"

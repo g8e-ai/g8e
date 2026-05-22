@@ -237,8 +237,8 @@ func GetDiskPercent() float64 {
 		return 0.0
 	}
 
-	total := stat.Blocks * uint64(stat.Bsize)
-	free := stat.Bfree * uint64(stat.Bsize)
+	total := stat.Blocks * uint64(stat.Bsize) //nolint:gosec // stat.Blocks bounded by filesystem
+	free := stat.Bfree * uint64(stat.Bsize)   //nolint:gosec // stat.Bfree bounded by filesystem
 	if total == 0 {
 		return 0.0
 	}
@@ -330,8 +330,8 @@ func GetDiskDetails() models.HeartbeatDiskDetails {
 		return models.HeartbeatDiskDetails{}
 	}
 
-	total := stat.Blocks * uint64(stat.Bsize)
-	free := stat.Bfree * uint64(stat.Bsize)
+	total := stat.Blocks * uint64(stat.Bsize) //nolint:gosec // stat.Blocks bounded by filesystem
+	free := stat.Bfree * uint64(stat.Bsize)   //nolint:gosec // stat.Bfree bounded by filesystem
 	used := total - free
 
 	totalGB := float64(total) / (1024 * 1024 * 1024)
@@ -355,8 +355,8 @@ func GetDiskUsedGB() float64 {
 	if err := syscall.Statfs("/", &stat); err != nil {
 		return 0
 	}
-	total := stat.Blocks * uint64(stat.Bsize)
-	free := stat.Bfree * uint64(stat.Bsize)
+	total := stat.Blocks * uint64(stat.Bsize) //nolint:gosec // stat.Blocks bounded by filesystem
+	free := stat.Bfree * uint64(stat.Bsize)   //nolint:gosec // stat.Bfree bounded by filesystem
 	used := total - free
 	return math.Round(float64(used)/(1024*1024*1024)*10) / 10
 }
@@ -366,7 +366,7 @@ func GetDiskTotalGB() float64 {
 	if err := syscall.Statfs("/", &stat); err != nil {
 		return 0
 	}
-	total := stat.Blocks * uint64(stat.Bsize)
+	total := stat.Blocks * uint64(stat.Bsize) //nolint:gosec // stat.Blocks bounded by filesystem
 	return math.Round(float64(total)/(1024*1024*1024)*10) / 10
 }
 
@@ -582,7 +582,7 @@ func GetPublicIP(ipService string) string {
 	if ipService == "" {
 		ipService = "https://api.ipify.org?format=text"
 	}
-	resp, err := http.Get(ipService)
+	resp, err := http.Get(ipService) //nolint:gosec // URL is a configurable IP-service endpoint
 	if err != nil {
 		return GetLocalIP("")
 	}

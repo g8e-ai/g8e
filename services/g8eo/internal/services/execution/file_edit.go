@@ -289,7 +289,7 @@ func (fes *FileEditService) executeWrite(ctx context.Context, request *models.Fi
 
 	// Write content to file
 	bytesWritten := int64(len(*request.Content))
-	if err := os.WriteFile(request.FilePath, []byte(*request.Content), 0644); err != nil {
+	if err := os.WriteFile(request.FilePath, []byte(*request.Content), 0600); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -361,7 +361,7 @@ func (fes *FileEditService) executeReplace(ctx context.Context, request *models.
 
 	// Write back to file
 	bytesWritten := int64(len(originalContent))
-	if err := os.WriteFile(request.FilePath, []byte(originalContent), 0644); err != nil {
+	if err := os.WriteFile(request.FilePath, []byte(originalContent), 0600); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -422,12 +422,17 @@ func (fes *FileEditService) executeInsert(ctx context.Context, request *models.F
 
 	// Insert new content
 	insertLines := strings.Split(*request.InsertContent, "\n")
-	newLines := append(lines[:insertPos], append(insertLines, lines[insertPos:]...)...)
+	inserted := make([]string, 0, len(insertLines)+len(lines[insertPos:]))
+	inserted = append(inserted, insertLines...)
+	inserted = append(inserted, lines[insertPos:]...)
+	newLines := make([]string, 0, insertPos+len(inserted))
+	newLines = append(newLines, lines[:insertPos]...)
+	newLines = append(newLines, inserted...)
 	newContent := strings.Join(newLines, "\n")
 
 	// Write back to file
 	bytesWritten := int64(len(newContent))
-	if err := os.WriteFile(request.FilePath, []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile(request.FilePath, []byte(newContent), 0600); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -487,12 +492,14 @@ func (fes *FileEditService) executeDelete(ctx context.Context, request *models.F
 	}
 
 	// Delete lines
-	newLines := append(lines[:startLine], lines[endLine+1:]...)
+	newLines := make([]string, 0, startLine+len(lines[endLine+1:]))
+	newLines = append(newLines, lines[:startLine]...)
+	newLines = append(newLines, lines[endLine+1:]...)
 	newContent := strings.Join(newLines, "\n")
 
 	// Write back to file
 	bytesWritten := int64(len(newContent))
-	if err := os.WriteFile(request.FilePath, []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile(request.FilePath, []byte(newContent), 0600); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 

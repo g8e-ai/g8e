@@ -290,7 +290,7 @@ func (avs *AuditVaultService) initGitRepo(path string) error {
 	}
 
 	gitignore := filepath.Join(path, ".gitignore")
-	if err := os.WriteFile(gitignore, []byte("# g8e Ledger\n"), 0644); err != nil {
+	if err := os.WriteFile(gitignore, []byte("# g8e Ledger\n"), 0600); err != nil {
 		return fmt.Errorf("failed to create .gitignore: %w", err)
 	}
 
@@ -526,14 +526,14 @@ func (avs *AuditVaultService) RecordEvents(events []*Event) error {
 
 	stmt, err := tx.Prepare(query)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return fmt.Errorf("failed to prepare batch statement: %w", err)
 	}
 	defer stmt.Close()
 
 	for _, event := range events {
 		if err := avs.requireExistingSessionTx(tx, event); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return err
 		}
 
@@ -548,19 +548,19 @@ func (avs *AuditVaultService) RecordEvents(events []*Event) error {
 
 		contentTextBytes, err := avs.encryptContent(event.ContentText)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("failed to encrypt content_text: %w", err)
 		}
 
 		stdoutBytes, err := avs.encryptContent(stdout)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("failed to encrypt stdout: %w", err)
 		}
 
 		stderrBytes, err := avs.encryptContent(stderr)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("failed to encrypt stderr: %w", err)
 		}
 
@@ -580,7 +580,7 @@ func (avs *AuditVaultService) RecordEvents(events []*Event) error {
 			encryptedFlag,
 		)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("failed to execute batch statement: %w", err)
 		}
 	}
@@ -665,7 +665,7 @@ func (avs *AuditVaultService) RecordChaosEvents(events []*ChaosEvent) error {
 
 	stmt, err := tx.Prepare(query)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
@@ -682,7 +682,7 @@ func (avs *AuditVaultService) RecordChaosEvents(events []*ChaosEvent) error {
 			event.TransactionHash,
 		)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("failed to record chaos event: %w", err)
 		}
 	}
@@ -707,7 +707,7 @@ func (avs *AuditVaultService) RecordEvent(event *Event) (int64, error) {
 	}
 
 	if err := avs.requireExistingSessionTx(tx, event); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return 0, err
 	}
 
@@ -718,19 +718,19 @@ func (avs *AuditVaultService) RecordEvent(event *Event) (int64, error) {
 
 	contentTextBytes, err := avs.encryptContent(event.ContentText)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return 0, fmt.Errorf("failed to encrypt content_text: %w", err)
 	}
 
 	stdoutBytes, err := avs.encryptContent(stdout)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return 0, fmt.Errorf("failed to encrypt stdout: %w", err)
 	}
 
 	stderrBytes, err := avs.encryptContent(stderr)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return 0, fmt.Errorf("failed to encrypt stderr: %w", err)
 	}
 
@@ -763,7 +763,7 @@ func (avs *AuditVaultService) RecordEvent(event *Event) (int64, error) {
 		encryptedFlag,
 	)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return 0, fmt.Errorf("failed to record event: %w", err)
 	}
 

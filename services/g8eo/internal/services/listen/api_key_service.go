@@ -105,7 +105,7 @@ func (s *ApiKeyService) ValidateKey(rawKey string) (*models.Document, error) {
 	// Liveness is a UI/UX signal, not an authentication gate.
 	var status string
 	if statusVal, ok := doc.Data["status"]; ok {
-		json.Unmarshal(statusVal, &status)
+		_ = json.Unmarshal(statusVal, &status)
 	}
 
 	if status == marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated) {
