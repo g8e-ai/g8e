@@ -128,6 +128,7 @@ class OperatorDocument(G8eIdentifiableModel):
     organization_id: str | None = Field(default=None, description="Organization ID")
     status: OperatorStatus = Field(default=OperatorStatus.OFFLINE, description="Current Operator status")
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
+    bound_cli_session_id: str | None = Field(default=None, description="Bound CLI session ID")
     operator_session_id: str | None = Field(default=None, description="Current Operator session ID")
     claimed: bool = Field(default=False, description="True when the slot has been claimed by a running g8eo process")
     claimed_at: UTCDatetime | None = Field(default=None, description="When the slot was claimed (set at claim time, not heartbeat time)")

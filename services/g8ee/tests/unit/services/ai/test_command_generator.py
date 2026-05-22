@@ -61,10 +61,14 @@ from app.models.agents.tribunal import (
 from app.models.http_context import G8eHttpContext
 from app.models.reputation import ReputationCommitment
 from app.models.settings import G8eeUserSettings, LLMSettings
+from app.models.tribunal_commands import TribunalGenerationRequest
 from app.models.tool_results import (
     CommandRiskAnalysis,
     ErrorAnalysisResult,
 )
+from app.models.whitelist import WhitelistedCommand
+from app.services.data.reputation_data_service import ReputationDataService
+from app.services.protocols import AIResponseAnalyzerProtocol, EventServiceProtocol
 from app.services.ai.generator import (
     TribunalEmitter,
     _build_and_emit_result,
@@ -162,6 +166,68 @@ def _make_mock_g8e_context() -> G8eHttpContext:
         case_id="test-case-id",
         investigation_id="test-investigation-id",
         source_component=ComponentName.G8EE,
+    )
+
+
+def _make_tribunal_request(
+    request: str,
+    guidelines: str = "",
+    operator_context: OperatorContext | None = None,
+    event_service: EventServiceProtocol | None = None,
+    g8e_context: G8eHttpContext | None = None,
+    settings: G8eeUserSettings | None = None,
+    reputation_data_service: ReputationDataService | None = None,
+    auditor_hmac_key: str = "test-hmac-key",
+    ai_response_analyzer: AIResponseAnalyzerProtocol | None = None,
+    investigation_state: str = "",
+    investigation_context: str = "",
+    whitelisting_enabled: bool = False,
+    blacklisting_enabled: bool = False,
+    whitelisted_commands: list[WhitelistedCommand] | None = None,
+    blacklisted_commands: list[str] | None = None,
+) -> TribunalGenerationRequest:
+    """Create a TribunalGenerationRequest for tests."""
+    if operator_context is None:
+        operator_context = _make_mock_operator_context()
+    if g8e_context is None:
+        g8e_context = _make_mock_g8e_context()
+    if settings is None:
+        settings = _MOCK_USER_SETTINGS
+    if whitelisted_commands is None:
+        whitelisted_commands = []
+    if blacklisted_commands is None:
+        blacklisted_commands = []
+    # If reputation_data_service is None, create a mock that returns empty results
+    if reputation_data_service is None:
+        reputation_data_service = MagicMock()
+        reputation_data_service.list_states = AsyncMock(return_value=[])
+        reputation_data_service.resolve_stakes = AsyncMock(return_value=MagicMock(resolutions=[]))
+        reputation_data_service.get_latest_commitment = AsyncMock(return_value=None)
+        # Create a proper mock commitment with string fields
+        mock_commitment = MagicMock()
+        mock_commitment.id = "test-commitment-id"
+        mock_commitment.commitment_id = "test-commitment-id"
+        mock_commitment.tribunal_command_id = "test-tribunal-command-id"
+        mock_commitment.investigation_id = "test-investigation-id"
+        mock_commitment.merkle_root = "a" * 64  # Merkle roots must be 64 characters
+        mock_commitment.prev_root = "b" * 64  # Previous roots must be 64 characters
+        reputation_data_service.create_commitment = AsyncMock(return_value=mock_commitment)
+    return TribunalGenerationRequest(
+        request=request,
+        guidelines=guidelines,
+        operator_context=operator_context,
+        event_service=event_service,
+        g8e_context=g8e_context,
+        settings=settings,
+        reputation_data_service=reputation_data_service,
+        auditor_hmac_key=auditor_hmac_key,
+        ai_response_analyzer=ai_response_analyzer,
+        investigation_state=investigation_state,
+        investigation_context=investigation_context,
+        whitelisting_enabled=whitelisting_enabled,
+        blacklisting_enabled=blacklisting_enabled,
+        whitelisted_commands=whitelisted_commands,
+        blacklisted_commands=blacklisted_commands,
     )
 
 
@@ -395,16 +461,14 @@ class TestGenerateCommandOutcomes:
 
         with pytest.raises(TribunalDisabledError) as exc_info:
             await generate_command(
-                request="list files",
-                guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/tmp", username="root", uid=0),
-                event_service=AsyncMock(),
-                web_session_id="ws-1",
-                user_id="user-1",
-                case_id="case-1",
-                investigation_id="inv-1",
-                settings=settings,
-                **_REPUTATION_KWARGS,
+                _make_tribunal_request(
+                    request="list files",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/tmp", username="root", uid=0),
+                    event_service=AsyncMock(),
+                    g8e_context=G8eHttpContext(web_session_id="ws-1", user_id="user-1", case_id="case-1", investigation_id="inv-1", source_component=ComponentName.G8EE),
+                    settings=settings,
+                )
             )
 
         assert exc_info.value.request == "list files"
@@ -435,16 +499,14 @@ class TestGenerateCommandSystemError:
         ):
             with pytest.raises(TribunalSystemError) as exc_info:
                 await generate_command(
-                    request="list files",
-                    guidelines="",
-                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    event_service=mock_event_service,
-                    web_session_id="ws-1",
-                    user_id="user-1",
-                    case_id="case-1",
-                    investigation_id="inv-1",
-                    settings=settings,
-                    **_REPUTATION_KWARGS,
+                    _make_tribunal_request(
+                        request="list files",
+                        guidelines="",
+                        operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                        event_service=mock_event_service,
+                        g8e_context=G8eHttpContext(web_session_id="ws-1", user_id="user-1", case_id="case-1", investigation_id="inv-1", source_component=ComponentName.G8EE),
+                        settings=settings,
+                    )
                 )
 
             assert len(exc_info.value.pass_errors) > 0
@@ -473,16 +535,14 @@ class TestGenerateCommandSystemError:
         ):
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
                 await generate_command(
-                    request="list files",
-                    guidelines="",
-                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    event_service=mock_event_service,
-                    web_session_id="ws-1",
-                    user_id="user-1",
-                    case_id="case-1",
-                    investigation_id="inv-1",
-                    settings=settings,
-                    **_REPUTATION_KWARGS,
+                    _make_tribunal_request(
+                        request="list files",
+                        guidelines="",
+                        operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                        event_service=mock_event_service,
+                        g8e_context=G8eHttpContext(web_session_id="ws-1", user_id="user-1", case_id="case-1", investigation_id="inv-1", source_component=ComponentName.G8EE),
+                        settings=settings,
+                    )
                 )
 
             assert exc_info.value.request == "list files"
@@ -518,16 +578,14 @@ class TestGenerateCommandSystemError:
             mock_event_service = MagicMock()
             mock_event_service.publish = AsyncMock()
             result = await generate_command(
-                request="list files",
-                guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                event_service=mock_event_service,
-                web_session_id="ws-1",
-                user_id="user-1",
-                case_id="case-1",
-                investigation_id="inv-1",
-                settings=settings,
-                **_REPUTATION_KWARGS,
+                _make_tribunal_request(
+                    request="list files",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                    event_service=mock_event_service,
+                    g8e_context=G8eHttpContext(web_session_id="ws-1", user_id="user-1", case_id="case-1", investigation_id="inv-1", source_component=ComponentName.G8EE),
+                    settings=settings,
+                )
             )
 
             # Tribunal generation uses lite tier, auditor uses primary tier
@@ -573,16 +631,14 @@ class TestMixedErrorFallback:
         ):
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
                 await generate_command(
-                    request="list files",
-                    guidelines="",
-                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    event_service=mock_event_service,
-                    web_session_id="ws-1",
-                    user_id="user-1",
-                    case_id="case-1",
-                    investigation_id="inv-1",
-                    settings=settings,
-                    **_REPUTATION_KWARGS,
+                    _make_tribunal_request(
+                        request="list files",
+                        guidelines="",
+                        operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                        event_service=mock_event_service,
+                        g8e_context=G8eHttpContext(web_session_id="ws-1", user_id="user-1", case_id="case-1", investigation_id="inv-1", source_component=ComponentName.G8EE),
+                        settings=settings,
+                    )
                 )
 
             assert exc_info.value.request == "list files"
@@ -620,16 +676,14 @@ class TestTribunalProviderUnavailableError:
         ):
             with pytest.raises(TribunalProviderUnavailableError) as exc_info:
                 await generate_command(
-                    request="list files",
-                    guidelines="",
-                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    event_service=mock_event_service,
-                    web_session_id="ws-1",
-                    user_id="user-1",
-                    case_id="case-1",
-                    investigation_id="inv-1",
-                    settings=settings,
-                    **_REPUTATION_KWARGS,
+                    _make_tribunal_request(
+                        request="list files",
+                        guidelines="",
+                        operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                        event_service=mock_event_service,
+                        g8e_context=G8eHttpContext(web_session_id="ws-1", user_id="user-1", case_id="case-1", investigation_id="inv-1", source_component=ComponentName.G8EE),
+                        settings=settings,
+                    )
                 )
 
             assert exc_info.value.provider == "ollama"
@@ -656,16 +710,14 @@ class TestTribunalModelNotConfiguredError:
         ):
             with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
                 await generate_command(
-                    request="list files",
-                    guidelines="",
-                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    event_service=mock_event_service,
-                    web_session_id="ws-1",
-                    user_id="user-1",
-                    case_id="case-1",
-                    investigation_id="inv-1",
-                    settings=settings,
-                    **_REPUTATION_KWARGS,
+                    _make_tribunal_request(
+                        request="list files",
+                        guidelines="",
+                        operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                        event_service=mock_event_service,
+                        g8e_context=G8eHttpContext(web_session_id="ws-1", user_id="user-1", case_id="case-1", investigation_id="inv-1", source_component=ComponentName.G8EE),
+                        settings=settings,
+                    )
                 )
 
             assert exc_info.value.provider == "ollama"
@@ -1069,16 +1121,14 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                request="list files with details",
-                guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/tmp", username="root", uid=0),
-                event_service=mock_event_service,
-                web_session_id="ws-happy-1",
-                user_id="user-happy-1",
-                case_id="case-happy-1",
-                investigation_id="inv-happy-1",
-                settings=settings,
-                **_REPUTATION_KWARGS,
+                _make_tribunal_request(
+                    request="list files with details",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/tmp", username="root", uid=0),
+                    event_service=mock_event_service,
+                    g8e_context=G8eHttpContext(web_session_id="ws-happy-1", user_id="user-happy-1", case_id="case-happy-1", investigation_id="inv-happy-1", source_component=ComponentName.G8EE),
+                    settings=settings,
+                )
             )
 
         assert result.outcome == CommandGenerationOutcome.CONSENSUS
@@ -1115,16 +1165,14 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                request="find all log files under /var/log",
-                guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                event_service=mock_event_service,
-                web_session_id="ws-happy-2",
-                user_id="user-happy-2",
-                case_id="case-happy-2",
-                investigation_id="inv-happy-2",
-                settings=settings,
-                **_REPUTATION_KWARGS,
+                _make_tribunal_request(
+                    request="find all log files under /var/log",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                    event_service=mock_event_service,
+                    g8e_context=G8eHttpContext(web_session_id="ws-happy-2", user_id="user-happy-2", case_id="case-happy-2", investigation_id="inv-happy-2", source_component=ComponentName.G8EE),
+                    settings=settings,
+                )
             )
 
         assert result.outcome == CommandGenerationOutcome.VERIFIED
@@ -1160,16 +1208,14 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                request="find all TODO comments recursively with line numbers",
-                guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user/project", username="user", uid=1000),
-                event_service=mock_event_service,
-                web_session_id="ws-happy-3",
-                user_id="user-happy-3",
-                case_id="case-happy-3",
-                investigation_id="inv-happy-3",
-                settings=settings,
-                **_REPUTATION_KWARGS,
+                _make_tribunal_request(
+                    request="find all TODO comments recursively with line numbers",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user/project", username="user", uid=1000),
+                    event_service=mock_event_service,
+                    g8e_context=G8eHttpContext(web_session_id="ws-happy-3", user_id="user-happy-3", case_id="case-happy-3", investigation_id="inv-happy-3", source_component=ComponentName.G8EE),
+                    settings=settings,
+                )
             )
 
         assert result.outcome == CommandGenerationOutcome.VERIFICATION_FAILED
@@ -1214,16 +1260,14 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                request="show disk usage in human-readable format",
-                guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                event_service=mock_event_service,
-                web_session_id="ws-happy-4",
-                user_id="user-happy-4",
-                case_id="case-happy-4",
-                investigation_id="inv-happy-4",
-                settings=settings,
-                **_REPUTATION_KWARGS,
+                _make_tribunal_request(
+                    request="show disk usage in human-readable format",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                    event_service=mock_event_service,
+                    g8e_context=G8eHttpContext(web_session_id="ws-happy-4", user_id="user-happy-4", case_id="case-happy-4", investigation_id="inv-happy-4", source_component=ComponentName.G8EE),
+                    settings=settings,
+                )
             )
 
         assert result.outcome == CommandGenerationOutcome.VERIFIED
@@ -1246,16 +1290,14 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                request="show current user name",
-                guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                event_service=mock_event_service,
-                web_session_id="ws-happy-5",
-                user_id="user-happy-5",
-                case_id="case-happy-5",
-                investigation_id="inv-happy-5",
-                settings=settings,
-                **_REPUTATION_KWARGS,
+                _make_tribunal_request(
+                    request="show current user name",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                    event_service=mock_event_service,
+                    g8e_context=G8eHttpContext(web_session_id="ws-happy-5", user_id="user-happy-5", case_id="case-happy-5", investigation_id="inv-happy-5", source_component=ComponentName.G8EE),
+                    settings=settings,
+                )
             )
 
         assert result.outcome == CommandGenerationOutcome.VERIFIED
@@ -1278,16 +1320,14 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             await generate_command(
-                request="show system uptime",
-                guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                event_service=mock_event_service,
-                web_session_id="ws-happy-6",
-                user_id="user-happy-6",
-                case_id="case-happy-6",
-                investigation_id="inv-happy-6",
-                settings=settings,
-                **_REPUTATION_KWARGS,
+                _make_tribunal_request(
+                    request="show system uptime",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                    event_service=mock_event_service,
+                    g8e_context=G8eHttpContext(web_session_id="ws-happy-6", user_id="user-happy-6", case_id="case-happy-6", investigation_id="inv-happy-6", source_component=ComponentName.G8EE),
+                    settings=settings,
+                )
             )
 
         from app.constants import EventType
@@ -1323,16 +1363,14 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                request="list files in /tmp with details",
-                guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                event_service=mock_event_service,
-                web_session_id="ws-happy-7",
-                user_id="user-happy-7",
-                case_id="case-happy-7",
-                investigation_id="inv-happy-7",
-                settings=settings,
-                **_REPUTATION_KWARGS,
+                _make_tribunal_request(
+                    request="list files in /tmp with details",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                    event_service=mock_event_service,
+                    g8e_context=G8eHttpContext(web_session_id="ws-happy-7", user_id="user-happy-7", case_id="case-happy-7", investigation_id="inv-happy-7", source_component=ComponentName.G8EE),
+                    settings=settings,
+                )
             )
 
         assert result.request == "list files in /tmp with details"
@@ -1363,16 +1401,14 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                request="show the system hostname from /etc/hostname",
-                guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                event_service=mock_event_service,
-                web_session_id="ws-happy-8",
-                user_id="user-happy-8",
-                case_id="case-happy-8",
-                investigation_id="inv-happy-8",
-                settings=settings,
-                **_REPUTATION_KWARGS,
+                _make_tribunal_request(
+                    request="show the system hostname from /etc/hostname",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                    event_service=mock_event_service,
+                    g8e_context=G8eHttpContext(web_session_id="ws-happy-8", user_id="user-happy-8", case_id="case-happy-8", investigation_id="inv-happy-8", source_component=ComponentName.G8EE),
+                    settings=settings,
+                )
             )
 
         assert result.final_command != result.request
@@ -1402,16 +1438,14 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                request="ls",
-                guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                event_service=mock_event_service,
-                web_session_id="ws-happy-9",
-                user_id="user-happy-9",
-                case_id="case-happy-9",
-                investigation_id="inv-happy-9",
-                settings=settings,
-                **_REPUTATION_KWARGS,
+                _make_tribunal_request(
+                    request="ls",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                    event_service=mock_event_service,
+                    g8e_context=G8eHttpContext(web_session_id="ws-happy-9", user_id="user-happy-9", case_id="case-happy-9", investigation_id="inv-happy-9", source_component=ComponentName.G8EE),
+                    settings=settings,
+                )
             )
 
         assert result.final_command == result.request
@@ -1512,16 +1546,14 @@ class TestGenerateCommandAuditorFailure:
         ):
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
-                    request="list files with details",
-                    guidelines="",
-                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    event_service=mock_event_service,
-                    web_session_id="ws-vf-1",
-                    user_id="user-vf-1",
-                    case_id="case-vf-1",
-                    investigation_id="inv-vf-1",
-                    settings=settings,
-                    **_REPUTATION_KWARGS,
+                    _make_tribunal_request(
+                        request="list files with details",
+                        guidelines="",
+                        operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                        event_service=mock_event_service,
+                        g8e_context=G8eHttpContext(web_session_id="ws-vf-1", user_id="user-vf-1", case_id="case-vf-1", investigation_id="inv-vf-1", source_component=ComponentName.G8EE),
+                        settings=settings,
+                    )
                 )
 
             assert exc_info.value.reason == AuditorReason.EMPTY_RESPONSE
@@ -1561,16 +1593,14 @@ class TestGenerateCommandAuditorFailure:
         ):
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
-                    request="list files with details",
-                    guidelines="",
-                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    event_service=mock_event_service,
-                    web_session_id="ws-vf-2",
-                    user_id="user-vf-2",
-                    case_id="case-vf-2",
-                    investigation_id="inv-vf-2",
-                    settings=settings,
-                    **_REPUTATION_KWARGS,
+                    _make_tribunal_request(
+                        request="list files with details",
+                        guidelines="",
+                        operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                        event_service=mock_event_service,
+                        g8e_context=G8eHttpContext(web_session_id="ws-vf-2", user_id="user-vf-2", case_id="case-vf-2", investigation_id="inv-vf-2", source_component=ComponentName.G8EE),
+                        settings=settings,
+                    )
                 )
 
             assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
@@ -1606,16 +1636,14 @@ class TestGenerateCommandAuditorFailure:
         ):
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
-                    request="list files with details",
-                    guidelines="",
-                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    event_service=mock_event_service,
-                    web_session_id="ws-vf-3",
-                    user_id="user-vf-3",
-                    case_id="case-vf-3",
-                    investigation_id="inv-vf-3",
-                    settings=settings,
-                    **_REPUTATION_KWARGS,
+                    _make_tribunal_request(
+                        request="list files with details",
+                        guidelines="",
+                        operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                        event_service=mock_event_service,
+                        g8e_context=G8eHttpContext(web_session_id="ws-vf-3", user_id="user-vf-3", case_id="case-vf-3", investigation_id="inv-vf-3", source_component=ComponentName.G8EE),
+                        settings=settings,
+                    )
                 )
 
             assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
@@ -1654,16 +1682,14 @@ class TestGenerateCommandAuditorFailure:
         ):
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
-                    request="show system hostname",
-                    guidelines="",
-                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    event_service=mock_event_service,
-                    web_session_id="ws-vf-4",
-                    user_id="user-vf-4",
-                    case_id="case-vf-4",
-                    investigation_id="inv-vf-4",
-                    settings=settings,
-                    **_REPUTATION_KWARGS,
+                    _make_tribunal_request(
+                        request="show system hostname",
+                        guidelines="",
+                        operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                        event_service=mock_event_service,
+                        g8e_context=G8eHttpContext(web_session_id="ws-vf-4", user_id="user-vf-4", case_id="case-vf-4", investigation_id="inv-vf-4", source_component=ComponentName.G8EE),
+                        settings=settings,
+                    )
                 )
 
             assert exc_info.value.request == "show system hostname"
@@ -1688,16 +1714,14 @@ class TestGenerateCommandAuditorFailure:
         ):
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
-                    request="show current user",
-                    guidelines="",
-                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    event_service=mock_event_service,
-                    web_session_id="ws-vf-5",
-                    user_id="user-vf-5",
-                    case_id="case-vf-5",
-                    investigation_id="inv-vf-5",
-                    settings=settings,
-                    **_REPUTATION_KWARGS,
+                    _make_tribunal_request(
+                        request="show current user",
+                        guidelines="",
+                        operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                        event_service=mock_event_service,
+                        g8e_context=G8eHttpContext(web_session_id="ws-vf-5", user_id="user-vf-5", case_id="case-vf-5", investigation_id="inv-vf-5", source_component=ComponentName.G8EE),
+                        settings=settings,
+                    )
                 )
 
             assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
@@ -1982,16 +2006,14 @@ class TestTribunalEmitter:
             mock_event_service.publish = AsyncMock()
 
             result = await generate_command(
-                request="test round 2",
-                guidelines="",
-                operator_context=_make_mock_operator_context(),
-                event_service=mock_event_service,
-                web_session_id="ws-1",
-                user_id="user-1",
-                case_id="case-1",
-                investigation_id="inv-1",
-                settings=settings,
-                **_REPUTATION_KWARGS,
+                _make_tribunal_request(
+                    request="test round 2",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(),
+                    event_service=mock_event_service,
+                    g8e_context=G8eHttpContext(web_session_id="ws-1", user_id="user-1", case_id="case-1", investigation_id="inv-1", source_component=ComponentName.G8EE),
+                    settings=settings,
+                )
             )
 
             assert result.final_command == "cmd_consensus"

@@ -335,14 +335,10 @@ class OperatorApprovalService:
 
             try:
                 await self.event_service.publish(
-                    SessionEvent(
+                    SessionEvent.from_context(
+                        context=g8e_context,
                         event_type=EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED,
                         payload=approval_event,
-                        web_session_id=g8e_context.web_session_id,
-                        user_id=g8e_context.user_id,
-                        case_id=g8e_context.case_id,
-                        investigation_id=g8e_context.investigation_id,
-                        task_id=request.task_id,
                     )
                 )
                 logger.info("[AGENT_CONTINUE_APPROVAL] Published to client")
@@ -506,13 +502,10 @@ class OperatorApprovalService:
 
             try:
                 await self.event_service.publish(
-                    SessionEvent(
+                    SessionEvent.from_context(
+                        context=g8e_context,
                         event_type=EventType.OPERATOR_STREAM_APPROVAL_REQUESTED,
                         payload=approval_event,
-                        web_session_id=g8e_context.web_session_id,
-                        user_id=g8e_context.user_id,
-                        case_id=g8e_context.case_id,
-                        investigation_id=g8e_context.investigation_id,
                     )
                 )
                 logger.info("[STREAM_APPROVAL] Published to client")
@@ -665,14 +658,10 @@ class OperatorApprovalService:
 
             try:
                 await self.event_service.publish(
-                    SessionEvent(
+                    SessionEvent.from_context(
+                        context=g8e_context,
                         event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
                         payload=approval_event,
-                        web_session_id=g8e_context.web_session_id,
-                        user_id=g8e_context.user_id,
-                        case_id=g8e_context.case_id,
-                        investigation_id=g8e_context.investigation_id,
-                        task_id=task_id,
                     )
                 )
                 logger.info("[APPROVAL] Published to client")
@@ -839,13 +828,10 @@ class OperatorApprovalService:
 
             try:
                 await self.event_service.publish(
-                    SessionEvent(
+                    SessionEvent.from_context(
+                        context=g8e_context,
                         event_type=EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED,
                         payload=approval_event,
-                        web_session_id=g8e_context.web_session_id,
-                        user_id=g8e_context.user_id,
-                        case_id=g8e_context.case_id,
-                        investigation_id=g8e_context.investigation_id,
                     )
                 )
                 logger.info("[FILE_EDIT_APPROVAL] Published to client")
@@ -1020,13 +1006,10 @@ class OperatorApprovalService:
 
             try:
                 await self.event_service.publish(
-                    SessionEvent(
+                    SessionEvent.from_context(
+                        context=g8e_context,
                         event_type=EventType.OPERATOR_INTENT_APPROVAL_REQUESTED,
                         payload=approval_event,
-                        web_session_id=g8e_context.web_session_id,
-                        user_id=g8e_context.user_id,
-                        case_id=g8e_context.case_id,
-                        investigation_id=g8e_context.investigation_id,
                     )
                 )
                 logger.info("[INTENT_APPROVAL] Published to client")

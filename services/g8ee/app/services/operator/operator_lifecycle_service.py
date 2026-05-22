@@ -69,6 +69,7 @@ class OperatorLifecycleService:
         operator_id: str,
         operator_session_id: str,
         bound_web_session_id: str | None,
+        bound_cli_session_id: str | None = None,
         operator_type: OperatorType | str | None = None,
     ) -> bool:
         """Claim an operator slot for an active session.
@@ -109,6 +110,7 @@ class OperatorLifecycleService:
             "status": OperatorStatus.ACTIVE,
             "operator_session_id": operator_session_id,
             "bound_web_session_id": bound_web_session_id,
+            "bound_cli_session_id": bound_cli_session_id,
             "claimed": True,
             "updated_at": now_timestamp,
             "claimed_at": now_timestamp,
@@ -128,6 +130,7 @@ class OperatorLifecycleService:
         history_details = {
             "operator_session_id": operator_session_id,
             "bound_web_session_id": bound_web_session_id,
+            "bound_cli_session_id": bound_cli_session_id,
             "operator_type": str(operator_type) if operator_type else None,
             "is_reclaim": is_reclaim,
         }

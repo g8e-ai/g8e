@@ -29,6 +29,7 @@ import pytest
 from app.constants import (
     AuditorReason,
     CommandGenerationOutcome,
+    ComponentName,
     EventType,
     TribunalMember,
 )
@@ -37,8 +38,10 @@ from app.models.agents.tribunal import (
     VoteBreakdown,
     TribunalAuditResult,
 )
+from app.models.http_context import G8eHttpContext
 from app.models.reputation import ReputationState
 from app.services.ai.generator import generate_command
+from app.models.tribunal_commands import TribunalGenerationRequest
 from app.services.data.reputation_data_service import ReputationDataService
 from tests.fakes.agent_helpers import (
     make_agent_run_args,
@@ -109,13 +112,19 @@ class TestCommandGeneratorWithCommitment:
                     leaves_count=1,
                     correlation_id=correlation_id,
                 )
-                event = SessionEvent(
-                    event_type=EventType.AI_REPUTATION_COMMITMENT_CREATED,
-                    payload=payload,
+                from app.models.http_context import RequestContext
+                from app.constants import ComponentName
+                ctx = RequestContext(
                     web_session_id=inputs.web_session_id,
                     user_id=inputs.user_id,
                     case_id=inputs.case_id,
                     investigation_id=inputs.investigation_id,
+                    source_component=ComponentName.G8EE,
+                )
+                event = SessionEvent.from_context(
+                    context=ctx,
+                    event_type=EventType.AI_REPUTATION_COMMITMENT_CREATED,
+                    payload=payload,
                 )
                 await event_svc.publish(event)
 
@@ -132,19 +141,24 @@ class TestCommandGeneratorWithCommitment:
 
             # Generate command via Tribunal
             gen_result = await generate_command(
-                request="list files",
-                guidelines="",
-                operator_context=None,
-                event_service=event_svc,
-                web_session_id=inputs.web_session_id,
-                user_id=inputs.user_id,
-                case_id=inputs.case_id,
-                investigation_id=inputs.investigation_id,
-                settings=inputs.request_settings,
-                reputation_data_service=reputation_svc,
-                auditor_hmac_key=_TEST_HMAC_KEY,
-                whitelisting_enabled=False,
-                blacklisting_enabled=False,
+                TribunalGenerationRequest(
+                    request="list files",
+                    guidelines="",
+                    operator_context=None,
+                    event_service=event_svc,
+                    g8e_context=G8eHttpContext(
+                        web_session_id=inputs.web_session_id,
+                        user_id=inputs.user_id,
+                        case_id=inputs.case_id,
+                        investigation_id=inputs.investigation_id,
+                        source_component=ComponentName.G8EE
+                    ),
+                    settings=inputs.request_settings,
+                    reputation_data_service=reputation_svc,
+                    auditor_hmac_key=_TEST_HMAC_KEY,
+                    whitelisting_enabled=False,
+                    blacklisting_enabled=False,
+                )
             )
 
         # 1. Verify commitment ID was returned
@@ -189,17 +203,22 @@ class TestCommandGeneratorWithCommitment:
             )
 
             gen_result = await generate_command(
-                request="delete all",
-                guidelines="",
-                operator_context=None,
-                event_service=event_svc,
-                web_session_id=inputs.web_session_id,
-                user_id=inputs.user_id,
-                case_id=inputs.case_id,
-                investigation_id=inputs.investigation_id,
-                settings=inputs.request_settings,
-                reputation_data_service=reputation_svc,
-                auditor_hmac_key=_TEST_HMAC_KEY,
+                TribunalGenerationRequest(
+                    request="delete all",
+                    guidelines="",
+                    operator_context=None,
+                    event_service=event_svc,
+                    g8e_context=G8eHttpContext(
+                        web_session_id=inputs.web_session_id,
+                        user_id=inputs.user_id,
+                        case_id=inputs.case_id,
+                        investigation_id=inputs.investigation_id,
+                        source_component=ComponentName.G8EE
+                    ),
+                    settings=inputs.request_settings,
+                    reputation_data_service=reputation_svc,
+                    auditor_hmac_key=_TEST_HMAC_KEY,
+                )
             )
 
         # Verify no commitment ID
@@ -244,12 +263,19 @@ class TestCommandGeneratorWithCommitment:
                     error="DB Offline",
                     correlation_id=correlation_id,
                 )
-                event = SessionEvent(
-                    event_type=EventType.AI_REPUTATION_COMMITMENT_FAILED,
-                    payload=payload,
-                    investigation_id=inputs.investigation_id,
+                from app.models.http_context import RequestContext
+                from app.constants import ComponentName
+                ctx = RequestContext(
                     web_session_id=inputs.web_session_id,
                     user_id=inputs.user_id,
+                    case_id=inputs.case_id,
+                    investigation_id=inputs.investigation_id,
+                    source_component=ComponentName.G8EE,
+                )
+                event = SessionEvent.from_context(
+                    context=ctx,
+                    event_type=EventType.AI_REPUTATION_COMMITMENT_FAILED,
+                    payload=payload,
                 )
                 await event_svc.publish(event)
 
@@ -259,17 +285,22 @@ class TestCommandGeneratorWithCommitment:
 
             with pytest.raises(RuntimeError, match="Reputation commitment failed"):
                 await generate_command(
-                    request="list",
-                    guidelines="",
-                    operator_context=None,
-                    event_service=event_svc,
-                    web_session_id=inputs.web_session_id,
-                    user_id=inputs.user_id,
-                    case_id=inputs.case_id,
-                    investigation_id=inputs.investigation_id,
-                    settings=inputs.request_settings,
-                    reputation_data_service=reputation_svc,
-                    auditor_hmac_key=_TEST_HMAC_KEY,
+                    TribunalGenerationRequest(
+                        request="list",
+                        guidelines="",
+                        operator_context=None,
+                        event_service=event_svc,
+                        g8e_context=G8eHttpContext(
+                            web_session_id=inputs.web_session_id,
+                            user_id=inputs.user_id,
+                            case_id=inputs.case_id,
+                            investigation_id=inputs.investigation_id,
+                            source_component=ComponentName.G8EE
+                        ),
+                        settings=inputs.request_settings,
+                        reputation_data_service=reputation_svc,
+                        auditor_hmac_key=_TEST_HMAC_KEY,
+                    )
                 )
 
         # Should emit a failure event

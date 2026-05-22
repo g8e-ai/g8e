@@ -20,6 +20,7 @@ from app.models.agent import OperatorContext
 from app.models.agents.tribunal import TribunalGenerationFailedError
 from app.models.http_context import G8eHttpContext
 from app.services.ai.generator import TribunalEmitter, generate_command
+from app.models.tribunal_commands import TribunalGenerationRequest
 from app.utils.command import normalise_command
 from app.utils.safety import validate_command_safety
 
@@ -199,17 +200,22 @@ class TestGenerateCommandSafety:
 
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
                 await generate_command(
-                    request="run as root",
-                    guidelines="",
-                    operator_context=_make_mock_operator_context(),
-                    event_service=AsyncMock(),
-                    web_session_id="ws-1",
-                    user_id="user-1",
-                    case_id="case-1",
-                    investigation_id="inv-1",
-                    settings=mock_settings,
-                    reputation_data_service=MagicMock(),
-                    auditor_hmac_key="test-key",
+                    TribunalGenerationRequest(
+                        request="run as root",
+                        guidelines="",
+                        operator_context=_make_mock_operator_context(),
+                        event_service=AsyncMock(),
+                        g8e_context=G8eHttpContext(
+                            web_session_id="ws-1",
+                            user_id="user-1",
+                            case_id="case-1",
+                            investigation_id="inv-1",
+                            source_component=ComponentName.G8EE
+                        ),
+                        settings=mock_settings,
+                        reputation_data_service=MagicMock(),
+                        auditor_hmac_key="test-key",
+                    )
                 )
 
             assert "safety validation failed" in exc_info.value.pass_errors[0].lower()

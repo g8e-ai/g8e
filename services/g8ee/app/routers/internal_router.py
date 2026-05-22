@@ -326,13 +326,10 @@ async def internal_chat(
         # Publish CASE_CREATED event immediately after inline creation.
         try:
             await event_service.publish(
-                SessionEvent(
+                SessionEvent.from_context(
+                    context=g8e_context,
                     event_type=EventType.APP_CASE_CREATED,
                     payload=CaseCreatedPayload(title=case.title),
-                    web_session_id=g8e_context.web_session_id,
-                    user_id=g8e_context.user_id,
-                    case_id=g8e_context.case_id,
-                    investigation_id=g8e_context.investigation_id,
                 )
             )
         except Exception as sse_err:
@@ -1260,7 +1257,8 @@ async def bind_operators(
                     heartbeat_snapshot = operator.latest_heartbeat_snapshot
                     system_identity = heartbeat_snapshot.system_identity if heartbeat_snapshot else None
                     await event_service.publish(
-                        SessionEvent(
+                        SessionEvent.from_context(
+                            context=g8e_context,
                             event_type=EventType.OPERATOR_STATUS_UPDATED_BOUND,
                             payload=OperatorStatusUpdatedPayload(
                                 operator_id=operator_id,
@@ -1270,8 +1268,6 @@ async def bind_operators(
                                 system_fingerprint=heartbeat_snapshot.system_fingerprint if heartbeat_snapshot else None,
                                 metrics=heartbeat_snapshot,
                             ),
-                            web_session_id=g8e_context.web_session_id,
-                            user_id=g8e_context.user_id,
                         )
                     )
                 except Exception as e:
@@ -1360,7 +1356,8 @@ async def unbind_operators(
                     heartbeat_snapshot = operator.latest_heartbeat_snapshot
                     system_identity = heartbeat_snapshot.system_identity if heartbeat_snapshot else None
                     await event_service.publish(
-                        SessionEvent(
+                        SessionEvent.from_context(
+                            context=g8e_context,
                             event_type=EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
                             payload=OperatorStatusUpdatedPayload(
                                 operator_id=operator_id,
@@ -1370,8 +1367,6 @@ async def unbind_operators(
                                 system_fingerprint=heartbeat_snapshot.system_fingerprint if heartbeat_snapshot else None,
                                 metrics=heartbeat_snapshot,
                             ),
-                            web_session_id=g8e_context.web_session_id,
-                            user_id=g8e_context.user_id,
                         )
                     )
                 except Exception as e:

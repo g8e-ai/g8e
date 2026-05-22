@@ -124,13 +124,19 @@ async def _collect_sse_events(chunks, inputs=None, state=None):
         # Calls are made with keyword arguments
         if call.kwargs:
             from app.models.events import SessionEvent
-            event = SessionEvent(
-                event_type=call.kwargs.get("event_type"),
-                payload=call.kwargs.get("payload"),
+            from app.models.http_context import RequestContext
+            from app.constants import ComponentName
+            ctx = RequestContext(
                 web_session_id=call.kwargs.get("web_session_id"),
                 user_id=call.kwargs.get("user_id"),
                 case_id=call.kwargs.get("case_id"),
                 investigation_id=call.kwargs.get("investigation_id"),
+                source_component=ComponentName.G8EE,
+            )
+            event = SessionEvent.from_context(
+                context=ctx,
+                event_type=call.kwargs.get("event_type"),
+                payload=call.kwargs.get("payload"),
             )
             events.append(event)
     return events

@@ -49,6 +49,14 @@ async def mock_awaitable(result):
 async def mock_awaitable_exception(exc):
     raise exc
 
+def _make_awaitable_side_effect(result):
+    """Returns a side_effect function that returns an awaitable with the given result."""
+    return lambda *args, **kwargs: mock_awaitable(result)
+
+def _make_awaitable_exception_side_effect(exc):
+    """Returns a side_effect function that raises an awaitable exception."""
+    return lambda *args, **kwargs: mock_awaitable_exception(exc)
+
 class TestCaseDataService:
     @pytest.fixture
     def service(self, mock_settings, mock_cache_aside_service, mock_event_service):
@@ -284,7 +292,7 @@ class TestCaseDataService:
         mock_del_result = MagicMock()
         mock_del_result.success = True
         # db.delete_document is called and its result is awaited
-        mock_cache.delete_document = MagicMock(side_effect=lambda *args, **kwargs: mock_awaitable(mock_del_result))
+        mock_cache.delete_document = MagicMock(side_effect=_make_awaitable_side_effect(mock_del_result))
 
         await service.delete_case(case_id)
 
@@ -307,7 +315,7 @@ class TestCaseDataService:
         mock_del_result = MagicMock()
         mock_del_result.success = False
         mock_del_result.error = "Delete error"
-        mock_cache.delete_document = MagicMock(side_effect=lambda *args, **kwargs: mock_awaitable(mock_del_result))
+        mock_cache.delete_document = MagicMock(side_effect=_make_awaitable_side_effect(mock_del_result))
 
         with pytest.raises(DatabaseError, match="Failed to delete case: Delete error"):
             await service.delete_case(case_id)
@@ -325,7 +333,7 @@ class TestCaseDataService:
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z",
         }
-        mock_cache.delete_document = MagicMock(side_effect=lambda *args, **kwargs: mock_awaitable_exception(Exception("Fatal delete")))
+        mock_cache.delete_document = MagicMock(side_effect=_make_awaitable_exception_side_effect(Exception("Fatal delete")))
 
         with pytest.raises(DatabaseError, match="Failed to delete case: Fatal delete"):
             await service.delete_case(case_id)

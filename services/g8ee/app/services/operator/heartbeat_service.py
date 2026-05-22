@@ -410,13 +410,19 @@ class HeartbeatSnapshotService:
                 operator.id,
                 operator.bound_web_session_id
             )
-            return SessionEvent(
-                event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
-                payload=envelope,
+            from app.models.http_context import RequestContext
+            from app.constants import ComponentName
+            ctx = RequestContext(
                 web_session_id=operator.bound_web_session_id,
                 user_id=operator.user_id,
                 case_id=payload.case_id,
                 investigation_id=payload.investigation_id,
+                source_component=ComponentName.G8EE,
+            )
+            return SessionEvent.from_context(
+                context=ctx,
+                event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
+                payload=envelope,
             )
         logger.info(
             "[HEARTBEAT] Building BackgroundEvent for unbound operator %s -> user %s",

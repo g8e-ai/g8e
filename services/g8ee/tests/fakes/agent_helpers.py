@@ -283,14 +283,20 @@ def make_event_service():
         cli_session_id: str | None = None,
     ):
         """Capture investigation event calls and create proper SessionEvent."""
-        session_event = SessionEvent(
-            event_type=event_type,
-            payload=payload,
-            investigation_id=investigation_id,
+        from app.models.http_context import RequestContext
+        from app.constants import ComponentName
+        ctx = RequestContext(
             web_session_id=web_session_id,
             cli_session_id=cli_session_id,
-            case_id=case_id,
             user_id=user_id,
+            case_id=case_id,
+            investigation_id=investigation_id,
+            source_component=ComponentName.G8EE,
+        )
+        session_event = SessionEvent.from_context(
+            context=ctx,
+            event_type=event_type,
+            payload=payload,
         )
         return await capture_publish(session_event)
 
@@ -300,13 +306,10 @@ def make_event_service():
 
     async def capture_publish_reputation(event_type, data, g8e_context):
         """Capture reputation event calls and create proper SessionEvent."""
-        session_event = SessionEvent(
+        session_event = SessionEvent.from_context(
+            context=g8e_context,
             event_type=event_type,
             payload=data,
-            web_session_id=g8e_context.web_session_id,
-            user_id=g8e_context.user_id,
-            case_id=g8e_context.case_id,
-            investigation_id=g8e_context.investigation_id,
         )
         return await capture_publish(session_event)
 

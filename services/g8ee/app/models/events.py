@@ -59,6 +59,36 @@ class SessionEvent(G8eBaseModel):
     investigation_id: str | None = Field(default=None, description="Investigation correlation ID")
     task_id: str | None = Field(default=None, description="AI task ID for routing")
 
+    @classmethod
+    def from_context(
+        cls,
+        context: Any,
+        event_type: EventType,
+        payload: G8eBaseModel,
+    ) -> SessionEvent:
+        """Create a SessionEvent safely extracting IDs from a g8e_context.
+        
+        Args:
+            context: G8eHttpContext or RequestContext object.
+            event_type: The EventType.
+            payload: The event payload.
+        """
+        user_id = getattr(context, "user_id", None)
+        if not user_id:
+            # SessionEvent requires a user_id for routing fallback
+            user_id = "unknown"
+            
+        return cls(
+            event_type=event_type,
+            payload=payload,
+            web_session_id=getattr(context, "web_session_id", None),
+            cli_session_id=getattr(context, "cli_session_id", None),
+            user_id=user_id,
+            case_id=getattr(context, "case_id", None),
+            investigation_id=getattr(context, "investigation_id", None),
+            task_id=getattr(context, "task_id", None),
+        )
+
     @model_validator(mode="after")
     def _exactly_one_session_id(self) -> SessionEvent:
         if self.web_session_id and self.cli_session_id:

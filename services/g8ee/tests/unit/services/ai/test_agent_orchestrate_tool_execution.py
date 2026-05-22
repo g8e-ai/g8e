@@ -46,6 +46,7 @@ from app.constants import CommandErrorType, OperatorStatus, OperatorToolName, Op
 from app.llm.llm_types import ToolCall
 from app.models.agent import StreamChunkData
 from app.models.agents.tribunal import TribunalSystemError
+from app.models.tribunal_commands import TribunalGenerationRequest
 from app.models.operators import (
     HeartbeatNetworkInfo,
     HeartbeatSnapshot,
@@ -92,7 +93,13 @@ def mock_tool_executor():
 
     executor.reputation_data_service = MagicMock()
     executor.auditor_hmac_key = "test-hmac-key"
-    executor.ai_response_analyzer = MagicMock()
+    executor.ai_response_analyzer = None
+    
+    # Mock reputation_service with async resolve_stakes
+    from app.services.ai.reputation_service import ResolveStakesResult
+    mock_reputation_service = MagicMock()
+    mock_reputation_service.resolve_stakes = AsyncMock(return_value=ResolveStakesResult(resolutions=[]))
+    executor.reputation_service = mock_reputation_service
 
     return executor
 
@@ -163,7 +170,7 @@ def _mock_executor_failure(executor: MagicMock, error_type: CommandErrorType = C
     executor.execute_tool_call = AsyncMock(return_value=result)
 
 
-def _noop_generate_command(request: str, **_kwargs):
+def _noop_generate_command(request: TribunalGenerationRequest, **_kwargs):
     """Mock Tribunal that passes the request through verbatim as the final command.
 
     Used by tests that need Tribunal to run but do not care about refinement.
@@ -172,22 +179,29 @@ def _noop_generate_command(request: str, **_kwargs):
     """
     from app.services.ai.generator import CommandGenerationOutcome, CommandGenerationResult
     return CommandGenerationResult(
-        request=request,
-        final_command=request,
+        request=request.request,
+        final_command=request.request,
         outcome=CommandGenerationOutcome.CONSENSUS,
         reputation_commitment_id=None,
     )
 
 
-def _refining_generate_command(request: str, refined: str, **_kwargs):
+def _refining_generate_command(request: TribunalGenerationRequest, refined: str, **_kwargs):
     """Mock Tribunal that produces a refined command distinct from the request."""
     from app.services.ai.generator import CommandGenerationOutcome, CommandGenerationResult
     return CommandGenerationResult(
-        request=request,
+        request=request.request,
         final_command=refined,
         outcome=CommandGenerationOutcome.CONSENSUS,
         reputation_commitment_id=None,
     )
+
+
+def _refining_generate_command_with_refined(refined: str):
+    """Returns a mock Tribunal function that produces a specific refined command."""
+    def _wrapper(request: TribunalGenerationRequest, **_kwargs):
+        return _refining_generate_command(request, refined=refined)
+    return _wrapper
 
 
 NON_OPERATOR_FUNCTION = "some_unknown_tool_that_is_not_registered"
@@ -634,7 +648,7 @@ class TestTribunalResultSurfaced:
     async def test_tribunal_result_carries_refined_command(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         _mock_executor_success(mock_tool_executor)
 
-        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=lambda request, **kwargs: _refining_generate_command(request, refined="ls -lhR"))):
+        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_refining_generate_command_with_refined("ls -lhR"))):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files recursively", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
@@ -782,9 +796,10 @@ class TestTribunalRefinement:
             )
 
         mock_generate.assert_awaited_once()
-        call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["request"] == "list files in long format"
-        assert call_kwargs["guidelines"] == "favour -la flags"
+        call_args = mock_generate.call_args.args
+        tribunal_request = call_args[0]
+        assert tribunal_request.request == "list files in long format"
+        assert tribunal_request.guidelines == "favour -la flags"
 
     async def test_generate_command_not_called_for_file_read(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         _mock_executor_success(mock_tool_executor)
@@ -815,7 +830,7 @@ class TestTribunalRefinement:
 
         mock_tool_executor.execute_tool_call = capture_call
 
-        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=lambda request, **kwargs: _refining_generate_command(request, refined="df -h --output=source,size,avail"))):
+        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_refining_generate_command_with_refined("df -h --output=source,size,avail"))):
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
@@ -904,8 +919,9 @@ class TestTribunalRefinement:
                 request_settings=request_settings,
             )
 
-        call_kwargs = mock_generate.call_args.kwargs
-        op_ctx = call_kwargs["operator_context"]
+        call_args = mock_generate.call_args.args
+        tribunal_request = call_args[0]
+        op_ctx = tribunal_request.operator_context
         assert op_ctx is not None
         assert op_ctx.os == "ubuntu"
         assert op_ctx.operator_id == unique_operator_id
@@ -1067,8 +1083,9 @@ class TestTargetOperatorResolution:
             )
 
         # Verify Tribunal received Linux operator's OS context
-        call_kwargs = mock_generate.call_args.kwargs
-        op_ctx = call_kwargs["operator_context"]
+        call_args = mock_generate.call_args.args
+        tribunal_request = call_args[0]
+        op_ctx = tribunal_request.operator_context
         assert op_ctx is not None
         assert op_ctx.operator_id == "op-linux"
         assert op_ctx.os == "linux"
@@ -1092,8 +1109,9 @@ class TestTargetOperatorResolution:
             )
 
         # Verify Tribunal received Ubuntu operator's OS context
-        call_kwargs = mock_generate.call_args.kwargs
-        op_ctx = call_kwargs["operator_context"]
+        call_args = mock_generate.call_args.args
+        tribunal_request = call_args[0]
+        op_ctx = tribunal_request.operator_context
         assert op_ctx is not None
         assert op_ctx.operator_id == "op-ubuntu"
         assert op_ctx.os == "ubuntu"
@@ -1117,8 +1135,9 @@ class TestTargetOperatorResolution:
             )
 
         # Should resolve to ubuntu operator by hostname
-        call_kwargs = mock_generate.call_args.kwargs
-        op_ctx = call_kwargs["operator_context"]
+        call_args = mock_generate.call_args.args
+        tribunal_request = call_args[0]
+        op_ctx = tribunal_request.operator_context
         assert op_ctx is not None
         assert op_ctx.operator_id == "op-ubuntu"
         assert op_ctx.os == "ubuntu"
@@ -1142,8 +1161,9 @@ class TestTargetOperatorResolution:
             )
 
         # Index 1 should resolve to second operator (ubuntu)
-        call_kwargs = mock_generate.call_args.kwargs
-        op_ctx = call_kwargs["operator_context"]
+        call_args = mock_generate.call_args.args
+        tribunal_request = call_args[0]
+        op_ctx = tribunal_request.operator_context
         assert op_ctx is not None
         assert op_ctx.operator_id == "op-ubuntu"
         assert op_ctx.os == "ubuntu"
@@ -1167,8 +1187,9 @@ class TestTargetOperatorResolution:
             )
 
         # Should fall back to first operator (linux)
-        call_kwargs = mock_generate.call_args.kwargs
-        op_ctx = call_kwargs["operator_context"]
+        call_args = mock_generate.call_args.args
+        tribunal_request = call_args[0]
+        op_ctx = tribunal_request.operator_context
         assert op_ctx is not None
         assert op_ctx.operator_id == "op-linux"
         assert op_ctx.os == "linux"
@@ -1192,8 +1213,9 @@ class TestTargetOperatorResolution:
             )
 
         # Should use first operator (linux) by default
-        call_kwargs = mock_generate.call_args.kwargs
-        op_ctx = call_kwargs["operator_context"]
+        call_args = mock_generate.call_args.args
+        tribunal_request = call_args[0]
+        op_ctx = tribunal_request.operator_context
         assert op_ctx is not None
         assert op_ctx.operator_id == "op-linux"
         assert op_ctx.os == "linux"

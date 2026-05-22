@@ -60,14 +60,10 @@ class FakeEventService:
         })
         # Converge command events into the main published list as SessionEvents
         from app.models.events import SessionEvent
-        event = SessionEvent(
+        event = SessionEvent.from_context(
+            context=g8e_context,
             event_type=event_type,
             payload=data,
-            web_session_id=g8e_context.web_session_id,
-            user_id=g8e_context.user_id,
-            case_id=g8e_context.case_id,
-            investigation_id=g8e_context.investigation_id,
-            task_id=task_id,
         )
         # CRITICAL: We MUST call self.publish() which is an AsyncMock.
         # The AsyncMock's side_effect is _record_publish, which appends to self.published.
@@ -86,14 +82,20 @@ class FakeEventService:
     ) -> None:
         """Typed fake for publish_investigation_event."""
         # We can just record this as a SessionEvent in self.published
-        event = SessionEvent(
-            event_type=event_type,
-            payload=payload,
-            investigation_id=investigation_id,
+        from app.models.http_context import RequestContext
+        from app.constants import ComponentName
+        ctx = RequestContext(
             web_session_id=web_session_id,
             cli_session_id=cli_session_id,
-            case_id=case_id,
             user_id=user_id,
+            case_id=case_id,
+            investigation_id=investigation_id,
+            source_component=ComponentName.G8EE,
+        )
+        event = SessionEvent.from_context(
+            context=ctx,
+            event_type=event_type,
+            payload=payload,
         )
         await self.publish(event)
 
