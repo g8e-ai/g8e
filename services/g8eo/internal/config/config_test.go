@@ -170,10 +170,10 @@ func TestLoad_ValidationErrors(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// LoadListen
+// LoadGateway
 // ---------------------------------------------------------------------------
 
-func TestLoadListen_Defaults(t *testing.T) {
+func TestLoadGateway_Defaults(t *testing.T) {
 	wantWorkDir := FindProjectRoot()
 	if wantWorkDir == "" {
 		var err error
@@ -181,20 +181,20 @@ func TestLoadListen_Defaults(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	cfg, err := LoadListen(ListenOptions{AllowTestPortZero: true})
+	cfg, err := LoadGateway(GatewayOptions{AllowTestPortZero: true})
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
-	assert.True(t, cfg.Listen.Enabled)
+	assert.True(t, cfg.Gateway.Enabled)
 
-	assert.Equal(t, 0, cfg.Listen.HTTPPort)
-	assert.Equal(t, filepath.Join(wantWorkDir, ".g8e", "data"), cfg.Listen.DataDir)
-	assert.True(t, filepath.IsAbs(cfg.Listen.DataDir))
+	assert.Equal(t, 0, cfg.Gateway.HTTPPort)
+	assert.Equal(t, filepath.Join(wantWorkDir, ".g8e", "data"), cfg.Gateway.DataDir)
+	assert.True(t, filepath.IsAbs(cfg.Gateway.DataDir))
 	assert.Equal(t, constants.Status.ComponentName.G8EOListen, cfg.ComponentName)
 }
 
-func TestLoadListen_ExplicitValues(t *testing.T) {
-	cfg, err := LoadListen(ListenOptions{
+func TestLoadGateway_ExplicitValues(t *testing.T) {
+	cfg, err := LoadGateway(GatewayOptions{
 		HTTPPort:          443,
 		BootstrapPort:     80,
 		PublicPort:        8443,
@@ -207,25 +207,25 @@ func TestLoadListen_ExplicitValues(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, 443, cfg.Listen.HTTPPort)
-	assert.Equal(t, 80, cfg.Listen.BootstrapPort)
-	assert.Equal(t, 8443, cfg.Listen.PublicPort)
-	assert.Equal(t, "/var/data", cfg.Listen.DataDir)
-	assert.Equal(t, "/var/pki", cfg.Listen.PKIDir)
-	assert.Equal(t, "/var/secrets", cfg.Listen.SecretsDir)
+	assert.Equal(t, 443, cfg.Gateway.HTTPPort)
+	assert.Equal(t, 80, cfg.Gateway.BootstrapPort)
+	assert.Equal(t, 8443, cfg.Gateway.PublicPort)
+	assert.Equal(t, "/var/data", cfg.Gateway.DataDir)
+	assert.Equal(t, "/var/pki", cfg.Gateway.PKIDir)
+	assert.Equal(t, "/var/secrets", cfg.Gateway.SecretsDir)
 }
 
-func TestLoadListen_PartialDefaults(t *testing.T) {
+func TestLoadGateway_PartialDefaults(t *testing.T) {
 
 	t.Run("only data dir overridden", func(t *testing.T) {
-		cfg, err := LoadListen(ListenOptions{DataDir: "/custom/data", AllowTestPortZero: true})
+		cfg, err := LoadGateway(GatewayOptions{DataDir: "/custom/data", AllowTestPortZero: true})
 		require.NoError(t, err)
 
-		assert.Equal(t, "/custom/data", cfg.Listen.DataDir)
+		assert.Equal(t, "/custom/data", cfg.Gateway.DataDir)
 	})
 
 	t.Run("no operator fields set", func(t *testing.T) {
-		cfg, err := LoadListen(ListenOptions{AllowTestPortZero: true})
+		cfg, err := LoadGateway(GatewayOptions{AllowTestPortZero: true})
 		require.NoError(t, err)
 		assert.Empty(t, cfg.APIKey)
 		assert.Empty(t, cfg.Endpoint)
@@ -233,15 +233,15 @@ func TestLoadListen_PartialDefaults(t *testing.T) {
 	})
 }
 
-func TestLoadListen_SucceedsWithAllDefaults(t *testing.T) {
-	_, err := LoadListen(ListenOptions{AllowTestPortZero: true})
+func TestLoadGateway_SucceedsWithAllDefaults(t *testing.T) {
+	_, err := LoadGateway(GatewayOptions{AllowTestPortZero: true})
 	require.NoError(t, err)
 }
 
-func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
+func TestLoadGateway_RejectsPortZeroInProduction(t *testing.T) {
 
 	t.Run("reject httpPort 0", func(t *testing.T) {
-		_, err := LoadListen(ListenOptions{
+		_, err := LoadGateway(GatewayOptions{
 			HTTPPort:          0,
 			BootstrapPort:     constants.Ports.OperatorBootstrapHttps,
 			PublicPort:        constants.Ports.OperatorPublicHttps,
@@ -252,7 +252,7 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 	})
 
 	t.Run("reject bootstrapPort 0", func(t *testing.T) {
-		_, err := LoadListen(ListenOptions{
+		_, err := LoadGateway(GatewayOptions{
 			HTTPPort:          constants.Ports.OperatorHttps,
 			BootstrapPort:     0,
 			PublicPort:        constants.Ports.OperatorPublicHttps,
@@ -263,7 +263,7 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 	})
 
 	t.Run("reject publicPort 0", func(t *testing.T) {
-		_, err := LoadListen(ListenOptions{
+		_, err := LoadGateway(GatewayOptions{
 			HTTPPort:          constants.Ports.OperatorHttps,
 			BootstrapPort:     constants.Ports.OperatorBootstrapHttps,
 			PublicPort:        0,
@@ -274,7 +274,7 @@ func TestLoadListen_RejectsPortZeroInProduction(t *testing.T) {
 	})
 
 	t.Run("accept all non-zero ports in production", func(t *testing.T) {
-		_, err := LoadListen(ListenOptions{
+		_, err := LoadGateway(GatewayOptions{
 			HTTPPort:          constants.Ports.OperatorHttps,
 			BootstrapPort:     constants.Ports.OperatorBootstrapHttps,
 			PublicPort:        constants.Ports.OperatorPublicHttps,

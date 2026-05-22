@@ -38,8 +38,11 @@ BOOTSTRAP_PORT="$G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT"
 # a port would force VerifyClientCertIfGiven and downgrade the mTLS gate.
 PUBLIC_PORT="$G8E_OPERATOR_PUBLIC_HTTPS_PORT"
 
-echo "Starting g8eg Governance Gateway (listen mode) on ports HTTP:${HTTP_PORT}..."
-exec "$GATEWAY_BIN" --listen \
+# Map G8E_GATEWAY_POSTURE to posture flag (default: doctrine)
+GATEWAY_POSTURE="${G8E_GATEWAY_POSTURE:-doctrine}"
+
+echo "Starting g8eg Governance Gateway (posture: ${GATEWAY_POSTURE}) on ports HTTP:${HTTP_PORT}..."
+exec "$GATEWAY_BIN" --"$GATEWAY_POSTURE" \
     --data-dir "$DATA_DIR" \
     --pki-dir "$PKI_DIR" \
     --secrets-dir "$SECRETS_DIR" \

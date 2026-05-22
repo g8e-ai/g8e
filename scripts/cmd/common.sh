@@ -207,7 +207,7 @@ _operator_bootstrap() {
 
 _ensure_operator() {
     if ! _operator_running; then
-        echo "[g8e] Operator listen mode is not running - start the platform: ./g8e platform start" >&2
+        echo "[g8e] Governance Gateway is not running - start the platform: ./g8e platform start" >&2
         exit 1
     fi
 }

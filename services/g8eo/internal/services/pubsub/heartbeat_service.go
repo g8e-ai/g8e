@@ -279,7 +279,7 @@ func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg PubSubCommand
 			hs.logger.Info("[HEARTBEAT] Requested heartbeat sent successfully")
 		}
 	} else {
-		if hs.config.Listen.Enabled {
+		if hs.config.Gateway.Enabled {
 			hs.logger.Debug("[HEARTBEAT] Results publisher not set, skipping heartbeat in listen mode")
 		} else {
 			hs.logger.Warn("[HEARTBEAT] Results publisher not set, cannot send heartbeat")
@@ -299,7 +299,7 @@ func (hs *HeartbeatService) SendAutomatic() {
 			hs.logger.Info("[HEARTBEAT] Automatic heartbeat sent successfully")
 		}
 	} else {
-		if hs.config.Listen.Enabled {
+		if hs.config.Gateway.Enabled {
 			hs.logger.Debug("[HEARTBEAT] Results publisher not set, skipping automatic heartbeat in listen mode")
 		} else {
 			hs.logger.Warn("[HEARTBEAT] Results publisher not set, cannot send automatic heartbeat")
