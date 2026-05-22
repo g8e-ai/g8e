@@ -28,7 +28,7 @@ from app.constants.status import (
     ExecutionStatus,
     AITaskId,
 )
-from app.constants.events import (
+from app.constants.generated_events import (
     EventType,
 )
 from app.models.http_context import G8eHttpContext

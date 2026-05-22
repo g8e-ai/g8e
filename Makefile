@@ -36,6 +36,7 @@ help:
 	@echo "  constants     Generate all constants and sync documentation ports"
 	@echo "  buf-install   Install Buf CLI locally if not found"
 	@echo "  lint-no-bare-session-id  Check for bare session_id regression"
+	@echo "  lint-no-hand-authored-events  Check for hand-authored events.py regression"
 	@echo "  first-issues  Find good first issues in the codebase"
 	@echo "  clean         Remove build artifacts and runtime state"
 	@echo ""
@@ -144,6 +145,15 @@ lint-no-bare-session-id:
 		exit 1; \
 	fi
 	@echo "No bare session_id found."
+
+.PHONY: lint-no-hand-authored-events
+lint-no-hand-authored-events:
+	@echo "Checking for hand-authored events.py regression..."
+	@if [ -f "services/g8ee/app/constants/events.py" ]; then \
+		echo "Error: Hand-authored 'services/g8ee/app/constants/events.py' found. Use 'generated_events.py' instead."; \
+		exit 1; \
+	fi
+	@echo "No hand-authored events.py found."
 
 .PHONY: first-issues
 first-issues:

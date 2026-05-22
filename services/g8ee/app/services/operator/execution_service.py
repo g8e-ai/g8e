@@ -20,7 +20,7 @@ and result assembly.
 import asyncio
 import logging
 
-from app.constants.events import EventType
+from app.constants.generated_events import EventType
 from app.constants.status import (
     AITaskId,
     CommandErrorType,

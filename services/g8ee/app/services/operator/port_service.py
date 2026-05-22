@@ -25,7 +25,7 @@ from app.services.protocols import (
     PubSubServiceProtocol,
 )
 
-from app.constants.events import EventType
+from app.constants.generated_events import EventType
 from app.constants.status import (
     AITaskId,
     CommandErrorType,

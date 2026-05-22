@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.events import EventType
+from app.constants.generated_events import EventType
 from app.constants.intents import CloudIntent
 from app.constants.status import FileOperation
 from app.models.http_context import RequestContext, G8eHttpContext

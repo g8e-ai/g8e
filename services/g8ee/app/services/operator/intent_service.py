@@ -32,7 +32,7 @@ from app.constants.status import (
     ExecutionStatus,
     OperatorType,
 )
-from app.constants.events import (
+from app.constants.generated_events import (
     EventType,
 )
 from app.constants.intents import (

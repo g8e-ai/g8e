@@ -64,7 +64,7 @@ class CaseDataService:
         settings: G8eeAppSettings,
         cache: CacheAsideService,
         event_service: EventService,
-        governance_client: "GovernanceClient",
+        governance_client: GovernanceClient,
     ):
         self.settings = settings
         self.cache = cache
@@ -247,7 +247,7 @@ class CaseDataService:
 
         async def _update():
             db_payload = updated.model_dump(mode="json")
-            context = updates.context if hasattr(updates, 'context') else None
+            context = updates.context if hasattr(updates, "context") else None
 
             if context:
                 await self._governance_client.update_governed_doc(

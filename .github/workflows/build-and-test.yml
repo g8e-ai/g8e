@@ -56,6 +56,9 @@ jobs:
       - name: Lint no bare session_id
         run: make lint-no-bare-session-id
 
+      - name: Lint no hand-authored events
+        run: make lint-no-hand-authored-events
+
       - name: Validate doctrine JSON schema
         run: make validate-doctrines
 

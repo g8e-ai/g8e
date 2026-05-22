@@ -35,7 +35,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
     All reads and writes route exclusively through CacheAsideService.
     """
 
-    def __init__(self, cache_aside_service: CacheAsideService, governance_client: "GovernanceClient") -> None:
+    def __init__(self, cache_aside_service: CacheAsideService, governance_client: GovernanceClient) -> None:
         self._cache_aside = cache_aside_service
         self._governance_client = governance_client
         self.memories_collection = DB_COLLECTION_MEMORIES
@@ -48,7 +48,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
             status=investigation.status,
             case_title=investigation.case_title,
         )
-        
+
         from app.models.pubsub_messages import G8eMessage
         from app.models.command_request_payloads import DocumentUpdateRequestPayload
         from app.constants import EventType, ComponentName, AITaskId
@@ -87,9 +87,9 @@ class MemoryDataService(MemoryDataServiceProtocol):
 
     async def save_memory(self, memory: InvestigationMemory, is_new: bool, context: RequestContext) -> None:
         data = memory.model_dump(mode="json")
-        
+
         from app.constants import EventType, ComponentName
-        
+
         if is_new:
             from app.models.pubsub_messages import G8eMessage
             from app.models.command_request_payloads import DocumentUpdateRequestPayload

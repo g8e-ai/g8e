@@ -59,7 +59,7 @@ _CONVERSATION_HISTORY_ADAPTER = TypeAdapter(list[ConversationHistoryMessage])
 
 class InvestigationDataService(InvestigationDataServiceProtocol):
 
-    def __init__(self, cache: CacheAsideService, governance_client: "GovernanceClient"):
+    def __init__(self, cache: CacheAsideService, governance_client: GovernanceClient):
         self.cache = cache
         self.collection = DB_COLLECTION_INVESTIGATIONS
         self._history_lock = KeyedAsyncLock()
@@ -122,7 +122,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         )
         await self._governance_client.submit_envelope(message)
         logger.info("Created investigation %s for case %s via governance envelope", investigation.id, request.case_id)
-        
+
         return investigation
 
     async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:

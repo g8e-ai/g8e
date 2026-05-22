@@ -474,6 +474,7 @@ async def health_check_dependencies(request: Request) -> HealthCheckResult:
 __all__ = [
     "get_g8ee_all_services",
     "get_g8ee_api_key_service",
+    "get_g8ee_app_settings",
     "get_g8ee_approval_service",
     "get_g8ee_attachment_service",
     "get_g8ee_auth_service",
@@ -500,7 +501,6 @@ __all__ = [
     "get_g8ee_operator_data_service",
     "get_g8ee_operator_lifecycle_service",
     "get_g8ee_operator_session_service",
-    "get_g8ee_app_settings",
     "get_g8ee_pubsub_client",
     "get_g8ee_session_auth_listener",
     "get_g8ee_settings_service",

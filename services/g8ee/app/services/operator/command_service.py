@@ -17,7 +17,7 @@ import logging
 from app.clients.pubsub_client import PubSubClient
 from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.constants.status import ComponentName, CommandErrorType, ExecutionStatus, RiskLevel
-from app.constants.events import EventType
+from app.constants.generated_events import EventType
 from app.constants.status import AITaskId
 from app.models.agent import ExecutorCommandArgs
 from app.models.tool_args import (
