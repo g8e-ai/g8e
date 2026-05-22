@@ -75,6 +75,7 @@ class TestServiceFactorySmoke:
                 blob_service=None,
                 pubsub_client=None,
                 web_search_provider=None,
+                governance_client=MagicMock(),
             )
 
             assert services is not None
@@ -106,6 +107,7 @@ class TestServiceFactorySmoke:
                 blob_service=None,
                 pubsub_client=None,
                 web_search_provider=web_search_provider,
+                governance_client=MagicMock(),
             )
 
             assert services is not None

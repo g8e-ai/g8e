@@ -112,8 +112,8 @@ class RequestContext(G8eBaseModel):
             execution_id=context.execution_id,
             source_component=context.source_component,
             system_fingerprint=context.system_fingerprint,
-            operator_id=None,
-            operator_session_id=None,
+            operator_id=context.operator_id,
+            operator_session_id=context.operator_session_id,
         )
 
 class G8eHttpContext(G8eBaseModel):
@@ -165,6 +165,14 @@ class G8eHttpContext(G8eBaseModel):
     system_fingerprint: str | None = Field(
         default=None,
         description="System fingerprint of the caller"
+    )
+    operator_id: str | None = Field(
+        default=None,
+        description="Operator ID for governance envelope routing"
+    )
+    operator_session_id: str | None = Field(
+        default=None,
+        description="Operator session ID for governance envelope routing"
     )
     is_operator_auth_relay: bool = Field(
         default=False,
@@ -285,6 +293,8 @@ class G8eHttpContext(G8eBaseModel):
             execution_id=request_context.execution_id or generate_execution_id(),
             source_component=request_context.source_component,
             system_fingerprint=request_context.system_fingerprint,
+            operator_id=request_context.operator_id,
+            operator_session_id=request_context.operator_session_id,
             is_operator_auth_relay=is_exempt_path,
         )
 

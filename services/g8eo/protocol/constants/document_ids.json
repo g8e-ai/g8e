@@ -1,0 +1,14 @@
+{
+  "document_ids": {
+    "app_settings": {
+      "value": "app_settings",
+      "_go_const": "DocIDAppSettings",
+      "_python_const": "PLATFORM_SETTINGS"
+    },
+    "user_settings_prefix": {
+      "value": "user_settings_",
+      "_go_const": "DocIDUserSettingsPrefix",
+      "_python_const": "USER_SETTINGS_PREFIX"
+    }
+  }
+}

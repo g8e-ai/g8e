@@ -21,6 +21,10 @@ from app.constants import (
     TribunalAuditMode,
     TribunalAuditStatus,
 )
+from app.constants.generated_events import (
+    OPERATOR_REPUTATION_COMMITMENT_CREATED,
+    OPERATOR_REPUTATION_COMMITMENT_FAILED,
+)
 from app.constants.status import CommandErrorType
 from app.llm.provider import LLMProvider
 from app.errors import OllamaEmptyResponseError
@@ -253,7 +257,7 @@ class TribunalAuditor:
                 commitment_id = commitment.id
                 logger.info("[TRIBUNAL-AUDITOR] Reputation commitment created: id=%s merkle_root=%s", commitment.id, commitment.merkle_root[:16])
                 await self.emitter.emit(
-                    EventType.AI_REPUTATION_COMMITMENT_CREATED,
+                    OPERATOR_REPUTATION_COMMITMENT_CREATED,
                     ReputationCommitmentCreatedPayload(
                         commitment_id=commitment.id,
                         tribunal_command_id=commitment.tribunal_command_id,
@@ -272,7 +276,7 @@ class TribunalAuditor:
                     exc_info=True,
                 )
                 await self.emitter.emit(
-                    EventType.AI_REPUTATION_COMMITMENT_FAILED,
+                    OPERATOR_REPUTATION_COMMITMENT_FAILED,
                     ReputationCommitmentFailedPayload(
                         tribunal_command_id=correlation_id,
                         investigation_id=investigation_id,

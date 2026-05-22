@@ -1,0 +1,64 @@
+{
+  "senders": {
+    "AiAssistant": {
+      "value": "g8e.v1.source.ai.assistant",
+      "_go_const": "SourceAiAssistant",
+      "_python_const": "AI_ASSISTANT"
+    },
+    "AiPrimary": {
+      "value": "g8e.v1.source.ai.primary",
+      "_go_const": "SourceAiPrimary",
+      "_python_const": "AI_PRIMARY"
+    },
+    "AiTriage": {
+      "value": "g8e.v1.source.ai.triage",
+      "_go_const": "SourceAiTriage",
+      "_python_const": "AI_TRIAGE"
+    },
+    "System": {
+      "value": "g8e.v1.source.system",
+      "_go_const": "SourceSystem",
+      "_python_const": "SYSTEM"
+    },
+    "TypeCall": {
+      "value": "call",
+      "_go_const": "MessageTypeCall",
+      "_python_const": "TYPE_CALL"
+    },
+    "TypeCode": {
+      "value": "code",
+      "_go_const": "MessageTypeCode",
+      "_python_const": "TYPE_CODE"
+    },
+    "TypeError": {
+      "value": "error",
+      "_go_const": "MessageTypeError",
+      "_python_const": "TYPE_ERROR"
+    },
+    "TypeResult": {
+      "value": "result",
+      "_go_const": "MessageTypeResult",
+      "_python_const": "TYPE_RESULT"
+    },
+    "TypeText": {
+      "value": "text",
+      "_go_const": "MessageTypeText",
+      "_python_const": "TYPE_TEXT"
+    },
+    "TypeThinking": {
+      "value": "thinking",
+      "_go_const": "MessageTypeThinking",
+      "_python_const": "TYPE_THINKING"
+    },
+    "UserChat": {
+      "value": "g8e.v1.source.user.chat",
+      "_go_const": "SourceUserChat",
+      "_python_const": "USER_CHAT"
+    },
+    "UserTerminal": {
+      "value": "g8e.v1.source.user.terminal",
+      "_go_const": "SourceUserTerminal",
+      "_python_const": "USER_TERMINAL"
+    }
+  }
+}

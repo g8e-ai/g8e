@@ -220,13 +220,8 @@ class EventType(StrEnum):
     AI_TRIBUNAL_VOTING_ROUND_2_PASS_COMPLETED = "g8e.v1.ai.tribunal.voting.round_2.pass.completed"
     AI_TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED = "g8e.v1.ai.tribunal.voting.round_2.consensus.reached"
     AI_TRIBUNAL_VOTING_ROUND_2_CONSENSUS_FAILED = "g8e.v1.ai.tribunal.voting.round_2.consensus.failed"
-    AI_REPUTATION_COMMITMENT_CREATED = "g8e.v1.ai.reputation.commitment.created"
-    AI_REPUTATION_COMMITMENT_VERIFIED = "g8e.v1.ai.reputation.commitment.verified"
-    AI_REPUTATION_COMMITMENT_FAILED = "g8e.v1.ai.reputation.commitment.failed"
-    AI_REPUTATION_STATE_UPDATED = "g8e.v1.ai.reputation.state.updated"
-    AI_REPUTATION_SLASH_TIER1 = "g8e.v1.ai.reputation.slash.tier1"
-    AI_REPUTATION_SLASH_TIER2 = "g8e.v1.ai.reputation.slash.tier2"
-    AI_REPUTATION_SLASH_TIER3 = "g8e.v1.ai.reputation.slash.tier3"
+    # Reputation events moved to OPERATOR_* prefix (substrate governance concern, L2 consensus layer)
+    # Import from generated_events.py: OPERATOR_REPUTATION_COMMITMENT_CREATED, OPERATOR_REPUTATION_COMMITMENT_VERIFIED, etc.
     AI_LLM_CONFIG_REQUESTED = "g8e.v1.ai.llm.config.requested"
     AI_LLM_CONFIG_RECEIVED = "g8e.v1.ai.llm.config.received"
     AI_LLM_CONFIG_FAILED = "g8e.v1.ai.llm.config.failed"

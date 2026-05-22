@@ -572,7 +572,7 @@ def unique_web_session_id():
     return f"test-ws-{uuid.uuid4().hex[:8]}"
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def mock_governance_client():
     """Mock GovernanceClient for service tests."""
     from unittest.mock import AsyncMock, MagicMock

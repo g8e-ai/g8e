@@ -1,0 +1,39 @@
+{
+  "channels": {
+    "Message": {
+      "value": "message",
+      "_go_const": "PubSubEventMessage",
+      "_python_const": "MESSAGE"
+    },
+    "PMessage": {
+      "value": "pmessage",
+      "_go_const": "PubSubEventPMessage",
+      "_python_const": "P_MESSAGE"
+    },
+    "PSubscribe": {
+      "value": "psubscribe",
+      "_go_const": "PubSubActionPSubscribe",
+      "_python_const": "P_SUBSCRIBE"
+    },
+    "Publish": {
+      "value": "publish",
+      "_go_const": "PubSubActionPublish",
+      "_python_const": "PUBLISH"
+    },
+    "Subscribe": {
+      "value": "subscribe",
+      "_go_const": "PubSubActionSubscribe",
+      "_python_const": "SUBSCRIBE"
+    },
+    "Subscribed": {
+      "value": "subscribed",
+      "_go_const": "PubSubEventSubscribed",
+      "_python_const": "SUBSCRIBED"
+    },
+    "Unsubscribe": {
+      "value": "unsubscribe",
+      "_go_const": "PubSubActionUnsubscribe",
+      "_python_const": "UNSUBSCRIBE"
+    }
+  }
+}
