@@ -65,7 +65,7 @@ def test_collections_json_matches_model():
 def test_events_json_matches_model():
     """events.json must validate against EventsConstants model."""
     data = _load_json_file("events.json")
-    model = EventsConstants.model_validate(data)
+    EventsConstants.model_validate(data)
     # Spot-check a well-known key (keys are map keys from registry.go)
     assert "OperatorCommandCompleted" in data["events"]
 
@@ -73,7 +73,7 @@ def test_events_json_matches_model():
 def test_status_json_matches_model():
     """status.json must validate against StatusConstants model."""
     data = _load_json_file("status.json")
-    model = StatusConstants.model_validate(data)
+    StatusConstants.model_validate(data)
     # Spot-check a well-known key
     assert "available" in data["status"]["operator_status"]
     assert data["status"]["operator_status"]["available"]["value"] == "available"
@@ -82,7 +82,7 @@ def test_status_json_matches_model():
 def test_senders_json_matches_model():
     """senders.json must validate against SendersConstants model."""
     data = _load_json_file("senders.json")
-    model = SendersConstants.model_validate(data)
+    SendersConstants.model_validate(data)
     # senders.json has a nested structure with senders
     assert "senders" in data
     assert "AiAssistant" in data["senders"]
@@ -91,7 +91,7 @@ def test_senders_json_matches_model():
 def test_headers_json_matches_model():
     """headers.json must validate against HeadersConstants model."""
     data = _load_json_file("headers.json")
-    model = HeadersConstants.model_validate(data)
+    HeadersConstants.model_validate(data)
     # Spot-check a well-known key
     assert "APIKey" in data["headers"]
     assert data["headers"]["APIKey"]["value"] == "X-API-Key"
@@ -100,49 +100,49 @@ def test_headers_json_matches_model():
 def test_channels_json_matches_model():
     """channels.json must validate against ChannelsConstants model."""
     data = _load_json_file("channels.json")
-    model = ChannelsConstants.model_validate(data)
+    ChannelsConstants.model_validate(data)
 
 
 def test_pubsub_json_matches_model():
     """pubsub.json must validate against PubSubConstants model."""
     data = _load_json_file("pubsub.json")
-    model = PubSubConstants.model_validate(data)
+    PubSubConstants.model_validate(data)
 
 
 def test_intents_json_matches_model():
     """intents.json must validate against IntentsConstants model."""
     data = _load_json_file("intents.json")
-    model = IntentsConstants.model_validate(data)
+    IntentsConstants.model_validate(data)
 
 
 def test_prompts_json_matches_model():
     """prompts.json must validate against PromptsConstants model."""
     data = _load_json_file("prompts.json")
-    model = PromptsConstants.model_validate(data)
+    PromptsConstants.model_validate(data)
 
 
 def test_platform_json_matches_model():
     """platform.json must validate against PlatformConstants model."""
     data = _load_json_file("platform.json")
-    model = PlatformConstants.model_validate(data)
+    PlatformConstants.model_validate(data)
 
 
 def test_agents_json_matches_model():
     """agents.json must validate against AgentsConstants model."""
     data = _load_json_file("agents.json")
-    model = AgentsConstants.model_validate(data)
+    AgentsConstants.model_validate(data)
 
 
 def test_document_ids_json_matches_model():
     """document_ids.json must validate against DocumentIdsConstants model."""
     data = _load_json_file("document_ids.json")
-    model = DocumentIdsConstants.model_validate(data)
+    DocumentIdsConstants.model_validate(data)
 
 
 def test_kv_keys_json_matches_model():
     """kv_keys.json must validate against KVKeysConstants model."""
     data = _load_json_file("kv_keys.json")
-    model = KVKeysConstants.model_validate(data)
+    KVKeysConstants.model_validate(data)
 
 
 def test_paths_json_matches_model():

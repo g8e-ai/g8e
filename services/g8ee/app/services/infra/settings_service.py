@@ -295,19 +295,28 @@ class SettingsService:
             p_str = prov.value if hasattr(prov, "value") else str(prov)
 
             if p_str == "openai":
-                if key: user_settings.llm.openai_api_key = key
-                if endpoint: user_settings.llm.openai_endpoint = endpoint
+                if key:
+                    user_settings.llm.openai_api_key = key
+                if endpoint:
+                    user_settings.llm.openai_endpoint = endpoint
             elif p_str == "anthropic":
-                if key: user_settings.llm.anthropic_api_key = key
-                if endpoint: user_settings.llm.anthropic_endpoint = endpoint
+                if key:
+                    user_settings.llm.anthropic_api_key = key
+                if endpoint:
+                    user_settings.llm.anthropic_endpoint = endpoint
             elif p_str == "gemini":
-                if key: user_settings.llm.gemini_api_key = key
+                if key:
+                    user_settings.llm.gemini_api_key = key
             elif p_str == "ollama":
-                if key: user_settings.llm.ollama_api_key = key
-                if endpoint: user_settings.llm.ollama_endpoint = endpoint
+                if key:
+                    user_settings.llm.ollama_api_key = key
+                if endpoint:
+                    user_settings.llm.ollama_endpoint = endpoint
             elif p_str == "llamacpp":
-                if key: user_settings.llm.llamacpp_api_key = key
-                if endpoint: user_settings.llm.llamacpp_endpoint = endpoint
+                if key:
+                    user_settings.llm.llamacpp_api_key = key
+                if endpoint:
+                    user_settings.llm.llamacpp_endpoint = endpoint
 
         # Update Search settings
         if search_overrides:

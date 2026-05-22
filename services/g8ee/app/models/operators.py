@@ -817,7 +817,7 @@ class HeartbeatSSEEnvelope(G8eBaseModel):
 
     Authorship boundary: g8ee owns `operator_id` and `status` (the authoritative value from
     OperatorDocument); `metrics` carries the g8eo-authored HeartbeatSnapshot
-    snapshot verbatim (defined in protocol/proto/operator.proto)  - 
+    snapshot verbatim (defined in protocol/proto/operator.proto) -
     the same instance persisted as `latest_heartbeat_snapshot` on the operator
     document. There is no flat projection: wire, persistence, and browser
     all see the identical nested shape. Callers must never mutate fields

@@ -155,7 +155,7 @@ class HeartbeatSnapshotService:
         )
 
     async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        """Stop tracking an operator session. No pubsub state to release - 
+        """Stop tracking an operator session. No pubsub state to release -
         the pattern subscription is shared across all operators.
         """
         self._active_sessions.discard((operator_id, operator_session_id))
