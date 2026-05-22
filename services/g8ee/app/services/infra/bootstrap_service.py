@@ -159,12 +159,15 @@ class BootstrapService:
         self._cached_ca_path = None
 
     def verify_against_manifest(self, secret_name: str, value: str | None) -> None:
-        """Verify a loaded secret's SHA-256 matches the digest g8eo recorded.
+        """Verify the encrypted secret file's SHA-256 matches the digest g8eo recorded.
 
-        Closes the silent bootstrap-secret coupling: without this, g8ee
-        trusts whatever value the volume contains and any drift from the
-        DB-authoritative value written by g8eo surfaces only as an opaque
-        401 on the first downstream API call.
+        g8eo encrypts secrets with AES-256-GCM before writing to disk. The manifest
+        contains SHA-256 digests of the encrypted file content, not the plaintext
+        secrets. This verification ensures the encrypted file on disk has not been
+        tampered with since g8eo wrote it.
+
+        g8ee cannot decrypt secrets (no access to OS key store), so it reads the
+        encrypted file content directly and hashes it for comparison against the manifest.
 
         Behaviour:
           * manifest missing -> log warning, return (transitional window
@@ -176,15 +179,12 @@ class BootstrapService:
 
         Args:
             secret_name: logical secret name.
-            value: value loaded from the volume (already stripped).
+            value: ignored - we read the encrypted file directly for verification.
 
         Raises:
             BootstrapSecretTamperError: when the manifest has an entry for
-                ``secret_name`` but its digest does not match ``value``.
+                ``secret_name`` but the encrypted file digest does not match.
         """
-        if not value:
-            return
-
         manifest_path = self._secrets_dir / BOOTSTRAP_DIGEST_MANIFEST_FILE
         if not manifest_path.exists():
             self._logger.warning(
@@ -216,13 +216,28 @@ class BootstrapService:
             )
             return
 
-        actual = hashlib.sha256(value.encode("utf-8")).hexdigest()
+        # Read the encrypted file content and hash it (not the plaintext value)
+        try:
+            key_path = validate_safe_path(secret_name, self._secrets_dir)
+            if not key_path.exists():
+                raise BootstrapSecretTamperError(
+                    f"Bootstrap secret file {secret_name} does not exist at {key_path}. "
+                    f"Refusing to start with missing secret."
+                )
+            encrypted_content = key_path.read_bytes()
+            actual = hashlib.sha256(encrypted_content).hexdigest()
+        except Exception as err:
+            raise BootstrapSecretTamperError(
+                f"Failed to read encrypted secret file {secret_name} for verification: {err}. "
+                f"Refusing to start with an unreadable secret."
+            ) from err
+
         if actual != expected:
             raise BootstrapSecretTamperError(
                 f"Bootstrap secret {secret_name} failed tamper-evidence check: "
-                f"volume SHA-256 {actual} does not match manifest digest {expected}. "
-                f"The on-disk secret has drifted from the DB-authoritative value. "
-                f"Refusing to start to avoid authenticating with a divergent secret."
+                f"encrypted file SHA-256 {actual} does not match manifest digest {expected}. "
+                f"The on-disk encrypted file has been tampered with or corrupted. "
+                f"Refusing to start to avoid using a compromised secret."
             )
 
-        self._logger.info("Bootstrap secret %s verified against digest manifest", secret_name)
+        self._logger.info("Bootstrap secret %s verified against digest manifest (encrypted content)", secret_name)

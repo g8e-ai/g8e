@@ -197,7 +197,7 @@ func (m *SecretManager) createPlatformSettings(now time.Time) error {
 		}
 	}
 
-	if err := m.writeDigestManifest(secrets, now); err != nil {
+	if err := m.writeDigestManifestFromEncryptedFiles(now); err != nil {
 		return err
 	}
 
@@ -221,12 +221,13 @@ func (m *SecretManager) validatePlatformSettings() error {
 	}
 
 	for _, name := range requiredBootstrapSecrets {
-		fileValue, err := m.readRequiredSecretFile(name)
+		// Decrypt to verify against DB (plaintext comparison)
+		decryptedValue, err := m.readRequiredSecretFile(name)
 		if err != nil {
 			return err
 		}
-		if fileValue != dbSecrets[name] {
-			fileDigest := sha256.Sum256([]byte(fileValue))
+		if decryptedValue != dbSecrets[name] {
+			fileDigest := sha256.Sum256([]byte(decryptedValue))
 			dbDigest := sha256.Sum256([]byte(dbSecrets[name]))
 			m.logger.Error("[SecretManager] Bootstrap secret divergence between file and DB",
 				"name", name,
@@ -234,13 +235,20 @@ func (m *SecretManager) validatePlatformSettings() error {
 				"db_sha256", hex.EncodeToString(dbDigest[:]))
 			return fmt.Errorf("bootstrap secret %s differs between secrets directory and platform_settings DB; delete and recreate runtime state", name)
 		}
+
+		// Verify encrypted file digest matches manifest (what g8ee will check)
 		entry, ok := manifest.Secrets[name]
 		if !ok || entry.SHA256 == "" {
 			return fmt.Errorf("bootstrap digest manifest missing required entry %s; delete and recreate runtime state", name)
 		}
-		fileDigest := sha256.Sum256([]byte(fileValue))
-		if actual := hex.EncodeToString(fileDigest[:]); actual != entry.SHA256 {
-			return fmt.Errorf("bootstrap secret %s digest %s does not match manifest digest %s; delete and recreate runtime state", name, actual, entry.SHA256)
+		filePath := filepath.Join(m.secretsDir, name)
+		encryptedData, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("read encrypted secret file %s for validation: %w", filePath, err)
+		}
+		encryptedDigest := sha256.Sum256(encryptedData)
+		if actual := hex.EncodeToString(encryptedDigest[:]); actual != entry.SHA256 {
+			return fmt.Errorf("bootstrap secret %s encrypted file digest %s does not match manifest digest %s; delete and recreate runtime state", name, actual, entry.SHA256)
 		}
 	}
 
@@ -294,22 +302,25 @@ type bootstrapDigestRef struct {
 	SHA256 string `json:"sha256"`
 }
 
-// writeDigestManifest writes the bootstrap digest manifest atomically. Empty
-// secret values are skipped (they were never written to disk either). A
-// failure here is fatal: without the manifest, consumers cannot detect
-// volume-vs-DB drift on their next startup, which is the whole point of the
-// manifest.
-func (m *SecretManager) writeDigestManifest(secrets map[string]string, now time.Time) error {
+// writeDigestManifestFromEncryptedFiles writes the bootstrap digest manifest by reading
+// the actual encrypted files on disk and computing their SHA-256 digests. This ensures
+// the manifest matches what consumers (g8ee) will verify: they read the encrypted file
+// content and hash it, so the manifest must contain digests of the encrypted content,
+// not the plaintext secrets.
+func (m *SecretManager) writeDigestManifestFromEncryptedFiles(now time.Time) error {
 	manifest := bootstrapDigestManifest{
 		Version:   1,
 		UpdatedAt: now.UTC().Format(time.RFC3339Nano),
-		Secrets:   make(map[string]bootstrapDigestRef, len(secrets)),
+		Secrets:   make(map[string]bootstrapDigestRef, len(requiredBootstrapSecrets)),
 	}
-	for name, value := range secrets {
-		if value == "" {
-			continue
+
+	for _, name := range requiredBootstrapSecrets {
+		filePath := filepath.Join(m.secretsDir, name)
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("read encrypted secret file %s for manifest: %w", filePath, err)
 		}
-		sum := sha256.Sum256([]byte(value))
+		sum := sha256.Sum256(data)
 		manifest.Secrets[name] = bootstrapDigestRef{SHA256: hex.EncodeToString(sum[:])}
 	}
 
@@ -331,7 +342,7 @@ func (m *SecretManager) writeDigestManifest(secrets map[string]string, now time.
 			"from", tmpPath, "to", finalPath, string(constants.ConnectionStateError), err)
 		return fmt.Errorf("rename bootstrap digest manifest to %s: %w", finalPath, err)
 	}
-	m.logger.Info("[SecretManager] Bootstrap digest manifest written",
+	m.logger.Info("[SecretManager] Bootstrap digest manifest written from encrypted files",
 		"path", finalPath, "secrets", len(manifest.Secrets))
 	return nil
 }

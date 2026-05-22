@@ -22,10 +22,15 @@ import (
 )
 
 // New creates a new Keystore instance with the libsecret backend.
+// Falls back to file-based storage if libsecret is not available.
 func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
 	backend, err := newLibsecretBackend()
 	if err != nil {
-		return nil, fmt.Errorf("initialize libsecret backend: %w", err)
+		logger.Warn("[Keystore] libsecret backend unavailable, falling back to file-based storage", "error", err)
+		backend, err = newFileBackend(secretsDir)
+		if err != nil {
+			return nil, fmt.Errorf("initialize file backend: %w", err)
+		}
 	}
 
 	if err := os.MkdirAll(secretsDir, 0700); err != nil {

@@ -98,14 +98,14 @@ class SettingsService:
         # Load secrets from bootstrap service
         session_key = self._bootstrap.load_session_encryption_key()
         if session_key:
-            self._bootstrap.verify_against_manifest("session_encryption_key", session_key)
+            self._bootstrap.verify_against_manifest("session_encryption_key", None)
             settings.auth.session_encryption_key = session_key
         else:
             self._logger.info("Session encryption key not available from bootstrap service")
 
         auditor_hmac_key = self._bootstrap.load_auditor_hmac_key()
         if auditor_hmac_key:
-            self._bootstrap.verify_against_manifest("auditor_hmac_key", auditor_hmac_key)
+            self._bootstrap.verify_against_manifest("auditor_hmac_key", None)
             settings.auth.auditor_hmac_key = auditor_hmac_key
         else:
             self._logger.info("Auditor HMAC key not available from bootstrap service")
