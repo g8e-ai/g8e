@@ -968,7 +968,7 @@ class TestAudit:
             operator_id="op-1",
             event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
             metadata=metadata,
-            g8e_context=g8e_context,
+            context=RequestContext.from_app_context(g8e_context),
             log_tag="APPROVAL",
         )
 
@@ -1004,7 +1004,7 @@ class TestAudit:
             operator_id=None,
             event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
             metadata=metadata,
-            g8e_context=g8e_context,
+            context=RequestContext.from_app_context(g8e_context),
             log_tag="APPROVAL",
         )
 
@@ -1040,7 +1040,7 @@ class TestAudit:
             operator_id=None,
             event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
             metadata=metadata,
-            g8e_context=g8e_context,
+            context=RequestContext.from_app_context(g8e_context),
             log_tag="APPROVAL",
         )
 

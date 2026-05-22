@@ -161,6 +161,7 @@ from app.dependencies import (
     get_g8ee_settings_service,
     get_g8ee_settings_service_write,
     get_g8ee_user_settings,
+    get_request_context,
     require_authenticated_context,
 )
 from app.models.internal_api import RequestOverrides
@@ -797,7 +798,8 @@ async def delete_case(
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     cache_aside_service: CacheAsideService = Depends(get_g8ee_cache_aside_service),
-    g8e_context: G8eHttpContext = Depends(require_authenticated_context)
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
+    request_context: RequestContext = Depends(get_request_context)
 ):
     """
     Delete a case and all related data - internal cluster use only.
@@ -826,7 +828,7 @@ async def delete_case(
     investigations = await investigation_service.investigation_data_service.get_case_investigations(
         case_id=case_id,
         user_id=case_user_id,
-        context=RequestContext.from_app_context(g8e_context),
+        context=request_context,
     )
     for investigation in investigations:
         logger.info(
@@ -869,7 +871,7 @@ async def delete_case(
         )
 
     # Finally delete the case
-    await case_service.delete_case(case_id, context=RequestContext.from_app_context(g8e_context))
+    await case_service.delete_case(case_id, context=request_context)
 
     logger.info(
         "[INTERNAL-HTTP] Case and all related data deleted successfully",

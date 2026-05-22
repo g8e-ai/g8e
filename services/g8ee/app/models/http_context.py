@@ -88,6 +88,14 @@ class RequestContext(G8eBaseModel):
         default=None,
         description="System fingerprint of the caller"
     )
+    operator_id: str | None = Field(
+        default=None,
+        description="Operator ID for governance envelope routing"
+    )
+    operator_session_id: str | None = Field(
+        default=None,
+        description="Operator session ID for governance envelope routing"
+    )
 
     @classmethod
     def from_app_context(cls, context: G8eHttpContext) -> RequestContext:
@@ -104,6 +112,8 @@ class RequestContext(G8eBaseModel):
             execution_id=context.execution_id,
             source_component=context.source_component,
             system_fingerprint=context.system_fingerprint,
+            operator_id=None,
+            operator_session_id=None,
         )
 
 class G8eHttpContext(G8eBaseModel):

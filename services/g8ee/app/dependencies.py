@@ -455,6 +455,18 @@ async def require_authenticated_context(
     return await auth_service.get_validated_context(request, user, is_exempt_path=is_exempt)
 
 
+async def get_request_context(request: Request) -> RequestContext:
+    """Get RequestContext from request.state (set by middleware).
+
+    This centralizes context access - services should use this dependency
+    instead of calling RequestContext.from_app_context() scattered throughout code.
+    """
+    request_context = getattr(request.state, "request_context", None)
+    if not request_context:
+        raise AuthenticationError("RequestContext not found in request state - middleware may have failed to parse context")
+    return request_context
+
+
 async def health_check_dependencies(request: Request) -> HealthCheckResult:
     return await HealthService.check_dependencies(request)
 
@@ -495,6 +507,7 @@ __all__ = [
     "get_g8ee_settings_service_write",
     "get_g8ee_user_settings",
     "get_g8eeweb_search_provider",
+    "get_request_context",
     "health_check_dependencies",
     "is_infrastructure_health_check_ip",
     "require_authenticated_context",

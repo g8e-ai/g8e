@@ -72,6 +72,14 @@ class RequestContext(G8eBaseModel):
         default=None,
         description="System fingerprint of the caller"
     )
+    operator_id: str | None = Field(
+        default=None,
+        description="Operator ID for governance envelope routing"
+    )
+    operator_session_id: str | None = Field(
+        default=None,
+        description="Operator session ID for governance envelope routing"
+    )
 
     @model_validator(mode="after")
     def validate_session_identity(self):

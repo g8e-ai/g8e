@@ -575,11 +575,11 @@ def unique_web_session_id():
 @pytest.fixture
 def mock_governance_client():
     """Mock GovernanceClient for service tests."""
-    from unittest.mock import MagicMock
+    from unittest.mock import AsyncMock, MagicMock
     mock = MagicMock()
-    mock.submit_envelope = MagicMock(return_value=mock_awaitable({"status": "accepted"}))
-    mock.update_governed_doc = MagicMock(return_value=mock_awaitable({"status": "accepted"}))
-    mock.delete_governed_doc = MagicMock(return_value=mock_awaitable({"status": "accepted"}))
+    mock.submit_envelope = AsyncMock(return_value={"status": "accepted"})
+    mock.update_governed_doc = AsyncMock(return_value={"status": "accepted"})
+    mock.delete_governed_doc = AsyncMock(return_value={"status": "accepted"})
     return mock
 
 
@@ -874,9 +874,9 @@ async def pubsub_client(pubsub_service):
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def db_service(test_settings, cache_aside_service):
+async def db_service(test_settings, cache_aside_service, mock_governance_client):
     from app.services.investigation.investigation_data_service import InvestigationDataService
-    yield InvestigationDataService(cache=cache_aside_service)
+    yield InvestigationDataService(cache=cache_aside_service, governance_client=mock_governance_client)
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")

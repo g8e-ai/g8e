@@ -93,6 +93,7 @@ class AuthContext:
     web_session_id: str = ""
     source_component: ComponentName = ComponentName.CLIENT
     system_fingerprint: str = ""
+    operator_id: str = ""
     # Filled in by from_env() so callers can introspect what was loaded.
     missing: tuple[str, ...] = field(default_factory=tuple)
 
@@ -200,11 +201,19 @@ class AuthContext:
         task_id: Optional[str] = None,
         source_component: Optional[ComponentName] = None,
         web_session_id: Optional[str] = None,
+        operator_id: Optional[str] = None,
+        operator_session_id: Optional[str] = None,
     ) -> RequestContext:
         """Return a ``RequestContext`` model for request bodies.
 
         Matches ``app.models.http_context.RequestContext`` in g8ee.
         """
+        # Extract operator_id/operator_session_id from bound_operators if not provided
+        if not operator_id and self.bound_operators:
+            operator_id = self.bound_operators[0].operator_id
+        if not operator_session_id and self.bound_operators:
+            operator_session_id = self.bound_operators[0].operator_session_id
+
         return RequestContext(
             web_session_id=web_session_id or self.web_session_id or None,
             cli_session_id=self.cli_session_id,
@@ -216,6 +225,8 @@ class AuthContext:
             bound_operators=self.bound_operators,
             source_component=source_component or self.source_component,
             system_fingerprint=self.system_fingerprint,
+            operator_id=operator_id or self.operator_id or None,
+            operator_session_id=operator_session_id or self.operator_session_id or None,
         )
 
     def cookies(self) -> dict[str, str]:

@@ -66,7 +66,7 @@ from app.models.operators import (
     TargetSystem,
 )
 from app.models.events import SessionEvent
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.utils.ids import generate_approval_id, generate_intent_approval_id
 from app.utils.timestamp import now
 
@@ -215,7 +215,7 @@ class OperatorApprovalService:
         operator_id: str | None,
         event_type: EventType,
         metadata: ConversationMessageMetadata,
-        g8e_context: G8eHttpContext,
+        context: RequestContext,
         log_tag: str,
     ) -> None:
         """Record an approval lifecycle event to both operator activity_log and conversation_history."""
@@ -235,10 +235,8 @@ class OperatorApprovalService:
                 logger.error("[AUDIT-FAILURE] %s operator: %s", log_tag, e, exc_info=True)
 
         try:
-            from app.models.http_context import RequestContext
-            context = RequestContext.from_app_context(g8e_context)
             await self.investigation_data_service.add_approval_record(
-                investigation_id=g8e_context.investigation_id,
+                investigation_id=context.investigation_id,
                 event_type=event_type,
                 metadata=metadata,
                 context=context,
@@ -366,7 +364,7 @@ class OperatorApprovalService:
                     justification=request.justification,
                     requested_at=approval_event.requested_at,
                 ),
-                g8e_context=g8e_context,
+                context=RequestContext.from_app_context(g8e_context),
                 log_tag="AGENT_CONTINUE_APPROVAL",
             )
 
@@ -397,7 +395,7 @@ class OperatorApprovalService:
                         feedback_reason=pending.reason,
                         responded_at=pending.responded_at or now(),
                     ),
-                    g8e_context=g8e_context,
+                    context=RequestContext.from_app_context(g8e_context),
                     log_tag="AGENT_CONTINUE_APPROVAL",
                 )
                 return ApprovalResult(
@@ -421,7 +419,7 @@ class OperatorApprovalService:
                     reason=pending.reason,
                     responded_at=now(),
                 ),
-                g8e_context=g8e_context,
+                context=RequestContext.from_app_context(g8e_context),
                 log_tag="AGENT_CONTINUE_APPROVAL",
             )
 
@@ -533,7 +531,7 @@ class OperatorApprovalService:
                     justification=justification,
                     requested_at=approval_event.requested_at,
                 ),
-                g8e_context=g8e_context,
+                context=RequestContext.from_app_context(g8e_context),
                 log_tag="STREAM_APPROVAL",
             )
 
@@ -564,7 +562,7 @@ class OperatorApprovalService:
                         feedback_reason=pending.reason,
                         responded_at=pending.responded_at or now(),
                     ),
-                    g8e_context=g8e_context,
+                    context=RequestContext.from_app_context(g8e_context),
                     log_tag="STREAM_APPROVAL",
                 )
                 return ApprovalResult(
@@ -588,7 +586,7 @@ class OperatorApprovalService:
                     reason=pending.reason,
                     responded_at=now(),
                 ),
-                g8e_context=g8e_context,
+                context=RequestContext.from_app_context(g8e_context),
                 log_tag="STREAM_APPROVAL",
             )
 
@@ -692,7 +690,7 @@ class OperatorApprovalService:
                     is_batch_execution=approval_event.is_batch_execution,
                     batch_id=batch_id,
                 ),
-                g8e_context=g8e_context,
+                context=RequestContext.from_app_context(g8e_context),
                 log_tag="APPROVAL",
             )
 
@@ -739,7 +737,7 @@ class OperatorApprovalService:
                         feedback_reason=pending.reason,
                         responded_at=pending.responded_at or now(),
                     ),
-                    g8e_context=g8e_context,
+                    context=RequestContext.from_app_context(g8e_context),
                     log_tag="APPROVAL",
                 )
                 return ApprovalResult(
@@ -762,7 +760,7 @@ class OperatorApprovalService:
                     reason=pending.reason,
                     responded_at=now(),
                 ),
-                g8e_context=g8e_context,
+                context=RequestContext.from_app_context(g8e_context),
                 log_tag="APPROVAL",
             )
 
@@ -860,7 +858,7 @@ class OperatorApprovalService:
                     operation=operation,
                     requested_at=approval_event.requested_at,
                 ),
-                g8e_context=g8e_context,
+                context=RequestContext.from_app_context(g8e_context),
                 log_tag="FILE_EDIT_APPROVAL",
             )
 
@@ -893,7 +891,7 @@ class OperatorApprovalService:
                         file_path=file_path,
                         responded_at=pending.responded_at or now(),
                     ),
-                    g8e_context=g8e_context,
+                    context=RequestContext.from_app_context(g8e_context),
                     log_tag="FILE_EDIT_APPROVAL",
                 )
                 return ApprovalResult(
@@ -915,7 +913,7 @@ class OperatorApprovalService:
                     operation=operation,
                     responded_at=now(),
                 ),
-                g8e_context=g8e_context,
+                context=RequestContext.from_app_context(g8e_context),
                 log_tag="FILE_EDIT_APPROVAL",
             )
 
@@ -1039,7 +1037,7 @@ class OperatorApprovalService:
                     justification=justification,
                     requested_at=approval_event.requested_at,
                 ),
-                g8e_context=g8e_context,
+                context=RequestContext.from_app_context(g8e_context),
                 log_tag="INTENT_APPROVAL",
             )
 
@@ -1074,7 +1072,7 @@ class OperatorApprovalService:
                         feedback_reason=pending.reason,
                         responded_at=pending.responded_at or now(),
                     ),
-                    g8e_context=g8e_context,
+                    context=RequestContext.from_app_context(g8e_context),
                     log_tag="INTENT_APPROVAL",
                 )
                 return ApprovalResult(
@@ -1097,7 +1095,7 @@ class OperatorApprovalService:
                     reason=pending.reason,
                     responded_at=now(),
                 ),
-                g8e_context=g8e_context,
+                context=RequestContext.from_app_context(g8e_context),
                 log_tag="INTENT_APPROVAL",
             )
 
