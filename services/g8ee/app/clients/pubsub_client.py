@@ -56,9 +56,6 @@ class PubSubClient:
         timeout: float = 10.0,
         tls_config: TLSConfig | None = None,
         auditor_hmac_key: str | None = None,
-        ca_cert_path: str | None = None,
-        client_cert_path: str | None = None,
-        client_key_path: str | None = None,
     ):
         _settings = GatewaySettings()
         # Use direct internal WSS URL by default for service-to-service
@@ -74,9 +71,9 @@ class PubSubClient:
             self._client_cert_path = tls_config.client_cert_path
             self._client_key_path = tls_config.client_key_path
         else:
-            self._ca_cert_path = ca_cert_path
-            self._client_cert_path = client_cert_path
-            self._client_key_path = client_key_path
+            self._ca_cert_path = None
+            self._client_cert_path = None
+            self._client_key_path = None
 
         self._auditor_hmac_key = auditor_hmac_key
 

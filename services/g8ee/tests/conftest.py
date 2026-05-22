@@ -266,7 +266,7 @@ async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = T
     from app.constants import ComponentName
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
-    from app.models.settings import G8eeAppSettings
+    from app.models.settings import G8eeAppSettings, TLSConfig
     from app.services.cache.cache_aside import CacheAsideService
     from app.services.infra.settings_service import SettingsService
 
@@ -281,18 +281,17 @@ async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = T
     try:
         # Wrap the entire setup and fetch in a timeout
         async with asyncio.timeout(timeout):
-            db_client = DBClient(
+            tls_config = TLSConfig(
                 ca_cert_path=bootstrap_settings.ca_cert_path,
                 client_cert_path=bootstrap_settings.client_cert_path,
                 client_key_path=bootstrap_settings.client_key_path,
             )
+            db_client = DBClient(tls_config=tls_config)
             await db_client.connect()
 
             kv_client = KVCacheClient(
                 component_name=ComponentName.G8EE,
-                ca_cert_path=bootstrap_settings.ca_cert_path,
-                client_cert_path=bootstrap_settings.client_cert_path,
-                client_key_path=bootstrap_settings.client_key_path,
+                tls_config=tls_config,
             )
             await kv_client.connect()
 
@@ -795,6 +794,7 @@ async def cache_aside_service(test_settings):
     from app.constants import ComponentName
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
+    from app.models.settings import TLSConfig
     from app.services.cache.cache_aside import CacheAsideService
 
     if not _OPERATOR_ONLINE:
@@ -802,19 +802,19 @@ async def cache_aside_service(test_settings):
 
     settings = test_settings
 
-    raw_kv = KVCacheClient(
+    tls_config = TLSConfig(
         ca_cert_path=settings.ca_cert_path,
         client_cert_path=settings.client_cert_path,
         client_key_path=settings.client_key_path,
+    )
+
+    raw_kv = KVCacheClient(
+        tls_config=tls_config,
         component_name=ComponentName.G8EE,
     )
     await raw_kv.connect()
 
-    raw_db = DBClient(
-        ca_cert_path=settings.ca_cert_path,
-        client_cert_path=settings.client_cert_path,
-        client_key_path=settings.client_key_path,
-    )
+    raw_db = DBClient(tls_config=tls_config)
     await raw_db.connect()
 
     kv = KVService(raw_kv)

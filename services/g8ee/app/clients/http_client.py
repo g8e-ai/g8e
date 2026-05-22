@@ -240,9 +240,6 @@ class HTTPClient:
         api_key: str | None = None,
         headers: dict[str, str] | None = None,
         tls_config: TLSConfig | None = None,
-        ca_cert_path: str | None = None,
-        client_cert_path: str | None = None,
-        client_key_path: str | None = None,
     ):
         self.component_id = component_id
         self.base_url = base_url
@@ -258,9 +255,9 @@ class HTTPClient:
             self._client_cert_path = tls_config.client_cert_path
             self._client_key_path = tls_config.client_key_path
         else:
-            self._ca_cert_path = ca_cert_path
-            self._client_cert_path = client_cert_path
-            self._client_key_path = client_key_path
+            self._ca_cert_path = None
+            self._client_cert_path = None
+            self._client_key_path = None
 
         self._session: aiohttp.ClientSession | None = None
         self.circuit_breakers: dict[str, CircuitBreaker] = {}
@@ -816,9 +813,7 @@ def get_service_client(
     auth_token: str | None = None,
     api_key: str | None = None,
     headers: dict[str, str] | None = None,
-    ca_cert_path: str | None = None,
-    client_cert_path: str | None = None,
-    client_key_path: str | None = None,
+    tls_config: TLSConfig | None = None,
 ) -> HTTPClient:
     """Get an HTTP client configured for inter-service communication.
 
@@ -830,7 +825,7 @@ def get_service_client(
         auth_token: Optional pre-loaded auth token (avoids inline Settings creation)
         api_key: Optional API key for authentication
         headers: Optional default headers
-        ca_cert_path: Optional path to CA certificate
+        tls_config: Optional TLS configuration
 
     Returns:
         Configured HTTP client for the service
@@ -851,9 +846,7 @@ def get_service_client(
         auth_token=auth_token,
         api_key=api_key,
         headers=headers,
-        ca_cert_path=ca_cert_path,
-        client_cert_path=client_cert_path,
-        client_key_path=client_key_path,
+        tls_config=tls_config,
     )
 
     logger.info("Created HTTP client for service %s with base URL %s", target_service, base_url)
