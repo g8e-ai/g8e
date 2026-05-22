@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
@@ -57,6 +58,7 @@ func TestNewPubSubCommandService(t *testing.T) {
 func TestNewPubSubCommandService_StartsWithoutTrustedSignersButRejectsL2(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	cfg.PKIDir = filepath.Join(t.TempDir(), "pki")
+	cfg.Gateway.Posture = config.PostureConsensus // Set Consensus posture to enforce L2
 	svc, err := NewPubSubCommandService(CommandServiceConfig{
 		Config:            cfg,
 		Logger:            testutil.NewTestLogger(),
