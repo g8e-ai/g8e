@@ -35,7 +35,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -77,7 +77,7 @@ const (
 )
 
 func pickCategory(r *rand.Rand) category {
-	n := r.Intn(100)
+	n := r.IntN(100)
 	switch {
 	case n < 60:
 		return catGoodActor
@@ -181,7 +181,7 @@ func signedEnvelope(
 		TargetResource:    targetResource,
 		Payload:           payload,
 		StateMerkleRoot:   stateRoot,
-		Nonce:             fmt.Sprintf("chaos-%s-%s", nonceSuffix, hex.EncodeToString(payload[:min(4, len(payload))])),
+		Nonce:             fmt.Sprintf("chaos-%s-%s", nonceSuffix, hex.EncodeToString(payload[:clampMin(4, len(payload))])),
 	}
 
 	hash, err := uap.GenerateMessageID(env)
@@ -211,7 +211,7 @@ func signedEnvelope(
 	return env, nil
 }
 
-func min(a, b int) int {
+func clampMin(a, b int) int {
 	if a < b {
 		return a
 	}
@@ -293,7 +293,7 @@ func (c *chaosExecutionHandler) ExecuteVerifiedTransaction(_ context.Context, ev
 			if res != nil {
 				// Create the dummy file so git can see it
 				_ = os.MkdirAll(filepath.Dir(req.FilePath), 0755)
-				_ = os.WriteFile(req.FilePath, []byte(req.Content), 0644)
+				_ = os.WriteFile(req.FilePath, []byte(req.Content), 0600)
 				err = c.ledger.CompleteMirrorWrite(res, msg.OperatorSessionID)
 				if err != nil {
 					slog.Error("CompleteMirrorWrite failed", "error", err)
@@ -390,8 +390,6 @@ func main() {
 		logger.Error("failed to initialise audit vault", "error", err)
 		os.Exit(1)
 	}
-	defer av.Close()
-
 	// ── generate session IDs for concurrency ──────────────────────────────────
 	workerCount := runtime.NumCPU() * 2
 	sessionIDs := make([]string, workerCount)
@@ -401,15 +399,18 @@ func main() {
 		session, err := av.GetSession(sessionID)
 		if err != nil {
 			logger.Error("failed to inspect chaos audit session", "error", err)
+			av.Close()
 			os.Exit(1)
 		}
 		if session == nil {
 			if err := av.CreateSession(sessionID, fmt.Sprintf("Chaos Worker %d", i+1), "chaos@test.local"); err != nil {
 				logger.Error("failed to create chaos audit session", "error", err)
+				av.Close()
 				os.Exit(1)
 			}
 		}
 	}
+	defer av.Close()
 
 	const initialStateRoot = "chaos-state-root-v1"
 
@@ -436,7 +437,7 @@ func main() {
 		knownActionTypes,
 	)
 
-	Actuator := &governance.Actuator{
+	act := &governance.Actuator{
 		Logger:            logger,
 		SignerStore:       &governance.SimpleSignerStore{Signers: trustedSigners},
 		AuditVault:        av,
@@ -448,7 +449,7 @@ func main() {
 	}
 
 	// ── phase 1: generate and count payloads by category ───────────────────────
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())) //nolint:gosec // deterministic chaos testing
 	payloads := make([]category, *flagCount)
 	var generatedCounters struct {
 		goodActor    int
@@ -530,7 +531,7 @@ func main() {
 				return
 			}
 
-			fireOne(id, c, env, currentRoot, verifier, Actuator, logger, &cnt, rejectionBatch)
+			fireOne(id, c, env, currentRoot, verifier, act, logger, &cnt, rejectionBatch)
 		}(idx, catCopy, sessionID)
 	}
 
@@ -593,7 +594,7 @@ func fireOne(
 	env *uap.UAPEnvelope,
 	stateRoot string,
 	verifier *governance.TransactionVerifier,
-	Actuator *governance.Actuator,
+	actuator *governance.Actuator,
 	logger *slog.Logger,
 	cnt *counters,
 	batchWriter *batchEventWriter,
@@ -630,7 +631,7 @@ func fireOne(
 
 	// Execute through the handler
 	eventType := constants.MapActionTypeToEventType(constants.ActionType(env.ActionType))
-	_, err := Actuator.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, cmdMsg)
+	_, err := actuator.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, cmdMsg)
 
 	if err != nil {
 		logger.Warn("execution error", "id", id, "error", err)
@@ -795,10 +796,10 @@ func printSummaryRow(category string, count int, expectedOutcome string, actual 
 func printDemoQueries(dbPath string) {
 	fmt.Printf("=== Demo Queries (run these via ./g8e) ===\n\n")
 
-	fmt.Printf("# 1. View Governance Summary (intercept rate, attack patterns, action types)\n")
-	fmt.Printf("./g8e data audit --db-path '%s' summary\n\n", dbPath)
+	fmt.Printf("# 1. View Chaos Test Summary (category/outcome breakdown)\n")
+	fmt.Printf("./g8e data audit --db-path '%s' chaos-summary\n\n", dbPath)
 
-	fmt.Printf("# 2. View Recent Events (last 10)\n")
+	fmt.Printf("# 2. View Recent Chaos Events (last 10)\n")
 	fmt.Printf("./g8e data audit --db-path '%s' events --session chaos-session-001 --limit 10\n\n", dbPath)
 
 	fmt.Printf("# 3. Inspect Git Ledger (audit trail)\n")

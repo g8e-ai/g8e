@@ -259,13 +259,13 @@ func (s *ListenDBService) RunMaintenance(ctx context.Context) {
 		case <-ticker.C:
 			now := sqliteutil.NowTimestamp()
 			// KV store
-			s.db.Exec("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+			_, _ = s.db.Exec("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 			// Blobs
-			s.db.Exec("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+			_, _ = s.db.Exec("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 			// Nonces
-			s.db.Exec("DELETE FROM nonces WHERE expires_at < ?", now)
+			_, _ = s.db.Exec("DELETE FROM nonces WHERE expires_at < ?", now)
 			// Suspended transactions
-			s.db.Exec("DELETE FROM suspended_transactions WHERE expires_at < ?", now)
+			_, _ = s.db.Exec("DELETE FROM suspended_transactions WHERE expires_at < ?", now)
 		}
 	}
 }
@@ -962,8 +962,8 @@ func (s *ListenDBService) RunTTLCleanup(ctx context.Context) {
 			return
 		case <-ticker.C:
 			now := sqliteutil.NowTimestamp()
-			s.db.Exec("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
-			s.db.Exec("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+			_, _ = s.db.Exec("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+			_, _ = s.db.Exec("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 		}
 	}
 }

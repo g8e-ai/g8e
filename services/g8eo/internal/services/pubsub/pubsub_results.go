@@ -33,19 +33,6 @@ func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string 
 	return constants.ResultsChannel(rr.config.OperatorID, operatorSessionID)
 }
 
-// isUAPMessageID checks if a message ID is a UAP MessageID (64-character hex SHA-256 hash).
-func isUAPMessageID(id string) bool {
-	if len(id) != 64 {
-		return false
-	}
-	for _, c := range id {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
-}
-
 // PubSubResultsService handles publishing results back to g8e-Compliant Agentic Ensemble via operator pub/sub
 type PubSubResultsService struct {
 	client     PubSubClient

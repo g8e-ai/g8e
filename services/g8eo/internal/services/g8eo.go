@@ -31,7 +31,6 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/vault"
 )
 
 type G8eoService struct {
@@ -48,10 +47,9 @@ type G8eoService struct {
 
 	pubSubClient pubsub.PubSubClient
 
-	auditVault      *storage.AuditVaultService
-	encryptionVault *vault.Vault
-	ledger          *storage.LedgerService
-	historyHandler  *storage.HistoryHandler
+	auditVault     *storage.AuditVaultService
+	ledger         *storage.LedgerService
+	historyHandler *storage.HistoryHandler
 
 	sentinel *sentinel.Sentinel
 
@@ -60,7 +58,6 @@ type G8eoService struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
-	wg     sync.WaitGroup
 
 	running   bool
 	mu        sync.RWMutex

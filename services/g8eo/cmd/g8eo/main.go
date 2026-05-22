@@ -52,9 +52,9 @@ import (
 
 // Version information (set via ldflags during build)
 var (
-	version  = constants.Status.VersionStability.Dev
-	buildID  = constants.SystemHealthUnknown
-	platform = constants.SystemHealthUnknown
+	version  string = string(constants.Status.VersionStability.Dev)
+	buildID  string = string(constants.SystemHealthUnknown)
+	platform string = string(constants.SystemHealthUnknown)
 )
 
 func main() {
@@ -348,7 +348,7 @@ func main() {
 		os.Exit(constants.ExitConfigError)
 	}
 
-	cfg.Version = string(version)
+	cfg.Version = version
 
 	// Apply remaining bootstrap config from device-link registration if available
 	if deviceAuthResult != nil && deviceAuthResult.Config != nil {
@@ -399,11 +399,11 @@ func main() {
 	cancel()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer shutdownCancel()
 
 	if err := g8eoService.Stop(shutdownCtx); err != nil {
 		logger.Error("Graceful shutdown failed", constants.ConnectionStateErrorStr, err)
 	}
+	shutdownCancel()
 
 	os.Exit(constants.ExitSuccess)
 }
@@ -570,7 +570,7 @@ func runListenMode(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, sec
 		logger.Error("Failed to load listen configuration", constants.ConnectionStateErrorStr, err)
 		os.Exit(constants.ExitConfigError)
 	}
-	cfg.Version = string(version)
+	cfg.Version = version
 
 	svc, err := listen.NewListenService(cfg, logger)
 	if err != nil {
@@ -686,7 +686,9 @@ func runListenMode(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, sec
 	defer shutdownCancel()
 
 	if cmdSvc != nil {
-		cmdSvc.Stop()
+		if err := cmdSvc.Stop(); err != nil {
+			logger.Error("Command service stop error", constants.ConnectionStateErrorStr, err)
+		}
 	}
 
 	if err := svc.Stop(shutdownCtx); err != nil {
@@ -854,7 +856,7 @@ func handleResetVault(vault *vault.Vault, logger *slog.Logger) {
 	fmt.Fprint(os.Stderr, "WARNING: This will PERMANENTLY DESTROY all encrypted vault data. Type 'DESTROY' to confirm: ")
 
 	var confirmation string
-	fmt.Fscan(os.Stdin, &confirmation)
+	_, _ = fmt.Fscan(os.Stdin, &confirmation)
 
 	if confirmation != "DESTROY" {
 		logger.Info("Reset cancelled")
@@ -1034,7 +1036,7 @@ func runMCPServe(endpointURL, pkiDir, logLevel string) {
 				if _, err := os.Stdout.Write(respBytes); err != nil {
 					fmt.Fprintf(os.Stderr, "failed to write response: %v\n", err)
 				}
-				if _, err := os.Stdout.Write([]byte("\n")); err != nil {
+				if _, err := os.Stdout.WriteString("\n"); err != nil {
 					fmt.Fprintf(os.Stderr, "failed to write newline: %v\n", err)
 				}
 			}
@@ -1047,7 +1049,7 @@ func runMCPServe(endpointURL, pkiDir, logLevel string) {
 				if _, err := os.Stdout.Write(respBytes); err != nil {
 					fmt.Fprintf(os.Stderr, "failed to write response: %v\n", err)
 				}
-				if _, err := os.Stdout.Write([]byte("\n")); err != nil {
+				if _, err := os.Stdout.WriteString("\n"); err != nil {
 					fmt.Fprintf(os.Stderr, "failed to write newline: %v\n", err)
 				}
 			}
@@ -1078,7 +1080,7 @@ func sendRPCResponse(id interface{}, result interface{}) {
 	if _, err := os.Stdout.Write(b); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to write response: %v\n", err)
 	}
-	if _, err := os.Stdout.Write([]byte("\n")); err != nil {
+	if _, err := os.Stdout.WriteString("\n"); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to write newline: %v\n", err)
 	}
 }
@@ -1100,7 +1102,7 @@ func sendRPCError(id interface{}, code int, message string) {
 	if _, err := os.Stdout.Write(b); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to write response: %v\n", err)
 	}
-	if _, err := os.Stdout.Write([]byte("\n")); err != nil {
+	if _, err := os.Stdout.WriteString("\n"); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to write newline: %v\n", err)
 	}
 }

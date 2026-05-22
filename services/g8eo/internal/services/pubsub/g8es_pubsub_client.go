@@ -209,8 +209,8 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 // closes before the ACK arrives.
 func (c *OperatorPubSubClient) waitForSubscribedACK(ctx context.Context, ws *websocket.Conn, channel string, pending *[][]byte) error {
 	const ackTimeout = 5 * time.Second
-	ws.SetReadDeadline(time.Now().Add(ackTimeout))
-	defer ws.SetReadDeadline(time.Time{})
+	_ = ws.SetReadDeadline(time.Now().Add(ackTimeout))
+	defer func() { _ = ws.SetReadDeadline(time.Time{}) }()
 
 	// Close the WebSocket when the context is cancelled so that ws.ReadMessage
 	// unblocks immediately rather than waiting for the ackTimeout to expire.
@@ -317,35 +317,6 @@ func (c *OperatorPubSubClient) Publish(ctx context.Context, channel string, data
 	}
 
 	return nil
-}
-
-// checkTLSConnectivity performs a raw WebSocket dial to verify that TCP and TLS
-// are operational. A rejection with an HTTP response means the server replied
-// (TCP+TLS healthy). Only a TLS-level error (no HTTP response) is fatal.
-func (c *OperatorPubSubClient) checkTLSConnectivity(ctx context.Context) error {
-	wsURL := c.pubSubWSURL()
-
-	var dialer websocket.Dialer
-	if c.tlsConfig != nil {
-		dialer = *httpclient.WebSocketDialerWithTLS(c.tlsConfig)
-	}
-
-	ws, resp, err := dialer.DialContext(ctx, wsURL, nil)
-	if err == nil {
-		// Unexpected: proxy accepted a sessionless connection - close it cleanly
-		ws.Close()
-		return nil
-	}
-
-	// A non-nil HTTP response means the server replied - TCP and TLS are healthy.
-	// The specific status code is irrelevant; what matters is that it responded.
-	if resp != nil {
-		return nil
-	}
-
-	// No HTTP response: the error occurred at the transport layer (TLS handshake
-	// failure, connection refused, etc.). Propagate so the caller can inspect it.
-	return err
 }
 
 // Close marks the client as closed and tears down the publish WebSocket.

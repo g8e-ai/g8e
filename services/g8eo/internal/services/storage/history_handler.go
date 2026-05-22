@@ -30,23 +30,6 @@ type HistoryHandler struct {
 	logger     *slog.Logger
 }
 
-type fetchHistoryRequest struct {
-	OperatorSessionID string `json:"operator_session_id"`
-	Limit             int    `json:"limit"`
-	Offset            int    `json:"offset"`
-}
-
-type fetchFileHistoryRequest struct {
-	FilePath string `json:"file_path"`
-	Limit    int    `json:"limit"`
-}
-
-type restoreFileRequest struct {
-	FilePath          string `json:"file_path"`
-	CommitHash        string `json:"commit_hash"`
-	OperatorSessionID string `json:"operator_session_id"`
-}
-
 func NewHistoryHandler(auditVault *AuditVaultService, ledger *LedgerService, logger *slog.Logger) *HistoryHandler {
 	return &HistoryHandler{
 		auditVault: auditVault,
@@ -91,8 +74,8 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*operatorv1.Fe
 		Success:           true,
 		OperatorSessionId: request.OperatorSessionId,
 		Events:            make([]*operatorv1.AuditEvent, 0, len(events)),
-		Limit:             int32(limit),
-		Offset:            int32(offset),
+		Limit:             int32(limit),  //nolint:gosec // bounded by query parameters
+		Offset:            int32(offset), //nolint:gosec // bounded by query parameters
 	}
 
 	if session != nil {
@@ -122,7 +105,7 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*operatorv1.Fe
 			FileMutations:       []*operatorv1.AuditFileMutation{},
 		}
 		if event.CommandExitCode != nil {
-			auditEvent.CommandExitCode = int32(*event.CommandExitCode)
+			auditEvent.CommandExitCode = int32(*event.CommandExitCode) //nolint:gosec // exit codes are 0-255
 		}
 
 		if event.Type == constants.Event.Operator.FileEdit.Completed {
@@ -146,7 +129,7 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*operatorv1.Fe
 		result.Events = append(result.Events, auditEvent)
 	}
 
-	result.Total = int32(len(result.Events))
+	result.Total = int32(len(result.Events)) //nolint:gosec // bounded by query results
 	return result, nil
 }
 

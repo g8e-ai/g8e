@@ -328,7 +328,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	if err != nil {
 		return fmt.Errorf("failed to read root CA: %w", err)
 	}
-	if err := os.WriteFile(rootBundlePath, rootPEM, 0644); err != nil {
+	if err := os.WriteFile(rootBundlePath, rootPEM, 0600); err != nil {
 		return fmt.Errorf("failed to write root bundle: %w", err)
 	}
 
@@ -346,24 +346,30 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	if err != nil {
 		return fmt.Errorf("failed to read bootstrap CA: %w", err)
 	}
-	hubBundle := append(rootPEM, hubPEM...)
+	hubBundle := make([]byte, 0, len(rootPEM)+len(hubPEM)+len(operatorPEM)+len(bootstrapPEM))
+	hubBundle = append(hubBundle, rootPEM...)
+	hubBundle = append(hubBundle, hubPEM...)
 	hubBundle = append(hubBundle, operatorPEM...)
 	hubBundle = append(hubBundle, bootstrapPEM...)
-	if err := os.WriteFile(hubBundlePath, hubBundle, 0644); err != nil {
+	if err := os.WriteFile(hubBundlePath, hubBundle, 0600); err != nil {
 		return fmt.Errorf("failed to write hub bundle: %w", err)
 	}
 
 	// Operator bundle (root + operator intermediate)
 	operatorBundlePath := filepath.Join(pki.pkiDir, "trust", "operator-bundle.pem")
-	operatorBundle := append(rootPEM, operatorPEM...)
-	if err := os.WriteFile(operatorBundlePath, operatorBundle, 0644); err != nil {
+	operatorBundle := make([]byte, 0, len(rootPEM)+len(operatorPEM))
+	operatorBundle = append(operatorBundle, rootPEM...)
+	operatorBundle = append(operatorBundle, operatorPEM...)
+	if err := os.WriteFile(operatorBundlePath, operatorBundle, 0600); err != nil {
 		return fmt.Errorf("failed to write operator bundle: %w", err)
 	}
 
 	// Bootstrap bundle (root + bootstrap intermediate)
 	bootstrapBundlePath := filepath.Join(pki.pkiDir, "trust", "bootstrap-bundle.pem")
-	bootstrapBundle := append(rootPEM, bootstrapPEM...)
-	if err := os.WriteFile(bootstrapBundlePath, bootstrapBundle, 0644); err != nil {
+	bootstrapBundle := make([]byte, 0, len(rootPEM)+len(bootstrapPEM))
+	bootstrapBundle = append(bootstrapBundle, rootPEM...)
+	bootstrapBundle = append(bootstrapBundle, bootstrapPEM...)
+	if err := os.WriteFile(bootstrapBundlePath, bootstrapBundle, 0600); err != nil {
 		return fmt.Errorf("failed to write bootstrap bundle: %w", err)
 	}
 
@@ -372,7 +378,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 		"trust_domain": protocol.TrustDomain,
 	}
 	trustDomainJSON, _ := json.MarshalIndent(trustDomainData, "", "  ")
-	if err := os.WriteFile(filepath.Join(pki.pkiDir, "trust", "trust-domain.json"), trustDomainJSON, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pki.pkiDir, "trust", "trust-domain.json"), trustDomainJSON, 0600); err != nil {
 		return fmt.Errorf("failed to write trust-domain.json: %w", err)
 	}
 
@@ -850,7 +856,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	chainPEM = append(chainPEM, hubPEM...)
 	chainPEM = append(chainPEM, rootPEM...)
 	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.chain.pem")
-	if err := os.WriteFile(chainPath, chainPEM, 0644); err != nil {
+	if err := os.WriteFile(chainPath, chainPEM, 0600); err != nil {
 		return fmt.Errorf("failed to write chain: %w", err)
 	}
 

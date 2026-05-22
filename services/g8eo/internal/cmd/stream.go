@@ -196,6 +196,7 @@ func RunStream(args []string) {
 		succeeded, len(hosts), totalMs)
 
 	if failed > 0 {
+		cancel()
 		os.Exit(constants.ExitGeneralError)
 	}
 }

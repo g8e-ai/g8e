@@ -558,7 +558,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 			Username:          req.Username,
 		}
 		body, _ := json.Marshal(linkData)
-		s.db.KVSet(linkKey, string(body), 0)
+		_ = s.db.KVSet(linkKey, string(body), 0)
 
 		return s.completeRegistration(operator, &linkData, req, sanitizedFingerprint)
 	}
@@ -621,11 +621,11 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 	// 5. Usage check - enforce max_uses
 	currentUsage, err := s.fingerprintSetCount(token)
 	if err != nil {
-		s.fingerprintSetRemove(token, sanitizedFingerprint)
+		_ = s.fingerprintSetRemove(token, sanitizedFingerprint)
 		return nil, fmt.Errorf("usage check failed: %w", err)
 	}
 	if currentUsage > linkData.MaxUses {
-		s.fingerprintSetRemove(token, sanitizedFingerprint)
+		_ = s.fingerprintSetRemove(token, sanitizedFingerprint)
 		s.logger.Error("[REGISTRATION] Link exhausted",
 			"token", token, "current_usage", currentUsage, "max_uses", linkData.MaxUses)
 		return nil, fmt.Errorf("device link exhausted")
@@ -660,20 +660,20 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 	if operator == nil {
 		operator, err = s.createSlot(linkData.UserID, linkData.OrganizationID)
 		if err != nil {
-			s.fingerprintSetRemove(token, sanitizedFingerprint)
+			_ = s.fingerprintSetRemove(token, sanitizedFingerprint)
 			return nil, fmt.Errorf("failed to create operator slot: %w", err)
 		}
 	}
 
 	if operator == nil {
-		s.fingerprintSetRemove(token, sanitizedFingerprint)
+		_ = s.fingerprintSetRemove(token, sanitizedFingerprint)
 		return nil, fmt.Errorf("failed to resolve operator slot")
 	}
 
 	// 7. Complete registration
 	resp, err := s.completeRegistration(operator, &linkData, req, sanitizedFingerprint)
 	if err != nil {
-		s.fingerprintSetRemove(token, sanitizedFingerprint)
+		_ = s.fingerprintSetRemove(token, sanitizedFingerprint)
 		return nil, err
 	}
 
@@ -693,7 +693,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 			if err := s.userSvc.Disable(bootstrapUser.ID, "retired_by_real_login", linkData.UserID, operator.ID); err != nil {
 				s.logger.Error("[REGISTRATION] Failed to retire bootstrap user", string(constants.ConnectionStateError), err)
 				// Hard failure - no half-state (plan §4.5)
-				s.fingerprintSetRemove(token, sanitizedFingerprint)
+				_ = s.fingerprintSetRemove(token, sanitizedFingerprint)
 				return nil, fmt.Errorf("registration failed: bootstrap retirement failed: %w", err)
 			}
 		}
@@ -707,7 +707,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 		s.logger.Error("[REGISTRATION] Failed to acquire registration lock", "token", token, string(constants.ConnectionStateError), err)
 		return resp, nil // Registration succeeded, but claim update failed - device can retry
 	}
-	defer s.releaseLock(lockKey, lockValue)
+	defer func() { _ = s.releaseLock(lockKey, lockValue) }()
 
 	// 9. Add claim to linkData
 	freshLinkRaw, found := s.db.KVGet(linkKey)
@@ -741,7 +741,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 	}
 
 	body, _ := json.Marshal(freshLink)
-	s.db.KVSet(linkKey, string(body), 0)
+	_ = s.db.KVSet(linkKey, string(body), 0)
 
 	s.logger.Info("[REGISTRATION] Device registered and link updated",
 		"token", token, "operator_id", operator.ID, "uses", freshLink.Uses, "max_uses", freshLink.MaxUses)
@@ -970,7 +970,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 		raw, found := s.db.KVGet(webBindKey)
 		var sessionIDs []string
 		if found {
-			json.Unmarshal([]byte(raw), &sessionIDs)
+			_ = json.Unmarshal([]byte(raw), &sessionIDs)
 		}
 		exists := false
 		for _, sid := range sessionIDs {
@@ -982,7 +982,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 		if !exists {
 			sessionIDs = append(sessionIDs, op.OperatorSessionID)
 			body, _ := json.Marshal(sessionIDs)
-			s.db.KVSet(webBindKey, string(body), 0)
+			_ = s.db.KVSet(webBindKey, string(body), 0)
 		}
 
 		// 2. Update durability document
@@ -1000,11 +1000,11 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				Status:             constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Active)),
 			}
 			body, _ := json.Marshal(newDoc)
-			s.db.DocSet(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
+			_ = s.db.DocSet(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
 		} else {
 			var bDoc models.BoundSessionsDocumentGo
 			b, _ := json.Marshal(existingDoc.ForWire())
-			json.Unmarshal(b, &bDoc)
+			_ = json.Unmarshal(b, &bDoc)
 
 			opExists := false
 			for _, id := range bDoc.OperatorIDs {
@@ -1019,12 +1019,12 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				bDoc.LastUpdatedAt = time.Now().UTC()
 				bDoc.Status = constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Active))
 				body, _ := json.Marshal(bDoc)
-				s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
+				_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
 			}
 		}
 
 		// 3. Update operator document itself (for UI)
-		s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.WebSessionID)))
+		_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(fmt.Sprintf(`{"bound_web_session_id": %q}`, req.WebSessionID)))
 
 		bound = append(bound, opID)
 	}
@@ -1081,13 +1081,13 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 
 		// 1. Update KV binding
 		if op.OperatorSessionID != "" {
-			s.db.KVDelete(sessionOperatorBindKey(op.OperatorSessionID))
+			_ = s.db.KVDelete(sessionOperatorBindKey(op.OperatorSessionID))
 
 			webBindKey := sessionWebBindKey(req.WebSessionID)
 			raw, found := s.db.KVGet(webBindKey)
 			if found {
 				var sessionIDs []string
-				json.Unmarshal([]byte(raw), &sessionIDs)
+				_ = json.Unmarshal([]byte(raw), &sessionIDs)
 				newSessionIDs := []string{}
 				for _, sid := range sessionIDs {
 					if sid != op.OperatorSessionID {
@@ -1095,10 +1095,10 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 					}
 				}
 				if len(newSessionIDs) == 0 {
-					s.db.KVDelete(webBindKey)
+					_ = s.db.KVDelete(webBindKey)
 				} else {
 					body, _ := json.Marshal(newSessionIDs)
-					s.db.KVSet(webBindKey, string(body), 0)
+					_ = s.db.KVSet(webBindKey, string(body), 0)
 				}
 			}
 		}
@@ -1109,7 +1109,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 		if existingDoc != nil {
 			var bDoc models.BoundSessionsDocumentGo
 			b, _ := json.Marshal(existingDoc.ForWire())
-			json.Unmarshal(b, &bDoc)
+			_ = json.Unmarshal(b, &bDoc)
 
 			newOpIDs := []string{}
 			newSessIDs := []string{}
@@ -1126,11 +1126,11 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 				bDoc.Status = constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated))
 			}
 			body, _ := json.Marshal(bDoc)
-			s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
+			_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
 		}
 
 		// 3. Update operator document itself
-		s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`))
+		_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionOperators), opID, []byte(`{"bound_web_session_id": ""}`))
 
 		unbound = append(unbound, opID)
 	}

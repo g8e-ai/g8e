@@ -380,14 +380,15 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	isShellCommand := request.Command == "sh" || request.Command == "/bin/sh" ||
 		request.Command == "bash" || request.Command == "/bin/bash"
 
-	if isShellCommand && len(request.Args) >= 2 && request.Args[0] == "-c" {
+	switch {
+	case isShellCommand && len(request.Args) >= 2 && request.Args[0] == "-c":
 		// Extract the script directly - it's already meant for shell execution
 		// Join remaining args in case the script was split across multiple args
 		fullCommand = strings.Join(request.Args[1:], " ")
-	} else if len(request.Args) > 0 {
+	case len(request.Args) > 0:
 		// Command and args provided separately - combine them
 		fullCommand = request.Command + " " + strings.Join(request.Args, " ")
-	} else {
+	default:
 		fullCommand = request.Command
 	}
 
@@ -549,9 +550,9 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		if cmd.Process != nil {
 			pgid, pgidErr := syscall.Getpgid(cmd.Process.Pid)
 			if pgidErr == nil {
-				syscall.Kill(-pgid, syscall.SIGKILL)
+				_ = syscall.Kill(-pgid, syscall.SIGKILL)
 			} else {
-				cmd.Process.Kill()
+				_ = cmd.Process.Kill()
 			}
 		}
 		err = <-done // Wait for process to actually exit
@@ -591,21 +592,22 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 				stderr := stderrBuf.String()
 				stderrLower := strings.ToLower(stderr)
 
-				if exitCode == 126 && (strings.Contains(stderrLower, "permission denied") ||
+				switch {
+				case exitCode == 126 && (strings.Contains(stderrLower, "permission denied") ||
 					strings.Contains(stderrLower, "not executable") ||
-					strings.Contains(stderrLower, "cannot execute")) {
+					strings.Contains(stderrLower, "cannot execute")):
 					// Actual permission denied error from shell
 					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 					result.ErrorMessage = system.StringPtr("Permission denied: command is not executable")
 					result.ErrorType = system.StringPtr("permission_denied")
-				} else if exitCode == 127 && (strings.Contains(stderrLower, "not found") ||
+				case exitCode == 127 && (strings.Contains(stderrLower, "not found") ||
 					strings.Contains(stderrLower, "no such file") ||
-					strings.Contains(stderrLower, "command not found")) {
+					strings.Contains(stderrLower, "command not found")):
 					// Actual command not found error from shell
 					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 					result.ErrorMessage = system.StringPtr("Command not found")
 					result.ErrorType = system.StringPtr("command_not_found")
-				} else {
+				default:
 					// All other non-zero exit codes (including deliberate exit 126/127) are normal completion
 					// The command executed and returned an exit code - that's a successful execution
 					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
@@ -675,7 +677,9 @@ func (es *ExecutionService) createTerminalOutput(command string, args []string, 
 
 	// Get last 50 lines for UI
 	const maxLines = 50
-	allLines := append(stdoutLines, stderrLines...)
+	allLines := make([]string, 0, len(stdoutLines)+len(stderrLines))
+	allLines = append(allLines, stdoutLines...)
+	allLines = append(allLines, stderrLines...)
 	var lastLines []string
 
 	if len(allLines) > maxLines {
@@ -801,9 +805,9 @@ func (es *ExecutionService) Stop() {
 		if execCtx.Process != nil {
 			pgid, err := syscall.Getpgid(execCtx.Process.Pid)
 			if err == nil {
-				syscall.Kill(-pgid, syscall.SIGKILL)
+				_ = syscall.Kill(-pgid, syscall.SIGKILL)
 			} else {
-				execCtx.Process.Kill()
+				_ = execCtx.Process.Kill()
 			}
 		}
 		execCtx.mu.Unlock()
@@ -846,9 +850,9 @@ func (es *ExecutionService) CancelExecution(requestID string) error {
 	if execCtx.Process != nil {
 		pgid, err := syscall.Getpgid(execCtx.Process.Pid)
 		if err == nil {
-			syscall.Kill(-pgid, syscall.SIGKILL)
+			_ = syscall.Kill(-pgid, syscall.SIGKILL)
 		} else {
-			execCtx.Process.Kill()
+			_ = execCtx.Process.Kill()
 		}
 	}
 	execCtx.mu.Unlock()

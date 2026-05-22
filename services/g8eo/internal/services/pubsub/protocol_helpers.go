@@ -16,13 +16,10 @@ package pubsub
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
-	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -155,47 +152,6 @@ func BuildUniversalResultEnvelope(
 	}
 
 	return env, nil
-}
-
-// validateL1Governance uses Protobuf reflection to find and enforce fields with the
-// forbidden_patterns custom option.
-func validateL1Governance(msg proto.Message) []string {
-	var violations []string
-	md := msg.ProtoReflect().Descriptor()
-	fields := md.Fields()
-
-	for i := 0; i < fields.Len(); i++ {
-		fd := fields.Get(i)
-		opts := fd.Options()
-		if opts == nil {
-			continue
-		}
-
-		if proto.HasExtension(opts, commonv1.E_ForbiddenPatterns) {
-			patternsStr := proto.GetExtension(opts, commonv1.E_ForbiddenPatterns).(string)
-			if patternsStr == "" {
-				continue
-			}
-
-			val := msg.ProtoReflect().Get(fd)
-			// Only strings are supported for forbidden_patterns currently
-			if fd.Kind() == protoreflect.StringKind {
-				strVal := val.String()
-				patterns := strings.Split(patternsStr, ",")
-				for _, p := range patterns {
-					p = strings.TrimSpace(p)
-					if p == "" {
-						continue
-					}
-					matched, err := regexp.MatchString(p, strVal)
-					if err == nil && matched {
-						violations = append(violations, fmt.Sprintf("Field '%s' violates pattern '%s'", fd.Name(), p))
-					}
-				}
-			}
-		}
-	}
-	return violations
 }
 
 // MaxPayloadSize is the maximum allowed size for a protobuf payload (5MB).

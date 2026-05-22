@@ -166,8 +166,8 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 			Architecture: h.SystemIdentity.Architecture,
 			Pwd:          h.SystemIdentity.PWD,
 			CurrentUser:  h.SystemIdentity.CurrentUser,
-			CpuCount:     int32(h.SystemIdentity.CPUCount),
-			MemoryMb:     int32(h.SystemIdentity.MemoryMB),
+			CpuCount:     int32(h.SystemIdentity.CPUCount), //nolint:gosec // realistically < 1000
+			MemoryMb:     int32(h.SystemIdentity.MemoryMB), //nolint:gosec // realistically < 1TB (1,000,000 MB)
 		},
 		NetworkInfo: &operatorv1.NetworkInfo{
 			PublicIp:   h.NetworkInfo.PublicIP,
@@ -187,8 +187,8 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 			MemoryPercent:  h.PerformanceMetrics.MemoryPercent,
 			DiskPercent:    h.PerformanceMetrics.DiskPercent,
 			NetworkLatency: h.PerformanceMetrics.NetworkLatency,
-			MemoryUsedMb:   int32(h.PerformanceMetrics.MemoryUsedMB),
-			MemoryTotalMb:  int32(h.PerformanceMetrics.MemoryTotalMB),
+			MemoryUsedMb:   int32(h.PerformanceMetrics.MemoryUsedMB),  //nolint:gosec // realistically < 1TB
+			MemoryTotalMb:  int32(h.PerformanceMetrics.MemoryTotalMB), //nolint:gosec // realistically < 1TB
 			DiskUsedGb:     h.PerformanceMetrics.DiskUsedGB,
 			DiskTotalGb:    h.PerformanceMetrics.DiskTotalGB,
 		},
@@ -240,7 +240,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 		p.FingerprintDetails = &operatorv1.FingerprintDetails{
 			Os:           string(h.FingerprintDetails.OS),
 			Architecture: h.FingerprintDetails.Architecture,
-			CpuCount:     int32(h.FingerprintDetails.CPUCount),
+			CpuCount:     int32(h.FingerprintDetails.CPUCount), //nolint:gosec // realistically < 1000
 			MachineId:    h.FingerprintDetails.MachineID,
 		}
 	}
@@ -249,7 +249,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 		p.NetworkInfo.ConnectivityStatus = append(p.NetworkInfo.ConnectivityStatus, &operatorv1.NetworkInterface{
 			Name: iface.Name,
 			Ip:   iface.IP,
-			Mtu:  int32(iface.MTU),
+			Mtu:  int32(iface.MTU), //nolint:gosec // MTU is typically < 9000
 		})
 	}
 

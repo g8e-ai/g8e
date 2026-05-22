@@ -135,7 +135,7 @@ func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
 		}
 
 		// Re-hash for verifier
-		env.TransactionHash, _ = uap.GenerateMessageID((*uap.UAPEnvelope)(env))
+		env.TransactionHash, _ = uap.GenerateMessageID(env)
 		env.Id = env.TransactionHash
 
 		// Sign for verifier

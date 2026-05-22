@@ -282,7 +282,8 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 
 		cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
 
-		if operatorSessionID != "" {
+		switch {
+		case operatorSessionID != "":
 			op, err := s.ValidateOperatorSession(operatorSessionID)
 			if err == nil {
 				// [PIVOT] Verify URI SAN identity (Phase 6)
@@ -323,7 +324,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				s.jsonError(w, ae.Status, ae.Message) // Note: jsonError wraps it in {"error": ...}
 				return
 			}
-		} else if cliSessionID != "" {
+		case cliSessionID != "":
 			// CLI authentication via CLI session ID and CLI certificate
 			// Verify the CLI certificate matches the CLI session ID
 			// SPIFFE ID format: protocol.WorkloadIdentity.CLISPIFFEID()
@@ -392,7 +393,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 
 			next.ServeHTTP(w, r)
 			return
-		} else {
+		default:
 			// [PIVOT] System/App Authentication via URI SAN (Phase 6)
 			// If no session ID is provided, we check if the certificate belongs to a trusted system app.
 			// Note: /_query requires operator session authentication - no app bypass allowed.
@@ -472,7 +473,7 @@ func (s *AuthService) WebSocketAuth(next http.Handler) http.Handler {
 func (s *AuthService) jsonError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set(constants.HeaderContentType, "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(struct {
+	_ = json.NewEncoder(w).Encode(struct {
 		Error string `json:"error"`
 	}{Error: msg})
 }

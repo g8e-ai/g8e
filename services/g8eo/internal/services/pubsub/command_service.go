@@ -27,7 +27,6 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/system"
-	vault "github.com/g8e-ai/g8e/services/g8eo/internal/services/vault"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -52,7 +51,6 @@ type CommandService struct {
 	auditVault     *storage.AuditVaultService
 	localStore     *storage.LocalStoreService
 	rawVault       *storage.RawVaultService
-	encryption     *vault.Vault
 	ledger         *storage.LedgerService
 	historyHandler *storage.HistoryHandler
 }
@@ -159,7 +157,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 				Status:      verdict.blockedResult.Status,
 				Error:       *verdict.blockedResult.ErrorMessage,
 				Stderr:      verdict.blockedResult.Stderr,
-				ReturnCode:  int32(*verdict.blockedResult.ReturnCode),
+				ReturnCode:  int32(*verdict.blockedResult.ReturnCode), //nolint:gosec // exit codes are 0-255
 			}
 			if err := cs.results.PublishExecutionResult(ctx, protoResult, msg); err != nil {
 				cs.logger.Error("Failed to publish blocked result", string(constants.ConnectionStateError), err)
@@ -281,7 +279,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 			ExecutionTimeSeconds: float32(result.DurationSeconds),
 		}
 		if result.ReturnCode != nil {
-			protoResult.ReturnCode = int32(*result.ReturnCode)
+			protoResult.ReturnCode = int32(*result.ReturnCode) //nolint:gosec // exit codes are 0-255
 		}
 		if result.ErrorMessage != nil {
 			protoResult.Error = *result.ErrorMessage

@@ -728,7 +728,7 @@ func (lms *LedgerService) RestoreFileFromCommit(filePath, commitHash, operatorSe
 
 	_, _ = lms.snapshotLedger(ledgerDir, fmt.Sprintf("Pre-restoration state: %s", filePath))
 
-	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte(content), 0600); err != nil {
 		return fmt.Errorf("failed to write restored file: %w", err)
 	}
 
