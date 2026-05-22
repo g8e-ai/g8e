@@ -23,6 +23,18 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 )
 
+// GatewayPosture defines the governance enforcement posture for the Gateway.
+type GatewayPosture string
+
+const (
+	// PostureDoctrine: L1 enforced, L2/L3 audited but not enforced (default)
+	PostureDoctrine GatewayPosture = "doctrine"
+	// PostureConsensus: L1/L2 enforced, L3 audited but not enforced
+	PostureConsensus GatewayPosture = "consensus"
+	// PostureNotary: L1/L2/L3 strictly enforced
+	PostureNotary GatewayPosture = "notary"
+)
+
 // LoadOptions contains all configuration values passed explicitly from main
 type LoadOptions struct {
 	// Required
@@ -68,16 +80,17 @@ type LoadOptions struct {
 // No outbound authentication is required - the Operator simply starts and listens.
 type ListenConfig struct {
 	Enabled          bool
-	HTTPPort         int    // TLS/HTTPS port for internal g8ee/client traffic (default: from paths.json)
-	BootstrapPort    int    // Plain-TLS port for bootstrap routes (/.well-known/, /api/auth/device-link/register) (default: from paths.json)
-	PublicPort       int    // Plain-TLS port for browser-based auth and setup (default: from paths.json)
-	DataDir          string // Root directory for SQLite database (default: .g8e/data in working directory)
-	PKIDir           string // Directory for TLS certificates (default: .g8e/pki)
-	SecretsDir       string // Directory for platform secrets (default: .g8e/secrets)
-	PasskeyRpID      string // RP ID for passkey operations (default: localhost)
-	PasskeyRpName    string // RP Name for passkey operations (default: g8e)
-	MCPDownstreamURL string // URL of the downstream MCP server to proxy discovery and execution to
-	A2ADownstreamURL string // URL of the downstream A2A server to proxy execution to
+	Posture          GatewayPosture // Governance enforcement posture (doctrine, consensus, notary)
+	HTTPPort         int            // TLS/HTTPS port for internal g8ee/client traffic (default: from paths.json)
+	BootstrapPort    int            // Plain-TLS port for bootstrap routes (/.well-known/, /api/auth/device-link/register) (default: from paths.json)
+	PublicPort       int            // Plain-TLS port for browser-based auth and setup (default: from paths.json)
+	DataDir          string         // Root directory for SQLite database (default: .g8e/data in working directory)
+	PKIDir           string         // Directory for TLS certificates (default: .g8e/pki)
+	SecretsDir       string         // Directory for platform secrets (default: .g8e/secrets)
+	PasskeyRpID      string         // RP ID for passkey operations (default: localhost)
+	PasskeyRpName    string         // RP Name for passkey operations (default: g8e)
+	MCPDownstreamURL string         // URL of the downstream MCP server to proxy discovery and execution to
+	A2ADownstreamURL string         // URL of the downstream A2A server to proxy execution to
 }
 
 // OpenClawConfig holds configuration for --openclaw mode.
@@ -214,6 +227,7 @@ func FindProjectRoot() string {
 
 // ListenOptions contains configuration values for LoadListen.
 type ListenOptions struct {
+	Posture          GatewayPosture
 	HTTPPort         int
 	BootstrapPort    int
 	PublicPort       int
@@ -316,12 +330,18 @@ func LoadListen(opts ListenOptions) (*Config, error) {
 		passkeyRpName = "g8e"
 	}
 
+	posture := opts.Posture
+	if posture == "" {
+		posture = PostureDoctrine
+	}
+
 	return &Config{
 		ComponentName: constants.Status.ComponentName.G8EOListen,
 		PKIDir:        pkiDir,     // Also set top-level for services that use Config.PKIDir
 		SecretsDir:    secretsDir, // Also set top-level for services that use Config.SecretsDir
 		Listen: ListenConfig{
 			Enabled: true,
+			Posture: posture,
 
 			HTTPPort:         httpPort,
 			BootstrapPort:    bootstrapPort,

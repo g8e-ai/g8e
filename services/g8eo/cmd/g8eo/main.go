@@ -87,7 +87,9 @@ func main() {
 
 	var httpPort int
 
-	var listenMode bool
+	var doctrineMode bool
+	var consensusMode bool
+	var notaryMode bool
 	var listenHTTPPort int
 	var listenBootstrapPort int
 	var listenPublicPort int
@@ -132,7 +134,9 @@ func main() {
 	flag.BoolVar(&noGit, "no-git", false, "Disable git (ledger)")
 	flag.BoolVar(&showVersion, "version", false, "Version")
 
-	flag.BoolVar(&listenMode, "listen", false, "Listen mode: platform persistence + pub/sub broker")
+	flag.BoolVar(&doctrineMode, "doctrine", false, "Gateway mode: L1 enforced, L2/L3 audited (default)")
+	flag.BoolVar(&consensusMode, "consensus", false, "Gateway mode: L1/L2 enforced, L3 audited")
+	flag.BoolVar(&notaryMode, "notary", false, "Gateway mode: L1/L2/L3 strictly enforced")
 	flag.IntVar(&listenHTTPPort, "http-listen-port", constants.Ports.OperatorHttps, "HTTPS port for mTLS API (default: from paths.json)")
 	flag.IntVar(&listenBootstrapPort, "bootstrap-listen-port", constants.Ports.OperatorBootstrapHttps, "Bootstrap TLS port for device-link enrollment (default: from paths.json)")
 	flag.IntVar(&listenPublicPort, "public-listen-port", constants.Ports.OperatorPublicHttps, "Public browser/BYO bootstrap port (default: from paths.json)")
@@ -212,8 +216,29 @@ func main() {
 		return
 	}
 
-	if listenMode {
-		runListenMode(listenHTTPPort, listenBootstrapPort, listenPublicPort, listenDataDir, listenPKIDir, listenSecretsDir, listenPasskeyRpID, listenPasskeyRpName, logLevel)
+	// Check for mutually exclusive posture flags
+	postureCount := 0
+	var posture config.GatewayPosture
+	if doctrineMode {
+		postureCount++
+		posture = config.PostureDoctrine
+	}
+	if consensusMode {
+		postureCount++
+		posture = config.PostureConsensus
+	}
+	if notaryMode {
+		postureCount++
+		posture = config.PostureNotary
+	}
+
+	if postureCount > 1 {
+		fmt.Fprintf(os.Stderr, "Error: Only one of --doctrine, --consensus, or --notary may be specified\n")
+		os.Exit(constants.ExitConfigError)
+	}
+
+	if postureCount > 0 {
+		runListenMode(posture, listenHTTPPort, listenBootstrapPort, listenPublicPort, listenDataDir, listenPKIDir, listenSecretsDir, listenPasskeyRpID, listenPasskeyRpName, logLevel)
 		return
 	}
 
@@ -544,16 +569,17 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 // runListenMode starts the Operator in listen mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution Gateway.
-func runListenMode(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, logLevel string) {
+func runListenMode(posture config.GatewayPosture, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
 		os.Exit(constants.ExitConfigError)
 	}
 
-	logger.Info("g8e Operator - Listen Mode (operator)", "version", version, "build", buildID)
+	logger.Info("g8e Operator - Gateway Mode", "posture", posture, "version", version, "build", buildID)
 
 	cfg, err := config.LoadListen(config.ListenOptions{
+		Posture:           posture,
 		HTTPPort:          httpPort,
 		BootstrapPort:     bootstrapPort,
 		PublicPort:        publicPort,

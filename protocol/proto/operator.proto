@@ -468,6 +468,14 @@ message ActionReceipt {
 
   // Flag indicating if the transaction was signed implicitly (gateway-local).
   bool implicit_l2_signature = 10;
+
+  // Flag indicating if L2 (Consensus/Tribunal) signature was valid.
+  // Set to false if signature was missing or invalid but posture allowed execution.
+  bool l2_valid = 11;
+
+  // Flag indicating if L3 (Notary/Human) proof was valid.
+  // Set to false if proof was missing or invalid but posture allowed execution.
+  bool l3_valid = 12;
 }
 
 // CommitmentAttestation is the Auditor's signed record that a verified

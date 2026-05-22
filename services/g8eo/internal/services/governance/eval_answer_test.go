@@ -46,6 +46,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key-id": pubKey}},
 		nil, // L3 verifier not needed for EVAL_ANSWER (non-mutation)
 		[]constants.ActionType{constants.ActionTypeEvalAnswer},
+		"doctrine",
 	)
 
 	// Create an EVAL_ANSWER payload

@@ -113,6 +113,8 @@ type VerifiedTransaction struct {
 	StateRoot      string
 	Nonce          string
 	ExpiresAt      time.Time
+	L2Valid        bool // Whether L2 signature was valid (may be false in Doctrine posture)
+	L3Valid        bool // Whether L3 proof was valid (may be false in Doctrine/Consensus posture)
 }
 
 // TransactionVerifier performs all pre-dispatch verification checks.
@@ -123,6 +125,7 @@ type TransactionVerifier struct {
 	signerStore       SignerStore
 	l3Notary          L3Notary
 	knownActionTypes  map[constants.ActionType]struct{}
+	posture           string // Governance posture: "doctrine", "consensus", or "notary"
 }
 
 // NewTransactionVerifier creates a new transaction verifier.
@@ -133,6 +136,7 @@ func NewTransactionVerifier(
 	signerStore SignerStore,
 	l3Notary L3Notary,
 	knownActionTypes []constants.ActionType,
+	posture string,
 ) *TransactionVerifier {
 	knownActions := make(map[constants.ActionType]struct{})
 	for _, action := range knownActionTypes {
@@ -146,6 +150,7 @@ func NewTransactionVerifier(
 		signerStore:       signerStore,
 		l3Notary:          l3Notary,
 		knownActionTypes:  knownActions,
+		posture:           posture,
 	}
 }
 
@@ -237,49 +242,96 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		return nil, ErrStateRootMismatch
 	}
 
+	// L2 (Consensus) verification - posture-aware
+	l2Valid := false
 	if envelope.Governance == nil || envelope.Governance.L2 == nil {
-		return nil, ErrL2SignatureMissing
-	}
-	if envelope.Governance.L2.TribunalSignature == "" {
-		return nil, ErrL2SignatureMissing
-	}
-	if envelope.Governance.L2.KeyId == "" {
-		return nil, ErrL2KeyNotConfigured
-	}
-	if tv.signerStore == nil {
-		tv.logger.Error("Signer store not configured")
-		return nil, ErrL2KeyNotConfigured
-	}
-	pubKey, err := tv.signerStore.GetTrustedSigner(envelope.Governance.L2.KeyId)
-	if err != nil {
-		tv.logger.Error("Failed to load trusted signer", "key_id", envelope.Governance.L2.KeyId, string(constants.ConnectionStateError), err)
-		return nil, ErrL2KeyNotConfigured
-	}
-	if pubKey == nil {
-		tv.logger.Error("Quorum (L2Consensus) signer key not found in trusted signers", "key_id", envelope.Governance.L2.KeyId)
-		return nil, ErrL2KeyNotConfigured
-	}
-	if !tv.verifyL2Signature(pubKey, envelope.Governance.L2.TribunalSignature, computedHash, true) {
-		return nil, ErrL2SignatureInvalid
+		if tv.posture == "consensus" || tv.posture == "notary" {
+			tv.logger.Error("L2 signature missing but required by posture", "posture", tv.posture)
+			return nil, ErrL2SignatureMissing
+		}
+		tv.logger.Warn("L2 signature missing (audited but not enforced in doctrine posture)", "posture", tv.posture)
+	} else if envelope.Governance.L2.TribunalSignature == "" {
+		if tv.posture == "consensus" || tv.posture == "notary" {
+			tv.logger.Error("L2 signature empty but required by posture", "posture", tv.posture)
+			return nil, ErrL2SignatureMissing
+		}
+		tv.logger.Warn("L2 signature empty (audited but not enforced in doctrine posture)", "posture", tv.posture)
+	} else if envelope.Governance.L2.KeyId == "" {
+		if tv.posture == "consensus" || tv.posture == "notary" {
+			tv.logger.Error("L2 key ID missing but required by posture", "posture", tv.posture)
+			return nil, ErrL2KeyNotConfigured
+		}
+		tv.logger.Warn("L2 key ID missing (audited but not enforced in doctrine posture)", "posture", tv.posture)
+	} else {
+		if tv.signerStore == nil {
+			if tv.posture == "consensus" || tv.posture == "notary" {
+				tv.logger.Error("Signer store not configured but required by posture", "posture", tv.posture)
+				return nil, ErrL2KeyNotConfigured
+			}
+			tv.logger.Warn("Signer store not configured (audited but not enforced in doctrine posture)", "posture", tv.posture)
+		} else {
+			pubKey, err := tv.signerStore.GetTrustedSigner(envelope.Governance.L2.KeyId)
+			if err != nil {
+				if tv.posture == "consensus" || tv.posture == "notary" {
+					tv.logger.Error("Failed to load trusted signer", "key_id", envelope.Governance.L2.KeyId, string(constants.ConnectionStateError), err)
+					return nil, ErrL2KeyNotConfigured
+				}
+				tv.logger.Warn("Failed to load trusted signer (audited but not enforced in doctrine posture)", "key_id", envelope.Governance.L2.KeyId, string(constants.ConnectionStateError), err)
+			} else if pubKey == nil {
+				if tv.posture == "consensus" || tv.posture == "notary" {
+					tv.logger.Error("Quorum (L2Consensus) signer key not found in trusted signers", "key_id", envelope.Governance.L2.KeyId)
+					return nil, ErrL2KeyNotConfigured
+				}
+				tv.logger.Warn("Quorum (L2Consensus) signer key not found in trusted signers (audited but not enforced in doctrine posture)", "key_id", envelope.Governance.L2.KeyId)
+			} else if tv.verifyL2Signature(pubKey, envelope.Governance.L2.TribunalSignature, computedHash, true) {
+				l2Valid = true
+			} else {
+				if tv.posture == "consensus" || tv.posture == "notary" {
+					tv.logger.Error("L2 signature verification failed but required by posture", "posture", tv.posture)
+					return nil, ErrL2SignatureInvalid
+				}
+				tv.logger.Warn("L2 signature verification failed (audited but not enforced in doctrine posture)", "posture", tv.posture)
+			}
+		}
 	}
 
+	// L3 (Notary) verification - posture-aware
+	l3Valid := false
 	if tv.isMutation(actionType) {
 		if envelope.Governance == nil || envelope.Governance.L3 == nil || envelope.Governance.L3.Proof == nil {
-			return nil, ErrL3ProofMissing
+			if tv.posture == "notary" {
+				tv.logger.Error("L3 proof missing but required by notary posture", "posture", tv.posture)
+				return nil, ErrL3ProofMissing
+			}
+			tv.logger.Warn("L3 proof missing (audited but not enforced in doctrine/consensus posture)", "posture", tv.posture)
+		} else {
+			if tv.l3Notary == nil {
+				if tv.posture == "notary" {
+					tv.logger.Error("L3 notary not configured but required by notary posture", "posture", tv.posture)
+					return nil, ErrL3NotaryNotConfigured
+				}
+				tv.logger.Warn("L3 notary not configured (audited but not enforced in doctrine/consensus posture)", "posture", tv.posture)
+			} else {
+				ok, err := tv.l3Notary.VerifyL3Proof(
+					envelope.OperatorId,
+					envelope.TransactionHash,
+					envelope.CliSessionId,
+					envelope.Governance.L3.Proof,
+				)
+				if err != nil || !ok {
+					if tv.posture == "notary" {
+						tv.logger.Error("Notary (L3Notary) verification failed but required by notary posture", string(constants.ConnectionStateError), err)
+						return nil, ErrL3ProofInvalid
+					}
+					tv.logger.Warn("Notary (L3Notary) verification failed (audited but not enforced in doctrine/consensus posture)", string(constants.ConnectionStateError), err)
+				} else {
+					l3Valid = true
+				}
+			}
 		}
-		if tv.l3Notary == nil {
-			return nil, ErrL3NotaryNotConfigured
-		}
-		ok, err := tv.l3Notary.VerifyL3Proof(
-			envelope.OperatorId,
-			envelope.TransactionHash,
-			envelope.CliSessionId,
-			envelope.Governance.L3.Proof,
-		)
-		if err != nil || !ok {
-			tv.logger.Error("Notary (L3Notary) verification failed", string(constants.ConnectionStateError), err)
-			return nil, ErrL3ProofInvalid
-		}
+	} else {
+		// Non-mutations don't require L3
+		l3Valid = true
 	}
 
 	// Consume the nonce only after every gate has succeeded so that
@@ -304,6 +356,8 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		StateRoot:      envelope.StateMerkleRoot,
 		Nonce:          envelope.Nonce,
 		ExpiresAt:      expiresAt,
+		L2Valid:        l2Valid,
+		L3Valid:        l3Valid,
 	}
 
 	return verified, nil

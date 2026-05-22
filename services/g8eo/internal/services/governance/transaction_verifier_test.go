@@ -76,6 +76,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
 		l3Notary,
 		[]constants.ActionType{constants.ActionTypeExecuteBash, constants.ActionTypeFsList},
+		"notary",
 	), privKey
 }
 

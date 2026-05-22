@@ -679,7 +679,7 @@ _print_platform_info() {
     printf "  %-17s %s\n" "L3 Notary" "$l2_signer_count signers enrolled"
     printf "  %-17s %s\n" "Ruleset" "${ruleset_hash:0:8}…"
     if [[ "$l2_signer_count" -eq 0 ]]; then
-        printf "  %-17s %s\n" "" "⚠ No L2/L3 signers"
+        printf "  %-17s %s\n" "" "⚠  No L2/L3 signers enrolled"
     fi
     _print_header "IDENTITY"
     printf "  %-11s %s\n" "Session" "$operator_session_id"
