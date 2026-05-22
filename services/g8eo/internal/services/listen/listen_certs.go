@@ -886,6 +886,12 @@ func (pki *PKIAuthority) generateAppCert(app, certPath string) error {
 		return fmt.Errorf("store %s private key in keystore: %w", app, err)
 	}
 
+	// Write private key to PKI directory for app consumption (e.g., g8ee uvicorn)
+	keyPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".key")
+	if err := writePEMFile(keyPath, "EC PRIVATE KEY", keyDER, 0600); err != nil {
+		return fmt.Errorf("write %s private key to PKI directory: %w", app, err)
+	}
+
 	return nil
 }
 

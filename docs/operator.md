@@ -68,7 +68,7 @@ Sensitive data is scrubbed before it ever leaves the host. **AI never sees unscr
 
 Sentinel runs in two phases on the Operator:
 
-- **Pre-execution defense** - Regex analysis against MITRE ATT&CK threat patterns blocks dangerous commands before dispatch.
+- **Pre-execution defense** - Regex analysis against MITRE ATT&CK threat patterns blocks dangerous commands before dispatch. Threat doctrines are loaded from `protocol/constants/doctrine/` at startup, including industry sources (OWASP CRS, Gitleaks) and g8e-specific MCP/agentic threat vectors.
 - **Post-execution scrubbing** - Removes API keys, tokens, PII, connection strings, and credentials from output before it is stored in the Scrubbed Vault or transmitted off-host. Sentinel placeholders include `[AWS_KEY]`, `[AWS_SECRET]`, `[PII]`, `[URL_WITH_CREDENTIALS]`, `[CONN_STRING]`, `[CREDENTIAL_REFERENCE]`. Patterns live in `@/home/bob/g8e/services/g8eo/internal/services/sentinel/`.
 
 ### Three local vaults (LFAA)

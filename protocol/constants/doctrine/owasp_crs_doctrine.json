@@ -1,0 +1,63 @@
+{
+  "source": "owasp_crs",
+  "version": "4.0.0",
+  "last_updated": "2026-05-22",
+  "license": "Apache-2.0",
+  "doctrines": [
+    {
+      "id": "owasp_crs_932100",
+      "name": "RCE: nc -e reverse shell",
+      "category": "reverse_shell",
+      "severity": "critical",
+      "pattern": "(?i)nc\\s+.*-e\\s+(/bin/)?(sh|bash|zsh)",
+      "mitre_attack": "T1059.004",
+      "mitre_tactic": "Execution",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "owasp_crs_932110",
+      "name": "RCE: bash -i reverse shell",
+      "category": "reverse_shell",
+      "severity": "critical",
+      "pattern": "(?i)bash\\s+-i\\s+>&\\s+/dev/tcp/",
+      "mitre_attack": "T1059.004",
+      "mitre_tactic": "Execution",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "owasp_crs_930100",
+      "name": "LFI: path traversal",
+      "category": "path_traversal",
+      "severity": "high",
+      "pattern": "(?i)\\.\\.[\\/\\\\]",
+      "mitre_attack": "T1006",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "owasp_crs_942100",
+      "name": "SQLi: UNION SELECT",
+      "category": "sql_injection",
+      "severity": "critical",
+      "pattern": "(?i)\\bUNION\\s+SELECT\\b",
+      "mitre_attack": "T1190",
+      "mitre_tactic": "Initial Access",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "owasp_crs_913100",
+      "name": "Scanner: nmap",
+      "category": "reconnaissance",
+      "severity": "medium",
+      "pattern": "(?i)nmap\\s+",
+      "mitre_attack": "T1595.001",
+      "mitre_tactic": "Reconnaissance",
+      "confidence": 0.85,
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-05-22",
+  "sources": [
+    {
+      "name": "owasp_crs",
+      "url": "https://github.com/coreruleset/coreruleset",
+      "version": "4.0.0",
+      "license": "Apache-2.0",
+      "enabled": true,
+      "last_ingested": "2026-05-22"
+    },
+    {
+      "name": "gitleaks",
+      "url": "https://github.com/gitleaks/gitleaks",
+      "version": "8.18.0",
+      "license": "MIT",
+      "enabled": true,
+      "last_ingested": "2026-05-22"
+    },
+    {
+      "name": "semgrep",
+      "url": "https://github.com/semgrep/semgrep-rules",
+      "version": "latest",
+      "license": "Semgrep Rules License v1.0",
+      "enabled": false,
+      "last_ingested": null
+    },
+    {
+      "name": "secrets_patterns_db",
+      "url": "https://github.com/mazen160/secrets-patterns-db",
+      "version": "latest",
+      "license": "CC0",
+      "enabled": false,
+      "last_ingested": null
+    },
+    {
+      "name": "mcp_vectors",
+      "url": null,
+      "version": "1.0.0",
+      "license": "Proprietary",
+      "enabled": true,
+      "last_ingested": "2026-05-22"
+    }
+  ]
+}

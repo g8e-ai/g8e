@@ -39,6 +39,11 @@ help:
 	@echo "  first-issues  Find good first issues in the codebase"
 	@echo "  clean         Remove build artifacts and runtime state"
 	@echo ""
+	@echo "Doctrine Ingestion:"
+	@echo "  ingest-doctrines    Run all doctrine ingestion scripts"
+	@echo "  validate-doctrines  Validate JSON schema for all doctrine files"
+	@echo "  update-doctrines    Pull latest sources and re-ingest doctrines"
+	@echo ""
 	@echo "Services:"
 	@echo "  build-g8eo    Build the Operator service"
 	@echo "  test-g8eo     Run Operator tests"
@@ -167,6 +172,47 @@ clean:
 	@find . -name "*.pyc" -delete
 	@find . -name "__pycache__" -type d -exec rm -rf {} +
 	@echo "Clean complete."
+
+# =============================================================================
+# DOCTRINE INGESTION
+# =============================================================================
+.PHONY: ingest-doctrines
+ingest-doctrines:
+	@echo "Running doctrine ingestion scripts..."
+	@if [ -f "scripts/data/ingest_owasp_crs.py" ]; then \
+		echo "Ingesting OWASP CRS doctrines..."; \
+		python3 scripts/data/ingest_owasp_crs.py /tmp/coreruleset 2>/dev/null || echo "OWASP CRS source not found, skipping"; \
+	fi
+	@if [ -f "scripts/data/ingest_gitleaks.py" ]; then \
+		echo "Ingesting Gitleaks doctrines..."; \
+		python3 scripts/data/ingest_gitleaks.py /tmp/gitleaks.toml 2>/dev/null || echo "Gitleaks source not found, skipping"; \
+	fi
+	@echo "Doctrine ingestion complete."
+
+.PHONY: validate-doctrines
+validate-doctrines:
+	@echo "Validating doctrine JSON schema..."
+	@for file in protocol/constants/doctrine/*.json; do \
+		if [ -f "$$file" ]; then \
+			echo "Validating $$file..."; \
+			python3 -m json.tool "$$file" > /dev/null || exit 1; \
+		fi \
+	done
+	@echo "All doctrine files are valid JSON."
+
+.PHONY: update-doctrines
+update-doctrines:
+	@echo "Updating doctrine sources..."
+	@if [ -d "/tmp/coreruleset" ]; then \
+		cd /tmp/coreruleset && git pull; \
+	else \
+		git clone --depth 1 https://github.com/coreruleset/coreruleset.git /tmp/coreruleset; \
+	fi
+	@if [ -f "/tmp/gitleaks.toml" ]; then \
+		curl -sSL https://raw.githubusercontent.com/gitleaks/gitleaks/master/config/gitleaks.toml -o /tmp/gitleaks.toml; \
+	fi
+	@$(MAKE) ingest-doctrines
+	@echo "Doctrine update complete."
 
 # =============================================================================
 # SERVICE DISPATCH

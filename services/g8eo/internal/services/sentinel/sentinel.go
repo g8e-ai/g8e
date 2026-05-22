@@ -14,8 +14,11 @@
 package sentinel
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -335,7 +338,168 @@ func NewSentinel(config *SentinelConfig, logger *slog.Logger) *Sentinel {
 	s.initializeScrubbers()
 	s.initializeThreatDetectors()
 	s.initializeInputThreatDetectors()
+	s.LoadDoctrinesFromProtocol()
 	return s
+}
+
+// doctrineData represents a single doctrine definition
+type doctrineData struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Category    string  `json:"category"`
+	Severity    string  `json:"severity"`
+	Pattern     string  `json:"pattern"`
+	MitreAttack string  `json:"mitre_attack,omitempty"`
+	MitreTactic string  `json:"mitre_tactic,omitempty"`
+	Confidence  float64 `json:"confidence"`
+	Enabled     bool    `json:"enabled"`
+}
+
+// LoadDoctrinesFromProtocol loads threat doctrines from protocol/constants/doctrine/
+func (s *Sentinel) LoadDoctrinesFromProtocol() {
+	doctrineDir := filepath.Join(constants.Paths.Infra.ProtocolDir, "constants", "doctrine")
+	if _, err := os.Stat(doctrineDir); os.IsNotExist(err) {
+		s.logger.Info("Doctrine directory not found, skipping protocol doctrine loading", "path", doctrineDir)
+		return
+	}
+
+	entries, err := os.ReadDir(doctrineDir)
+	if err != nil {
+		s.logger.Warn("Failed to read doctrine directory", "path", doctrineDir, "error", err)
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		if entry.Name() == "doctrine_registry.json" {
+			continue
+		}
+
+		doctrinePath := filepath.Join(doctrineDir, entry.Name())
+		s.loadDoctrineFile(doctrinePath)
+	}
+}
+
+// loadDoctrineFile loads a single doctrine JSON file and adds doctrines to threat detectors
+func (s *Sentinel) loadDoctrineFile(doctrinePath string) {
+	data, err := os.ReadFile(doctrinePath)
+	if err != nil {
+		s.logger.Warn("Failed to read doctrine file", "path", doctrinePath, "error", err)
+		return
+	}
+
+	var doctrineFile struct {
+		Source    string         `json:"source"`
+		Version   string         `json:"version"`
+		Doctrines []doctrineData `json:"doctrines"`
+	}
+
+	if err := json.Unmarshal(data, &doctrineFile); err != nil {
+		s.logger.Warn("Failed to parse doctrine JSON", "path", doctrinePath, "error", err)
+		return
+	}
+
+	s.logger.Info("Loading doctrine file", "source", doctrineFile.Source, "version", doctrineFile.Version, "path", doctrinePath)
+
+	loadedCount := 0
+	for _, d := range doctrineFile.Doctrines {
+		if !d.Enabled {
+			continue
+		}
+
+		detector, err := s.doctrineToDetector(d)
+		if err != nil {
+			s.logger.Warn("Failed to compile doctrine pattern", "id", d.ID, "error", err)
+			continue
+		}
+
+		s.threatDetectors = append(s.threatDetectors, detector)
+		loadedCount++
+	}
+
+	s.logger.Info("Loaded doctrines from file", "source", doctrineFile.Source, "loaded", loadedCount, "total", len(doctrineFile.Doctrines))
+}
+
+// doctrineToDetector converts a doctrine definition to a ThreatDetector
+func (s *Sentinel) doctrineToDetector(d doctrineData) (ThreatDetector, error) {
+	pattern, err := regexp.Compile(d.Pattern)
+	if err != nil {
+		return nil, fmt.Errorf("invalid regex pattern: %w", err)
+	}
+
+	severity := s.mapSeverity(d.Severity)
+	category := s.mapCategory(d.Category)
+
+	return &RegexThreatDetector{
+		name:           d.ID,
+		pattern:        pattern,
+		category:       category,
+		severity:       severity,
+		confidence:     d.Confidence,
+		mitreAttack:    d.MitreAttack,
+		mitreTactic:    d.MitreTactic,
+		recommendation: fmt.Sprintf("Detected by doctrine %s from %s", d.ID, d.Name),
+	}, nil
+}
+
+// mapSeverity maps string severity to ThreatSeverity
+func (s *Sentinel) mapSeverity(sev string) ThreatSeverity {
+	switch strings.ToLower(sev) {
+	case "critical":
+		return ThreatSeverityCritical
+	case "high":
+		return ThreatSeverityHigh
+	case "medium":
+		return ThreatSeverityMedium
+	case "low":
+		return ThreatSeverityLow
+	case "info":
+		return ThreatSeverityInfo
+	default:
+		return ThreatSeverityMedium
+	}
+}
+
+// mapCategory maps string category to ThreatCategory
+func (s *Sentinel) mapCategory(cat string) ThreatCategory {
+	switch cat {
+	case "reverse_shell":
+		return ThreatCategoryReverseShell
+	case "privilege_escalation":
+		return ThreatCategoryPrivilegeEsc
+	case "credential_access":
+		return ThreatCategoryCredentialAccess
+	case "data_exfiltration":
+		return ThreatCategoryExfiltration
+	case "cryptominer":
+		return ThreatCategoryCryptominer
+	case "persistence":
+		return ThreatCategoryPersistence
+	case "lateral_movement":
+		return ThreatCategoryLateralMovement
+	case "defense_evasion":
+		return ThreatCategoryDefenseEvasion
+	case "reconnaissance":
+		return ThreatCategoryReconnaissance
+	case "resource_hijacking":
+		return ThreatCategoryResourceHijacking
+	case "tool_response_injection":
+		return ThreatCategoryDefenseEvasion
+	case "unsafe_argument_handling":
+		return ThreatCategoryDefenseEvasion
+	case "prompt_injection_via_output":
+		return ThreatCategoryDefenseEvasion
+	case "credential_exposure_in_tool_responses":
+		return ThreatCategoryCredentialAccess
+	case "governance_envelope_field_abuse":
+		return ThreatCategorySecurityBypass
+	case "mcp_protocol_misuse":
+		return ThreatCategorySecurityBypass
+	default:
+		return ThreatCategorySecurityBypass
+	}
 }
 
 // initializeScrubbers sets up all the pattern-based scrubbers

@@ -674,12 +674,12 @@ _print_platform_info() {
     printf "  %-13s %-25s %-10s %s\n" "Internal API" "http://127.0.0.1:$G8E_OPERATOR_HTTPS_PORT" "$G8E_OPERATOR_HTTPS_PORT/tcp" "loopback only"
     printf "  %-13s %-25s %-10s %s\n" "Bootstrap" "http://${HOST_IPS%%,*}:$G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT" "$G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT/tcp" "LAN — trust install"
     _print_header "ENFORCEMENT POSTURE"
-    printf "  %-17s %s\n" "L1 Doctrine" "$l1_pattern_count patterns — hard gates enforced"
+    printf "  %-17s %s\n" "L1 Doctrine" "$l1_pattern_count patterns"
     printf "  %-17s %s\n" "L2 Consensus" "$l2_signer_count signers enrolled"
-    printf "  %-17s %s\n" "L3 Authorization" "WebAuthn/FIDO2 — human-in-the-loop"
+    printf "  %-17s %s\n" "L3 Notary" "$l2_signer_count signers enrolled"
     printf "  %-17s %s\n" "Ruleset" "${ruleset_hash:0:8}…"
     if [[ "$l2_signer_count" -eq 0 ]]; then
-        printf "  %-17s %s\n" "" "⚠ no L2 signers — all mutations fail-closed"
+        printf "  %-17s %s\n" "" "⚠ No L2/L3 signers"
     fi
     _print_header "IDENTITY"
     printf "  %-11s %s\n" "Session" "$operator_session_id"
@@ -700,11 +700,7 @@ _print_platform_info() {
     fi
     printf "  %-2s %-16s %s\n" "3" "Tail logs" "tail -f ${G8E_LOG_DIR/#$HOME/\~}/operator.log"
     echo "────────────────────────────────────────────────────────────────────────────────"
-    if [[ "$l2_signer_count" -eq 0 ]]; then
-        echo "[g8e] Control plane listening. No L2 signers — mutations fail-closed until enrolled."
-    else
-        echo "[g8e] Control plane listening. Mutations governed by active ruleset."
-    fi
+    echo "[g8e] Control plane listening. Mutations governed by active ruleset."
 }
 
 if [[ -z "$COMMAND" ]]; then
@@ -868,7 +864,7 @@ _preflight
 # ─── up ───────────────────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "up" ]]; then
-    echo "[g8e] Initializing BFT Governance Architecture..."
+    echo "[g8e] Initializing"
     mapfile -t UP_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
     
     if printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx operator; then
@@ -902,7 +898,7 @@ fi
 # Operator binary builds provide the listen-mode and remote Operator artifacts.
 
 if [[ "$COMMAND" == "setup" ]]; then
-    echo "[g8e] Initializing BFT Governance Architecture..."
+    echo "[g8e] Initializing"
     mapfile -t SETUP_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
     echo "Stopping all runtime services..."
     _stop_g8ee
@@ -930,7 +926,7 @@ fi
 # ─── rebuild ──────────────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "rebuild" ]]; then
-    echo "[g8e] Initializing BFT Governance Architecture..."
+    echo "[g8e] Initializing"
     mapfile -t REBUILD_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
 
     if printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx operator; then
