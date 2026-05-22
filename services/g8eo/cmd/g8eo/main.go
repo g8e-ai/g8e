@@ -42,7 +42,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services"
 	auth "github.com/g8e-ai/g8e/services/g8eo/internal/services/auth"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
-	listen "github.com/g8e-ai/g8e/services/g8eo/internal/services/listen"
+	listen "github.com/g8e-ai/g8e/services/g8eo/internal/services/gateway"
 	openclaw "github.com/g8e-ai/g8e/services/g8eo/internal/services/openclaw"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
@@ -177,8 +177,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  -G, --no-git            Disable ledger (git-backed file versioning)\n")
 		fmt.Fprintf(os.Stderr, "      --heartbeat-interval <dur> Heartbeat interval (e.g. 60s, 2m); overrides the 30s default\n")
 		fmt.Fprintf(os.Stderr, "  -v, --version           Show version\n")
-		fmt.Fprintf(os.Stderr, "\nListen Mode (platform persistence + pub/sub broker):\n")
-		fmt.Fprintf(os.Stderr, "  --listen                    Listen mode: local persistence + pub/sub broker\n")
+		fmt.Fprintf(os.Stderr, "\nGateway Mode (platform persistence + pub/sub broker):\n")
+		fmt.Fprintf(os.Stderr, "  --doctrine                Gateway mode: L1 enforced, L2/L3 audited (default)\n")
+		fmt.Fprintf(os.Stderr, "  --consensus               Gateway mode: L1/L2 enforced, L3 audited\n")
+		fmt.Fprintf(os.Stderr, "  --notary                  Gateway mode: L1/L2/L3 strictly enforced\n")
 		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for mTLS API (default: %d)\n", constants.Ports.OperatorHttps)
 		fmt.Fprintf(os.Stderr, "  --bootstrap-listen-port <port> Bootstrap TLS port for device-link enrollment (default: %d)\n", constants.Ports.OperatorBootstrapHttps)
 		fmt.Fprintf(os.Stderr, "  --public-listen-port <port> Public browser/BYO bootstrap port (default: %d)\n", constants.Ports.OperatorPublicHttps)
@@ -238,7 +240,7 @@ func main() {
 	}
 
 	if postureCount > 0 {
-		runListenMode(posture, listenHTTPPort, listenBootstrapPort, listenPublicPort, listenDataDir, listenPKIDir, listenSecretsDir, listenPasskeyRpID, listenPasskeyRpName, logLevel)
+		runGatewayMode(posture, listenHTTPPort, listenBootstrapPort, listenPublicPort, listenDataDir, listenPKIDir, listenSecretsDir, listenPasskeyRpID, listenPasskeyRpName, logLevel)
 		return
 	}
 
@@ -566,10 +568,10 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 	}
 }
 
-// runListenMode starts the Operator in listen mode - the platform's central
+// runGatewayMode starts the Operator in gateway mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution Gateway.
-func runListenMode(posture config.GatewayPosture, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, logLevel string) {
+func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, secretsDir, passkeyRpID, passkeyRpName string, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
@@ -578,7 +580,7 @@ func runListenMode(posture config.GatewayPosture, httpPort, bootstrapPort, publi
 
 	logger.Info("g8e Operator - Gateway Mode", "posture", posture, "version", version, "build", buildID)
 
-	cfg, err := config.LoadListen(config.ListenOptions{
+	cfg, err := config.LoadGateway(config.GatewayOptions{
 		Posture:           posture,
 		HTTPPort:          httpPort,
 		BootstrapPort:     bootstrapPort,
@@ -598,9 +600,9 @@ func runListenMode(posture config.GatewayPosture, httpPort, bootstrapPort, publi
 	}
 	cfg.Version = version
 
-	svc, err := listen.NewListenService(cfg, logger)
+	svc, err := listen.NewGatewayService(cfg, logger)
 	if err != nil {
-		logger.Error("Failed to create listen service", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to create gateway service", constants.ConnectionStateErrorStr, err)
 		os.Exit(constants.ExitCodeFromError(err))
 	}
 
@@ -652,11 +654,11 @@ func runListenMode(posture config.GatewayPosture, httpPort, bootstrapPort, publi
 		FileEdit:           fileSvc,
 		PubSubClient:       loopbackClient,
 		ResultsService:     nil, // Results handled via direct loopback publish if needed
-		LocalStore:         nil, // Not used in listen mode
-		RawVault:           nil, // Not used in listen mode
+		LocalStore:         nil, // Not used in gateway mode
+		RawVault:           nil, // Not used in gateway mode
 		AuditVault:         nil, // Handled by Actuator direct audit
-		Ledger:             nil, // P1: Ledger in listen mode
-		HistoryHandler:     nil, // P1: History in listen mode
+		Ledger:             nil, // P1: Ledger in gateway mode
+		HistoryHandler:     nil, // P1: History in gateway mode
 		Sentinel:           sentinel.NewSentinel(services.ProductionSentinelConfig(), logger),
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
@@ -682,7 +684,7 @@ func runListenMode(posture config.GatewayPosture, httpPort, bootstrapPort, publi
 	// downstream MCP server is invoked from the Actuator via cmdSvc, so the
 	// gateway only needs the Gateway processor + signing identity here.
 	if mcpSvc != nil {
-		mcpSvc.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, cfg.Listen.MCPDownstreamURL)
+		mcpSvc.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, cfg.Gateway.MCPDownstreamURL)
 	}
 
 	go func() {
@@ -692,7 +694,7 @@ func runListenMode(posture config.GatewayPosture, httpPort, bootstrapPort, publi
 		}
 	}()
 
-	// Start the command service once the listen service is ready
+	// Start the command service once the gateway service is ready
 	go func() {
 		for !svc.IsReady() {
 			time.Sleep(100 * time.Millisecond)
@@ -724,7 +726,7 @@ func runListenMode(posture config.GatewayPosture, httpPort, bootstrapPort, publi
 	if err := svc.Stop(shutdownCtx); err != nil {
 		logger.Error("Listen shutdown error", constants.ConnectionStateErrorStr, err)
 	}
-	logger.Info("Listen mode stopped")
+	logger.Info("Gateway mode stopped")
 }
 
 // handleVaultCommand processes vault management CLI commands

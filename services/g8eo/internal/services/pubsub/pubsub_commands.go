@@ -242,7 +242,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		constants.ActionTypeMcpCall,
 		constants.ActionTypeA2aCall,
 	}
-	posture := string(c.Config.Listen.Posture)
+	posture := string(c.Config.Gateway.Posture)
 	if posture == "" {
 		posture = "doctrine"
 	}
@@ -259,8 +259,8 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 	// Wire MCP gateway with dependencies if configured.
 	// MCPGateway is used as the egress dispatcher for protocol translation.
 	if rs.mcpGateway != nil {
-		rs.mcpGateway.SetDependencies(rs, c.StateRootProvider, c.ActuatorSigningKey, c.ActuatorKeyID, c.Config.Listen.MCPDownstreamURL)
-		rs.mcpGateway.SetA2ADependencies(c.Config.Listen.A2ADownstreamURL)
+		rs.mcpGateway.SetDependencies(rs, c.StateRootProvider, c.ActuatorSigningKey, c.ActuatorKeyID, c.Config.Gateway.MCPDownstreamURL)
+		rs.mcpGateway.SetA2ADependencies(c.Config.Gateway.A2ADownstreamURL)
 	}
 
 	c.Logger.Info("UAP governance services initialized",

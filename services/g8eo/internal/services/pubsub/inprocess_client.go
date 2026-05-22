@@ -28,7 +28,7 @@ type Broker interface {
 }
 
 // InProcessPubSubClient implements PubSubClient for in-process communication
-// between the ListenService (broker) and PubSubCommandService (executor).
+// between the GatewayService (broker) and PubSubCommandService (executor).
 type InProcessPubSubClient struct {
 	broker Broker
 	mu     sync.Mutex

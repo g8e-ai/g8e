@@ -29,7 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/certs"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/listen"
+	listen "github.com/g8e-ai/g8e/services/g8eo/internal/services/gateway"
 )
 
 // ---------------------------------------------------------------------------

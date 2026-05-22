@@ -60,7 +60,7 @@ import (
 	pubsubv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/pubsubv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/listen"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/gateway"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
@@ -78,7 +78,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	secretsDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 
-	cfg, err := config.LoadListen(config.ListenOptions{
+	cfg, err := config.LoadGateway(config.GatewayOptions{
 		DataDir:           dataDir,
 		PKIDir:            pkiDir,
 		SecretsDir:        secretsDir,
@@ -88,7 +88,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	ls, err := listen.NewListenService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
@@ -131,7 +131,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond)
 
 	// Since we used port 0, we need to know what ports were assigned.
-	// We'll add getters for the servers in ListenService.
+	// We'll add getters for the servers in GatewayService.
 	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())

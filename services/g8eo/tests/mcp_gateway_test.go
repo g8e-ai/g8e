@@ -57,7 +57,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/listen"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/gateway"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
@@ -95,7 +95,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	defer downstreamServer.Close()
 
 	// 2. Setup Operator with MCP configuration
-	cfg, err := config.LoadListen(config.ListenOptions{
+	cfg, err := config.LoadGateway(config.GatewayOptions{
 		DataDir:           dataDir,
 		PKIDir:            pkiDir,
 		SecretsDir:        secretsDir,
@@ -104,9 +104,9 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		AllowTestPortZero: true,
 	})
 	require.NoError(t, err)
-	cfg.Listen.MCPDownstreamURL = downstreamServer.URL
+	cfg.Gateway.MCPDownstreamURL = downstreamServer.URL
 
-	ls, err := listen.NewListenService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
@@ -399,7 +399,7 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	defer downstreamServer.Close()
 
 	// 2. Setup Operator with A2A configuration
-	cfg, err := config.LoadListen(config.ListenOptions{
+	cfg, err := config.LoadGateway(config.GatewayOptions{
 		DataDir:           dataDir,
 		PKIDir:            pkiDir,
 		SecretsDir:        secretsDir,
@@ -408,9 +408,9 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		AllowTestPortZero: true,
 	})
 	require.NoError(t, err)
-	cfg.Listen.A2ADownstreamURL = downstreamServer.URL
+	cfg.Gateway.A2ADownstreamURL = downstreamServer.URL
 
-	ls, err := listen.NewListenService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
@@ -608,7 +608,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	secretsDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 
-	cfg, err := config.LoadListen(config.ListenOptions{
+	cfg, err := config.LoadGateway(config.GatewayOptions{
 		DataDir:           dataDir,
 		PKIDir:            pkiDir,
 		SecretsDir:        secretsDir,
@@ -618,7 +618,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	ls, err := listen.NewListenService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
@@ -891,7 +891,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	secretsDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 
-	cfg, err := config.LoadListen(config.ListenOptions{
+	cfg, err := config.LoadGateway(config.GatewayOptions{
 		DataDir:           dataDir,
 		PKIDir:            pkiDir,
 		SecretsDir:        secretsDir,
@@ -901,7 +901,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	ls, err := listen.NewListenService(cfg, testutil.NewTestLogger())
+	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())

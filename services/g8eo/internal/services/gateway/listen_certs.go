@@ -1,0 +1,1007 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package gateway
+
+import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
+	"fmt"
+	"log/slog"
+	"math/big"
+	"net"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/g8e-ai/g8e/protocol"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
+)
+
+const (
+	rootValidityDays         = 3650
+	intermediateValidityDays = 3650
+	serviceValidityDays      = 90
+	bootstrapValidityDays    = 1 // Short-lived for enrollment certs
+
+	rootCommonName      = "g8e Root CA"
+	hubCommonName       = "g8e Hub Intermediate CA"
+	operatorCommonName  = "g8e Operator Intermediate CA"
+	bootstrapCommonName = "g8e Bootstrap Intermediate CA"
+)
+
+// PKIAuthority manages the full PKI hierarchy for the Operator.
+// It generates and stores:
+// - Root CA under pki/root/ (cert only, key in keystore)
+// - Intermediate CAs under pki/authorities/ (cert only, keys in keystore)
+// - Service certificates under pki/issued/
+// - Trust bundles under pki/trust/
+// - Revocation state under pki/revocation/
+type PKIAuthority struct {
+	mu     sync.RWMutex
+	logger *slog.Logger
+	db     *GatewayDBService
+
+	pkiDir        string
+	secretManager *SecretManager
+
+	// Root CA
+	rootCert *x509.Certificate
+	rootKey  *ecdsa.PrivateKey
+
+	// Intermediate CAs
+	hubCert       *x509.Certificate
+	hubKey        *ecdsa.PrivateKey
+	operatorCert  *x509.Certificate
+	operatorKey   *ecdsa.PrivateKey
+	bootstrapCert *x509.Certificate
+	bootstrapKey  *ecdsa.PrivateKey
+
+	// Service certificate for operator-listen
+	serviceCert tls.Certificate
+}
+
+func newPKIAuthority(dataDir, pkiDir string, db *GatewayDBService, secretManager *SecretManager, logger *slog.Logger) *PKIAuthority {
+	if pkiDir == "" {
+		pkiDir = filepath.Join(dataDir, "pki")
+	}
+	return &PKIAuthority{
+		pkiDir:        pkiDir,
+		db:            db,
+		secretManager: secretManager,
+		logger:        logger,
+	}
+}
+
+// EnsurePKI initializes the full PKI hierarchy. Must be called before TLSConfig().
+func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
+	pki.mu.Lock()
+	defer pki.mu.Unlock()
+
+	// Create directory structure
+	dirs := []string{
+		filepath.Join(pki.pkiDir, "root"),
+		filepath.Join(pki.pkiDir, "authorities"),
+		filepath.Join(pki.pkiDir, "issued", "hub"),
+		filepath.Join(pki.pkiDir, "issued", "apps"),
+		filepath.Join(pki.pkiDir, "trust"),
+		filepath.Join(pki.pkiDir, "revocation"),
+	}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create PKI directory %s: %w", dir, err)
+		}
+	}
+
+	// Generate or load Root CA
+	if err := pki.ensureRootCA(); err != nil {
+		return fmt.Errorf("root CA setup failed: %w", err)
+	}
+
+	// Generate or load Intermediate CAs
+	if err := pki.ensureIntermediateCAs(); err != nil {
+		return fmt.Errorf("intermediate CA setup failed: %w", err)
+	}
+
+	// Generate or load operator-listen service certificate
+	if err := pki.ensureServiceCert(extraIPs); err != nil {
+		return fmt.Errorf("service certificate setup failed: %w", err)
+	}
+
+	// Generate or load certificates for reference ensembles
+	if err := pki.ensureAppCerts(); err != nil {
+		return fmt.Errorf("app certificates setup failed: %w", err)
+	}
+
+	// Generate trust bundles
+	if err := pki.generateTrustBundles(); err != nil {
+		return fmt.Errorf("trust bundle generation failed: %w", err)
+	}
+
+	pki.logger.Info("[PKI] PKI hierarchy initialized", "pki_dir", pki.pkiDir)
+	return nil
+}
+
+// TLSConfig returns a tls.Config that serves the managed server certificate.
+// It also configures the client CA pool to enable mTLS verification.
+func (pki *PKIAuthority) TLSConfig() *tls.Config {
+	pki.mu.RLock()
+	defer pki.mu.RUnlock()
+
+	// Create client CA pool from our root and hub authorities
+	pool := x509.NewCertPool()
+	if pki.rootCert != nil {
+		pool.AddCert(pki.rootCert)
+	}
+	if pki.hubCert != nil {
+		pool.AddCert(pki.hubCert)
+	}
+	if pki.operatorCert != nil {
+		pool.AddCert(pki.operatorCert)
+	}
+
+	return &tls.Config{
+		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			pki.mu.RLock()
+			defer pki.mu.RUnlock()
+			c := pki.serviceCert
+			return &c, nil
+		},
+		ClientAuth: tls.RequireAndVerifyClientCert,
+		ClientCAs:  pool,
+		MinVersion: tls.VersionTLS13,
+	}
+}
+
+// TLSConfigPlain returns a TLS config for the bootstrap listener.
+// This listener does not require client certificates for unauthenticated routes
+// (/.well-known/, /api/auth/device-link/register).
+func (pki *PKIAuthority) TLSConfigPlain() *tls.Config {
+	pki.mu.RLock()
+	defer pki.mu.RUnlock()
+
+	return &tls.Config{
+		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			pki.mu.RLock()
+			defer pki.mu.RUnlock()
+			c := pki.serviceCert
+			return &c, nil
+		},
+		ClientAuth: tls.NoClientCert,
+		MinVersion: tls.VersionTLS13,
+	}
+}
+
+// TrustBundlePath returns the path to the hub trust bundle.
+func (pki *PKIAuthority) TrustBundlePath() string {
+	return filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem")
+}
+
+// PKIDir returns the path to the pki directory.
+func (pki *PKIAuthority) PKIDir() string {
+	return pki.pkiDir
+}
+
+// ─── PKI hierarchy management ─────────────────────────────────────────────
+
+func (pki *PKIAuthority) ensureRootCA() error {
+	rootCertPath := filepath.Join(pki.pkiDir, "root", "root_ca.crt")
+
+	needRoot := !fileExists(rootCertPath)
+	if !needRoot {
+		if err := pki.loadCertificatePair(rootCertPath, "", &pki.rootCert, &pki.rootKey); err != nil {
+			pki.logger.Warn("[PKI] Failed to load root CA, regenerating", string(constants.ConnectionStateError), err)
+			needRoot = true
+		}
+	}
+
+	if needRoot {
+		pki.logger.Info("[PKI] Generating root CA")
+		if err := pki.generateRootCA("", rootCertPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (pki *PKIAuthority) ensureIntermediateCAs() error {
+	// Hub Intermediate CA
+	hubCertPath := filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt")
+	needHub := !fileExists(hubCertPath)
+	if !needHub {
+		if err := pki.loadCertificatePair(hubCertPath, "", &pki.hubCert, &pki.hubKey); err != nil {
+			pki.logger.Warn("[PKI] Failed to load hub CA, regenerating", string(constants.ConnectionStateError), err)
+			needHub = true
+		}
+	}
+	if needHub {
+		pki.logger.Info("[PKI] Generating hub intermediate CA")
+		if err := pki.generateIntermediateCA("", hubCertPath, pki.rootCert, pki.rootKey, hubCommonName); err != nil {
+			return err
+		}
+	}
+
+	// Operator Intermediate CA
+	operatorCertPath := filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt")
+	needOperator := !fileExists(operatorCertPath)
+	if !needOperator {
+		if err := pki.loadCertificatePair(operatorCertPath, "", &pki.operatorCert, &pki.operatorKey); err != nil {
+			pki.logger.Warn("[PKI] Failed to load operator CA, regenerating", string(constants.ConnectionStateError), err)
+			needOperator = true
+		}
+	}
+	if needOperator {
+		pki.logger.Info("[PKI] Generating operator intermediate CA")
+		if err := pki.generateIntermediateCA("", operatorCertPath, pki.rootCert, pki.rootKey, operatorCommonName); err != nil {
+			return err
+		}
+	}
+
+	// Bootstrap Intermediate CA
+	bootstrapCertPath := filepath.Join(pki.pkiDir, "authorities", "bootstrap_ca.crt")
+	needBootstrap := !fileExists(bootstrapCertPath)
+	if !needBootstrap {
+		if err := pki.loadCertificatePair(bootstrapCertPath, "", &pki.bootstrapCert, &pki.bootstrapKey); err != nil {
+			pki.logger.Warn("[PKI] Failed to load bootstrap CA, regenerating", string(constants.ConnectionStateError), err)
+			needBootstrap = true
+		}
+	}
+	if needBootstrap {
+		pki.logger.Info("[PKI] Generating bootstrap intermediate CA")
+		if err := pki.generateIntermediateCA("", bootstrapCertPath, pki.rootCert, pki.rootKey, bootstrapCommonName); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
+	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.crt")
+	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.chain.pem")
+
+	needService := !fileExists(serviceCertPath) || !fileExists(chainPath)
+	if !needService {
+		// Load certificate chain from file
+		chainPEM, err := os.ReadFile(chainPath)
+		if err != nil {
+			pki.logger.Warn("[PKI] Failed to load service cert chain, regenerating", string(constants.ConnectionStateError), err)
+			needService = true
+		} else {
+			// Load private key from keystore
+			if pki.secretManager == nil {
+				return fmt.Errorf("SecretManager is required for service private key loading")
+			}
+			keyDER, err := pki.secretManager.GetServicePrivateKey("operator-listen")
+			if err != nil {
+				pki.logger.Warn("[PKI] Failed to load service private key from keystore, regenerating", string(constants.ConnectionStateError), err)
+				needService = true
+			} else {
+				// Validate the key can be parsed
+				if _, err := x509.ParseECPrivateKey(keyDER); err != nil {
+					pki.logger.Warn("[PKI] Failed to parse service private key, regenerating", string(constants.ConnectionStateError), err)
+					needService = true
+				} else {
+					cert, err := tls.X509KeyPair(chainPEM, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}))
+					if err != nil {
+						pki.logger.Warn("[PKI] Failed to construct service certificate, regenerating", string(constants.ConnectionStateError), err)
+						needService = true
+					} else {
+						if isExpiringSoon(cert) {
+							pki.logger.Info("[PKI] Service certificate expiring soon, renewing")
+							needService = true
+						} else {
+							pki.serviceCert = cert
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if needService {
+		pki.logger.Info("[PKI] Generating operator-listen service certificate")
+		if err := pki.generateServiceCert(extraIPs); err != nil {
+			return err
+		}
+		// Load the newly generated certificate and key
+		chainPEM, err := os.ReadFile(chainPath)
+		if err != nil {
+			return fmt.Errorf("failed to load generated service cert chain: %w", err)
+		}
+		keyDER, err := pki.secretManager.GetServicePrivateKey("operator-listen")
+		if err != nil {
+			return fmt.Errorf("failed to load generated service private key from keystore: %w", err)
+		}
+		tlsCert, err := tls.X509KeyPair(chainPEM, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}))
+		if err != nil {
+			return fmt.Errorf("failed to construct service certificate: %w", err)
+		}
+		pki.serviceCert = tlsCert
+	}
+
+	return nil
+}
+
+func (pki *PKIAuthority) generateTrustBundles() error {
+	// Root bundle (just root CA)
+	rootBundlePath := filepath.Join(pki.pkiDir, "trust", "root.pem")
+	rootPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "root", "root_ca.crt"))
+	if err != nil {
+		return fmt.Errorf("failed to read root CA: %w", err)
+	}
+	if err := os.WriteFile(rootBundlePath, rootPEM, 0600); err != nil {
+		return fmt.Errorf("failed to write root bundle: %w", err)
+	}
+
+	// Hub bundle (root + hub intermediate + operator intermediate + bootstrap intermediate)
+	hubBundlePath := filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem")
+	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt"))
+	if err != nil {
+		return fmt.Errorf("failed to read hub CA: %w", err)
+	}
+	operatorPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt"))
+	if err != nil {
+		return fmt.Errorf("failed to read operator CA: %w", err)
+	}
+	bootstrapPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "bootstrap_ca.crt"))
+	if err != nil {
+		return fmt.Errorf("failed to read bootstrap CA: %w", err)
+	}
+	hubBundle := make([]byte, 0, len(rootPEM)+len(hubPEM)+len(operatorPEM)+len(bootstrapPEM))
+	hubBundle = append(hubBundle, rootPEM...)
+	hubBundle = append(hubBundle, hubPEM...)
+	hubBundle = append(hubBundle, operatorPEM...)
+	hubBundle = append(hubBundle, bootstrapPEM...)
+	if err := os.WriteFile(hubBundlePath, hubBundle, 0600); err != nil {
+		return fmt.Errorf("failed to write hub bundle: %w", err)
+	}
+
+	// Operator bundle (root + operator intermediate)
+	operatorBundlePath := filepath.Join(pki.pkiDir, "trust", "operator-bundle.pem")
+	operatorBundle := make([]byte, 0, len(rootPEM)+len(operatorPEM))
+	operatorBundle = append(operatorBundle, rootPEM...)
+	operatorBundle = append(operatorBundle, operatorPEM...)
+	if err := os.WriteFile(operatorBundlePath, operatorBundle, 0600); err != nil {
+		return fmt.Errorf("failed to write operator bundle: %w", err)
+	}
+
+	// Bootstrap bundle (root + bootstrap intermediate)
+	bootstrapBundlePath := filepath.Join(pki.pkiDir, "trust", "bootstrap-bundle.pem")
+	bootstrapBundle := make([]byte, 0, len(rootPEM)+len(bootstrapPEM))
+	bootstrapBundle = append(bootstrapBundle, rootPEM...)
+	bootstrapBundle = append(bootstrapBundle, bootstrapPEM...)
+	if err := os.WriteFile(bootstrapBundlePath, bootstrapBundle, 0600); err != nil {
+		return fmt.Errorf("failed to write bootstrap bundle: %w", err)
+	}
+
+	// Trust domain metadata
+	trustDomainData := map[string]string{
+		"trust_domain": protocol.TrustDomain,
+	}
+	trustDomainJSON, _ := json.MarshalIndent(trustDomainData, "", "  ")
+	if err := os.WriteFile(filepath.Join(pki.pkiDir, "trust", "trust-domain.json"), trustDomainJSON, 0600); err != nil {
+		return fmt.Errorf("failed to write trust-domain.json: %w", err)
+	}
+
+	return nil
+}
+
+// HubTrustBundle returns the full PEM-encoded hub trust bundle (root + hub intermediate).
+func (pki *PKIAuthority) HubTrustBundle() ([]byte, error) {
+	pki.mu.RLock()
+	defer pki.mu.RUnlock()
+	return os.ReadFile(filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem"))
+}
+
+// RevokeCertificate adds a certificate serial to the revocation list.
+func (pki *PKIAuthority) RevokeCertificate(serial string, reason string) error {
+	pki.mu.Lock()
+	defer pki.mu.Unlock()
+
+	if pki.db == nil {
+		return fmt.Errorf("database not available")
+	}
+
+	doc := map[string]interface{}{
+		"serial":     serial,
+		"reason":     reason,
+		"revoked_at": time.Now().UTC(),
+	}
+	body, _ := json.Marshal(doc)
+
+	return pki.db.DocSet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial, body)
+}
+
+// GenerateRevocationBundle creates a signed JSON bundle of all revoked certificate serials.
+func (pki *PKIAuthority) GenerateRevocationBundle() (bundleJSON string, signature string, err error) {
+	pki.mu.RLock()
+	defer pki.mu.RUnlock()
+
+	if pki.db == nil {
+		return "", "", fmt.Errorf("database not available")
+	}
+
+	docs, err := pki.db.DocQuery(marshaler.CollectionName(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
+	if err != nil {
+		return "", "", err
+	}
+
+	revoked := make([]string, 0, len(docs))
+	for _, doc := range docs {
+		revoked = append(revoked, doc.ID)
+	}
+
+	bundle := map[string]interface{}{
+		"revoked_serials": revoked,
+		"generated_at":    time.Now().UTC(),
+		"trust_domain":    protocol.TrustDomain,
+	}
+
+	bundleBytes, err := json.Marshal(bundle)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Sign the bundle with the hub intermediate key
+	sig, err := pki.signData(bundleBytes, pki.hubKey)
+	if err != nil {
+		return "", "", err
+	}
+
+	return string(bundleBytes), sig, nil
+}
+
+// IsRevoked checks if a certificate serial is in the revocation list.
+func (pki *PKIAuthority) IsRevoked(serial string) (bool, error) {
+	if pki.db == nil {
+		return false, fmt.Errorf("database not available")
+	}
+
+	doc, err := pki.db.DocGet(marshaler.CollectionName(constants.CollectionRevokedCertificates), serial)
+	if err != nil {
+		return false, err
+	}
+
+	return doc != nil, nil
+}
+
+// VerifyCertificate checks if a certificate is valid and not revoked.
+func (pki *PKIAuthority) VerifyCertificate(cert *x509.Certificate) error {
+	if cert == nil {
+		return fmt.Errorf("no certificate provided")
+	}
+
+	revoked, err := pki.IsRevoked(cert.SerialNumber.String())
+	if err != nil {
+		return fmt.Errorf("failed to check revocation status: %w", err)
+	}
+
+	if revoked {
+		return fmt.Errorf("certificate is revoked")
+	}
+
+	return nil
+}
+
+func (pki *PKIAuthority) signData(data []byte, key *ecdsa.PrivateKey) (string, error) {
+	hash := sha256.Sum256(data)
+	r, s, err := ecdsa.Sign(rand.Reader, key, hash[:])
+	if err != nil {
+		return "", err
+	}
+
+	sig := append(r.Bytes(), s.Bytes()...)
+	return base64.RawURLEncoding.EncodeToString(sig), nil
+}
+
+// SignCSR signs a certificate signing request using the operator intermediate CA.
+// leafType should be "operator", "app", or "cli".
+// Parameters:
+//   - For "operator": organizationID, operatorID, sessionID (operator_session_id)
+//   - For "cli": userID, sessionID (cli_session_id)
+//   - For "app": operatorID (app identity)
+func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID, operatorID, userID, sessionID string) (certPEM, chainPEM string, err error) {
+	pki.mu.Lock()
+	defer pki.mu.Unlock()
+
+	if pki.operatorCert == nil || pki.operatorKey == nil {
+		return "", "", fmt.Errorf("operator CA not loaded - call EnsurePKI first")
+	}
+
+	block, _ := pem.Decode([]byte(csrPEM))
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		return "", "", fmt.Errorf("invalid CSR PEM")
+	}
+
+	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to parse CSR: %w", err)
+	}
+
+	if err := csr.CheckSignature(); err != nil {
+		return "", "", fmt.Errorf("CSR signature check failed: %w", err)
+	}
+
+	serial, err := randomSerial()
+	if err != nil {
+		return "", "", err
+	}
+
+	now := time.Now().UTC()
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      csr.Subject,
+		NotBefore:    now.Add(-1 * time.Minute),
+		NotAfter:     now.Add(time.Duration(serviceValidityDays) * 24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		DNSNames:     csr.DNSNames,
+		IPAddresses:  csr.IPAddresses,
+	}
+
+	// Set URI SAN for workload identity
+	wid := protocol.NewWorkloadIdentity()
+	var uriURL *url.URL
+	switch leafType {
+	case string(constants.SessionTypeOperator):
+		uriURL, _ = wid.OperatorSPIFFEURL(organizationID, operatorID, sessionID)
+	case string(constants.SessionTypeCLI):
+		uriURL, _ = wid.CLISPIFFEURL(userID, sessionID)
+	case "app":
+		uriURL, _ = wid.AppSPIFFEURL(operatorID)
+	}
+
+	if uriURL != nil {
+		template.URIs = []*url.URL{uriURL}
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.operatorCert, csr.PublicKey, pki.operatorKey)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to sign certificate: %w", err)
+	}
+
+	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))
+
+	// Build chain (leaf + operator intermediate + root)
+	opPEM, _ := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt"))
+	rootPEM, _ := os.ReadFile(filepath.Join(pki.pkiDir, "root", "root_ca.crt"))
+	chainPEM = certPEM + string(opPEM) + string(rootPEM)
+
+	return certPEM, chainPEM, nil
+}
+
+// ─── private helpers ──────────────────────────────────────────────────────────
+
+func (pki *PKIAuthority) loadCertificatePair(certPath, keyPath string, cert **x509.Certificate, key **ecdsa.PrivateKey) error {
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		return err
+	}
+
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return fmt.Errorf("invalid cert PEM")
+	}
+	parsedCert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return err
+	}
+
+	// Load private key from keystore
+	if pki.secretManager == nil {
+		return fmt.Errorf("SecretManager is required for PKI private key loading")
+	}
+
+	// Determine CA type from cert path
+	var caType string
+	if strings.Contains(certPath, "root_ca.crt") {
+		caType = "root"
+	} else if strings.Contains(certPath, "hub_ca.crt") {
+		caType = "hub"
+	} else if strings.Contains(certPath, "operator_ca.crt") {
+		caType = "operator"
+	} else if strings.Contains(certPath, "bootstrap_ca.crt") {
+		caType = "bootstrap"
+	}
+
+	if caType == "" {
+		// For non-CA certificates (service/app certs), load private key from keystore
+		if pki.secretManager == nil {
+			return fmt.Errorf("SecretManager is required for service private key loading")
+		}
+
+		// Extract service name from cert path
+		var serviceName string
+		if strings.Contains(certPath, "operator-listen.crt") {
+			serviceName = "operator-listen"
+		} else if strings.Contains(certPath, "issued/apps/") {
+			// Extract app name from path like "issued/apps/g8ee.crt"
+			base := filepath.Base(certPath)
+			serviceName = strings.TrimSuffix(base, ".crt")
+		} else {
+			return fmt.Errorf("cannot determine service name from cert path: %s", certPath)
+		}
+
+		keyDER, err := pki.secretManager.GetServicePrivateKey(serviceName)
+		if err != nil {
+			return fmt.Errorf("load %s private key from keystore: %w", serviceName, err)
+		}
+
+		parsedKey, err := x509.ParseECPrivateKey(keyDER)
+		if err != nil {
+			return fmt.Errorf("parse %s private key: %w", serviceName, err)
+		}
+		*cert = parsedCert
+		*key = parsedKey
+		return nil
+	}
+
+	keyDER, err := pki.secretManager.GetCAPrivateKey(caType)
+	if err != nil {
+		return fmt.Errorf("load %s CA private key from keystore: %w", caType, err)
+	}
+
+	parsedKey, err := x509.ParseECPrivateKey(keyDER)
+	if err != nil {
+		return fmt.Errorf("parse %s CA private key: %w", caType, err)
+	}
+
+	*cert = parsedCert
+	*key = parsedKey
+	return nil
+}
+
+func (pki *PKIAuthority) generateRootCA(keyPath, certPath string) error {
+	rootKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		return err
+	}
+
+	serial, err := randomSerial()
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject: pkix.Name{
+			CommonName:   rootCommonName,
+			Organization: []string{"g8e"},
+			Country:      []string{"US"},
+		},
+		NotBefore:             now.Add(-1 * time.Minute),
+		NotAfter:              now.Add(time.Duration(rootValidityDays) * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLen:            2, // Root -> Intermediate -> Leaf
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &rootKey.PublicKey, rootKey)
+	if err != nil {
+		return err
+	}
+
+	rootCert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return err
+	}
+
+	if err := writePEMFile(certPath, "CERTIFICATE", certDER, 0644); err != nil {
+		return err
+	}
+
+	keyDER, err := x509.MarshalECPrivateKey(rootKey)
+	if err != nil {
+		return err
+	}
+	if pki.secretManager == nil {
+		return fmt.Errorf("SecretManager is required for PKI private key storage")
+	}
+	if err := pki.secretManager.StoreCAPrivateKey("root", keyDER); err != nil {
+		return fmt.Errorf("store root CA private key in keystore: %w", err)
+	}
+
+	pki.rootCert = rootCert
+	pki.rootKey = rootKey
+	return nil
+}
+
+func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parentCert *x509.Certificate, parentKey *ecdsa.PrivateKey, commonName string) error {
+	intermediateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		return err
+	}
+
+	serial, err := randomSerial()
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject: pkix.Name{
+			CommonName:   commonName,
+			Organization: []string{"g8e"},
+			Country:      []string{"US"},
+		},
+		NotBefore:             now.Add(-1 * time.Minute),
+		NotAfter:              now.Add(time.Duration(intermediateValidityDays) * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLen:            1, // Intermediate -> Leaf
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, parentCert, &intermediateKey.PublicKey, parentKey)
+	if err != nil {
+		return err
+	}
+
+	intermediateCert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return err
+	}
+
+	if err := writePEMFile(certPath, "CERTIFICATE", certDER, 0644); err != nil {
+		return err
+	}
+
+	keyDER, err := x509.MarshalECPrivateKey(intermediateKey)
+	if err != nil {
+		return err
+	}
+
+	// Determine CA type for keystore storage
+	var caType string
+	switch commonName {
+	case hubCommonName:
+		caType = "hub"
+	case operatorCommonName:
+		caType = "operator"
+	case bootstrapCommonName:
+		caType = "bootstrap"
+	}
+
+	if pki.secretManager == nil {
+		return fmt.Errorf("SecretManager is required for PKI private key storage")
+	}
+	if caType == "" {
+		return fmt.Errorf("unknown CA common name: %s", commonName)
+	}
+	if err := pki.secretManager.StoreCAPrivateKey(caType, keyDER); err != nil {
+		return fmt.Errorf("store %s CA private key in keystore: %w", caType, err)
+	}
+
+	// Store in the appropriate field based on common name
+	switch commonName {
+	case hubCommonName:
+		pki.hubCert = intermediateCert
+		pki.hubKey = intermediateKey
+	case operatorCommonName:
+		pki.operatorCert = intermediateCert
+		pki.operatorKey = intermediateKey
+	case bootstrapCommonName:
+		pki.bootstrapCert = intermediateCert
+		pki.bootstrapKey = intermediateKey
+	}
+
+	return nil
+}
+
+func (pki *PKIAuthority) ensureAppCerts() error {
+	apps := []string{marshaler.Status(constants.Status.ComponentName.G8EE)}
+	for _, app := range apps {
+		certPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".crt")
+
+		if fileExists(certPath) {
+			continue
+		}
+
+		pki.logger.Info("[PKI] Generating certificate for reference ensemble", "app", app)
+		// We use a simplified signing flow for bundled reference ensembles during bootstrap.
+		// In a BYO world, they would use the SignCSR API.
+		if err := pki.generateAppCert(app, certPath); err != nil {
+			return fmt.Errorf("failed to generate cert for %s: %w", app, err)
+		}
+	}
+	return nil
+}
+
+func (pki *PKIAuthority) generateAppCert(app, certPath string) error {
+	if pki.hubCert == nil || pki.hubKey == nil {
+		return fmt.Errorf("hub CA not loaded")
+	}
+
+	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		return err
+	}
+
+	serial, err := randomSerial()
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	wid := protocol.NewWorkloadIdentity()
+	appURI, _ := wid.AppSPIFFEURL(app)
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject: pkix.Name{
+			CommonName:   app,
+			Organization: []string{"g8e"},
+		},
+		NotBefore:   now.Add(-1 * time.Minute),
+		NotAfter:    now.Add(time.Duration(serviceValidityDays) * 24 * time.Hour),
+		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		DNSNames:    []string{"localhost", "g8e.local", app},
+		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
+		URIs:        []*url.URL{appURI},
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.hubCert, &priv.PublicKey, pki.hubKey)
+	if err != nil {
+		return err
+	}
+
+	if err := writePEMFile(certPath, "CERTIFICATE", certDER, 0644); err != nil {
+		return err
+	}
+
+	keyDER, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		return err
+	}
+	if pki.secretManager == nil {
+		return fmt.Errorf("SecretManager is required for app private key storage")
+	}
+	if err := pki.secretManager.StoreServicePrivateKey(app, keyDER); err != nil {
+		return fmt.Errorf("store %s private key in keystore: %w", app, err)
+	}
+
+	// Write private key to PKI directory for app consumption (e.g., g8ee uvicorn)
+	keyPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".key")
+	if err := writePEMFile(keyPath, "EC PRIVATE KEY", keyDER, 0600); err != nil {
+		return fmt.Errorf("write %s private key to PKI directory: %w", app, err)
+	}
+
+	return nil
+}
+
+func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
+	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.crt")
+
+	if pki.hubCert == nil || pki.hubKey == nil {
+		return fmt.Errorf("hub CA not loaded - call EnsurePKI first")
+	}
+
+	serviceKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		return err
+	}
+
+	serial, err := randomSerial()
+	if err != nil {
+		return err
+	}
+
+	dnsNames := []string{"localhost", "g8e.local", string(constants.SessionTypeOperator), marshaler.Status(constants.Status.ComponentName.G8EE)}
+	ipAddresses := append([]net.IP{net.ParseIP("127.0.0.1")}, extraIPs...)
+
+	// Add URI SAN for workload identity
+	wid := protocol.NewWorkloadIdentity()
+	hubURL, _ := wid.HubSPIFFEURL()
+
+	now := time.Now().UTC()
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject: pkix.Name{
+			CommonName:   "operator-listen",
+			Organization: []string{"g8e"},
+			Country:      []string{"US"},
+		},
+		NotBefore:             now.Add(-1 * time.Minute),
+		NotAfter:              now.Add(time.Duration(serviceValidityDays) * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		DNSNames:              dnsNames,
+		IPAddresses:           ipAddresses,
+		URIs:                  []*url.URL{hubURL},
+		BasicConstraintsValid: true,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.hubCert, &serviceKey.PublicKey, pki.hubKey)
+	if err != nil {
+		return err
+	}
+
+	// Write chain PEM (leaf + hub intermediate + root)
+	chainPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	hubPEM, _ := os.ReadFile(filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt"))
+	rootPEM, _ := os.ReadFile(filepath.Join(pki.pkiDir, "root", "root_ca.crt"))
+	chainPEM = append(chainPEM, hubPEM...)
+	chainPEM = append(chainPEM, rootPEM...)
+	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.chain.pem")
+	if err := os.WriteFile(chainPath, chainPEM, 0600); err != nil {
+		return fmt.Errorf("failed to write chain: %w", err)
+	}
+
+	if err := writePEMFile(serviceCertPath, "CERTIFICATE", certDER, 0644); err != nil {
+		return err
+	}
+
+	keyDER, err := x509.MarshalECPrivateKey(serviceKey)
+	if err != nil {
+		return err
+	}
+	if pki.secretManager == nil {
+		return fmt.Errorf("SecretManager is required for service private key storage")
+	}
+	if err := pki.secretManager.StoreServicePrivateKey("operator-listen", keyDER); err != nil {
+		return fmt.Errorf("store operator-listen private key in keystore: %w", err)
+	}
+
+	return nil
+}
+
+func randomSerial() (*big.Int, error) {
+	limit := new(big.Int).Lsh(big.NewInt(1), 128)
+	return rand.Int(rand.Reader, limit)
+}
+
+func writePEMFile(path, pemType string, der []byte, mode os.FileMode) (err error) {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		closeErr := f.Close()
+		if err == nil {
+			err = closeErr
+		}
+	}()
+	return pem.Encode(f, &pem.Block{Type: pemType, Bytes: der})
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func isExpiringSoon(cert tls.Certificate) bool {
+	if len(cert.Certificate) == 0 {
+		return true
+	}
+	x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return true
+	}
+	return time.Until(x509Cert.NotAfter) < 30*24*time.Hour
+}

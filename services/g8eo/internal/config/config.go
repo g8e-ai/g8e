@@ -74,11 +74,11 @@ type LoadOptions struct {
 	IPResolver string // G8E_IP_RESOLVER value
 }
 
-// ListenConfig holds configuration for --listen mode.
-// In listen mode, the Operator binary becomes the persistence and messaging
+// GatewayConfig holds configuration for gateway mode.
+// In gateway mode, the Operator binary becomes the persistence and messaging
 // backbone for the entire g8e platform, replacing external databases.
 // No outbound authentication is required - the Operator simply starts and listens.
-type ListenConfig struct {
+type GatewayConfig struct {
 	Enabled          bool
 	Posture          GatewayPosture // Governance enforcement posture (doctrine, consensus, notary)
 	HTTPPort         int            // TLS/HTTPS port for internal g8ee/client traffic (default: from paths.json)
@@ -202,8 +202,8 @@ type Config struct {
 	IPService  string // G8E_IP_SERVICE - URL for public IP detection
 	IPResolver string // G8E_IP_RESOLVER - UDP target for local IP detection
 
-	// Listen mode configuration
-	Listen ListenConfig
+	// Gateway mode configuration
+	Gateway GatewayConfig
 }
 
 // FindProjectRoot locates the g8e project root by searching for the VERSION file.
@@ -225,8 +225,8 @@ func FindProjectRoot() string {
 	return ""
 }
 
-// ListenOptions contains configuration values for LoadListen.
-type ListenOptions struct {
+// GatewayOptions contains configuration values for LoadGateway.
+type GatewayOptions struct {
 	Posture          GatewayPosture
 	HTTPPort         int
 	BootstrapPort    int
@@ -244,10 +244,10 @@ type ListenOptions struct {
 	AllowTestPortZero bool
 }
 
-// LoadListen creates configuration for --listen mode.
-// Listen mode skips all operator-mode validation - no API key, no endpoint,
+// LoadGateway creates configuration for gateway mode.
+// Gateway mode skips all operator-mode validation - no API key, no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
-func LoadListen(opts ListenOptions) (*Config, error) {
+func LoadGateway(opts GatewayOptions) (*Config, error) {
 	projectRoot := FindProjectRoot()
 
 	mcpDownstreamURL := opts.MCPDownstreamURL
@@ -339,7 +339,7 @@ func LoadListen(opts ListenOptions) (*Config, error) {
 		ComponentName: constants.Status.ComponentName.G8EOListen,
 		PKIDir:        pkiDir,     // Also set top-level for services that use Config.PKIDir
 		SecretsDir:    secretsDir, // Also set top-level for services that use Config.SecretsDir
-		Listen: ListenConfig{
+		Gateway: GatewayConfig{
 			Enabled: true,
 			Posture: posture,
 

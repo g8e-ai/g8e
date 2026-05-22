@@ -428,7 +428,7 @@ _start_operator_listen() {
     export G8E_PKI_DIR="$G8E_PKI_DIR"
     export G8E_SECRETS_DIR="$G8E_SECRETS_DIR"
 
-    setsid "$bin" --listen \
+    setsid "$bin" --doctrine \
         --data-dir "$G8E_DATA_DIR" \
         --pki-dir "$G8E_PKI_DIR" \
         --secrets-dir "$G8E_SECRETS_DIR" \

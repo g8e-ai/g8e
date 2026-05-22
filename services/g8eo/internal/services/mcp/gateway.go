@@ -71,7 +71,7 @@ func NewGatewayService(logger *slog.Logger, suspendedStore SuspendedTransactionS
 }
 
 // RunMaintenance periodically prunes expired suspended transactions.
-// Although the underlying store may perform its own cleanup (e.g., ListenDBService
+// Although the underlying store may perform its own cleanup (e.g., GatewayDBService
 // does this via RunMaintenance), the GatewayService provides this routine to
 // ensure memory and state consistency regardless of the store implementation.
 func (g *GatewayService) RunMaintenance(ctx context.Context) {
@@ -83,7 +83,7 @@ func (g *GatewayService) RunMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// If the store is the ListenDBService, it already prunes.
+			// If the store is the GatewayDBService, it already prunes.
 			// If it's another implementation, we might need an explicit cleanup call.
 			// For now, we rely on the store's internal expiration logic during GET,
 			// but we can add an explicit DELETE call here if the interface is expanded.
