@@ -48,6 +48,7 @@ from app.models.agent import (
 )
 
 from app.services.ai.generator import generate_command
+from app.models.tribunal_commands import TribunalGenerationRequest
 from app.models.grounding import GroundingMetadata
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -164,15 +165,12 @@ class TribunalInvoker:
         investigation_context_parts = [p for p in [investigation.case_title, investigation.case_description] if p]
         investigation_context = " | ".join(investigation_context_parts)
 
-        gen_result = await generate_command(
+        tribunal_request = TribunalGenerationRequest(
             request=request,
             guidelines=guidelines,
             operator_context=op_context,
             event_service=event_service,
-            web_session_id=g8e_context.web_session_id or "",
-            user_id=g8e_context.user_id or "",
-            case_id=g8e_context.case_id or "",
-            investigation_id=investigation.id,
+            g8e_context=g8e_context,
             settings=request_settings,
             reputation_data_service=tool_executor.reputation_data_service,
             auditor_hmac_key=tool_executor.auditor_hmac_key,
@@ -184,6 +182,7 @@ class TribunalInvoker:
             whitelisted_commands=whitelisted_commands,
             blacklisted_commands=blacklisted_commands,
         )
+        gen_result = await generate_command(tribunal_request)
         logger.info(
             "[CMD_GEN] Tribunal produced command: outcome=%s request=%r final=%r",
             gen_result.outcome, request[:80], gen_result.final_command[:80] if gen_result.final_command else None,

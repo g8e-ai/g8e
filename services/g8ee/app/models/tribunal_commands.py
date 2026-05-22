@@ -11,12 +11,46 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
 from pydantic import Field
 
 from app.constants import CommandGenerationOutcome, AuditorReason
 from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
+from app.models.agent import OperatorContext
+from app.models.http_context import G8eHttpContext
+from app.models.settings import G8eeUserSettings
+from app.models.whitelist import WhitelistedCommand
+from app.services.data.reputation_data_service import ReputationDataService
+from app.services.protocols import AIResponseAnalyzerProtocol, EventServiceProtocol
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
+
+
+@dataclass
+class TribunalGenerationRequest:
+    """Context object for Tribunal command generation requests.
+
+    Groups all 14 parameters previously passed individually to generate_command
+    into a single typed context object for improved maintainability.
+    """
+    request: str
+    guidelines: str = ""
+    operator_context: OperatorContext | None = None
+    event_service: EventServiceProtocol | None = None
+    g8e_context: G8eHttpContext | None = None
+    settings: G8eeUserSettings | None = None
+    reputation_data_service: ReputationDataService | None = None
+    auditor_hmac_key: str = ""
+    ai_response_analyzer: AIResponseAnalyzerProtocol | None = None
+    investigation_state: str = ""
+    investigation_context: str = ""
+    whitelisting_enabled: bool = False
+    blacklisting_enabled: bool = False
+    whitelisted_commands: list[WhitelistedCommand] = field(default_factory=list)
+    blacklisted_commands: list[str] = field(default_factory=list)
 
 
 class TribunalCommandRequestContext(G8eBaseModel):
@@ -86,4 +120,5 @@ __all__ = [
     "TribunalCommandGenerationResult",
     "TribunalCommandPipelineMetadata",
     "TribunalCommandRequestContext",
+    "TribunalGenerationRequest",
 ]

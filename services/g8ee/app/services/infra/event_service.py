@@ -68,13 +68,19 @@ class EventService(EventServiceProtocol):
     ) -> None:
         """Publish an investigation-related event."""
         from app.models.events import SessionEvent
-        event = SessionEvent(
-            event_type=event_type,
-            payload=payload,
+        from app.models.http_context import RequestContext
+        from app.constants import ComponentName
+        ctx = RequestContext(
             web_session_id=web_session_id,
             cli_session_id=cli_session_id,
-            investigation_id=investigation_id,
-            case_id=case_id,
             user_id=user_id,
+            case_id=case_id,
+            investigation_id=investigation_id,
+            source_component=ComponentName.G8EE,
+        )
+        event = SessionEvent.from_context(
+            context=ctx,
+            event_type=event_type,
+            payload=payload,
         )
         await self.publish(event)

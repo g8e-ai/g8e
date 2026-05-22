@@ -184,6 +184,7 @@ class OperatorSlotClaimRequest(G8eBaseModel):
     operator_id: str = Field(..., description="Operator ID")
     operator_session_id: str = Field(..., description="Operator session ID")
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
+    bound_cli_session_id: str | None = Field(default=None, description="Bound CLI session ID")
     operator_type: str = Field(..., description="Operator type")
 
 

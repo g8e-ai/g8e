@@ -56,14 +56,10 @@ class TribunalEmitter:
             if corr_id and hasattr(payload, "correlation_id"):
                 payload.correlation_id = corr_id
 
-            event = SessionEvent(
+            event = SessionEvent.from_context(
+                context=self.g8e_context,
                 event_type=event_type,
                 payload=payload,
-                web_session_id=self.g8e_context.web_session_id,
-                user_id=self.g8e_context.user_id,
-                case_id=self.g8e_context.case_id,
-                investigation_id=self.g8e_context.investigation_id,
-                source_component=ComponentName.G8EE,
             )
             await self.event_service.publish(event)
         except Exception as exc:

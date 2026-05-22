@@ -274,9 +274,10 @@ class CaseDataService:
     async def publish_case_update_sse(
         self,
         case_id: str,
-        web_session_id: str,
         payload: CaseEventPayload,
         user_id: str,
+        web_session_id: str | None = None,
+        cli_session_id: str | None = None,
         event_type: EventType = EventType.APP_CASE_UPDATED
     ) -> None:
         """
@@ -284,34 +285,49 @@ class CaseDataService:
 
         Args:
             case_id: Case ID
-            web_session_id: WebSession ID for routing
             payload: Typed case event payload
+            user_id: User ID
+            web_session_id: WebSession ID for routing (optional)
+            cli_session_id: CLISession ID for routing (optional)
             event_type: Event type
         """
         if not self.event_service:
             logger.warning("Event service not configured in CaseDataService, skipping SSE publish")
             return
 
+        if not web_session_id and not cli_session_id:
+            logger.warning("No session ID provided for case SSE update, skipping", extra={"case_id": case_id})
+            return
+
         try:
+            from app.models.http_context import RequestContext
+            from app.constants import ComponentName
+            ctx = RequestContext(
+                web_session_id=web_session_id,
+                cli_session_id=cli_session_id,
+                user_id=user_id,
+                case_id=case_id,
+                source_component=ComponentName.G8EE,
+            )
             await self.event_service.publish(
-                SessionEvent(
+                SessionEvent.from_context(
+                    context=ctx,
                     event_type=event_type,
                     payload=payload,
-                    web_session_id=web_session_id,
-                    user_id=user_id,
-                    case_id=case_id,
                 )
             )
 
             logger.info("Published case SSE update", extra={
                 "case_id": case_id,
                 "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
+                "cli_session_id": (cli_session_id[:8] + "...") if cli_session_id else None,
             })
 
         except Exception as e:
             logger.warning("Failed to publish case SSE: %s", e, extra={
                 "case_id": case_id,
-                "web_session_id": (web_session_id[:8] + "...") if web_session_id else None
+                "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
+                "cli_session_id": (cli_session_id[:8] + "...") if cli_session_id else None,
             })
 
     async def get_case_history(self, query: CaseHistoryQuery) -> list[HistoryEntry]:

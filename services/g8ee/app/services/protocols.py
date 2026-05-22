@@ -443,6 +443,7 @@ class OperatorLifecycleServiceProtocol(Protocol):
         operator_id: str,
         operator_session_id: str,
         bound_web_session_id: str | None,
+        bound_cli_session_id: str | None = None,
         operator_type: OperatorType | str | None = None,
     ) -> bool:
         """Claim an operator slot for an active session."""

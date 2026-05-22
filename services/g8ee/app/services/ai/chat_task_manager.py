@@ -87,6 +87,7 @@ class BackgroundTaskManager:
         task_id: str,
         reason: str,
         web_session_id: str | None = None,
+        cli_session_id: str | None = None,
         user_id: str | None = None,
         case_id: str | None = None,
         event_service: EventService | None = None,
@@ -95,7 +96,7 @@ class BackgroundTaskManager:
 
         Returns True if a task was cancelled, False if no active task existed.
         Publishes AI_PROCESSING_STOPPED via event_service when both
-        web_session_id and event_service are provided.
+        session id and event_service are provided.
         """
         async with self._task_lock:
             task = self._active_tasks.get(task_id)
@@ -114,19 +115,26 @@ class BackgroundTaskManager:
                 extra={"task_id": task_id, "reason": reason},
             )
 
-        if web_session_id and case_id and event_service:
+        if (web_session_id or cli_session_id) and case_id and event_service:
             try:
+                from app.models.http_context import RequestContext
+                from app.constants import ComponentName
+                ctx = RequestContext(
+                    web_session_id=web_session_id,
+                    cli_session_id=cli_session_id,
+                    user_id=user_id or "",
+                    case_id=case_id,
+                    investigation_id=task_id,
+                    source_component=ComponentName.G8EE,
+                )
                 await event_service.publish(
-                    SessionEvent(
+                    SessionEvent.from_context(
+                        context=ctx,
                         event_type=EventType.AI_LLM_CHAT_ITERATION_STOPPED,
                         payload=AiProcessingStoppedPayload(
                             reason=reason,
                             timestamp=now(),
                         ),
-                        web_session_id=web_session_id,
-                        user_id=user_id or "",
-                        case_id=case_id,
-                        investigation_id=task_id,
                     )
                 )
             except Exception as e:
@@ -136,9 +144,9 @@ class BackgroundTaskManager:
                 "Cannot send ai.processing_stopped event - no event_service provided",
                 extra={"task_id": task_id},
             )
-        elif not web_session_id:
+        elif not (web_session_id or cli_session_id):
             logger.warning(
-                "Cannot send ai.processing_stopped event - no web_session_id provided",
+                "Cannot send ai.processing_stopped event - no web_session_id or cli_session_id provided",
                 extra={"task_id": task_id},
             )
 
