@@ -22,8 +22,6 @@ components verify before execution.
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import logging
 import json
 from datetime import datetime, timedelta, UTC
@@ -48,31 +46,14 @@ from google.protobuf.json_format import MessageToDict, ParseDict
 logger = logging.getLogger(__name__)
 
 
-def sign_l2_tribunal(event_type: str, payload_bytes: bytes, hmac_key: str) -> str:
-    """Compute the L2 Tribunal signature over the canonical envelope material.
-
-    The signature binds the event_type to its payload bytes using
-    HMAC-SHA256 with the shared auditor key. The canonical material is
-    ``event_type + "\\n" + payload_bytes`` - both sides MUST compute
-    the signature over the identical byte sequence.
-
-    Returns the hex-encoded digest. Never returns an empty string on
-    success; callers treat an empty signature as "unsigned".
-    """
-    if not hmac_key:
-        raise ValueError("auditor_hmac_key is required for L2 Tribunal signing")
-    mac = hmac.new(
-        hmac_key.encode("utf-8"),
-        event_type.encode("utf-8") + b"\n" + payload_bytes,
-        hashlib.sha256,
-    )
-    return mac.hexdigest()
+# L2 Tribunal signing removed - Engine must not hold L2 keys per cryptographic key segregation.
+# L2 signatures are handled by the Gateway (g8eg) using Ed25519 trusted signers.
+# See: .local.dev/docs/plans/engine_gateway_secure_link.md §3
 
 
 def build_uap_envelope(
     message: G8eMessage,
     *,
-    auditor_hmac_key: str,
     agent_ids: list[str] | None = None,
     state_merkle_root: str = "",
 ) -> UAPEnvelope:
@@ -111,11 +92,7 @@ def build_uap_envelope(
         payload=payload_bytes,
     )
 
-    # L2 Metadata
-    if auditor_hmac_key:
-        envelope.governance.l2.tribunal_signature = sign_l2_tribunal(
-            message.event_type, payload_bytes, auditor_hmac_key
-        )
+    # L2 Metadata - agent IDs only; signatures handled by Gateway
     if agent_ids:
         envelope.governance.l2.agent_ids = agent_ids
 
@@ -125,14 +102,12 @@ def build_uap_envelope(
 def build_uap_envelope_json(
     message: G8eMessage,
     *,
-    auditor_hmac_key: str,
     agent_ids: list[str] | None = None,
     state_merkle_root: str = "",
 ) -> str:
     """Build a UAP JSON envelope and return it as a JSON string."""
     envelope = build_uap_envelope(
         message,
-        auditor_hmac_key=auditor_hmac_key,
         agent_ids=agent_ids,
         state_merkle_root=state_merkle_root,
     )

@@ -533,7 +533,6 @@ class PubSubClient:
         try:
             payload_bytes = build_uap_envelope_json(
                 command_data,
-                auditor_hmac_key=self._auditor_hmac_key or "",
             ).encode("utf-8")
             logger.debug("[PUBSUB-CLIENT] Publishing UAP JSON Envelope")
         except Exception as e:
@@ -698,7 +697,6 @@ class PubSubClient:
             try:
                 payload_bytes = build_uap_envelope_json(
                     ping,
-                    auditor_hmac_key=self._auditor_hmac_key or "",
                 ).encode("utf-8")
                 logger.debug("[PUBSUB-CLIENT] Publishing UAP JSON Envelope for ping")
             except Exception as e:
