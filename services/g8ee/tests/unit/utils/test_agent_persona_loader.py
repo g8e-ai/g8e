@@ -186,7 +186,7 @@ class TestPipelineTemplateContract:
     """
 
     def test_tribunal_member_system_prompts_are_pure_voice(self):
-        """Tribunal member system prompts must not carry scaffolding placeholders  - 
+        """Tribunal member system prompts must not carry scaffolding placeholders -
         scaffolding lives in TRIBUNAL_PROMPT_TEMPLATE in command_generator."""
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
             prompt_text = get_tribunal_member(member_id).get_system_prompt()

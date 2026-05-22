@@ -41,7 +41,7 @@ from app.models.base import G8eBaseModel, Field, UTCDatetime
 class SessionEvent(G8eBaseModel):
     """Event that must reach a specific connected client session.
 
-    Use this when the triggering request arrived on a known client session  - 
+    Use this when the triggering request arrived on a known client session -
     either a browser (web_session_id) or a BYO CLI client (cli_session_id).
     Both are first-class session types and the Gateway keeps their routing
     namespaces strictly disjoint, so producers MUST set exactly one of the two

@@ -410,7 +410,7 @@ class TestToolArgsInjection:
     async def test_original_args_preserved_without_hidden_injection(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         """The Tribunal adds ``command`` to the executor args; the caller's original
         ``request``/``guidelines`` are preserved. Internal routing fields
-        (``execution_id``, ``_web_session_id``) MUST NOT be silently injected  - 
+        (``execution_id``, ``_web_session_id``) MUST NOT be silently injected -
         they are passed as typed parameters instead."""
         captured_args = {}
 
