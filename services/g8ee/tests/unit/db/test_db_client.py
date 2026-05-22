@@ -28,6 +28,7 @@ from app.constants import BatchWriteOpType, InvestigationStatus
 from app.db import ArrayRemove, ArrayUnion, DBClient
 from app.errors import NetworkError, ResourceNotFoundError
 from app.models.cache import BatchWriteOperation
+from app.models.settings import TLSConfig
 
 
 class InMemoryOperator:
@@ -102,7 +103,8 @@ class InMemoryOperator:
 @pytest.fixture
 def db_client():
     store = InMemoryOperator()
-    client = DBClient(ca_cert_path="/mock/ca.crt", operator_session_id="mock-session")
+    tls_config = TLSConfig(ca_cert_path="/mock/ca.crt")
+    client = DBClient(tls_config=tls_config, operator_session_id="mock-session")
     client._request_json = store.handle_json
     client._request_list = store.handle_list
     client._request_void = store.handle_void
@@ -111,7 +113,8 @@ def db_client():
 
 @pytest.fixture
 def db_client_http_error():
-    client = DBClient(ca_cert_path="/mock/ca.crt", operator_session_id="mock-session")
+    tls_config = TLSConfig(ca_cert_path="/mock/ca.crt")
+    client = DBClient(tls_config=tls_config, operator_session_id="mock-session")
 
     async def raise_network_error(method, path, **kwargs):
         raise NetworkError("client HTTP 500: internal error", component="g8ee")

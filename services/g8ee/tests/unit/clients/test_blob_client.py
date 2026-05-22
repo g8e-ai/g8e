@@ -17,6 +17,7 @@ import pytest
 
 from app.clients.blob_client import BlobClient
 from app.errors import NetworkError
+from app.models.settings import TLSConfig
 
 pytestmark = pytest.mark.unit
 
@@ -32,8 +33,9 @@ def blob_client(mock_listen_settings):
         mock_svc = mock_svc_cls.return_value
         mock_svc.get_local_settings.return_value.operator_session_id = "test-session"
 
+        tls_config = TLSConfig(ca_cert_path="/path/to/ca.crt")
         return BlobClient(
-            ca_cert_path="/path/to/ca.crt",
+            tls_config=tls_config,
             operator_session_id="test-session",
             gateway_settings=mock_listen_settings
         )

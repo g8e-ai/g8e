@@ -28,6 +28,7 @@ from app.clients.kv_cache_client import KVCacheClient
 from app.constants import ComponentName
 from app.db.db_service import DBService
 from app.db.kv_service import KVService
+from app.models.settings import TLSConfig
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.settings_service import SettingsService
 
@@ -45,12 +46,15 @@ async def real_kv_client():
         pytest.skip("No client certificates available for mTLS authentication")
 
     # Create KVCacheClient with mTLS authentication
-    client = KVCacheClient(
-        http_url=bootstrap_settings.gateway.http_url,
-        component_name=ComponentName.G8EE,
+    tls_config = TLSConfig(
         ca_cert_path=bootstrap_settings.ca_cert_path,
         client_cert_path=bootstrap_settings.client_cert_path,
         client_key_path=bootstrap_settings.client_key_path,
+    )
+    client = KVCacheClient(
+        http_url=bootstrap_settings.gateway.http_url,
+        component_name=ComponentName.G8EE,
+        tls_config=tls_config,
     )
 
     await client.connect()
@@ -71,11 +75,12 @@ async def real_db_client():
         pytest.skip("No client certificates available for mTLS authentication")
 
     # Create DBClient with mTLS authentication
-    client = DBClient(
+    tls_config = TLSConfig(
         ca_cert_path=bootstrap_settings.ca_cert_path,
         client_cert_path=bootstrap_settings.client_cert_path,
         client_key_path=bootstrap_settings.client_key_path,
     )
+    client = DBClient(tls_config=tls_config)
 
     await client.connect()
 

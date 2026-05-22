@@ -14,6 +14,7 @@
 import pytest
 
 from app.db import DBClient
+from app.models.settings import TLSConfig
 
 
 @pytest.mark.unit
@@ -21,6 +22,7 @@ from app.db import DBClient
 class TestDBClientBootstrapAuth:
     async def test_init_uses_operator_session_id(self):
         operator_session_id = "session-456"
-        client = DBClient(ca_cert_path="/mock/ca.crt", operator_session_id=operator_session_id)
+        tls_config = TLSConfig(ca_cert_path="/mock/ca.crt")
+        client = DBClient(tls_config=tls_config, operator_session_id=operator_session_id)
 
         assert client._operator_session_id == operator_session_id

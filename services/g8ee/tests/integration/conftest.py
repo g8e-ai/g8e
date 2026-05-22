@@ -192,6 +192,7 @@ async def all_services(cache_aside_service, test_settings):
     from app.clients.db_client import DBClient
     from app.constants.paths import PATHS
     from app.llm.factory import get_search_settings
+    from app.models.settings import TLSConfig
     from app.services.ai.grounding.web_search_provider import WebSearchProvider
     from app.services.infra.settings_service import SettingsService
     from app.services.service_factory import ServiceFactory
@@ -205,11 +206,12 @@ async def all_services(cache_aside_service, test_settings):
     try:
         settings_service = SettingsService()
         bootstrap_settings = settings_service.get_local_settings()
-        db_client = DBClient(
+        tls_config = TLSConfig(
             ca_cert_path=bootstrap_settings.ca_cert_path,
             client_cert_path=bootstrap_settings.client_cert_path,
             client_key_path=bootstrap_settings.client_key_path,
         )
+        db_client = DBClient(tls_config=tls_config)
         await db_client.connect()
         await db_client.close()
     except Exception as e:

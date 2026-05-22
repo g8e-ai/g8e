@@ -57,9 +57,6 @@ class DBClient:
         operator_session_id: str | None = None,
         operator_api_key: str | None = None,
         gateway_settings: GatewaySettings | None = None,
-        ca_cert_path: str | None = None,
-        client_cert_path: str | None = None,
-        client_key_path: str | None = None,
     ) -> None:
         if gateway_settings is None:
             service = SettingsService()
@@ -72,9 +69,9 @@ class DBClient:
             self._client_cert_path = tls_config.client_cert_path
             self._client_key_path = tls_config.client_key_path
         else:
-            self._ca_cert_path = ca_cert_path
-            self._client_cert_path = client_cert_path
-            self._client_key_path = client_key_path
+            self._ca_cert_path = None
+            self._client_cert_path = None
+            self._client_key_path = None
 
         self._operator_session_id = operator_session_id
         self._operator_api_key = operator_api_key
