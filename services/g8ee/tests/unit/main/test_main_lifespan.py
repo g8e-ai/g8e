@@ -69,13 +69,21 @@ def _build_mocks():
 
 def _configure_settings(mocks):
     """Wire up SettingsService + initialize_g8e_service to return a usable mock settings."""
-    settings = MagicMock()
-    settings.ca_cert_path = "/tmp/ca.crt"
-    settings.client_cert_path = "/tmp/client.crt"
-    settings.client_key_path = "/tmp/client.key"
-    settings.operator_session_id = "session"
+    from app.models.settings import G8eeAppSettings
+    from unittest.mock import PropertyMock
+
+    settings = G8eeAppSettings()
+    settings._client_cert_path = "/tmp/client.crt"
+    settings._client_key_path = "/tmp/client.key"
+    settings.auth.operator_session_id = "session"
     settings.gateway.default_ttl = 3600
     settings.port = PortConstants.G8E_PORT_G8EE_HTTPS
+
+    # Patch the TLS certificate path properties to return proper strings
+    # instead of trying to read from filesystem
+    type(settings).ca_cert_path = PropertyMock(return_value="/tmp/ca.crt")
+    type(settings).client_cert_path = PropertyMock(return_value="/tmp/client.crt")
+    type(settings).client_key_path = PropertyMock(return_value="/tmp/client.key")
 
     mocks["initialize_g8e_service"].side_effect = AsyncMock(return_value=settings)
 
