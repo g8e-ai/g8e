@@ -74,6 +74,7 @@ def _contents_to_messages(
                 messages.append({
                     "role": "tool",
                     "content": json.dumps(part.tool_response.response),
+                    "tool_name": part.tool_response.name,
                 })
             elif part.text:
                 messages.append({"role": role, "content": part.text})

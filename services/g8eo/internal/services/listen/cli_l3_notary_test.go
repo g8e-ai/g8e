@@ -271,7 +271,8 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 
-	pki := newPKIAuthority(dbDir, filepath.Join(dbDir, "pki"), db, logger)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	pki := newPKIAuthority(dbDir, filepath.Join(dbDir, "pki"), db, sm, logger)
 	err = pki.EnsurePKI(nil)
 	require.NoError(t, err)
 

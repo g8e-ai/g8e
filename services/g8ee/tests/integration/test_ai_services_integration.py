@@ -602,12 +602,13 @@ class TestCommandGenerationIntegration:
             pytest.skip("LLM provider is not configured")
         assert callable(generate_command)
 
-        # Verify function signature (this will be tested more thoroughly in agent tests)
+        # Verify function signature uses TribunalGenerationRequest context object
         import inspect
+        from app.models.tribunal_commands import TribunalGenerationRequest
         sig = inspect.signature(generate_command)
-        expected_params = ["request", "guidelines", "operator_context", "event_service", "web_session_id", "user_id", "case_id", "investigation_id", "settings", "reputation_data_service", "auditor_hmac_key", "ai_response_analyzer", "investigation_state", "investigation_context", "whitelisting_enabled", "blacklisting_enabled", "whitelisted_commands", "blacklisted_commands"]
         actual_params = list(sig.parameters.keys())
-        assert actual_params == expected_params
+        assert actual_params == ["request"]
+        assert sig.parameters["request"].annotation == TribunalGenerationRequest
 
     async def test_forbidden_patterns_dynamic_integration(self, user_settings):
         """Test that FORBIDDEN_COMMAND_PATTERNS changes are reflected in Tribunal prompts."""

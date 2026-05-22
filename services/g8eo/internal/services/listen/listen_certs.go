@@ -31,6 +31,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,8 +54,8 @@ const (
 
 // PKIAuthority manages the full PKI hierarchy for the Operator.
 // It generates and stores:
-// - Root CA under pki/root/
-// - Intermediate CAs under pki/authorities/
+// - Root CA under pki/root/ (cert only, key in keystore)
+// - Intermediate CAs under pki/authorities/ (cert only, keys in keystore)
 // - Service certificates under pki/issued/
 // - Trust bundles under pki/trust/
 // - Revocation state under pki/revocation/
@@ -63,7 +64,8 @@ type PKIAuthority struct {
 	logger *slog.Logger
 	db     *ListenDBService
 
-	pkiDir string
+	pkiDir        string
+	secretManager *SecretManager
 
 	// Root CA
 	rootCert *x509.Certificate
@@ -81,14 +83,15 @@ type PKIAuthority struct {
 	serviceCert tls.Certificate
 }
 
-func newPKIAuthority(dataDir, pkiDir string, db *ListenDBService, logger *slog.Logger) *PKIAuthority {
+func newPKIAuthority(dataDir, pkiDir string, db *ListenDBService, secretManager *SecretManager, logger *slog.Logger) *PKIAuthority {
 	if pkiDir == "" {
 		pkiDir = filepath.Join(dataDir, "pki")
 	}
 	return &PKIAuthority{
-		pkiDir: pkiDir,
-		db:     db,
-		logger: logger,
+		pkiDir:        pkiDir,
+		db:            db,
+		secretManager: secretManager,
+		logger:        logger,
 	}
 }
 
@@ -204,12 +207,11 @@ func (pki *PKIAuthority) PKIDir() string {
 // ─── PKI hierarchy management ─────────────────────────────────────────────
 
 func (pki *PKIAuthority) ensureRootCA() error {
-	rootKeyPath := filepath.Join(pki.pkiDir, "root", "root_ca.key")
 	rootCertPath := filepath.Join(pki.pkiDir, "root", "root_ca.crt")
 
-	needRoot := !fileExists(rootKeyPath) || !fileExists(rootCertPath)
+	needRoot := !fileExists(rootCertPath)
 	if !needRoot {
-		if err := pki.loadCertificatePair(rootCertPath, rootKeyPath, &pki.rootCert, &pki.rootKey); err != nil {
+		if err := pki.loadCertificatePair(rootCertPath, "", &pki.rootCert, &pki.rootKey); err != nil {
 			pki.logger.Warn("[PKI] Failed to load root CA, regenerating", string(constants.ConnectionStateError), err)
 			needRoot = true
 		}
@@ -217,7 +219,7 @@ func (pki *PKIAuthority) ensureRootCA() error {
 
 	if needRoot {
 		pki.logger.Info("[PKI] Generating root CA")
-		if err := pki.generateRootCA(rootKeyPath, rootCertPath); err != nil {
+		if err := pki.generateRootCA("", rootCertPath); err != nil {
 			return err
 		}
 	}
@@ -227,52 +229,49 @@ func (pki *PKIAuthority) ensureRootCA() error {
 
 func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	// Hub Intermediate CA
-	hubKeyPath := filepath.Join(pki.pkiDir, "authorities", "hub_ca.key")
 	hubCertPath := filepath.Join(pki.pkiDir, "authorities", "hub_ca.crt")
-	needHub := !fileExists(hubKeyPath) || !fileExists(hubCertPath)
+	needHub := !fileExists(hubCertPath)
 	if !needHub {
-		if err := pki.loadCertificatePair(hubCertPath, hubKeyPath, &pki.hubCert, &pki.hubKey); err != nil {
+		if err := pki.loadCertificatePair(hubCertPath, "", &pki.hubCert, &pki.hubKey); err != nil {
 			pki.logger.Warn("[PKI] Failed to load hub CA, regenerating", string(constants.ConnectionStateError), err)
 			needHub = true
 		}
 	}
 	if needHub {
 		pki.logger.Info("[PKI] Generating hub intermediate CA")
-		if err := pki.generateIntermediateCA(hubKeyPath, hubCertPath, pki.rootCert, pki.rootKey, hubCommonName); err != nil {
+		if err := pki.generateIntermediateCA("", hubCertPath, pki.rootCert, pki.rootKey, hubCommonName); err != nil {
 			return err
 		}
 	}
 
 	// Operator Intermediate CA
-	operatorKeyPath := filepath.Join(pki.pkiDir, "authorities", "operator_ca.key")
 	operatorCertPath := filepath.Join(pki.pkiDir, "authorities", "operator_ca.crt")
-	needOperator := !fileExists(operatorKeyPath) || !fileExists(operatorCertPath)
+	needOperator := !fileExists(operatorCertPath)
 	if !needOperator {
-		if err := pki.loadCertificatePair(operatorCertPath, operatorKeyPath, &pki.operatorCert, &pki.operatorKey); err != nil {
+		if err := pki.loadCertificatePair(operatorCertPath, "", &pki.operatorCert, &pki.operatorKey); err != nil {
 			pki.logger.Warn("[PKI] Failed to load operator CA, regenerating", string(constants.ConnectionStateError), err)
 			needOperator = true
 		}
 	}
 	if needOperator {
 		pki.logger.Info("[PKI] Generating operator intermediate CA")
-		if err := pki.generateIntermediateCA(operatorKeyPath, operatorCertPath, pki.rootCert, pki.rootKey, operatorCommonName); err != nil {
+		if err := pki.generateIntermediateCA("", operatorCertPath, pki.rootCert, pki.rootKey, operatorCommonName); err != nil {
 			return err
 		}
 	}
 
 	// Bootstrap Intermediate CA
-	bootstrapKeyPath := filepath.Join(pki.pkiDir, "authorities", "bootstrap_ca.key")
 	bootstrapCertPath := filepath.Join(pki.pkiDir, "authorities", "bootstrap_ca.crt")
-	needBootstrap := !fileExists(bootstrapKeyPath) || !fileExists(bootstrapCertPath)
+	needBootstrap := !fileExists(bootstrapCertPath)
 	if !needBootstrap {
-		if err := pki.loadCertificatePair(bootstrapCertPath, bootstrapKeyPath, &pki.bootstrapCert, &pki.bootstrapKey); err != nil {
+		if err := pki.loadCertificatePair(bootstrapCertPath, "", &pki.bootstrapCert, &pki.bootstrapKey); err != nil {
 			pki.logger.Warn("[PKI] Failed to load bootstrap CA, regenerating", string(constants.ConnectionStateError), err)
 			needBootstrap = true
 		}
 	}
 	if needBootstrap {
 		pki.logger.Info("[PKI] Generating bootstrap intermediate CA")
-		if err := pki.generateIntermediateCA(bootstrapKeyPath, bootstrapCertPath, pki.rootCert, pki.rootKey, bootstrapCommonName); err != nil {
+		if err := pki.generateIntermediateCA("", bootstrapCertPath, pki.rootCert, pki.rootKey, bootstrapCommonName); err != nil {
 			return err
 		}
 	}
@@ -576,10 +575,6 @@ func (pki *PKIAuthority) loadCertificatePair(certPath, keyPath string, cert **x5
 	if err != nil {
 		return err
 	}
-	keyPEM, err := os.ReadFile(keyPath)
-	if err != nil {
-		return err
-	}
 
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
@@ -590,22 +585,53 @@ func (pki *PKIAuthority) loadCertificatePair(certPath, keyPath string, cert **x5
 		return err
 	}
 
-	block, _ = pem.Decode(keyPEM)
-	if block == nil {
-		return fmt.Errorf("invalid key PEM")
+	// Load private key from keystore
+	if pki.secretManager == nil {
+		return fmt.Errorf("SecretManager is required for PKI private key loading")
 	}
-	parsedKey, err := x509.ParseECPrivateKey(block.Bytes)
+
+	// Determine CA type from cert path
+	var caType string
+	if strings.Contains(certPath, "root_ca.crt") {
+		caType = "root"
+	} else if strings.Contains(certPath, "hub_ca.crt") {
+		caType = "hub"
+	} else if strings.Contains(certPath, "operator_ca.crt") {
+		caType = "operator"
+	} else if strings.Contains(certPath, "bootstrap_ca.crt") {
+		caType = "bootstrap"
+	}
+
+	if caType == "" {
+		// For non-CA certificates (service certs), load from PEM file
+		if keyPath != "" {
+			keyPEM, err := os.ReadFile(keyPath)
+			if err != nil {
+				return err
+			}
+			keyBlock, _ := pem.Decode(keyPEM)
+			if keyBlock == nil {
+				return fmt.Errorf("invalid key PEM")
+			}
+			parsedKey, err := x509.ParseECPrivateKey(keyBlock.Bytes)
+			if err != nil {
+				return fmt.Errorf("parse private key: %w", err)
+			}
+			*cert = parsedCert
+			*key = parsedKey
+			return nil
+		}
+		return fmt.Errorf("cannot determine CA type from cert path: %s", certPath)
+	}
+
+	keyDER, err := pki.secretManager.GetCAPrivateKey(caType)
 	if err != nil {
-		// Try PKCS8
-		keyIface, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
-		if err2 != nil {
-			return fmt.Errorf("parse key: %w (also tried PKCS8: %v)", err, err2)
-		}
-		var ok bool
-		parsedKey, ok = keyIface.(*ecdsa.PrivateKey)
-		if !ok {
-			return fmt.Errorf("key is not ECDSA")
-		}
+		return fmt.Errorf("load %s CA private key from keystore: %w", caType, err)
+	}
+
+	parsedKey, err := x509.ParseECPrivateKey(keyDER)
+	if err != nil {
+		return fmt.Errorf("parse %s CA private key: %w", caType, err)
 	}
 
 	*cert = parsedCert
@@ -658,8 +684,11 @@ func (pki *PKIAuthority) generateRootCA(keyPath, certPath string) error {
 	if err != nil {
 		return err
 	}
-	if err := writePEMFile(keyPath, "EC PRIVATE KEY", keyDER, 0600); err != nil {
-		return err
+	if pki.secretManager == nil {
+		return fmt.Errorf("SecretManager is required for PKI private key storage")
+	}
+	if err := pki.secretManager.StoreCAPrivateKey("root", keyDER); err != nil {
+		return fmt.Errorf("store root CA private key in keystore: %w", err)
 	}
 
 	pki.rootCert = rootCert
@@ -712,8 +741,26 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 	if err != nil {
 		return err
 	}
-	if err := writePEMFile(keyPath, "EC PRIVATE KEY", keyDER, 0600); err != nil {
-		return err
+
+	// Determine CA type for keystore storage
+	var caType string
+	switch commonName {
+	case hubCommonName:
+		caType = "hub"
+	case operatorCommonName:
+		caType = "operator"
+	case bootstrapCommonName:
+		caType = "bootstrap"
+	}
+
+	if pki.secretManager == nil {
+		return fmt.Errorf("SecretManager is required for PKI private key storage")
+	}
+	if caType == "" {
+		return fmt.Errorf("unknown CA common name: %s", commonName)
+	}
+	if err := pki.secretManager.StoreCAPrivateKey(caType, keyDER); err != nil {
+		return fmt.Errorf("store %s CA private key in keystore: %w", caType, err)
 	}
 
 	// Store in the appropriate field based on common name

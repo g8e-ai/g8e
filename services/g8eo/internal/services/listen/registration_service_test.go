@@ -62,7 +62,8 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	err = pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
@@ -470,7 +471,8 @@ func TestRegistrationService_DeviceLinks(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
@@ -511,7 +513,8 @@ func TestRegistrationService_CreateDeviceLinkRejectsWrongOperatorOwner(t *testin
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
@@ -558,7 +561,8 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
@@ -611,7 +615,8 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
@@ -658,7 +663,8 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
@@ -740,7 +746,8 @@ func TestRegistrationService_Binding(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
@@ -844,7 +851,8 @@ func TestRegistration_SessionDocuments(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
 	err = pki.EnsurePKI(nil)
 	require.NoError(t, err)
 

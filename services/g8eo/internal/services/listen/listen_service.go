@@ -67,7 +67,11 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	}
 
 	pubsub := NewPubSubBroker(logger)
-	pki := newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, db, logger)
+	sm, err := NewSecretManager(db.db, cfg.Listen.SecretsDir, logger)
+	if err != nil {
+		return nil, fmt.Errorf("initialize secret manager: %w", err)
+	}
+	pki := newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	auth := NewAuthService(db, pki, logger, userSvc, cfg.Listen.SecretsDir)
 	sessionSvc := NewSessionService(db, logger)
@@ -132,7 +136,8 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 // newListenServiceFromComponents assembles a ListenService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
 func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker) *ListenService {
-	pki := newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, db, logger)
+	sm, _ := NewSecretManager(db.db, cfg.Listen.SecretsDir, logger)
+	pki := newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	auth := NewAuthService(db, pki, logger, userSvc, cfg.Listen.SecretsDir)
 	sessionSvc := NewSessionService(db, logger)
