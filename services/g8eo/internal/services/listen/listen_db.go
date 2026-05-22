@@ -21,8 +21,10 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -321,7 +323,16 @@ func (s *ListenDBService) initSchema(secretsDir string) error {
 	if err != nil {
 		return err
 	}
-	return sm.InitPlatformSettings()
+	if err := sm.InitPlatformSettings(); err != nil {
+		return err
+	}
+
+	// Migration: Move plaintext service certificate private keys to keystore
+	if err := s.migratePlaintextServiceKeys(secretsDir, sm); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // runDataMigrations applies data-only migrations (not schema changes).
@@ -373,6 +384,77 @@ func (s *ListenDBService) runDataMigrations() error {
 	}
 
 	s.logger.Info("Applied data migration: scrubbed plaintext secrets from platform_settings")
+	return nil
+}
+
+// migratePlaintextServiceKeys moves existing plaintext service certificate private keys
+// to the keystore and deletes the plaintext files. This is a one-time migration.
+func (s *ListenDBService) migratePlaintextServiceKeys(secretsDir string, sm *SecretManager) error {
+	// Check if migration marker exists in keystore
+	_, err := sm.keystore.DecryptSecret("migration_plaintext_keys_migrated")
+	if err == nil {
+		// Already migrated
+		return nil
+	}
+
+	pkiDir := filepath.Join(filepath.Dir(secretsDir), "pki")
+	keyPaths := []string{
+		filepath.Join(pkiDir, "issued", "hub", "operator-listen.key"),
+		filepath.Join(pkiDir, "issued", "apps", "g8ee.key"),
+	}
+
+	migratedCount := 0
+	for _, keyPath := range keyPaths {
+		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+			continue
+		}
+
+		// Read the plaintext key
+		keyPEM, err := os.ReadFile(keyPath)
+		if err != nil {
+			s.logger.Warn("[Migration] Failed to read plaintext key file", "path", keyPath, "error", err)
+			continue
+		}
+
+		block, _ := pem.Decode(keyPEM)
+		if block == nil {
+			s.logger.Warn("[Migration] Failed to decode PEM key file", "path", keyPath)
+			continue
+		}
+
+		// Determine service name from path
+		var serviceName string
+		if strings.Contains(keyPath, "operator-listen.key") {
+			serviceName = "operator-listen"
+		} else if strings.Contains(keyPath, "g8ee.key") {
+			serviceName = "g8ee"
+		} else {
+			s.logger.Warn("[Migration] Unknown service key file", "path", keyPath)
+			continue
+		}
+
+		// Store in keystore
+		if err := sm.StoreServicePrivateKey(serviceName, block.Bytes); err != nil {
+			s.logger.Warn("[Migration] Failed to store key in keystore", "service", serviceName, "error", err)
+			continue
+		}
+
+		// Delete plaintext file
+		if err := os.Remove(keyPath); err != nil {
+			s.logger.Warn("[Migration] Failed to delete plaintext key file", "path", keyPath, "error", err)
+			continue
+		}
+
+		s.logger.Info("[Migration] Migrated plaintext service key to keystore", "service", serviceName, "path", keyPath)
+		migratedCount++
+	}
+
+	if migratedCount > 0 {
+		// Mark migration as complete
+		_ = sm.keystore.EncryptSecret("migration_plaintext_keys_migrated", "true")
+		s.logger.Info("[Migration] Completed plaintext service key migration", "count", migratedCount)
+	}
+
 	return nil
 }
 
