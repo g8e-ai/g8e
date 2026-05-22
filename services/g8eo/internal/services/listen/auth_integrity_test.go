@@ -35,7 +35,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -101,7 +101,7 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 

@@ -58,7 +58,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -466,7 +466,7 @@ func TestRegistrationService_DeviceLinks(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -507,7 +507,7 @@ func TestRegistrationService_CreateDeviceLinkRejectsWrongOperatorOwner(t *testin
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -554,7 +554,7 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -607,7 +607,7 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -654,7 +654,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -736,7 +736,7 @@ func TestRegistrationService_Binding(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -840,7 +840,7 @@ func TestRegistration_SessionDocuments(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 

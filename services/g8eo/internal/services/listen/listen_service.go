@@ -61,7 +61,7 @@ type ListenService struct {
 
 // NewListenService creates a new listen mode service.
 func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, error) {
-	db, err := NewListenDBService(cfg.Listen.DataDir, cfg.Listen.SecretsDir, logger)
+	db, err := OpenListenDBService(cfg.Listen.DataDir, cfg.Listen.SecretsDir, logger, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}

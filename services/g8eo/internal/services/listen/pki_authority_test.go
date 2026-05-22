@@ -33,7 +33,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
-		db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+		db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 		err := pki.EnsurePKI(nil)
@@ -59,7 +59,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
-		db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+		db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 		err := pki.EnsurePKI(nil)
@@ -91,7 +91,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
-		db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+		db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 		err := pki.EnsurePKI(nil)
@@ -115,7 +115,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
-		db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+		db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 		err := pki.EnsurePKI(nil)
@@ -140,7 +140,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
-		db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+		db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 		err := pki.EnsurePKI(nil)
@@ -164,7 +164,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
-		db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+		db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 		err := pki.EnsurePKI(nil)
@@ -181,7 +181,7 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
-	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+	db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
@@ -240,7 +240,7 @@ func TestPKIAuthority_IssuerSeparation(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
-	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+	db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
@@ -279,7 +279,7 @@ func TestPKIAuthority_URISAN(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
-	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+	db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
@@ -311,7 +311,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
-	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+	db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
@@ -356,7 +356,7 @@ func TestPKIAuthority_EKU(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
-	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+	db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
@@ -386,7 +386,7 @@ func TestPKIAuthority_TLSConfig(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
-	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+	db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
@@ -410,7 +410,7 @@ func TestPKIAuthority_TrustBundlePath(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
-	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+	db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
@@ -429,7 +429,7 @@ func TestPKIAuthority_PKIDir(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
-	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+	db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	assert.Equal(t, pkiDir, pki.PKIDir())
@@ -439,7 +439,7 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
-	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
+	db, _ := OpenListenDBService(dataDir, t.TempDir(), logger, true)
 
 	// First initialization
 	pki1 := newPKIAuthority(dataDir, pkiDir, db, logger)

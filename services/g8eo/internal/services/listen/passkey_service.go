@@ -303,7 +303,11 @@ func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bo
 		return false, 0, err
 	}
 
-	s.logger.Info("Credential revoked", "userID", userID, "credentialID", credentialID[:12])
+	credPrefix := credentialID
+	if len(credentialID) > 12 {
+		credPrefix = credentialID[:12]
+	}
+	s.logger.Info("Credential revoked", "userID", userID, "credentialID", credPrefix)
 	return true, len(newCreds), nil
 }
 

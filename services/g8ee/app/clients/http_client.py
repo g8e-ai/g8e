@@ -51,7 +51,7 @@ from app.errors import (
 )
 from app.models.base import G8eBaseModel
 from app.models.http_context import G8eHttpContext, RequestContext
-from app.utils.aiohttp_session import new_component_http_session
+from app.utils.aiohttp_session import create_component_http_session
 from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
@@ -280,7 +280,7 @@ class HTTPClient:
 
     async def _get_http_session(self) -> aiohttp.ClientSession:
         """Get or create a persistent aiohttp session."""
-        self._session = new_component_http_session(
+        self._session = create_component_http_session(
             self._session,
             timeout=self.timeout,
             ca_cert_path=self._ca_cert_path,
