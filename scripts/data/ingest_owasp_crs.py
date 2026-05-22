@@ -77,10 +77,15 @@ class CRSParser:
         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
         
-        # Extract SecRule directives
-        # Pattern: SecRule <variable> "@rx <pattern>" [actions]
+        # Normalize multiline rules by removing backslash continuations and newlines
+        # CRS rules span multiple lines with backslash continuations
+        content = re.sub(r'\\\s*\n', ' ', content)
+        
+        # Extract SecRule directives with @rx patterns
+        # Pattern: SecRule <variable> "@rx <pattern>" "id:...,msg:...,severity:..."
+        # Use non-greedy match for pattern to capture everything up to the closing quote
         rule_pattern = re.compile(
-            r'SecRule\s+(?:[^:]+):\s*"([^"]+)"\s+"@rx\s+([^"]+)"\s*(.*)',
+            r'SecRule\s+([^\s]+(?:\|[^\s]+)*)\s+"@rx\s+([^"]+?)"\s+"([^"]*(?:id:\d+)[^"]*)"',
             re.MULTILINE | re.IGNORECASE
         )
         
@@ -97,10 +102,10 @@ class CRSParser:
             rule_id = rule_id_match.group(1)
             
             # Extract severity from actions
-            severity_match = re.search(r'severity:(\'[A-Z]+\')', actions)
+            severity_match = re.search(r'severity:(\'?[A-Z]+\'?)', actions)
             if severity_match:
                 crs_severity = severity_match.group(1).strip("'")
-                severity = self.SEVERITY_MAPPING.get(crs_severity, "medium")
+                severity = self.SEVERITY_MAPPING.get(crs_severity.upper(), "medium")
             else:
                 severity = "medium"
             
@@ -119,8 +124,9 @@ class CRSParser:
             mitre_attack = self.MITRE_MAPPING.get(rule_prefix)
             mitre_tactic = self.TACTIC_MAPPING.get(mitre_attack) if mitre_attack else None
             
-            # Clean up pattern (remove SecLanguage escapes)
+            # Clean up pattern (remove SecLanguage escapes and hex sequences)
             pattern = pattern.replace(r'\.', '.').replace(r'\*', '*')
+            pattern = re.sub(r'\\x[0-9a-fA-F]{2}', '', pattern)
             
             doctrine = Doctrine(
                 id=f"owasp_crs_{rule_id}",
