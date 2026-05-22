@@ -30,7 +30,7 @@ func TestAuthStatusIndependence(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -143,7 +143,7 @@ func TestApiKeyStatusIndependence(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

@@ -34,7 +34,7 @@ from app.constants import OPERATOR_API_KEY_HEADER, HTTP_AUTHORIZATION_HEADER, HT
 from app.errors import DatabaseError, ErrorCode, NetworkError
 from app.models.settings import ListenSettings
 from app.services.infra.settings_service import SettingsService
-from app.utils.aiohttp_session import new_component_http_session
+from app.utils.aiohttp_session import create_component_http_session
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class BlobClient:
             headers[OPERATOR_API_KEY_HEADER] = self._operator_api_key
 
         if self._session is None or self._session.closed:
-            self._session = new_component_http_session(
+            self._session = create_component_http_session(
                 None,
                 timeout=aiohttp.ClientTimeout(total=30),
                 ca_cert_path=self._ca_cert_path,

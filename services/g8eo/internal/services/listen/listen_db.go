@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/keystore"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 )
@@ -52,8 +53,9 @@ type ListenDBService struct {
 	AuditVault *storage.AuditVaultService
 }
 
-// NewListenDBService opens (or creates) the unified SQLite database.
-func NewListenDBService(dataDir string, secretsDir string, logger *slog.Logger) (*ListenDBService, error) {
+// OpenListenDBService opens (or creates) the unified SQLite database.
+// testMode enables the in-memory keystore backend for unit tests.
+func OpenListenDBService(dataDir string, secretsDir string, logger *slog.Logger, testMode bool) (*ListenDBService, error) {
 	dbPath := filepath.Join(dataDir, "g8e.db")
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
@@ -65,7 +67,6 @@ func NewListenDBService(dataDir string, secretsDir string, logger *slog.Logger) 
 	// Initialize Audit Vault for transaction-native audit recording
 	auditVaultConfig := storage.DefaultAuditVaultConfig()
 	auditVaultConfig.DataDir = dataDir
-	// Git is optional for audit vault but recommended for file history
 	auditVault, err := storage.NewAuditVaultService(auditVaultConfig, logger)
 	if err != nil {
 		db.Close()
@@ -78,9 +79,16 @@ func NewListenDBService(dataDir string, secretsDir string, logger *slog.Logger) 
 		AuditVault: auditVault,
 	}
 
-	if err := svc.initSchema(secretsDir); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to initialize schema: %w", err)
+	if testMode {
+		if err := svc.initTestSchema(secretsDir); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to initialize schema: %w", err)
+		}
+	} else {
+		if err := svc.initSchema(secretsDir); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to initialize schema: %w", err)
+		}
 	}
 
 	// Initialize state root if missing
@@ -94,6 +102,34 @@ func NewListenDBService(dataDir string, secretsDir string, logger *slog.Logger) 
 
 	logger.Info("Listen database initialized", "path", dbPath)
 	return svc, nil
+}
+
+func (s *ListenDBService) initTestSchema(secretsDir string) error {
+	_, err := s.db.Exec(listenSchema)
+	if err != nil {
+		return err
+	}
+	backend, err := keystore.NewTestBackend()
+	if err != nil {
+		return err
+	}
+	ks, err := keystore.NewWithBackend(secretsDir, s.logger, backend)
+	if err != nil {
+		return err
+	}
+	if err := ks.Initialize(); err != nil {
+		return err
+	}
+	if err := ks.EnsurePermissions(); err != nil {
+		return err
+	}
+	sm := &SecretManager{
+		db:         s.db,
+		secretsDir: secretsDir,
+		logger:     s.logger,
+		keystore:   ks,
+	}
+	return sm.InitPlatformSettings()
 }
 
 func (s *ListenDBService) initStateRoot() error {

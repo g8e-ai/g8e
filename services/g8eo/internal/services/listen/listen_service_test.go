@@ -33,15 +33,22 @@ func TestNewListenService(t *testing.T) {
 	cfg.Listen.SecretsDir = t.TempDir()
 
 	t.Run("Default configuration with self-signed certs", func(t *testing.T) {
-		ls, err := NewListenService(cfg, logger)
+		db, err := OpenListenDBService(cfg.Listen.DataDir, cfg.Listen.SecretsDir, logger, true)
 		require.NoError(t, err)
+		defer db.Close()
+
+		pubsub := NewPubSubBroker(logger)
+		defer pubsub.Close()
+
+		cfg.Listen.PKIDir = t.TempDir()
+		cfg.Listen.SecretsDir = t.TempDir()
+		cfg.Listen.BootstrapPort = constants.Ports.OperatorBootstrapHttps
+
+		ls := newListenServiceFromComponents(cfg, logger, db, pubsub)
 		assert.NotNil(t, ls)
 		assert.NotNil(t, ls.server)
 		assert.NotNil(t, ls.pki)
 		assert.False(t, ls.running)
-
-		err = ls.db.Close()
-		require.NoError(t, err)
 	})
 }
 
@@ -53,9 +60,16 @@ func TestListenService_StateManagement(t *testing.T) {
 	cfg.Listen.PKIDir = t.TempDir()
 	cfg.Listen.SecretsDir = t.TempDir()
 
-	ls, err := NewListenService(cfg, logger)
+	db, err := OpenListenDBService(cfg.Listen.DataDir, cfg.Listen.SecretsDir, logger, true)
 	require.NoError(t, err)
-	defer ls.db.Close()
+	defer db.Close()
+
+	pubsub := NewPubSubBroker(logger)
+	defer pubsub.Close()
+
+	cfg.Listen.BootstrapPort = constants.Ports.OperatorBootstrapHttps
+
+	ls := newListenServiceFromComponents(cfg, logger, db, pubsub)
 
 	t.Run("Initial state", func(t *testing.T) {
 		assert.False(t, ls.IsRunning())
@@ -91,7 +105,7 @@ func TestNewListenServiceFromComponents(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 

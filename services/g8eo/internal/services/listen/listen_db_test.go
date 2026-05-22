@@ -52,7 +52,7 @@ func newTestDB(t *testing.T) *ListenDBService {
 	t.Helper()
 	dir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dir, secretsDir, testutil.NewTestLogger())
+	db, err := OpenListenDBService(dir, secretsDir, testutil.NewTestLogger(), true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
@@ -372,13 +372,13 @@ func TestSchemaIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	secretsDir := t.TempDir()
 
-	db1, err := NewListenDBService(dir, secretsDir, testutil.NewTestLogger())
+	db1, err := OpenListenDBService(dir, secretsDir, testutil.NewTestLogger(), true)
 	require.NoError(t, err)
 	require.NoError(t, db1.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
-	db2, err := NewListenDBService(dir, secretsDir, testutil.NewTestLogger())
+	db2, err := OpenListenDBService(dir, secretsDir, testutil.NewTestLogger(), true)
 	require.NoError(t, err)
 	defer db2.Close()
 
@@ -396,7 +396,7 @@ func TestCreateDataDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "nested", "deep", "data")
 	secretsDir := t.TempDir()
 
-	db, err := NewListenDBService(dir, secretsDir, testutil.NewTestLogger())
+	db, err := OpenListenDBService(dir, secretsDir, testutil.NewTestLogger(), true)
 	require.NoError(t, err)
 	defer db.Close()
 

@@ -43,7 +43,7 @@ from app.errors import (
     ValidationError,
 )
 from app.models.cache import ArrayRemove, ArrayUnion, BatchWriteOperation, CacheOperationResult, DocumentResult, QueryResult
-from app.utils.aiohttp_session import new_component_http_session
+from app.utils.aiohttp_session import create_component_http_session
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ class DBClient:
             headers[OPERATOR_API_KEY_HEADER] = self._operator_api_key
 
         if not hasattr(self, "_session") or self._session is None:
-            self._session = new_component_http_session(
+            self._session = create_component_http_session(
                 None,
                 timeout=aiohttp.ClientTimeout(total=30),
                 ca_cert_path=self._ca_cert_path,

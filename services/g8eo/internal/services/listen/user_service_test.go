@@ -29,7 +29,7 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -58,7 +58,7 @@ func TestUserService_Disable(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := t.TempDir()
 		secretsDir := t.TempDir()
-		db, err := NewListenDBService(dbDir, secretsDir, logger)
+		db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 		require.NoError(t, err)
 		defer db.Close()
 
@@ -96,7 +96,7 @@ func TestUserService_Disable(t *testing.T) {
 
 	t.Run("Error - user not found", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		db, _ := NewListenDBService(t.TempDir(), t.TempDir(), logger)
+		db, _ := OpenListenDBService(t.TempDir(), t.TempDir(), logger, true)
 		defer db.Close()
 		userSvc := NewUserService(db, logger)
 
@@ -115,7 +115,7 @@ func mustMarshal(t *testing.T, v any) []byte {
 func TestUserService_FindBootstrapUser(t *testing.T) {
 	t.Run("Success - finds bootstrap user", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		db, _ := NewListenDBService(t.TempDir(), t.TempDir(), logger)
+		db, _ := OpenListenDBService(t.TempDir(), t.TempDir(), logger, true)
 		defer db.Close()
 		userSvc := NewUserService(db, logger)
 
@@ -134,7 +134,7 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 
 	t.Run("Success - returns nil when no bootstrap user", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		db, _ := NewListenDBService(t.TempDir(), t.TempDir(), logger)
+		db, _ := OpenListenDBService(t.TempDir(), t.TempDir(), logger, true)
 		defer db.Close()
 		userSvc := NewUserService(db, logger)
 
@@ -181,7 +181,7 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, secretsDir, logger)
+	db, err := OpenListenDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	defer db.Close()
 

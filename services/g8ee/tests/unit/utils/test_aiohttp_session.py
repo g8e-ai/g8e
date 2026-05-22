@@ -24,9 +24,9 @@ import pytest
 from app.utils.aiohttp_session import (
     _resolve_ssl_context,
     _url_uses_tls,
-    new_component_http_session,
-    new_kv_http_session,
-    new_pubsub_ws_session,
+    create_component_http_session,
+    create_kv_http_session,
+    create_pubsub_ws_session,
     resolve_pubsub_ssl_context,
 )
 
@@ -89,14 +89,14 @@ class TestResolveSslContext:
 
 
 # =============================================================================
-# new_kv_http_session
+# create_kv_http_session
 # =============================================================================
 
 @pytest.mark.asyncio(loop_scope="session")
 class TestNewKvHttpSession:
 
     async def test_returns_new_session_when_none(self):
-        s = new_kv_http_session(
+        s = create_kv_http_session(
             None,
             base_url="https://localhost:8440",
             timeout=aiohttp.ClientTimeout(total=10),
@@ -109,7 +109,7 @@ class TestNewKvHttpSession:
             await s.close()
 
     async def test_reuses_open_session(self):
-        s = new_kv_http_session(
+        s = create_kv_http_session(
             None,
             base_url="https://localhost:8440",
             timeout=aiohttp.ClientTimeout(total=10),
@@ -117,7 +117,7 @@ class TestNewKvHttpSession:
             headers={},
         )
         try:
-            same = new_kv_http_session(
+            same = create_kv_http_session(
                 s,
                 base_url="https://localhost:8440",
                 timeout=aiohttp.ClientTimeout(total=10),
@@ -129,7 +129,7 @@ class TestNewKvHttpSession:
             await s.close()
 
     async def test_recreates_after_close(self):
-        s = new_kv_http_session(
+        s = create_kv_http_session(
             None,
             base_url="https://localhost:8440",
             timeout=aiohttp.ClientTimeout(total=10),
@@ -137,7 +137,7 @@ class TestNewKvHttpSession:
             headers={},
         )
         await s.close()
-        s2 = new_kv_http_session(
+        s2 = create_kv_http_session(
             s,
             base_url="https://localhost:8440",
             timeout=aiohttp.ClientTimeout(total=10),
@@ -151,7 +151,7 @@ class TestNewKvHttpSession:
             await s2.close()
 
     async def test_sets_content_type_header(self):
-        s = new_kv_http_session(
+        s = create_kv_http_session(
             None,
             base_url="https://localhost:8440",
             timeout=aiohttp.ClientTimeout(total=10),
@@ -169,7 +169,7 @@ class TestNewKvHttpSessionSsl:
 
     async def test_no_ssl_for_http_url(self):
         with patch("app.utils.aiohttp_session._resolve_ssl_context", return_value=False) as mock_resolve:
-            s = new_kv_http_session(
+            s = create_kv_http_session(
                 None,
                 base_url="https://localhost:8440",
                 timeout=aiohttp.ClientTimeout(total=10),
@@ -181,7 +181,7 @@ class TestNewKvHttpSessionSsl:
 
     async def test_ssl_attempted_for_https_url(self):
         with patch("app.utils.aiohttp_session._resolve_ssl_context", return_value=None) as mock_resolve:
-            s = new_kv_http_session(
+            s = create_kv_http_session(
                 None,
                 base_url="https://localhost:8440",
                 timeout=aiohttp.ClientTimeout(total=10),
@@ -193,7 +193,7 @@ class TestNewKvHttpSessionSsl:
 
     async def test_no_ssl_without_ca_cert_path_for_https(self):
         with patch("app.utils.aiohttp_session._resolve_ssl_context", return_value=None) as mock_resolve:
-            s = new_kv_http_session(
+            s = create_kv_http_session(
                 None,
                 base_url="https://localhost:8440",
                 timeout=aiohttp.ClientTimeout(total=10),
@@ -205,29 +205,29 @@ class TestNewKvHttpSessionSsl:
 
 
 # =============================================================================
-# new_pubsub_ws_session
+# create_pubsub_ws_session
 # =============================================================================
 
 @pytest.mark.asyncio(loop_scope="session")
 class TestNewPubsubWsSession:
 
     async def test_returns_new_session_when_none(self):
-        s = new_pubsub_ws_session(None, timeout=aiohttp.ClientTimeout(total=10))
+        s = create_pubsub_ws_session(None, timeout=aiohttp.ClientTimeout(total=10))
         try:
             assert isinstance(s, aiohttp.ClientSession)
         finally:
             await s.close()
 
     async def test_reuses_open_session(self):
-        s = new_pubsub_ws_session(None, timeout=aiohttp.ClientTimeout(total=10))
+        s = create_pubsub_ws_session(None, timeout=aiohttp.ClientTimeout(total=10))
         try:
-            same = new_pubsub_ws_session(s, timeout=aiohttp.ClientTimeout(total=10))
+            same = create_pubsub_ws_session(s, timeout=aiohttp.ClientTimeout(total=10))
             assert same is s
         finally:
             await s.close()
 
     async def test_no_content_type_header(self):
-        s = new_pubsub_ws_session(None, timeout=aiohttp.ClientTimeout(total=10))
+        s = create_pubsub_ws_session(None, timeout=aiohttp.ClientTimeout(total=10))
         try:
             assert "Content-Type" not in s.headers
         finally:
@@ -239,7 +239,7 @@ class TestNewPubsubWsSessionSsl:
 
     async def test_ssl_never_wired_into_connector(self):
         with patch("app.utils.aiohttp_session._resolve_ssl_context") as mock_resolve:
-            s = new_pubsub_ws_session(None, timeout=aiohttp.ClientTimeout(total=10))
+            s = create_pubsub_ws_session(None, timeout=aiohttp.ClientTimeout(total=10))
             try:
                 mock_resolve.assert_not_called()
             finally:
@@ -270,14 +270,14 @@ class TestResolvePubsubSslContext:
 
 
 # =============================================================================
-# new_component_http_session
+# create_component_http_session
 # =============================================================================
 
 @pytest.mark.asyncio(loop_scope="session")
 class TestNewComponentHttpSession:
 
     async def test_returns_new_session_when_none(self):
-        s = new_component_http_session(
+        s = create_component_http_session(
             None, timeout=aiohttp.ClientTimeout(total=10), ca_cert_path="/tmp/ca.crt", headers={}
         )
         try:
@@ -286,11 +286,11 @@ class TestNewComponentHttpSession:
             await s.close()
 
     async def test_reuses_open_session(self):
-        s = new_component_http_session(
+        s = create_component_http_session(
             None, timeout=aiohttp.ClientTimeout(total=10), ca_cert_path="/tmp/ca.crt", headers={}
         )
         try:
-            same = new_component_http_session(
+            same = create_component_http_session(
                 s, timeout=aiohttp.ClientTimeout(total=10), ca_cert_path="/tmp/ca.crt", headers={}
             )
             assert same is s
@@ -298,11 +298,11 @@ class TestNewComponentHttpSession:
             await s.close()
 
     async def test_recreates_after_close(self):
-        s = new_component_http_session(
+        s = create_component_http_session(
             None, timeout=aiohttp.ClientTimeout(total=10), ca_cert_path="/tmp/ca.crt", headers={}
         )
         await s.close()
-        s2 = new_component_http_session(
+        s2 = create_component_http_session(
             s, timeout=aiohttp.ClientTimeout(total=10), ca_cert_path="/tmp/ca.crt", headers={}
         )
         try:
@@ -312,7 +312,7 @@ class TestNewComponentHttpSession:
             await s2.close()
 
     async def test_no_default_content_type_header(self):
-        s = new_component_http_session(
+        s = create_component_http_session(
             None, timeout=aiohttp.ClientTimeout(total=10), ca_cert_path="/tmp/ca.crt", headers={}
         )
         try:
@@ -326,7 +326,7 @@ class TestNewComponentHttpSessionSsl:
 
     async def test_no_ssl_when_ca_cert_path_not_given(self):
         with patch("app.utils.aiohttp_session._resolve_ssl_context", return_value=None) as mock_resolve:
-            s = new_component_http_session(
+            s = create_component_http_session(
                 None, timeout=aiohttp.ClientTimeout(total=10), ca_cert_path="/nonexistent/ca.pem", headers={}
             )
             try:
@@ -336,7 +336,7 @@ class TestNewComponentHttpSessionSsl:
 
     async def test_ssl_used_when_ca_cert_path_given(self):
         with patch("app.utils.aiohttp_session._resolve_ssl_context", return_value=None) as mock_resolve:
-            s = new_component_http_session(
+            s = create_component_http_session(
                 None,
                 timeout=aiohttp.ClientTimeout(total=10),
                 ca_cert_path="/some/ca.pem",

@@ -30,7 +30,7 @@ from google.protobuf.message import DecodeError
 import aiohttp
 
 from app.models.settings import ListenSettings
-from app.utils.aiohttp_session import new_pubsub_ws_session, resolve_pubsub_ssl_context
+from app.utils.aiohttp_session import create_pubsub_ws_session, resolve_pubsub_ssl_context
 from app.utils.envelope_builder import build_uap_envelope_json
 from app.constants import (
     ComponentName,
@@ -97,7 +97,7 @@ class PubSubClient:
 
     async def _get_http_ws_session(self) -> aiohttp.ClientSession:
         """Carrier session for WebSocket pub/sub."""
-        self._ws_session = new_pubsub_ws_session(
+        self._ws_session = create_pubsub_ws_session(
             self._ws_session,
             timeout=aiohttp.ClientTimeout(total=self._timeout),
         )

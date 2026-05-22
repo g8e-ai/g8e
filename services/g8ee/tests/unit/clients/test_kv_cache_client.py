@@ -144,21 +144,21 @@ class TestKVCacheClientLifecycle:
     async def test_connect_success(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "ok"}')
         # We need to ensure _get_http_session returns our mock
-        with patch("app.clients.kv_cache_client.new_kv_http_session", return_value=mock_session):
+        with patch("app.clients.kv_cache_client.create_kv_http_session", return_value=mock_session):
             connected = await client.connect()
             assert connected is True
             assert client.is_healthy() is True
 
     async def test_connect_failure(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "error"}')
-        with patch("app.clients.kv_cache_client.new_kv_http_session", return_value=mock_session):
+        with patch("app.clients.kv_cache_client.create_kv_http_session", return_value=mock_session):
             connected = await client.connect()
             assert connected is False
             assert client.is_healthy() is False
 
     async def test_connect_exception(self, client, mock_session):
         mock_session.request.side_effect = Exception("Down")
-        with patch("app.clients.kv_cache_client.new_kv_http_session", return_value=mock_session):
+        with patch("app.clients.kv_cache_client.create_kv_http_session", return_value=mock_session):
             connected = await client.connect()
             assert connected is False
             assert client.is_healthy() is False

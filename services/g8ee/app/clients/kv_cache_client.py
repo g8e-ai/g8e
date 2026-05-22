@@ -30,7 +30,7 @@ import aiohttp
 
 from app.models.settings import ListenSettings
 from app.services.infra.settings_service import SettingsService
-from app.utils.aiohttp_session import new_kv_http_session
+from app.utils.aiohttp_session import create_kv_http_session
 from app.constants import (
     ComponentName,
     ErrorCode,
@@ -90,7 +90,7 @@ class KVCacheClient:
         elif self._operator_api_key:
             headers[OPERATOR_API_KEY_HEADER] = self._operator_api_key
 
-        self._session = new_kv_http_session(
+        self._session = create_kv_http_session(
             self._session,
             base_url=self.http_url,
             timeout=aiohttp.ClientTimeout(total=self._timeout),

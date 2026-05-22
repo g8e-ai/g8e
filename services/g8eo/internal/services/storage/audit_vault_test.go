@@ -1346,7 +1346,7 @@ func TestAuditVaultService_WithEncryption(t *testing.T) {
 
 	// Create and initialize vault for encryption
 	vaultDataDir := filepath.Join(tempDir, "vault")
-	encVault := newTestVault(t, vaultDataDir, "test-api-key-for-encryption")
+	encVault := createTestVault(t, vaultDataDir, "test-api-key-for-encryption")
 	defer encVault.Close()
 	require.True(t, encVault.IsUnlocked())
 
@@ -1411,7 +1411,7 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 
 	// Create and initialize vault
 	vaultDataDir := filepath.Join(tempDir, "vault")
-	vault1 := newTestVault(t, vaultDataDir, apiKey)
+	vault1 := createTestVault(t, vaultDataDir, apiKey)
 
 	// Create audit vault with encryption
 	config := &AuditVaultConfig{
@@ -1489,7 +1489,7 @@ func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
 
 	// Initialize with old key
 	vaultDataDir := filepath.Join(tempDir, "vault")
-	vaultSvc := newTestVault(t, vaultDataDir, oldAPIKey)
+	vaultSvc := createTestVault(t, vaultDataDir, oldAPIKey)
 
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -1601,7 +1601,7 @@ func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
 
 	// Now create vault and write encrypted data
 	vaultDataDir := filepath.Join(tempDir, "vault")
-	encVault := newTestVault(t, vaultDataDir, "mixed-test-api-key")
+	encVault := createTestVault(t, vaultDataDir, "mixed-test-api-key")
 
 	config2 := &AuditVaultConfig{
 		DataDir:                   tempDir,

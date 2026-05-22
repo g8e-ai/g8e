@@ -19,9 +19,9 @@ No aiohttp.ClientSession(...) calls anywhere else in the codebase.
 
 Roles
 -----
-new_kv_http_session        - KV/REST HTTP to the Operator listen port (kv_cache_client)
-new_pubsub_ws_session      - WebSocket carrier session for pub/sub (pubsub_client)
-new_component_http_session - inter-service HTTP with retry/circuit-breaker (HTTPClient , CacheAsideService)
+create_kv_http_session        - KV/REST HTTP to the Operator listen port (kv_cache_client)
+create_pubsub_ws_session      - WebSocket carrier session for pub/sub (pubsub_client)
+create_component_http_session - inter-service HTTP with retry/circuit-breaker (HTTPClient , CacheAsideService)
 
 SSL
 ---
@@ -30,7 +30,7 @@ resolved from SSLSettings) and returns a loaded SSLContext for the first path
 that exists on disk, or None if no cert is present.
 
 WebSocket SSL is passed directly to ws_connect(), not to the session connector,
-so new_pubsub_ws_session does not wire SSL - the caller resolves it via
+so create_pubsub_ws_session does not wire SSL - the caller resolves it via
 resolve_pubsub_ssl_context(ssl_settings) and passes it to ws_connect().
 """
 
@@ -79,7 +79,7 @@ def _url_uses_tls(url: str) -> bool:
     return url.startswith(("https://", "wss://"))
 
 
-def new_kv_http_session(
+def create_kv_http_session(
     existing: aiohttp.ClientSession | None,
     *,
     base_url: str,
@@ -118,7 +118,7 @@ def new_kv_http_session(
     )
 
 
-def new_pubsub_ws_session(
+def create_pubsub_ws_session(
     existing: aiohttp.ClientSession | None,
     *,
     timeout: aiohttp.ClientTimeout,
@@ -155,7 +155,7 @@ def resolve_pubsub_ssl_context(
     )
 
 
-def new_component_http_session(
+def create_component_http_session(
     existing: aiohttp.ClientSession | None,
     *,
     timeout: aiohttp.ClientTimeout,

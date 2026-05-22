@@ -41,7 +41,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 	// Create verifier with EVAL_ANSWER in known action types
 	verifier := NewTransactionVerifier(
 		nil,
-		newMockReplayStore(),
+		createMockReplayStore(),
 		&mockStateRootProvider{root: "test-state-root-v1"},
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key-id": pubKey}},
 		nil, // L3 verifier not needed for EVAL_ANSWER (non-mutation)
