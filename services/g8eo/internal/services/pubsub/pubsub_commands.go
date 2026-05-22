@@ -104,7 +104,7 @@ type CommandServiceConfig struct {
 	Ledger            *storage.LedgerService
 	HistoryHandler    *storage.HistoryHandler
 	Sentinel          *sentinel.Sentinel
-	L3Verifier        governance.L3Verifier
+	L3Notary          governance.L3Notary
 	ReplayStore       governance.ReplayStore
 	StateRootProvider governance.StateRootProvider
 	TransactionAudit  governance.TransactionAuditStore
@@ -192,8 +192,8 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	if c.StateRootProvider == nil {
 		return nil, fmt.Errorf("StateRootProvider is required for transaction verification")
 	}
-	// L3Verifier is optional for outbound mode (platform verifies L3)
-	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Verifier is nil
+	// L3Notary is optional for outbound mode (platform verifies L3)
+	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Notary is nil
 
 	// Initialize UAP governance services after trusted signers are loaded
 	rs.initializeUAPGovernance(c, serviceCtx)
@@ -219,7 +219,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		Execution:         c.Execution,
 		AuditVault:        c.AuditVault,
 		AuditStore:        c.TransactionAudit,
-		L3Verifier:        c.L3Verifier,
+		L3Notary:          c.L3Notary,
 		StateRootProvider: c.StateRootProvider,
 		Ctx:               serviceCtx,
 		ExecutionHandler:  rs, // PubSubCommandService implements ExecutionHandler
@@ -247,7 +247,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		c.ReplayStore,
 		c.StateRootProvider,
 		rs.signerStore,
-		c.L3Verifier,
+		c.L3Notary,
 		knownActionTypes,
 	)
 

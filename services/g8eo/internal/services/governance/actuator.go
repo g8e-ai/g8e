@@ -33,7 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 )
 
-type L3Verifier interface {
+type L3Notary interface {
 	VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
 }
 
@@ -54,7 +54,7 @@ type Actuator struct {
 	Execution         *execution.ExecutionService
 	AuditVault        *storage.AuditVaultService
 	AuditStore        TransactionAuditStore
-	L3Verifier        L3Verifier
+	L3Notary          L3Notary
 	StateRootProvider StateRootProvider
 	Ctx               context.Context
 	ExecutionHandler  ExecutionHandler

@@ -103,7 +103,7 @@ func TestGovernanceEnvelope_VerificationErrors_Return403(t *testing.T) {
 		{"unknown l2 signer", governance.ErrL2KeyNotConfigured},
 		{"missing l3 proof", governance.ErrL3ProofMissing},
 		{"invalid l3 proof", governance.ErrL3ProofInvalid},
-		{"l3 verifier not configured", governance.ErrL3VerifierNotConfigured},
+		{"l3 notary not configured", governance.ErrL3NotaryNotConfigured},
 		{"state root mismatch", governance.ErrStateRootMismatch},
 		{"state root missing", governance.ErrStateRootMissing},
 		{"state root required", governance.ErrStateRootRequired},

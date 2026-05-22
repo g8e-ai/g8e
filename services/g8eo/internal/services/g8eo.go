@@ -223,10 +223,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 
 	// Create governance dependencies for transaction verification
-	// Outbound mode does not configure L3Verifier - mutations will fail-closed at verification layer
+	// Outbound mode does not configure L3Notary - mutations will fail-closed at verification layer
 	stateRootProvider := &governance.SimpleStateRootProvider{Root: vs.config.SystemFingerprint}
 	transactionAudit := &auditVaultTransactionStore{vault: vs.auditVault}
-	// NoOpL3Verifier removed - outbound mode now fails-closed when mutations require L3 verification
+	// NoOpL3Notary removed - outbound mode now fails-closed when mutations require L3 verification
 	// This is intentional: outbound operators must connect to a platform that provides L3 verification
 
 	// PubSubCommandService Construction
@@ -246,7 +246,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		ReplayStore:       vs.replayStore,
 		StateRootProvider: stateRootProvider,
 		TransactionAudit:  transactionAudit,
-		// L3Verifier intentionally nil - mutations will fail-closed at TransactionVerifier
+		// L3Notary intentionally nil - mutations will fail-closed at TransactionVerifier
 	}
 
 	vs.pubSubCommands, err = pubsub.NewPubSubCommandService(psConfig)

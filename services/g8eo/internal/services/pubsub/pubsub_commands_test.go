@@ -47,7 +47,7 @@ func TestNewPubSubCommandService(t *testing.T) {
 			ReplayStore:       &mockReplayStore{},
 			StateRootProvider: &mockStateRootProvider{},
 			TransactionAudit:  &mockTransactionAudit{},
-			L3Verifier:        &mockL3Verifier{},
+			L3Notary:          &mockL3Notary{},
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, svc)
@@ -64,7 +64,7 @@ func TestNewPubSubCommandService_StartsWithoutTrustedSignersButRejectsL2(t *test
 		ReplayStore:       &mockReplayStore{},
 		StateRootProvider: &mockStateRootProvider{},
 		TransactionAudit:  &mockTransactionAudit{},
-		L3Verifier:        &mockL3Verifier{},
+		L3Notary:          &mockL3Notary{},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, svc.transactionVerifier)

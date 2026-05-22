@@ -63,9 +63,9 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
 
-type gatewayAcceptingL3Verifier struct{}
+type gatewayAcceptingL3Notary struct{}
 
-func (gatewayAcceptingL3Verifier) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
+func (gatewayAcceptingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
 	return true, nil
 }
 
@@ -141,7 +141,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Verifier:         gatewayAcceptingL3Verifier{},
+		L3Notary:           gatewayAcceptingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,
@@ -297,7 +297,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 5. Test MCP tools/call (Direct, no L3 needed for benign echo)
 	// Actually, MCP_CALL is classified as a mutation, so it needs L3 unless we bypass it.
-	// In this test environment, acceptingL3Verifier always returns true.
+	// In this test environment, acceptingL3Notary always returns true.
 	t.Run("tools/call", func(t *testing.T) {
 		callReq := struct {
 			Jsonrpc string `json:"jsonrpc"`
@@ -445,7 +445,7 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Verifier:         gatewayAcceptingL3Verifier{},
+		L3Notary:           gatewayAcceptingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,
@@ -652,7 +652,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Verifier:         gatewayAcceptingL3Verifier{},
+		L3Notary:           gatewayAcceptingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,
@@ -935,7 +935,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Verifier:         gatewayAcceptingL3Verifier{},
+		L3Notary:           gatewayAcceptingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,

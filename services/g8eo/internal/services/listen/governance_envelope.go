@@ -118,7 +118,7 @@ func classifyEnvelopeError(err error) int {
 		errors.Is(err, governance.ErrL2KeyNotConfigured),
 		errors.Is(err, governance.ErrL3ProofMissing),
 		errors.Is(err, governance.ErrL3ProofInvalid),
-		errors.Is(err, governance.ErrL3VerifierNotConfigured):
+		errors.Is(err, governance.ErrL3NotaryNotConfigured):
 		return http.StatusForbidden
 	}
 	// Wrapped invalid-envelope decode error from ProcessEnvelope.
