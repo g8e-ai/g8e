@@ -447,7 +447,7 @@ async def require_authenticated_context(
         InternalApiPaths.G8EE_OPERATORS_DEVICE_LINK_REGISTER,
         InternalApiPaths.G8EE_OPERATORS_VALIDATE_SESSION,
         InternalApiPaths.G8EE_OPERATORS_REFRESH_SESSION,
-        InternalApiPaths.G8EE_OPERATORS_LISTEN_SESSION_AUTH,
+        InternalApiPaths.G8EE_OPERATORS_GATEWAY_SESSION_AUTH,
         InternalApiPaths.G8EE_AUTH_GENERATE_KEY,
         InternalApiPaths.G8EE_AUTH_REVOKE_CERT,
     ]

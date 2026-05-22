@@ -819,8 +819,9 @@ func (pki *PKIAuthority) ensureAppCerts() error {
 	apps := []string{marshaler.Status(constants.Status.ComponentName.G8EE)}
 	for _, app := range apps {
 		certPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".crt")
+		keyPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".key")
 
-		if fileExists(certPath) {
+		if fileExists(certPath) && fileExists(keyPath) {
 			continue
 		}
 
