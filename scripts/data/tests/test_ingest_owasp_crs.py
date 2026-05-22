@@ -219,5 +219,93 @@ SecRule REQUEST_URI "@rx test" "id:913100,phase:1,log,deny,msg:'Scanner'"
         conf_path.unlink()
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+def test_robust_parsing_variations(parser):
+    """Test parsing with various quoting styles and optional @rx."""
+    conf = """
+    # Single quotes for pattern and actions
+    SecRule REQUEST_URI '@rx (?i)nc' 'id:1001,msg:test,severity:CRITICAL'
+    # Mixed quotes
+    SecRule ARGS "@rx union" 'id:1002,msg:test,severity:ERROR'
+    # Double quotes, no @rx
+    SecRule REQUEST_BODY "select" "id:1003,msg:test,severity:WARNING"
+    # Single quotes, no @rx
+    SecRule ARGS 'delete' 'id:1004,msg:test,severity:NOTICE'
+    # Quoted variable
+    SecRule "ARGS|REQUEST_HEADERS" "@rx test" "id:1005,msg:test,severity:INFO"
+    """
+    
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.conf', delete=False) as f:
+        f.write(conf)
+        f.flush()
+        conf_path = Path(f.name)
+    
+    try:
+        doctrines = parser.parse_file(conf_path)
+        assert len(doctrines) == 5
+        
+        # Verify specific variations
+        ids = [d.id for d in doctrines]
+        assert "owasp_crs_1001" in ids
+        assert "owasp_crs_1002" in ids
+        assert "owasp_crs_1003" in ids
+        assert "owasp_crs_1004" in ids
+        assert "owasp_crs_1005" in ids
+        
+        # Verify trimmed pattern
+        assert doctrines[0].pattern == "(?i)nc"
+    finally:
+        conf_path.unlink()
+
+
+def test_structural_validation_warning(parser, capsys):
+    """Test that missed rules trigger a warning."""
+    conf = """
+    # This rule is valid
+    SecRule ARGS "@rx valid" "id:2001,msg:test"
+    # This rule is invalid (missing quotes around variable)
+    SecRule ARGS invalid "id:2002,msg:test"
+    """
+    
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.conf', delete=False) as f:
+        f.write(conf)
+        f.flush()
+        conf_path = Path(f.name)
+    
+    try:
+        doctrines = parser.parse_file(conf_path)
+        assert len(doctrines) == 1
+        
+        # Check stderr for warning
+        captured = capsys.readouterr()
+        assert "Warning: Missed 1 SecRule directives" in captured.err
+    finally:
+        conf_path.unlink()
+
+
+def test_integration_full_run(tmp_path):
+    """Integration test running the script end-to-end."""
+    conf_content = 'SecRule ARGS "@rx pattern" "id:3001,msg:\'msg\',severity:\'CRITICAL\'"'
+    conf_file = tmp_path / "test.conf"
+    conf_file.write_text(conf_content)
+    
+    output_file = tmp_path / "doctrine.json"
+    
+    import subprocess
+    script_path = Path(__file__).parent.parent / "ingest_owasp_crs.py"
+    
+    result = subprocess.run(
+        [sys.executable, str(script_path), str(conf_file), "-o", str(output_file)],
+        capture_output=True,
+        text=True
+    )
+    
+    assert result.returncode == 0
+    assert "Successfully ingested 1 OWASP CRS doctrines" in result.stdout
+    assert output_file.exists()
+    
+    with open(output_file, 'r') as f:
+        data = json.load(f)
+    
+    assert data["source"] == "owasp_crs"
+    assert len(data["doctrines"]) == 1
+    assert data["doctrines"][0]["id"] == "owasp_crs_3001"

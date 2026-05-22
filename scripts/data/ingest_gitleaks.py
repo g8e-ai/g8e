@@ -123,19 +123,39 @@ class GitleaksParser:
         }
         return severity_map.get(gitleaks_severity.lower(), 'medium')
 
-    def _calculate_confidence(self, entropy: Optional[Dict]) -> float:
+    def _calculate_confidence(self, entropy: Optional[any]) -> float:
         """Calculate confidence score based on entropy configuration."""
         if not entropy:
             return 0.95
         
-        # Higher entropy ranges generally indicate higher confidence
-        min_entropy = entropy.get('min', 0)
-        max_entropy = entropy.get('max', 8)
-        
-        # Normalize to 0.8-0.95 range
-        if max_entropy >= 6:
+        # Gitleaks can specify entropy as a float, string "min-max", or a table/dict
+        if isinstance(entropy, dict):
+            min_val = float(entropy.get('min', 0))
+            max_val = float(entropy.get('max', 8))
+        elif isinstance(entropy, str):
+            # Try to parse "min-max" or just a single value
+            try:
+                if '-' in entropy:
+                    parts = entropy.split('-')
+                    min_val = float(parts[0])
+                    max_val = float(parts[1])
+                else:
+                    min_val = 0
+                    max_val = float(entropy)
+            except (ValueError, IndexError):
+                min_val = 0
+                max_val = 8
+        elif isinstance(entropy, (int, float)):
+            min_val = 0
+            max_val = float(entropy)
+        else:
             return 0.95
-        elif max_entropy >= 4:
+        
+        # Higher entropy ranges generally indicate higher confidence
+        # Normalize to 0.8-0.95 range
+        if max_val >= 6:
+            return 0.95
+        elif max_val >= 4:
             return 0.90
         else:
             return 0.85

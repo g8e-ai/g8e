@@ -81,18 +81,30 @@ class CRSParser:
         # CRS rules span multiple lines with backslash continuations
         content = re.sub(r'\\\s*\n', ' ', content)
         
-        # Extract SecRule directives with @rx patterns
-        # Pattern: SecRule <variable> "@rx <pattern>" "id:...,msg:...,severity:..."
-        # Use non-greedy match for pattern to capture everything up to the closing quote
+        # Extract SecRule directives with flexible quoting and optional @rx
+        # This handles:
+        # - Both single and double quotes for patterns and actions
+        # - Optional @rx operator
+        # - Case-insensitive matching
+        # - Multiline rules (normalized above)
+        # - Whitespace variations
         rule_pattern = re.compile(
-            r'SecRule\s+([^\s]+(?:\|[^\s]+)*)\s+"@rx\s+([^"]+?)"\s+"([^"]*(?:id:\d+)[^"]*)"',
+            r'SecRule\s+'
+            r'([^\s]+(?:\|[^\s]+)*)\s+'            # 1: Variables
+            r'([\'"])(?:@rx\s+)?\s*(.*?)\s*\2\s+'   # 2: Quote, 3: Pattern (trimmed)
+            r'([\'"])(.*?id:\d+.*?)\4',             # 4: Quote, 5: Actions
             re.MULTILINE | re.IGNORECASE
         )
         
+        # Structural validation: count total SecRule occurrences to find missed ones
+        total_secrules = len(re.findall(r'SecRule\s+', content, re.IGNORECASE))
+        matched_count = 0
+        
         for match in rule_pattern.finditer(content):
-            variable = match.group(1)
-            pattern = match.group(2)
-            actions = match.group(3)
+            matched_count += 1
+            variable = match.group(1).strip("'\"")
+            pattern = match.group(3)
+            actions = match.group(5)
             
             # Extract rule ID from actions
             rule_id_match = re.search(r'id:(\d+)', actions)
@@ -102,17 +114,17 @@ class CRSParser:
             rule_id = rule_id_match.group(1)
             
             # Extract severity from actions
-            severity_match = re.search(r'severity:(\'?[A-Z]+\'?)', actions)
+            severity_match = re.search(r'severity:([\'"]?)([A-Z]+)\1', actions, re.IGNORECASE)
             if severity_match:
-                crs_severity = severity_match.group(1).strip("'")
+                crs_severity = severity_match.group(2)
                 severity = self.SEVERITY_MAPPING.get(crs_severity.upper(), "medium")
             else:
                 severity = "medium"
             
             # Extract message from actions for doctrine name
-            msg_match = re.search(r'msg:\'([^\']+)\'', actions)
+            msg_match = re.search(r'msg:([\'"])(.*?)\1', actions)
             if msg_match:
-                name = msg_match.group(1)
+                name = msg_match.group(2)
             else:
                 name = f"CRS Rule {rule_id}"
             
@@ -142,6 +154,10 @@ class CRSParser:
             
             doctrines.append(doctrine)
         
+        if matched_count < total_secrules:
+            missed = total_secrules - matched_count
+            print(f"  Warning: Missed {missed} SecRule directives in {filepath.name} due to parsing limitations", file=sys.stderr)
+            
         return doctrines
 
     def parse_directory(self, directory: Path) -> List[Doctrine]:
