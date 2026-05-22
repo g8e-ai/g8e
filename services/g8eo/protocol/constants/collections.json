@@ -1,0 +1,139 @@
+{
+  "collections": {
+    "account_locks": {
+      "value": "account_locks",
+      "_go_const": "CollectionAccountLocks",
+      "_python_const": "ACCOUNT_LOCKS"
+    },
+    "agent_activity_metadata": {
+      "value": "agent_activity_metadata",
+      "_go_const": "CollectionAgentActivityMetadata",
+      "_python_const": "AGENT_ACTIVITY_METADATA"
+    },
+    "api_keys": {
+      "value": "api_keys",
+      "_go_const": "CollectionAPIKeys",
+      "_python_const": "API_KEYS"
+    },
+    "auth_admin_audit": {
+      "value": "auth_admin_audit",
+      "_go_const": "CollectionAuthAdminAudit",
+      "_python_const": "AUTH_ADMIN_AUDIT"
+    },
+    "bound_sessions": {
+      "value": "bound_sessions",
+      "_go_const": "CollectionBoundSessions",
+      "_python_const": "BOUND_SESSIONS"
+    },
+    "cases": {
+      "value": "cases",
+      "_go_const": "CollectionCases",
+      "_python_const": "CASES"
+    },
+    "chaos_events": {
+      "value": "chaos_events",
+      "_go_const": "CollectionChaosEvents",
+      "_python_const": "CHAOS_EVENTS"
+    },
+    "cli_sessions": {
+      "value": "cli_sessions",
+      "_go_const": "CollectionCLISessions",
+      "_python_const": "CLI_SESSIONS"
+    },
+    "console_audit": {
+      "value": "console_audit",
+      "_go_const": "CollectionConsoleAudit",
+      "_python_const": "CONSOLE_AUDIT"
+    },
+    "investigations": {
+      "value": "investigations",
+      "_go_const": "CollectionInvestigations",
+      "_python_const": "INVESTIGATIONS"
+    },
+    "login_audit": {
+      "value": "login_audit",
+      "_go_const": "CollectionLoginAudit",
+      "_python_const": "LOGIN_AUDIT"
+    },
+    "memories": {
+      "value": "memories",
+      "_go_const": "CollectionMemories",
+      "_python_const": "MEMORIES"
+    },
+    "operator_sessions": {
+      "value": "operator_sessions",
+      "_go_const": "CollectionOperatorSessions",
+      "_python_const": "OPERATOR_SESSIONS"
+    },
+    "operator_usage": {
+      "value": "operator_usage",
+      "_go_const": "CollectionOperatorUsage",
+      "_python_const": "OPERATOR_USAGE"
+    },
+    "operators": {
+      "value": "operators",
+      "_go_const": "CollectionOperators",
+      "_python_const": "OPERATORS"
+    },
+    "organizations": {
+      "value": "organizations",
+      "_go_const": "CollectionOrganizations",
+      "_python_const": "ORGANIZATIONS"
+    },
+    "passkey_challenges": {
+      "value": "passkey_challenges",
+      "_go_const": "CollectionPasskeyChallenges",
+      "_python_const": "PASSKEY_CHALLENGES"
+    },
+    "reputation_commitments": {
+      "value": "reputation_commitments",
+      "_go_const": "CollectionReputationCommitments",
+      "_python_const": "REPUTATION_COMMITMENTS"
+    },
+    "reputation_state": {
+      "value": "reputation_state",
+      "_go_const": "CollectionReputationState",
+      "_python_const": "REPUTATION_STATE"
+    },
+    "revoked_certificates": {
+      "value": "revoked_certificates",
+      "_go_const": "CollectionRevokedCertificates",
+      "_python_const": "REVOKED_CERTIFICATES"
+    },
+    "settings": {
+      "value": "settings",
+      "_go_const": "CollectionSettings",
+      "_python_const": "SETTINGS"
+    },
+    "stake_resolutions": {
+      "value": "stake_resolutions",
+      "_go_const": "CollectionStakeResolutions",
+      "_python_const": "STAKE_RESOLUTIONS"
+    },
+    "tasks": {
+      "value": "tasks",
+      "_go_const": "CollectionTasks",
+      "_python_const": "TASKS"
+    },
+    "tribunal_commands": {
+      "value": "tribunal_commands",
+      "_go_const": "CollectionTribunalCommands",
+      "_python_const": "TRIBUNAL_COMMANDS"
+    },
+    "trusted_signers": {
+      "value": "trusted_signers",
+      "_go_const": "CollectionTrustedSigners",
+      "_python_const": "TRUSTED_SIGNERS"
+    },
+    "users": {
+      "value": "users",
+      "_go_const": "CollectionUsers",
+      "_python_const": "USERS"
+    },
+    "web_sessions": {
+      "value": "web_sessions",
+      "_go_const": "CollectionWebSessions",
+      "_python_const": "WEB_SESSIONS"
+    }
+  }
+}

@@ -207,6 +207,8 @@ def build_request_context(
     organization_id: str | None = None,
     bound_operators: list[BoundOperator] | None = None,
     source_component: ComponentName = ComponentName.G8EE,
+    operator_id: str | None = "test-operator-id",
+    operator_session_id: str | None = "test-operator-session-id",
 ) -> RequestContext:
     """Build a RequestContext with fixed deterministic defaults for unit tests."""
     return RequestContext(
@@ -217,6 +219,8 @@ def build_request_context(
         organization_id=organization_id,
         bound_operators=bound_operators or [],
         source_component=source_component,
+        operator_id=operator_id,
+        operator_session_id=operator_session_id,
     )
 
 
@@ -229,6 +233,8 @@ def build_g8e_http_context(
     bound_operators: list[BoundOperator] | None = None,
     source_component: ComponentName = ComponentName.CLIENT,
     is_operator_auth_relay: bool = False,
+    operator_id: str | None = "test-operator-id",
+    operator_session_id: str | None = "test-operator-session-id",
 ) -> G8eHttpContext:
     """Build a G8eHttpContext with fixed deterministic defaults for unit tests.
 
@@ -249,6 +255,8 @@ def build_g8e_http_context(
         bound_operators=bound_operators or [],
         source_component=source_component,
         is_operator_auth_relay=is_operator_auth_relay,
+        operator_id=operator_id,
+        operator_session_id=operator_session_id,
     )
 
 

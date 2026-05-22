@@ -1,0 +1,32 @@
+{
+  "agents": {
+    "AgentNameDash": "dash",
+    "AgentNameSage": "sage",
+    "TriageComplexityComplex": "complex",
+    "TriageComplexitySimple": "simple",
+    "TriageConfidenceHigh": "high",
+    "TriageConfidenceLow": "low",
+    "TriageIntentAction": "action",
+    "TriageIntentInformation": "information",
+    "TriageIntentUnknown": "unknown",
+    "TriagePostureAdversarial": "adversarial",
+    "TriagePostureConfused": "confused",
+    "TriagePostureEscalated": "escalated",
+    "TriagePostureNormal": "normal",
+    "TribunalAuditorReasonAuditorError": "auditor_error",
+    "TribunalAuditorReasonEmptyResponse": "empty_response",
+    "TribunalAuditorReasonNoValidRevision": "no_valid_revision",
+    "TribunalAuditorReasonOk": "ok",
+    "TribunalAuditorReasonRevisedFromDissent": "revised_from_dissent",
+    "TribunalAuditorReasonSwappedToDissenter": "swapped_to_dissenter",
+    "TribunalAuditorReasonWhitelistViolation": "whitelist_violation",
+    "TribunalMemberAxiom": "axiom",
+    "TribunalMemberConcord": "concord",
+    "TribunalMemberNemesis": "nemesis",
+    "TribunalMemberPragma": "pragma",
+    "TribunalMemberVariance": "variance",
+    "TribunalTieBreakReasonAlphabetical": "alphabetical",
+    "TribunalTieBreakReasonExcludedNemesis": "excluded_nemesis",
+    "TribunalTieBreakReasonShortest": "shortest"
+  }
+}

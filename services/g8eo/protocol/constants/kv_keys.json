@@ -1,0 +1,17 @@
+{
+  "cache.prefix": "g8e",
+  "key.schema": {
+    "CacheDoc": "g8e:cache:doc:{collection}:{id}",
+    "CacheQuery": "g8e:cache:query:{collection}:{hash}",
+    "OperatorBind": "g8e:session:operator:{operator.session.id}:bind",
+    "SessionWeb": "g8e:session:{session.type}:{session.id}",
+    "UserMemories": "g8e:user:{user.id}:memories",
+    "UserOperators": "g8e:user:{user.id}:operators",
+    "UserWebSessions": "g8e:user:{user.id}:web_sessions",
+    "WebBind": "g8e:session:web:{web.session.id}:bind"
+  },
+  "session.type": {
+    "Operator": "operator",
+    "Web": "web"
+  }
+}

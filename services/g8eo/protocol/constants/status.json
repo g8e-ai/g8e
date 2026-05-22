@@ -1,0 +1,140 @@
+{
+  "status": {
+    "attachment.type": {
+      "image": {
+        "value": "image",
+        "_go_const": "AttachmentTypeImage",
+        "_python_const": "IMAGE"
+      },
+      "other": {
+        "value": "other",
+        "_go_const": "AttachmentTypeOther",
+        "_python_const": "OTHER"
+      },
+      "pdf": {
+        "value": "pdf",
+        "_go_const": "AttachmentTypePdf",
+        "_python_const": "PDF"
+      },
+      "text": {
+        "value": "text",
+        "_go_const": "AttachmentTypeText",
+        "_python_const": "TEXT"
+      }
+    },
+    "user_role": {
+      "admin": {
+        "value": "admin",
+        "_go_const": "UserRoleAdmin",
+        "_python_const": "ADMIN"
+      },
+      "user": {
+        "value": "user",
+        "_go_const": "UserRoleUser",
+        "_python_const": "USER"
+      }
+    },
+    "user_status": {
+      "active": {
+        "value": "active",
+        "_go_const": "UserStatusActive",
+        "_python_const": "ACTIVE"
+      },
+      "disabled": {
+        "value": "disabled",
+        "_go_const": "UserStatusDisabled",
+        "_python_const": "DISABLED"
+      }
+    },
+    "operator_status": {
+      "available": {
+        "value": "available",
+        "_go_const": "OperatorStatusAvailable",
+        "_python_const": "AVAILABLE"
+      },
+      "offline": {
+        "value": "offline",
+        "_go_const": "OperatorStatusOffline",
+        "_python_const": "OFFLINE"
+      }
+    },
+    "execution_status": {
+      "completed": {
+        "value": "completed",
+        "_go_const": "ExecutionStatusCompleted",
+        "_python_const": "COMPLETED"
+      },
+      "executing": {
+        "value": "executing",
+        "_go_const": "ExecutionStatusExecuting",
+        "_python_const": "EXECUTING"
+      },
+      "failed": {
+        "value": "failed",
+        "_go_const": "ExecutionStatusFailed",
+        "_python_const": "FAILED"
+      },
+      "pending": {
+        "value": "pending",
+        "_go_const": "ExecutionStatusPending",
+        "_python_const": "PENDING"
+      }
+    },
+    "tribunal.outcome": {
+      "consensus": {
+        "value": "consensus",
+        "_go_const": "TribunalOutcomeConsensus",
+        "_python_const": "CONSENSUS"
+      },
+      "consensus_failed": {
+        "value": "consensus_failed",
+        "_go_const": "TribunalOutcomeConsensusFailed",
+        "_python_const": "CONSENSUS_FAILED"
+      },
+      "verification_failed": {
+        "value": "verification_failed",
+        "_go_const": "TribunalOutcomeVerificationFailed",
+        "_python_const": "VERIFICATION_FAILED"
+      },
+      "verified": {
+        "value": "verified",
+        "_go_const": "TribunalOutcomeVerified",
+        "_python_const": "VERIFIED"
+      }
+    },
+    "approval.error.type": {
+      "approval.exception": {
+        "value": "approval.exception",
+        "_go_const": "ApprovalErrorTypeApprovalException",
+        "_python_const": "APPROVAL_EXCEPTION"
+      },
+      "approval.publish.failure": {
+        "value": "approval.publish.failure",
+        "_go_const": "ApprovalErrorTypeApprovalPublishFailure",
+        "_python_const": "APPROVAL_PUBLISH_FAILURE"
+      },
+      "approval.timeout": {
+        "value": "approval.timeout",
+        "_go_const": "ApprovalErrorTypeApprovalTimeout",
+        "_python_const": "APPROVAL_TIMEOUT"
+      },
+      "intent.approval.exception": {
+        "value": "intent.approval.exception",
+        "_go_const": "ApprovalErrorTypeIntentApprovalException",
+        "_python_const": "INTENT_APPROVAL_EXCEPTION"
+      },
+      "invalid.intent": {
+        "value": "invalid.intent",
+        "_go_const": "ApprovalErrorTypeInvalidIntent",
+        "_python_const": "INVALID_INTENT"
+      }
+    },
+    "llm.models": {
+      "llamacpp.gemma4.e2b": {
+        "value": "google_gemma-4-E2B-it-Q4_K_M.gguf",
+        "_go_const": "LLMModelsLlamacppGemma4E2b",
+        "_python_const": "LLAMACPP_GEMMA4_E2B"
+      }
+    }
+  }
+}

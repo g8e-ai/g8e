@@ -37,6 +37,10 @@ from app.constants import (
     ComponentName,
     ErrorCode,
 )
+from app.constants.generated_events import (
+    OPERATOR_REPUTATION_COMMITMENT_CREATED,
+    OPERATOR_REPUTATION_STATE_UPDATED,
+)
 from app.errors import DatabaseError, ValidationError
 from app.models.cache import FieldFilter
 from app.models.reputation import ReputationCommitment, ReputationState
@@ -138,7 +142,7 @@ class ReputationDataService:
                 collection=self.state_collection,
                 document_id=state.agent_id,
                 updates=state.model_dump(mode="json"),
-                event_type=EventType.AI_REPUTATION_STATE_UPDATED,
+                event_type=OPERATOR_REPUTATION_STATE_UPDATED,
                 web_session_id=context.web_session_id,
                 user_id=context.user_id,
                 operator_id=context.operator_id,
@@ -173,7 +177,7 @@ class ReputationDataService:
                 collection=self.commitments_collection,
                 document_id=commitment.id,
                 updates=commitment.model_dump(mode="json"),
-                event_type=EventType.AI_REPUTATION_COMMITMENT_CREATED,
+                event_type=OPERATOR_REPUTATION_COMMITMENT_CREATED,
                 web_session_id=context.web_session_id,
                 user_id=context.user_id,
                 operator_id=context.operator_id,

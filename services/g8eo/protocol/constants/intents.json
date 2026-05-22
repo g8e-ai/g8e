@@ -1,0 +1,264 @@
+{
+  "intents": {
+    "AcmDiscovery": {
+      "value": "acm_discovery",
+      "_go_const": "IntentAcmDiscovery",
+      "_python_const": "ACM_DISCOVERY"
+    },
+    "ApigatewayDiscovery": {
+      "value": "apigateway_discovery",
+      "_go_const": "IntentApigatewayDiscovery",
+      "_python_const": "APIGATEWAY_DISCOVERY"
+    },
+    "AthenaDiscovery": {
+      "value": "athena_discovery",
+      "_go_const": "IntentAthenaDiscovery",
+      "_python_const": "ATHENA_DISCOVERY"
+    },
+    "AthenaQueryExecution": {
+      "value": "athena_query_execution",
+      "_go_const": "IntentAthenaQueryExecution",
+      "_python_const": "ATHENA_QUERY_EXECUTION"
+    },
+    "AuroraCloning": {
+      "value": "aurora_cloning",
+      "_go_const": "IntentAuroraCloning",
+      "_python_const": "AURORA_CLONING"
+    },
+    "AuroraClusterManagement": {
+      "value": "aurora_cluster_management",
+      "_go_const": "IntentAuroraClusterManagement",
+      "_python_const": "AURORA_CLUSTER_MANAGEMENT"
+    },
+    "AuroraGlobalDatabase": {
+      "value": "aurora_global_database",
+      "_go_const": "IntentAuroraGlobalDatabase",
+      "_python_const": "AURORA_GLOBAL_DATABASE"
+    },
+    "AuroraScaling": {
+      "value": "aurora_scaling",
+      "_go_const": "IntentAuroraScaling",
+      "_python_const": "AURORA_SCALING"
+    },
+    "AutoscalingDiscovery": {
+      "value": "autoscaling_discovery",
+      "_go_const": "IntentAutoscalingDiscovery",
+      "_python_const": "AUTOSCALING_DISCOVERY"
+    },
+    "AutoscalingManagement": {
+      "value": "autoscaling_management",
+      "_go_const": "IntentAutoscalingManagement",
+      "_python_const": "AUTOSCALING_MANAGEMENT"
+    },
+    "CloudformationDeployment": {
+      "value": "cloudformation_deployment",
+      "_go_const": "IntentCloudformationDeployment",
+      "_python_const": "CLOUDFORMATION_DEPLOYMENT"
+    },
+    "CloudfrontDiscovery": {
+      "value": "cloudfront_discovery",
+      "_go_const": "IntentCloudfrontDiscovery",
+      "_python_const": "CLOUDFRONT_DISCOVERY"
+    },
+    "CloudwatchLogs": {
+      "value": "cloudwatch_logs",
+      "_go_const": "IntentCloudwatchLogs",
+      "_python_const": "CLOUDWATCH_LOGS"
+    },
+    "CloudwatchMetrics": {
+      "value": "cloudwatch_metrics",
+      "_go_const": "IntentCloudwatchMetrics",
+      "_python_const": "CLOUDWATCH_METRICS"
+    },
+    "CodedeployDiscovery": {
+      "value": "codedeploy_discovery",
+      "_go_const": "IntentCodedeployDiscovery",
+      "_python_const": "CODEPLOY_DISCOVERY"
+    },
+    "CostExplorer": {
+      "value": "cost_explorer",
+      "_go_const": "IntentCostExplorer",
+      "_python_const": "COST_EXPLORER"
+    },
+    "DynamodbDiscovery": {
+      "value": "dynamodb_discovery",
+      "_go_const": "IntentDynamodbDiscovery",
+      "_python_const": "DYNAMODB_DISCOVERY"
+    },
+    "DynamodbRead": {
+      "value": "dynamodb_read",
+      "_go_const": "IntentDynamodbRead",
+      "_python_const": "DYNAMODB_READ"
+    },
+    "DynamodbWrite": {
+      "value": "dynamodb_write",
+      "_go_const": "IntentDynamodbWrite",
+      "_python_const": "DYNAMODB_WRITE"
+    },
+    "Ec2Discovery": {
+      "value": "ec2_discovery",
+      "_go_const": "IntentEc2Discovery",
+      "_python_const": "EC2_DISCOVERY"
+    },
+    "Ec2Management": {
+      "value": "ec2_management",
+      "_go_const": "IntentEc2Management",
+      "_python_const": "EC2_MANAGEMENT"
+    },
+    "Ec2SnapshotManagement": {
+      "value": "ec2_snapshot_management",
+      "_go_const": "IntentEc2SnapshotManagement",
+      "_python_const": "EC2_SNAPSHOT_MANAGEMENT"
+    },
+    "EcsDiscovery": {
+      "value": "ecs_discovery",
+      "_go_const": "IntentEcsDiscovery",
+      "_python_const": "ECS_DISCOVERY"
+    },
+    "EcsManagement": {
+      "value": "ecs_management",
+      "_go_const": "IntentEcsManagement",
+      "_python_const": "ECS_MANAGEMENT"
+    },
+    "EksDiscovery": {
+      "value": "eks_discovery",
+      "_go_const": "IntentEksDiscovery",
+      "_python_const": "EKS_DISCOVERY"
+    },
+    "ElasticacheDiscovery": {
+      "value": "elasticache_discovery",
+      "_go_const": "IntentElasticacheDiscovery",
+      "_python_const": "ELASTICACHE_DISCOVERY"
+    },
+    "ElbDiscovery": {
+      "value": "elb_discovery",
+      "_go_const": "IntentElbDiscovery",
+      "_python_const": "ELB_DISCOVERY"
+    },
+    "EventbridgeDiscovery": {
+      "value": "eventbridge_discovery",
+      "_go_const": "IntentEventbridgeDiscovery",
+      "_python_const": "EVENTBRIDGE_DISCOVERY"
+    },
+    "GlueDiscovery": {
+      "value": "glue_discovery",
+      "_go_const": "IntentGlueDiscovery",
+      "_python_const": "GLUE_DISCOVERY"
+    },
+    "IamDiscovery": {
+      "value": "iam_discovery",
+      "_go_const": "IntentIamDiscovery",
+      "_python_const": "IAM_DISCOVERY"
+    },
+    "KmsCrypto": {
+      "value": "kms_crypto",
+      "_go_const": "IntentKmsCrypto",
+      "_python_const": "KMS_CRYPTO"
+    },
+    "KmsDiscovery": {
+      "value": "kms_discovery",
+      "_go_const": "IntentKmsDiscovery",
+      "_python_const": "KMS_DISCOVERY"
+    },
+    "LambdaDiscovery": {
+      "value": "lambda_discovery",
+      "_go_const": "IntentLambdaDiscovery",
+      "_python_const": "LAMBDA_DISCOVERY"
+    },
+    "LambdaInvoke": {
+      "value": "lambda_invoke",
+      "_go_const": "IntentLambdaInvoke",
+      "_python_const": "LAMBDA_INVOKE"
+    },
+    "RdsDiscovery": {
+      "value": "rds_discovery",
+      "_go_const": "IntentRdsDiscovery",
+      "_python_const": "RDS_DISCOVERY"
+    },
+    "RdsManagement": {
+      "value": "rds_management",
+      "_go_const": "IntentRdsManagement",
+      "_python_const": "RDS_MANAGEMENT"
+    },
+    "RdsSnapshotManagement": {
+      "value": "rds_snapshot_management",
+      "_go_const": "IntentRdsSnapshotManagement",
+      "_python_const": "RDS_SNAPSHOT_MANAGEMENT"
+    },
+    "Route53Discovery": {
+      "value": "route53_discovery",
+      "_go_const": "IntentRoute53Discovery",
+      "_python_const": "ROUTE53_DISCOVERY"
+    },
+    "Route53Management": {
+      "value": "route53_management",
+      "_go_const": "IntentRoute53Management",
+      "_python_const": "ROUTE53_MANAGEMENT"
+    },
+    "S3BucketDiscovery": {
+      "value": "s3_bucket_discovery",
+      "_go_const": "IntentS3BucketDiscovery",
+      "_python_const": "S3_BUCKET_DISCOVERY"
+    },
+    "S3Delete": {
+      "value": "s3_delete",
+      "_go_const": "IntentS3Delete",
+      "_python_const": "S3_DELETE"
+    },
+    "S3Read": {
+      "value": "s3_read",
+      "_go_const": "IntentS3Read",
+      "_python_const": "S3_READ"
+    },
+    "S3Write": {
+      "value": "s3_write",
+      "_go_const": "IntentS3Write",
+      "_python_const": "S3_WRITE"
+    },
+    "SecretsRead": {
+      "value": "secrets_read",
+      "_go_const": "IntentSecretsRead",
+      "_python_const": "SECRETS_READ"
+    },
+    "SnsDiscovery": {
+      "value": "sns_discovery",
+      "_go_const": "IntentSnsDiscovery",
+      "_python_const": "SNS_DISCOVERY"
+    },
+    "SnsPublish": {
+      "value": "sns_publish",
+      "_go_const": "IntentSnsPublish",
+      "_python_const": "SNS_PUBLISH"
+    },
+    "SqsDiscovery": {
+      "value": "sqs_discovery",
+      "_go_const": "IntentSqsDiscovery",
+      "_python_const": "SQS_DISCOVERY"
+    },
+    "SqsManagement": {
+      "value": "sqs_management",
+      "_go_const": "IntentSqsManagement",
+      "_python_const": "SQS_MANAGEMENT"
+    },
+    "StepfunctionsDiscovery": {
+      "value": "stepfunctions_discovery",
+      "_go_const": "IntentStepfunctionsDiscovery",
+      "_python_const": "STEPFUNCTIONS_DISCOVERY"
+    },
+    "StepfunctionsExecution": {
+      "value": "stepfunctions_execution",
+      "_go_const": "IntentStepfunctionsExecution",
+      "_python_const": "STEPFUNCTIONS_EXECUTION"
+    },
+    "TerraformState": {
+      "value": "terraform_state",
+      "_go_const": "IntentTerraformState",
+      "_python_const": "TERRAFORM_STATE"
+    },
+    "VpcDiscovery": {
+      "value": "vpc_discovery",
+      "_go_const": "IntentVpcDiscovery",
+      "_python_const": "VPC_DISCOVERY"
+    }
+  }
+}

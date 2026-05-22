@@ -46,7 +46,7 @@ class SessionAuthListener:
         self._active_listeners = {}
         self._background_tasks: set[asyncio.Task[None]] = set()
 
-    async def listen(self, operator_session_id: str, operator_id: str, user_id: str, organization_id: str | None):
+    async def gateway(self, operator_session_id: str, operator_id: str, user_id: str, organization_id: str | None):
         """
         Subscribe to the session auth channel for this operator_session_id and
         respond with bootstrap config once.
