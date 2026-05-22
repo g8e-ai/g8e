@@ -34,7 +34,7 @@ import (
 )
 
 type L3Verifier interface {
-	VerifyL3Proof(userID, transactionHash string, proof *commonv1.L3Proof) (bool, error)
+	VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
 }
 
 // ExecutionHandler is the interface for executing verified transactions.

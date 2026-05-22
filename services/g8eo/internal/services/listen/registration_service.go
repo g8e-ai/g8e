@@ -15,7 +15,10 @@ package listen
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -800,7 +803,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 
 	// CLI certificate generation (optional for backwards compatibility)
 	// If the client provides a CLI CSR, generate a CLI certificate with distinct SPIFFE identity
-	var cliCertPEM, cliCertChainPEM string
+	var cliCertPEM, cliCertChainPEM, cliCertFingerprint, cliCertSerial string
 	if req.CLICSR != "" {
 		block, _ := pem.Decode([]byte(req.CLICSR))
 		if block == nil || block.Type != "CERTIFICATE REQUEST" {
@@ -812,6 +815,9 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign CLI CSR: %w", err)
 		}
+		// Calculate fingerprint and serial from the issued CLI certificate
+		cliCertFingerprint = calculateFingerprintFromPEM(cliCertPEM)
+		cliCertSerial = calculateSerialFromPEM(cliCertPEM)
 	} else {
 		// [SPIFFE-DRIFT] Fallback: If no CLI CSR provided, the CLI cert returned MUST be
 		// the operator cert for backwards compatibility with older binaries, even though
@@ -819,6 +825,8 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		// NOTE: New protocol requires CLI CSR for distinct /cli/ SPIFFE ID.
 		cliCertPEM = update["operator_cert"].(string)
 		cliCertChainPEM = update["operator_cert_chain"].(string)
+		cliCertFingerprint = calculateFingerprintFromPEM(cliCertPEM)
+		cliCertSerial = calculateSerialFromPEM(cliCertPEM)
 	}
 
 	updateBytes, _ := json.Marshal(update)
@@ -841,6 +849,8 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		linkData.OrganizationID,
 		operator.ID,
 		sanitizedFingerprint,
+		cliCertFingerprint,
+		cliCertSerial,
 		"device_link",
 	)
 	if err != nil {
@@ -1194,4 +1204,31 @@ func (s *RegistrationService) SetTargetContext(req models.SetTargetContextReques
 		Success:    true,
 		OperatorID: req.OperatorID,
 	}, nil
+}
+
+// calculateFingerprintFromPEM computes the SHA-256 fingerprint of a PEM-encoded certificate.
+func calculateFingerprintFromPEM(certPEM string) string {
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil {
+		return ""
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return ""
+	}
+	hash := sha256.Sum256(cert.Raw)
+	return hex.EncodeToString(hash[:])
+}
+
+// calculateSerialFromPEM extracts the serial number from a PEM-encoded certificate.
+func calculateSerialFromPEM(certPEM string) string {
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil {
+		return ""
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return ""
+	}
+	return cert.SerialNumber.String()
 }

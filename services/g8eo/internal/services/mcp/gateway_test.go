@@ -237,3 +237,112 @@ func TestGatewayService_ResumeWithL3Proof(t *testing.T) {
 	require.Contains(t, string(proc.gotPayload), `"l3"`)
 	require.Contains(t, string(proc.gotPayload), `"credentialId"`)
 }
+
+func TestGatewayService_HandleResourcesRead(t *testing.T) {
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId: "tx-1",
+		Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		ResultSummary: "resource content",
+	}
+	proc := &fakeEnvelopeProcessor{receipt: receipt}
+	pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
+	_ = pubKey
+
+	g := &GatewayService{
+		envProc:           proc,
+		signingKey:        privKey,
+		keyID:             "test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"file:///test.txt"}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp/resources/read", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+
+	g.HandleResourcesRead(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+
+	require.Nil(t, resp.Error)
+	var result ReadResourceResult
+	err = json.Unmarshal(resp.Result, &result)
+	require.NoError(t, err)
+
+	require.Len(t, result.Contents, 1)
+	require.Equal(t, "resource content", result.Contents[0].Text)
+}
+
+func TestGatewayService_HandlePromptsGet(t *testing.T) {
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId: "tx-1",
+		Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		ResultSummary: "prompt template",
+	}
+	proc := &fakeEnvelopeProcessor{receipt: receipt}
+	pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
+	_ = pubKey
+
+	g := &GatewayService{
+		envProc:           proc,
+		signingKey:        privKey,
+		keyID:             "test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"test-prompt"}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp/prompts/get", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+
+	g.HandlePromptsGet(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp JSONRPCResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+
+	require.Nil(t, resp.Error)
+	var result GetPromptResult
+	err = json.Unmarshal(resp.Result, &result)
+	require.NoError(t, err)
+
+	require.Equal(t, "prompt template", result.Description)
+	require.Len(t, result.Messages, 1)
+	require.Equal(t, "user", result.Messages[0].Role)
+}
+
+func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId: "tx-1",
+		Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		ResultSummary: "streamed result",
+	}
+	proc := &fakeEnvelopeProcessor{receipt: receipt}
+	pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
+	_ = pubKey
+
+	g := &GatewayService{
+		envProc:           proc,
+		signingKey:        privKey,
+		keyID:             "test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+
+	g.HandleToolsCallSSE(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
+	require.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
+
+	body := w.Body.String()
+	require.Contains(t, body, "data:")
+	require.Contains(t, body, "streamed result")
+}

@@ -65,19 +65,21 @@ class SessionEvent(G8eBaseModel):
         context: Any,
         event_type: EventType,
         payload: G8eBaseModel,
+        task_id: str | None = None,
     ) -> SessionEvent:
         """Create a SessionEvent safely extracting IDs from a g8e_context.
-        
+
         Args:
             context: G8eHttpContext or RequestContext object.
             event_type: The EventType.
             payload: The event payload.
+            task_id: Optional override for task_id. If provided, takes precedence over context.task_id.
         """
         user_id = getattr(context, "user_id", None)
         if not user_id:
             # SessionEvent requires a user_id for routing fallback
             user_id = "unknown"
-            
+
         return cls(
             event_type=event_type,
             payload=payload,
@@ -86,7 +88,7 @@ class SessionEvent(G8eBaseModel):
             user_id=user_id,
             case_id=getattr(context, "case_id", None),
             investigation_id=getattr(context, "investigation_id", None),
-            task_id=getattr(context, "task_id", None),
+            task_id=task_id if task_id is not None else getattr(context, "task_id", None),
         )
 
     @model_validator(mode="after")

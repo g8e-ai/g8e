@@ -11,6 +11,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import json
 import logging
 from pathlib import Path
@@ -41,7 +43,7 @@ T = TypeVar("T")
 
 _PROTOCOL_DIR = Path(__file__).parent.parent.parent.parent.parent / "protocol" / "constants"
 
-def _load_protocol_json[T](filename: str, model_cls: type[T] | None = None) -> Any:
+def _load_protocol_json(filename: str, model_cls: type[T] | None = None) -> Any:
     path = _PROTOCOL_DIR / filename
     if not path.exists():
         # Fallback for containerized environments where the path might differ

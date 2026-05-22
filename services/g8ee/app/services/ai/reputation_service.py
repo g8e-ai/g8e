@@ -33,6 +33,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime, UTC
 
 from app.constants import (
@@ -543,9 +545,9 @@ def classify_stakes(inputs: ClassifierInputs) -> list[StakeOutcome]:
 # ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class ResolveStakesResult:
+class ResolveStakesResult(BaseModel):
     """Return value of ``resolve_stakes`` - one row per affected agent."""
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
 
     resolutions: list[StakeResolution]
 

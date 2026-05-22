@@ -23,6 +23,7 @@ from app.services.ai.generator import TribunalEmitter, generate_command
 from app.models.tribunal_commands import TribunalGenerationRequest
 from app.utils.command import normalise_command
 from app.utils.safety import validate_command_safety
+from tests.unit.services.ai.tribunal.conftest import make_tribunal_generation_request
 
 
 def _make_mock_operator_context(os="linux"):
@@ -200,7 +201,7 @@ class TestGenerateCommandSafety:
 
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
                 await generate_command(
-                    TribunalGenerationRequest(
+                    make_tribunal_generation_request(
                         request="run as root",
                         guidelines="",
                         operator_context=_make_mock_operator_context(),
@@ -213,8 +214,6 @@ class TestGenerateCommandSafety:
                             source_component=ComponentName.G8EE
                         ),
                         settings=mock_settings,
-                        reputation_data_service=MagicMock(),
-                        auditor_hmac_key="test-key",
                     )
                 )
 

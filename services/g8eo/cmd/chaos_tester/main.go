@@ -243,7 +243,7 @@ func (m *memReplayStore) CheckAndSetNonce(nonce string, _ time.Time) (bool, erro
 
 type chaosL3Verifier struct{}
 
-func (c *chaosL3Verifier) VerifyL3Proof(userID, transactionHash string, proof *commonv1.L3Proof) (bool, error) {
+func (c *chaosL3Verifier) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	return true, nil
 }
 

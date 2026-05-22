@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import logging
 
+from pydantic import BaseModel, ConfigDict
+
 from app.constants import FORBIDDEN_COMMAND_PATTERNS, DEFAULT_OS_NAME
 from app.constants.status import Platform, CommandErrorType
 from app.models.agent import OperatorContext
@@ -25,20 +27,16 @@ from app.utils.blacklist_validator import CommandBlacklistValidator
 logger = logging.getLogger(__name__)
 
 
-class SafetyValidationResult:
+class SafetyValidationResult(BaseModel):
     """Structured result from command safety validation.
 
     Replaces raw (bool, str) tuple with typed fields for better error type resolution.
     """
-    def __init__(
-        self,
-        is_safe: bool,
-        error_message: str | None = None,
-        error_type: CommandErrorType | None = None,
-    ) -> None:
-        self.is_safe = is_safe
-        self.error_message = error_message
-        self.error_type = error_type
+    model_config = ConfigDict(extra="forbid")
+
+    is_safe: bool
+    error_message: str | None = None
+    error_type: CommandErrorType | None = None
 
     @property
     def safe(self) -> bool:

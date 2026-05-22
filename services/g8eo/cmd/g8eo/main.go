@@ -593,7 +593,11 @@ func runListenMode(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, sec
 
 	// Use the listen-mode database for everything
 	govDeps := svc.GetGovernanceDeps()
-	sm := svc.GetSecretManager()
+	sm, err := svc.GetSecretManager()
+	if err != nil {
+		logger.Error("Failed to get secret manager", constants.ConnectionStateErrorStr, err)
+		os.Exit(constants.ExitConfigError)
+	}
 
 	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
 	if err != nil {

@@ -402,6 +402,40 @@ message A2aCallRequested {
   string execution_id = 3;
 }
 
+// Payload for g8e.v1.operator.mcp.resources.list.requested
+// Lists available resources from the downstream MCP server.
+message McpResourceListRequested {
+  // Optional client-supplied invocation id surfaced back in the result.
+  string execution_id = 1;
+}
+
+// Payload for g8e.v1.operator.mcp.resources.read.requested
+// Reads a specific resource from the downstream MCP server.
+message McpResourceReadRequested {
+  // The resource URI to read (e.g., "file:///path/to/file", "memory://var").
+  string uri = 1 [(g8e.common.v1.forbidden_patterns) = "/mnt/pnfs/private/.*"];
+
+  // Optional client-supplied invocation id surfaced back in the result.
+  string execution_id = 2;
+}
+
+// Payload for g8e.v1.operator.mcp.prompts.list.requested
+// Lists available prompts from the downstream MCP server.
+message McpPromptListRequested {
+  // Optional client-supplied invocation id surfaced back in the result.
+  string execution_id = 1;
+}
+
+// Payload for g8e.v1.operator.mcp.prompts.get.requested
+// Gets a specific prompt template from the downstream MCP server.
+message McpPromptGetRequested {
+  // The prompt name/template identifier.
+  string name = 1;
+
+  // Optional client-supplied invocation id surfaced back in the result.
+  string execution_id = 2;
+}
+
 // ActionReceipt is the signed proof of a completed or failed mutation.
 // It is emitted by the Warden after execution.
 message ActionReceipt {

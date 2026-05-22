@@ -448,7 +448,7 @@ class TestExecuteCommandTargetSystems:
         """Whitelisting is a hard ALLOW-LIST, NOT an auto-approve list.
 
         When only enable_whitelisting is on, every command - even one that
-        passes the L1 whitelist gate - must still go through human approval.
+        passes the L1Doctrine whitelist gate - must still go through human approval.
         Auto-approval requires the explicit enable_auto_approve flag.
         """
         approval_service = FakeApprovalService()
@@ -576,7 +576,7 @@ class TestExecuteCommandTargetSystems:
 
     async def test_auto_approve_does_not_bypass_whitelist_hard_gate(self):
         """A command in auto_approved_commands but NOT in the whitelist is still
-        blocked by the L1 whitelist gate. Auto-approve only skips human approval
+        blocked by the L1Doctrine whitelist gate. Auto-approve only skips human approval
         for commands that have already passed every hard safety gate."""
         approval_service = FakeApprovalService()
         event_service = FakeEventService()
@@ -609,11 +609,11 @@ class TestExecuteCommandTargetSystems:
 
         assert result.success is False
         assert result.error_type == CommandErrorType.WHITELIST_VIOLATION
-        # Approval flow never invoked because L1 blocked first.
+        # Approval flow never invoked because L1Doctrine blocked first.
         assert approval_service.command_approval_calls == []
 
     async def test_csv_whitelist_blocks_unlisted_command(self):
-        """A command not present in the user CSV must be blocked by L1 safety."""
+        """A command not present in the user CSV must be blocked by L1Doctrine safety."""
         approval_service = FakeApprovalService()
         event_service = FakeEventService()
         ai_analyzer = FakeAIResponseAnalyzer()

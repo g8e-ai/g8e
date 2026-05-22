@@ -6,7 +6,7 @@ title: g8e Operator
 
 Last Updated: 2026-05-20
 
-The **g8e Operator** is the host-side, sovereign agent role defined by the [g8e Protocol](protocol.md): a daemon or piece of software that speaks the protocol to perform remote operations under the security guarantees the protocol enables. An Operator receives signed transactions, enforces Doctrine (L1), Quorum (L2), and Notary (L3) verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+The **g8e Operator** is the host-side, sovereign agent role defined by the [g8e Protocol](protocol.md): a daemon or piece of software that speaks the protocol to perform remote operations under the security guarantees the protocol enables. An Operator receives signed transactions, enforces Doctrine (L1Doctrine), Quorum (L2Consensus), and Notary (L3Notary) verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
 The reference Operator is **`g8eo`** (built as the `g8e.operator` binary). It functions as a sovereign, **Governed Operator** and **Model Context Protocol (MCP) Server** (the Policy Execution Point).
 
@@ -25,7 +25,7 @@ An Operator is the only component that can mutate the host. It executes ordinary
 Concretely, the reference Operator:
 
 - Connects outbound-only over mTLS WSS to the Hub (no inbound ports required).
-- Verifies every inbound `GovernanceEnvelope` against Doctrine (L1), Quorum (L2), Notary (L3), integrity, freshness, and state-root gates.
+- Verifies every inbound `GovernanceEnvelope` against Doctrine (L1Doctrine), Quorum (L2Consensus), Notary (L3Notary), integrity, freshness, and state-root gates.
 - Runs the **Actuator** as the sole execution boundary, signing pre- and post-execution `ActionReceipt`s.
 - Records every accepted mutation to a host-local, encrypted, append-only audit vault and a per-session git-backed ledger.
 - Scrubs sensitive data (PII, secrets) at the host boundary so AI never sees unscrubbed data.
@@ -40,9 +40,9 @@ The Operator distrusts every upstream input. Before any code runs on the host, t
 1. **Integrity** - `id == transaction_hash == SHA256(canonical_fields)`.
 2. **Freshness** - `expires_at` not passed; `nonce` not in the replay store.
 3. **State binding** - `state_merkle_root` matches the host's current ledger root.
-4. **Doctrine (L1) hard gates** - Reflected `forbidden_patterns` over the typed protobuf payload, plus Sentinel pre-execution threat analysis (90+ MITRE ATT&CK patterns).
-5. **Quorum (L2) consensus** - Ed25519 Tribunal signature verified against the Operator-owned `SignerStore`. Missing or unknown signers → reject.
-6. **Notary (L3) authorization** - WebAuthn proof verified for every mutation. Auto-approval policy may suppress the human prompt for benign verbs only after Doctrine (L1) and Quorum (L2) have passed.
+4. **Doctrine (L1Doctrine) hard gates** - Reflected `forbidden_patterns` over the typed protobuf payload, plus Sentinel pre-execution threat analysis (90+ MITRE ATT&CK patterns).
+5. **Quorum (L2Consensus) consensus** - Ed25519 Tribunal signature verified against the Operator-owned `SignerStore`. Missing or unknown signers → reject.
+6. **Notary (L3Notary) authorization** - WebAuthn proof verified for web sessions, mTLS certificate fingerprint verified for CLI sessions. Web sessions authenticate once with a passkey to establish a `web_session` (24-hour TTL), then can approve multiple mutations without re-authenticating. CLI sessions authenticate via mTLS certificates with SPIFFE URI SANs; the certificate fingerprint serves as the L3Notary proof. Auto-approval policy may suppress the human prompt for benign verbs only after Doctrine (L1Doctrine) and Quorum (L2Consensus) have passed.
 
 If any gate fails, the envelope is rejected, a `BLOCKED` receipt is recorded, and no execution (via the Actuator) occurs. There are no fallbacks.
 

@@ -14,8 +14,8 @@ The documentation is organized around the g8e execution Gateway: a typed, signed
 ## 1. Protocol Gateway
 The domain-agnostic wire contract and governance model that every conforming component must follow.
 
-- [**Protocol Gateway**](protocol.md) - The `GovernanceEnvelope`, transaction flow, L1/L2/L3 gates, receipts, and session rules.
-- [**Governance Hierarchy**](protocol.md#3-layer-governance-bedrock) - L1/L2/L3 validation model.
+- [**Protocol Gateway**](protocol.md) - The `GovernanceEnvelope`, transaction flow, L1Doctrine/L2Consensus/L3Notary gates, receipts, and session rules.
+- [**Governance Hierarchy**](protocol.md#3-layer-governance-bedrock) - L1Doctrine/L2Consensus/L3Notary validation model.
 - [**Security Principles**](protocol.md#host-sovereignty--audit) - Host sovereignty, local-first audit, and fail-closed execution.
 
 ## 2. Gateway Components

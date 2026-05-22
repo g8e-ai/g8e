@@ -339,6 +339,7 @@ class OperatorApprovalService:
                         context=g8e_context,
                         event_type=EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED,
                         payload=approval_event,
+                        task_id=request.task_id,
                     )
                 )
                 logger.info("[AGENT_CONTINUE_APPROVAL] Published to client")

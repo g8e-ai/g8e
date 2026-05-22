@@ -85,6 +85,7 @@ from .agents import (
     CaseTitleRequest,
     CaseTitleResult,
 )
+from .tribunal_commands import TribunalGenerationRequest
 from .command_request_payloads import (
     CommandCancelRequestPayload,
     CommandRequestPayload,

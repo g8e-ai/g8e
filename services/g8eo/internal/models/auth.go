@@ -348,6 +348,8 @@ type CLISession struct {
 	UserID            string    `json:"user_id"`
 	OperatorSessionID string    `json:"operator_session_id"` // Bind to the specific operator session that created it
 	SystemFingerprint string    `json:"system_fingerprint,omitempty"`
+	CertFingerprint   string    `json:"cert_fingerprint,omitempty"` // SHA-256 fingerprint of the mTLS certificate
+	CertSerial        string    `json:"cert_serial,omitempty"`      // Serial number for revocation checking
 	CreatedAt         time.Time `json:"created_at"`
 	ExpiresAt         time.Time `json:"expires_at"`
 	AbsoluteExpiresAt time.Time `json:"absolute_expires_at"`

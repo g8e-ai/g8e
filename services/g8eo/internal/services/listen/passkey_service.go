@@ -334,7 +334,9 @@ func (s *PasskeyService) CreateWebSession(userID string) (*models.WebSession, er
 
 // VerifyL3Proof verifies a WebAuthn assertion against a registered passkey.
 // The challenge is the transaction_hash.
-func (s *PasskeyService) VerifyL3Proof(userID, transactionHash string, proof *commonv1.L3Proof) (bool, error) {
+// The cliSessionID parameter is ignored for web sessions (WebAuthn) but is required
+// for interface compatibility with CLI mTLS-based L3 verification.
+func (s *PasskeyService) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	if userID == "" {
 		return false, fmt.Errorf("user_id is required for L3 WebAuthn verification")
 	}

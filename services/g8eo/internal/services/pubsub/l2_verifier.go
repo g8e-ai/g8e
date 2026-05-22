@@ -17,15 +17,15 @@ import (
 	"errors"
 )
 
-// L2/L3 verification errors. Each error is distinct so dispatcher
+// L2Consensus/L3Notary verification errors. Each error is distinct so dispatcher
 // logs can distinguish between different failure modes.
 var (
-	ErrL2KeyNotConfigured   = errors.New("L2: trusted ED25519 key not configured")
-	ErrL2KeyIDMissing       = errors.New("L2: key_id missing from envelope")
-	ErrL2SignatureMissing   = errors.New("L2: tribunal_signature missing from envelope")
-	ErrL2AsymmetricInvalid  = errors.New("L2: tribunal_signature failed ED25519 verification")
-	ErrL3ProofMissing       = errors.New("L3: governance.l3.proof missing from envelope")
-	ErrL3ProofInvalid       = errors.New("L3: governance.l3.proof failed verification")
+	ErrL2KeyNotConfigured   = errors.New("L2Consensus: trusted ED25519 key not configured")
+	ErrL2KeyIDMissing       = errors.New("L2Consensus: key_id missing from envelope")
+	ErrL2SignatureMissing   = errors.New("L2Consensus: tribunal_signature missing from envelope")
+	ErrL2AsymmetricInvalid  = errors.New("L2Consensus: tribunal_signature failed ED25519 verification")
+	ErrL3ProofMissing       = errors.New("L3Notary: governance.l3.proof missing from envelope")
+	ErrL3ProofInvalid       = errors.New("L3Notary: governance.l3.proof failed verification")
 	ErrStateRootMissing     = errors.New("Protocol: state_merkle_root missing")
 	ErrStateRootUnavailable = errors.New("Protocol: current state merkle root unavailable")
 	ErrStateRootMismatch    = errors.New("Protocol: state_merkle_root does not match current state")
@@ -33,6 +33,6 @@ var (
 	ErrTransactionReplay    = errors.New("Protocol: transaction replay detected")
 )
 
-// L2 and L3 verification for UAP JSON envelopes is handled by the Tribunal and Actuator services.
+// L2Consensus and L3Notary verification for UAP JSON envelopes is handled by the Tribunal and Actuator services.
 // This file保留 error definitions for consistency but the actual verification logic
 // is in services/g8eo/services/governance/tribunal.go and Actuator.go.

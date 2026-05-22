@@ -509,6 +509,8 @@ const (
 	ActionTypeRevokeIntent     ActionType = "REVOKE_INTENT"
 	ActionTypeMcpCall          ActionType = "MCP_CALL"
 	ActionTypeA2aCall          ActionType = "A2A_CALL"
+	ActionTypeMcpResourceRead  ActionType = "MCP_RESOURCE_READ"
+	ActionTypeMcpPromptGet     ActionType = "MCP_PROMPT_GET"
 )
 
 // CommandErrorType is a typed string for command error type.

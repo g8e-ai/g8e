@@ -13,7 +13,7 @@ The reference Go implementation of the g8e Protocol compiles from a single codeb
 - **mTLS-Everywhere**: All communication is outbound-only from the target operator and strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts.
 - **Local-First Audit (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger.
 - **UAP JSON-First (GovernanceEnvelope)**: Every mutation action is governed by a UAP JSON `GovernanceEnvelope`. This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
-- **3-Layer Governance**: Hard gates at the bedrock (L1), consensus in the middle (L2), and human authorization at the top (L3).
+- **3-Layer Governance**: Hard gates at the bedrock (L1Doctrine), consensus in the middle (L2Consensus), and human authorization at the top (L3Notary).
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
 - **Protocol vs Implementation**: The protocol is the Gateway. The reference Governance Gateway (`g8eg`) and Governed Operator (`g8eo`) implement the protocol's core invariants, while application layers consume their public interfaces.
 - **Sovereign Authority (PKI)**: The Governance Gateway owns the platform's PKI and is the only entity permitted to sign certificates, maintaining isolated intermediate CAs.
@@ -25,7 +25,7 @@ The reference Go implementation of the g8e Protocol compiles from a single codeb
 
 The g8e platform is built on the g8e Protocol as Gateway. Conforming gateway and operator implementations are what make that protocol live.
 
-- **Protocol (Gateway)**: The wire contract, schemas, and L1/L2/L3 verification rules. Mandatory and immutable for any client or implementation.
+- **Protocol (Gateway)**: The wire contract, schemas, and L1Doctrine/L2Consensus/L3Notary verification rules. Mandatory and immutable for any client or implementation.
 - **Governance Gateway (`g8eg`)**: Built as `g8e.gateway` and run in **Listen Mode** (`--listen`). It acts as the platform's backbone - protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
 - **Governed Operator (`g8eo`)**: Built as `g8e.operator` and run in **Standard Mode** or **MCP Mode** (`--mcp-serve`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease.
 - **Reference Application Layer (Optional)**: Reference components like the **g8e Agentic Ensemble** (`g8ee`) consume the public Gateway/Operator protocol surface. They have no privileged Gateway responsibilities and no private access channels.
@@ -115,11 +115,13 @@ When Public and mTLS surfaces share a port, the gateway serves them through a si
 
 ### Gateway Mutation Entry
 
-`POST /api/governance/envelope` is the only customer-facing mutation API on the Governance Gateway (`g8eg`). Clients submit canonical JSON (protojson) `GovernanceEnvelope` transactions and receive a signed `ActionReceipt` after the envelope passes transaction hash, expiry, nonce/replay, state-root, L2 signer, L3 proof, and L1 typed-payload validation.
+`POST /api/governance/envelope` is the only customer-facing mutation API on the Governance Gateway (`g8eg`). Clients submit canonical JSON (protojson) `GovernanceEnvelope` transactions and receive a signed `ActionReceipt` after the envelope passes transaction hash, expiry, nonce/replay, state-root, L2Consensus signer, L3Notary proof, and L1Doctrine typed-payload validation.
 
 #### Out-of-Band (OOB) Suspension & WebAuthn Approval Flow
 
-When a standard AI client requests a mutation, it typically cannot generate an L3 human signature. Instead of failing open or throwing a hard error, the `g8eg` gateway suspends the transaction. It records the envelope in the SQLite `suspended_transactions` table and returns a local out-of-band (OOB) WebAuthn challenge URL. Once the human user approves the transaction via their browser and physical security key, the gateway attaches the resulting WebAuthn proof, resumes verification, and moves the transaction to execution.
+When a standard AI client requests a mutation, it typically cannot generate an L3 human signature. Instead of failing open or throwing a hard error, the `g8eg` gateway suspends the transaction. It records the envelope in the SQLite `suspended_transactions` table and returns a local out-of-band (OOB) WebAuthn challenge URL. The user authenticates once with a passkey to establish a `web_session` (24-hour TTL). Within this authenticated session, the user can approve multiple suspended transactions via their browser without re-authenticating. The gateway attaches the resulting WebAuthn proof, resumes verification, and moves the transaction to execution.
+
+**CLI sessions** use a different L3Notary path: they authenticate via mTLS certificates with SPIFFE URI SANs. The L3Notary proof for CLI sessions is the SHA-256 fingerprint of the mTLS certificate. The composite L3Notary verifier validates the certificate fingerprint, checks revocation status, expiry, and ensures the SPIFFE URI SAN matches the expected CLI session. CLI sessions do not require OOB approval flows since the mTLS certificate itself provides the L3Notary proof.
 
 ```mermaid
 graph TD
@@ -135,7 +137,7 @@ graph TD
     subgraph g8eg_suspension ["g8eg Governance Gateway (Suspension & Approval)"]
         direction TB
 
-        CheckL3{"L3 Gate Checked<br/>(Proof Present?)"}:::gate
+        CheckL3{"L3Notary Gate Checked<br/>(Proof Present?)"}:::gate
         SuspendTx["Suspend Transaction<br/>(Store SuspendedTransaction)"]:::gate
         ReturnURL["Return OOB Approval URL<br/>(Response as MCP Tool Text)"]:::gate
 
@@ -144,7 +146,7 @@ graph TD
         ApprovePage["Serve HTML Approval Page<br/>(/approve/:tx_hash)"]:::gate
         Challenge["Get WebAuthn Challenge<br/>(/api/approve/:tx_hash/challenge)"]:::gate
         VerifyProof["Verify WebAuthn Proof<br/>(/api/approve/:tx_hash/verify)"]:::gate
-        ResumeTx["Resume Transaction<br/>(Attach L3 Proof & Submit)"]:::gate
+        ResumeTx["Resume Transaction<br/>(Attach L3Notary Proof & Submit)"]:::gate
         PruneTx["Delete Suspended TX<br/>(Cleanup Store)"]:::gate
 
         CheckL3 -- "No / Missing" --> SuspendTx

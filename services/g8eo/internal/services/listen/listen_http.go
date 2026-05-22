@@ -139,6 +139,11 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	mux.HandleFunc("/api/mcp/v1/tools/list", h.mcp.HandleToolsList)
 	mux.HandleFunc("/api/mcp/v1/tools/call", h.mcp.HandleToolsCall)
+	mux.HandleFunc("/api/mcp/v1/tools/call/sse", h.mcp.HandleToolsCallSSE)
+	mux.HandleFunc("/api/mcp/v1/resources/list", h.mcp.HandleResourcesList)
+	mux.HandleFunc("/api/mcp/v1/resources/read", h.mcp.HandleResourcesRead)
+	mux.HandleFunc("/api/mcp/v1/prompts/list", h.mcp.HandlePromptsList)
+	mux.HandleFunc("/api/mcp/v1/prompts/get", h.mcp.HandlePromptsGet)
 	mux.HandleFunc("/api/a2a/v1/call", h.mcp.HandleA2aCall)
 
 	// Internal SSE event bridge (used by g8ee Ensemble to publish typed events
@@ -3015,6 +3020,10 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Calculate CLI certificate fingerprint and serial for L3 verification
+		cliCertFingerprint := calculateFingerprintFromPEM(cliCertPEM)
+		cliCertSerial := calculateSerialFromPEM(cliCertPEM)
+
 		// Persist operator document
 		opBytes, err := json.Marshal(operator)
 		if err != nil {
@@ -3042,6 +3051,8 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 			orgID,
 			operatorID,
 			req.SystemFingerprint,
+			cliCertFingerprint,
+			cliCertSerial,
 			string(constants.HeartbeatTypeBootstrap),
 		)
 		if err != nil {

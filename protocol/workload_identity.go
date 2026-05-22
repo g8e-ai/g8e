@@ -103,3 +103,33 @@ func (w *WorkloadIdentity) MatchesApp(spiffeID, operatorID string) bool {
 func (w *WorkloadIdentity) MatchesHub(spiffeID string) bool {
 	return spiffeID == w.HubSPIFFEID()
 }
+
+// ExtractCLISessionID extracts the CLI session ID from a SPIFFE ID.
+// Returns the session ID and true if the SPIFFE ID is a valid CLI identity.
+func (w *WorkloadIdentity) ExtractCLISessionID(spiffeID string) (string, bool) {
+	prefix := fmt.Sprintf("spiffe://%s/cli/", TrustDomain)
+	if !strings.HasPrefix(spiffeID, prefix) {
+		return "", false
+	}
+	// Format: spiffe://g8e.local/cli/<user_id>/<cli_session_id>
+	parts := strings.Split(spiffeID, "/")
+	if len(parts) < 6 {
+		return "", false
+	}
+	return parts[5], true
+}
+
+// ExtractUserID extracts the user ID from a SPIFFE ID.
+// Returns the user ID and true if the SPIFFE ID contains a user ID.
+func (w *WorkloadIdentity) ExtractUserID(spiffeID string) (string, bool) {
+	prefix := fmt.Sprintf("spiffe://%s/cli/", TrustDomain)
+	if !strings.HasPrefix(spiffeID, prefix) {
+		return "", false
+	}
+	// Format: spiffe://g8e.local/cli/<user_id>/<cli_session_id>
+	parts := strings.Split(spiffeID, "/")
+	if len(parts) < 5 {
+		return "", false
+	}
+	return parts[4], true
+}

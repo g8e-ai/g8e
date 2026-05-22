@@ -40,12 +40,12 @@ var (
 	ErrTransactionReplay       = errors.New("TX_REPLAY: nonce already used")
 	ErrStateRootMissing        = errors.New("TX_STATE_MISSING: state_merkle_root required but missing")
 	ErrStateRootMismatch       = errors.New("TX_STATE_MISMATCH: state_merkle_root does not match current state")
-	ErrL2SignatureMissing      = errors.New("TX_QUORUM_L2_SIG_MISSING: Quorum (L2) tribunal_signature required but missing")
-	ErrL2SignatureInvalid      = errors.New("TX_QUORUM_L2_SIG_INVALID: Quorum (L2) tribunal_signature failed verification")
-	ErrL2KeyNotConfigured      = errors.New("TX_QUORUM_L2_KEY_MISSING: trusted Quorum (L2) signer key not configured")
-	ErrL3ProofMissing          = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3) WebAuthn proof required but missing")
-	ErrL3ProofInvalid          = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3) WebAuthn proof failed verification")
-	ErrL3VerifierNotConfigured = errors.New("TX_NOTARY_L3_VERIFIER_MISSING: Notary (L3) verifier required but not configured")
+	ErrL2SignatureMissing      = errors.New("TX_QUORUM_L2_SIG_MISSING: Quorum (L2Consensus) tribunal_signature required but missing")
+	ErrL2SignatureInvalid      = errors.New("TX_QUORUM_L2_SIG_INVALID: Quorum (L2Consensus) tribunal_signature failed verification")
+	ErrL2KeyNotConfigured      = errors.New("TX_QUORUM_L2_KEY_MISSING: trusted Quorum (L2Consensus) signer key not configured")
+	ErrL3ProofMissing          = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
+	ErrL3ProofInvalid          = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
+	ErrL3VerifierNotConfigured = errors.New("TX_NOTARY_L3_VERIFIER_MISSING: Notary (L3Notary) verifier required but not configured")
 	ErrTransactionHashMissing  = errors.New("TX_HASH_MISSING: transaction_hash required")
 	ErrTransactionIDMissing    = errors.New("TX_ID_MISSING: id required")
 	ErrExpiresAtMissing        = errors.New("TX_EXPIRES_AT_MISSING: expires_at required")
@@ -54,7 +54,7 @@ var (
 	ErrStateRootRequired       = errors.New("TX_STATE_REQUIRED: state_merkle_root required")
 	ErrPayloadMissing          = errors.New("TX_PAYLOAD_MISSING: typed protobuf payload required")
 	ErrPayloadActionMismatch   = errors.New("TX_PAYLOAD_ACTION_MISMATCH: action type does not match typed payload")
-	ErrL1ValidationFailed      = errors.New("TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1) forbidden patterns")
+	ErrL1ValidationFailed      = errors.New("TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns")
 )
 
 // ReplayStore defines the interface for nonce replay protection.
@@ -69,7 +69,7 @@ type StateRootProvider interface {
 	GetCurrentStateRoot() (string, error)
 }
 
-// SignerStore defines the interface for loading trusted L2 signers.
+// SignerStore defines the interface for loading trusted L2Consensus signers.
 type SignerStore interface {
 	GetTrustedSigner(keyID string) (ed25519.PublicKey, error)
 }
@@ -171,7 +171,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		return nil, ErrPayloadDecodeFailed
 	}
 	if violations := tv.validateL1Governance(decodedPayload); len(violations) > 0 {
-		tv.logger.Error("Doctrine (L1) validation failed", "action_type", envelope.ActionType, "violations", violations)
+		tv.logger.Error("Doctrine (L1Doctrine) validation failed", "action_type", envelope.ActionType, "violations", violations)
 		return nil, fmt.Errorf("%w: %s", ErrL1ValidationFailed, strings.Join(violations, ", "))
 	}
 
@@ -211,7 +211,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		return nil, ErrReplayStoreMissing
 	}
 	// Nonce consumption is deferred until after all other gates pass so a
-	// transaction that legitimately suspends on NOTARY_L3_PROOF_MISSING can be
+	// transaction that legitimately suspends on NOTARY_L3Notary_PROOF_MISSING can be
 	// resumed once the human supplies WebAuthn proof without forcing the
 	// upstream client to re-issue the call with a fresh nonce.
 
@@ -256,7 +256,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		return nil, ErrL2KeyNotConfigured
 	}
 	if pubKey == nil {
-		tv.logger.Error("Quorum (L2) signer key not found in trusted signers", "key_id", envelope.Governance.L2.KeyId)
+		tv.logger.Error("Quorum (L2Consensus) signer key not found in trusted signers", "key_id", envelope.Governance.L2.KeyId)
 		return nil, ErrL2KeyNotConfigured
 	}
 	if !tv.verifyL2Signature(pubKey, envelope.Governance.L2.TribunalSignature, computedHash, true) {
@@ -273,16 +273,17 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		ok, err := tv.l3Verifier.VerifyL3Proof(
 			envelope.OperatorId,
 			envelope.TransactionHash,
+			envelope.CliSessionId,
 			envelope.Governance.L3.Proof,
 		)
 		if err != nil || !ok {
-			tv.logger.Error("Notary (L3) verification failed", string(constants.ConnectionStateError), err)
+			tv.logger.Error("Notary (L3Notary) verification failed", string(constants.ConnectionStateError), err)
 			return nil, ErrL3ProofInvalid
 		}
 	}
 
 	// Consume the nonce only after every gate has succeeded so that
-	// recoverable failures (L3 suspended pending human approval) do not
+	// recoverable failures (L3Notary suspended pending human approval) do not
 	// burn the nonce and force the upstream client to re-issue a fresh
 	// envelope.
 	replayed, err := tv.replayStore.CheckAndSetNonce(envelope.Nonce, expiresAt)
@@ -403,7 +404,7 @@ func (tv *TransactionVerifier) verifyL2Signature(pubKey ed25519.PublicKey, signa
 // isMutation returns true if the action type modifies system state.
 // MCP_CALL and A2A_CALL are mutations because the Gateway cannot reason
 // about the side effects of arbitrary downstream tools/skills - they must
-// pass the L3 human-presence gate just like any local mutation.
+// pass the L3Notary human-presence gate just like any local mutation.
 func (tv *TransactionVerifier) isMutation(actionType constants.ActionType) bool {
 	switch actionType {
 	case constants.ActionTypeExecuteBash, constants.ActionTypeFileEdit, constants.ActionTypeRestoreFile, constants.ActionTypeShutdown,

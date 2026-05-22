@@ -17,7 +17,6 @@ Pydantic models for the g8e Agent streaming pipeline.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 from pydantic import ConfigDict, Field
@@ -250,9 +249,10 @@ class StreamChunkFromModel(G8eBaseModel):
     data: StreamChunkData
 
 
-@dataclass
-class TurnResult:
+class TurnResult(G8eBaseModel):
     """Result produced by _process_provider_turn for a single LLM stream turn."""
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
+
     model_response_parts: list[Part]
     pending_tool_calls: list[ToolCall]
     finish_reason: str | None
@@ -261,9 +261,10 @@ class TurnResult:
     total_tokens: int
 
 
-@dataclass
-class ToolCallResponse:
+class ToolCallResponse(G8eBaseModel):
     """Record of a single executed tool call within a turn."""
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
+
     tool_name: str
     flattened_response: dict[str, Any]
     grounding: GroundingMetadata | None
@@ -274,4 +275,6 @@ AgentInputs.model_rebuild()
 AgentStreamState.model_rebuild()
 StreamChunkData.model_rebuild()
 StreamChunkFromModel.model_rebuild()
+TurnResult.model_rebuild()
+ToolCallResponse.model_rebuild()
 

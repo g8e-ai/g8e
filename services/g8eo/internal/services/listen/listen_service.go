@@ -259,7 +259,7 @@ func (ls *ListenService) GetDB() *ListenDBService {
 }
 
 // GetSecretManager returns the secret manager.
-func (ls *ListenService) GetSecretManager() *SecretManager {
+func (ls *ListenService) GetSecretManager() (*SecretManager, error) {
 	return NewSecretManager(ls.db.db, ls.cfg.Listen.SecretsDir, ls.logger)
 }
 
@@ -332,7 +332,7 @@ func (ls *ListenService) IsGovernanceReady() bool {
 
 // GovernanceDeps holds the governance dependencies required for transaction verification.
 // These interfaces are implemented by ListenDBService (ReplayStore, StateRootProvider,
-// TransactionAuditStore) and PasskeyService (L3Verifier).
+// TransactionAuditStore) and CompositeL3Verifier (L3Verifier).
 type GovernanceDeps struct {
 	ReplayStore       governance.ReplayStore
 	StateRootProvider governance.StateRootProvider
@@ -343,12 +343,17 @@ type GovernanceDeps struct {
 
 // GetGovernanceDeps returns the governance dependencies for transaction verification.
 // This enables the in-process PubSubCommandService to perform fail-closed verification.
+// The L3 verifier is a composite that handles both WebAuthn (web sessions) and mTLS (CLI sessions).
 func (ls *ListenService) GetGovernanceDeps() *GovernanceDeps {
+	// Create composite L3 verifier that handles both web and CLI sessions
+	cliL3 := NewCLIL3Notary(ls.db, ls.pki, ls.logger, ls.userSvc, ls.sessionSvc)
+	compositeL3 := NewCompositeL3Verifier(ls.passkey, cliL3, ls.logger)
+
 	return &GovernanceDeps{
 		ReplayStore:       ls.db,
 		StateRootProvider: ls.db,
 		TransactionAudit:  ls.db,
-		L3Verifier:        ls.passkey,
+		L3Verifier:        compositeL3,
 		SignerStore:       ls.db,
 	}
 }
