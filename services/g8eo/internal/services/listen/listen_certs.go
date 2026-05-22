@@ -280,27 +280,44 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 }
 
 func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
-	serviceKeyPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.key")
 	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.crt")
 	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.chain.pem")
 
-	needService := !fileExists(serviceKeyPath) || !fileExists(serviceCertPath) || !fileExists(chainPath)
+	needService := !fileExists(serviceCertPath) || !fileExists(chainPath)
 	if !needService {
-		// Prefer loading the chain file for the service certificate
-		tlsCert, err := tls.LoadX509KeyPair(chainPath, serviceKeyPath)
+		// Load certificate chain from file
+		chainPEM, err := os.ReadFile(chainPath)
 		if err != nil {
-			// Fallback to single cert if chain is missing (though EnsurePKI should have created it)
-			tlsCert, err = tls.LoadX509KeyPair(serviceCertPath, serviceKeyPath)
-		}
-		if err != nil {
-			pki.logger.Warn("[PKI] Failed to load service cert, regenerating", string(constants.ConnectionStateError), err)
+			pki.logger.Warn("[PKI] Failed to load service cert chain, regenerating", string(constants.ConnectionStateError), err)
 			needService = true
 		} else {
-			if isExpiringSoon(tlsCert) {
-				pki.logger.Info("[PKI] Service certificate expiring soon, renewing")
+			// Load private key from keystore
+			if pki.secretManager == nil {
+				return fmt.Errorf("SecretManager is required for service private key loading")
+			}
+			keyDER, err := pki.secretManager.GetServicePrivateKey("operator-listen")
+			if err != nil {
+				pki.logger.Warn("[PKI] Failed to load service private key from keystore, regenerating", string(constants.ConnectionStateError), err)
 				needService = true
 			} else {
-				pki.serviceCert = tlsCert
+				// Validate the key can be parsed
+				if _, err := x509.ParseECPrivateKey(keyDER); err != nil {
+					pki.logger.Warn("[PKI] Failed to parse service private key, regenerating", string(constants.ConnectionStateError), err)
+					needService = true
+				} else {
+					cert, err := tls.X509KeyPair(chainPEM, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}))
+					if err != nil {
+						pki.logger.Warn("[PKI] Failed to construct service certificate, regenerating", string(constants.ConnectionStateError), err)
+						needService = true
+					} else {
+						if isExpiringSoon(cert) {
+							pki.logger.Info("[PKI] Service certificate expiring soon, renewing")
+							needService = true
+						} else {
+							pki.serviceCert = cert
+						}
+					}
+				}
 			}
 		}
 	}
@@ -310,9 +327,18 @@ func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
 		if err := pki.generateServiceCert(extraIPs); err != nil {
 			return err
 		}
-		tlsCert, err := tls.LoadX509KeyPair(chainPath, serviceKeyPath)
+		// Load the newly generated certificate and key
+		chainPEM, err := os.ReadFile(chainPath)
 		if err != nil {
 			return fmt.Errorf("failed to load generated service cert chain: %w", err)
+		}
+		keyDER, err := pki.secretManager.GetServicePrivateKey("operator-listen")
+		if err != nil {
+			return fmt.Errorf("failed to load generated service private key from keystore: %w", err)
+		}
+		tlsCert, err := tls.X509KeyPair(chainPEM, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}))
+		if err != nil {
+			return fmt.Errorf("failed to construct service certificate: %w", err)
 		}
 		pki.serviceCert = tlsCert
 	}
@@ -603,25 +629,35 @@ func (pki *PKIAuthority) loadCertificatePair(certPath, keyPath string, cert **x5
 	}
 
 	if caType == "" {
-		// For non-CA certificates (service certs), load from PEM file
-		if keyPath != "" {
-			keyPEM, err := os.ReadFile(keyPath)
-			if err != nil {
-				return err
-			}
-			keyBlock, _ := pem.Decode(keyPEM)
-			if keyBlock == nil {
-				return fmt.Errorf("invalid key PEM")
-			}
-			parsedKey, err := x509.ParseECPrivateKey(keyBlock.Bytes)
-			if err != nil {
-				return fmt.Errorf("parse private key: %w", err)
-			}
-			*cert = parsedCert
-			*key = parsedKey
-			return nil
+		// For non-CA certificates (service/app certs), load private key from keystore
+		if pki.secretManager == nil {
+			return fmt.Errorf("SecretManager is required for service private key loading")
 		}
-		return fmt.Errorf("cannot determine CA type from cert path: %s", certPath)
+
+		// Extract service name from cert path
+		var serviceName string
+		if strings.Contains(certPath, "operator-listen.crt") {
+			serviceName = "operator-listen"
+		} else if strings.Contains(certPath, "issued/apps/") {
+			// Extract app name from path like "issued/apps/g8ee.crt"
+			base := filepath.Base(certPath)
+			serviceName = strings.TrimSuffix(base, ".crt")
+		} else {
+			return fmt.Errorf("cannot determine service name from cert path: %s", certPath)
+		}
+
+		keyDER, err := pki.secretManager.GetServicePrivateKey(serviceName)
+		if err != nil {
+			return fmt.Errorf("load %s private key from keystore: %w", serviceName, err)
+		}
+
+		parsedKey, err := x509.ParseECPrivateKey(keyDER)
+		if err != nil {
+			return fmt.Errorf("parse %s private key: %w", serviceName, err)
+		}
+		*cert = parsedCert
+		*key = parsedKey
+		return nil
 	}
 
 	keyDER, err := pki.secretManager.GetCAPrivateKey(caType)
@@ -782,24 +818,23 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 func (pki *PKIAuthority) ensureAppCerts() error {
 	apps := []string{marshaler.Status(constants.Status.ComponentName.G8EE)}
 	for _, app := range apps {
-		keyPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".key")
 		certPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".crt")
 
-		if fileExists(keyPath) && fileExists(certPath) {
+		if fileExists(certPath) {
 			continue
 		}
 
 		pki.logger.Info("[PKI] Generating certificate for reference ensemble", "app", app)
 		// We use a simplified signing flow for bundled reference ensembles during bootstrap.
 		// In a BYO world, they would use the SignCSR API.
-		if err := pki.generateAppCert(app, keyPath, certPath); err != nil {
+		if err := pki.generateAppCert(app, certPath); err != nil {
 			return fmt.Errorf("failed to generate cert for %s: %w", app, err)
 		}
 	}
 	return nil
 }
 
-func (pki *PKIAuthority) generateAppCert(app, keyPath, certPath string) error {
+func (pki *PKIAuthority) generateAppCert(app, certPath string) error {
 	if pki.hubCert == nil || pki.hubKey == nil {
 		return fmt.Errorf("hub CA not loaded")
 	}
@@ -840,16 +875,21 @@ func (pki *PKIAuthority) generateAppCert(app, keyPath, certPath string) error {
 		return err
 	}
 
-	keyDER, _ := x509.MarshalECPrivateKey(priv)
-	if err := writePEMFile(keyPath, "EC PRIVATE KEY", keyDER, 0600); err != nil {
+	keyDER, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
 		return err
+	}
+	if pki.secretManager == nil {
+		return fmt.Errorf("SecretManager is required for app private key storage")
+	}
+	if err := pki.secretManager.StoreServicePrivateKey(app, keyDER); err != nil {
+		return fmt.Errorf("store %s private key in keystore: %w", app, err)
 	}
 
 	return nil
 }
 
 func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
-	serviceKeyPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.key")
 	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.crt")
 
 	if pki.hubCert == nil || pki.hubKey == nil {
@@ -915,8 +955,11 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	if err != nil {
 		return err
 	}
-	if err := writePEMFile(serviceKeyPath, "EC PRIVATE KEY", keyDER, 0600); err != nil {
-		return err
+	if pki.secretManager == nil {
+		return fmt.Errorf("SecretManager is required for service private key storage")
+	}
+	if err := pki.secretManager.StoreServicePrivateKey("operator-listen", keyDER); err != nil {
+		return fmt.Errorf("store operator-listen private key in keystore: %w", err)
 	}
 
 	return nil

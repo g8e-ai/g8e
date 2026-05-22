@@ -475,3 +475,22 @@ func (m *SecretManager) StoreNotaryKey(seedHex string) error {
 func (m *SecretManager) GetNotaryKey() (string, error) {
 	return m.keystore.DecryptSecret("notary_signing_key")
 }
+
+// StoreServicePrivateKey stores a service or app certificate private key in the keystore.
+// name should be the service/app identifier (e.g., "operator-listen", "g8ee").
+func (m *SecretManager) StoreServicePrivateKey(name string, keyDER []byte) error {
+	keystoreName := fmt.Sprintf("service_%s_key", name)
+	plaintext := hex.EncodeToString(keyDER)
+	return m.keystore.EncryptSecret(keystoreName, plaintext)
+}
+
+// GetServicePrivateKey retrieves a service or app certificate private key from the keystore.
+// name should be the service/app identifier (e.g., "operator-listen", "g8ee").
+func (m *SecretManager) GetServicePrivateKey(name string) ([]byte, error) {
+	keystoreName := fmt.Sprintf("service_%s_key", name)
+	plaintext, err := m.keystore.DecryptSecret(keystoreName)
+	if err != nil {
+		return nil, err
+	}
+	return hex.DecodeString(plaintext)
+}

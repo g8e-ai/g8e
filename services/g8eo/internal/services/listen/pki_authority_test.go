@@ -136,17 +136,23 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 
 		// Verify operator-listen service certificate
 		serviceCertPath := filepath.Join(pkiDir, "issued", "hub", "operator-listen.crt")
-		serviceKeyPath := filepath.Join(pkiDir, "issued", "hub", "operator-listen.key")
 		serviceChainPath := filepath.Join(pkiDir, "issued", "hub", "operator-listen.chain.pem")
 
 		_, err = os.Stat(serviceCertPath)
 		require.NoError(t, err)
 
-		_, err = os.Stat(serviceKeyPath)
-		require.NoError(t, err)
-
 		_, err = os.Stat(serviceChainPath)
 		require.NoError(t, err)
+
+		// Verify private key is stored in keystore, not as plaintext file
+		serviceKeyPath := filepath.Join(pkiDir, "issued", "hub", "operator-listen.key")
+		_, err = os.Stat(serviceKeyPath)
+		require.Error(t, err, "private key should not exist as plaintext file")
+
+		// Verify key can be loaded from keystore
+		keyDER, err := sm.GetServicePrivateKey("operator-listen")
+		require.NoError(t, err, "private key should be loadable from keystore")
+		require.NotEmpty(t, keyDER, "private key DER should not be empty")
 	})
 
 	t.Run("Trust bundle generation", func(t *testing.T) {
