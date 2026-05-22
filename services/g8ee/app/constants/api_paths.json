@@ -1,6 +1,16 @@
 {
-  "internal_prefix": "/api/v1",
-  "operator_prefix": "/api",
+  "client": {
+    "chat": "/chat",
+    "health": "/health",
+    "sse_events": "/internal/sse/events",
+    "sse_stream": "/internal/sse/stream"
+  },
+  "client_full": {
+    "chat": "/api/chat",
+    "health": "/api/health",
+    "sse_events": "/api/internal/sse/events",
+    "sse_stream": "/api/internal/sse/stream"
+  },
   "g8ee": {
     "auth_generate_key": "/auth/api-key/generate",
     "auth_revoke_cert": "/auth/certificate/revoke",
@@ -69,16 +79,6 @@
     "settings_sync": "/api/v1/settings/sync",
     "settings_user": "/api/v1/settings/user"
   },
-  "client": {
-    "chat": "/chat",
-    "health": "/health",
-    "sse_events": "/internal/sse/events",
-    "sse_stream": "/internal/sse/stream"
-  },
-  "client_full": {
-    "chat": "/api/chat",
-    "health": "/api/health",
-    "sse_events": "/api/internal/sse/events",
-    "sse_stream": "/api/internal/sse/stream"
-  }
+  "internal_prefix": "/api/v1",
+  "operator_prefix": "/api"
 }

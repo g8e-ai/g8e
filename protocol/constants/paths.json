@@ -1,4 +1,11 @@
 {
+  "g8ee": {
+    "app_dir": "/app/services/g8ee",
+    "cert_name": "g8ee",
+    "config_dir": "/app/services/g8ee/config",
+    "tests_dir": "/app/services/g8ee/tests"
+  },
+  "host": "localhost",
   "infra": {
     "app_cert_dir": ".g8e/pki/issued/apps",
     "ca_cert_path": ".g8e/pki/trust/hub-bundle.pem",
@@ -11,18 +18,11 @@
     "secrets_dir": ".g8e/secrets",
     "ssh_config_path": "/etc/g8e/ssh_config"
   },
-  "g8ee": {
-    "app_dir": "/app/services/g8ee",
-    "cert_name": "g8ee",
-    "config_dir": "/app/services/g8ee/config",
-    "tests_dir": "/app/services/g8ee/tests"
-  },
   "ports": {
     "g8ee_https": 8443,
     "openclaw_gateway": 18789,
     "operator_bootstrap_https": 8441,
     "operator_https": 8440,
     "operator_public_https": 8442
-  },
-  "host": "localhost"
+  }
 }

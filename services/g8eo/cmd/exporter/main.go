@@ -83,6 +83,26 @@ func isUpper(r rune) bool {
 	return r >= 'A' && r <= 'Z'
 }
 
+// mergeMaps recursively merges existing map into new map, preserving hand-authored keys
+// Go SSOT takes precedence at each level
+func mergeMaps(newData, existing map[string]interface{}) map[string]interface{} {
+	for key, existingValue := range existing {
+		if newValue, exists := newData[key]; exists {
+			// Both have this key - check if both are maps for recursive merge
+			if newMap, ok := newValue.(map[string]interface{}); ok {
+				if existingMap, ok := existingValue.(map[string]interface{}); ok {
+					newData[key] = mergeMaps(newMap, existingMap)
+				}
+			}
+			// If not both maps, Go SSOT value takes precedence (do nothing)
+		} else {
+			// Key only in existing - preserve it
+			newData[key] = existingValue
+		}
+	}
+	return newData
+}
+
 func main() {
 	root := flag.String("root", "../..", "Repository root directory")
 	flag.Parse()
@@ -105,14 +125,34 @@ func main() {
 		}
 	}
 
-	// Emit JSON files
-	emitJSON := func(filename string, data interface{}) {
+	// Emit JSON files with merge support for hand-authored content
+	emitJSON := func(filename string, data interface{}, merge bool) {
 		path := filepath.Join(protocolConstantsDir, filename)
 		jsonData, err := json.MarshalIndent(data, "", "  ")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error marshaling %s: %v\n", filename, err)
 			os.Exit(1)
 		}
+
+		// If file exists and merge is enabled, merge with existing content to preserve hand-authored keys
+		if merge {
+			if existingData, err := os.ReadFile(path); err == nil {
+				var existing map[string]interface{}
+				if err := json.Unmarshal(existingData, &existing); err == nil {
+					var newData map[string]interface{}
+					if err := json.Unmarshal(jsonData, &newData); err == nil {
+						// Merge: Go SSOT takes precedence, but preserve hand-authored keys recursively
+						newData = mergeMaps(newData, existing)
+						jsonData, err = json.MarshalIndent(newData, "", "  ")
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "Error marshaling merged %s: %v\n", filename, err)
+							os.Exit(1)
+						}
+					}
+				}
+			}
+		}
+
 		if err := os.WriteFile(path, jsonData, 0600); err != nil {
 			fmt.Fprintf(os.Stderr, "Error writing %s: %v\n", path, err)
 			os.Exit(1)
@@ -120,29 +160,29 @@ func main() {
 		fmt.Printf("  Wrote %s\n", path)
 	}
 
-	emitJSON("collections.json", CollectionsExport{Collections: snapshot.Collections})
-	emitJSON("events.json", EventsExport{Events: snapshot.Events})
-	emitJSON("status.json", StatusExport{Status: snapshot.Status})
-	emitJSON("senders.json", SendersExport{Senders: snapshot.Senders})
+	emitJSON("collections.json", CollectionsExport{Collections: snapshot.Collections}, true)
+	emitJSON("events.json", EventsExport{Events: snapshot.Events}, false)
+	emitJSON("status.json", StatusExport{Status: snapshot.Status}, true)
+	emitJSON("senders.json", SendersExport{Senders: snapshot.Senders}, true)
 	emitJSON("kv_keys.json", KVKeysExport{
 		CachePrefix: snapshot.KVKeys.CachePrefix,
 		KeySchema:   snapshot.KVKeys.KeySchema,
 		SessionType: snapshot.KVKeys.SessionType,
-	})
-	emitJSON("channels.json", ChannelsExport{Channels: snapshot.Channels})
-	emitJSON("pubsub.json", PubSubExport{PubSub: snapshot.PubSub})
-	emitJSON("intents.json", IntentsExport{Intents: snapshot.Intents})
-	emitJSON("prompts.json", PromptsExport{Prompts: snapshot.Prompts})
-	emitJSON("headers.json", HeadersExport{Headers: snapshot.Headers})
+	}, true)
+	emitJSON("channels.json", ChannelsExport{Channels: snapshot.Channels}, true)
+	emitJSON("pubsub.json", PubSubExport{PubSub: snapshot.PubSub}, true)
+	emitJSON("intents.json", IntentsExport{Intents: snapshot.Intents}, true)
+	emitJSON("prompts.json", PromptsExport{Prompts: snapshot.Prompts}, true)
+	emitJSON("headers.json", HeadersExport{Headers: snapshot.Headers}, true)
 	emitJSON("document_ids.json", DocumentIdsExport{
 		DocumentIds: snapshot.DocumentIds.DocumentIds,
-	})
-	emitJSON("platform.json", PlatformExport{Platform: snapshot.Platform})
-	emitJSON("agents.json", AgentsExport{Agents: snapshot.Agents})
-	emitJSON("paths.json", snapshot.Paths)
-	emitJSON("ports.json", PortsExport{Ports: snapshot.Ports})
-	emitJSON("env_vars.json", EnvVarsExport{EnvVars: snapshot.EnvVars})
-	emitJSON("timestamp.json", TimestampExport{Timestamp: snapshot.Timestamp})
+	}, true)
+	emitJSON("platform.json", PlatformExport{Platform: snapshot.Platform}, true)
+	emitJSON("agents.json", AgentsExport{Agents: snapshot.Agents}, true)
+	emitJSON("paths.json", snapshot.Paths, true)
+	emitJSON("ports.json", PortsExport{Ports: snapshot.Ports}, true)
+	emitJSON("env_vars.json", EnvVarsExport{EnvVars: snapshot.EnvVars}, true)
+	emitJSON("timestamp.json", TimestampExport{Timestamp: snapshot.Timestamp}, true)
 	// Emit api_paths.json with full paths
 	apiPathsFull := struct {
 		InternalPrefix string            `json:"internal_prefix"`
@@ -165,7 +205,7 @@ func main() {
 	for k, v := range constants.ApiPaths.Client {
 		apiPathsFull.ClientFull[k] = constants.ApiPaths.OperatorPrefix + v
 	}
-	emitJSON("api_paths.json", apiPathsFull)
+	emitJSON("api_paths.json", apiPathsFull, true)
 
 	// Symlink or copy api_paths.json to g8ee app constants
 	// This ensures the protocol version is the sole source of truth.

@@ -268,8 +268,13 @@ vulncheck:
 	@echo "Running vulnerability check (allowing stdlib issues per environment constraint)..."
 	@$(GOVULNCHECK) ./... || (if [ $$? -eq 3 ]; then echo "Vulnerabilities found (standard library), continuing per plan."; exit 0; else exit $$?; fi)
 
+.PHONY: check-registry
+check-registry:
+	@echo "Checking constants registry completeness..."
+	@cd internal/constants && go run check_registry.go
+
 .PHONY: check
-check: fmt vet lint vulncheck test
+check: fmt vet lint vulncheck test check-registry
 
 # =============================================================================
 # TOOL INSTALL

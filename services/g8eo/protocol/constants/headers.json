@@ -1,214 +1,214 @@
 {
   "headers": {
     "APIKey": {
-      "value": "X-API-Key",
       "_go_const": "HeaderAPIKey",
-      "_python_const": "API_KEY"
+      "_python_const": "API_KEY",
+      "value": "X-API-Key"
     },
     "Accept": {
-      "value": "Accept",
       "_go_const": "HeaderAccept",
-      "_python_const": "ACCEPT"
+      "_python_const": "ACCEPT",
+      "value": "Accept"
     },
     "AcceptLanguage": {
-      "value": "Accept-Language",
       "_go_const": "HeaderAcceptLanguage",
-      "_python_const": "ACCEPT_LANGUAGE"
+      "_python_const": "ACCEPT_LANGUAGE",
+      "value": "Accept-Language"
     },
     "AccessControlAllowCredentials": {
-      "value": "Access-Control-Allow-Credentials",
       "_go_const": "HeaderAccessControlAllowCredentials",
-      "_python_const": "ACCESS_CONTROL_ALLOW_CREDENTIALS"
+      "_python_const": "ACCESS_CONTROL_ALLOW_CREDENTIALS",
+      "value": "Access-Control-Allow-Credentials"
     },
     "AccessControlAllowOrigin": {
-      "value": "Access-Control-Allow-Origin",
       "_go_const": "HeaderAccessControlAllowOrigin",
-      "_python_const": "ACCESS_CONTROL_ALLOW_ORIGIN"
+      "_python_const": "ACCESS_CONTROL_ALLOW_ORIGIN",
+      "value": "Access-Control-Allow-Origin"
     },
     "AccessControlRequestHeaders": {
-      "value": "Access-Control-Request-Headers",
       "_go_const": "HeaderAccessControlRequestHeaders",
-      "_python_const": "ACCESS_CONTROL_REQUEST_HEADERS"
+      "_python_const": "ACCESS_CONTROL_REQUEST_HEADERS",
+      "value": "Access-Control-Request-Headers"
     },
     "AccessControlRequestMethod": {
-      "value": "Access-Control-Request-Method",
       "_go_const": "HeaderAccessControlRequestMethod",
-      "_python_const": "ACCESS_CONTROL_REQUEST_METHOD"
+      "_python_const": "ACCESS_CONTROL_REQUEST_METHOD",
+      "value": "Access-Control-Request-Method"
     },
     "Authorization": {
-      "value": "Authorization",
       "_go_const": "HeaderAuthorization",
-      "_python_const": "AUTHORIZATION"
+      "_python_const": "AUTHORIZATION",
+      "value": "Authorization"
     },
     "BoundOperators": {
-      "value": "X-G8E-Bound-Operators",
       "_go_const": "HeaderBoundOperators",
-      "_python_const": "BOUND_OPERATORS"
+      "_python_const": "BOUND_OPERATORS",
+      "value": "X-G8E-Bound-Operators"
     },
     "CLISessionID": {
-      "value": "X-G8E-CLI-Session-ID",
       "_go_const": "HeaderCLISessionID",
-      "_python_const": "CLI_SESSION_ID"
+      "_python_const": "CLI_SESSION_ID",
+      "value": "X-G8E-CLI-Session-ID"
     },
     "CacheControl": {
-      "value": "Cache-Control",
       "_go_const": "HeaderCacheControl",
-      "_python_const": "CACHE_CONTROL"
+      "_python_const": "CACHE_CONTROL",
+      "value": "Cache-Control"
     },
     "CaseID": {
-      "value": "X-G8E-Case-ID",
       "_go_const": "HeaderCaseID",
-      "_python_const": "CASE_ID"
+      "_python_const": "CASE_ID",
+      "value": "X-G8E-Case-ID"
     },
     "ContentDisposition": {
-      "value": "Content-Disposition",
       "_go_const": "HeaderContentDisposition",
-      "_python_const": "CONTENT_DISPOSITION"
+      "_python_const": "CONTENT_DISPOSITION",
+      "value": "Content-Disposition"
     },
     "ContentLanguage": {
-      "value": "Content-Language",
       "_go_const": "HeaderContentLanguage",
-      "_python_const": "CONTENT_LANGUAGE"
+      "_python_const": "CONTENT_LANGUAGE",
+      "value": "Content-Language"
     },
     "ContentLength": {
-      "value": "Content-Length",
       "_go_const": "HeaderContentLength",
-      "_python_const": "CONTENT_LENGTH"
+      "_python_const": "CONTENT_LENGTH",
+      "value": "Content-Length"
     },
     "ContentType": {
-      "value": "Content-Type",
       "_go_const": "HeaderContentType",
-      "_python_const": "CONTENT_TYPE"
+      "_python_const": "CONTENT_TYPE",
+      "value": "Content-Type"
     },
     "Cookie": {
-      "value": "Cookie",
       "_go_const": "HeaderCookie",
-      "_python_const": "COOKIE"
+      "_python_const": "COOKIE",
+      "value": "Cookie"
     },
     "DeviceToken": {
-      "value": "X-G8E-Device-Token",
       "_go_const": "HeaderDeviceToken",
-      "_python_const": "DEVICE_TOKEN"
+      "_python_const": "DEVICE_TOKEN",
+      "value": "X-G8E-Device-Token"
     },
     "InvestigationID": {
-      "value": "X-G8E-Investigation-ID",
       "_go_const": "HeaderInvestigationID",
-      "_python_const": "INVESTIGATION_ID"
+      "_python_const": "INVESTIGATION_ID",
+      "value": "X-G8E-Investigation-ID"
     },
     "LastEventID": {
-      "value": "Last-Event-ID",
       "_go_const": "HeaderLastEventID",
-      "_python_const": "LAST_EVENT_ID"
+      "_python_const": "LAST_EVENT_ID",
+      "value": "Last-Event-ID"
     },
     "OperatorAPIKey": {
-      "value": "X-G8E-Operator-API-Key",
       "_go_const": "HeaderOperatorAPIKey",
-      "_python_const": "OPERATOR_API_KEY"
+      "_python_const": "OPERATOR_API_KEY",
+      "value": "X-G8E-Operator-API-Key"
     },
     "OperatorID": {
-      "value": "X-G8E-Operator-ID",
       "_go_const": "HeaderOperatorID",
-      "_python_const": "OPERATOR_ID"
+      "_python_const": "OPERATOR_ID",
+      "value": "X-G8E-Operator-ID"
     },
     "OperatorSessionID": {
-      "value": "X-G8E-Operator-Session-ID",
       "_go_const": "HeaderOperatorSessionID",
-      "_python_const": "OPERATOR_SESSION_ID"
+      "_python_const": "OPERATOR_SESSION_ID",
+      "value": "X-G8E-Operator-Session-ID"
     },
     "OrganizationID": {
-      "value": "X-G8E-Organization-ID",
       "_go_const": "HeaderOrganizationID",
-      "_python_const": "ORGANIZATION_ID"
+      "_python_const": "ORGANIZATION_ID",
+      "value": "X-G8E-Organization-ID"
     },
     "Pragma": {
-      "value": "Pragma",
       "_go_const": "HeaderPragma",
-      "_python_const": "PRAGMA"
+      "_python_const": "PRAGMA",
+      "value": "Pragma"
     },
     "RequestID": {
-      "value": "X-G8E-Request-ID",
       "_go_const": "HeaderRequestID",
-      "_python_const": "REQUEST_ID"
+      "_python_const": "REQUEST_ID",
+      "value": "X-G8E-Request-ID"
     },
     "RequestedWith": {
-      "value": "X-Requested-With",
       "_go_const": "HeaderRequestedWith",
-      "_python_const": "REQUESTED_WITH"
+      "_python_const": "REQUESTED_WITH",
+      "value": "X-Requested-With"
     },
     "SetCookie": {
-      "value": "Set-Cookie",
       "_go_const": "HeaderSetCookie",
-      "_python_const": "SET_COOKIE"
+      "_python_const": "SET_COOKIE",
+      "value": "Set-Cookie"
     },
     "SourceComponent": {
-      "value": "X-G8E-Source-Component",
       "_go_const": "HeaderSourceComponent",
-      "_python_const": "SOURCE_COMPONENT"
+      "_python_const": "SOURCE_COMPONENT",
+      "value": "X-G8E-Source-Component"
     },
     "SystemFingerprint": {
-      "value": "X-G8E-System-Fingerprint",
       "_go_const": "HeaderSystemFingerprint",
-      "_python_const": "SYSTEM_FINGERPRINT"
+      "_python_const": "SYSTEM_FINGERPRINT",
+      "value": "X-G8E-System-Fingerprint"
     },
     "TaskID": {
-      "value": "X-G8E-Task-ID",
       "_go_const": "HeaderTaskID",
-      "_python_const": "TASK_ID"
+      "_python_const": "TASK_ID",
+      "value": "X-G8E-Task-ID"
     },
     "UserAgent": {
-      "value": "User-Agent",
       "_go_const": "HeaderUserAgent",
-      "_python_const": "USER_AGENT"
+      "_python_const": "USER_AGENT",
+      "value": "User-Agent"
     },
     "UserID": {
-      "value": "X-G8E-User-ID",
       "_go_const": "HeaderUserID",
-      "_python_const": "USER_ID"
+      "_python_const": "USER_ID",
+      "value": "X-G8E-User-ID"
     },
     "WebSessionID": {
-      "value": "X-G8E-Web-Session-ID",
       "_go_const": "HeaderWebSessionID",
-      "_python_const": "WEB_SESSION_ID"
+      "_python_const": "WEB_SESSION_ID",
+      "value": "X-G8E-Web-Session-ID"
     },
     "XAccelBuffering": {
-      "value": "X-Accel-Buffering",
       "_go_const": "HeaderXAccelBuffering",
-      "_python_const": "X_ACCEL_BUFFERING"
+      "_python_const": "X_ACCEL_BUFFERING",
+      "value": "X-Accel-Buffering"
     },
     "XForwardedFor": {
-      "value": "X-Forwarded-For",
       "_go_const": "HeaderXForwardedFor",
-      "_python_const": "X_FORWARDED_FOR"
+      "_python_const": "X_FORWARDED_FOR",
+      "value": "X-Forwarded-For"
     },
     "XForwardedHost": {
-      "value": "X-Forwarded-Host",
       "_go_const": "HeaderXForwardedHost",
-      "_python_const": "X_FORWARDED_HOST"
+      "_python_const": "X_FORWARDED_HOST",
+      "value": "X-Forwarded-Host"
     },
     "XForwardedProto": {
-      "value": "X-Forwarded-Proto",
       "_go_const": "HeaderXForwardedProto",
-      "_python_const": "X_FORWARDED_PROTO"
+      "_python_const": "X_FORWARDED_PROTO",
+      "value": "X-Forwarded-Proto"
     },
     "XProxyOrganizationID": {
-      "value": "X-Proxy-Organization-Id",
       "_go_const": "HeaderXProxyOrganizationID",
-      "_python_const": "X_PROXY_ORGANIZATION_ID"
+      "_python_const": "X_PROXY_ORGANIZATION_ID",
+      "value": "X-Proxy-Organization-Id"
     },
     "XProxyUserEmail": {
-      "value": "X-Proxy-User-Email",
       "_go_const": "HeaderXProxyUserEmail",
-      "_python_const": "X_PROXY_USER_EMAIL"
+      "_python_const": "X_PROXY_USER_EMAIL",
+      "value": "X-Proxy-User-Email"
     },
     "XProxyUserID": {
-      "value": "X-Proxy-User-Id",
       "_go_const": "HeaderXProxyUserID",
-      "_python_const": "X_PROXY_USER_ID"
+      "_python_const": "X_PROXY_USER_ID",
+      "value": "X-Proxy-User-Id"
     },
     "XRequestTimestamp": {
-      "value": "X-Request-Timestamp",
       "_go_const": "HeaderXRequestTimestamp",
-      "_python_const": "X_REQUEST_TIMESTAMP"
+      "_python_const": "X_REQUEST_TIMESTAMP",
+      "value": "X-Request-Timestamp"
     }
   }
 }
