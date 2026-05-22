@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 
+from _lib import RegexValidationError, validate_regex_complexity
+
 try:
     import tomllib
 except ImportError:
@@ -58,6 +60,7 @@ class GitleaksParser:
                 data = tomli.load(f)
         
         doctrines = []
+        seen_ids = set()
         
         # Parse rules from [[rules]] sections
         for rule in data.get('rules', []):
@@ -66,8 +69,9 @@ class GitleaksParser:
                 continue
             try:
                 doctrine = self._parse_rule(rule)
-                if doctrine:
+                if doctrine and doctrine.id not in seen_ids:
                     doctrines.append(doctrine)
+                    seen_ids.add(doctrine.id)
             except Exception as e:
                 print(f"Error parsing rule: {e}", file=sys.stderr)
                 continue
@@ -84,9 +88,16 @@ class GitleaksParser:
         regex = rule.get('regex')
         if not regex:
             return None
-        
+
         # Clean up the regex (remove TOML string escaping if present)
         pattern = regex.strip()
+
+        # Validate regex complexity to prevent ReDoS
+        try:
+            validate_regex_complexity(pattern)
+        except RegexValidationError as e:
+            print(f"Warning: Skipping rule {rule_id} due to regex validation error: {e}", file=sys.stderr)
+            return None
         
         # Extract description/name
         description = rule.get('description', rule_id)

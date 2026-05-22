@@ -32,9 +32,9 @@ from app.errors import ConfigurationError
 from app.models.settings import (
     AuthSettings,
     LLMSettings,
-    G8eePlatformSettings,
+    G8eeAppSettings,
     G8eeUserSettings,
-    PlatformSettingsDocument,
+    AppSettingsDocument,
     UserSettingsDocument,
     SearchSettings,
 )
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 class SettingsServiceProtocol(Protocol):
     """Protocol for SettingsService ensuring read-only access to platform and user settings."""
 
-    async def get_platform_settings(self) -> G8eePlatformSettings:
+    async def get_app_settings(self) -> G8eeAppSettings:
         """Retrieve platform-level settings from operator with cache-aside."""
         ...
 
@@ -59,7 +59,7 @@ class SettingsServiceProtocol(Protocol):
         """Retrieve settings for a specific user, overlaid on platform settings."""
         ...
 
-    def get_local_settings(self) -> G8eePlatformSettings:
+    def get_local_settings(self) -> G8eeAppSettings:
         """Retrieve local bootstrap settings (bootstrap)."""
         ...
 
@@ -76,10 +76,10 @@ class SettingsService:
         self._logger = logging.getLogger(__name__)
 
 
-    def get_local_settings(self) -> G8eePlatformSettings:
+    def get_local_settings(self) -> G8eeAppSettings:
         """Load settings using canonical defaults plus secrets sourced from the
         bootstrap service (operator volume)."""
-        settings = G8eePlatformSettings(
+        settings = G8eeAppSettings(
             host="0.0.0.0",
             port=PortConstants.G8E_PORT_G8EE_HTTPS,
             log_level=LogLevel.INFO,
@@ -112,12 +112,12 @@ class SettingsService:
 
         return settings
 
-    def overlay_platform_data(self, settings: G8eePlatformSettings, platform_settings: G8eePlatformSettings) -> G8eePlatformSettings:
+    def overlay_platform_data(self, settings: G8eeAppSettings, app_settings: G8eeAppSettings) -> G8eeAppSettings:
         """Overlay platform DB settings onto local bootstrap settings.
 
         Model-driven by design: each nested settings model is overlaid as a
         whole object, except for AuthSettings which merges. This ensures
-        any new fields or nested models added to G8eePlatformSettings
+        any new fields or nested models added to G8eeAppSettings
         automatically flow through without manual code updates here.
 
         Auth is the only sub-model that merges instead of being replaced,
@@ -131,7 +131,7 @@ class SettingsService:
                 continue
 
             local_value = getattr(settings, field_name)
-            platform_value = getattr(platform_settings, field_name)
+            platform_value = getattr(app_settings, field_name)
 
             # We only overlay nested models that are G8eBaseModels.
             if not isinstance(local_value, G8eBaseModel):
@@ -156,7 +156,7 @@ class SettingsService:
         """
         return user_settings.llm
 
-    async def get_platform_settings(self) -> G8eePlatformSettings:
+    async def get_app_settings(self) -> G8eeAppSettings:
         """Load platform settings from operator via CacheAsideService."""
         if not self._cache_aside:
             return self.get_local_settings()
@@ -168,11 +168,11 @@ class SettingsService:
 
         if not doc_dict:
             raise ConfigurationError(
-                "g8ee cannot start: platform_settings document missing in operator",
+                "g8ee cannot start: app_settings document missing in operator",
                 code=ErrorCode.DB_QUERY_ERROR
             )
 
-        doc = PlatformSettingsDocument.model_validate(doc_dict)
+        doc = AppSettingsDocument.model_validate(doc_dict)
 
         settings = self.get_local_settings()
         return self.overlay_platform_data(settings, doc.settings)
@@ -193,13 +193,13 @@ class SettingsService:
                 "No user settings document for user %s; using empty defaults so request overrides can complete validation",
                 user_id,
             )
-            platform_settings = await self.get_platform_settings()
+            app_settings = await self.get_app_settings()
             return G8eeUserSettings(
-                llm=platform_settings.llm,
-                search=platform_settings.search,
-                eval_judge=platform_settings.eval_judge,
-                command_validation=platform_settings.command_validation,
-                batch_execution=platform_settings.batch_execution,
+                llm=app_settings.llm,
+                search=app_settings.search,
+                eval_judge=app_settings.eval_judge,
+                command_validation=app_settings.command_validation,
+                batch_execution=app_settings.batch_execution,
             )
 
         user_doc = UserSettingsDocument.model_validate(user_doc_dict)
@@ -332,7 +332,7 @@ class SettingsService:
         await self.update_user_settings(user_id, user_settings)
         return True
 
-    def _build_search_settings(self, settings: G8eePlatformSettings | G8eeUserSettings) -> SearchSettings:
+    def _build_search_settings(self, settings: G8eeAppSettings | G8eeUserSettings) -> SearchSettings:
         """Build SearchSettings from platform or user settings."""
         return settings.search
 

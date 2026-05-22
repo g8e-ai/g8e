@@ -36,6 +36,7 @@ from app.models.agents.tribunal import (
     VoteBreakdown,
 )
 from app.models.reputation import ReputationState, SlashTier, StakeResolution
+from app.models.http_context import RequestContext
 from app.models.tool_results import CommandExecutionResult
 from app.services.ai.reputation_service import (
     AUDITOR_ID,
@@ -606,6 +607,11 @@ class TestResolveStakes:
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
             gen_result=_result(),
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
         # All rows should report scalar_before == BOOTSTRAP_SCALAR because
         # `get_state` returned None for every persona.
@@ -624,6 +630,11 @@ class TestResolveStakes:
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
             gen_result=_result(),
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
         assert reputation_data.upsert_state.call_count == len(result.resolutions)
         assert stake_data.create.call_count == len(result.resolutions)
@@ -654,6 +665,11 @@ class TestResolveStakes:
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
             gen_result=_result(),
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         # Replay must be a no-op: no new state writes, no new resolution rows.
@@ -679,6 +695,11 @@ class TestResolveStakes:
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
             gen_result=_result(),
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         for row in result.resolutions:
@@ -693,6 +714,11 @@ class TestResolveStakes:
             gen_result=_result(),
             execution_result=CommandExecutionResult(success=False, exit_code=1, error="boom"),
             warden_risk=RiskLevel.HIGH,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
         auditor = next(r for r in result.resolutions if r.agent_id == AUDITOR_ID)
         assert auditor.slash_tier == SlashTier.TIER_1
@@ -705,6 +731,11 @@ class TestResolveStakes:
                 tribunal_command_id="",
                 investigation_id="inv-1",
                 gen_result=_result(),
+                context=RequestContext(
+                    web_session_id="test-web-session",
+                    user_id="test-user",
+                    investigation_id="inv-1",
+                ),
             )
 
     async def test_invalid_investigation_id_raises(self, service):
@@ -713,6 +744,11 @@ class TestResolveStakes:
                 tribunal_command_id="tc-1",
                 investigation_id="",
                 gen_result=_result(),
+                context=RequestContext(
+                    web_session_id="test-web-session",
+                    user_id="test-user",
+                    investigation_id="inv-1",
+                ),
             )
 
     async def test_invalid_half_life_in_constructor_raises(

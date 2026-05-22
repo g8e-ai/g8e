@@ -37,6 +37,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .clients.blob_client import BlobClient
 from .clients.db_client import DBClient
+from .clients.governance_client import GovernanceClient
 from .clients.kv_cache_client import KVCacheClient
 from .clients.pubsub_client import PubSubClient
 from .constants import (
@@ -78,6 +79,7 @@ from .constants import (
 )
 from .constants.generated_paths import PathConstants, PortConstants
 from .models.state import G8eeAppState
+from .models.settings import TLSConfig
 from .db.blob_service import BlobService
 from .db.db_service import DBService
 from .db.kv_service import KVService
@@ -96,46 +98,31 @@ from .llm import clear_provider_cache
 logger = logging.getLogger(__name__)
 
 
-async def _connect_clients(settings):
+async def _connect_clients(settings, tls_config):
     """Create and connect the 5 core operator transport clients.
 
     Returns (db_client, kv_cache_client, pubsub_client, blob_client).
     HTTP client is created by ServiceFactory (InternalHttpClient).
     """
-    ca = settings.ca_cert_path
-    cert = settings.client_cert_path
-    key = settings.client_key_path
     auditor_hmac_key = settings.auth.auditor_hmac_key
 
-    db_client = DBClient(
-        ca_cert_path=ca,
-        client_cert_path=cert,
-        client_key_path=key
-    )
+    db_client = DBClient(tls_config=tls_config)
     await db_client.connect()
 
     kv_cache_client = KVCacheClient(
         component_name=ComponentName.G8EE,
-        ca_cert_path=ca,
-        client_cert_path=cert,
-        client_key_path=key,
+        tls_config=tls_config,
     )
     await kv_cache_client.connect()
 
     pubsub_client = PubSubClient(
         component_name=ComponentName.G8EE,
-        ca_cert_path=ca,
-        client_cert_path=cert,
-        client_key_path=key,
+        tls_config=tls_config,
         auditor_hmac_key=auditor_hmac_key,
     )
     await pubsub_client.connect()
 
-    blob_client = BlobClient(
-        ca_cert_path=ca,
-        client_cert_path=cert,
-        client_key_path=key
-    )
+    blob_client = BlobClient(tls_config=tls_config)
     await blob_client.connect()
 
     return db_client, kv_cache_client, pubsub_client, blob_client
@@ -169,13 +156,20 @@ async def lifespan(app: FastAPI):
         setup_logging(settings, component_name="g8ee")
         logger.info("Bootstrap settings loaded")
 
+        # -- Phase 0.5: Create TLS config for all clients --
+        tls_config = TLSConfig(
+            ca_cert_path=settings.ca_cert_path,
+            client_cert_path=settings.client_cert_path,
+            client_key_path=settings.client_key_path,
+        )
+
         # -- Phase 1: Core operator clients (db, kv, pubsub, blob) --
         (
             state.db_client,
             state.kv_cache_client,
             state.pubsub_client,
             state.blob_client,
-        ) = await _connect_clients(settings)
+        ) = await _connect_clients(settings, tls_config)
         logger.info("operator transport clients connected (db, kv, pubsub, blob)")
 
         # -- Phase 2: Handler services (sole users of each client) --
@@ -188,16 +182,23 @@ async def lifespan(app: FastAPI):
             kv=kv_service,
             db=db_service,
             component_name=ComponentName.G8EE,
-            default_ttl=settings.listen.default_ttl,
-            read_enabled=settings.listen.enable_cache_read,
+            default_ttl=settings.gateway.default_ttl,
+            read_enabled=settings.gateway.enable_cache_read,
         )
         settings_service._cache_aside = cache_aside_service
 
         # -- Phase 4: Platform settings from operator --
-        settings = await settings_service.get_platform_settings()
+        settings = await settings_service.get_app_settings()
         state.settings = settings
         set_settings(settings)
         logger.info("Platform settings merged: port=%s", settings.port)
+
+        # -- Phase 4.5: GovernanceClient for governed collection writes --
+        governance_client = GovernanceClient(
+            tls_config=tls_config,
+            operator_session_id=settings.auth.operator_session_id,
+            gateway_settings=settings.gateway,
+        )
 
         # -- Phase 5: All domain services (single factory call) --
         all_services = ServiceFactory.create_all_services(
@@ -208,6 +209,7 @@ async def lifespan(app: FastAPI):
             blob_service=blob_service,
             pubsub_client=state.pubsub_client,
             blob_service_client=state.blob_client,
+            governance_client=governance_client,
         )
         ServiceFactory.bind_to_app_state(app, all_services)
         logger.info("All domain services created and bound to app state")

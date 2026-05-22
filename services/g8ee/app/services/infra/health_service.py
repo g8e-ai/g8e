@@ -35,7 +35,7 @@ class HealthService:
         to the dependency getters.
         """
         from app.dependencies import (
-            get_g8ee_platform_settings,
+            get_g8ee_app_settings,
             get_g8ee_cache_aside_service,
             get_g8ee_investigation_data_service,
             get_g8ee_investigation_service,
@@ -53,7 +53,7 @@ class HealthService:
             except Exception as e:
                 dependencies[name] = DependencyStatus(status=HealthStatus.UNHEALTHY, error=str(e))
 
-        await _check("settings", get_g8ee_platform_settings(request_context))
+        await _check("settings", get_g8ee_app_settings(request_context))
         await _check("cache_aside_service", get_g8ee_cache_aside_service(request_context))
         await _check("investigation_data_service", get_g8ee_investigation_data_service(request_context))
         await _check("investigation_service", get_g8ee_investigation_service(request_context))

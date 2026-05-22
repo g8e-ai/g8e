@@ -29,6 +29,7 @@ keeps Information Isolation (GDD §3) intact.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from app.constants import (
     DB_COLLECTION_REPUTATION_COMMITMENTS,
@@ -39,7 +40,11 @@ from app.constants import (
 from app.errors import DatabaseError, ValidationError
 from app.models.cache import FieldFilter
 from app.models.reputation import ReputationCommitment, ReputationState
+from app.models.http_context import RequestContext
 from app.services.protocols import DocumentServiceProtocol
+
+if TYPE_CHECKING:
+    from app.clients.governance_client import GovernanceClient
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +62,9 @@ class ReputationDataService:
     state_collection: str
     commitments_collection: str
 
-    def __init__(self, cache: DocumentServiceProtocol) -> None:
+    def __init__(self, cache: DocumentServiceProtocol, governance_client: "GovernanceClient") -> None:
         self.cache = cache
+        self._governance_client = governance_client
         self.state_collection = DB_COLLECTION_REPUTATION_STATE
         self.commitments_collection = DB_COLLECTION_REPUTATION_COMMITMENTS
 
@@ -116,7 +122,7 @@ class ReputationDataService:
                 component=ComponentName.G8EE,
             ) from exc
 
-    async def upsert_state(self, state: ReputationState) -> ReputationState:
+    async def upsert_state(self, state: ReputationState, context: RequestContext) -> ReputationState:
         """Create or merge a `reputation_state` row keyed on ``agent_id``."""
         if not state.agent_id:
             raise ValidationError("ReputationState.agent_id is required")
@@ -125,17 +131,41 @@ class ReputationDataService:
                 collection=self.state_collection,
                 document_id=state.agent_id,
             )
+            
+            from app.constants import EventType
+            
             if existing is None:
-                await self.cache.create_document(
+                from app.models.pubsub_messages import G8eMessage
+                from app.models.command_request_payloads import DocumentUpdateRequestPayload
+                from app.constants import AITaskId
+
+                payload = DocumentUpdateRequestPayload(
                     collection=self.state_collection,
                     document_id=state.agent_id,
-                    data=state.model_dump(mode="json"),
+                    updates=state.model_dump(mode="json"),
+                    merge=False,
                 )
+
+                message = G8eMessage(
+                    id=state.agent_id,
+                    source_component=ComponentName.G8EE,
+                    event_type=EventType.APP_REPUTATION_STATE_CREATED,
+                    task_id=AITaskId.REPUTATION,
+                    web_session_id=context.web_session_id,
+                    user_id=context.user_id,
+                    payload=payload,
+                )
+                await self._governance_client.submit_envelope(message)
             else:
-                await self.cache.update_document(
+                await self._governance_client.update_governed_doc(
                     collection=self.state_collection,
                     document_id=state.agent_id,
-                    data=state.model_dump(mode="json"),
+                    updates=state.model_dump(mode="json"),
+                    event_type=EventType.APP_REPUTATION_STATE_UPDATED,
+                    web_session_id=context.web_session_id,
+                    user_id=context.user_id,
+                    operator_id=context.operator_id,
+                    operator_session_id=context.operator_session_id,
                     merge=True,
                 )
             return state
@@ -155,16 +185,33 @@ class ReputationDataService:
     # reputation_commitments
     # ------------------------------------------------------------------
 
-    async def create_commitment(self, commitment: ReputationCommitment) -> ReputationCommitment:
+    async def create_commitment(self, commitment: ReputationCommitment, context: RequestContext) -> ReputationCommitment:
         """Append a new `reputation_commitment` row. Commitments are immutable."""
         if not commitment.id:
             raise ValidationError("ReputationCommitment.id is required")
         try:
-            await self.cache.create_document(
+            from app.models.pubsub_messages import G8eMessage
+            from app.models.command_request_payloads import DocumentUpdateRequestPayload
+            from app.constants import EventType, AITaskId
+
+            payload = DocumentUpdateRequestPayload(
                 collection=self.commitments_collection,
                 document_id=commitment.id,
-                data=commitment.model_dump(mode="json"),
+                updates=commitment.model_dump(mode="json"),
+                merge=False,
             )
+
+            message = G8eMessage(
+                id=commitment.id,
+                source_component=ComponentName.G8EE,
+                event_type=EventType.APP_REPUTATION_COMMITMENT_CREATED,
+                investigation_id=commitment.investigation_id,
+                task_id=AITaskId.REPUTATION,
+                web_session_id=context.web_session_id,
+                user_id=context.user_id,
+                payload=payload,
+            )
+            await self._governance_client.submit_envelope(message)
             logger.info(
                 "Reputation commitment created",
                 extra={

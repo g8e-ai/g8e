@@ -36,10 +36,10 @@ import (
 
 // mockSSHServer is a minimal SSH server for testing streamToHost.
 type mockSSHServer struct {
-	listener net.Listener
-	config   *ssh.ServerConfig
-	addr     string
-	hostKey  ssh.PublicKey
+	gateway net.Listener
+	config  *ssh.ServerConfig
+	addr    string
+	hostKey ssh.PublicKey
 }
 
 func newMockSSHServer(t *testing.T, handler func(ssh.Conn, <-chan ssh.NewChannel, <-chan *ssh.Request)) *mockSSHServer {
@@ -56,10 +56,10 @@ func newMockSSHServer(t *testing.T, handler func(ssh.Conn, <-chan ssh.NewChannel
 	require.NoError(t, err)
 
 	s := &mockSSHServer{
-		listener: l,
-		config:   config,
-		addr:     l.Addr().String(),
-		hostKey:  key.PublicKey(),
+		gateway: l,
+		config:  config,
+		addr:    l.Addr().String(),
+		hostKey: key.PublicKey(),
 	}
 
 	go func() {

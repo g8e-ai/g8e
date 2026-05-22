@@ -94,7 +94,7 @@ async def test_internal_chat_new_case(request_context, g8e_context, task_tracker
     )
 
     # Mock dependencies
-    mock_platform_settings = MagicMock()
+    mock_app_settings = MagicMock()
     mock_user_settings = MagicMock()
     mock_chat_pipeline = MagicMock()
     mock_chat_task_manager = MagicMock()
@@ -115,7 +115,7 @@ async def test_internal_chat_new_case(request_context, g8e_context, task_tracker
     with task_tracker.patch_create_task("app.routers.internal_router"):
         response = await internal_chat(
             request=request,
-            platform_settings=mock_platform_settings,
+            app_settings=mock_app_settings,
             user_settings=mock_user_settings,
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
@@ -137,7 +137,7 @@ async def test_internal_chat_missing_investigation(request_context, g8e_context,
     request_context = request_context.model_copy(update={"investigation_id": ""})
     request = ChatMessageRequest(context=request_context, message="test message", sentinel_mode=True)
 
-    mock_platform_settings = MagicMock()
+    mock_app_settings = MagicMock()
     mock_user_settings = MagicMock()
     mock_chat_pipeline = MagicMock()
     mock_chat_pipeline.run_chat = AsyncMock()
@@ -151,7 +151,7 @@ async def test_internal_chat_missing_investigation(request_context, g8e_context,
     with task_tracker.patch_create_task("app.routers.internal_router"):
         response = await internal_chat(
             request=request,
-            platform_settings=mock_platform_settings,
+            app_settings=mock_app_settings,
             user_settings=mock_user_settings,
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
@@ -595,7 +595,7 @@ async def test_internal_chat_with_llm_overrides(request_context, g8e_context, ta
     )
 
     # Mock dependencies
-    mock_platform_settings = MagicMock()
+    mock_app_settings = MagicMock()
     mock_user_settings = MagicMock()
     mock_chat_pipeline = MagicMock()
     mock_chat_task_manager = MagicMock()
@@ -612,7 +612,7 @@ async def test_internal_chat_with_llm_overrides(request_context, g8e_context, ta
     with task_tracker.patch_create_task("app.routers.internal_router"):
         await internal_chat(
             request=request,
-            platform_settings=mock_platform_settings,
+            app_settings=mock_app_settings,
             user_settings=mock_user_settings,
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,
@@ -642,7 +642,7 @@ async def test_internal_chat_settings_service_di_regression(request_context, g8e
     )
 
     # Mock dependencies with proper AsyncMock for async methods
-    mock_platform_settings = MagicMock()
+    mock_app_settings = MagicMock()
     mock_user_settings = MagicMock()
     mock_chat_pipeline = MagicMock()
     mock_chat_task_manager = MagicMock()
@@ -658,7 +658,7 @@ async def test_internal_chat_settings_service_di_regression(request_context, g8e
     with task_tracker.patch_create_task("app.routers.internal_router"):
         response = await internal_chat(
             request=request,
-            platform_settings=mock_platform_settings,
+            app_settings=mock_app_settings,
             user_settings=mock_user_settings,
             chat_pipeline=mock_chat_pipeline,
             chat_task_manager=mock_chat_task_manager,

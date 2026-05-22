@@ -40,7 +40,7 @@ _DOCUMENT_IDS_DATA = _load("document_ids.json", DocumentIdsConstants)
 _c = _COLLECTIONS_DATA.collections
 _d = _DOCUMENT_IDS_DATA.document_ids
 
-DB_COLLECTION_SETTINGS: str          = _c["settings"].value # one 'settings' collection for both 'platform_settings' and user-specific settings documents
+DB_COLLECTION_SETTINGS: str          = _c["settings"].value # one 'settings' collection for both 'app_settings' and user-specific settings documents
 DB_COLLECTION_USERS: str             = _c["users"].value
 DB_COLLECTION_WEB_SESSIONS: str      = _c["web_sessions"].value
 DB_COLLECTION_OPERATOR_SESSIONS: str = _c["operator_sessions"].value
@@ -61,5 +61,5 @@ DB_COLLECTION_REPUTATION_COMMITMENTS: str  = _c["reputation_commitments"].value
 DB_COLLECTION_STAKE_RESOLUTIONS: str       = _c["stake_resolutions"].value
 
 # Document IDs for settings collection
-PLATFORM_SETTINGS_DOC: str = _d["platform_settings"].value
+PLATFORM_SETTINGS_DOC: str = _d["app_settings"].value
 USER_SETTINGS_DOC_PREFIX: str = _d["user_settings_prefix"].value

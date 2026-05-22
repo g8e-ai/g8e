@@ -39,7 +39,7 @@ All Gemini-specific logic lives in app.llm.providers.gemini.
 
 import logging
 
-from app.models.settings import LLMSettings, G8eePlatformSettings, SearchSettings
+from app.models.settings import LLMSettings, G8eeAppSettings, SearchSettings
 from app.constants import LLMProvider
 
 from .provider import LLMProvider as LLMProviderBase
@@ -51,19 +51,19 @@ from .providers.ollama import OllamaProvider, _normalize_ollama_host
 
 logger = logging.getLogger(__name__)
 
-_settings: G8eePlatformSettings | None = None
+_settings: G8eeAppSettings | None = None
 _llm_settings: LLMSettings | None = None
 _search_settings: SearchSettings | None = None
 _provider_cache: dict[str, LLMProviderBase] = {}
 
 
-def set_settings(settings: G8eePlatformSettings) -> None:
-    """Inject the platform G8eePlatformSettings at startup."""
+def set_settings(settings: G8eeAppSettings) -> None:
+    """Inject the platform G8eeAppSettings at startup."""
     global _settings
     _settings = settings
 
 
-def get_settings() -> G8eePlatformSettings | None:
+def get_settings() -> G8eeAppSettings | None:
     """Return the platform settings singleton."""
     return _settings
 

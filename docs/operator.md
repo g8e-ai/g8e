@@ -64,12 +64,14 @@ The dual-receipt model guarantees that every attempt to change reality is crypto
 
 Sensitive data is scrubbed before it ever leaves the host. **AI never sees unscrubbed data.**
 
-### Sentinel
+### Sentinel (Application-Layer Privacy & Defense)
 
-Sentinel runs in two phases on the Operator:
+Sentinel is an application-enabled security service that defends the host from app-layer attacks and enforces data sovereignty. It sits on top of the mandatory protocol gates and provides:
 
-- **Pre-execution defense** - Regex analysis against MITRE ATT&CK threat patterns blocks dangerous commands before dispatch. Threat doctrines are loaded from `protocol/constants/doctrine/` at startup, including industry sources (OWASP CRS, Gitleaks) and g8e-specific MCP/agentic threat vectors.
-- **Post-execution scrubbing** - Removes API keys, tokens, PII, connection strings, and credentials from output before it is stored in the Scrubbed Vault or transmitted off-host. Sentinel placeholders include `[AWS_KEY]`, `[AWS_SECRET]`, `[PII]`, `[URL_WITH_CREDENTIALS]`, `[CONN_STRING]`, `[CREDENTIAL_REFERENCE]`. Patterns live in `@/home/bob/g8e/services/g8eo/internal/services/sentinel/`.
+- **Pre-Execution Host Defense**: Analyzes commands and file edits before dispatch to block 90+ MITRE ATT&CK patterns (reverse shells, privesc, data destruction).
+- **Post-Execution Data Sovereignty**: Scrubs PII, credentials, and connection strings from output before it leaves the host or reaches AI-accessible storage.
+- **Intent Validation**: Enforces an authoritative allowlist of high-level capabilities (e.g., `s3_read`, `ec2_management`) to prevent unmapped or shadow agentic requests.
+- **Vault Orchestration**: When `sentinel_mode=scrubbed`, the Operator bypasses the Raw Vault and only persists to the AI-accessible Scrubbed Vault.
 
 ### Three local vaults (LFAA)
 
@@ -145,7 +147,7 @@ The Actuator's Ed25519 signing key lives in `.g8e/secrets/Actuator_signing_key`;
 | `--doctrine`, `--consensus`, `--notary` | Start in Gateway mode (Hub). |
 | `--http-listen-port` | mTLS API and Pub/Sub port (default `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->`). |
 | `--bootstrap-listen-port` | Device-link enrollment port (default `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->`, plain HTTP; must not share a port with any TLS surface). |
-| `--public-listen-port` | Browser/BYO public port (default `<!-- g8e:port:operator_public -->8442<!-- /g8e:port -->`; multiplexes onto the mTLS API listener when equal, using `VerifyClientCertIfGiven`). |
+| `--public-listen-port` | Browser/BYO public port (default `<!-- g8e:port:operator_public -->8442<!-- /g8e:port -->`; multiplexes onto the mTLS API gateway when equal, using `VerifyClientCertIfGiven`). |
 | `--data-dir` | Persistence directory (default `.g8e/data`). |
 | `--pki-dir` | PKI hierarchy directory (default `.g8e/pki`). |
 | `--secrets-dir` | Platform secrets directory (default `.g8e/secrets`). |

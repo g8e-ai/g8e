@@ -18,7 +18,7 @@ Covers:
 - use_db_config=True: loads config from operator via cache_aside_service
 - use_db_config=True without cache_aside_service: raises ValueError
 - use_db_config=False with explicit settings: uses supplied settings object
-- use_db_config=False without settings: creates G8eePlatformSettings()
+- use_db_config=False without settings: creates G8eeAppSettings()
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -26,7 +26,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.errors import ConfigurationError
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeAppSettings
 from app.utils.service_init import initialize_g8e_service
 from app.constants.generated_paths import PathConstants, PortConstants
 
@@ -38,7 +38,7 @@ def _make_cache_aside_service():
 
 
 def _make_settings():
-    return G8eePlatformSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
+    return G8eeAppSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
 
 
 class TestUseDbConfigTrue:
@@ -57,7 +57,7 @@ class TestUseDbConfigTrue:
         expected_settings = _make_settings()
 
         with patch(
-            "app.models.settings.G8eePlatformSettings.from_db",
+            "app.models.settings.G8eeAppSettings.from_db",
             new_callable=AsyncMock,
             return_value=expected_settings,
         ) as mock_from_db:
@@ -76,7 +76,7 @@ class TestUseDbConfigTrue:
         loaded_settings = _make_settings()
 
         with patch(
-            "app.models.settings.G8eePlatformSettings.from_db",
+            "app.models.settings.G8eeAppSettings.from_db",
             new_callable=AsyncMock,
             return_value=loaded_settings,
         ):
@@ -103,8 +103,8 @@ class TestUseDbConfigFalse:
         assert result is explicit_settings
 
     async def test_creates_default_settings_when_none_provided(self):
-        with patch("app.utils.service_init.G8eePlatformSettings") as mock_settings_class:
-            mock_settings_instance = MagicMock(spec=G8eePlatformSettings)
+        with patch("app.utils.service_init.G8eeAppSettings") as mock_settings_class:
+            mock_settings_instance = MagicMock(spec=G8eeAppSettings)
             mock_settings_class.return_value = mock_settings_instance
             result = await initialize_g8e_service(
                 "test-service",
@@ -113,5 +113,5 @@ class TestUseDbConfigFalse:
                 use_db_config=False,
             )
             assert result is mock_settings_instance
-            # Ensure G8eePlatformSettings was called to create default
+            # Ensure G8eeAppSettings was called to create default
             mock_settings_class.assert_called_once()

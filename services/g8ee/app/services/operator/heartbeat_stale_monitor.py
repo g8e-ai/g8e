@@ -143,13 +143,13 @@ class HeartbeatStaleMonitorService:
                 last_hb = op.latest_heartbeat_snapshot.timestamp if op.latest_heartbeat_snapshot else None
                 if not last_hb:
                     # No heartbeat data yet - operator is freshly registered (e.g.
-                    # the local CLI bootstrap operator that owns the listener
+                    # the local CLI bootstrap operator that owns the gateway
                     # itself). Do NOT flip its status; wait for the threshold-based
                     # path to make a decision once the operator has actually
                     # reported at least one heartbeat. The previous "treat as
                     # immediately stale" behaviour conflated "never connected" with
                     # "stopped connecting" and broke `./g8e chat send` on a fresh
-                    # install because the listener-bound operator can never produce
+                    # install because the gateway-bound operator can never produce
                     # heartbeats against itself.
                     continue
 

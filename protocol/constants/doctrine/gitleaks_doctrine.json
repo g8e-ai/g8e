@@ -5,6 +5,28 @@
   "license": "MIT",
   "doctrines": [
     {
+      "id": "gitleaks_1password-secret-key",
+      "name": "Uncovered a possible 1Password secret key, potentially compromising access to secrets in vaults.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\bA3-[A-Z0-9]{6}-(?:(?:[A-Z0-9]{11})|(?:[A-Z0-9]{6}-[A-Z0-9]{5}))-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}\\b",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_1password-service-account-token",
+      "name": "Uncovered a possible 1Password service account token, potentially compromising access to secrets in vaults.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "ops_eyJ[a-zA-Z0-9+/]{250,}={0,3}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_adafruit-api-key",
       "name": "Identified a potential Adafruit API Key, which could lead to unauthorized access to Adafruit services and sensitive data exposure.",
       "category": "credential_access",
@@ -13,6 +35,28 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_adobe-client-id",
+      "name": "Detected a pattern that resembles an Adobe OAuth Web Client ID, posing a risk of compromised Adobe integrations and data breaches.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:adobe)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-f0-9]{32})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_adobe-client-secret",
+      "name": "Discovered a potential Adobe Client Secret, which, if exposed, could allow unauthorized Adobe service access and data manipulation.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(p8e-(?i)[a-z0-9]{32})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {
@@ -60,6 +104,28 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_alibaba-access-key-id",
+      "name": "Detected an Alibaba Cloud AccessKey ID, posing a risk of unauthorized cloud resource access and potential data compromise.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(LTAI(?i)[a-z0-9]{20})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_alibaba-secret-key",
+      "name": "Discovered a potential Alibaba Cloud Secret Key, potentially allowing unauthorized operations and data access within Alibaba Cloud.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:alibaba)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-z0-9]{30})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_anthropic-admin-api-key",
       "name": "Detected an Anthropic Admin API Key, risking unauthorized access to administrative functions and sensitive AI model configurations.",
       "category": "credential_access",
@@ -82,6 +148,28 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_artifactory-api-key",
+      "name": "Detected an Artifactory api key, posing a risk unauthorized access to the central repository.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\bAKCp[A-Za-z0-9]{69}\\b",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_artifactory-reference-token",
+      "name": "Detected an Artifactory reference token, posing a risk of impersonation and unauthorized access to the central repository.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\bcmVmd[A-Za-z0-9]{59}\\b",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_asana-client-id",
       "name": "Discovered a potential Asana Client ID, risking unauthorized access to Asana projects and sensitive task information.",
       "category": "credential_access",
@@ -101,6 +189,72 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_atlassian-api-token",
+      "name": "Detected an Atlassian API token, posing a threat to project management and collaboration tool security and data confidentiality.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:(?-i:ATLASSIAN|[Aa]tlassian)|(?-i:CONFLUENCE|[Cc]onfluence)|(?-i:JIRA|[Jj]ira))(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-z0-9]{20}[a-f0-9]{4})(?:[\\x60'\"\\s;]|\\\\[nr]|$)|\\b(ATATT3[A-Za-z0-9_\\-=]{186})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_authress-service-client-access-key",
+      "name": "Uncovered a possible Authress Service Client Access Key, which may compromise access control services and sensitive data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b((?:sc|ext|scauth|authress)_(?i)[a-z0-9]{5,30}\\.[a-z0-9]{4,6}\\.(?-i:acc)[_-][a-z0-9-]{10,32}\\.[a-z0-9+/_=-]{30,120})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_aws-access-token",
+      "name": "Identified a pattern that may indicate AWS credentials, risking unauthorized cloud resource access and data breaches on AWS platforms.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b((?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16})\\b",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_aws-amazon-bedrock-api-key-long-lived",
+      "name": "Identified a pattern that may indicate long-lived Amazon Bedrock API keys, risking unauthorized Amazon Bedrock usage",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(ABSK[A-Za-z0-9+/]{109,269}={0,2})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_aws-amazon-bedrock-api-key-short-lived",
+      "name": "Identified a pattern that may indicate short-lived Amazon Bedrock API keys, risking unauthorized Amazon Bedrock usage",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "bedrock-api-key-YmVkcm9jay5hbWF6b25hd3MuY29t",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_azure-ad-client-secret",
+      "name": "Azure AD Client Secret",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?:^|[\\\\'\"\\x60\\s>=:(,)])([a-zA-Z0-9_~.]{3}\\dQ~[a-zA-Z0-9_~.-]{31,34})(?:$|[\\\\'\"\\x60\\s<),])",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {
@@ -159,6 +313,72 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_cisco-meraki-api-key",
+      "name": "Cisco Meraki is a cloud-managed IT solution that provides networking, security, and device management through an easy-to-use interface.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "[\\w.-]{0,50}?(?i:[\\w.-]{0,50}?(?:(?-i:[Mm]eraki|MERAKI))(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3})(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([0-9a-f]{40})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_clickhouse-cloud-api-secret-key",
+      "name": "Identified a pattern that may indicate clickhouse cloud API secret key, risking unauthorized clickhouse cloud api access and data breaches on ClickHouse Cloud platforms.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(4b1d[A-Za-z0-9]{38})\\b",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_clojars-api-token",
+      "name": "Uncovered a possible Clojars API token, risking unauthorized access to Clojure libraries and potential code manipulation.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)CLOJARS_[a-z0-9]{60}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_cloudflare-api-key",
+      "name": "Detected a Cloudflare API Key, potentially compromising cloud application deployments and operational security.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:cloudflare)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-z0-9_-]{40})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_cloudflare-global-api-key",
+      "name": "Detected a Cloudflare Global API Key, potentially compromising cloud application deployments and operational security.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:cloudflare)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-f0-9]{37})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_cloudflare-origin-ca-key",
+      "name": "Detected a Cloudflare Origin CA Key, potentially compromising cloud application deployments and operational security.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(v1\\.0-[a-f0-9]{24}-[a-f0-9]{146})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_codecov-access-token",
       "name": "Found a pattern resembling a Codecov Access Token, posing a risk of unauthorized access to code coverage reports and sensitive data.",
       "category": "credential_access",
@@ -167,6 +387,17 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_cohere-api-token",
+      "name": "Identified a Cohere Token, posing a risk of unauthorized access to AI services and data manipulation.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "[\\w.-]{0,50}?(?i:[\\w.-]{0,50}?(?:cohere|CO_API_KEY)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3})(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-zA-Z0-9]{40})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
       "enabled": true
     },
     {
@@ -214,6 +445,39 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_curl-auth-header",
+      "name": "Discovered a potential authorization token provided in a curl command header, which could compromise the curl accessed resource.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\bcurl\\b(?:.*?|.*?(?:[\\r\\n]{1,2}.*?){1,5})[ \\t\\n\\r](?:-H|--header)(?:=|[ \\t]{0,5})(?:\"(?i)(?:Authorization:[ \\t]{0,5}(?:Basic[ \\t]([a-z0-9+/]{8,}={0,3})|(?:Bearer|(?:Api-)?Token)[ \\t]([\\w=~@.+/-]{8,})|([\\w=~@.+/-]{8,}))|(?:(?:X-(?:[a-z]+-)?)?(?:Api-?)?(?:Key|Token)):[ \\t]{0,5}([\\w=~@.+/-]{8,}))\"|'(?i)(?:Authorization:[ \\t]{0,5}(?:Basic[ \\t]([a-z0-9+/]{8,}={0,3})|(?:Bearer|(?:Api-)?Token)[ \\t]([\\w=~@.+/-]{8,})|([\\w=~@.+/-]{8,}))|(?:(?:X-(?:[a-z]+-)?)?(?:Api-?)?(?:Key|Token)):[ \\t]{0,5}([\\w=~@.+/-]{8,}))')(?:\\B|\\s|\\z)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_curl-auth-user",
+      "name": "Discovered a potential basic authorization token provided in a curl command, which could compromise the curl accessed resource.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\bcurl\\b(?:.*|.*(?:[\\r\\n]{1,2}.*){1,5})[ \\t\\n\\r](?:-u|--user)(?:=|[ \\t]{0,5})(\"(:[^\"]{3,}|[^:\"]{3,}:|[^:\"]{3,}:[^\"]{3,})\"|'([^:']{3,}:[^']{3,})'|((?:\"[^\"]{3,}\"|'[^']{3,}'|[\\w$@.-]+):(?:\"[^\"]{3,}\"|'[^']{3,}'|[\\w${}@.-]+)))(?:\\s|\\z)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_databricks-api-token",
+      "name": "Uncovered a Databricks API token, which may compromise big data analytics platforms and sensitive data processing.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(dapi[a-f0-9]{32}(?:-\\d)?)(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_datadog-access-token",
       "name": "Detected a Datadog Access Token, potentially risking monitoring and analytics data exposure and manipulation.",
       "category": "credential_access",
@@ -236,6 +500,28 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_digitalocean-access-token",
+      "name": "Found a DigitalOcean OAuth Access Token, risking unauthorized cloud resource access and data compromise.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(doo_v1_[a-f0-9]{64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_digitalocean-pat",
+      "name": "Discovered a DigitalOcean Personal Access Token, posing a threat to cloud infrastructure security and data privacy.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(dop_v1_[a-f0-9]{64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_digitalocean-refresh-token",
       "name": "Uncovered a DigitalOcean OAuth Refresh Token, which could allow prolonged unauthorized access and resource manipulation.",
       "category": "credential_access",
@@ -255,6 +541,39 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_discord-client-id",
+      "name": "Identified a Discord client ID, which may lead to unauthorized integrations and data exposure in Discord applications.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:discord)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([0-9]{18})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_discord-client-secret",
+      "name": "Discovered a potential Discord client secret, risking compromised Discord bot integrations and data leaks.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:discord)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-z0-9=_\\-]{32})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_doppler-api-token",
+      "name": "Discovered a Doppler API token, posing a risk to environment and secrets management security.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "dp\\.pt\\.(?i)[a-z0-9]{43}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {
@@ -299,6 +618,94 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_duffel-api-token",
+      "name": "Uncovered a Duffel API token, which may compromise travel platform integrations and sensitive customer data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "duffel_(?:test|live)_(?i)[a-z0-9_\\-=]{43}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_dynatrace-api-token",
+      "name": "Detected a Dynatrace API token, potentially risking application performance monitoring and data exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "dt0c01\\.(?i)[a-z0-9]{24}\\.[a-z0-9]{64}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_easypost-api-token",
+      "name": "Identified an EasyPost API token, which could lead to unauthorized postal and shipment service access and data exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\bEZAK(?i)[a-z0-9]{54}\\b",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_easypost-test-api-token",
+      "name": "Detected an EasyPost test API token, risking exposure of test environments and potentially sensitive shipment data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\bEZTK(?i)[a-z0-9]{54}\\b",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_etsy-access-token",
+      "name": "Found an Etsy Access Token, potentially compromising Etsy shop management and customer data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:(?-i:ETSY|[Ee]tsy))(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-z0-9]{24})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_facebook-access-token",
+      "name": "Discovered a Facebook Access Token, posing a risk of unauthorized access to Facebook accounts and personal data exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)\\b(\\d{15,16}(\\||%)[0-9a-z\\-_]{27,40})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_facebook-page-access-token",
+      "name": "Discovered a Facebook Page Access Token, posing a risk of unauthorized access to Facebook accounts and personal data exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(EAA[MC](?i)[a-z0-9]{100,})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_facebook-secret",
+      "name": "Discovered a Facebook Application secret, posing a risk of unauthorized access to Facebook accounts and personal data exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:facebook)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-f0-9]{32})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {
@@ -357,6 +764,50 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_flutterwave-encryption-key",
+      "name": "Uncovered a Flutterwave Encryption Key, which may compromise payment processing and sensitive financial information.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "FLWSECK_TEST-(?i)[a-h0-9]{12}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_flutterwave-public-key",
+      "name": "Detected a Finicity Public Key, potentially exposing public cryptographic operations and integrations.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "FLWPUBK_TEST-(?i)[a-h0-9]{32}-X",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_flutterwave-secret-key",
+      "name": "Identified a Flutterwave Secret Key, risking unauthorized financial transactions and data breaches.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "FLWSECK_TEST-(?i)[a-h0-9]{32}-X",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_flyio-access-token",
+      "name": "Uncovered a Fly.io API key",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b((?:fo1_[\\w-]{43}|fm1[ar]_[a-zA-Z0-9+\\/]{100,}={0,3}|fm2_[a-zA-Z0-9+\\/]{100,}={0,3}))(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_frameio-api-token",
       "name": "Found a Frame.io API token, potentially compromising video collaboration and project management.",
       "category": "credential_access",
@@ -390,6 +841,248 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_gcp-api-key",
+      "name": "Uncovered a GCP API key, which could lead to unauthorized access to Google Cloud services and data breaches.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(AIza[\\w-]{35})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_generic-api-key",
+      "name": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:access|auth|(?-i:[Aa]pi|API)|credential|creds|key|passw(?:or)?d|secret|token)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([\\w.=-]{10,150}|[a-z0-9][a-z0-9+/]{11,}={0,3})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_github-app-token",
+      "name": "Identified a GitHub App Token, which may compromise GitHub application integrations and source code security.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?:ghu|ghs)_[0-9a-zA-Z]{36}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_github-fine-grained-pat",
+      "name": "Found a GitHub Fine-Grained Personal Access Token, risking unauthorized repository access and code manipulation.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "github_pat_\\w{82}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_github-oauth",
+      "name": "Discovered a GitHub OAuth Access Token, posing a risk of compromised GitHub account integrations and data leaks.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "gho_[0-9a-zA-Z]{36}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_github-pat",
+      "name": "Uncovered a GitHub Personal Access Token, potentially leading to unauthorized repository access and sensitive content exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "ghp_[0-9a-zA-Z]{36}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_github-refresh-token",
+      "name": "Detected a GitHub Refresh Token, which could allow prolonged unauthorized access to GitHub services.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "ghr_[0-9a-zA-Z]{36}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-cicd-job-token",
+      "name": "Identified a GitLab CI/CD Job Token, potential access to projects and some APIs on behalf of a user while the CI job is running.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "glcbt-[0-9a-zA-Z]{1,5}_[0-9a-zA-Z_-]{20}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-deploy-token",
+      "name": "Identified a GitLab Deploy Token, risking access to repositories, packages and containers with write access.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "gldt-[0-9a-zA-Z_\\-]{20}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-feature-flag-client-token",
+      "name": "Identified a GitLab feature flag client token, risks exposing user lists and features flags used by an application.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "glffct-[0-9a-zA-Z_\\-]{20}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-feed-token",
+      "name": "Identified a GitLab feed token, risking exposure of user data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "glft-[0-9a-zA-Z_\\-]{20}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-incoming-mail-token",
+      "name": "Identified a GitLab incoming mail token, risking manipulation of data sent by mail.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "glimt-[0-9a-zA-Z_\\-]{25}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-kubernetes-agent-token",
+      "name": "Identified a GitLab Kubernetes Agent token, risking access to repos and registry of projects connected via agent.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "glagent-[0-9a-zA-Z_\\-]{50}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-oauth-app-secret",
+      "name": "Identified a GitLab OIDC Application Secret, risking access to apps using GitLab as authentication provider.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "gloas-[0-9a-zA-Z_\\-]{64}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-pat",
+      "name": "Identified a GitLab Personal Access Token, risking unauthorized access to GitLab repositories and codebase exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "glpat-[\\w-]{20}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-pat-routable",
+      "name": "Identified a GitLab Personal Access Token (routable), risking unauthorized access to GitLab repositories and codebase exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\bglpat-[0-9a-zA-Z_-]{27,300}\\.[0-9a-z]{2}[0-9a-z]{7}\\b",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-ptt",
+      "name": "Found a GitLab Pipeline Trigger Token, potentially compromising continuous integration workflows and project security.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "glptt-[0-9a-f]{40}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-rrt",
+      "name": "Discovered a GitLab Runner Registration Token, posing a risk to CI/CD pipeline integrity and unauthorized access.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "GR1348941[\\w-]{20}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-runner-authentication-token",
+      "name": "Discovered a GitLab Runner Authentication Token, posing a risk to CI/CD pipeline integrity and unauthorized access.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "glrt-[0-9a-zA-Z_\\-]{20}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-runner-authentication-token-routable",
+      "name": "Discovered a GitLab Runner Authentication Token (Routable), posing a risk to CI/CD pipeline integrity and unauthorized access.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\bglrt-t\\d_[0-9a-zA-Z_\\-]{27,300}\\.[0-9a-z]{2}[0-9a-z]{7}\\b",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-scim-token",
+      "name": "Discovered a GitLab SCIM Token, posing a risk to unauthorized access for a organization or instance.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "glsoat-[0-9a-zA-Z_\\-]{20}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_gitlab-session-cookie",
+      "name": "Discovered a GitLab Session Cookie, posing a risk to unauthorized access to a user account.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "_gitlab_session=[0-9a-z]{32}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_gitter-access-token",
       "name": "Uncovered a Gitter Access Token, which may lead to unauthorized access to chat and communication services.",
       "category": "credential_access",
@@ -412,6 +1105,39 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_grafana-api-key",
+      "name": "Identified a Grafana API key, which could compromise monitoring dashboards and sensitive data analytics.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)\\b(eyJrIjoi[A-Za-z0-9]{70,400}={0,3})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_grafana-cloud-api-token",
+      "name": "Found a Grafana cloud API token, risking unauthorized access to cloud-based monitoring services and data exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)\\b(glc_[A-Za-z0-9+/]{32,400}={0,3})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_grafana-service-account-token",
+      "name": "Discovered a Grafana service account token, posing a risk of compromised monitoring services and data integrity.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)\\b(glsa_[A-Za-z0-9]{32}_[A-Fa-f0-9]{8})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_harness-api-key",
       "name": "Identified a Harness Access Token (PAT or SAT), risking unauthorized access to a Harness account.",
       "category": "credential_access",
@@ -420,6 +1146,28 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_hashicorp-tf-api-token",
+      "name": "Uncovered a HashiCorp Terraform user/org API token, which may lead to unauthorized infrastructure management and security breaches.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[a-z0-9]{14}\\.(?-i:atlasv1)\\.[a-z0-9\\-_=]{60,70}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_hashicorp-tf-password",
+      "name": "Identified a HashiCorp Terraform password field, risking unauthorized infrastructure configuration and security breaches.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:administrator_login_password|password)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}(\"[a-z0-9=_\\-]{8,20}\")(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {
@@ -434,6 +1182,17 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_heroku-api-key-v2",
+      "name": "Detected a Heroku API Key, potentially compromising cloud application deployments and operational security.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b((HRKU-AA[0-9a-zA-Z_-]{58}))(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_hubspot-api-key",
       "name": "Found a HubSpot API Token, posing a risk to CRM data integrity and unauthorized marketing operations.",
       "category": "credential_access",
@@ -445,6 +1204,39 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_huggingface-access-token",
+      "name": "Discovered a Hugging Face Access token, which could lead to unauthorized access to AI models and sensitive data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(hf_(?i:[a-z]{34}))(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_huggingface-organization-api-token",
+      "name": "Uncovered a Hugging Face Organization API token, potentially compromising AI organization accounts and associated data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(api_org_(?i:[a-z]{34}))(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_infracost-api-token",
+      "name": "Detected an Infracost API Token, risking unauthorized access to cloud cost estimation tools and financial data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(ico-[a-zA-Z0-9]{32})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_intercom-api-key",
       "name": "Identified an Intercom API Token, which could compromise customer communication channels and data privacy.",
       "category": "credential_access",
@@ -453,6 +1245,17 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_intra42-client-secret",
+      "name": "Found a Intra42 client secret, which could lead to unauthorized access to the 42School API and sensitive data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(s-s4t2(?:ud|af)-(?i)[abcdef0123456789]{64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {
@@ -475,6 +1278,28 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_jwt",
+      "name": "Uncovered a JSON Web Token, which may lead to unauthorized access to web applications and sensitive user data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(ey[a-zA-Z0-9]{17,}\\.ey[a-zA-Z0-9\\/\\\\_-]{17,}\\.(?:[a-zA-Z0-9\\/\\\\_-]{10,}={0,2})?)(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_jwt-base64",
+      "name": "Detected a Base64-encoded JSON Web Token, posing a risk of exposing encoded authentication and data exchange information.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\bZXlK(?:(?P<alg>aGJHY2lPaU)|(?P<apu>aGNIVWlPaU)|(?P<apv>aGNIWWlPaU)|(?P<aud>aGRXUWlPaU)|(?P<b64>aU5qUWlP)|(?P<crit>amNtbDBJanBi)|(?P<cty>amRIa2lPaU)|(?P<epk>bGNHc2lPbn)|(?P<enc>bGJtTWlPaU)|(?P<jku>cWEzVWlPaU)|(?P<jwk>cWQyc2lPb)|(?P<iss>cGMzTWlPaU)|(?P<iv>cGRpSTZJ)|(?P<kid>cmFXUWlP)|(?P<key_ops>clpYbGZiM0J6SWpwY)|(?P<kty>cmRIa2lPaUp)|(?P<nonce>dWIyNWpaU0k2)|(?P<p2c>d01tTWlP)|(?P<p2s>d01uTWlPaU)|(?P<ppt>d2NIUWlPaU)|(?P<sub>emRXSWlPaU)|(?P<svt>emRuUWlP)|(?P<tag>MFlXY2lPaU)|(?P<typ>MGVYQWlPaUp)|(?P<url>MWNtd2l)|(?P<use>MWMyVWlPaUp)|(?P<ver>MlpYSWlPaU)|(?P<version>MlpYSnphVzl1SWpv)|(?P<x>NElqb2)|(?P<x5c>NE5XTWlP)|(?P<x5t>NE5YUWlPaU)|(?P<x5ts256>NE5YUWpVekkxTmlJNkl)|(?P<x5u>NE5YVWlPaU)|(?P<zip>NmFYQWlPaU))[a-zA-Z0-9\\/\\\\_+\\-\\r\\n]{40,}={0,2}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {
@@ -530,6 +1355,50 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_linear-api-key",
+      "name": "Detected a Linear API Token, posing a risk to project management tools and sensitive task data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "lin_api_(?i)[a-z0-9]{40}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_linear-client-secret",
+      "name": "Identified a Linear Client Secret, which may compromise secure integrations and sensitive project management data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:linear)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-f0-9]{32})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_linkedin-client-id",
+      "name": "Found a LinkedIn Client ID, risking unauthorized access to LinkedIn integrations and professional data exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:linked[_-]?in)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-z0-9]{14})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_linkedin-client-secret",
+      "name": "Discovered a LinkedIn Client secret, potentially compromising LinkedIn application integrations and user data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:linked[_-]?in)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-z0-9]{16})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {
@@ -643,6 +1512,17 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_maxmind-license-key",
+      "name": "Discovered a potential MaxMind license key.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b([A-Za-z0-9]{6}_[A-Za-z0-9]{29}_mmk)(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_messagebird-api-token",
       "name": "Found a MessageBird API token, risking unauthorized access to communication platforms and message data.",
       "category": "credential_access",
@@ -731,6 +1611,39 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_notion-api-token",
+      "name": "Notion API token",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(ntn_[0-9]{11}[A-Za-z0-9]{32}[A-Za-z0-9]{3})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_npm-access-token",
+      "name": "Uncovered an npm access token, potentially compromising package management and code repository access.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)\\b(npm_[a-z0-9]{36})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_nuget-config-password",
+      "name": "Identified a password within a Nuget config file, potentially compromising package management access.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)<add key=\\\"(?:(?:ClearText)?Password)\\\"\\s*value=\\\"(.{8,})\\\"\\s*/>",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_nytimes-access-token",
       "name": "Detected a Nytimes Access Token, risking unauthorized access to New York Times APIs and content services.",
       "category": "credential_access",
@@ -739,6 +1652,61 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_octopus-deploy-api-key",
+      "name": "Discovered a potential Octopus Deploy API key, risking application deployments and operational security.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(API-[A-Z0-9]{26})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_okta-access-token",
+      "name": "Identified an Okta Access Token, which may compromise identity management services and user authentication data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "[\\w.-]{0,50}?(?i:[\\w.-]{0,50}?(?:(?-i:[Oo]kta|OKTA))(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3})(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}(00[\\w=\\-]{40})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_openai-api-key",
+      "name": "Found an OpenAI API Key, posing a risk of unauthorized access to AI services and data manipulation.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(sk-(?:proj|svcacct|admin)-(?:[A-Za-z0-9_-]{74}|[A-Za-z0-9_-]{58})T3BlbkFJ(?:[A-Za-z0-9_-]{74}|[A-Za-z0-9_-]{58})\\b|sk-[a-zA-Z0-9]{20}T3BlbkFJ[a-zA-Z0-9]{20})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_openshift-user-token",
+      "name": "Found an OpenShift user token, potentially compromising an OpenShift/Kubernetes cluster.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(sha256~[\\w-]{43})(?:[^\\w-]|\\z)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_perplexity-api-key",
+      "name": "Detected a Perplexity API key, which could lead to unauthorized access to Perplexity AI services and data exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(pplx-[a-zA-Z0-9]{48})(?:[\\x60'\"\\s;]|\\\\[nr]|$|\\b)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
       "enabled": true
     },
     {
@@ -753,6 +1721,83 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_plaid-client-id",
+      "name": "Uncovered a Plaid Client ID, which could lead to unauthorized financial service integrations and data breaches.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:plaid)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-z0-9]{24})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_plaid-secret-key",
+      "name": "Detected a Plaid Secret key, risking unauthorized access to financial accounts and sensitive transaction data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:plaid)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-z0-9]{30})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_planetscale-api-token",
+      "name": "Identified a PlanetScale API token, potentially compromising database management and operations.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(pscale_tkn_(?i)[\\w=\\.-]{32,64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_planetscale-oauth-token",
+      "name": "Found a PlanetScale OAuth token, posing a risk to database access control and sensitive data integrity.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(pscale_oauth_[\\w=\\.-]{32,64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_planetscale-password",
+      "name": "Discovered a PlanetScale password, which could lead to unauthorized database operations and data breaches.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)\\b(pscale_pw_(?i)[\\w=\\.-]{32,64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_postman-api-token",
+      "name": "Uncovered a Postman API token, potentially compromising API testing and development workflows.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(PMAK-(?i)[a-f0-9]{24}\\-[a-f0-9]{34})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_prefect-api-token",
+      "name": "Detected a Prefect API token, risking unauthorized access to workflow management and automation services.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(pnu_[a-zA-Z0-9]{36})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_private-key",
       "name": "Identified a Private Key, which may compromise cryptographic security and sensitive data encryption.",
       "category": "credential_access",
@@ -764,6 +1809,39 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_privateai-api-token",
+      "name": "Identified a PrivateAI Token, posing a risk of unauthorized access to AI services and data manipulation.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "[\\w.-]{0,50}?(?i:[\\w.-]{0,50}?(?:private[_-]?ai)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3})(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-z0-9]{32})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_pulumi-api-token",
+      "name": "Found a Pulumi API token, posing a risk to infrastructure as code services and cloud resource management.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(pul-[a-f0-9]{40})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_pypi-upload-token",
+      "name": "Discovered a PyPI upload token, potentially compromising Python package distribution and repository integrity.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "pypi-AgEIcHlwaS5vcmc[\\w-]{50,1000}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_rapidapi-access-token",
       "name": "Uncovered a RapidAPI Access Token, which could lead to unauthorized access to various APIs and data services.",
       "category": "credential_access",
@@ -772,6 +1850,39 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_readme-api-token",
+      "name": "Detected a Readme API token, risking unauthorized documentation management and content exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(rdme_[a-z0-9]{70})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_rubygems-api-token",
+      "name": "Identified a Rubygem API token, potentially compromising Ruby library distribution and package management.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(rubygems_[a-f0-9]{48})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_scalingo-api-token",
+      "name": "Found a Scalingo API token, posing a risk to cloud platform services and application deployment security.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(tk-us-[\\w-]{48})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {
@@ -797,6 +1908,149 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_sendgrid-api-token",
+      "name": "Detected a SendGrid API token, posing a risk of unauthorized email service operations and data exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(SG\\.(?i)[a-z0-9=_\\-\\.]{66})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_sendinblue-api-token",
+      "name": "Identified a Sendinblue API token, which may compromise email marketing services and subscriber data privacy.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(xkeysib-[a-f0-9]{64}\\-(?i)[a-z0-9]{16})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_sentry-access-token",
+      "name": "Found a Sentry.io Access Token (old format), risking unauthorized access to error tracking services and sensitive application data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:sentry)(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-f0-9]{64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_sentry-org-token",
+      "name": "Found a Sentry.io Organization Token, risking unauthorized access to error tracking services and sensitive application data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\bsntrys_eyJpYXQiO[a-zA-Z0-9+/]{10,200}(?:LCJyZWdpb25fdXJs|InJlZ2lvbl91cmwi|cmVnaW9uX3VybCI6)[a-zA-Z0-9+/]{10,200}={0,2}_[a-zA-Z0-9+/]{43}(?:[^a-zA-Z0-9+/]|\\z)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_sentry-user-token",
+      "name": "Found a Sentry.io User Token, risking unauthorized access to error tracking services and sensitive application data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(sntryu_[a-f0-9]{64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_settlemint-application-access-token",
+      "name": "Found a Settlemint Application Access Token.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(sm_aat_[a-zA-Z0-9]{16})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_settlemint-personal-access-token",
+      "name": "Found a Settlemint Personal Access Token.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(sm_pat_[a-zA-Z0-9]{16})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_settlemint-service-access-token",
+      "name": "Found a Settlemint Service Access Token.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(sm_sat_[a-zA-Z0-9]{16})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_shippo-api-token",
+      "name": "Discovered a Shippo API token, potentially compromising shipping services and customer order data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(shippo_(?:live|test)_[a-fA-F0-9]{40})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_shopify-access-token",
+      "name": "Uncovered a Shopify access token, which could lead to unauthorized e-commerce platform access and data breaches.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "shpat_[a-fA-F0-9]{32}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_shopify-custom-access-token",
+      "name": "Detected a Shopify custom access token, potentially compromising custom app integrations and e-commerce data security.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "shpca_[a-fA-F0-9]{32}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_shopify-private-app-access-token",
+      "name": "Identified a Shopify private app access token, risking unauthorized access to private app data and store operations.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "shppa_[a-fA-F0-9]{32}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_shopify-shared-secret",
+      "name": "Found a Shopify shared secret, posing a risk to application authentication and e-commerce platform security.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "shpss_[a-fA-F0-9]{32}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_sidekiq-secret",
       "name": "Discovered a Sidekiq Secret, which could lead to compromised background job processing and application data breaches.",
       "category": "credential_access",
@@ -816,6 +2070,94 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_slack-app-token",
+      "name": "Detected a Slack App-level token, risking unauthorized access to Slack applications and workspace data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)xapp-\\d-[A-Z0-9]+-\\d+-[a-z0-9]+",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_slack-bot-token",
+      "name": "Identified a Slack Bot token, which may compromise bot integrations and communication channel security.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "xoxb-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9-]*",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_slack-config-access-token",
+      "name": "Found a Slack Configuration access token, posing a risk to workspace configuration and sensitive data access.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)xoxe.xox[bp]-\\d-[A-Z0-9]{163,166}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_slack-config-refresh-token",
+      "name": "Discovered a Slack Configuration refresh token, potentially allowing prolonged unauthorized access to configuration settings.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)xoxe-\\d-[A-Z0-9]{146}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_slack-legacy-bot-token",
+      "name": "Uncovered a Slack Legacy bot token, which could lead to compromised legacy bot operations and data exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "xoxb-[0-9]{8,14}-[a-zA-Z0-9]{18,26}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_slack-legacy-token",
+      "name": "Detected a Slack Legacy token, risking unauthorized access to older Slack integrations and user data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "xox[os]-\\d+-\\d+-\\d+-[a-fA-F\\d]+",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_slack-legacy-workspace-token",
+      "name": "Identified a Slack Legacy Workspace token, potentially compromising access to workspace data and legacy features.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "xox[ar]-(?:\\d-)?[0-9a-zA-Z]{8,48}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_slack-user-token",
+      "name": "Found a Slack User token, posing a risk of unauthorized user impersonation and data access within Slack workspaces.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "xox[pe](?:-[0-9]{10,13}){3}-[a-zA-Z0-9-]{28,34}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {
@@ -852,6 +2194,28 @@
       "enabled": true
     },
     {
+      "id": "gitleaks_sourcegraph-access-token",
+      "name": "Sourcegraph is a code search and navigation engine.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)\\b(\\b(sgp_(?:[a-fA-F0-9]{16}|local)_[a-fA-F0-9]{40}|sgp_[a-fA-F0-9]{40}|[a-fA-F0-9]{40})\\b)(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_square-access-token",
+      "name": "Detected a Square Access Token, risking unauthorized payment processing and financial transaction exposure.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b((?:EAAA|sq0atp-)[\\w-]{22,60})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
       "id": "gitleaks_squarespace-access-token",
       "name": "Identified a Squarespace Access Token, which may compromise website management and content control on Squarespace.",
       "category": "credential_access",
@@ -860,6 +2224,39 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_stripe-access-token",
+      "name": "Found a Stripe Access Token, posing a risk to payment processing services and sensitive financial data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b((?:sk|rk)_(?:test|live|prod)_[a-zA-Z0-9]{10,99})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_sumologic-access-id",
+      "name": "Discovered a SumoLogic Access ID, potentially compromising log management services and data analytics integrity.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "[\\w.-]{0,50}?(?i:[\\w.-]{0,50}?(?:(?-i:[Ss]umo|SUMO))(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3})(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}(su[a-zA-Z0-9]{12})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_sumologic-access-token",
+      "name": "Uncovered a SumoLogic Access Token, which could lead to unauthorized access to log data and analytics insights.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)[\\w.-]{0,50}?(?:(?-i:[Ss]umo|SUMO))(?:[ \\t\\w.-]{0,20})[\\s'\"]{0,3}(?:=|>|:{1,3}=|\\|\\||:|=>|\\?=|,)[\\x60'\"\\s=]{0,5}([a-z0-9]{64})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {
@@ -882,6 +2279,17 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_twilio-api-key",
+      "name": "Found a Twilio API Key, posing a risk to communication services and sensitive customer interaction data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "SK[0-9a-fA-F]{32}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {
@@ -959,6 +2367,28 @@
       "mitre_attack": "T1055.001",
       "mitre_tactic": "Credential Access",
       "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_vault-batch-token",
+      "name": "Detected a Vault Batch Token, risking unauthorized access to secret management services and sensitive data.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b(hvb\\.[\\w-]{138,300})(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_vault-service-token",
+      "name": "Identified a Vault Service Token, potentially compromising infrastructure security and access to sensitive credentials.",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "\\b((?:hvs\\.[\\w-]{90,120}|s\\.(?i:[a-z0-9]{24})))(?:[\\x60'\"\\s;]|\\\\[nr]|$)",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.85,
       "enabled": true
     },
     {

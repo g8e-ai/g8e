@@ -50,7 +50,7 @@ from app.models.agent import (
 from app.services.ai.generator import generate_command
 from app.models.tribunal_commands import TribunalGenerationRequest
 from app.models.grounding import GroundingMetadata
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.reputation import StakeResolutionPayload
 from app.models.tool_results import (
@@ -410,6 +410,7 @@ async def orchestrate_tool_execution(
                     execution_result=result,
                     warden_risk=result.warden_risk,
                     warden_blocked=warden_blocked,
+                    context=RequestContext.from_app_context(g8e_context),
                 )
 
                 for outcome in res.resolutions:

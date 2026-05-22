@@ -226,6 +226,7 @@ class TestOnHeartbeatMessage:
     @pytest.fixture
     async def service(self):
         svc = _make_service()
+        svc.set_pubsub_client(_make_mock_pubsub_client())
         await svc.register_operator_session("op-222", "op-session-111")
         return svc
 

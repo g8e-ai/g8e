@@ -23,7 +23,7 @@ from typing import Any
 
 from app.errors import ConfigurationError
 from app.models.settings import G8eeUserSettings
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.agent import OperatorContext
 from app.constants import (
     CommandGenerationOutcome,
@@ -403,6 +403,7 @@ async def generate_command(request: TribunalGenerationRequest) -> CommandGenerat
         auditor_enabled=request.settings.llm.llm_command_gen_auditor,
         command_constraints_message=command_constraints_message,
         investigation_id=investigation_id,
+        context=RequestContext.from_app_context(request.g8e_context),
         whitelisting_enabled=request.whitelisting_enabled,
         blacklisting_enabled=request.blacklisting_enabled,
     )

@@ -5,9 +5,9 @@
     "db_path": ".g8e/data/g8e.db",
     "docs_dir": "/docs",
     "pki_dir": ".g8e/pki",
-    "protocol_constants_dir": "/app/protocol/constants",
-    "protocol_dir": "/app/protocol",
-    "protocol_models_dir": "/app/protocol/models",
+    "protocol_constants_dir": "/home/bob/g8e/protocol/constants",
+    "protocol_dir": "/home/bob/g8e/protocol",
+    "protocol_models_dir": "/home/bob/g8e/protocol/models",
     "secrets_dir": ".g8e/secrets",
     "ssh_config_path": "/etc/g8e/ssh_config"
   },

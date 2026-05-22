@@ -62,6 +62,8 @@ func MapEventTypeToActionType(eventType EventType) ActionType {
 		return ActionTypeA2aCall
 	case Event.Operator.PortCheck.Requested:
 		return ActionTypePortCheck
+	case EventAppInvestigationCreated:
+		return ActionTypeInvestigationCreate
 	default:
 		return ActionType(eventType)
 	}
@@ -104,6 +106,8 @@ func MapActionTypeToEventType(actionType ActionType) EventType {
 		return Event.Operator.A2a.CallRequested
 	case ActionTypePortCheck:
 		return Event.Operator.PortCheck.Requested
+	case ActionTypeInvestigationCreate:
+		return EventAppInvestigationCreated
 	default:
 		return EventType(actionType)
 	}

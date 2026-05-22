@@ -14,7 +14,7 @@
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from app.models.settings import BatchExecutionSettings, LLMSettings, G8eePlatformSettings
+from app.models.settings import BatchExecutionSettings, LLMSettings, G8eeAppSettings
 
 pytestmark = [pytest.mark.unit]
 
@@ -65,16 +65,16 @@ class TestLLMSettingsResolvedAssistantModel:
         assert llm.resolved_assistant_model == "gemma3:4b"
 
 
-class TestG8eePlatformSettingsMTLSPaths:
+class TestG8eeAppSettingsMTLSPaths:
 
     def test_default_paths_are_none_or_string(self):
-        settings = G8eePlatformSettings()
+        settings = G8eeAppSettings()
         # Should not raise AttributeError
         assert settings.client_cert_path is None or isinstance(settings.client_cert_path, str)
         assert settings.client_key_path is None or isinstance(settings.client_key_path, str)
 
     def test_private_field_overrides(self):
-        settings = G8eePlatformSettings()
+        settings = G8eeAppSettings()
         settings._client_cert_path = "/tmp/cert.pem"
         settings._client_key_path = "/tmp/key.pem"
         assert settings.client_cert_path == "/tmp/cert.pem"

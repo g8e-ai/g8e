@@ -23,6 +23,7 @@ from app.utils.agent_persona_loader import get_agent_persona
 from app.models.settings import G8eeUserSettings
 from app.models.investigations import ConversationHistoryMessage, InvestigationModel
 from app.models.memory import InvestigationMemory, MemoryAnalysis
+from app.models.http_context import RequestContext
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.services.protocols import MemoryDataServiceProtocol
 
@@ -66,6 +67,7 @@ class MemoryGenerationService:
         conversation_history: list[ConversationHistoryMessage],
         investigation: InvestigationModel,
         settings: G8eeUserSettings,
+        context: RequestContext,
     ) -> InvestigationMemory:
         investigation_id = investigation.id
 
@@ -90,7 +92,7 @@ class MemoryGenerationService:
             )
             if existing is not None:
                 return existing
-            return await self._memory_crud.create_memory(investigation)
+            return await self._memory_crud.create_memory(investigation, context)
 
         if is_new:
             memory = InvestigationMemory(
@@ -116,7 +118,7 @@ class MemoryGenerationService:
         memory.status = investigation.status
         memory.update_timestamp()
 
-        await self._memory_crud.save_memory(memory, is_new=is_new)
+        await self._memory_crud.save_memory(memory, is_new=is_new, context=context)
 
         logger.info(
             "Memory updated for investigation %s",

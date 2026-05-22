@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 
+from _lib import RegexValidationError, validate_regex_complexity
+
 
 @dataclass
 class Doctrine:
@@ -99,12 +101,19 @@ class CRSParser:
         # Structural validation: count total SecRule occurrences to find missed ones
         total_secrules = len(re.findall(r'SecRule\s+', content, re.IGNORECASE))
         matched_count = 0
+        skipped_non_regex = 0
         
         for match in rule_pattern.finditer(content):
             matched_count += 1
             variable = match.group(1).strip("'\"")
             pattern = match.group(3)
             actions = match.group(5)
+            
+            # Skip non-regex operators that don't translate to Go regex
+            # @pm = parallel match, @lt = less than, @gt = greater than, @eq = equal, etc.
+            if pattern.startswith('@'):
+                skipped_non_regex += 1
+                continue
             
             # Extract rule ID from actions
             rule_id_match = re.search(r'id:(\d+)', actions)
@@ -139,7 +148,14 @@ class CRSParser:
             # Clean up pattern (remove SecLanguage escapes and hex sequences)
             pattern = pattern.replace(r'\.', '.').replace(r'\*', '*')
             pattern = re.sub(r'\\x[0-9a-fA-F]{2}', '', pattern)
-            
+
+            # Validate regex complexity to prevent ReDoS
+            try:
+                validate_regex_complexity(pattern)
+            except RegexValidationError as e:
+                print(f"Warning: Skipping rule {rule_id} due to regex validation error: {e}", file=sys.stderr)
+                continue
+
             doctrine = Doctrine(
                 id=f"owasp_crs_{rule_id}",
                 name=name,
@@ -154,22 +170,25 @@ class CRSParser:
             
             doctrines.append(doctrine)
         
-        if matched_count < total_secrules:
-            missed = total_secrules - matched_count
-            print(f"  Warning: Missed {missed} SecRule directives in {filepath.name} due to parsing limitations", file=sys.stderr)
+        if skipped_non_regex > 0:
+            print(f"  Info: Skipped {skipped_non_regex} non-regex SecRule directives in {filepath.name} (expected: @pm, @lt, @gt, @eq, etc.)")
             
         return doctrines
 
     def parse_directory(self, directory: Path) -> List[Doctrine]:
         """Parse all .conf files in a directory."""
         all_doctrines = []
+        seen_ids = set()
         
         for conf_file in directory.glob("*.conf"):
             print(f"Parsing {conf_file.name}...")
             try:
                 doctrines = self.parse_file(conf_file)
-                all_doctrines.extend(doctrines)
-                print(f"  Extracted {len(doctrines)} doctrines")
+                for doctrine in doctrines:
+                    if doctrine.id not in seen_ids:
+                        all_doctrines.append(doctrine)
+                        seen_ids.add(doctrine.id)
+                print(f"  Extracted {len(doctrines)} doctrines ({len(all_doctrines)} unique)")
             except Exception as e:
                 print(f"  Error parsing {conf_file.name}: {e}", file=sys.stderr)
         

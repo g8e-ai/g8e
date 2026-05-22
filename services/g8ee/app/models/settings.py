@@ -46,12 +46,18 @@ from app.models.base import ConfigDict, Field, G8eBaseModel, G8eIdentifiableMode
 
 logger = logging.getLogger(__name__)
 
-class PlatformSettingsDocument(G8eIdentifiableModel):
-    """Platform-wide configuration document from operator 'platform_settings' collection."""
+class TLSConfig(G8eBaseModel):
+    """TLS/mTLS configuration for operator client connections."""
+    ca_cert_path: str | None = Field(None, description="Path to CA certificate bundle")
+    client_cert_path: str | None = Field(None, description="Path to client certificate for mTLS")
+    client_key_path: str | None = Field(None, description="Path to client private key for mTLS")
+
+class AppSettingsDocument(G8eIdentifiableModel):
+    """Platform-wide configuration document from operator 'app_settings' collection."""
 
     model_config = ConfigDict(extra="forbid")
 
-    settings: G8eePlatformSettings
+    settings: G8eeAppSettings
 
 class UserSettingsDocument(G8eIdentifiableModel):
     """Per-user settings document from operator 'user_settings' collection."""
@@ -82,8 +88,8 @@ class ComponentURLsSettings(G8eBaseModel):
     """Internal and external component URL configuration.
 
     The internal SSE bridge (`/api/internal/sse/push`, `/api/internal/sse/events`)
-    lives on the Operator's mTLS HTTP listener (default from paths.json), so ``client_url``
-    defaults to that listener. The CLI / BYO frontends consume events from the
+    lives on the Operator's mTLS HTTP gateway (default from paths.json), so ``client_url``
+    defaults to that gateway. The CLI / BYO frontends consume events from the
     same host. Override with the ``G8E_DASHBOARD_URL`` env var if you front the
     Operator behind a different ingress.
     """
@@ -217,7 +223,7 @@ class DatabaseSettings(G8eBaseModel):
     cases_collection: str = Field(DB_COLLECTION_CASES)
     users_collection: str = Field(DB_COLLECTION_USERS)
     investigations_collection: str = Field(DB_COLLECTION_INVESTIGATIONS)
-    platform_settings_collection: str = Field(DB_COLLECTION_SETTINGS)
+    app_settings_collection: str = Field(DB_COLLECTION_SETTINGS)
     user_settings_collection: str = Field(DB_COLLECTION_SETTINGS)
     api_keys_collection: str = Field(DB_COLLECTION_API_KEYS)
     memories_collection: str = Field(DB_COLLECTION_MEMORIES)
@@ -226,7 +232,7 @@ class DatabaseSettings(G8eBaseModel):
     orgs_collection: str = Field(DB_COLLECTION_ORGANIZATIONS)
     operators_collection: str = Field(DB_COLLECTION_OPERATORS)
 
-class ListenSettings(G8eBaseModel):
+class GatewaySettings(G8eBaseModel):
     """operator (Operator Gateway mode) configuration."""
     http_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}") or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
     pubsub_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_PUBSUB_URL, f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}") or f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
@@ -240,10 +246,10 @@ class ListenSettings(G8eBaseModel):
         return v.rstrip("/")
 
     @classmethod
-    def from_bootstrap(cls, settings_service: Any) -> ListenSettings:
-        """Load ListenSettings from bootstrap (volume-based secrets)."""
+    def from_bootstrap(cls, settings_service: Any) -> GatewaySettings:
+        """Load GatewaySettings from bootstrap (volume-based secrets)."""
         settings = settings_service.get_local_settings()
-        return settings.listen
+        return settings.gateway
 
 class EvalJudgeSettings(G8eBaseModel):
     """Evaluation judge configuration for grading agent performance."""
@@ -493,7 +499,7 @@ class ReputationSettings(G8eBaseModel):
     )
 
 
-class G8eePlatformSettings(G8eBaseModel):
+class G8eeAppSettings(G8eBaseModel):
     """Platform-level deployment configuration."""
     port: int = Field(PortConstants.G8E_PORT_G8EE_HTTPS)
     host: str = Field("0.0.0.0")
@@ -501,7 +507,7 @@ class G8eePlatformSettings(G8eBaseModel):
     enable_logging: bool = Field(True)
 
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
-    listen: ListenSettings = Field(default_factory=ListenSettings)
+    gateway: GatewaySettings = Field(default_factory=GatewaySettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     component_urls: ComponentURLsSettings = Field(default_factory=ComponentURLsSettings)
 
@@ -584,9 +590,9 @@ class G8eePlatformSettings(G8eBaseModel):
             return None
 
     @classmethod
-    async def from_db(cls, settings_service: Any) -> G8eePlatformSettings:
+    async def from_db(cls, settings_service: Any) -> G8eeAppSettings:
         """Load platform settings from DB: Defaults < Env < Platform."""
-        return await settings_service.get_platform_settings()
+        return await settings_service.get_app_settings()
 
 
 class G8eeUserSettings(G8eBaseModel):

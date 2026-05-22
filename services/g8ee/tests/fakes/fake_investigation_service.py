@@ -16,6 +16,7 @@
 from unittest.mock import MagicMock
 
 from app.constants import ComponentName, EventType
+from app.models.http_context import RequestContext
 from app.models.investigations import (
     ConversationMessageMetadata,
     EnrichedInvestigationContext,
@@ -64,6 +65,7 @@ class FakeInvestigationService:
         actor: ComponentName,
         summary: str,
         details: ConversationMessageMetadata,
+        context: RequestContext,
     ) -> InvestigationModel:
         entry = {
             "investigation_id": investigation_id,
@@ -83,6 +85,7 @@ class FakeInvestigationService:
         result: CommandInternalResult,
         operator_id: str,
         operator_session_id: str,
+        context: RequestContext,
         actor: ComponentName = ComponentName.G8EO,
     ) -> InvestigationModel:
         self.command_results.append({
@@ -120,6 +123,7 @@ class FakeInvestigationService:
         file_path: str,
         result: FileEditResult,
         operation: FileOperation,
+        context: RequestContext,
         operator_session_id: str
     ) -> InvestigationModel:
         return MagicMock(spec=InvestigationModel)
@@ -129,6 +133,7 @@ class FakeInvestigationService:
         investigation_id: str,
         event_type: EventType,
         metadata: ConversationMessageMetadata,
+        context: RequestContext,
         actor: ComponentName = ComponentName.G8EE,
     ) -> InvestigationModel:
         return MagicMock(spec=InvestigationModel)

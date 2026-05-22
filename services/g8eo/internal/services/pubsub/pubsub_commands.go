@@ -241,6 +241,9 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		constants.ActionTypeEvalAnswer,
 		constants.ActionTypeMcpCall,
 		constants.ActionTypeA2aCall,
+		constants.ActionTypeMcpResourceRead,
+		constants.ActionTypeMcpPromptGet,
+		constants.ActionTypeInvestigationCreate,
 	}
 	posture := string(c.Config.Gateway.Posture)
 	if posture == "" {
@@ -298,6 +301,11 @@ func (rs *PubSubCommandService) buildHandlers() {
 		constants.Event.Operator.A2a.CallRequested: func(ctx context.Context, msg PubSubCommandMessage) {
 			if _, err := rs.handleA2aCallRequestSync(ctx, msg); err != nil {
 				rs.logger.Error("A2A call request handler failed", "error", err)
+			}
+		},
+		constants.EventAppInvestigationCreated: func(ctx context.Context, msg PubSubCommandMessage) {
+			if _, err := rs.handleAppInvestigationCreatedSync(ctx, msg); err != nil {
+				rs.logger.Error("App investigation creation handler failed", "error", err)
 			}
 		},
 	}
@@ -388,7 +396,7 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 	for {
 		select {
 		case <-rs.ctx.Done():
-			rs.logger.Info("Command listener stopped (context cancelled)")
+			rs.logger.Info("Command gateway stopped (context cancelled)")
 			return
 		default:
 		}
@@ -405,7 +413,7 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 		msgCh, err := rs.client.Subscribe(rs.ctx, channelName)
 		if err != nil {
 			if err == context.Canceled {
-				rs.logger.Info("Command listener stopped (context cancelled during connection)")
+				rs.logger.Info("Command gateway stopped (context cancelled during connection)")
 				return
 			}
 			if IsTLSCertError(err) {
@@ -439,7 +447,7 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 		for !disconnected {
 			select {
 			case <-rs.ctx.Done():
-				rs.logger.Info("Command listener stopped")
+				rs.logger.Info("Command gateway stopped")
 				return
 			case payload, ok := <-msgCh:
 				if !ok {
@@ -754,6 +762,24 @@ func (rs *PubSubCommandService) handleA2aCallRequestSync(ctx context.Context, ms
 		summary = summary[:4096]
 	}
 	return summary, nil
+}
+
+func (rs *PubSubCommandService) handleAppInvestigationCreatedSync(ctx context.Context, msg PubSubCommandMessage) (string, error) {
+	rs.logger.Info("App investigation creation request received", "investigation_id", msg.ID)
+
+	if rs.Actuator == nil || rs.Actuator.AuditStore == nil {
+		return "", errors.New("Actuator or AuditStore not configured")
+	}
+
+	// DocSet expects collection, id, and data.
+	// For APP_INVESTIGATION_CREATED, the ID is the investigation ID from the envelope.
+	if err := rs.Actuator.AuditStore.DocSet(string(constants.CollectionInvestigations), msg.ID, msg.Payload); err != nil {
+		rs.logger.Error("Failed to create investigation document", string(constants.ConnectionStateError), err, "investigation_id", msg.ID)
+		return "", fmt.Errorf("failed to create investigation document: %w", err)
+	}
+
+	rs.logger.Info("Investigation document created successfully", "investigation_id", msg.ID)
+	return "investigation created", nil
 }
 
 func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {

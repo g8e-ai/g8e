@@ -363,7 +363,7 @@ class InvestigationService:
             patch["sentinel_mode"] = investigation.sentinel_mode
         patch["history_trail"] = [e.model_dump(mode="json") for e in investigation.history_trail]
 
-        await self.investigation_data_service.update_investigation_raw(investigation_id, patch)
+        await self.investigation_data_service.update_investigation_raw(investigation_id, patch, request.context)
         logger.info("Updated investigation %s", investigation_id)
         return investigation
 

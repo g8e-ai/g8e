@@ -35,7 +35,7 @@ def blob_client(mock_listen_settings):
         return BlobClient(
             ca_cert_path="/path/to/ca.crt",
             operator_session_id="test-session",
-            listen_settings=mock_listen_settings
+            gateway_settings=mock_listen_settings
         )
 
 @pytest.mark.asyncio

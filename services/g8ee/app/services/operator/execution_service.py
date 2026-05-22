@@ -52,7 +52,7 @@ from app.models.operators import (
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope, ExecutionResultsPayload
 from app.models.tool_results import CommandInternalResult
 from app.models.http_context import G8eHttpContext
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeAppSettings
 from app.security.operator_command_validator import OperatorCommandValidator
 from app.utils.validators import get_blacklist_validator, get_whitelist_validator
 
@@ -67,7 +67,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         pubsub_service: PubSubServiceProtocol,
         approval_service: ApprovalServiceProtocol,
         event_service: EventServiceProtocol,
-        settings: G8eePlatformSettings,
+        settings: G8eeAppSettings,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         operator_data_service: OperatorDataServiceProtocol,
         investigation_service: InvestigationServiceProtocol,

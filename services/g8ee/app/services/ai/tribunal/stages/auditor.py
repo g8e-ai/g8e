@@ -48,6 +48,7 @@ from app.services.ai.auditor_service import (
     parse_auditor_response,
     fail_auditor,
 )
+from app.models.http_context import RequestContext
 from app.services.data.reputation_data_service import ReputationDataService
 from app.services.ai.tribunal.emitter import TribunalEmitter
 
@@ -82,6 +83,7 @@ class TribunalAuditor:
         auditor_enabled: bool,
         command_constraints_message: str,
         investigation_id: str,
+        context: RequestContext,
         tied_candidates: list[CandidateCommand] | None = None,
         whitelisting_enabled: bool = False,
         blacklisting_enabled: bool = False,
@@ -246,6 +248,7 @@ class TribunalAuditor:
                     tribunal_command_id=correlation_id,
                     investigation_id=investigation_id,
                     hmac_key=self.auditor_hmac_key,
+                    context=context,
                 )
                 commitment_id = commitment.id
                 logger.info("[TRIBUNAL-AUDITOR] Reputation commitment created: id=%s merkle_root=%s", commitment.id, commitment.merkle_root[:16])

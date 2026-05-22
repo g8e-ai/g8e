@@ -259,7 +259,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		}
 
 		// [PIVOT] Enforce mTLS for all other routes (Phase 6)
-		// The mTLS listener uses tls.RequireAndVerifyClientCert; reaching L7
+		// The mTLS gateway uses tls.RequireAndVerifyClientCert; reaching L7
 		// without a peer cert means an internal misroute, not a client error.
 		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 			s.logger.Warn("mTLS required but no client certificate provided", "path", r.URL.Path)

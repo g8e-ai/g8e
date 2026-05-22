@@ -349,7 +349,7 @@ def exec_wipe(dry_run: bool = False) -> None:
 
 
 def exec_get_setting(key: str) -> None:
-    doc = get_document('settings', 'platform_settings')
+    doc = get_document('settings', 'app_settings')
     if doc is None:
         return
     value = (doc.get('settings') or {}).get(key)

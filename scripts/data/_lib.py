@@ -22,13 +22,100 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import ssl
+import signal
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List
+
+
+class RegexValidationError(Exception):
+    """Raised when a regex pattern fails complexity validation."""
+    pass
+
+
+def validate_regex_complexity(pattern: str, max_alternations: int = 20, max_quantifier_depth: int = 3) -> None:
+    """Validate regex pattern for catastrophic backtracking risks.
+
+    Args:
+        pattern: The regex pattern to validate.
+        max_alternations: Maximum number of alternation branches allowed.
+        max_quantifier_depth: Maximum nesting depth of quantifiers.
+
+    Raises:
+        RegexValidationError: If the pattern has dangerous complexity.
+    """
+    # Check for nested quantifiers (catastrophic backtracking risk)
+    # Patterns like (a+)+, (a*)*, (a+)?+, etc.
+    quantifier_pattern = r'(\([^)]*[\*\+\?]\)[\*\+\?])'
+    if re.search(quantifier_pattern, pattern):
+        raise RegexValidationError(
+            f"Pattern contains nested quantifiers which can cause catastrophic backtracking: {pattern[:100]}"
+        )
+
+    # Check for repeated quantifiers on groups
+    # Patterns like (a+)+, (a*)*, (a?)+
+    repeated_quantifier = r'(\([^)]*\)[\*\+\?])\s*[\*\+\?]'
+    if re.search(repeated_quantifier, pattern):
+        raise RegexValidationError(
+            f"Pattern contains repeated quantifiers on groups: {pattern[:100]}"
+        )
+
+    # Check for excessive alternation (many | operators)
+    alternation_count = pattern.count('|')
+    if alternation_count > max_alternations:
+        raise RegexValidationError(
+            f"Pattern contains excessive alternations ({alternation_count} > {max_alternations}): {pattern[:100]}"
+        )
+
+    # Check for very large character classes with quantifiers
+    # e.g., [a-zA-Z0-9]{100,}
+    large_char_class = r'\[[^\]]{20,}\]\s*\{[0-9,]{3,}\}'
+    if re.search(large_char_class, pattern):
+        raise RegexValidationError(
+            f"Pattern contains large character class with large quantifier: {pattern[:100]}"
+        )
+
+    # Check for overlapping character classes that can cause exponential backtracking
+    # e.g., (a|ab)+ on string "aaaaab"
+    overlapping_branches = r'\([^)]*\|[^)]*\)\s*[\*\+\?]'
+    if re.search(overlapping_branches, pattern):
+        # Additional check: if branches have common prefixes
+        branch_content = re.search(r'\(([^)]*)\)', pattern)
+        if branch_content:
+            branches = branch_content.group(1).split('|')
+            if len(branches) > 1:
+                # Check if any branch is a prefix of another
+                for i, b1 in enumerate(branches):
+                    for b2 in branches[i+1:]:
+                        if b1.startswith(b2) or b2.startswith(b1):
+                            raise RegexValidationError(
+                                f"Pattern contains overlapping alternation branches which can cause exponential backtracking: {pattern[:100]}"
+                            )
+
+    # Attempt to compile with a timeout to catch actual ReDoS
+    def compile_with_timeout():
+        try:
+            re.compile(pattern)
+        except re.error as e:
+            raise RegexValidationError(f"Invalid regex syntax: {e}")
+
+    # Set a 1-second timeout for compilation
+    def timeout_handler(signum, frame):
+        raise RegexValidationError(f"Regex compilation timed out (possible ReDoS): {pattern[:100]}")
+
+    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(1)
+    try:
+        compile_with_timeout()
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
+
 
 def resolve_project_root() -> Path:
     """

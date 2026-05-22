@@ -86,7 +86,7 @@ By passing --doctrine, --consensus, or --notary, the binary transforms into the 
 
 ### Multiplexed Port Contract
 
-The Governance Gateway (`g8eg`) exposes four logical protocol surfaces. Operators may bind each surface to its own TCP port or collapse multiple surfaces onto a single shared port. The Gateway automatically detects port overlaps and promotes the shared listener to a **Multiplexed Handler** with **Optional mTLS**.
+The Governance Gateway (`g8eg`) exposes four logical protocol surfaces. Operators may bind each surface to its own TCP port or collapse multiple surfaces onto a single shared port. The Gateway automatically detects port overlaps and promotes the shared gateway to a **Multiplexed Handler** with **Optional mTLS**.
 
 Default ports are sourced from `services/g8eo/internal/constants/paths.go`:
 
@@ -105,11 +105,11 @@ The gateway selects a TLS configuration and HTTP handler per port based on which
 - **Public only on a port**: TLS without client-cert request.
 - **Bootstrap only on a port**: plain HTTP (no TLS).
 
-When Public and mTLS surfaces share a port, the gateway serves them through a single `MasterRouter` that dispatches by route prefix. WebSocket connections are natively upgraded over the same listener.
+When Public and mTLS surfaces share a port, the gateway serves them through a single `MasterRouter` that dispatches by route prefix. WebSocket connections are natively upgraded over the same gateway.
 
 #### Constraints
 
-- **Bootstrap isolation is required for plain HTTP**: a port serves plain HTTP only when Bootstrap is the *sole* surface mapped to it. If Bootstrap shares a port with any TLS surface, the listener becomes TLS and trust-anchor download from clients without the platform CA breaks. Keep Bootstrap on its own port.
+- **Bootstrap isolation is required for plain HTTP**: a port serves plain HTTP only when Bootstrap is the *sole* surface mapped to it. If Bootstrap shares a port with any TLS surface, the gateway becomes TLS and trust-anchor download from clients without the platform CA breaks. Keep Bootstrap on its own port.
 - **Privileged ports**: the gateway runs as an unprivileged user, so each configured port must be >1024 unless the binary has been granted `CAP_NET_BIND_SERVICE` (or another root-granted mechanism) out of band. The default ports above are all >1024 and require no privileged setup.
 - **Port equality is the multiplex trigger**: ports collapse only when their numeric values match. Setting `operator_http` and `operator_public` to the same number multiplexes them; setting them to different numbers creates two listeners.
 

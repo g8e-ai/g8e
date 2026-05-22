@@ -166,7 +166,7 @@ Usage:
   `./g8e mcp config`      - Generate an IDE-compatible mcpServers configuration block
   `./g8e mcp status`      - Check the health of the MCP gateway
   `./g8e mcp test`        - Run test tools/list and tools/call requests against the operator
-  `./g8e mcp serve`       - Start the MCP stdio listener and proxy requests to the operator via mTLS
+  `./g8e mcp serve`       - Start the MCP stdio gateway and proxy requests to the operator via mTLS
 
 ### data
 - `users|operators`: Query or modify user and operator documents

@@ -36,7 +36,7 @@ from app.dependencies import (
     get_g8ee_kv_cache_client,
     get_g8ee_operator_cache,
     get_g8ee_operator_command_service,
-    get_g8ee_platform_settings,
+    get_g8ee_app_settings,
     get_g8ee_pubsub_client,
     health_check_dependencies,
     require_authenticated_context,
@@ -48,7 +48,7 @@ from app.errors import (
     ConfigurationError,
     ServiceUnavailableError,
 )
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeAppSettings
 from tests.fakes.factories import build_authenticated_user
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
@@ -71,12 +71,12 @@ def mock_request():
 
 class TestGetG8eeAppSettings:
     async def test_returns_settings_from_app_state(self, mock_request):
-        # We need a real G8eePlatformSettings object for this test to be meaningful
-        settings = G8eePlatformSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
+        # We need a real G8eeAppSettings object for this test to be meaningful
+        settings = G8eeAppSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
         mock_request.app.state.settings = settings
-        result = await get_g8ee_platform_settings(mock_request)
+        result = await get_g8ee_app_settings(mock_request)
         assert result.port == settings.port
-        assert isinstance(result, G8eePlatformSettings)
+        assert isinstance(result, G8eeAppSettings)
 
     async def test_missing_raises_configuration_error(self, mock_request):
         # In a real app, if the attribute is missing, it's a configuration failure
@@ -84,7 +84,7 @@ class TestGetG8eeAppSettings:
             delattr(mock_request.app.state, "settings")
 
         with pytest.raises(ConfigurationError, match="Settings not available"):
-            await get_g8ee_platform_settings(mock_request)
+            await get_g8ee_app_settings(mock_request)
 
 
 class TestGetG8eePubSubClient:

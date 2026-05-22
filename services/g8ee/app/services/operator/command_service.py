@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 
 from app.clients.pubsub_client import PubSubClient
-from app.models.settings import G8eePlatformSettings, G8eeUserSettings
+from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.constants.status import ComponentName, CommandErrorType, ExecutionStatus, RiskLevel
 from app.constants.events import EventType
 from app.constants.status import AITaskId
@@ -115,7 +115,7 @@ class OperatorCommandService:
         cache_aside_service: CacheAsideService,
         operator_data_service: OperatorDataService,
         investigation_service: InvestigationServiceProtocol,
-        settings: G8eePlatformSettings,
+        settings: G8eeAppSettings,
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
         auto_approved_validator: CommandAutoApprovedValidator | None = None,
@@ -154,7 +154,7 @@ class OperatorCommandService:
     def investigation_service(self) -> InvestigationServiceProtocol:
         return self._investigation_service
 
-    def _init_logic(self, settings: G8eePlatformSettings) -> None:
+    def _init_logic(self, settings: G8eeAppSettings) -> None:
         self._cv = settings.command_validation
         self._be = settings.batch_execution
         logger.info(
@@ -177,7 +177,7 @@ class OperatorCommandService:
         operator_data_service: OperatorDataService,
         investigation_service: InvestigationServiceProtocol,
         event_service: EventServiceProtocol,
-        settings: G8eePlatformSettings,
+        settings: G8eeAppSettings,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         internal_http_client: G8eClientProtocol,
         approval_service: ApprovalServiceProtocol,

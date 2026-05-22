@@ -382,15 +382,15 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
+	doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDAppSettings))
 	if err != nil {
-		h.logger.Error("Health check failed to query platform_settings", string(constants.ConnectionStateError), err)
-		jsonError(w, http.StatusServiceUnavailable, "platform_settings not ready")
+		h.logger.Error("Health check failed to query app_settings", string(constants.ConnectionStateError), err)
+		jsonError(w, http.StatusServiceUnavailable, "app_settings not ready")
 		return
 	}
 	if doc == nil {
-		h.logger.Warn("Health check: platform_settings not found")
-		jsonError(w, http.StatusServiceUnavailable, "platform_settings not ready")
+		h.logger.Warn("Health check: app_settings not found")
+		jsonError(w, http.StatusServiceUnavailable, "app_settings not ready")
 		return
 	}
 
@@ -639,7 +639,7 @@ func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Re
 func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
+		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDAppSettings))
 		if err != nil {
 			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -657,9 +657,9 @@ func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		var err2 error
 		if r.Method == http.MethodPut {
-			err2 = h.db.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
+			err2 = h.db.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDAppSettings), json.RawMessage(body))
 		} else {
-			_, err2 = h.db.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
+			_, err2 = h.db.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDAppSettings), json.RawMessage(body))
 		}
 		if err2 != nil {
 			jsonError(w, http.StatusInternalServerError, err2.Error())

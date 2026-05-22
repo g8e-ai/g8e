@@ -19,7 +19,7 @@ from fastapi import Depends, Request
 from app.clients.kv_cache_client import KVCacheClient
 from app.clients.pubsub_client import PubSubClient
 from app.clients.blob_client import BlobClient
-from app.models.settings import G8eePlatformSettings, G8eeUserSettings
+from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.models.state import G8eeAppState
 from app.services.service_factory import AllServices
 from app.constants import (
@@ -97,7 +97,7 @@ async def get_g8ee_settings_service_write(request: Request) -> SettingsService:
     return service
 
 
-async def get_g8ee_platform_settings(request: Request) -> G8eePlatformSettings:
+async def get_g8ee_app_settings(request: Request) -> G8eeAppSettings:
     state = cast(G8eeAppState, request.app.state)
     if not hasattr(state, "settings"):
         logger.error("Settings not found in app state - g8ee initialization may have failed")
@@ -424,7 +424,7 @@ async def get_g8ee_current_active_user(request: Request) -> AuthenticatedUser:
 
 async def require_authenticated_user(
     request: Request,
-    settings: G8eePlatformSettings = Depends(get_g8ee_platform_settings),
+    settings: G8eeAppSettings = Depends(get_g8ee_app_settings),
     auth_service: AuthService = Depends(get_g8ee_auth_service),
 ) -> AuthenticatedUser:
     return await auth_service.authenticate_request(request, settings)
@@ -488,7 +488,7 @@ __all__ = [
     "get_g8ee_operator_data_service",
     "get_g8ee_operator_lifecycle_service",
     "get_g8ee_operator_session_service",
-    "get_g8ee_platform_settings",
+    "get_g8ee_app_settings",
     "get_g8ee_pubsub_client",
     "get_g8ee_session_auth_listener",
     "get_g8ee_settings_service",

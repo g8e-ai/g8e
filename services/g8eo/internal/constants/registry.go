@@ -117,7 +117,7 @@ func Registry() Snapshot {
 		},
 		DocumentIds: DocumentIdsSnapshot{
 			DocumentIds: map[string]Entry{
-				"platform_settings":    {Value: string(DocIDPlatformSettings), GoConst: "DocIDPlatformSettings", PythonConst: "PLATFORM_SETTINGS"},
+				"app_settings":         {Value: string(DocIDAppSettings), GoConst: "DocIDAppSettings", PythonConst: "PLATFORM_SETTINGS"},
 				"user_settings_prefix": {Value: string(DocIDUserSettingsPrefix), GoConst: "DocIDUserSettingsPrefix", PythonConst: "USER_SETTINGS_PREFIX"},
 			},
 		},

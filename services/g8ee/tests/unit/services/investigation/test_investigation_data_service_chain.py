@@ -17,6 +17,7 @@ from app.constants import ComponentName, EventType
 from app.models.investigations import (
     ConversationMessageMetadata,
     InvestigationCreateRequest,
+    InvestigationCurrentState,
 )
 from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.utils.ledger_hash import verify_chain
@@ -24,8 +25,50 @@ from app.utils.ledger_hash import verify_chain
 
 @pytest.fixture
 def investigation_data_service(fake_cache_aside_service):
-    """Investigation data service fixture."""
-    return InvestigationDataService(fake_cache_aside_service)
+    """Investigation data service fixture - bypasses governance for hash chain tests."""
+    from unittest.mock import AsyncMock, MagicMock
+    from app.models.investigations import InvestigationModel
+    from app.constants import ComponentName, EscalationRisk, ComponentStatus
+    from app.utils.timestamp import now
+    
+    # Use None for governance_client to bypass governance envelope
+    service = InvestigationDataService(fake_cache_aside_service, None)
+    
+    # Patch create_investigation to use cache directly (bypass governance)
+    async def patched_create_investigation(request):
+        investigation = InvestigationModel(
+            case_id=request.case_id,
+            case_title=request.case_title,
+            case_description=request.case_description,
+            web_session_id=request.web_session_id,
+            user_id=request.user_id,
+            user_email=request.user_email,
+            priority=request.priority,
+            created_with_case=request.created_with_case,
+            case_source=request.case_source,
+            sentinel_mode=request.sentinel_mode,
+            created_at=now(),
+        )
+        investigation.current_state = InvestigationCurrentState(
+            active_attempt=1,
+            escalation_risk=EscalationRisk.LOW,
+            collaboration_status={ComponentName.G8EE: ComponentStatus.ACTIVE},
+        )
+        investigation.add_history_entry(
+            event_type=EventType.APP_INVESTIGATION_CREATED,
+            actor=ComponentName.G8EE,
+            summary=f"Investigation created for case {request.case_id}",
+        )
+        await fake_cache_aside_service.create_document(
+            collection="investigations",
+            document_id=investigation.id,
+            document_data=investigation.model_dump(mode="json"),
+        )
+        return investigation
+    
+    service.create_investigation = patched_create_investigation
+    
+    return service
 
 
 @pytest.mark.asyncio
@@ -37,6 +80,7 @@ async def test_chat_message_creates_hash_chain(investigation_data_service):
         case_title="Test Case",
         case_description="Test Description",
         user_id="test-user",
+        web_session_id="test-session",
     )
     investigation = await investigation_data_service.create_investigation(request)
 
@@ -83,10 +127,18 @@ async def test_history_entry_creates_hash_chain(investigation_data_service):
         case_title="Test Case",
         case_description="Test Description",
         user_id="test-user",
+        web_session_id="test-session",
     )
     investigation = await investigation_data_service.create_investigation(request)
 
     # Add multiple history entries
+    from app.models.http_context import RequestContext
+    context = RequestContext(
+        web_session_id="test-session",
+        user_id="test-user",
+        source_component=ComponentName.G8EE,
+    )
+    
     details1 = ConversationMessageMetadata()
     await investigation_data_service.add_history_entry(
         investigation_id=investigation.id,
@@ -94,6 +146,7 @@ async def test_history_entry_creates_hash_chain(investigation_data_service):
         actor=ComponentName.G8EE,
         summary="First entry",
         details=details1,
+        context=context,
     )
 
     details2 = ConversationMessageMetadata()
@@ -103,6 +156,7 @@ async def test_history_entry_creates_hash_chain(investigation_data_service):
         actor=ComponentName.G8EE,
         summary="Second entry",
         details=details2,
+        context=context,
     )
 
     details3 = ConversationMessageMetadata()
@@ -112,6 +166,7 @@ async def test_history_entry_creates_hash_chain(investigation_data_service):
         actor=ComponentName.G8EE,
         summary="Third entry",
         details=details3,
+        context=context,
     )
 
     # Verify the chain
@@ -132,6 +187,7 @@ async def test_concurrent_appends_produce_valid_chain(investigation_data_service
         case_title="Test Case",
         case_description="Test Description",
         user_id="test-user",
+        web_session_id="test-session",
     )
     investigation = await investigation_data_service.create_investigation(request)
 
@@ -163,6 +219,7 @@ async def test_first_entry_uses_genesis_hash(investigation_data_service):
         case_title="Test Case",
         case_description="Test Description",
         user_id="test-user",
+        web_session_id="test-session",
     )
     investigation = await investigation_data_service.create_investigation(request)
 
@@ -196,6 +253,7 @@ async def test_backward_compat_without_hash_fields(investigation_data_service):
         case_title="Test Case",
         case_description="Test Description",
         user_id="test-user",
+        web_session_id="test-session",
     )
     investigation = await investigation_data_service.create_investigation(request)
 

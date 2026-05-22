@@ -18,7 +18,7 @@ from uuid import uuid4
 
 T = TypeVar("T")
 
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeAppSettings
 from app.constants import (
     DB_COLLECTION_CASES,
     DB_COLLECTION_TASKS,
@@ -45,9 +45,14 @@ from app.models.cache import FieldFilter
 from app.models.cases import CaseModel, HistoryEntry
 from app.models.events import SessionEvent
 from app.models.db_queries import CaseHistoryQuery
+from app.models.http_context import RequestContext
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.event_service import EventService
 from app.utils.timestamp import now
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.clients.governance_client import GovernanceClient
 
 logger = logging.getLogger(__name__)
 
@@ -56,13 +61,15 @@ class CaseDataService:
 
     def __init__(
         self,
-        settings: G8eePlatformSettings,
+        settings: G8eeAppSettings,
         cache: CacheAsideService,
-        event_service: EventService
+        event_service: EventService,
+        governance_client: "GovernanceClient",
     ):
         self.settings = settings
         self.cache = cache
         self.event_service = event_service
+        self._governance_client = governance_client
         self.cases_collection = settings.database.cases_collection or DB_COLLECTION_CASES
         self.tasks_collection = settings.database.tasks_collection or DB_COLLECTION_TASKS
 
@@ -135,12 +142,29 @@ class CaseDataService:
         )
 
         async def _create():
-            await self.cache.create_document(
+            from app.models.pubsub_messages import G8eMessage
+            from app.models.command_request_payloads import DocumentUpdateRequestPayload
+            from app.constants import EventType, AITaskId
+
+            payload = DocumentUpdateRequestPayload(
                 collection=self.cases_collection,
                 document_id=case_id,
-                data=case.model_dump(mode="json"),
+                updates=case.model_dump(mode="json"),
+                merge=False,
             )
-            logger.info("Case created: %s", case_id, extra={"case_id": case_id})
+
+            message = G8eMessage(
+                id=case_id,
+                source_component=ComponentName.G8EE,
+                event_type=EventType.APP_CASE_CREATED,
+                case_id=case_id,
+                task_id=AITaskId.CASE,
+                web_session_id=case_data.web_session_id,
+                user_id=case_data.user_id,
+                payload=payload,
+            )
+            await self._governance_client.submit_envelope(message)
+            logger.info("Case created: %s via governance envelope", case_id, extra={"case_id": case_id})
             return case
 
         return await self._with_error_handling(
@@ -223,13 +247,24 @@ class CaseDataService:
 
         async def _update():
             db_payload = updated.model_dump(mode="json")
-            await self.cache.update_document(
-                collection=self.cases_collection,
-                document_id=case_id,
-                data=db_payload,
-                merge=True,
-            )
-            logger.info("Case updated: %s", case_id, extra={"case_id": case_id})
+            context = updates.context if hasattr(updates, 'context') else None
+
+            if context:
+                await self._governance_client.update_governed_doc(
+                    collection=self.cases_collection,
+                    document_id=case_id,
+                    updates=db_payload,
+                    event_type=EventType.APP_CASE_UPDATED,
+                    case_id=case_id,
+                    web_session_id=context.web_session_id,
+                    user_id=context.user_id,
+                    operator_id=context.operator_id,
+                    operator_session_id=context.operator_session_id,
+                    merge=True,
+                )
+                logger.info("Case updated: %s via governance envelope", case_id, extra={"case_id": case_id})
+            else:
+                raise ValidationError("RequestContext is required for case updates")
             return updated
 
         return await self._with_error_handling(
@@ -239,30 +274,30 @@ class CaseDataService:
             error_code=ErrorCode.DB_WRITE_ERROR
         )
 
-    async def delete_case(self, case_id: str) -> None:
+    async def delete_case(self, case_id: str, context: RequestContext) -> None:
         """
         Delete a case.
 
         Args:
             case_id: Case ID
+            context: RequestContext for governance envelope
         """
         logger.info("Deleting case: %s", case_id, extra={"case_id": case_id})
 
         await self.get_case(case_id)
 
         async def _delete():
-            result = await self.cache.delete_document(
+            await self._governance_client.delete_governed_doc(
                 collection=self.cases_collection,
                 document_id=case_id,
+                event_type=EventType.APP_CASE_DELETED,
+                case_id=case_id,
+                web_session_id=context.web_session_id,
+                user_id=context.user_id,
+                operator_id=context.operator_id,
+                operator_session_id=context.operator_session_id,
             )
-            if not result.success:
-                raise DatabaseError(
-                    message=f"Failed to delete case: {result.error}",
-                    code=ErrorCode.DB_WRITE_ERROR,
-                    details={"case_id": case_id},
-                    component=ComponentName.G8EE
-                )
-            logger.info("Case deleted: %s", case_id, extra={"case_id": case_id})
+            logger.info("Case deleted: %s via governance envelope", case_id, extra={"case_id": case_id})
 
         return await self._with_error_handling(
             _delete(),

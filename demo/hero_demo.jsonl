@@ -1,0 +1,1 @@
+{"key": "hero-001", "prompt": "Create a directory named /tmp/g8e-governed-demo and then create a file inside it named success.txt containing the string 'Mutation Verified'.", "instruction_id_list": ["length:min_words"], "kwargs": [{"num_words": 1}]}

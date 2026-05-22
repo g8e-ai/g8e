@@ -31,7 +31,7 @@ import aiohttp
 
 from app.utils.envelope_builder import build_uap_envelope_json
 from app.models.pubsub_messages import G8eMessage
-from app.models.settings import ListenSettings
+from app.models.settings import GatewaySettings, TLSConfig
 from app.services.infra.settings_service import SettingsService
 from app.constants import HTTP_AUTHORIZATION_HEADER, HTTP_BEARER_PREFIX
 from app.errors import NetworkError, ValidationError, ErrorCode
@@ -50,20 +50,28 @@ class GovernanceClient:
 
     def __init__(
         self,
-        ca_cert_path: str | None = None,
+        tls_config: TLSConfig | None = None,
         operator_session_id: str | None = None,
-        listen_settings: ListenSettings | None = None,
+        gateway_settings: GatewaySettings | None = None,
+        ca_cert_path: str | None = None,
         client_cert_path: str | None = None,
         client_key_path: str | None = None,
     ) -> None:
-        if listen_settings is None:
+        if gateway_settings is None:
             service = SettingsService()
-            listen_settings = ListenSettings.from_bootstrap(service)
+            gateway_settings = GatewaySettings.from_bootstrap(service)
 
-        self._base_url = listen_settings.http_url
-        self._ca_cert_path = ca_cert_path
-        self._client_cert_path = client_cert_path
-        self._client_key_path = client_key_path
+        self._base_url = gateway_settings.http_url
+
+        if tls_config is not None:
+            self._ca_cert_path = tls_config.ca_cert_path
+            self._client_cert_path = tls_config.client_cert_path
+            self._client_key_path = tls_config.client_key_path
+        else:
+            self._ca_cert_path = ca_cert_path
+            self._client_cert_path = client_cert_path
+            self._client_key_path = client_key_path
+
         self._operator_session_id = operator_session_id
         self._session: aiohttp.ClientSession | None = None
 
@@ -197,6 +205,130 @@ class GovernanceClient:
             "deferring until Gateway public key distribution is available"
         )
         return True
+
+    async def update_governed_doc(
+        self,
+        collection: str,
+        document_id: str,
+        updates: dict[str, Any],
+        event_type: str,
+        *,
+        case_id: str | None = None,
+        investigation_id: str | None = None,
+        task_id: str | None = None,
+        web_session_id: str | None = None,
+        user_id: str | None = None,
+        operator_id: str | None = None,
+        operator_session_id: str | None = None,
+        merge: bool = True,
+    ) -> dict[str, Any]:
+        """Submit a governed document update via governance envelope.
+
+        Args:
+            collection: Target collection name
+            document_id: Document ID to update
+            updates: Dictionary of field updates
+            event_type: EventType for the governance envelope
+            case_id: Optional case ID for context
+            investigation_id: Optional investigation ID for context
+            task_id: Optional task ID for context
+            web_session_id: Optional web session ID
+            user_id: Optional user ID
+            operator_id: Optional operator ID
+            operator_session_id: Optional operator session ID
+            merge: If True, use PATCH (merge); if False, use PUT (replace)
+
+        Returns:
+            The signed ActionReceipt from the Gateway
+
+        Raises:
+            NetworkError: If the HTTP request fails
+            ValidationError: If the envelope is rejected by governance gates
+        """
+        from app.models.pubsub_messages import G8eMessage
+        from app.models.command_request_payloads import DocumentUpdateRequestPayload
+
+        payload = DocumentUpdateRequestPayload(
+            collection=collection,
+            document_id=document_id,
+            updates=updates,
+            merge=merge,
+        )
+
+        message = G8eMessage(
+            id=document_id,
+            source_component="g8ee",
+            event_type=event_type,
+            case_id=case_id,
+            investigation_id=investigation_id,
+            task_id=task_id,
+            web_session_id=web_session_id,
+            user_id=user_id,
+            operator_id=operator_id,
+            operator_session_id=operator_session_id,
+            payload=payload,
+        )
+
+        return await self.submit_envelope(message)
+
+    async def delete_governed_doc(
+        self,
+        collection: str,
+        document_id: str,
+        event_type: str,
+        *,
+        case_id: str | None = None,
+        investigation_id: str | None = None,
+        task_id: str | None = None,
+        web_session_id: str | None = None,
+        user_id: str | None = None,
+        operator_id: str | None = None,
+        operator_session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Submit a governed document deletion via governance envelope.
+
+        Args:
+            collection: Target collection name
+            document_id: Document ID to delete
+            event_type: EventType for the governance envelope
+            case_id: Optional case ID for context
+            investigation_id: Optional investigation ID for context
+            task_id: Optional task ID for context
+            web_session_id: Optional web session ID
+            user_id: Optional user ID
+            operator_id: Optional operator ID
+            operator_session_id: Optional operator session ID
+
+        Returns:
+            The signed ActionReceipt from the Gateway
+
+        Raises:
+            NetworkError: If the HTTP request fails
+            ValidationError: If the envelope is rejected by governance gates
+        """
+        from app.models.pubsub_messages import G8eMessage
+        from app.models.command_request_payloads import DocumentDeleteRequestPayload
+
+        payload = DocumentDeleteRequestPayload(
+            collection=collection,
+            document_id=document_id,
+        )
+
+        message = G8eMessage(
+            id=document_id,
+            source_component="g8ee",
+            event_type=event_type,
+            case_id=case_id,
+            investigation_id=investigation_id,
+            task_id=task_id,
+            web_session_id=web_session_id,
+            user_id=user_id,
+            operator_id=operator_id,
+            operator_session_id=operator_session_id,
+            payload=payload,
+        )
+
+        return await self.submit_envelope(message)
 
     async def close(self) -> None:
         """Close the HTTP session."""

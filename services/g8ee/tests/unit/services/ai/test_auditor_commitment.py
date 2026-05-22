@@ -33,6 +33,7 @@ import pytest
 
 from app.errors import DatabaseError
 from app.models.reputation import GENESIS_PREV_ROOT, ReputationState
+from app.models.http_context import RequestContext
 from app.services.ai.auditor_service import commit_reputation
 from app.services.data.reputation_data_service import ReputationDataService
 from app.utils.merkle import leaf_bytes, merkle_root
@@ -96,6 +97,11 @@ class TestCommitReputation:
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
             hmac_key=_FIXED_HMAC_KEY,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         assert commitment.prev_root == GENESIS_PREV_ROOT
@@ -112,6 +118,11 @@ class TestCommitReputation:
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
             hmac_key=_FIXED_HMAC_KEY,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         assert commitment.merkle_root == _recompute_root(seeded_states)
@@ -124,6 +135,11 @@ class TestCommitReputation:
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
             hmac_key=_FIXED_HMAC_KEY,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         expected = _expected_signature(
@@ -142,6 +158,11 @@ class TestCommitReputation:
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
             hmac_key=_FIXED_HMAC_KEY,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
         # Mutate one scalar so the second root must differ from the first.
         await service.upsert_state(_state("axiom", 0.60))
@@ -150,6 +171,11 @@ class TestCommitReputation:
             tribunal_command_id="tc-2",
             investigation_id="inv-1",
             hmac_key=_FIXED_HMAC_KEY,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         assert second.prev_root == first.merkle_root
@@ -161,6 +187,11 @@ class TestCommitReputation:
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
             hmac_key=_FIXED_HMAC_KEY,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         assert commitment.leaves_count == 0
@@ -175,6 +206,11 @@ class TestCommitReputation:
             tribunal_command_id="tc-1",
             investigation_id="inv-1",
             hmac_key=_FIXED_HMAC_KEY,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         fetched = await service.get_commitment(commitment.id)
@@ -191,6 +227,11 @@ class TestCommitReputation:
                 tribunal_command_id="tc-1",
                 investigation_id="inv-1",
                 hmac_key="",
+                context=RequestContext(
+                    web_session_id="test-web-session",
+                    user_id="test-user",
+                    investigation_id="inv-1",
+                ),
             )
 
     async def test_missing_tribunal_command_id_raises(self, service):
@@ -200,6 +241,11 @@ class TestCommitReputation:
                 tribunal_command_id="",
                 investigation_id="inv-1",
                 hmac_key=_FIXED_HMAC_KEY,
+                context=RequestContext(
+                    web_session_id="test-web-session",
+                    user_id="test-user",
+                    investigation_id="inv-1",
+                ),
             )
 
     async def test_missing_investigation_id_raises(self, service):
@@ -209,6 +255,11 @@ class TestCommitReputation:
                 tribunal_command_id="tc-1",
                 investigation_id="",
                 hmac_key=_FIXED_HMAC_KEY,
+                context=RequestContext(
+                    web_session_id="test-web-session",
+                    user_id="test-user",
+                    investigation_id="inv-1",
+                ),
             )
 
     async def test_db_write_failure_propagates_and_leaves_no_commitment(
@@ -228,6 +279,11 @@ class TestCommitReputation:
                 tribunal_command_id="tc-1",
                 investigation_id="inv-1",
                 hmac_key=_FIXED_HMAC_KEY,
+                context=RequestContext(
+                    web_session_id="test-web-session",
+                    user_id="test-user",
+                    investigation_id="inv-1",
+                ),
             )
 
         # No commitment should have been persisted.

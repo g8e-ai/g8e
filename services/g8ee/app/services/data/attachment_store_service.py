@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.db.blob_service import BlobService
 
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeAppSettings
 from app.constants import AttachmentType
 from app.errors import NetworkError
 from app.models.attachments import AttachmentData, AttachmentMetadata, ProcessedAttachment
@@ -54,7 +54,7 @@ class AttachmentService:
     def __init__(
         self,
         blob_service: BlobService,
-        settings: G8eePlatformSettings,
+        settings: G8eeAppSettings,
     ):
         self.blob_service = blob_service
         self.settings = settings

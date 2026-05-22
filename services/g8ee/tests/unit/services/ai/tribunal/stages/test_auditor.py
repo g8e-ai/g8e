@@ -17,6 +17,7 @@ from app.constants import CommandGenerationOutcome, AuditorReason
 from app.models.agents.tribunal import (
     VoteBreakdown,
 )
+from app.models.http_context import RequestContext
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 
@@ -45,6 +46,11 @@ class TestRunAuditStage:
             auditor_enabled=False,
             command_constraints_message="No whitelist or blacklist constraints are active.",
             investigation_id="inv-1",
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         assert result.final_command == "ls -la"
@@ -80,6 +86,11 @@ class TestRunAuditStage:
             auditor_enabled=True,
             command_constraints_message="No whitelist or blacklist constraints are active.",
             investigation_id="inv-1",
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         assert result.final_command == "ls -la"

@@ -28,7 +28,7 @@ from urllib.parse import quote
 
 import aiohttp
 
-from app.models.settings import ListenSettings
+from app.models.settings import GatewaySettings, TLSConfig
 from app.services.infra.settings_service import SettingsService
 from app.utils.aiohttp_session import create_kv_http_session
 from app.constants import (
@@ -59,23 +59,31 @@ class KVCacheClient:
         http_url: str | None = None,
         component_name: ComponentName = ComponentName.G8EE,
         timeout: float = 10.0,
-        ca_cert_path: str | None = None,
+        tls_config: TLSConfig | None = None,
         operator_session_id: str | None = None,
         operator_api_key: str | None = None,
-        listen_settings: ListenSettings | None = None,
+        gateway_settings: GatewaySettings | None = None,
+        ca_cert_path: str | None = None,
         client_cert_path: str | None = None,
         client_key_path: str | None = None,
     ):
-        if listen_settings is None:
+        if gateway_settings is None:
             service = SettingsService()
-            listen_settings = ListenSettings.from_bootstrap(service)
+            gateway_settings = GatewaySettings.from_bootstrap(service)
 
-        self.http_url = (http_url or listen_settings.http_url).rstrip("/")
+        self.http_url = (http_url or gateway_settings.http_url).rstrip("/")
         self.component_name = component_name
         self._timeout = timeout
-        self._ca_cert_path: str | None = ca_cert_path
-        self._client_cert_path = client_cert_path
-        self._client_key_path = client_key_path
+
+        if tls_config is not None:
+            self._ca_cert_path = tls_config.ca_cert_path
+            self._client_cert_path = tls_config.client_cert_path
+            self._client_key_path = tls_config.client_key_path
+        else:
+            self._ca_cert_path = ca_cert_path
+            self._client_cert_path = client_cert_path
+            self._client_key_path = client_key_path
+
         self._operator_session_id = operator_session_id
         self._operator_api_key = operator_api_key
         self._session: aiohttp.ClientSession | None = None

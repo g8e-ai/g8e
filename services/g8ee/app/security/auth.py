@@ -29,7 +29,7 @@ from app.constants import (
 )
 from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeAppSettings
 
 if TYPE_CHECKING:
     from app.services.operator.operator_session_service import OperatorSessionService

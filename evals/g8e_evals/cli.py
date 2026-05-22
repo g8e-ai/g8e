@@ -192,6 +192,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
         if not role_config or not role_config.provider:
             continue
 
+        # Skip API key validation for providers that don't require authentication
+        if role_config.provider in ("ollama", "llamacpp"):
+            continue
+
         # Key provided via CLI flag?
         if role_config.api_key:
             continue
@@ -205,8 +209,6 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Optional[Path], ou
             "openai": "openai_api_key",
             "anthropic": "anthropic_api_key",
             "gemini": "gemini_api_key",
-            "ollama": "ollama_api_key",
-            "llamacpp": "llamacpp_api_key",
         }
         remote_key_field = provider_key_map.get(role_config.provider)
         if remote_key_field and getattr(llm_settings, remote_key_field, None):
