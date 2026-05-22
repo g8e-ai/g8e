@@ -73,7 +73,7 @@ func readSecretFromDB(t *testing.T, db *sqliteutil.DB, name string) string {
 	t.Helper()
 	var dataJSON string
 	err := db.QueryRow(
-		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'app_settings'",
 	).Scan(&dataJSON)
 	require.NoError(t, err)
 	var doc models.SettingsDocument
@@ -86,7 +86,7 @@ func updatePlatformSetting(t *testing.T, db *sqliteutil.DB, name string, value s
 	t.Helper()
 	var dataJSON string
 	require.NoError(t, db.QueryRow(
-		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'app_settings'",
 	).Scan(&dataJSON))
 	var doc models.SettingsDocument
 	require.NoError(t, json.Unmarshal([]byte(dataJSON), &doc))
@@ -95,18 +95,18 @@ func updatePlatformSetting(t *testing.T, db *sqliteutil.DB, name string, value s
 	mutated, err := json.Marshal(doc)
 	require.NoError(t, err)
 	_, err = db.Exec(
-		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'platform_settings'",
+		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'app_settings'",
 		string(mutated),
 	)
 	require.NoError(t, err)
 }
 
-func TestSecretManager_InitPlatformSettings_CreatesSecretsAndFiles(t *testing.T) {
+func TestSecretManager_InitAppSettings_CreatesSecretsAndFiles(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
 
-	require.NoError(t, sm.InitPlatformSettings())
+	require.NoError(t, sm.InitAppSettings())
 
 	key, err := sm.keystore.DecryptSecret("session_encryption_key")
 	require.NoError(t, err)
@@ -115,12 +115,12 @@ func TestSecretManager_InitPlatformSettings_CreatesSecretsAndFiles(t *testing.T)
 
 }
 
-func TestSecretManager_InitPlatformSettings_CreatesValidActuatorKey(t *testing.T) {
+func TestSecretManager_InitAppSettings_CreatesValidActuatorKey(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
 
-	require.NoError(t, sm.InitPlatformSettings())
+	require.NoError(t, sm.InitAppSettings())
 
 	seedHex := readSecretFromDB(t, db, "Actuator_signing_key")
 	seed, err := hex.DecodeString(seedHex)
@@ -142,7 +142,7 @@ func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
-	require.NoError(t, sm.InitPlatformSettings())
+	require.NoError(t, sm.InitAppSettings())
 
 	updatePlatformSetting(t, db, "Actuator_signing_key", strings.Repeat("a", ed25519.PrivateKeySize*2))
 
@@ -155,7 +155,7 @@ func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
-	require.NoError(t, sm.InitPlatformSettings())
+	require.NoError(t, sm.InitAppSettings())
 
 	updatePlatformSetting(t, db, "Actuator_key_id", strings.Repeat("b", ed25519.PublicKeySize*2))
 
@@ -164,7 +164,7 @@ func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
 	assert.Contains(t, err.Error(), "Actuator_key_id does not match Actuator_signing_key")
 }
 
-func TestSecretManager_InitPlatformSettings_FailsWhenFileWriteFails(t *testing.T) {
+func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -176,18 +176,18 @@ func TestSecretManager_InitPlatformSettings_FailsWhenFileWriteFails(t *testing.T
 	require.NoError(t, os.WriteFile(secretsDir, []byte("not a directory"), 0600))
 	t.Cleanup(func() { _ = os.Remove(secretsDir) })
 
-	err := sm.InitPlatformSettings()
+	err := sm.InitAppSettings()
 	require.Error(t, err)
 	// Error occurs during preexisting bootstrap state check when stat fails on a file
 	assert.Contains(t, err.Error(), "not a directory")
 }
 
-func TestSecretManager_InitPlatformSettings_DetectsDBFileDivergence(t *testing.T) {
+func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
 	sm := newTestSecretManager(t, db, secretsDir)
-	require.NoError(t, sm.InitPlatformSettings())
+	require.NoError(t, sm.InitAppSettings())
 
 	// Write corrupted encrypted data (simulating manual file tampering)
 	corruptedData := []byte(`{"version":1,"nonce":"AAAA","ciphertext":"corrupted"}`)
@@ -195,7 +195,7 @@ func TestSecretManager_InitPlatformSettings_DetectsDBFileDivergence(t *testing.T
 
 	var dataJSON string
 	require.NoError(t, db.QueryRow(
-		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'app_settings'",
 	).Scan(&dataJSON))
 	var doc models.SettingsDocument
 	require.NoError(t, json.Unmarshal([]byte(dataJSON), &doc))
@@ -203,23 +203,23 @@ func TestSecretManager_InitPlatformSettings_DetectsDBFileDivergence(t *testing.T
 	mutated, err := json.Marshal(doc)
 	require.NoError(t, err)
 	_, err = db.Exec(
-		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'platform_settings'",
+		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'app_settings'",
 		string(mutated),
 	)
 	require.NoError(t, err)
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
-	err = sm2.InitPlatformSettings()
+	err = sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes decryption failure
 	assert.Contains(t, err.Error(), "decryption failed")
 }
 
-func TestSecretManager_InitPlatformSettings_WritesDigestManifest(t *testing.T) {
+func TestSecretManager_InitAppSettings_WritesDigestManifest(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
-	require.NoError(t, sm.InitPlatformSettings())
+	require.NoError(t, sm.InitAppSettings())
 
 	manifestPath := filepath.Join(secretsDir, BootstrapDigestManifestFile)
 	data, err := os.ReadFile(manifestPath)
@@ -241,23 +241,23 @@ func TestSecretManager_InitPlatformSettings_WritesDigestManifest(t *testing.T) {
 	}
 }
 
-func TestSecretManager_InitPlatformSettings_ManifestPermissions(t *testing.T) {
+func TestSecretManager_InitAppSettings_ManifestPermissions(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
-	require.NoError(t, sm.InitPlatformSettings())
+	require.NoError(t, sm.InitAppSettings())
 
 	info, err := os.Stat(filepath.Join(secretsDir, BootstrapDigestManifestFile))
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
 }
 
-func TestSecretManager_InitPlatformSettings_RejectsUncoordinatedSecretRotation(t *testing.T) {
+func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
 	sm := newTestSecretManager(t, db, secretsDir)
-	require.NoError(t, sm.InitPlatformSettings())
+	require.NoError(t, sm.InitAppSettings())
 
 	// Write corrupted encrypted data (simulating manual file tampering)
 	corruptedData := []byte(`{"version":1,"nonce":"AAAA","ciphertext":"corrupted"}`)
@@ -265,13 +265,13 @@ func TestSecretManager_InitPlatformSettings_RejectsUncoordinatedSecretRotation(t
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
 	var err error
-	err = sm2.InitPlatformSettings()
+	err = sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes decryption failure
 	assert.Contains(t, err.Error(), "decryption failed")
 }
 
-func TestSecretManager_InitPlatformSettings_RejectsPreexistingSecretWithoutPlatformSettings(t *testing.T) {
+func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSettings(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -279,49 +279,49 @@ func TestSecretManager_InitPlatformSettings_RejectsPreexistingSecretWithoutPlatf
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "session_encryption_key"), []byte(preSeeded), 0600))
 
 	sm := newTestSecretManager(t, db, secretsDir)
-	err := sm.InitPlatformSettings()
+	err := sm.InitAppSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "found preexisting bootstrap secret session_encryption_key without platform_settings")
+	assert.Contains(t, err.Error(), "found preexisting bootstrap secret session_encryption_key without app_settings")
 }
 
-func TestSecretManager_InitPlatformSettings_FailsWhenRequiredSecretFileMissing(t *testing.T) {
+func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
 	sm := newTestSecretManager(t, db, secretsDir)
-	require.NoError(t, sm.InitPlatformSettings())
+	require.NoError(t, sm.InitAppSettings())
 	require.NoError(t, os.Remove(filepath.Join(secretsDir, "session_encryption_key")))
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
 	var err error
-	err = sm2.InitPlatformSettings()
+	err = sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, missing file causes decryption error
 	assert.Contains(t, err.Error(), "decryption failed")
 }
 
-func TestSecretManager_InitPlatformSettings_FailsWhenDigestManifestMissing(t *testing.T) {
+func TestSecretManager_InitAppSettings_FailsWhenDigestManifestMissing(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
 	sm := newTestSecretManager(t, db, secretsDir)
-	require.NoError(t, sm.InitPlatformSettings())
+	require.NoError(t, sm.InitAppSettings())
 	require.NoError(t, os.Remove(filepath.Join(secretsDir, BootstrapDigestManifestFile)))
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
 	var err error
-	err = sm2.InitPlatformSettings()
+	err = sm2.InitAppSettings()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "bootstrap digest manifest")
 	assert.Contains(t, err.Error(), "is required")
 }
 
-func TestSecretManager_InitPlatformSettings_FailsWhenDigestManifestEntryMissing(t *testing.T) {
+func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
 	sm := newTestSecretManager(t, db, secretsDir)
-	require.NoError(t, sm.InitPlatformSettings())
+	require.NoError(t, sm.InitAppSettings())
 	manifestPath := filepath.Join(secretsDir, BootstrapDigestManifestFile)
 	data, err := os.ReadFile(manifestPath)
 	require.NoError(t, err)
@@ -333,29 +333,29 @@ func TestSecretManager_InitPlatformSettings_FailsWhenDigestManifestEntryMissing(
 	require.NoError(t, os.WriteFile(manifestPath, mutated, 0600))
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
-	err = sm2.InitPlatformSettings()
+	err = sm2.InitAppSettings()
 	require.Error(t, err)
 	// With shared test backend, decryption succeeds and manifest validation fails
 	assert.Contains(t, err.Error(), "bootstrap digest manifest missing required entry session_encryption_key")
 }
 
-func TestSecretManager_InitPlatformSettings_ReturnsErrorOnMalformedPlatformSettings(t *testing.T) {
+func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedAppSettings(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
 	sm := newTestSecretManager(t, db, secretsDir)
-	require.NoError(t, sm.InitPlatformSettings())
+	require.NoError(t, sm.InitAppSettings())
 
 	_, err := db.Exec(
-		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'platform_settings'",
+		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'app_settings'",
 		"{invalid json",
 	)
 	require.NoError(t, err)
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
-	err = sm2.InitPlatformSettings()
+	err = sm2.InitAppSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to unmarshal platform_settings document")
+	assert.Contains(t, err.Error(), "failed to unmarshal app_settings document")
 }
 
 func TestSecretManager_APIKeys(t *testing.T) {

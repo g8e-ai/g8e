@@ -66,33 +66,33 @@ func NewSecretManager(db *sqliteutil.DB, secretsDir string, logger *slog.Logger)
 	}, nil
 }
 
-// InitPlatformSettings creates secrets on first boot and validates them on later boots.
-func (m *SecretManager) InitPlatformSettings() error {
+// InitAppSettings creates secrets on first boot and validates them on later boots.
+func (m *SecretManager) InitAppSettings() error {
 	var exists bool
 	err := m.db.QueryRow(
-		"SELECT EXISTS(SELECT 1 FROM documents WHERE collection = 'settings' AND id = 'platform_settings')",
+		"SELECT EXISTS(SELECT 1 FROM documents WHERE collection = 'settings' AND id = 'app_settings')",
 	).Scan(&exists)
 	if err != nil {
-		return fmt.Errorf("failed to check platform_settings existence: %w", err)
+		return fmt.Errorf("failed to check app_settings existence: %w", err)
 	}
 
 	now := time.Now().UTC()
 
 	if !exists {
-		return m.createPlatformSettings(now)
+		return m.createAppSettings(now)
 	}
 
-	if err := m.cleanupStalePlatformSettings(); err != nil {
+	if err := m.cleanupStaleAppSettings(); err != nil {
 		m.logger.Warn("[SecretManager] Failed to cleanup stale platform settings", string(constants.ConnectionStateError), err)
 	}
 
-	return m.validatePlatformSettings()
+	return m.validateAppSettings()
 }
 
-func (m *SecretManager) cleanupStalePlatformSettings() error {
+func (m *SecretManager) cleanupStaleAppSettings() error {
 	var dataJSON string
 	err := m.db.QueryRow(
-		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'app_settings'",
 	).Scan(&dataJSON)
 	if err != nil {
 		return err
@@ -116,7 +116,7 @@ func (m *SecretManager) cleanupStalePlatformSettings() error {
 		return nil
 	}
 
-	m.logger.Info("[SecretManager] Cleaning up stale fields from platform_settings document", "fields", staleFields)
+	m.logger.Info("[SecretManager] Cleaning up stale fields from app_settings document", "fields", staleFields)
 
 	newData, err := json.Marshal(doc)
 	if err != nil {
@@ -124,13 +124,13 @@ func (m *SecretManager) cleanupStalePlatformSettings() error {
 	}
 
 	_, err = m.db.Exec(
-		"UPDATE documents SET data = ?, updated_at = ? WHERE collection = 'settings' AND id = 'platform_settings'",
+		"UPDATE documents SET data = ?, updated_at = ? WHERE collection = 'settings' AND id = 'app_settings'",
 		string(newData), sqliteutil.NowTimestamp(),
 	)
 	return err
 }
 
-func (m *SecretManager) createPlatformSettings(now time.Time) error {
+func (m *SecretManager) createAppSettings(now time.Time) error {
 	if err := m.rejectPreexistingBootstrapState(); err != nil {
 		return err
 	}
@@ -172,21 +172,21 @@ func (m *SecretManager) createPlatformSettings(now time.Time) error {
 
 	dataJSON, err := json.Marshal(platformSettings)
 	if err != nil {
-		return fmt.Errorf("failed to marshal platform_settings: %w", err)
+		return fmt.Errorf("failed to marshal app_settings: %w", err)
 	}
 
 	nowStr := sqliteutil.FormatTimestamp(now)
 	_, err = m.db.Exec(
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)`,
-		"settings", "platform_settings", string(dataJSON), nowStr, nowStr,
+		"settings", "app_settings", string(dataJSON), nowStr, nowStr,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create platform_settings document: %w", err)
+		return fmt.Errorf("failed to create app_settings document: %w", err)
 	}
-	m.logger.Info("[SecretManager] platform_settings document created with security secrets")
+	m.logger.Info("[SecretManager] app_settings document created with security secrets")
 
-	m.warmPlatformSettingsCache(string(dataJSON), now)
+	m.warmAppSettingsCache(string(dataJSON), now)
 
 	for _, name := range requiredBootstrapSecrets {
 		if err := m.keystore.EncryptSecret(name, secrets[name]); err != nil {
@@ -198,12 +198,12 @@ func (m *SecretManager) createPlatformSettings(now time.Time) error {
 		return err
 	}
 
-	return m.validatePlatformSettings()
+	return m.validateAppSettings()
 }
 
-func (m *SecretManager) validatePlatformSettings() error {
+func (m *SecretManager) validateAppSettings() error {
 	if info, err := os.Stat(m.secretsDir); err != nil {
-		return fmt.Errorf("bootstrap secrets directory %s is required after platform_settings exists: %w; delete and recreate runtime state", m.secretsDir, err)
+		return fmt.Errorf("bootstrap secrets directory %s is required after app_settings exists: %w; delete and recreate runtime state", m.secretsDir, err)
 	} else if !info.IsDir() {
 		return fmt.Errorf("bootstrap secrets path %s is not a directory; delete and recreate runtime state", m.secretsDir)
 	}
@@ -321,21 +321,21 @@ func (m *SecretManager) readDigestManifest() (*bootstrapDigestManifest, error) {
 func (m *SecretManager) rejectPreexistingBootstrapState() error {
 	for _, name := range requiredBootstrapSecrets {
 		if _, err := os.Stat(filepath.Join(m.secretsDir, name)); err == nil {
-			return fmt.Errorf("found preexisting bootstrap secret %s without platform_settings; delete and recreate runtime state", name)
+			return fmt.Errorf("found preexisting bootstrap secret %s without app_settings; delete and recreate runtime state", name)
 		} else if !os.IsNotExist(err) {
 			return fmt.Errorf("inspect bootstrap secret %s: %w", name, err)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(m.secretsDir, BootstrapDigestManifestFile)); err == nil {
-		return fmt.Errorf("found preexisting bootstrap digest manifest without platform_settings; delete and recreate runtime state")
+		return fmt.Errorf("found preexisting bootstrap digest manifest without app_settings; delete and recreate runtime state")
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("inspect bootstrap digest manifest: %w", err)
 	}
 	return nil
 }
 
-func (m *SecretManager) warmPlatformSettingsCache(dataJSON string, now time.Time) {
-	cacheKey := "g8e:cache:doc:settings:platform_settings"
+func (m *SecretManager) warmAppSettingsCache(dataJSON string, now time.Time) {
+	cacheKey := "g8e:cache:doc:settings:app_settings"
 	cacheTTL := 3600
 	nowStr := sqliteutil.FormatTimestamp(now)
 	_, err := m.db.Exec(
@@ -344,9 +344,9 @@ func (m *SecretManager) warmPlatformSettingsCache(dataJSON string, now time.Time
 		cacheKey, dataJSON, nowStr, sqliteutil.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
 	)
 	if err != nil {
-		m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings", string(constants.ConnectionStateError), err)
+		m.logger.Warn("[SecretManager] Failed to warm cache for app_settings", string(constants.ConnectionStateError), err)
 	} else {
-		m.logger.Info("[SecretManager] platform_settings cache warmed", "key", cacheKey, "ttl", cacheTTL)
+		m.logger.Info("[SecretManager] app_settings cache warmed", "key", cacheKey, "ttl", cacheTTL)
 	}
 }
 
@@ -381,7 +381,7 @@ func (m *SecretManager) generateSecureTokenBytes(bytes int) ([]byte, error) {
 }
 
 // GetActuatorKey retrieves the Actuator's ED25519 signing key and its KeyID.
-// The signing key is decrypted from the keystore; the KeyID is read from platform_settings.
+// The signing key is decrypted from the keystore; the KeyID is read from app_settings.
 func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
 	seedHex, err := m.keystore.DecryptSecret("Actuator_signing_key")
 	if err != nil {
@@ -400,22 +400,22 @@ func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
 
 	var dataJSON string
 	if err := m.db.QueryRow(
-		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'app_settings'",
 	).Scan(&dataJSON); err != nil {
-		return nil, "", fmt.Errorf("failed to query platform_settings document: %w", err)
+		return nil, "", fmt.Errorf("failed to query app_settings document: %w", err)
 	}
 
 	var settings models.SettingsDocument
 	if err := json.Unmarshal([]byte(dataJSON), &settings); err != nil {
-		return nil, "", fmt.Errorf("failed to unmarshal platform_settings document: %w", err)
+		return nil, "", fmt.Errorf("failed to unmarshal app_settings document: %w", err)
 	}
 	if settings.Settings == nil {
-		return nil, "", fmt.Errorf("platform_settings missing settings map; delete and recreate runtime state")
+		return nil, "", fmt.Errorf("app_settings missing settings map; delete and recreate runtime state")
 	}
 
 	keyID, ok := settings.Settings["Actuator_key_id"].(string)
 	if !ok || strings.TrimSpace(keyID) == "" {
-		return nil, "", fmt.Errorf("platform_settings missing Actuator_key_id; delete and recreate runtime state")
+		return nil, "", fmt.Errorf("app_settings missing Actuator_key_id; delete and recreate runtime state")
 	}
 	keyID = strings.TrimSpace(keyID)
 

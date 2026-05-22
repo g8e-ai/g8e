@@ -21,7 +21,7 @@ from app.constants.collections import (
     USER_SETTINGS_DOC_PREFIX,
 )
 from app.constants.generated_paths import PathConstants, PortConstants
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeAppSettings
 from app.services.infra.settings_service import SettingsService
 
 
@@ -37,10 +37,10 @@ class TestG8eeSettingsOverlayIntegration:
     def settings_service(self, cache_service):
         return SettingsService(cache_aside_service=cache_service)
 
-    async def test_get_platform_settings_loads_from_operator(self, settings_service, cache_service):
+    async def test_get_app_settings_loads_from_operator(self, settings_service, cache_service):
         """Verify platform settings are loaded from the correct operator collection/ID.
 
-        G8eePlatformSettings no longer carries LLM config. LLM settings are
+        G8eeAppSettings no longer carries LLM config. LLM settings are
         accessed via get_user_settings() which falls back to platform data
         when no user document exists.
         """
@@ -59,7 +59,7 @@ class TestG8eeSettingsOverlayIntegration:
                     "cases_collection": "cases",
                     "users_collection": "users",
                     "investigations_collection": "investigations",
-                    "platform_settings_collection": "settings",
+                    "app_settings_collection": "settings",
                     "user_settings_collection": "settings",
                     "api_keys_collection": "api_keys",
                     "memories_collection": "memories",
@@ -113,9 +113,9 @@ class TestG8eeSettingsOverlayIntegration:
         }
         cache_service.get_document_with_cache.return_value = platform_data
 
-        settings = await settings_service.get_platform_settings()
+        settings = await settings_service.get_app_settings()
 
-        assert isinstance(settings, G8eePlatformSettings)
+        assert isinstance(settings, G8eeAppSettings)
         cache_service.get_document_with_cache.assert_called_once_with(
             collection=DB_COLLECTION_SETTINGS,
             document_id=PLATFORM_SETTINGS_DOC
@@ -141,7 +141,7 @@ class TestG8eeSettingsOverlayIntegration:
                     "cases_collection": "cases",
                     "users_collection": "users",
                     "investigations_collection": "investigations",
-                    "platform_settings_collection": "settings",
+                    "app_settings_collection": "settings",
                     "user_settings_collection": "settings",
                     "api_keys_collection": "api_keys",
                     "memories_collection": "memories",
@@ -236,7 +236,7 @@ class TestG8eeSettingsOverlayIntegration:
         assert user_settings.llm.primary_model == "gpt-4o"
         assert user_settings.llm.openai_api_key == "user-key"
 
-    async def test_overlay_carries_auditor_hmac_key_from_platform_settings(self, cache_service):
+    async def test_overlay_carries_auditor_hmac_key_from_app_settings(self, cache_service):
         """Overlay must propagate ``auditor_hmac_key`` from the platform DB
         document onto local bootstrap settings when the bootstrap volume
         has not surfaced one (e.g. on a g8ee process that started before
@@ -273,7 +273,7 @@ class TestG8eeSettingsOverlayIntegration:
             bootstrap_service=bootstrap,
         )
 
-        settings = await settings_service.get_platform_settings()
+        settings = await settings_service.get_app_settings()
 
         assert settings.auth.auditor_hmac_key == hmac_key
 
@@ -297,7 +297,7 @@ class TestG8eeSettingsOverlayIntegration:
                     "cases_collection": "cases",
                     "users_collection": "users",
                     "investigations_collection": "investigations",
-                    "platform_settings_collection": "settings",
+                    "app_settings_collection": "settings",
                     "user_settings_collection": "settings",
                     "api_keys_collection": "api_keys",
                     "memories_collection": "memories",
@@ -409,7 +409,7 @@ class TestG8eeSettingsOverlayIntegration:
             bootstrap_service=bootstrap,
         )
 
-        settings = await settings_service.get_platform_settings()
+        settings = await settings_service.get_app_settings()
 
         for name, expected in synthetic_values.items():
             assert getattr(settings.auth, name) == expected, (
@@ -448,7 +448,7 @@ class TestG8eeSettingsOverlayIntegration:
             bootstrap_service=bootstrap,
         )
 
-        settings = await settings_service.get_platform_settings()
+        settings = await settings_service.get_app_settings()
 
         assert settings.auth.session_encryption_key == bootstrap_key
 
@@ -497,7 +497,7 @@ class TestG8eeSettingsOverlayIntegration:
             bootstrap_service=bootstrap,
         )
 
-        settings = await settings_service.get_platform_settings()
+        settings = await settings_service.get_app_settings()
 
         cv = settings.command_validation
         assert cv.enable_whitelisting is True

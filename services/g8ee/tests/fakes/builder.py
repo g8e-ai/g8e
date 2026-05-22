@@ -20,7 +20,7 @@ testing a sub-service in isolation.
 
 from app.constants.generated_paths import PathConstants, PortConstants
 from app.models.cache import CacheOperationResult
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeAppSettings
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.intent_service import OperatorIntentService
 from app.services.operator.operator_data_service import OperatorDataService
@@ -126,7 +126,7 @@ def build_command_service(
     internal_http_client: FakeG8eClient | None = None,
     investigation_service: FakeInvestigationService | None = None,
     pubsub_client: FakePubSubClient | None = None,
-    settings: G8eePlatformSettings | None = None,
+    settings: G8eeAppSettings | None = None,
     approval_service: FakeApprovalService | None = None,
     skip_pubsub_client: bool = False,
     whitelist_validator: CommandWhitelistValidator | None = None,
@@ -146,7 +146,7 @@ def build_command_service(
     event_service = event_service or FakeEventService()
     ai_response_analyzer = ai_response_analyzer or FakeAIResponseAnalyzer()
     investigation_service = investigation_service or FakeInvestigationService()
-    settings = settings or G8eePlatformSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
+    settings = settings or G8eeAppSettings(port=PortConstants.G8E_PORT_G8EE_HTTPS)
 
     operator_data_service = OperatorDataService(cache=cache_aside_service, internal_http_client=internal_http_client)
 

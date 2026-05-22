@@ -27,6 +27,7 @@ from app.models.investigations import (
     InvestigationModel,
 )
 from app.models.memory import InvestigationMemory, MemoryAnalysis
+from app.models.http_context import RequestContext
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.memory_generation_service import (
     CONVERSATION_HISTORY_LIMIT,
@@ -68,6 +69,11 @@ class TestUpdateMemoryFromConversation:
             conversation_history=[],
             investigation=investigation,
             settings=settings,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         assert isinstance(result, InvestigationMemory)
@@ -107,6 +113,11 @@ class TestUpdateMemoryFromConversation:
             conversation_history=[],
             investigation=investigation,
             settings=settings,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         assert result.investigation_summary == "Existing summary"
@@ -154,6 +165,11 @@ class TestUpdateMemoryFromConversation:
             conversation_history=conversation_history,
             investigation=investigation,
             settings=settings,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         # Verify the slice directly - the implementation uses conversation_history[-CONVERSATION_HISTORY_LIMIT:]
@@ -725,6 +741,11 @@ class TestMemoryMergeLogic:
             )],
             investigation=investigation,
             settings=settings,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         assert result.investigation_summary == "New summary with fan controller"
@@ -775,6 +796,11 @@ class TestMemoryMergeLogic:
             )],
             investigation=investigation,
             settings=settings,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         assert result.investigation_summary == "Updated summary"
@@ -814,6 +840,11 @@ class TestMemoryMergeLogic:
             )],
             investigation=investigation,
             settings=settings,
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-1",
+            ),
         )
 
         assert result.investigation_summary == "Preserved summary"

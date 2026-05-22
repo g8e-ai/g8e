@@ -25,7 +25,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeAppSettings
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.service_factory import ServiceFactory
 
@@ -34,8 +34,8 @@ pytestmark = [pytest.mark.unit]
 
 @pytest.fixture
 def mock_settings():
-    """Create a minimal G8eePlatformSettings for smoke testing."""
-    settings = G8eePlatformSettings()
+    """Create a minimal G8eeAppSettings for smoke testing."""
+    settings = G8eeAppSettings()
     settings.search.enabled = False
     return settings
 

@@ -14,6 +14,7 @@
 package sentinel
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -22,6 +23,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 )
@@ -129,6 +131,9 @@ type ThreatSignal struct {
 
 	// BlockRecommended indicates if execution should be blocked
 	BlockRecommended bool `json:"block_recommended"`
+
+	// Source is the doctrine source (e.g., owasp_crs, gitleaks, mcp_vectors)
+	Source string `json:"source,omitempty"`
 }
 
 // CommandAnalysisResult is the result of analyzing a command BEFORE execution
@@ -204,6 +209,7 @@ type RegexThreatDetector struct {
 	mitreAttack    string
 	mitreTactic    string
 	recommendation string
+	source         string
 }
 
 func (r *RegexThreatDetector) Name() string { return r.name }
@@ -218,6 +224,7 @@ func (r *RegexThreatDetector) Detect(input string) []ThreatSignal {
 			MitreAttack:    r.mitreAttack,
 			MitreTactic:    r.mitreTactic,
 			Recommendation: r.recommendation,
+			Source:         r.source,
 		}}
 	}
 	return nil
@@ -231,8 +238,8 @@ type SentinelConfig struct {
 	// StrictMode when true, aggressively scrubs anything that looks like data
 	StrictMode bool
 
-	// ThreatDetectionEnabled controls whether threat detection is active
-	ThreatDetectionEnabled bool
+	// SentinelEnabled  controls whether threat detection is active
+	SentinelEnabled bool
 
 	// MaxOutputLength limits the scrubbed output length (0 = no limit)
 	MaxOutputLength int
@@ -242,17 +249,21 @@ type SentinelConfig struct {
 
 	// CustomScrubPatterns are additional patterns to scrub
 	CustomScrubPatterns map[string]string
+
+	// DoctrineDir is the path to the doctrine directory for threat detection rules
+	DoctrineDir string
 }
 
 // DefaultSentinelConfig returns sensible defaults for production use
 func DefaultSentinelConfig() *SentinelConfig {
 	return &SentinelConfig{
-		Enabled:                true,
-		StrictMode:             true,
-		ThreatDetectionEnabled: true,
-		MaxOutputLength:        4096,
-		AllowedPatterns:        []string{},
-		CustomScrubPatterns:    map[string]string{},
+		Enabled:             true,
+		StrictMode:          true,
+		SentinelEnabled:     true,
+		MaxOutputLength:     4096,
+		AllowedPatterns:     []string{},
+		CustomScrubPatterns: map[string]string{},
+		DoctrineDir:         filepath.Join(constants.Paths.Infra.ProtocolDir, "constants", "doctrine"),
 	}
 }
 
@@ -355,9 +366,17 @@ type doctrineData struct {
 	Enabled     bool    `json:"enabled"`
 }
 
-// LoadDoctrinesFromProtocol loads threat doctrines from protocol/constants/doctrine/
+// LoadDoctrinesFromProtocol loads threat doctrines from the configured doctrine directory
 func (s *Sentinel) LoadDoctrinesFromProtocol() {
-	doctrineDir := filepath.Join(constants.Paths.Infra.ProtocolDir, "constants", "doctrine")
+	if s.logger == nil {
+		return
+	}
+
+	doctrineDir := s.config.DoctrineDir
+	if doctrineDir == "" {
+		doctrineDir = filepath.Join(constants.Paths.Infra.ProtocolDir, "constants", "doctrine")
+	}
+
 	if _, err := os.Stat(doctrineDir); os.IsNotExist(err) {
 		s.logger.Info("Doctrine directory not found, skipping protocol doctrine loading", "path", doctrineDir)
 		return
@@ -404,14 +423,16 @@ func (s *Sentinel) loadDoctrineFile(doctrinePath string) {
 	s.logger.Info("Loading doctrine file", "source", doctrineFile.Source, "version", doctrineFile.Version, "path", doctrinePath)
 
 	loadedCount := 0
+	failureCount := 0
 	for _, d := range doctrineFile.Doctrines {
 		if !d.Enabled {
 			continue
 		}
 
-		detector, err := s.doctrineToDetector(d)
+		detector, err := s.doctrineToDetector(d, doctrineFile.Source)
 		if err != nil {
 			s.logger.Warn("Failed to compile doctrine pattern", "id", d.ID, "error", err)
+			failureCount++
 			continue
 		}
 
@@ -419,12 +440,38 @@ func (s *Sentinel) loadDoctrineFile(doctrinePath string) {
 		loadedCount++
 	}
 
-	s.logger.Info("Loaded doctrines from file", "source", doctrineFile.Source, "loaded", loadedCount, "total", len(doctrineFile.Doctrines))
+	s.logger.Info("Loaded doctrines from file", "source", doctrineFile.Source, "loaded", loadedCount, "failed", failureCount, "total", len(doctrineFile.Doctrines))
+}
+
+// compileRegexWithTimeout compiles a regex pattern with a timeout to prevent
+// malicious or malformed patterns from blocking startup indefinitely
+func compileRegexWithTimeout(ctx context.Context, pattern string) (*regexp.Regexp, error) {
+	type result struct {
+		re  *regexp.Regexp
+		err error
+	}
+
+	resultChan := make(chan result, 1)
+
+	go func() {
+		re, err := regexp.Compile(pattern)
+		resultChan <- result{re: re, err: err}
+	}()
+
+	select {
+	case res := <-resultChan:
+		return res.re, res.err
+	case <-ctx.Done():
+		return nil, fmt.Errorf("regex compilation timeout: %w", ctx.Err())
+	}
 }
 
 // doctrineToDetector converts a doctrine definition to a ThreatDetector
-func (s *Sentinel) doctrineToDetector(d doctrineData) (ThreatDetector, error) {
-	pattern, err := regexp.Compile(d.Pattern)
+func (s *Sentinel) doctrineToDetector(d doctrineData, source string) (ThreatDetector, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pattern, err := compileRegexWithTimeout(ctx, d.Pattern)
 	if err != nil {
 		return nil, fmt.Errorf("invalid regex pattern: %w", err)
 	}
@@ -441,6 +488,7 @@ func (s *Sentinel) doctrineToDetector(d doctrineData) (ThreatDetector, error) {
 		mitreAttack:    d.MitreAttack,
 		mitreTactic:    d.MitreTactic,
 		recommendation: fmt.Sprintf("Detected by doctrine %s from %s", d.ID, d.Name),
+		source:         source,
 	}, nil
 }
 
@@ -677,7 +725,9 @@ func (s *Sentinel) initializeScrubbers() {
 	}
 
 	for name, pattern := range s.config.CustomScrubPatterns {
-		compiled, err := regexp.Compile(pattern)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		compiled, err := compileRegexWithTimeout(ctx, pattern)
+		cancel()
 		if err != nil {
 			s.logger.Warn("Invalid custom scrub pattern", "name", name, string(constants.ConnectionStateError), err)
 			continue
@@ -694,7 +744,7 @@ func (s *Sentinel) initializeScrubbers() {
 // These detectors run alongside scrubbing to identify malicious activity
 // Each detector is mapped to MITRE ATT&CK framework for SOC integration
 func (s *Sentinel) initializeThreatDetectors() {
-	if !s.config.ThreatDetectionEnabled {
+	if !s.config.SentinelEnabled {
 		return
 	}
 
@@ -1174,7 +1224,7 @@ func (s *Sentinel) initializeThreatDetectors() {
 
 // detectThreats runs all threat detectors on the input and returns signals
 func (s *Sentinel) detectThreats(input string) []ThreatSignal {
-	if !s.config.ThreatDetectionEnabled {
+	if !s.config.SentinelEnabled {
 		return nil
 	}
 

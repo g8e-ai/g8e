@@ -18,7 +18,7 @@ import pytest
 from app.constants import AuditorReason, ComponentName
 from app.models.agent import OperatorContext
 from app.models.agents.tribunal import TribunalGenerationFailedError
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.services.ai.generator import TribunalEmitter, generate_command
 from app.models.tribunal_commands import TribunalGenerationRequest
 from app.utils.command import normalise_command
@@ -173,6 +173,11 @@ class TestAuditorSafety:
                     auditor_enabled=True,
                     command_constraints_message="",
                     investigation_id="inv-1",
+                    context=RequestContext(
+                        web_session_id="test-web-session",
+                        user_id="test-user",
+                        investigation_id="inv-1",
+                    ),
                 )
 
             assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION

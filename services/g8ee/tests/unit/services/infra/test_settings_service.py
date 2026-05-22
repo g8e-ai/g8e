@@ -22,10 +22,10 @@ from app.constants.collections import (
 )
 from app.constants.settings import LLMProvider
 from app.models.settings import (
-    G8eePlatformSettings,
+    G8eeAppSettings,
     G8eeUserSettings,
     LLMSettings,
-    PlatformSettingsDocument,
+    AppSettingsDocument,
     UserSettingsDocument,
 )
 from app.services.infra.settings_service import SettingsService
@@ -81,8 +81,8 @@ class TestSettingsService:
         user_id = "user_456"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
-        platform_doc = PlatformSettingsDocument(
-            settings=G8eePlatformSettings()
+        platform_doc = AppSettingsDocument(
+            settings=G8eeAppSettings()
         ).model_dump()
 
         cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (

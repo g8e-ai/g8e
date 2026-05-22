@@ -32,7 +32,7 @@ from urllib.parse import quote
 
 import aiohttp
 
-from app.models.settings import ListenSettings
+from app.models.settings import GatewaySettings, TLSConfig
 from app.services.infra.settings_service import SettingsService
 from app.constants import BatchWriteOpType, OPERATOR_API_KEY_HEADER, HTTP_AUTHORIZATION_HEADER, HTTP_BEARER_PREFIX
 from app.errors import (
@@ -53,21 +53,29 @@ class DBClient:
 
     def __init__(
         self,
-        ca_cert_path: str | None = None,
+        tls_config: TLSConfig | None = None,
         operator_session_id: str | None = None,
         operator_api_key: str | None = None,
-        listen_settings: ListenSettings | None = None,
+        gateway_settings: GatewaySettings | None = None,
+        ca_cert_path: str | None = None,
         client_cert_path: str | None = None,
         client_key_path: str | None = None,
     ) -> None:
-        if listen_settings is None:
+        if gateway_settings is None:
             service = SettingsService()
-            listen_settings = ListenSettings.from_bootstrap(service)
+            gateway_settings = GatewaySettings.from_bootstrap(service)
 
-        self._base_url = listen_settings.http_url
-        self._ca_cert_path = ca_cert_path
-        self._client_cert_path = client_cert_path
-        self._client_key_path = client_key_path
+        self._base_url = gateway_settings.http_url
+
+        if tls_config is not None:
+            self._ca_cert_path = tls_config.ca_cert_path
+            self._client_cert_path = tls_config.client_cert_path
+            self._client_key_path = tls_config.client_key_path
+        else:
+            self._ca_cert_path = ca_cert_path
+            self._client_cert_path = client_cert_path
+            self._client_key_path = client_key_path
+
         self._operator_session_id = operator_session_id
         self._operator_api_key = operator_api_key
         self._session: aiohttp.ClientSession | None = None

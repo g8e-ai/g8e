@@ -43,7 +43,7 @@ from app.errors import ConfigurationError, ExternalServiceError, ValidationError
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.model_configs import get_model_config
-from app.models.settings import G8eePlatformSettings, G8eeUserSettings
+from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.models.tool_results import CommandExecutionResult, ToolResult
 from app.services.ai.tool_registry import (
     AI_UNIVERSAL_TOOLS,
@@ -82,7 +82,7 @@ class AIToolService:
         ssh_inventory_service: SshInventoryService,
         stream_executor: OperatorStreamExecutor,
         web_search_provider: WebSearchProvider | None,
-        platform_settings: G8eePlatformSettings | None = None,
+        app_settings: G8eeAppSettings | None = None,
         user_settings: G8eeUserSettings | None = None,
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
@@ -91,7 +91,7 @@ class AIToolService:
         self.operator_command_service = operator_command_service
         self.investigation_service = investigation_service
         self._web_search_provider: WebSearchProvider | None = web_search_provider
-        self._platform_settings = platform_settings
+        self._app_settings = app_settings
         self._user_settings = user_settings
         self._reputation_data_service = reputation_data_service
         self._reputation_service = reputation_service
@@ -193,8 +193,8 @@ class AIToolService:
         error surfaced at the call site.
         """
         key = None
-        if self._platform_settings is not None:
-            key = self._platform_settings.auth.auditor_hmac_key
+        if self._app_settings is not None:
+            key = self._app_settings.auth.auditor_hmac_key
         if not key:
             raise ConfigurationError(
                 "AIToolService has no auditor_hmac_key available; the key "

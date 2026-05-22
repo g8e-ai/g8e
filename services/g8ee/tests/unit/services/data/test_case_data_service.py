@@ -59,11 +59,12 @@ def _make_awaitable_exception_side_effect(exc):
 
 class TestCaseDataService:
     @pytest.fixture
-    def service(self, mock_settings, mock_cache_aside_service, mock_event_service):
+    def service(self, mock_settings, mock_cache_aside_service, mock_event_service, mock_governance_client):
         return CaseDataService(
             settings=mock_settings,
             cache=mock_cache_aside_service,
-            event_service=mock_event_service
+            event_service=mock_event_service,
+            governance_client=mock_governance_client
         )
 
     @pytest.fixture

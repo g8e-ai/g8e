@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical PlatformSettings document shape. operator (g8eo) is the initial authority for security secrets, while client is the authority for user-managed configuration via the dashboard. Document ID is 'platform_settings' in the 'components' collection.",
+  "_comment": "Canonical AppSettings document shape. operator (g8eo) is the initial authority for security secrets, while client is the authority for user-managed configuration via the dashboard. Document ID is 'app_settings' in the 'components' collection.",
 
   "_authority": "operator (Secrets) / client (Config)",
   "_consumers": [
@@ -7,9 +7,9 @@
     "client (JS - reads to serve internal settings API and UI dashboard)"
   ],
   "_collection": "settings",
-  "_document_id": "platform_settings",
+  "_document_id": "app_settings",
 
-  "platform_settings": {
+  "app_settings": {
     "_description": "Platform-wide configuration document. Stored flat under a 'settings' key.",
 
     "settings": {

@@ -65,8 +65,8 @@ def _make_commitment(
 
 class TestReputationStateCrud:
     @pytest.fixture
-    def service(self, mock_cache_aside_service):
-        return ReputationDataService(mock_cache_aside_service)
+    def service(self, mock_cache_aside_service, mock_governance_client):
+        return ReputationDataService(mock_cache_aside_service, governance_client=mock_governance_client)
 
     @pytest.fixture
     def mock_cache(self, mock_cache_aside_service):
@@ -130,8 +130,8 @@ class TestReputationStateCrud:
 
 class TestReputationCommitmentCrud:
     @pytest.fixture
-    def service(self, mock_cache_aside_service):
-        return ReputationDataService(mock_cache_aside_service)
+    def service(self, mock_cache_aside_service, mock_governance_client):
+        return ReputationDataService(mock_cache_aside_service, governance_client=mock_governance_client)
 
     @pytest.fixture
     def mock_cache(self, mock_cache_aside_service):

@@ -33,7 +33,7 @@ from app.models.auth import AuthenticatedUser
 from app.models.http_context import G8eHttpContext, RequestContext
 
 if TYPE_CHECKING:
-    from app.models.settings import G8eePlatformSettings
+    from app.models.settings import G8eeAppSettings
     from app.services.operator.operator_session_service import OperatorSessionService
     from app.services.operator.operator_data_service import OperatorDataService
 
@@ -54,7 +54,7 @@ class AuthService:
     async def authenticate_request(
         self,
         request: Request,
-        settings: G8eePlatformSettings,
+        settings: G8eeAppSettings,
     ) -> AuthenticatedUser:
         """Authenticate via proxy headers (browser) or Bearer operator session (CLI/mTLS)."""
         proxy_user_id = request.headers.get(PROXY_USER_ID_HEADER)

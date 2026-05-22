@@ -42,14 +42,14 @@ class TestSessionAuthListener:
         return AsyncMock(spec=OperatorDataService)
 
     @pytest.fixture
-    def listener(self, mock_pubsub_client, mock_session_service, mock_operator_data_service):
+    def gateway(self, mock_pubsub_client, mock_session_service, mock_operator_data_service):
         return SessionAuthListener(
             pubsub_client=mock_pubsub_client,
             session_service=mock_session_service,
             operator_data_service=mock_operator_data_service
         )
 
-    async def test_listen_subscribes_to_channel(self, listener, mock_pubsub_client):
+    async def test_listen_subscribes_to_channel(self, gateway, mock_pubsub_client):
         operator_session_id = "ops_123"
         operator_id = "op_456"
         user_id = "user_789"
@@ -58,21 +58,21 @@ class TestSessionAuthListener:
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
         expected_channel = f"auth.publish:session:{session_hash}"
 
-        await listener.listen(operator_session_id, operator_id, user_id, org_id)
+        await gateway.gateway(operator_session_id, operator_id, user_id, org_id)
 
         mock_pubsub_client.subscribe.assert_called_once_with(expected_channel)
         mock_pubsub_client.on_channel_message.assert_called_once()
-        assert expected_channel in listener._active_listeners
+        assert expected_channel in gateway._active_listeners
 
-    async def test_listen_duplicate_ignored(self, listener, mock_pubsub_client):
+    async def test_listen_duplicate_ignored(self, gateway, mock_pubsub_client):
         operator_session_id = "ops_123"
-        await listener.listen(operator_session_id, "op1", "u1", "org1")
-        await listener.listen(operator_session_id, "op1", "u1", "org1")
+        await gateway.gateway(operator_session_id, "op1", "u1", "org1")
+        await gateway.gateway(operator_session_id, "op1", "u1", "org1")
 
         assert mock_pubsub_client.subscribe.call_count == 1
         assert mock_pubsub_client.on_channel_message.call_count == 1
 
-    async def test_message_handler_success(self, listener, mock_pubsub_client, mock_session_service, mock_operator_data_service):
+    async def test_message_handler_success(self, gateway, mock_pubsub_client, mock_session_service, mock_operator_data_service):
         operator_session_id = "ops_123"
         operator_id = "op_456"
         user_id = "user_789"
@@ -93,7 +93,7 @@ class TestSessionAuthListener:
         mock_operator_data_service.get_operator.return_value = mock_operator
 
         # Start listening
-        await listener.listen(operator_session_id, operator_id, user_id, org_id)
+        await gateway.gateway(operator_session_id, operator_id, user_id, org_id)
 
         # Get the registered handler
         handler = mock_pubsub_client.on_channel_message.call_args[0][1]
@@ -117,16 +117,16 @@ class TestSessionAuthListener:
         # Verify cleanup happened
         mock_pubsub_client.unsubscribe.assert_called_once_with(auth_channel)
         mock_pubsub_client.off_channel_message.assert_called_once_with(auth_channel, handler)
-        assert auth_channel not in listener._active_listeners
+        assert auth_channel not in gateway._active_listeners
 
-    async def test_message_handler_invalid_session(self, listener, mock_pubsub_client, mock_session_service):
+    async def test_message_handler_invalid_session(self, gateway, mock_pubsub_client, mock_session_service):
         operator_session_id = "ops_123"
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
         auth_channel = f"auth.publish:session:{session_hash}"
 
         mock_session_service.validate_operator_session.return_value = None
 
-        await listener.listen(operator_session_id, "op1", "u1", "org1")
+        await gateway.gateway(operator_session_id, "op1", "u1", "org1")
         handler = mock_pubsub_client.on_channel_message.call_args[0][1]
         await handler(auth_channel, {})
 
@@ -135,14 +135,14 @@ class TestSessionAuthListener:
         assert response_data["success"] is False
         assert "Session not found" in response_data["error"]
 
-    async def test_message_handler_internal_error(self, listener, mock_pubsub_client, mock_session_service):
+    async def test_message_handler_internal_error(self, gateway, mock_pubsub_client, mock_session_service):
         operator_session_id = "ops_123"
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
         auth_channel = f"auth.publish:session:{session_hash}"
 
         mock_session_service.validate_operator_session.side_effect = Exception("boom")
 
-        await listener.listen(operator_session_id, "op1", "u1", "org1")
+        await gateway.gateway(operator_session_id, "op1", "u1", "org1")
         handler = mock_pubsub_client.on_channel_message.call_args[0][1]
         await handler(auth_channel, {})
 
@@ -151,17 +151,17 @@ class TestSessionAuthListener:
         assert response_data["success"] is False
         assert response_data["error"] == "Internal error"
 
-    async def test_auto_cleanup(self, listener, mock_pubsub_client):
+    async def test_auto_cleanup(self, gateway, mock_pubsub_client):
         operator_session_id = "ops_123"
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
         auth_channel = f"auth.publish:session:{session_hash}"
 
         with patch("asyncio.sleep", new=AsyncMock()):
-            await listener.listen(operator_session_id, "op1", "u1", "org1")
+            await gateway.gateway(operator_session_id, "op1", "u1", "org1")
 
             # Find the background task for auto_cleanup
             cleanup_task = None
-            for task in listener._background_tasks:
+            for task in gateway._background_tasks:
                 if "auto_cleanup" in str(task):
                     cleanup_task = task
                     break
@@ -172,18 +172,18 @@ class TestSessionAuthListener:
                 await cleanup_task
 
             mock_pubsub_client.unsubscribe.assert_called_once_with(auth_channel)
-            assert auth_channel not in listener._active_listeners
+            assert auth_channel not in gateway._active_listeners
 
-    async def test_message_handler_wrong_channel(self, listener, mock_pubsub_client, mock_session_service):
+    async def test_message_handler_wrong_channel(self, gateway, mock_pubsub_client, mock_session_service):
         operator_session_id = "ops_123"
-        await listener.listen(operator_session_id, "op1", "u1", "org1")
+        await gateway.gateway(operator_session_id, "op1", "u1", "org1")
         handler = mock_pubsub_client.on_channel_message.call_args[0][1]
 
         await handler("wrong_channel", {})
 
         mock_session_service.validate_operator_session.assert_not_called()
 
-    async def test_cleanup_handles_missing_channel(self, listener, mock_pubsub_client):
+    async def test_cleanup_handles_missing_channel(self, gateway, mock_pubsub_client):
         # Should not raise
-        await listener.cleanup("missing_channel")
+        await gateway.cleanup("missing_channel")
         mock_pubsub_client.unsubscribe.assert_not_called()

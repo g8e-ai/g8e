@@ -192,7 +192,7 @@ async def test_tick_skips_operator_with_no_heartbeat_snapshot():
     This regression test pins the rule that the monitor distinguishes "never
     connected yet" (silence) from "stopped connecting" (stale). Conflating the
     two breaks fresh-install flows where the local CLI bootstrap operator owns
-    the listener it would otherwise heartbeat against.
+    the gateway it would otherwise heartbeat against.
     """
     operator_data_service = AsyncMock()
     event_service = AsyncMock()

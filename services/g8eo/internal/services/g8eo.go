@@ -66,10 +66,10 @@ type G8eoService struct {
 
 func ProductionSentinelConfig() *sentinel.SentinelConfig {
 	return &sentinel.SentinelConfig{
-		Enabled:                true,
-		StrictMode:             true,
-		ThreatDetectionEnabled: true,
-		MaxOutputLength:        4096,
+		Enabled:         true,
+		StrictMode:      true,
+		SentinelEnabled: true,
+		MaxOutputLength: 4096,
 	}
 }
 

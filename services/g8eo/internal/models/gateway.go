@@ -278,8 +278,8 @@ type WebSessionResponse struct {
 	WebSessionID string `json:"web_session_id"`
 }
 
-// SettingsDocument represents the platform_settings document structure.
-// Authority: protocol/models/platform_settings.json
+// SettingsDocument represents the app_settings document structure.
+// Authority: protocol/models/app_settings.json
 type SettingsDocument struct {
 	Settings  map[string]interface{} `json:"settings"`
 	CreatedAt time.Time              `json:"created_at"`

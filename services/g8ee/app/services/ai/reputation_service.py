@@ -50,6 +50,7 @@ from app.models.reputation import (
     StakeResolution,
 )
 from app.models.tool_results import CommandExecutionResult
+from app.models.http_context import RequestContext
 from app.services.data.reputation_data_service import ReputationDataService
 from app.services.data.stake_resolution_data_service import (
     StakeResolutionDataService,
@@ -581,6 +582,7 @@ class ReputationService:
         warden_risk: RiskLevel | None = None,
         warden_blocked: bool = False,
         extra_agents: tuple[str, ...] = (),
+        context: RequestContext,
     ) -> ResolveStakesResult:
         """Apply stake resolution for one verdict.
 
@@ -638,7 +640,7 @@ class ReputationService:
                 last_slash_tier=int(outcome.slash_tier) if outcome.slash_tier is not None else (current_state.last_slash_tier if current_state else None),
                 updated_at=now,
             )
-            await self.reputation_data_service.upsert_state(updated_state)
+            await self.reputation_data_service.upsert_state(updated_state, context)
 
             resolution = StakeResolution(
                 id=stake_resolution_id(tribunal_command_id, outcome.agent_id),

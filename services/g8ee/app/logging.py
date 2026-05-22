@@ -17,7 +17,7 @@ import re
 import sys
 from typing import Any
 
-from .models.settings import G8eePlatformSettings
+from .models.settings import G8eeAppSettings
 
 PII_FIELDS: list[str] = [
     "email",
@@ -191,7 +191,7 @@ class ComponentFormatter(logging.Formatter):
 def register_component_logger(logger_name: str, component_name: str):
     _logger_component_registry[logger_name] = component_name
 
-def setup_logging(settings: G8eePlatformSettings, component_name: str):
+def setup_logging(settings: G8eeAppSettings, component_name: str):
     if settings.enable_logging:
         log_level = getattr(logging, settings.log_level, logging.INFO)
 

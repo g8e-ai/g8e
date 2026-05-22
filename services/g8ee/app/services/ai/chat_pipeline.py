@@ -50,7 +50,7 @@ from app.llm.providers.ollama import OllamaProvider
 from app.llm.providers.llama_cpp import LlamaCppProvider
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
-from app.models.http_context import G8eHttpContext
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.models.investigations import (
     ConversationMessageMetadata,
     ConversationHistoryMessage,
@@ -284,9 +284,12 @@ class ChatPipelineService:
 
         current_sentinel_mode = investigation.sentinel_mode
         if current_sentinel_mode != sentinel_mode:
+            from app.models.http_context import RequestContext
+            context = RequestContext.from_app_context(g8e_context)
             await self.investigation_service.investigation_data_service.update_investigation_raw(
                 investigation_id=investigation_id,
                 updates={"sentinel_mode": sentinel_mode},
+                context=context,
             )
             investigation.sentinel_mode = sentinel_mode
 
@@ -477,6 +480,7 @@ class ChatPipelineService:
                 conversation_history=inputs.conversation_history,
                 user_settings=user_settings,
                 task_manager=task_manager,
+                context=RequestContext.from_app_context(g8e_context),
             )
 
     async def _detect_and_publish_interrogation(
@@ -590,6 +594,7 @@ class ChatPipelineService:
         conversation_history: list[ConversationHistoryMessage],
         user_settings: G8eeUserSettings,
         task_manager: BackgroundTaskManager | None,
+        context: RequestContext,
     ) -> None:
         """Schedule memory generation as a background task so it never blocks persistence.
 
@@ -607,6 +612,7 @@ class ChatPipelineService:
                     conversation_history=conversation_history,
                     investigation=investigation,
                     settings=user_settings,
+                    context=context,
                 )
                 logger.info(
                     "Background memory update completed for investigation %s",

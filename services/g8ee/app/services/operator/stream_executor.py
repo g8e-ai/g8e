@@ -36,7 +36,7 @@ from app.errors import ExternalServiceError
 if TYPE_CHECKING:
     from app.services.operator.approval_service import OperatorApprovalService
     from app.services.infra.internal_http_client import InternalHttpClient
-    from app.models.settings import G8eePlatformSettings
+    from app.models.settings import G8eeAppSettings
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class OperatorStreamExecutor:
         self,
         approval_service: OperatorApprovalService,
         internal_http_client: InternalHttpClient,
-        settings: G8eePlatformSettings,
+        settings: G8eeAppSettings,
     ) -> None:
         self._approval_service = approval_service
         self._internal_http_client = internal_http_client

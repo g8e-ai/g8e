@@ -47,13 +47,13 @@ from _lib import (
 
 SETTINGS_API = f'{OPERATOR_HTTPS_URL}/api/settings'
 OPERATOR_SETTINGS_COLLECTION = 'settings'
-PLATFORM_SETTINGS_ID = 'platform_settings'
+PLATFORM_SETTINGS_ID = 'app_settings'
 USER_SETTINGS_ID_PREFIX = 'user_settings_'
 
 
 def _api_get(user_id: str | None = None) -> Dict[str, Any]:
     # Query platform settings directly from operator
-    doc = get_document('platform_settings', 'platform_settings')
+    doc = get_document('app_settings', 'app_settings')
     if not doc:
         return {'success': True, 'data': {'settings': {}}}
     
@@ -81,18 +81,18 @@ def _infer_section(key: str) -> str:
 
 
 def _api_put(settings: Dict[str, str], user_id: str | None = None) -> Dict[str, Any]:
-    """Write settings directly to operator platform_settings document."""
+    """Write settings directly to operator app_settings document."""
     if user_id:
         # User-specific settings not yet supported in g8eo
         raise RuntimeError('User-specific settings not yet supported')
     
-    doc = get_document('platform_settings', 'platform_settings') or {}
+    doc = get_document('app_settings', 'app_settings') or {}
     doc_settings = doc.get('settings', {})
     doc_settings.update(settings)
     doc['settings'] = doc_settings
-    doc['id'] = 'platform_settings'
+    doc['id'] = 'app_settings'
     
-    operator_request('PUT', '/db/platform_settings/platform_settings', doc)
+    operator_request('PUT', '/db/app_settings/app_settings', doc)
     return {'success': True, 'saved': list(settings.keys()), 'skipped': []}
 
 
@@ -218,12 +218,12 @@ def exec_get(args: argparse.Namespace) -> None:
         print(value, end='')
 
 
-def _operator_get_platform_settings() -> Dict[str, Any]:
+def _operator_get_app_settings() -> Dict[str, Any]:
     result = get_document(OPERATOR_SETTINGS_COLLECTION, PLATFORM_SETTINGS_ID)
     return result if result else {}
 
 
-def _operator_put_platform_settings(doc: Dict[str, Any]) -> None:
+def _operator_put_app_settings(doc: Dict[str, Any]) -> None:
     operator_request('PUT', f'/db/{OPERATOR_SETTINGS_COLLECTION}/{PLATFORM_SETTINGS_ID}', doc)
 
 
@@ -232,7 +232,7 @@ def exec_rotate_session_key(_args: argparse.Namespace) -> None:
     now = datetime.now(timezone.utc).isoformat()
 
     # 1. Update operator document
-    doc = _operator_get_platform_settings()
+    doc = _operator_get_app_settings()
 
     if not doc:
         doc = {
@@ -245,7 +245,7 @@ def exec_rotate_session_key(_args: argparse.Namespace) -> None:
     doc['settings']['session_encryption_key'] = new_key
     doc['updated_at'] = now
 
-    _operator_put_platform_settings(doc)
+    _operator_put_app_settings(doc)
 
     print(new_key, end='')
 
@@ -262,9 +262,9 @@ def _parse_assignments(assignments: list) -> Dict[str, str]:
 
 
 def _direct_set(settings: Dict[str, str]) -> None:
-    """Write settings directly to the operator platform_settings document."""
+    """Write settings directly to the operator app_settings document."""
     now = datetime.now(timezone.utc).isoformat()
-    doc = _operator_get_platform_settings()
+    doc = _operator_get_app_settings()
 
     if not doc:
         doc = {
@@ -278,7 +278,7 @@ def _direct_set(settings: Dict[str, str]) -> None:
         doc['settings'][key] = value
     doc['updated_at'] = now
 
-    _operator_put_platform_settings(doc)
+    _operator_put_app_settings(doc)
     for key in settings:
         print(f"  [OK] {key}")
 

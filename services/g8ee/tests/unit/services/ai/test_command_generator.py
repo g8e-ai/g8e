@@ -38,6 +38,7 @@ from app.llm.prompts import (
     build_tribunal_prompt_fields as _prompt_fields,
 )
 from app.models.agent import OperatorContext
+from app.models.http_context import RequestContext
 from app.models.agents.tribunal import (
     CandidateCommand,
     TribunalAuditorFailedError,
@@ -221,6 +222,11 @@ class TestRoleImportRegression:
             auditor_enabled=True,
             command_constraints_message="No whitelist or blacklist constraints are active.",
             investigation_id="inv-test",
+            context=RequestContext(
+                web_session_id="test-web-session",
+                user_id="test-user",
+                investigation_id="inv-test",
+            ),
         )
         _final_cmd, _outcome, auditor_passed, auditor_revision, _auditor_reason, _commitment_id = (
             audit_result.final_command,
@@ -684,6 +690,11 @@ class TestTribunalAuditorFailedError:
                 auditor_enabled=True,
                 command_constraints_message="No whitelist or blacklist constraints are active",
                 investigation_id="inv-test",
+                context=RequestContext(
+                    web_session_id="test-web-session",
+                    user_id="test-user",
+                    investigation_id="inv-test",
+                ),
             )
 
         assert exc_info.value.reason == AuditorReason.EMPTY_RESPONSE
@@ -725,6 +736,11 @@ class TestTribunalAuditorFailedError:
                 auditor_enabled=True,
                 command_constraints_message="No whitelist or blacklist constraints are active",
                 investigation_id="inv-test",
+                context=RequestContext(
+                    web_session_id="test-web-session",
+                    user_id="test-user",
+                    investigation_id="inv-test",
+                ),
             )
 
         assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
@@ -764,6 +780,11 @@ class TestTribunalAuditorFailedError:
                 auditor_enabled=True,
                 command_constraints_message="No whitelist or blacklist constraints are active",
                 investigation_id="inv-test",
+                context=RequestContext(
+                    web_session_id="test-web-session",
+                    user_id="test-user",
+                    investigation_id="inv-test",
+                ),
             )
 
         assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR

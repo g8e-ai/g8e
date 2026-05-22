@@ -46,7 +46,7 @@ async def real_kv_client():
 
     # Create KVCacheClient with mTLS authentication
     client = KVCacheClient(
-        http_url=bootstrap_settings.listen.http_url,
+        http_url=bootstrap_settings.gateway.http_url,
         component_name=ComponentName.G8EE,
         ca_cert_path=bootstrap_settings.ca_cert_path,
         client_cert_path=bootstrap_settings.client_cert_path,

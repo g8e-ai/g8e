@@ -58,8 +58,8 @@ pytestmark = pytest.mark.unit
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def client():
-    from app.models.settings import ListenSettings
-    listen = ListenSettings()
+    from app.models.settings import GatewaySettings
+    listen = GatewaySettings()
     c = HTTPClient (
         component_id=ComponentName.G8EE,
         base_url=listen.http_url,
@@ -77,8 +77,8 @@ async def client():
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def authed_client():
-    from app.models.settings import ListenSettings
-    listen = ListenSettings()
+    from app.models.settings import GatewaySettings
+    listen = GatewaySettings()
     c = HTTPClient (
         component_id=ComponentName.G8EE,
         base_url=listen.http_url,

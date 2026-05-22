@@ -34,6 +34,13 @@ from app.services.investigation.investigation_data_service import InvestigationD
 from app.services.investigation.investigation_service import InvestigationService
 
 
+def _make_investigation_data_service(mock_cache):
+    """Helper to create InvestigationDataService with required governance_client."""
+    from unittest.mock import MagicMock
+    mock_governance_client = MagicMock()
+    return InvestigationDataService(cache=mock_cache, governance_client=mock_governance_client)
+
+
 def _make_history_entry(
     event_type: EventType,
     status: ExecutionStatus | None = None,
@@ -80,7 +87,7 @@ class TestInvestigationDataServiceOperatorActions:
         ]
 
         mock_cache = AsyncMock()
-        service = InvestigationDataService(cache=mock_cache)
+        service = _make_investigation_data_service(mock_cache)
         service.get_investigation = AsyncMock(return_value=investigation)
 
         result = await service.get_operator_actions_for_ai_context("inv-1")
@@ -99,7 +106,7 @@ class TestInvestigationDataServiceOperatorActions:
         ]
 
         mock_cache = AsyncMock()
-        service = InvestigationDataService(cache=mock_cache)
+        service = _make_investigation_data_service(mock_cache)
         service.get_investigation = AsyncMock(return_value=investigation)
 
         result = await service.get_operator_actions_for_ai_context("inv-1")
@@ -117,7 +124,7 @@ class TestInvestigationDataServiceOperatorActions:
         ]
 
         mock_cache = AsyncMock()
-        service = InvestigationDataService(cache=mock_cache)
+        service = _make_investigation_data_service(mock_cache)
         service.get_investigation = AsyncMock(return_value=investigation)
 
         result = await service.get_operator_actions_for_ai_context("inv-1")

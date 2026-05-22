@@ -17,6 +17,6 @@ package constants
 type DocumentID string
 
 const (
-	DocIDPlatformSettings   DocumentID = "platform_settings"
+	DocIDAppSettings        DocumentID = "app_settings"
 	DocIDUserSettingsPrefix DocumentID = "user_settings_"
 )

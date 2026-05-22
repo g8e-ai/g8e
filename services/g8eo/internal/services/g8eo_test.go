@@ -108,7 +108,7 @@ func TestG8eoService_ProductionSentinelConfig(t *testing.T) {
 
 	assert.True(t, cfg.Enabled, "production sentinel must be enabled")
 	assert.True(t, cfg.StrictMode, "production sentinel must use strict mode")
-	assert.True(t, cfg.ThreatDetectionEnabled, "production sentinel must have threat detection enabled")
+	assert.True(t, cfg.SentinelEnabled, "production sentinel must have threat detection enabled")
 	assert.Equal(t, 4096, cfg.MaxOutputLength, "production sentinel max output length must be 4096")
 }
 

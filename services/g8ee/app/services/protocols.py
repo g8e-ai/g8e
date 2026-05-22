@@ -96,7 +96,7 @@ from app.models.command_request_payloads import (
     FsReadRequestPayload,
     CheckPortRequestPayload,
 )
-from app.models.settings import G8eePlatformSettings, G8eeUserSettings
+from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.models.tool_results import ToolResult
@@ -112,7 +112,7 @@ if TYPE_CHECKING:
 class SettingsServiceProtocol(Protocol):
     """Protocol for SettingsService ensuring read-only access to platform and user settings."""
 
-    async def get_platform_settings(self) -> G8eePlatformSettings:
+    async def get_app_settings(self) -> G8eeAppSettings:
         """Retrieve platform-level settings from operator with cache-aside."""
         raise NotImplementedError
 
@@ -120,7 +120,7 @@ class SettingsServiceProtocol(Protocol):
         """Retrieve settings for a specific user, overlaid on platform settings."""
         raise NotImplementedError
 
-    def get_local_settings(self) -> G8eePlatformSettings:
+    def get_local_settings(self) -> G8eeAppSettings:
         """Retrieve local bootstrap settings (bootstrap)."""
         raise NotImplementedError
 
@@ -486,13 +486,13 @@ class InvestigationDataServiceProtocol(Protocol):
         raise NotImplementedError
     async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
         raise NotImplementedError
-    async def update_investigation_raw(self, investigation_id: str, updates: dict[str, object], merge: bool = True) -> None:
+    async def update_investigation_raw(self, investigation_id: str, updates: dict[str, object], context: RequestContext, merge: bool = True) -> None:
         raise NotImplementedError
     async def query_investigations(self, request: InvestigationQueryRequest) -> list[InvestigationModel]:
         raise NotImplementedError
     async def get_case_investigations(self, case_id: str, user_id: str | None, context: RequestContext) -> list[InvestigationModel]:
         raise NotImplementedError
-    async def delete_investigation(self, investigation_id: str) -> None:
+    async def delete_investigation(self, investigation_id: str, context: RequestContext) -> None:
         raise NotImplementedError
     async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
         raise NotImplementedError
@@ -511,6 +511,7 @@ class InvestigationDataServiceProtocol(Protocol):
         actor: ComponentName,
         summary: str,
         details: ConversationMessageMetadata,
+        context: RequestContext,
     ) -> InvestigationModel:
         raise NotImplementedError
     async def add_approval_record(
@@ -518,6 +519,7 @@ class InvestigationDataServiceProtocol(Protocol):
         investigation_id: str,
         event_type: EventType,
         metadata: ConversationMessageMetadata,
+        context: RequestContext,
         actor: ComponentName = ComponentName.G8EE,
     ) -> InvestigationModel:
         raise NotImplementedError
@@ -529,6 +531,7 @@ class InvestigationDataServiceProtocol(Protocol):
         result: CommandInternalResult,
         operator_id: str,
         operator_session_id: str,
+        context: RequestContext,
     ) -> InvestigationModel:
         raise NotImplementedError
     async def add_file_operation_result(
@@ -540,6 +543,7 @@ class InvestigationDataServiceProtocol(Protocol):
         file_path: str,
         result: FileEditResult,
         operation: FileOperation,
+        context: RequestContext,
     ) -> InvestigationModel:
         raise NotImplementedError
     async def get_command_execution_history(self, investigation_id: str) -> list[InvestigationHistoryEntry]:

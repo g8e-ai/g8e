@@ -69,7 +69,7 @@ from app.services.operator.operator_data_service import OperatorDataService
 from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
 from app.services.data.case_data_service import CaseDataService
 from app.services.operator.heartbeat_service import HeartbeatSnapshotService
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeAppSettings
 from app.utils.whitelist_validator import get_whitelist_validator, register_whitelist_validator
 from app.utils.blacklist_validator import get_blacklist_validator, register_blacklist_validator
 from app.utils.auto_approved_validator import get_auto_approved_validator, register_auto_approved_validator
@@ -80,6 +80,7 @@ from app.db.blob_service import BlobService
 if TYPE_CHECKING:
     from app.clients.blob_client import BlobClient
     from app.clients.pubsub_client import PubSubClient
+    from app.clients.governance_client import GovernanceClient
     from app.services.investigation.investigation_service import InvestigationService
     from app.services.investigation.investigation_data_service import InvestigationDataService
     from app.services.operator.operator_data_service import OperatorDataService
@@ -181,7 +182,7 @@ class ServiceFactory:
 
     @staticmethod
     def create_core_services(
-        settings: G8eePlatformSettings, cache_aside_service: CacheAsideService
+        settings: G8eeAppSettings, cache_aside_service: CacheAsideService
     ) -> CoreServices:
         """Create core services that other services depend on."""
 
@@ -208,13 +209,15 @@ class ServiceFactory:
 
     @staticmethod
     def create_data_services(
-        settings: G8eePlatformSettings,
+        settings: G8eeAppSettings,
         cache_aside_service: CacheAsideService,
         core_services: CoreServices,
+        governance_client: "GovernanceClient",
     ) -> DataServices:
         """Create data services for CRUD operations."""
         investigation_data_service = InvestigationDataService(
-            cache=cache_aside_service
+            cache=cache_aside_service,
+            governance_client=governance_client,
         )
 
         operator_data_service = OperatorDataService(
@@ -223,13 +226,15 @@ class ServiceFactory:
         )
 
         memory_data_service = MemoryDataService(
-            cache_aside_service=cache_aside_service
+            cache_aside_service=cache_aside_service,
+            governance_client=governance_client,
         )
 
         case_data_service = CaseDataService(
             settings=settings,
             cache=cache_aside_service,
             event_service=cast(EventService, core_services.event_service),
+            governance_client=governance_client,
         )
 
         agent_activity_data_service = AgentActivityDataService(
@@ -237,7 +242,8 @@ class ServiceFactory:
         )
 
         reputation_data_service = ReputationDataService(
-            cache=cache_aside_service
+            cache=cache_aside_service,
+            governance_client=governance_client,
         )
 
         stake_resolution_data_service = StakeResolutionDataService(
@@ -262,7 +268,7 @@ class ServiceFactory:
 
     @staticmethod
     def create_domain_services(
-        settings: G8eePlatformSettings, data_services: DataServices
+        settings: G8eeAppSettings, data_services: DataServices
     ) -> DomainServices:
         """Create domain services that orchestrate business logic."""
         investigation_service = InvestigationService(
@@ -347,11 +353,12 @@ class ServiceFactory:
 
     @staticmethod
     def create_all_services(
-        settings: G8eePlatformSettings,
+        settings: G8eeAppSettings,
         cache_aside_service: CacheAsideService,
         db_service: DBService,
         kv_service: KVService,
         blob_service: BlobService,
+        governance_client: "GovernanceClient",
         pubsub_client: PubSubClient | None = None,
         blob_service_client: BlobClient | None = None,
         web_search_provider: WebSearchProvider | None = None,
@@ -366,7 +373,7 @@ class ServiceFactory:
         requiring platform settings to have search configured.
         """
         core_services = ServiceFactory.create_core_services(settings, cache_aside_service)
-        data_services = ServiceFactory.create_data_services(settings, cache_aside_service, core_services)
+        data_services = ServiceFactory.create_data_services(settings, cache_aside_service, core_services, governance_client)
         domain_services = ServiceFactory.create_domain_services(settings, data_services)
         operator_services = ServiceFactory.create_operator_services(core_services, data_services, cache_aside_service, pubsub_client)
 
@@ -444,7 +451,7 @@ class ServiceFactory:
             ssh_inventory_service=domain_services.ssh_inventory_service,
             stream_executor=stream_executor,
             web_search_provider=web_search_provider,
-            platform_settings=settings,
+            app_settings=settings,
         )
 
         request_builder = AIRequestBuilder(

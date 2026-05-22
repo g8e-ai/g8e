@@ -35,7 +35,7 @@ The Governance Gateway in Gateway mode exposes four logical surfaces. Defaults a
 | **Public Port** | `<!-- g8e:port:operator_public -->8442<!-- /g8e:port -->` (TLS) | Web session | Browser login, WebAuthn challenge, and PKI discovery. |
 | **mTLS API + Pub/Sub** | `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->` | mTLS + URI SAN | Central `/api/governance/envelope` mutation endpoint, `/db` persistence, and `/ws/pubsub` real-time event fan-out. |
 
-When the mTLS and Public surfaces share a port, the gateway serves them through a single `MasterRouter` with `tls.VerifyClientCertIfGiven`; per-route handlers enforce mTLS and URI SAN on Gateway routes. WebSocket connections are upgraded natively over the shared listener.
+When the mTLS and Public surfaces share a port, the gateway serves them through a single `MasterRouter` with `tls.VerifyClientCertIfGiven`; per-route handlers enforce mTLS and URI SAN on Gateway routes. WebSocket connections are upgraded natively over the shared gateway.
 
 ### Core Responsibilities
 - **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file in `.g8e/data`.

@@ -299,5 +299,50 @@ severity = "critical"
         toml_path.unlink()
 
 
+def test_deduplication_by_id(parser):
+    """Test that duplicate doctrine IDs are deduplicated when parsing file."""
+    toml = """
+[[rules]]
+id = "duplicate-id"
+description = "First occurrence"
+regex = '''test1'''
+severity = "critical"
+
+[[rules]]
+id = "duplicate-id"
+description = "Second occurrence (should be skipped)"
+regex = '''test2'''
+severity = "high"
+
+[[rules]]
+id = "unique-id"
+description = "Unique rule"
+regex = '''test3'''
+severity = "medium"
+"""
+    
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+        f.write(toml)
+        f.flush()
+        toml_path = Path(f.name)
+    
+    try:
+        doctrines = parser.parse_file(toml_path)
+        
+        # Should have 2 unique doctrines (first duplicate-id and unique-id)
+        assert len(doctrines) == 2
+        
+        ids = [d.id for d in doctrines]
+        assert "gitleaks_duplicate-id" in ids
+        assert "gitleaks_unique-id" in ids
+        
+        # First occurrence should be kept
+        doctrine_duplicate = next(d for d in doctrines if d.id == "gitleaks_duplicate-id")
+        assert doctrine_duplicate.name == "First occurrence"
+        assert doctrine_duplicate.severity == "critical"
+    finally:
+        toml_path.unlink()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -109,6 +109,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
+app.gateway(PORT, () => {
   console.log(`Fleet dashboard running on http://0.0.0.0:${PORT}`);
 });

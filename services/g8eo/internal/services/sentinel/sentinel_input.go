@@ -107,7 +107,7 @@ var CriticalSystemDirs = []string{
 }
 
 func (s *Sentinel) initializeInputThreatDetectors() {
-	if !s.config.ThreatDetectionEnabled {
+	if !s.config.SentinelEnabled {
 		return
 	}
 
@@ -775,7 +775,7 @@ func (s *Sentinel) AnalyzeCommand(command string) *CommandAnalysisResult {
 		RiskScore:   0,
 	}
 
-	if !s.config.ThreatDetectionEnabled {
+	if !s.config.SentinelEnabled {
 		return result
 	}
 
@@ -824,7 +824,7 @@ func (s *Sentinel) AnalyzeFileEdit(filePath string, operation constants.FileOper
 		IsCriticalSystemFile: s.isCriticalSystemFile(filePath),
 	}
 
-	if !s.config.ThreatDetectionEnabled {
+	if !s.config.SentinelEnabled {
 		return result
 	}
 

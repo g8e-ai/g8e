@@ -257,13 +257,13 @@ def test_robust_parsing_variations(parser):
         conf_path.unlink()
 
 
-def test_structural_validation_warning(parser, capsys):
-    """Test that missed rules trigger a warning."""
+def test_structural_validation_info(parser, capsys):
+    """Test that missed non-regex rules trigger an informational message."""
     conf = """
-    # This rule is valid
+    # This rule is valid (regex)
     SecRule ARGS "@rx valid" "id:2001,msg:test"
-    # This rule is invalid (missing quotes around variable)
-    SecRule ARGS invalid "id:2002,msg:test"
+    # This rule uses non-regex operator (expected to be skipped)
+    SecRule ARGS "@pm valid" "id:2002,msg:test"
     """
     
     with tempfile.NamedTemporaryFile(mode='w', suffix='.conf', delete=False) as f:
@@ -275,11 +275,37 @@ def test_structural_validation_warning(parser, capsys):
         doctrines = parser.parse_file(conf_path)
         assert len(doctrines) == 1
         
-        # Check stderr for warning
+        # Check stdout for informational message
         captured = capsys.readouterr()
-        assert "Warning: Missed 1 SecRule directives" in captured.err
+        assert "Info: Skipped 1 non-regex SecRule directives" in captured.out
     finally:
         conf_path.unlink()
+
+
+def test_deduplication_by_id(parser, tmp_path):
+    """Test that duplicate doctrine IDs are deduplicated when parsing directory."""
+    conf1 = tmp_path / "file1.conf"
+    conf1.write_text('SecRule ARGS "@rx pattern" "id:3001,msg:First"')
+    
+    conf2 = tmp_path / "file2.conf"
+    conf2.write_text('SecRule ARGS "@rx pattern" "id:3001,msg:Second"')
+    
+    conf3 = tmp_path / "file3.conf"
+    conf3.write_text('SecRule ARGS "@rx pattern" "id:3002,msg:Third"')
+    
+    doctrines = parser.parse_directory(tmp_path)
+    
+    # Should have 2 unique doctrines (3001 from first file, 3002 from third)
+    assert len(doctrines) == 2
+    
+    ids = [d.id for d in doctrines]
+    assert "owasp_crs_3001" in ids
+    assert "owasp_crs_3002" in ids
+    
+    # First occurrence should be kept
+    doctrine_3001 = next(d for d in doctrines if d.id == "owasp_crs_3001")
+    assert doctrine_3001.name == "First"
+    assert doctrine_3001.pattern == "pattern"
 
 
 def test_integration_full_run(tmp_path):

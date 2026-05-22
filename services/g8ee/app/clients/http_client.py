@@ -51,6 +51,7 @@ from app.errors import (
 )
 from app.models.base import G8eBaseModel
 from app.models.http_context import G8eHttpContext, RequestContext
+from app.models.settings import TLSConfig
 from app.utils.aiohttp_session import create_component_http_session
 from app.utils.timestamp import now
 
@@ -238,6 +239,7 @@ class HTTPClient:
         auth_token: str | None = None,
         api_key: str | None = None,
         headers: dict[str, str] | None = None,
+        tls_config: TLSConfig | None = None,
         ca_cert_path: str | None = None,
         client_cert_path: str | None = None,
         client_key_path: str | None = None,
@@ -250,9 +252,15 @@ class HTTPClient:
         self.auth_token = auth_token
         self.api_key = api_key
         self.default_headers = headers or {}
-        self._ca_cert_path = ca_cert_path
-        self._client_cert_path = client_cert_path
-        self._client_key_path = client_key_path
+
+        if tls_config is not None:
+            self._ca_cert_path = tls_config.ca_cert_path
+            self._client_cert_path = tls_config.client_cert_path
+            self._client_key_path = tls_config.client_key_path
+        else:
+            self._ca_cert_path = ca_cert_path
+            self._client_cert_path = client_cert_path
+            self._client_key_path = client_key_path
 
         self._session: aiohttp.ClientSession | None = None
         self.circuit_breakers: dict[str, CircuitBreaker] = {}

@@ -72,6 +72,19 @@ EOF
     bench)
         _ensure_evals_venv
         _banner "evals bench"
+
+        # Resolve relative gold-set path before we cd into the evals dir
+        _args=("${REMAINING_ARGS[@]}")
+        for i in "${!_args[@]}"; do
+            if [[ "${_args[$i]}" == "--gold-set" && $((i + 1)) -lt ${#_args[@]} ]]; then
+                val="${_args[$((i+1))]}"
+                if [[ ! "$val" == /* ]]; then
+                    _args[$((i+1))]="$(pwd)/$val"
+                fi
+            fi
+        done
+        REMAINING_ARGS=("${_args[@]}")
+
         # The bench drives the *full* g8ee chat pipeline (Triage → Dash/Sage →
         # Tribunal → Warden) via /api/internal/chat, so the platform must be
         # running and the caller must be authenticated.

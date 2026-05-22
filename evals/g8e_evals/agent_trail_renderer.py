@@ -108,6 +108,8 @@ _EVENT_STYLE: dict[str, tuple[str, str, str]] = {
     "g8e.v1.ai.llm.chat.message.processing.failed": ("CHAT/processing.failed", "red", "line"),
     "g8e.v1.ai.llm.chat.message.dead.lettered":     ("CHAT/dead-lettered",     "red", "line"),
 
+    "g8e.v1.ai.governance.warden.receipt.signed":      ("WARDEN/receipt.signed", "green", "line"),
+
     # Audit
     "g8e.v1.operator.audit.user.recorded":              ("AUDIT/user",   "blue", "line"),
     "g8e.v1.operator.audit.ai.recorded":                ("AUDIT/ai",     "blue", "line"),
@@ -147,6 +149,7 @@ def _summary_for(event_type: str, payload: dict[str, Any]) -> str:
         "agent_id", "member", "candidate", "command", "decision",
         "risk", "risk_level", "winner", "audited_command", "round",
         "intent", "intent_summary", "complexity", "posture",
+        "transaction_hash",
         "vote_count", "consensus", "error", "error_message",
         "error_type", "reason", "provider", "model",
     )

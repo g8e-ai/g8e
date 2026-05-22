@@ -131,7 +131,7 @@ func (s *GatewayDBService) initTestSchema(secretsDir string) error {
 		logger:     s.logger,
 		keystore:   ks,
 	}
-	return sm.InitPlatformSettings()
+	return sm.InitAppSettings()
 }
 
 func (s *GatewayDBService) initStateRoot() error {
@@ -323,7 +323,7 @@ func (s *GatewayDBService) initSchema(secretsDir string) error {
 	if err != nil {
 		return err
 	}
-	if err := sm.InitPlatformSettings(); err != nil {
+	if err := sm.InitAppSettings(); err != nil {
 		return err
 	}
 
@@ -337,25 +337,25 @@ func (s *GatewayDBService) initSchema(secretsDir string) error {
 
 // runDataMigrations applies data-only migrations (not schema changes).
 func (s *GatewayDBService) runDataMigrations() error {
-	// Migration 1: Scrub plaintext secrets from platform_settings
+	// Migration 1: Scrub plaintext secrets from app_settings
 	// This is a one-time migration that removes the old plaintext secret fields
-	// from the platform_settings document, since secrets are now stored in the keystore.
+	// from the app_settings document, since secrets are now stored in the keystore.
 	var count int
 	err := s.db.QueryRow(
-		"SELECT COUNT(*) FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+		"SELECT COUNT(*) FROM documents WHERE collection = 'settings' AND id = 'app_settings'",
 	).Scan(&count)
 	if err != nil {
 		return err
 	}
 	if count == 0 {
-		// No platform_settings document yet, nothing to migrate
+		// No app_settings document yet, nothing to migrate
 		return nil
 	}
 
 	// Check if migration already applied by checking for the old secret fields
 	var hasSecrets int
 	err = s.db.QueryRow(
-		"SELECT COUNT(*) FROM documents WHERE collection = 'settings' AND id = 'platform_settings' AND (json_extract(data, '$.settings.session_encryption_key') IS NOT NULL OR json_extract(data, '$.settings.Actuator_signing_key') IS NOT NULL OR json_extract(data, '$.settings.auditor_hmac_key') IS NOT NULL)",
+		"SELECT COUNT(*) FROM documents WHERE collection = 'settings' AND id = 'app_settings' AND (json_extract(data, '$.settings.session_encryption_key') IS NOT NULL OR json_extract(data, '$.settings.Actuator_signing_key') IS NOT NULL OR json_extract(data, '$.settings.auditor_hmac_key') IS NOT NULL)",
 	).Scan(&hasSecrets)
 	if err != nil {
 		return err
@@ -376,14 +376,14 @@ func (s *GatewayDBService) runDataMigrations() error {
 			 '$.settings.auditor_hmac_key'
 		 ),
 		 updated_at = ?
-		 WHERE collection = 'settings' AND id = 'platform_settings'`,
+		 WHERE collection = 'settings' AND id = 'app_settings'`,
 		sqliteutil.NowTimestamp(),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to scrub plaintext secrets from platform_settings: %w", err)
+		return fmt.Errorf("failed to scrub plaintext secrets from app_settings: %w", err)
 	}
 
-	s.logger.Info("Applied data migration: scrubbed plaintext secrets from platform_settings")
+	s.logger.Info("Applied data migration: scrubbed plaintext secrets from app_settings")
 	return nil
 }
 

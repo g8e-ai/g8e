@@ -202,7 +202,7 @@ func (ls *GatewayService) initHandlersAndServers() {
 	portUsage[cfg.Gateway.PublicPort] = append(portUsage[cfg.Gateway.PublicPort], "Public")
 
 	// Validate up front so collisions panic during init, not only when a
-	// fresh listener is built. HTTP and WSS may share a port (both mTLS);
+	// fresh gateway is built. HTTP and WSS may share a port (both mTLS);
 	// every other combination is rejected. Port 0 is reserved for tests
 	// (net.Listen picks a random free port per server) and is exempt.
 	for port, usage := range portUsage {
@@ -228,7 +228,7 @@ func (ls *GatewayService) initHandlersAndServers() {
 	tlsConfig := pki.TLSConfig()           // strict mTLS (RequireAndVerifyClientCert)
 	tlsConfigPlain := pki.TLSConfigPlain() // public TLS (no client cert)
 
-	// Each surface gets its own dedicated listener with a TLS config that
+	// Each surface gets its own dedicated gateway with a TLS config that
 	// matches the surface's authentication contract. The mTLS surface MUST
 	// use RequireAndVerifyClientCert; mixing it with any non-mTLS surface
 	// on the same port would force VerifyClientCertIfGiven and downgrade
@@ -405,9 +405,9 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	}
 
 	startServer := func(s *http.Server, name string) {
-		ls.logger.Info("Starting listener", "server", name, "addr", s.Addr)
+		ls.logger.Info("Starting gateway", "server", name, "addr", s.Addr)
 
-		// Use a temporary listener to signal readiness before blocking on Serve
+		// Use a temporary gateway to signal readiness before blocking on Serve
 		ln, err := net.Listen(string(constants.NetworkProtocolTCP), s.Addr)
 		if err != nil {
 			ls.logger.Error("Failed to listen", "server", name, "addr", s.Addr, string(constants.ConnectionStateError), err)
@@ -420,14 +420,14 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 			s.Addr = ln.Addr().String()
 		}
 
-		ls.logger.Info("TCP listener bound", "server", name, "addr", s.Addr)
+		ls.logger.Info("TCP gateway bound", "server", name, "addr", s.Addr)
 
 		var lnToServe net.Listener = ln
 		if s.TLSConfig != nil {
 			lnToServe = tls.NewListener(ln, s.TLSConfig)
-			ls.logger.Info("TLS listener bound", "server", name, "addr", s.Addr)
+			ls.logger.Info("TLS gateway bound", "server", name, "addr", s.Addr)
 		} else {
-			ls.logger.Info("Plain HTTP listener bound", "server", name, "addr", s.Addr)
+			ls.logger.Info("Plain HTTP gateway bound", "server", name, "addr", s.Addr)
 		}
 
 		readyChan <- struct{}{}

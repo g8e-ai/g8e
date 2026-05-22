@@ -243,10 +243,10 @@ def _is_operator_online(host: str | None = None, port: int | None = None, timeou
     """Check if the operator is online by attempting a socket connection to its port."""
     from urllib.parse import urlparse
 
-    from app.models.settings import ListenSettings
+    from app.models.settings import GatewaySettings
     from app.constants.generated_paths import PortConstants
 
-    listen = ListenSettings()
+    listen = GatewaySettings()
     parsed = urlparse(listen.http_url)
 
     target_host = host or parsed.hostname or "localhost"
@@ -266,7 +266,7 @@ async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = T
     from app.constants import ComponentName
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
-    from app.models.settings import G8eePlatformSettings
+    from app.models.settings import G8eeAppSettings
     from app.services.cache.cache_aside import CacheAsideService
     from app.services.infra.settings_service import SettingsService
 
@@ -304,7 +304,7 @@ async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = T
             settings_service._cache_aside = cache_aside
 
             try:
-                return await settings_service.get_platform_settings()
+                return await settings_service.get_app_settings()
             finally:
                 await kv_client.close()
                 await db_client.close()
@@ -326,7 +326,7 @@ def pytest_configure(config):
         )
 
     from app.llm.factory import set_llm_settings, set_search_settings, set_settings
-    from app.models.settings import ListenSettings
+    from app.models.settings import GatewaySettings
 
     import asyncio
     from urllib.parse import urlparse
@@ -334,7 +334,7 @@ def pytest_configure(config):
     logger.info("Pytest configure started.")
 
     # Check if operator is online once at the start
-    listen = ListenSettings()
+    listen = GatewaySettings()
     parsed = urlparse(listen.http_url)
     target_port = parsed.port or PortConstants.PORT_OPERATOR_HTTPS
 
@@ -574,6 +574,17 @@ def unique_web_session_id():
 
 
 @pytest.fixture
+def mock_governance_client():
+    """Mock GovernanceClient for service tests."""
+    from unittest.mock import MagicMock
+    mock = MagicMock()
+    mock.submit_envelope = MagicMock(return_value=mock_awaitable({"status": "accepted"}))
+    mock.update_governed_doc = MagicMock(return_value=mock_awaitable({"status": "accepted"}))
+    mock.delete_governed_doc = MagicMock(return_value=mock_awaitable({"status": "accepted"}))
+    return mock
+
+
+@pytest.fixture
 def mock_operator_document():
     """Mock OperatorDocument for evaluation tests.
 
@@ -591,14 +602,14 @@ def test_settings():
     """Returns the globally configured Settings object.
 
     In a real test run, this is loaded from operator by pytest_sessionstart.
-    If settings are not properly configured, returns a default G8eePlatformSettings.
+    If settings are not properly configured, returns a default G8eeAppSettings.
     """
     from app.llm.factory import get_settings
-    from app.models.settings import AuthSettings, G8eePlatformSettings, ListenSettings
+    from app.models.settings import AuthSettings, G8eeAppSettings, GatewaySettings
 
     settings = get_settings()
     if settings is None or not hasattr(settings, "auth"):
-        return G8eePlatformSettings(auth=AuthSettings(), listen=ListenSettings())
+        return G8eeAppSettings(auth=AuthSettings(), listen=GatewaySettings())
     return settings
 
 
@@ -633,8 +644,8 @@ def mock_event_service():
 
 @pytest.fixture
 def mock_settings():
-    from app.models.settings import AuthSettings, G8eePlatformSettings, ListenSettings
-    return G8eePlatformSettings(auth=AuthSettings(), listen=ListenSettings())
+    from app.models.settings import AuthSettings, G8eeAppSettings, GatewaySettings
+    return G8eeAppSettings(auth=AuthSettings(), listen=GatewaySettings())
 
 
 @pytest.fixture
@@ -813,7 +824,7 @@ async def cache_aside_service(test_settings):
         kv=kv,
         db=db,
         component_name=ComponentName.G8EE,
-        default_ttl=settings.listen.default_ttl,
+        default_ttl=settings.gateway.default_ttl,
     )
     yield service
     await service.close()
@@ -843,7 +854,7 @@ async def pubsub_service(test_settings):
     settings = test_settings
 
     client = PubSubClient(
-        pubsub_url=settings.listen.pubsub_url,
+        pubsub_url=settings.gateway.pubsub_url,
         component_name=ComponentName.G8EE,
     )
     await client.connect()

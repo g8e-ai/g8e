@@ -424,7 +424,7 @@ class ApiKeyGenerationResponse(G8eBaseModel):
 
 
 class OperatorListenSessionAuthRequest(G8eBaseModel):
-    """Request model for starting a session auth listener.
+    """Request model for starting a session auth gateway.
 
     Called by client during device registration bootstrap.
 

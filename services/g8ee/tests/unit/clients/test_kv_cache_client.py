@@ -20,7 +20,7 @@ import pytest
 from app.clients.kv_cache_client import KVCacheClient, _encode_key
 from app.constants import ComponentName
 from app.errors import NetworkError
-from app.models.settings import ListenSettings
+from app.models.settings import GatewaySettings
 
 pytestmark = pytest.mark.unit
 
@@ -90,15 +90,15 @@ class TestKVCacheClientInit:
 
     def test_default_init(self):
         with patch("app.clients.kv_cache_client.SettingsService"), \
-             patch("app.clients.kv_cache_client.ListenSettings") as mock_listen:
+             patch("app.clients.kv_cache_client.GatewaySettings") as mock_listen:
             mock_listen.from_bootstrap.return_value = MagicMock(http_url="https://default-localhost:443")
             client = KVCacheClient()
             assert client.http_url == "https://default-localhost:443"
 
     def test_init_with_listen_settings(self):
-        mock_listen = MagicMock(spec=ListenSettings)
+        mock_listen = MagicMock(spec=GatewaySettings)
         mock_listen.http_url = "https://explicit-localhost:443"
-        client = KVCacheClient(listen_settings=mock_listen)
+        client = KVCacheClient(gateway_settings=mock_listen)
         assert client.http_url == "https://explicit-localhost:443"
 
     def test_is_healthy_false_on_init(self):

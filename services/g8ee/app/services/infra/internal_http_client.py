@@ -14,7 +14,7 @@
 import logging
 
 from app.clients.http_client import CircuitBreakerConfig, RetryConfig, HTTPClient
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeAppSettings, TLSConfig
 from app.constants import (
     UNKNOWN_ERROR_MESSAGE,
     DEFAULT_HTTP_CLIENT_TIMEOUT,
@@ -38,17 +38,24 @@ from app.models.internal_api import (
 logger = logging.getLogger(__name__)
 
 
-def get_client_url(settings: G8eePlatformSettings) -> str:
+def get_client_url(settings: G8eeAppSettings) -> str:
     return settings.component_urls.client_url
 
 
 class InternalHttpClient:
 
-    def __init__(self, settings: G8eePlatformSettings):
+    def __init__(self, settings: G8eeAppSettings):
         self.client_url = get_client_url(settings)
         self._settings = settings
         self._cached_cert_path: str | None = None
         self._cached_key_path: str | None = None
+
+        tls_config = TLSConfig(
+            ca_cert_path=settings.ca_cert_path,
+            client_cert_path=settings.client_cert_path,
+            client_key_path=settings.client_key_path,
+        )
+
         self._http: HTTPClient = HTTPClient(
             component_id=ComponentName.G8EE,
             base_url=self.client_url,
@@ -61,20 +68,18 @@ class InternalHttpClient:
             auth_token="",
             api_key=settings.auth.internal_api_key or "",
             headers={},
-            ca_cert_path=settings.ca_cert_path or "",
-            client_cert_path=settings.client_cert_path,
-            client_key_path=settings.client_key_path,
+            tls_config=tls_config,
         )
 
         self._cached_cert_path = settings.client_cert_path
         self._cached_key_path = settings.client_key_path
         logger.info("InternalHttpClient initialized with URL: %s", self.client_url)
 
-    def configure(self, settings: G8eePlatformSettings) -> None:
+    def configure(self, settings: G8eeAppSettings) -> None:
         self._settings = settings
 
     @property
-    def settings(self) -> G8eePlatformSettings:
+    def settings(self) -> G8eeAppSettings:
         return self._settings
 
     @property

@@ -23,6 +23,7 @@ from app.errors import OllamaEmptyResponseError
 from app.models.base import G8eBaseModel
 from app.models.agent import OperatorContext
 from app.models.reputation import GENESIS_PREV_ROOT, ReputationCommitment
+from app.models.http_context import RequestContext
 from app.services.data.reputation_data_service import ReputationDataService
 from app.utils.merkle import leaf_bytes, merkle_root
 from app.constants import (
@@ -420,6 +421,7 @@ async def commit_reputation(
     tribunal_command_id: str,
     investigation_id: str,
     hmac_key: str,
+    context: RequestContext,
 ) -> ReputationCommitment:
     """Compute, sign, and persist a Merkle commitment over the reputation scoreboard.
 
@@ -460,4 +462,4 @@ async def commit_reputation(
         leaves_count=len(states),
         signature=signature,
     )
-    return await reputation_data_service.create_commitment(commitment)
+    return await reputation_data_service.create_commitment(commitment, context)

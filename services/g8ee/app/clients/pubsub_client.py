@@ -29,7 +29,7 @@ from app.proto.pubsub_pb2 import PubSubMessage, PubSubEvent
 from google.protobuf.message import DecodeError
 import aiohttp
 
-from app.models.settings import ListenSettings
+from app.models.settings import GatewaySettings, TLSConfig
 from app.utils.aiohttp_session import create_pubsub_ws_session, resolve_pubsub_ssl_context
 from app.utils.envelope_builder import build_uap_envelope_json
 from app.constants import (
@@ -54,12 +54,13 @@ class PubSubClient:
         pubsub_url: str | None = None,
         component_name: ComponentName = ComponentName.G8EE,
         timeout: float = 10.0,
-        ca_cert_path: str | None = None,
+        tls_config: TLSConfig | None = None,
         auditor_hmac_key: str | None = None,
+        ca_cert_path: str | None = None,
         client_cert_path: str | None = None,
         client_key_path: str | None = None,
     ):
-        _settings = ListenSettings()
+        _settings = GatewaySettings()
         # Use direct internal WSS URL by default for service-to-service
         raw_url = pubsub_url or _settings.pubsub_url
         self.pubsub_url = raw_url.rstrip("/")
@@ -67,9 +68,16 @@ class PubSubClient:
         self.component_name = component_name
         self.client_id = f"{component_name.value}-{uuid.uuid4().hex[:8]}"
         self._timeout = timeout
-        self._ca_cert_path = ca_cert_path
-        self._client_cert_path = client_cert_path
-        self._client_key_path = client_key_path
+
+        if tls_config is not None:
+            self._ca_cert_path = tls_config.ca_cert_path
+            self._client_cert_path = tls_config.client_cert_path
+            self._client_key_path = tls_config.client_key_path
+        else:
+            self._ca_cert_path = ca_cert_path
+            self._client_cert_path = client_cert_path
+            self._client_key_path = client_key_path
+
         self._auditor_hmac_key = auditor_hmac_key
 
         self._ws_session: aiohttp.ClientSession | None = None

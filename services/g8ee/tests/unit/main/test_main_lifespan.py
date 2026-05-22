@@ -71,15 +71,17 @@ def _configure_settings(mocks):
     """Wire up SettingsService + initialize_g8e_service to return a usable mock settings."""
     settings = MagicMock()
     settings.ca_cert_path = "/tmp/ca.crt"
+    settings.client_cert_path = "/tmp/client.crt"
+    settings.client_key_path = "/tmp/client.key"
     settings.operator_session_id = "session"
-    settings.listen.default_ttl = 3600
+    settings.gateway.default_ttl = 3600
     settings.port = PortConstants.G8E_PORT_G8EE_HTTPS
 
     mocks["initialize_g8e_service"].side_effect = AsyncMock(return_value=settings)
 
     settings_svc = mocks["SettingsService"].return_value
     settings_svc.get_local_settings.return_value = settings
-    settings_svc.get_platform_settings = AsyncMock(return_value=settings)
+    settings_svc.get_app_settings = AsyncMock(return_value=settings)
     settings_svc._cache_aside = None
 
     return settings, settings_svc
@@ -173,7 +175,7 @@ class TestLifespanStartup:
             for p in patches:
                 p.stop()
 
-    async def test_loads_platform_settings(self, mock_app):
+    async def test_loads_app_settings(self, mock_app):
         mocks, patches = _build_mocks()
         _, settings_svc = _configure_settings(mocks)
         _configure_factory(mocks)
@@ -181,7 +183,7 @@ class TestLifespanStartup:
             async with lifespan(mock_app):
                 pass
 
-            settings_svc.get_platform_settings.assert_called_once()
+            settings_svc.get_app_settings.assert_called_once()
             mocks["set_settings"].assert_called_once()
         finally:
             for p in patches:

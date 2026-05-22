@@ -235,10 +235,13 @@ class OperatorApprovalService:
                 logger.error("[AUDIT-FAILURE] %s operator: %s", log_tag, e, exc_info=True)
 
         try:
+            from app.models.http_context import RequestContext
+            context = RequestContext.from_app_context(g8e_context)
             await self.investigation_data_service.add_approval_record(
                 investigation_id=g8e_context.investigation_id,
                 event_type=event_type,
                 metadata=metadata,
+                context=context,
             )
             logger.info("[%s] Recorded in conversation_history", log_tag)
         except ResourceNotFoundError:

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from app.clients.db_client import DBClient
     from app.clients.kv_cache_client import KVCacheClient
     from app.clients.pubsub_client import PubSubClient
-    from app.models.settings import G8eePlatformSettings
+    from app.models.settings import G8eeAppSettings
     from app.services.service_factory import AllServices
     from app.services.infra.internal_http_client import InternalHttpClient
 
@@ -32,7 +32,7 @@ class G8eeAppState(Protocol):
     """Protocol for g8ee FastAPI app.state to ensure type safety."""
 
     # Settings and bootstrap
-    settings: G8eePlatformSettings
+    settings: G8eeAppSettings
 
     # Core transport clients
     db_client: DBClient

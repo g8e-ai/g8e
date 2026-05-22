@@ -46,6 +46,10 @@ from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import InvestigationDataServiceProtocol
 from app.utils.keyed_lock import KeyedAsyncLock
 from app.utils.timestamp import now
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.clients.governance_client import GovernanceClient
 
 
 logger = logging.getLogger(__name__)
@@ -55,13 +59,18 @@ _CONVERSATION_HISTORY_ADAPTER = TypeAdapter(list[ConversationHistoryMessage])
 
 class InvestigationDataService(InvestigationDataServiceProtocol):
 
-    def __init__(self, cache: CacheAsideService):
+    def __init__(self, cache: CacheAsideService, governance_client: "GovernanceClient"):
         self.cache = cache
         self.collection = DB_COLLECTION_INVESTIGATIONS
         self._history_lock = KeyedAsyncLock()
+        self._governance_client = governance_client
 
     async def create_investigation(self, request: InvestigationCreateRequest) -> InvestigationModel:
-        """Low-level persistence for a new investigation document."""
+        """Low-level persistence for a new investigation document via governance envelope."""
+        from app.models.command_request_payloads import InvestigationCreateRequestPayload
+        from app.models.pubsub_messages import G8eMessage
+        from app.constants import AITaskId
+
         investigation = InvestigationModel(
             case_id=request.case_id,
             case_title=request.case_title,
@@ -88,12 +97,32 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             summary=f"Investigation created for case {request.case_id}",
         )
 
-        await self.cache.create_document(
-            collection=self.collection,
-            document_id=investigation.id,
-            data=investigation.model_dump(mode="json"),
+        # Use governance envelope for governed collection writes
+        message = G8eMessage(
+            id=investigation.id,
+            source_component=ComponentName.G8EE,
+            event_type=EventType.APP_INVESTIGATION_CREATED,
+            case_id=request.case_id,
+            task_id=AITaskId.CHAT,
+            investigation_id=investigation.id,
+            web_session_id=request.web_session_id,
+            user_id=request.user_id,
+            payload=InvestigationCreateRequestPayload(
+                case_id=request.case_id,
+                case_title=request.case_title,
+                case_description=request.case_description,
+                web_session_id=request.web_session_id,
+                user_id=request.user_id,
+                user_email=request.user_email,
+                priority=str(request.priority.value) if request.priority else "MEDIUM",
+                created_with_case=request.created_with_case,
+                case_source=request.case_source,
+                sentinel_mode=request.sentinel_mode,
+            ),
         )
-        logger.info("Created investigation %s for case %s", investigation.id, request.case_id)
+        await self._governance_client.submit_envelope(message)
+        logger.info("Created investigation %s for case %s via governance envelope", investigation.id, request.case_id)
+        
         return investigation
 
     async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
@@ -111,21 +140,26 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         self,
         investigation_id: str,
         updates: dict[str, object],
+        context: RequestContext,
         merge: bool = True,
     ):
-        """Authoritative low-level update for the investigations collection."""
-        result = await self.cache.update_document(
+        """Authoritative low-level update for the investigations collection via governance envelope."""
+        from app.constants import EventType
+
+        await self._governance_client.update_governed_doc(
             collection=self.collection,
             document_id=investigation_id,
-            data=updates,
+            updates=updates,
+            event_type=EventType.APP_INVESTIGATION_UPDATED,
+            case_id=context.case_id,
+            investigation_id=investigation_id,
+            web_session_id=context.web_session_id,
+            user_id=context.user_id,
+            operator_id=context.operator_id,
+            operator_session_id=context.operator_session_id,
             merge=merge,
         )
-        if not result.success:
-            raise DatabaseError(
-                f"Failed to update investigation: {result.error}",
-                code=ErrorCode.DB_WRITE_ERROR,
-                component="g8ee"
-            )
+        logger.info("Updated investigation %s via governance envelope", investigation_id)
 
     async def query_investigations(self, request: InvestigationQueryRequest) -> list[InvestigationModel]:
         """Execute a filtered query against the investigations collection."""
@@ -165,20 +199,22 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         request = InvestigationQueryRequest(case_id=case_id, user_id=user_id, context=context, limit=100)
         return await self.query_investigations(request)
 
-    async def delete_investigation(self, investigation_id: str) -> None:
-        """Hard-delete an investigation document."""
-        result = await self.cache.delete_document(
+    async def delete_investigation(self, investigation_id: str, context: RequestContext) -> None:
+        """Hard-delete an investigation document via governance envelope."""
+        from app.constants import EventType
+
+        await self._governance_client.delete_governed_doc(
             collection=self.collection,
             document_id=investigation_id,
+            event_type=EventType.APP_INVESTIGATION_DELETED,
+            case_id=context.case_id,
+            investigation_id=investigation_id,
+            web_session_id=context.web_session_id,
+            user_id=context.user_id,
+            operator_id=context.operator_id,
+            operator_session_id=context.operator_session_id,
         )
-        if not result.success:
-            raise DatabaseError(
-                message=f"Failed to delete investigation: {result.error}",
-                code=ErrorCode.DB_WRITE_ERROR,
-                details={"investigation_id": investigation_id},
-                component=ComponentName.G8EE
-            )
-        logger.info("Deleted investigation %s", investigation_id)
+        logger.info("Deleted investigation %s via governance envelope", investigation_id)
 
     async def add_chat_message(
         self,
@@ -236,6 +272,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         actor: ComponentName,
         summary: str,
         details: ConversationMessageMetadata,
+        context: RequestContext,
     ) -> InvestigationModel:
         """Record an event in the investigation history trail."""
         async with self._history_lock.acquire(investigation_id):
@@ -258,6 +295,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             await self.update_investigation_raw(
                 investigation_id=investigation_id,
                 updates={"history_trail": [e.model_dump(mode="json") for e in investigation.history_trail]},
+                context=context,
             )
 
             return investigation
@@ -267,6 +305,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         investigation_id: str,
         event_type: EventType,
         metadata: ConversationMessageMetadata,
+        context: RequestContext,
         actor: ComponentName = ComponentName.G8EE,
     ) -> InvestigationModel:
         """Record an approval lifecycle event in both conversation_history and history_trail."""
@@ -286,6 +325,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             actor=actor,
             summary=summary,
             details=metadata,
+            context=context,
         )
 
     async def add_command_execution_result(
@@ -296,6 +336,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         result: CommandInternalResult,
         operator_id: str,
         operator_session_id: str,
+        context: RequestContext,
     ) -> InvestigationModel:
         """Helper to record a command execution result."""
         details = ConversationMessageMetadata(
@@ -314,6 +355,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             actor=ComponentName.G8EO,
             summary=summary,
             details=details,
+            context=context,
         )
 
     async def add_file_operation_result(
@@ -325,6 +367,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         file_path: str,
         result: FileEditResult,
         operation: FileOperation,
+        context: RequestContext,
     ) -> InvestigationModel:
         """Helper to record a file operation result."""
         details = ConversationMessageMetadata(
@@ -341,6 +384,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             actor=ComponentName.G8EO,
             summary=summary,
             details=details,
+            context=context,
         )
 
     async def get_command_execution_history(self, investigation_id: str) -> list[InvestigationHistoryEntry]:

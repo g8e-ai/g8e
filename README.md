@@ -198,7 +198,7 @@ g8e ships a full reference stack, but the protocol is the only mandatory part �
 
 ## Self-hosting & air-gap
 
-g8e is built to run entirely inside your perimeter. The Operator has no inbound listener, so there is nothing to expose and nothing to scan. The single static binary supports fully air-gapped deployment — no runtime, no package manager, no outbound dependency beyond the one mTLS tunnel it opens to your own Gateway. Raw data, forensic context, and execution history never leave the host; only Sentinel-scrubbed projections cross the wire.
+g8e is built to run entirely inside your perimeter. The Operator has no inbound gateway, so there is nothing to expose and nothing to scan. The single static binary supports fully air-gapped deployment — no runtime, no package manager, no outbound dependency beyond the one mTLS tunnel it opens to your own Gateway. Raw data, forensic context, and execution history never leave the host; only Sentinel-scrubbed projections cross the wire.
 
 <!-- ============================================================= -->
 <!-- INSERT: SCREENSHOT (optional but strong) — the audit vault:    -->
@@ -214,7 +214,7 @@ g8e is built to run entirely inside your perimeter. The Operator has no inbound 
 
 - **[Position Paper](docs/position-paper.md)** — the full design rationale, threat model, and BFT analysis.
 - **[Protocol](docs/protocol.md)** — wire format, transaction hash, and the Doctrine / Quorum / Notary definitions.
-- **[Operator (g8eo)](docs/g8eo.md)** — execution boundary, listener modes, and host storage.
+- **[Operator (g8eo)](docs/g8eo.md)** — execution boundary, gateway modes, and host storage.
 - **[Ensemble (g8ee)](docs/g8ee.md)** — reference g8e-Compliant Agentic Ensemble and agentic orchestration.
 - **[Troubleshooting](docs/developer/troubleshooting.md)** — common setup failures and recovery checks.
 - **[Contributing](CONTRIBUTING.md)** — build instructions, testing workflows, and standards.

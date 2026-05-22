@@ -26,9 +26,9 @@ import (
 func newTestSentinelWithThreatDetection(t *testing.T) *Sentinel {
 	t.Helper()
 	config := &SentinelConfig{
-		Enabled:                true,
-		StrictMode:             false,
-		ThreatDetectionEnabled: true,
+		Enabled:         true,
+		StrictMode:      false,
+		SentinelEnabled: true,
 	}
 	return NewSentinel(config, testutil.NewTestLogger())
 }
@@ -510,8 +510,8 @@ func TestSentinel_AnalyzeCommand_RiskScore(t *testing.T) {
 
 func TestSentinel_AnalyzeCommand_ThreatDetectionDisabled(t *testing.T) {
 	config := &SentinelConfig{
-		Enabled:                true,
-		ThreatDetectionEnabled: false,
+		Enabled:         true,
+		SentinelEnabled: false,
 	}
 	sentinel := NewSentinel(config, testutil.NewTestLogger())
 
@@ -655,8 +655,8 @@ func TestSentinel_AnalyzeFileEdit_SafeOperations(t *testing.T) {
 
 func TestSentinel_AnalyzeFileEdit_ThreatDetectionDisabled(t *testing.T) {
 	config := &SentinelConfig{
-		Enabled:                true,
-		ThreatDetectionEnabled: false,
+		Enabled:         true,
+		SentinelEnabled: false,
 	}
 	sentinel := NewSentinel(config, testutil.NewTestLogger())
 
@@ -1508,8 +1508,8 @@ func TestSentinel_AnalyzeFileEdit_ResultFieldsAreCorrect(t *testing.T) {
 
 func TestSentinel_AnalyzeCommand_SentinelEnabledFalse(t *testing.T) {
 	config := &SentinelConfig{
-		Enabled:                false,
-		ThreatDetectionEnabled: true,
+		Enabled:         false,
+		SentinelEnabled: true,
 	}
 	sentinel := NewSentinel(config, testutil.NewTestLogger())
 
@@ -1520,8 +1520,8 @@ func TestSentinel_AnalyzeCommand_SentinelEnabledFalse(t *testing.T) {
 
 func TestSentinel_AnalyzeFileEdit_SentinelEnabledFalse(t *testing.T) {
 	config := &SentinelConfig{
-		Enabled:                false,
-		ThreatDetectionEnabled: false,
+		Enabled:         false,
+		SentinelEnabled: false,
 	}
 	sentinel := NewSentinel(config, testutil.NewTestLogger())
 
@@ -1678,8 +1678,8 @@ func TestSentinel_AnalyzeFileEdit_CronAndSystemdDetectedWithoutShebang(t *testin
 
 func TestSentinel_AnalyzeFileEdit_ThreatDetectionDisabledPreservesCriticalFileFlag(t *testing.T) {
 	config := &SentinelConfig{
-		Enabled:                true,
-		ThreatDetectionEnabled: false,
+		Enabled:         true,
+		SentinelEnabled: false,
 	}
 	sentinel := NewSentinel(config, testutil.NewTestLogger())
 

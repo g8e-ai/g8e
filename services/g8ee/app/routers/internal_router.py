@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, Request, status
 from app.models.http_context import G8eHttpContext, RequestContext
 
-from app.models.settings import G8eePlatformSettings, G8eeUserSettings
+from app.models.settings import G8eeAppSettings, G8eeUserSettings
 from app.constants import (
     ComponentName,
     DB_COLLECTION_MEMORIES,
@@ -140,7 +140,7 @@ if TYPE_CHECKING:
     from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
 
 from app.dependencies import (
-    get_g8ee_platform_settings,
+    get_g8ee_app_settings,
     get_g8ee_approval_service,
     get_g8ee_attachment_service,
     get_g8ee_cache_aside_service,
@@ -224,7 +224,7 @@ async def _generate_and_update_title(
 @router.post(InternalApiPaths.G8EE_CHAT, response_model=ChatStartedResponse)
 async def internal_chat(
     request: ChatMessageRequest,
-    platform_settings: G8eePlatformSettings = Depends(get_g8ee_platform_settings),
+    app_settings: G8eeAppSettings = Depends(get_g8ee_app_settings),
     user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
     chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
@@ -869,7 +869,7 @@ async def delete_case(
         )
 
     # Finally delete the case
-    await case_service.delete_case(case_id)
+    await case_service.delete_case(case_id, context=RequestContext.from_app_context(g8e_context))
 
     logger.info(
         "[INTERNAL-HTTP] Case and all related data deleted successfully",
@@ -922,10 +922,10 @@ async def listen_session_auth(
     g8e_context: G8eHttpContext = Depends(require_authenticated_context)
 ):
     """
-    Start a session auth listener on PubSub.
+    Start a session auth gateway on PubSub.
     """
     try:
-        await session_auth_listener.listen(
+        await session_auth_listener.gateway(
             operator_session_id=request.operator_session_id,
             operator_id=request.operator_id,
             user_id=request.user_id,
@@ -933,8 +933,8 @@ async def listen_session_auth(
         )
         return {"success": True}
     except Exception as e:
-        logger.error("[INTERNAL-HTTP] Failed to start session auth listener: %s", e)
-        return {"success": False, "error": "Failed to start session auth listener"}
+        logger.error("[INTERNAL-HTTP] Failed to start session auth gateway: %s", e)
+        return {"success": False, "error": "Failed to start session auth gateway"}
 
 
 @router.post(InternalApiPaths.G8EE_OPERATORS_CREATE_SLOT, response_model=OperatorSlotCreationResponse)

@@ -48,6 +48,7 @@ from app.models.command_request_payloads import (
     RestoreFileRequestPayload,
     DirectCommandAuditRequestPayload,
     HeartbeatRequestPayload,
+    InvestigationCreateRequestPayload,
 )
 
 
@@ -520,6 +521,7 @@ G8eOutboundPayload = Union[
     RestoreFileRequestPayload,
     DirectCommandAuditRequestPayload,
     HeartbeatRequestPayload,
+    InvestigationCreateRequestPayload,
 ]
 
 

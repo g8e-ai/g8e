@@ -65,7 +65,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **Improved Chaos Output:** Enhanced chaos test reporting for better failure visibility.
 
 ### Fixed
-- **Operator TLS Hardening:** Refined operator TLS configuration and improved listener service stability.
+- **Operator TLS Hardening:** Refined operator TLS configuration and improved gateway service stability.
 - **WebAuthn L3:** Fixed L3 verification issues following the `g8ed` decommissioning.
 - **Path Resolution:** Improved path resolution and environment variable handling across the platform, including fixes in `paths.json`.
 - **Test Stability:** Extensive fixes for unit and integration tests across `g8ee` and `g8eo`, particularly around the `RequestContext` migration and tribunal consensus.
