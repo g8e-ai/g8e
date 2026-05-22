@@ -272,8 +272,6 @@ class ChatPipelineService:
                 details={"investigation_id": investigation_id}
             )
 
-        from app.models.http_context import RequestContext
-
         investigation = await self.investigation_service.get_investigation_context(
             context=RequestContext.from_app_context(g8e_context),
             investigation_id=investigation_id, user_id=user_id or ""
@@ -284,12 +282,10 @@ class ChatPipelineService:
 
         current_sentinel_mode = investigation.sentinel_mode
         if current_sentinel_mode != sentinel_mode:
-            from app.models.http_context import RequestContext
-            context = RequestContext.from_app_context(g8e_context)
             await self.investigation_service.investigation_data_service.update_investigation_raw(
                 investigation_id=investigation_id,
                 updates={"sentinel_mode": sentinel_mode},
-                context=context,
+                context=RequestContext.from_app_context(g8e_context),
             )
             investigation.sentinel_mode = sentinel_mode
 

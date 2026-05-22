@@ -35,6 +35,7 @@ from app.dependencies import (
     get_g8ee_chat_pipeline,
     get_g8ee_chat_task_manager,
     get_g8ee_settings_service,
+    get_request_context,
 )
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.data.case_data_service import CaseDataService
@@ -240,7 +241,8 @@ async def get_latest_chat_session_for_case(
     request: Request,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
-    g8e_context: G8eHttpContext = Depends(require_authenticated_context)
+    g8e_context: G8eHttpContext = Depends(require_authenticated_context),
+    request_context: RequestContext = Depends(get_request_context)
 ) -> LatestChatSessionResponse:
     """
     Get the most recent chat session for a case, including conversation history.
@@ -265,7 +267,7 @@ async def get_latest_chat_session_for_case(
     raw_investigations = await investigation_service.investigation_data_service.get_case_investigations(
         case_id=case_id,
         user_id=authenticated_user_id,
-        context=RequestContext.from_app_context(g8e_context),
+        context=request_context,
     )
 
     latest_investigation: InvestigationModel | None = None

@@ -356,9 +356,10 @@ async def test_delete_case_success(request_context, g8e_context):
         investigation_service=mock_inv_service,
         cache_aside_service=mock_cache,
         g8e_context=g8e_context,
+        request_context=request_context,
     )
 
-    mock_case_service.delete_case.assert_called_once_with(case_id)
+    mock_case_service.delete_case.assert_called_once_with(case_id, context=request_context)
 
 @pytest.mark.asyncio
 async def test_delete_case_not_found_idempotent(request_context, g8e_context):
@@ -379,6 +380,7 @@ async def test_delete_case_not_found_idempotent(request_context, g8e_context):
         investigation_service=MagicMock(),
         cache_aside_service=MagicMock(),
         g8e_context=g8e_context,
+        request_context=request_context,
     )
 
     mock_case_service.delete_case.assert_not_called()

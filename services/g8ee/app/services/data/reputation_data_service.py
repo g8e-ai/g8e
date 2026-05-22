@@ -131,43 +131,20 @@ class ReputationDataService:
                 collection=self.state_collection,
                 document_id=state.agent_id,
             )
-            
+
             from app.constants import EventType
-            
-            if existing is None:
-                from app.models.pubsub_messages import G8eMessage
-                from app.models.command_request_payloads import DocumentUpdateRequestPayload
-                from app.constants import AITaskId
 
-                payload = DocumentUpdateRequestPayload(
-                    collection=self.state_collection,
-                    document_id=state.agent_id,
-                    updates=state.model_dump(mode="json"),
-                    merge=False,
-                )
-
-                message = G8eMessage(
-                    id=state.agent_id,
-                    source_component=ComponentName.G8EE,
-                    event_type=EventType.APP_REPUTATION_STATE_CREATED,
-                    task_id=AITaskId.REPUTATION,
-                    web_session_id=context.web_session_id,
-                    user_id=context.user_id,
-                    payload=payload,
-                )
-                await self._governance_client.submit_envelope(message)
-            else:
-                await self._governance_client.update_governed_doc(
-                    collection=self.state_collection,
-                    document_id=state.agent_id,
-                    updates=state.model_dump(mode="json"),
-                    event_type=EventType.APP_REPUTATION_STATE_UPDATED,
-                    web_session_id=context.web_session_id,
-                    user_id=context.user_id,
-                    operator_id=context.operator_id,
-                    operator_session_id=context.operator_session_id,
-                    merge=True,
-                )
+            await self._governance_client.update_governed_doc(
+                collection=self.state_collection,
+                document_id=state.agent_id,
+                updates=state.model_dump(mode="json"),
+                event_type=EventType.AI_REPUTATION_STATE_UPDATED,
+                web_session_id=context.web_session_id,
+                user_id=context.user_id,
+                operator_id=context.operator_id,
+                operator_session_id=context.operator_session_id,
+                merge=(existing is not None),
+            )
             return state
         except DatabaseError:
             raise
@@ -190,28 +167,19 @@ class ReputationDataService:
         if not commitment.id:
             raise ValidationError("ReputationCommitment.id is required")
         try:
-            from app.models.pubsub_messages import G8eMessage
-            from app.models.command_request_payloads import DocumentUpdateRequestPayload
-            from app.constants import EventType, AITaskId
+            from app.constants import EventType
 
-            payload = DocumentUpdateRequestPayload(
+            await self._governance_client.update_governed_doc(
                 collection=self.commitments_collection,
                 document_id=commitment.id,
                 updates=commitment.model_dump(mode="json"),
-                merge=False,
-            )
-
-            message = G8eMessage(
-                id=commitment.id,
-                source_component=ComponentName.G8EE,
-                event_type=EventType.APP_REPUTATION_COMMITMENT_CREATED,
-                investigation_id=commitment.investigation_id,
-                task_id=AITaskId.REPUTATION,
+                event_type=EventType.AI_REPUTATION_COMMITMENT_CREATED,
                 web_session_id=context.web_session_id,
                 user_id=context.user_id,
-                payload=payload,
+                operator_id=context.operator_id,
+                operator_session_id=context.operator_session_id,
+                merge=False,
             )
-            await self._governance_client.submit_envelope(message)
             logger.info(
                 "Reputation commitment created",
                 extra={

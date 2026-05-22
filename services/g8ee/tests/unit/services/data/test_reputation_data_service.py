@@ -114,18 +114,33 @@ class TestReputationStateCrud:
 
         assert [s.agent_id for s in results] == ["axiom", "concord", "variance"]
 
-    async def test_upsert_state_creates_when_absent(self, service, mock_cache):
+    async def test_upsert_state_creates_when_absent(self, service, mock_cache, mock_governance_client):
+        from app.models.http_context import RequestContext
+        from app.constants import ComponentName
         mock_cache.get_document_with_cache.return_value = None
-        await service.upsert_state(_make_state())
-        mock_cache.create_document.assert_called_once()
-        mock_cache.update_document.assert_not_called()
+        context = RequestContext(
+            web_session_id="test-sess",
+            user_id="test-user",
+            source_component=ComponentName.G8EE,
+        )
+        await service.upsert_state(_make_state(), context=context)
+        mock_governance_client.update_governed_doc.assert_called_once()
+        kwargs = mock_governance_client.update_governed_doc.call_args.kwargs
+        assert kwargs["merge"] is False
 
-    async def test_upsert_state_updates_when_present(self, service, mock_cache):
+    async def test_upsert_state_updates_when_present(self, service, mock_cache, mock_governance_client):
+        from app.models.http_context import RequestContext
+        from app.constants import ComponentName
         mock_cache.get_document_with_cache.return_value = {"agent_id": "axiom", "scalar": 0.5, "updated_at": "2026-04-24T12:00:00Z"}
-        await service.upsert_state(_make_state(scalar=0.6))
-        mock_cache.update_document.assert_called_once()
-        # Both calls go through; create is *not* called for an existing row.
-        mock_cache.create_document.assert_not_called()
+        context = RequestContext(
+            web_session_id="test-sess",
+            user_id="test-user",
+            source_component=ComponentName.G8EE,
+        )
+        await service.upsert_state(_make_state(scalar=0.6), context=context)
+        mock_governance_client.update_governed_doc.assert_called_once()
+        kwargs = mock_governance_client.update_governed_doc.call_args.kwargs
+        assert kwargs["merge"] is True
 
 
 class TestReputationCommitmentCrud:
@@ -137,13 +152,21 @@ class TestReputationCommitmentCrud:
     def mock_cache(self, mock_cache_aside_service):
         return mock_cache_aside_service
 
-    async def test_create_commitment_writes_to_collection(self, service, mock_cache):
+    async def test_create_commitment_writes_to_collection(self, service, mock_cache, mock_governance_client):
+        from app.models.http_context import RequestContext
+        from app.constants import ComponentName
         c = _make_commitment()
-        await service.create_commitment(c)
-        mock_cache.create_document.assert_called_once()
-        kwargs = mock_cache.create_document.call_args.kwargs
+        context = RequestContext(
+            web_session_id="test-sess",
+            user_id="test-user",
+            source_component=ComponentName.G8EE,
+        )
+        await service.create_commitment(c, context=context)
+        mock_governance_client.update_governed_doc.assert_called_once()
+        kwargs = mock_governance_client.update_governed_doc.call_args.kwargs
         assert kwargs["collection"] == DB_COLLECTION_REPUTATION_COMMITMENTS
         assert kwargs["document_id"] == c.id
+        assert kwargs["merge"] is False
 
     async def test_get_commitment_round_trips(self, service, mock_cache):
         c = _make_commitment()

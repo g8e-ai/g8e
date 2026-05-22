@@ -33,6 +33,7 @@ class G8eHttpContextMiddleware(BaseHTTPMiddleware):
                     rc = RequestContext(**context_data)
                     g8e_context = G8eHttpContext.from_request_context(rc)
                     request.state.g8e_context = g8e_context
+                    request.state.request_context = rc
                 except Exception as e:
                     logger.warning(f"Failed to parse context: {e}")
 
