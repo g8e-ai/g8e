@@ -13,7 +13,7 @@ g8e is designed to be a **testing environment and a production environment at th
 ## Core Engineering Principles
 
 - **Hermetic execution** - Tests run directly on the host via `./g8e test`. Go for the Gateway (`g8eg`/`g8eo`); repo-local Python for explicit agentic ensemble targets (`g8ee`).
-- **Real infrastructure** - Gateway test runs begin with `./g8e platform start` (launching the `g8eg` Gateway). App-layer tests require explicit app startup via `./g8e apps start g8ee` or `./g8e platform start --with-apps`.
+- **Real infrastructure** - Gateway test runs begin with `./g8e platform start` (launching the `g8eg` Gateway). App-layer tests require explicit app startup via `./g8e apps start g8ee` or `./g8e platform start --g8ee`.
 - **No mocks policy** - Mocking internal services, database clients, or cross-component communication is prohibited. Integration tests use the real wire paths.
 - **mTLS by default** - Most internal and Gateway communication requires mTLS. The runner injects certs from `.g8e/pki` automatically when authenticated (`./g8e login`).
 - **Body-embedded context** - Business and session context is provided as a `RequestContext` in the request body. `X-G8E-*` context headers are not supported and are ignored by the Gateway.

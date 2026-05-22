@@ -79,8 +79,8 @@ export G8E_SECRETS_DIR="${G8E_SECRETS_DIR:-$G8E_RUNTIME_DIR/secrets}"
 export G8E_PID_DIR="${G8E_PID_DIR:-$G8E_RUNTIME_DIR/pids}"
 export G8E_LOG_DIR="${G8E_LOG_DIR:-$G8E_RUNTIME_DIR/logs}"
 
-export G8E_OPERATOR_PID_FILE="$G8E_PID_DIR/operator-listen.pid"
-export G8E_OPERATOR_LOG_FILE="$G8E_LOG_DIR/operator-listen.log"
+export G8E_OPERATOR_PID_FILE="$G8E_PID_DIR/operator-gateway.pid"
+export G8E_OPERATOR_LOG_FILE="$G8E_LOG_DIR/operator-gateway.log"
 export G8E_G8EE_PID_FILE="$G8E_PID_DIR/g8ee.pid"
 export G8E_G8EE_LOG_FILE="$G8E_LOG_DIR/g8ee.log"
 

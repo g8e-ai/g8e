@@ -196,7 +196,7 @@ def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
         raise RuntimeError(f'HTTP {e.code} {method} {path}: {err}')
     except urllib.error.URLError as e:
         raise RuntimeError(
-            f'Cannot reach the Operator listen-mode HTTP API at {OPERATOR_HTTPS_URL}. '
+            f'Cannot reach the Operator gateway-mode HTTP API at {OPERATOR_HTTPS_URL}. '
             f'Is the platform running? (./g8e platform start)\n  {e.reason}'
         )
 

@@ -115,7 +115,7 @@ class UserManager:
         if not isinstance(users, list):
             users = []
         total = len(users)
-        # In listen mode, limit is handled by the server if passed in body
+        # In gateway mode, limit is handled by the server if passed in body
         # but we still apply it here just in case.
         users = users[:limit] if limit > 0 else users
 

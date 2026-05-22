@@ -47,7 +47,7 @@ func newSecretManagerTestDB(t *testing.T) *sqliteutil.DB {
 	db, err := sqliteutil.OpenDB(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
-	_, err = db.Exec(listenSchema)
+	_, err = db.Exec(gatewaySchema)
 	require.NoError(t, err)
 	return db
 }

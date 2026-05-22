@@ -37,10 +37,10 @@ _banner() {
 _quick_start() {
     _banner
     echo "Quick Start Options:"
-    echo "1) Protocol + Local Operator (Listen Mode)"
+    echo "1) Protocol + Local Operator (Gateway Mode)"
     echo "   - Lightest possible setup."
     echo "   - Ideal for BYO clients, MCP/A2A translators, and custom agents."
-    echo "   - Runs the Local Operator (g8eg) in --listen mode."
+    echo "   - Runs the Local Operator (g8eg) in --gateway mode."
     echo ""
     echo "2) Protocol + Local Operator + Apps (Substrate + Engine)"
     echo "   - Full g8e experience."
@@ -52,7 +52,7 @@ _quick_start() {
     read -p "Choose a mode [0-2]: " mode
     case $mode in
         1)
-            echo "Configuring Protocol + Local Operator (Listen Mode)..."
+            echo "Configuring Protocol + Local Operator (Gateway Mode)..."
             _update_env "G8E_WITH_G8EE=0"
             echo -e "\033[1;32m✓ Environment updated.\033[0m"
             echo ""

@@ -190,7 +190,7 @@ func TestLoadGateway_Defaults(t *testing.T) {
 	assert.Equal(t, 0, cfg.Gateway.HTTPPort)
 	assert.Equal(t, filepath.Join(wantWorkDir, ".g8e", "data"), cfg.Gateway.DataDir)
 	assert.True(t, filepath.IsAbs(cfg.Gateway.DataDir))
-	assert.Equal(t, constants.Status.ComponentName.G8EOListen, cfg.ComponentName)
+	assert.Equal(t, constants.Status.ComponentName.G8EOGateway, cfg.ComponentName)
 }
 
 func TestLoadGateway_ExplicitValues(t *testing.T) {

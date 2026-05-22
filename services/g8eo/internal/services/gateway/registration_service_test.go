@@ -539,7 +539,7 @@ func TestRegistrationService_CreateDeviceLinkRejectsWrongOperatorOwner(t *testin
 }
 
 // mustDocJSON marshals a map to json.RawMessage for use with DocSet/DocUpdate.
-// Moved to listen_db_test.go as a shared package-level helper for the listen package.
+// Moved to gateway_db_test.go as a shared package-level helper for the gateway package.
 // func mustDocJSON(t *testing.T, v interface{}) json.RawMessage { ... }
 
 func docFieldString(t *testing.T, doc *models.Document, field string) string {

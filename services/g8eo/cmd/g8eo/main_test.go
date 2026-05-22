@@ -307,11 +307,11 @@ func TestHandleResetVault_RequiresInitializedVault(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runListenMode - invalid log level path (does not bind any port)
+// runGatewayMode - invalid log level path (does not bind any port)
 // ---------------------------------------------------------------------------
 
-func TestRunListenMode_InvalidLogLevel_ExitsConfigError(t *testing.T) {
-	// configureLogger is the first thing runListenMode calls.
+func TestRunGatewayMode_InvalidLogLevel_ExitsConfigError(t *testing.T) {
+	// configureLogger is the first thing runGatewayMode calls.
 	// Verify that an invalid log level returns an error from configureLogger,
 	// which is the gate before any network binding occurs.
 	_, err := configureLogger("notavalidlevel")

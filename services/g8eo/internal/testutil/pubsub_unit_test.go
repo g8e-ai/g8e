@@ -29,7 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/certs"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
-	listen "github.com/g8e-ai/g8e/services/g8eo/internal/services/gateway"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/gateway"
 )
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ import (
 func newTLSPubSubServer(t *testing.T) string {
 	t.Helper()
 
-	broker := listen.NewPubSubBroker(NewTestLogger())
+	broker := gateway.NewPubSubBroker(NewTestLogger())
 	srv := httptest.NewTLSServer(http.HandlerFunc(broker.HandleWebSocket))
 	t.Cleanup(srv.Close)
 

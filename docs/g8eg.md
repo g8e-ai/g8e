@@ -2,14 +2,14 @@
 
 The reference Go implementation of the g8e Protocol compiles from a single codebase into two role-specific binaries used in two distinct ways to secure and govern AI execution:
 
-1. **Governance Gateway (`g8eg` / `g8e.gateway`)**: Runs in `--listen` mode to serve as the central, fail-closed Byzantine Fault Tolerant (BFT) Governance Gateway (Policy Decision Point / PDP).
+1. **Governance Gateway (`g8eg` / `g8e.gateway`)**: Runs in Gateway mode (--doctrine, --consensus, or --notary) to serve as the central, fail-closed Byzantine Fault Tolerant (BFT) Governance Gateway (Policy Decision Point / PDP).
 2. **Governed Operator / MCP Server (`g8eo` / `g8e.operator`)**: Runs on target hosts (and exposes MCP over stdio with `--mcp-serve`) to function as the sovereign tool execution boundary (Policy Execution Point / PEP).
 
 ---
 
 ## Core Principles
 
-- **Single Codebase, Two Roles**: The exact same Go codebase is compiled into the central Policy Decision Point (`g8e.gateway`) and host-level Policy Execution Point (`g8e.operator`). Behavior is activated via invocation flags (e.g. `--listen`).
+- **Single Codebase, Two Roles**: The exact same Go codebase is compiled into the central Policy Decision Point (`g8e.gateway`) and host-level Policy Execution Point (`g8e.operator`). Behavior is activated via invocation flags (e.g. --doctrine, --consensus, --notary).
 - **mTLS-Everywhere**: All communication is outbound-only from the target operator and strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts.
 - **Local-First Audit (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger.
 - **UAP JSON-First (GovernanceEnvelope)**: Every mutation action is governed by a UAP JSON `GovernanceEnvelope`. This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
@@ -26,7 +26,7 @@ The reference Go implementation of the g8e Protocol compiles from a single codeb
 The g8e platform is built on the g8e Protocol as Gateway. Conforming gateway and operator implementations are what make that protocol live.
 
 - **Protocol (Gateway)**: The wire contract, schemas, and L1Doctrine/L2Consensus/L3Notary verification rules. Mandatory and immutable for any client or implementation.
-- **Governance Gateway (`g8eg`)**: Built as `g8e.gateway` and run in **Listen Mode** (`--listen`). It acts as the platform's backbone - protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
+- **Governance Gateway (`g8eg`)**: Built as `g8e.gateway` and run in **Gateway mode** (--doctrine, --consensus, or --notary). It acts as the platform's backbone - protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
 - **Governed Operator (`g8eo`)**: Built as `g8e.operator` and run in **Standard Mode** or **MCP Mode** (`--mcp-serve`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease.
 - **Reference Application Layer (Optional)**: Reference components like the **g8e Agentic Ensemble** (`g8ee`) consume the public Gateway/Operator protocol surface. They have no privileged Gateway responsibilities and no private access channels.
 
@@ -35,7 +35,7 @@ flowchart TD
     subgraph Hub ["Operator/Protocol Gateway"]
         direction TB
         subgraph Persistence ["Reference Runtime (g8eg)"]
-            listen["Reference Gateway (Listen Mode)"]
+            listen["Reference Gateway (Gateway mode)"]
             db[("SQLite / KV")]
             ps[["Pub/Sub Broker"]]
             ca["Root CA / PKI"]
@@ -66,9 +66,9 @@ flowchart TD
 
 ---
 
-## Operating Modes: Listen Mode (Hub)
+## Operating Modes: Gateway Mode (Hub)
 
-By passing `--listen`, the binary transforms into the platform's central backbone (`g8eg`).
+By passing --doctrine, --consensus, or --notary, the binary transforms into the platform's central backbone (`g8eg`).
 
 - **Role**: Reference hub for the bundled deployment.
 - **Capabilities**:

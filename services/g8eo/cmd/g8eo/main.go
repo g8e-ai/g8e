@@ -42,7 +42,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services"
 	auth "github.com/g8e-ai/g8e/services/g8eo/internal/services/auth"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
-	listen "github.com/g8e-ai/g8e/services/g8eo/internal/services/gateway"
+	gateway "github.com/g8e-ai/g8e/services/g8eo/internal/services/gateway"
 	openclaw "github.com/g8e-ai/g8e/services/g8eo/internal/services/openclaw"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
@@ -90,14 +90,14 @@ func main() {
 	var doctrineMode bool
 	var consensusMode bool
 	var notaryMode bool
-	var listenHTTPPort int
-	var listenBootstrapPort int
-	var listenPublicPort int
-	var listenDataDir string
-	var listenPKIDir string
-	var listenSecretsDir string
-	var listenPasskeyRpID string
-	var listenPasskeyRpName string
+	var gatewayHTTPPort int
+	var gatewayBootstrapPort int
+	var gatewayPublicPort int
+	var gatewayDataDir string
+	var gatewayPKIDir string
+	var gatewaySecretsDir string
+	var gatewayPasskeyRpID string
+	var gatewayPasskeyRpName string
 	var openclawMode bool
 	var openclawURL string
 	var openclawToken string
@@ -137,14 +137,14 @@ func main() {
 	flag.BoolVar(&doctrineMode, "doctrine", false, "Gateway mode: L1 enforced, L2/L3 audited (default)")
 	flag.BoolVar(&consensusMode, "consensus", false, "Gateway mode: L1/L2 enforced, L3 audited")
 	flag.BoolVar(&notaryMode, "notary", false, "Gateway mode: L1/L2/L3 strictly enforced")
-	flag.IntVar(&listenHTTPPort, "http-listen-port", constants.Ports.OperatorHttps, "HTTPS port for mTLS API (default: from paths.json)")
-	flag.IntVar(&listenBootstrapPort, "bootstrap-listen-port", constants.Ports.OperatorBootstrapHttps, "Bootstrap TLS port for device-link enrollment (default: from paths.json)")
-	flag.IntVar(&listenPublicPort, "public-listen-port", constants.Ports.OperatorPublicHttps, "Public browser/BYO bootstrap port (default: from paths.json)")
-	flag.StringVar(&listenDataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
-	flag.StringVar(&listenPKIDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
-	flag.StringVar(&listenSecretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
-	flag.StringVar(&listenPasskeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
-	flag.StringVar(&listenPasskeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
+	flag.IntVar(&gatewayHTTPPort, "http-listen-port", constants.Ports.OperatorHttps, "HTTPS port for mTLS API (default: from paths.json)")
+	flag.IntVar(&gatewayBootstrapPort, "bootstrap-listen-port", constants.Ports.OperatorBootstrapHttps, "Bootstrap TLS port for device-link enrollment (default: from paths.json)")
+	flag.IntVar(&gatewayPublicPort, "public-listen-port", constants.Ports.OperatorPublicHttps, "Public browser/BYO bootstrap port (default: from paths.json)")
+	flag.StringVar(&gatewayDataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
+	flag.StringVar(&gatewayPKIDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
+	flag.StringVar(&gatewaySecretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
+	flag.StringVar(&gatewayPasskeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
+	flag.StringVar(&gatewayPasskeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
 	flag.BoolVar(&rekeyVault, "rekey-vault", false, "Re-encrypt vault with new API key (requires --old-key)")
 	flag.StringVar(&oldAPIKey, "old-key", "", "Old API key for vault re-keying")
 	flag.BoolVar(&verifyVault, "verify-vault", false, "Verify vault integrity")
@@ -240,12 +240,12 @@ func main() {
 	}
 
 	if postureCount > 0 {
-		runGatewayMode(posture, listenHTTPPort, listenBootstrapPort, listenPublicPort, listenDataDir, listenPKIDir, listenSecretsDir, listenPasskeyRpID, listenPasskeyRpName, logLevel)
+		runGatewayMode(posture, gatewayHTTPPort, gatewayBootstrapPort, gatewayPublicPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayPasskeyRpID, gatewayPasskeyRpName, logLevel)
 		return
 	}
 
 	if mcpServe {
-		runMCPServe(endpointURL, listenPKIDir, logLevel)
+		runMCPServe(endpointURL, gatewayPKIDir, logLevel)
 		return
 	}
 
@@ -595,12 +595,12 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		AllowTestPortZero: false,
 	})
 	if err != nil {
-		logger.Error("Failed to load listen configuration", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to load gateway configuration", constants.ConnectionStateErrorStr, err)
 		os.Exit(constants.ExitConfigError)
 	}
 	cfg.Version = version
 
-	svc, err := listen.NewGatewayService(cfg, logger)
+	svc, err := gateway.NewGatewayService(cfg, logger)
 	if err != nil {
 		logger.Error("Failed to create gateway service", constants.ConnectionStateErrorStr, err)
 		os.Exit(constants.ExitCodeFromError(err))
@@ -619,7 +619,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	cfg.GitPath = gitPath
 	cfg.GitAvailable = gitPath != ""
 
-	// Use the listen-mode database for everything
+	// Use the gateway-mode database for everything
 	govDeps := svc.GetGovernanceDeps()
 	sm, err := svc.GetSecretManager()
 	if err != nil {
@@ -675,7 +675,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		os.Exit(constants.ExitCodeFromError(err))
 	}
 
-	// Wire the synchronous fail-closed mutation gate into the listen HTTP
+	// Wire the synchronous fail-closed mutation gate into the gateway HTTP
 	// surface. Once set, BYO clients can POST UAP envelopes to
 	// /api/governance/envelope and receive a signed ActionReceipt.
 	svc.SetEnvelopeProcessor(cmdSvc)
@@ -689,7 +689,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 
 	go func() {
 		if err := svc.Start(ctx); err != nil {
-			logger.Error("Listen service failed", constants.ConnectionStateErrorStr, err)
+			logger.Error("Gateway service failed", constants.ConnectionStateErrorStr, err)
 			os.Exit(constants.ExitCodeFromError(err))
 		}
 	}()
@@ -702,7 +702,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 				return
 			}
 		}
-		logger.Info("Listen service ready, starting in-process command service")
+		logger.Info("Gateway service ready, starting in-process command service")
 		if err := cmdSvc.Start(ctx); err != nil {
 			logger.Error("In-process command service failed to start", constants.ConnectionStateErrorStr, err)
 		}
@@ -724,7 +724,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	}
 
 	if err := svc.Stop(shutdownCtx); err != nil {
-		logger.Error("Listen shutdown error", constants.ConnectionStateErrorStr, err)
+		logger.Error("Gateway shutdown error", constants.ConnectionStateErrorStr, err)
 	}
 	logger.Info("Gateway mode stopped")
 }

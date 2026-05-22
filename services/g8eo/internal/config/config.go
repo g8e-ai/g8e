@@ -336,7 +336,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	}
 
 	return &Config{
-		ComponentName: constants.Status.ComponentName.G8EOListen,
+		ComponentName: constants.Status.ComponentName.G8EOGateway,
 		PKIDir:        pkiDir,     // Also set top-level for services that use Config.PKIDir
 		SecretsDir:    secretsDir, // Also set top-level for services that use Config.SecretsDir
 		Gateway: GatewayConfig{

@@ -37,14 +37,14 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 )
 
-// listenSchema is the canonical operator SQLite schema, embedded at compile time
+// gatewaySchema is the canonical operator SQLite schema, embedded at compile time
 // from `schema.sql`. That file is the single source of truth - do not inline
 // CREATE TABLE statements in Go code.
 //
 //go:embed schema.sql
-var listenSchema string
+var gatewaySchema string
 
-// GatewayDBService provides the unified SQLite persistence layer for listen mode.
+// GatewayDBService provides the unified SQLite persistence layer for gateway mode.
 // Three subsystems:
 //   - Document store: collection/id based CRUD (replaces client+g8ee separate SQLite DBs)
 //   - KV store with TTL: key/value with optional expiration
@@ -63,7 +63,7 @@ func OpenGatewayDBService(dataDir string, secretsDir string, logger *slog.Logger
 
 	db, err := sqliteutil.OpenDB(cfg, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open listen database: %w", err)
+		return nil, fmt.Errorf("failed to open gateway database: %w", err)
 	}
 
 	// Initialize Audit Vault for transaction-native audit recording
@@ -102,12 +102,12 @@ func OpenGatewayDBService(dataDir string, secretsDir string, logger *slog.Logger
 	// Start background maintenance
 	go svc.RunMaintenance(context.Background())
 
-	logger.Info("Listen database initialized", "path", dbPath)
+	logger.Info("Gateway database initialized", "path", dbPath)
 	return svc, nil
 }
 
 func (s *GatewayDBService) initTestSchema(secretsDir string) error {
-	_, err := s.db.Exec(listenSchema)
+	_, err := s.db.Exec(gatewaySchema)
 	if err != nil {
 		return err
 	}
@@ -309,7 +309,7 @@ func (s *GatewayDBService) RunMaintenance(ctx context.Context) {
 }
 
 func (s *GatewayDBService) initSchema(secretsDir string) error {
-	_, err := s.db.Exec(listenSchema)
+	_, err := s.db.Exec(gatewaySchema)
 	if err != nil {
 		return err
 	}
@@ -399,7 +399,7 @@ func (s *GatewayDBService) migratePlaintextServiceKeys(secretsDir string, sm *Se
 
 	pkiDir := filepath.Join(filepath.Dir(secretsDir), "pki")
 	keyPaths := []string{
-		filepath.Join(pkiDir, "issued", "hub", "operator-listen.key"),
+		filepath.Join(pkiDir, "issued", "hub", "operator-gateway.key"),
 		filepath.Join(pkiDir, "issued", "apps", "g8ee.key"),
 	}
 
@@ -424,8 +424,8 @@ func (s *GatewayDBService) migratePlaintextServiceKeys(secretsDir string, sm *Se
 
 		// Determine service name from path
 		var serviceName string
-		if strings.Contains(keyPath, "operator-listen.key") {
-			serviceName = "operator-listen"
+		if strings.Contains(keyPath, "operator-gateway.key") {
+			serviceName = "operator-gateway"
 		} else if strings.Contains(keyPath, "g8ee.key") {
 			serviceName = "g8ee"
 		} else {

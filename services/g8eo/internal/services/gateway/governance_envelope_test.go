@@ -16,11 +16,14 @@ package gateway
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -225,4 +228,87 @@ func TestGovernanceEnvelope_NilReceiptNilError_Returns500(t *testing.T) {
 	h.handleGovernanceEnvelope(w, req)
 
 	require.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestVerifyEnvelopeIdentityBinding_NoMTLS_ReturnsError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	err := verifyEnvelopeIdentityBinding(req, []byte(`{"operator_id":"op-1","operator_session_id":"sess-1"}`))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "mTLS client certificate required")
+}
+
+func TestVerifyEnvelopeIdentityBinding_NoURISAN_ReturnsError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{}},
+	}
+	err := verifyEnvelopeIdentityBinding(req, []byte(`{"operator_id":"op-1","operator_session_id":"sess-1"}`))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "client certificate missing URI SAN")
+}
+
+func TestVerifyEnvelopeIdentityBinding_MatchingOperatorSPIFFEID_ReturnsNil(t *testing.T) {
+	spiffeURL, _ := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+	envelope := []byte(`{"operator_id":"op-1","operator_session_id":"sess-1"}`)
+	err := verifyEnvelopeIdentityBinding(req, envelope)
+	require.NoError(t, err)
+}
+
+func TestVerifyEnvelopeIdentityBinding_MismatchedOperatorID_ReturnsError(t *testing.T) {
+	spiffeURL, _ := url.Parse("spiffe://g8e.local/operator/org-1/op-2/sess-1")
+	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+	envelope := []byte(`{"operator_id":"op-1","operator_session_id":"sess-1"}`)
+	err := verifyEnvelopeIdentityBinding(req, envelope)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "certificate URI SAN does not match envelope identity claims")
+}
+
+func TestVerifyEnvelopeIdentityBinding_MatchingAppSPIFFEID_ReturnsNil(t *testing.T) {
+	spiffeURL, _ := url.Parse("spiffe://g8e.local/app/op-1")
+	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+	envelope := []byte(`{"operator_id":"op-1","source_component":"g8ee"}`)
+	err := verifyEnvelopeIdentityBinding(req, envelope)
+	require.NoError(t, err)
+}
+
+func TestVerifyEnvelopeIdentityBinding_InvalidJSON_ReturnsNil(t *testing.T) {
+	spiffeURL, _ := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+	envelope := []byte(`not-json`)
+	err := verifyEnvelopeIdentityBinding(req, envelope)
+	require.NoError(t, err, "invalid JSON should pass through to processor for decode error")
+}
+
+func TestVerifyEnvelopeIdentityBinding_NoIdentityFields_ReturnsNil(t *testing.T) {
+	spiffeURL, _ := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	req := httptest.NewRequest(http.MethodPost, "/api/governance/envelope", bytes.NewReader([]byte(`{}`)))
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+	envelope := []byte(`{"event_type":"test"}`)
+	err := verifyEnvelopeIdentityBinding(req, envelope)
+	require.NoError(t, err, "envelope without identity fields should pass through to processor")
 }

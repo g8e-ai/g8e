@@ -136,7 +136,7 @@ To maximize developer ergonomics, **both the platform start script and the test 
 You can also manually build it or start the platform with optional apps pre-enabled:
 
 ```bash
-./g8e platform start --with-apps
+./g8e platform start --g8ee
 ```
 
 If you only need the Operator, skip the **agentic ensemble** (`g8ee`) and run:
@@ -155,7 +155,7 @@ them.
 ./g8e platform start
 ./g8e test g8eo
 
-./g8e platform start --with-apps
+./g8e platform start --g8ee
 ./g8e test g8ee
 ```
 

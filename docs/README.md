@@ -21,7 +21,7 @@ The domain-agnostic wire contract and governance model that every conforming com
 ## 2. Gateway Components
 The reference Go implementation compiles from a single codebase into two role-specific binaries:
 
-- [**Governance Gateway (g8eg)**](g8eg.md) (`g8e.gateway`) - The central PDP / BFT-governed Policy Decision Point running in `--listen` mode.
+- [**Governance Gateway (g8eg)**](g8eg.md) (`g8e.gateway`) - The central PDP / BFT-governed Policy Decision Point running in Gateway mode (--doctrine, --consensus, or --notary).
 - [**Governed Operator (g8eo)**](operator.md) (`g8e.operator`) - The host-side PEP / sovereign execution agent and MCP Server.
 
 ## 3. Reference Applications

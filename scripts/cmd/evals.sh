@@ -76,7 +76,7 @@ EOF
         # Tribunal → Warden) via /api/internal/chat, so the platform must be
         # running and the caller must be authenticated.
         if ! _operator_running; then
-            echo "[g8e] Operator listen mode is not running - start it: ./g8e platform start" >&2
+            echo "[g8e] Operator gateway mode is not running - start it: ./g8e platform start" >&2
             exit 1
         fi
         if ! _g8ee_running; then

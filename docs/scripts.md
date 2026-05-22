@@ -14,7 +14,7 @@ The scripts layer is the primary operational interface for the g8e platform. It 
 
 g8e avoids container-orchestration complexity by running directly on the host. There are two distinct tiers:
 
-1. **Gateway (mandatory)** - The `g8eo` binary in `--listen` mode. Owns persistence, PKI, pub/sub, and governance enforcement.
+1. **Gateway (mandatory)** - The `g8eo` binary in Gateway mode (--doctrine, --consensus, or --notary). Owns persistence, PKI, pub/sub, and governance enforcement.
 2. **Application Layer (optional)** - The reference **g8e Agentic Ensemble** (`g8ee`) that consume the public protocol. Run as managed host processes.
 
 ### The `./g8e` CLI entry point
@@ -37,8 +37,8 @@ Orchestrates the Gateway lifecycle via `scripts/core/build.sh`.
 
 | Command | Purpose |
 |---|---|
-| `start [-a\|--with-apps\|--with-g8ee]` | Start Operator listen mode; optional apps require explicit opt-in. |
-| `stop` | Stop Operator listen mode and any optional app processes. |
+| `start [-a\|--g8ee\|--with-g8ee]` | Start Operator Gateway mode; optional apps require explicit opt-in. |
+| `stop` | Stop Operator Gateway mode and any optional app processes. |
 | `restart` | Restart with the same flags. |
 | `status` | Gateway health first, optional app status separately. |
 | `wipe` | Clears app data via the Operator API. Preserves PKI, secrets, settings, and auth state. |

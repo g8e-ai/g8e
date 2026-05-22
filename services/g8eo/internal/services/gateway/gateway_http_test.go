@@ -284,7 +284,7 @@ func TestHandleHealth(t *testing.T) {
 		var resp models.HealthResponse
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.Equal(t, constants.Status.ListenMode.StatusOK, resp.Status)
+		assert.Equal(t, constants.Status.GatewayMode.StatusOK, resp.Status)
 	})
 }
 

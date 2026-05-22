@@ -280,7 +280,7 @@ func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg PubSubCommand
 		}
 	} else {
 		if hs.config.Gateway.Enabled {
-			hs.logger.Debug("[HEARTBEAT] Results publisher not set, skipping heartbeat in listen mode")
+			hs.logger.Debug("[HEARTBEAT] Results publisher not set, skipping heartbeat in gateway mode")
 		} else {
 			hs.logger.Warn("[HEARTBEAT] Results publisher not set, cannot send heartbeat")
 		}

@@ -121,7 +121,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 
 	go func() {
 		if err := ls.Start(ctx); err != nil && err != http.ErrServerClosed {
-			fmt.Printf("Listen service failed: %v\n", err)
+			fmt.Printf("Gateway service failed: %v\n", err)
 		}
 	}()
 

@@ -134,9 +134,9 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		err := pki.EnsurePKI(nil)
 		require.NoError(t, err)
 
-		// Verify operator-listen service certificate
-		serviceCertPath := filepath.Join(pkiDir, "issued", "hub", "operator-listen.crt")
-		serviceChainPath := filepath.Join(pkiDir, "issued", "hub", "operator-listen.chain.pem")
+		// Verify operator-gateway service certificate
+		serviceCertPath := filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt")
+		serviceChainPath := filepath.Join(pkiDir, "issued", "hub", "operator-gateway.chain.pem")
 
 		_, err = os.Stat(serviceCertPath)
 		require.NoError(t, err)
@@ -145,12 +145,12 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify private key is stored in keystore, not as plaintext file
-		serviceKeyPath := filepath.Join(pkiDir, "issued", "hub", "operator-listen.key")
+		serviceKeyPath := filepath.Join(pkiDir, "issued", "hub", "operator-gateway.key")
 		_, err = os.Stat(serviceKeyPath)
 		require.Error(t, err, "private key should not exist as plaintext file")
 
 		// Verify key can be loaded from keystore
-		keyDER, err := sm.GetServicePrivateKey("operator-listen")
+		keyDER, err := sm.GetServicePrivateKey("operator-gateway")
 		require.NoError(t, err, "private key should be loadable from keystore")
 		require.NotEmpty(t, keyDER, "private key DER should not be empty")
 	})
@@ -243,7 +243,7 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 
 	t.Run("Service certificate chain validity", func(t *testing.T) {
 		hubCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "hub_ca.crt"))
-		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-listen.crt"))
+		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
 
 		hubBlock, _ := pem.Decode(hubCertPEM)
 		serviceBlock, _ := pem.Decode(serviceCertPEM)
@@ -310,7 +310,7 @@ func TestPKIAuthority_URISAN(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("Service certificate has SPIFFE URI SAN", func(t *testing.T) {
-		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-listen.crt"))
+		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
 		block, _ := pem.Decode(serviceCertPEM)
 		serviceCert, _ := x509.ParseCertificate(block.Bytes)
 
@@ -366,7 +366,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 	})
 
 	t.Run("Service certificate validity period", func(t *testing.T) {
-		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-listen.crt"))
+		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
 		block, _ := pem.Decode(serviceCertPEM)
 		serviceCert, _ := x509.ParseCertificate(block.Bytes)
 
@@ -398,7 +398,7 @@ func TestPKIAuthority_EKU(t *testing.T) {
 	})
 
 	t.Run("Service certificate has correct EKU", func(t *testing.T) {
-		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-listen.crt"))
+		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
 		block, _ := pem.Decode(serviceCertPEM)
 		serviceCert, _ := x509.ParseCertificate(block.Bytes)
 

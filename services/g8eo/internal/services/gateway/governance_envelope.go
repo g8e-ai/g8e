@@ -16,18 +16,88 @@ package gateway
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 )
 
 // SetEnvelopeProcessor wires the synchronous envelope-processing pipeline
-// into the listen HTTP surface. It must be called after the listen service
+// into the gateway HTTP surface. It must be called after the gateway service
 // has been constructed and before BYO clients submit transactions to
 // /api/governance/envelope. Calling with nil disables the endpoint.
 func (ls *GatewayService) SetEnvelopeProcessor(p governance.EnvelopeProcessor) {
 	ls.handler.envProc = p
-	// Dependencies are now set via SetDependencies in runListenMode or similar
+	// Dependencies are now set via SetDependencies in runGatewayMode or similar
+}
+
+// verifyEnvelopeIdentityBinding enforces transport-to-envelope identity binding
+// (Plan §2). It extracts the mTLS certificate's URI SANs and verifies they match
+// the envelope's internal identity claims (operator_session_id, operator_id, source_component).
+// This prevents an Engine cert from impersonating another workload's envelope.
+func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
+	// Ensure mTLS is present
+	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+		return fmt.Errorf("mTLS client certificate required")
+	}
+
+	cert := r.TLS.PeerCertificates[0]
+	if len(cert.URIs) == 0 {
+		return fmt.Errorf("client certificate missing URI SAN")
+	}
+
+	// Parse envelope to extract identity fields
+	var envelope struct {
+		OperatorSessionID string `json:"operator_session_id"`
+		OperatorID        string `json:"operator_id"`
+		SourceComponent   string `json:"source_component"`
+	}
+	if err := json.Unmarshal(envelopeBody, &envelope); err != nil {
+		// If we can't parse the envelope, let the processor handle the decode error
+		// This is a decode error, not an identity binding error
+		return nil
+	}
+
+	// If envelope has no identity fields, let the processor handle validation
+	if envelope.OperatorSessionID == "" && envelope.OperatorID == "" {
+		return nil
+	}
+
+	wid := protocol.NewWorkloadIdentity()
+
+	// Check if any certificate URI SAN matches the envelope's identity
+	for _, uri := range cert.URIs {
+		spiffeID := uri.String()
+
+		// For operator sessions, verify the SPIFFE ID contains the operator_id and operator_session_id
+		if envelope.OperatorSessionID != "" && envelope.OperatorID != "" {
+			// Format: spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
+			// We check if the SPIFFE ID ends with the operator_id and operator_session_id
+			if strings.HasSuffix(spiffeID, "/"+envelope.OperatorID+"/"+envelope.OperatorSessionID) {
+				// Verify it's an operator SPIFFE ID (starts with spiffe://g8e.local/operator/)
+				if strings.HasPrefix(spiffeID, "spiffe://"+protocol.TrustDomain+"/operator/") {
+					return nil
+				}
+			}
+			// Also check if it matches the operator session ID alone (for CLI certs bound to operator)
+			if wid.MatchesCLISessionOnly(spiffeID, envelope.OperatorSessionID) {
+				return nil
+			}
+		}
+
+		// For app workloads (e.g., g8ee), verify the app SPIFFE ID matches operator_id
+		if envelope.SourceComponent == "g8ee" && envelope.OperatorID != "" {
+			if wid.MatchesApp(spiffeID, envelope.OperatorID) {
+				return nil
+			}
+		}
+	}
+
+	// No matching URI SAN found
+	return fmt.Errorf("certificate URI SAN does not match envelope identity claims (operator_id=%s, operator_session_id=%s, source_component=%s)",
+		envelope.OperatorID, envelope.OperatorSessionID, envelope.SourceComponent)
 }
 
 // handleGovernanceEnvelope is the canonical synchronous mutation entry point
@@ -43,7 +113,7 @@ func (ls *GatewayService) SetEnvelopeProcessor(p governance.EnvelopeProcessor) {
 //     payload too large) - no governance state mutated.
 //   - 403 Forbidden: governance verification failed before execution
 //     (expired, replayed, hash mismatch, missing/invalid L2/L3, unknown
-//     action type) - no state mutated, no receipt produced.
+//     action type, or transport-to-envelope identity mismatch) - no state mutated, no receipt produced.
 //   - 503 Service Unavailable: envelope processor not yet initialized.
 //   - 405 Method Not Allowed: non-POST methods.
 func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +133,15 @@ func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Re
 	}
 	if len(body) == 0 {
 		jsonError(w, http.StatusBadRequest, "empty request body")
+		return
+	}
+
+	// Transport-to-envelope identity binding (Plan §2)
+	// Extract mTLS certificate URI SANs and verify they match the envelope's
+	// internal identity claims. This prevents an Engine cert from impersonating
+	// another workload's envelope.
+	if err := verifyEnvelopeIdentityBinding(r, body); err != nil {
+		jsonError(w, http.StatusForbidden, fmt.Sprintf("identity binding failed: %s", err.Error()))
 		return
 	}
 

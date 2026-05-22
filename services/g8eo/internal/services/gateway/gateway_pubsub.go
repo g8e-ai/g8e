@@ -14,14 +14,17 @@
 package gateway
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/g8e-ai/g8e/protocol"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	pubsubv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/pubsubv1"
 )
@@ -32,7 +35,6 @@ type PubSubBroker struct {
 
 	mu          sync.RWMutex
 	subscribers map[string]map[*wsSubscriber]struct{}
-	patterns    map[string]map[*wsSubscriber]struct{}
 
 	// In-process handlers for governance command processing and SSE streaming
 	handlersMu    sync.RWMutex
@@ -61,6 +63,10 @@ type wsSubscriber struct {
 
 	mu      sync.Mutex
 	dropped uint64 // cumulative back-pressure drops; guarded by mu
+
+	// mTLS identity for topic ACL enforcement (Plan §5)
+	identitySPIFFEID string // SPIFFE ID from the client certificate's URI SAN
+	operatorID       string // Extracted operator_id for channel matching
 }
 
 // isDone reports whether shutdown has been initiated.
@@ -91,7 +97,6 @@ func NewPubSubBroker(logger *slog.Logger) *PubSubBroker {
 	return &PubSubBroker{
 		logger:      logger,
 		subscribers: make(map[string]map[*wsSubscriber]struct{}),
-		patterns:    make(map[string]map[*wsSubscriber]struct{}),
 		handlers:    make(map[string]map[int64]func(string, []byte)),
 	}
 }
@@ -100,7 +105,7 @@ var wsUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// Publish sends a message to all subscribers of a channel (exact + pattern matches).
+// Publish sends a message to all subscribers of a channel.
 func (b *PubSubBroker) Publish(channel string, data []byte) int {
 	// Snapshot targets and precomputed payloads under RLock, then release the
 	// broker lock before invoking trySend. trySend may block briefly on a
@@ -122,20 +127,6 @@ func (b *PubSubBroker) Publish(channel string, data []byte) int {
 		msg, _ := proto.Marshal(event)
 		for sub := range subs {
 			deliveries = append(deliveries, delivery{sub: sub, msg: msg})
-		}
-	}
-	for pattern, subs := range b.patterns {
-		if globMatch(pattern, channel) {
-			event := &pubsubv1.PubSubEvent{
-				Type:    constants.PubSubEventPMessage,
-				Channel: channel,
-				Pattern: pattern,
-				Data:    data,
-			}
-			msg, _ := proto.Marshal(event)
-			for sub := range subs {
-				deliveries = append(deliveries, delivery{sub: sub, msg: msg})
-			}
 		}
 	}
 	b.mu.RUnlock()
@@ -161,7 +152,7 @@ func (b *PubSubBroker) Publish(channel string, data []byte) int {
 }
 
 // RegisterHandler registers an in-process handler for a channel.
-// Used for governance command processing in listen mode and SSE streaming.
+// Used for governance command processing in gateway mode and SSE streaming.
 // Returns a function that unregisters the handler.
 func (b *PubSubBroker) RegisterHandler(channel string, handler func(string, []byte)) func() {
 	b.handlersMu.Lock()
@@ -190,6 +181,7 @@ func (b *PubSubBroker) RegisterHandler(channel string, handler func(string, []by
 }
 
 // HandleWebSocket upgrades the HTTP connection and passes it to a new session handler.
+// Extracts mTLS identity for topic ACL enforcement (Plan §5).
 func (b *PubSubBroker) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ws, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -197,12 +189,17 @@ func (b *PubSubBroker) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Extract mTLS identity for topic ACL enforcement
+	identitySPIFFEID, operatorID := extractMTLSIdentity(r)
+
 	handler := &pubSubSessionHandler{
 		broker: b,
 		sub: &wsSubscriber{
-			ws:   ws,
-			send: make(chan []byte, 4096),
-			done: make(chan struct{}),
+			ws:               ws,
+			send:             make(chan []byte, 4096),
+			done:             make(chan struct{}),
+			identitySPIFFEID: identitySPIFFEID,
+			operatorID:       operatorID,
 		},
 	}
 	handler.run()
@@ -254,10 +251,12 @@ func (h *pubSubSessionHandler) run() {
 func (h *pubSubSessionHandler) handleAction(msg *pubsubv1.PubSubMessage) {
 	switch msg.Action {
 	case constants.PubSubActionSubscribe:
+		// Enforce topic ACL: subscriber can only subscribe to channels matching their identity
+		if err := verifyChannelACL(msg.Channel, h.sub.operatorID, h.sub.identitySPIFFEID); err != nil {
+			h.broker.logger.Warn("PubSub subscription rejected: ACL violation", "channel", msg.Channel, "error", err.Error())
+			return
+		}
 		h.broker.subscribe(msg.Channel, h.sub)
-		h.broker.sendAck(h.sub, msg.Channel)
-	case constants.PubSubActionPSubscribe:
-		h.broker.psubscribe(msg.Channel, h.sub)
 		h.broker.sendAck(h.sub, msg.Channel)
 	case constants.PubSubActionUnsubscribe:
 		h.broker.unsubscribe(msg.Channel, h.sub)
@@ -290,16 +289,6 @@ func (b *PubSubBroker) subscribe(channel string, sub *wsSubscriber) {
 	b.subscribers[channel][sub] = struct{}{}
 }
 
-func (b *PubSubBroker) psubscribe(pattern string, sub *wsSubscriber) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if b.patterns[pattern] == nil {
-		b.patterns[pattern] = make(map[*wsSubscriber]struct{})
-	}
-	b.patterns[pattern][sub] = struct{}{}
-}
-
 func (b *PubSubBroker) unsubscribe(channel string, sub *wsSubscriber) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -308,12 +297,6 @@ func (b *PubSubBroker) unsubscribe(channel string, sub *wsSubscriber) {
 		delete(subs, sub)
 		if len(subs) == 0 {
 			delete(b.subscribers, channel)
-		}
-	}
-	if subs, ok := b.patterns[channel]; ok {
-		delete(subs, sub)
-		if len(subs) == 0 {
-			delete(b.patterns, channel)
 		}
 	}
 }
@@ -326,12 +309,6 @@ func (b *PubSubBroker) removeSub(sub *wsSubscriber) {
 		delete(subs, sub)
 		if len(subs) == 0 {
 			delete(b.subscribers, ch)
-		}
-	}
-	for pat, subs := range b.patterns {
-		delete(subs, sub)
-		if len(subs) == 0 {
-			delete(b.patterns, pat)
 		}
 	}
 }
@@ -396,21 +373,14 @@ func (b *PubSubBroker) trySend(sub *wsSubscriber, msg []byte) bool {
 func (b *PubSubBroker) Close() {
 	b.mu.Lock()
 	// Collect unique subscribers under the lock, then shutdown outside the
-	// lock. shutdown() is idempotent via sync.Once, so a subscriber that
-	// appears in both maps is torn down exactly once.
+	// lock. shutdown() is idempotent via sync.Once.
 	seen := make(map[*wsSubscriber]struct{})
 	for _, subs := range b.subscribers {
 		for sub := range subs {
 			seen[sub] = struct{}{}
 		}
 	}
-	for _, subs := range b.patterns {
-		for sub := range subs {
-			seen[sub] = struct{}{}
-		}
-	}
 	b.subscribers = make(map[string]map[*wsSubscriber]struct{})
-	b.patterns = make(map[string]map[*wsSubscriber]struct{})
 	b.mu.Unlock()
 
 	for sub := range seen {
@@ -418,31 +388,59 @@ func (b *PubSubBroker) Close() {
 	}
 }
 
-// globMatch matches a Redis-style glob pattern against a string.
-// Supports * (any sequence) and ? (any single char).
-func globMatch(pattern, str string) bool {
-	px, sx := 0, 0
-	starPx, starSx := -1, -1
+// extractMTLSIdentity extracts the SPIFFE ID and operator_id from the mTLS certificate.
+// Returns empty strings if mTLS is not present or the certificate has no URI SANs.
+func extractMTLSIdentity(r *http.Request) (string, string) {
+	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+		return "", ""
+	}
 
-	for sx < len(str) {
-		if px < len(pattern) && (pattern[px] == '?' || pattern[px] == str[sx]) {
-			px++
-			sx++
-		} else if px < len(pattern) && pattern[px] == '*' {
-			starPx = px
-			starSx = sx
-			px++
-		} else if starPx >= 0 {
-			px = starPx + 1
-			starSx++
-			sx = starSx
-		} else {
-			return false
+	cert := r.TLS.PeerCertificates[0]
+	if len(cert.URIs) == 0 {
+		return "", ""
+	}
+
+	spiffeID := cert.URIs[0].String()
+
+	// Extract operator_id from SPIFFE ID
+	// Format: spiffe://g8e.local/operator/<org_id>/<operator_id>/<session_id>
+	// or spiffe://g8e.local/app/<operator_id>
+	var operatorID string
+	if strings.HasPrefix(spiffeID, "spiffe://"+protocol.TrustDomain+"/operator/") {
+		parts := strings.Split(spiffeID, "/")
+		if len(parts) >= 6 {
+			operatorID = parts[5] // operator_id is at position 5
+		}
+	} else if strings.HasPrefix(spiffeID, "spiffe://"+protocol.TrustDomain+"/app/") {
+		parts := strings.Split(spiffeID, "/")
+		if len(parts) >= 5 {
+			operatorID = parts[4] // operator_id is at position 4
 		}
 	}
 
-	for px < len(pattern) && pattern[px] == '*' {
-		px++
+	return spiffeID, operatorID
+}
+
+// verifyChannelACL enforces topic ACLs (Plan §5).
+// Subscribers can only subscribe to channels matching their mTLS workload identity.
+// Channel format: results:<operator_id>:<session_id> or heartbeat:<operator_id>
+func verifyChannelACL(channel, operatorID, identitySPIFFEID string) error {
+	if operatorID == "" {
+		// If no operator_id in cert, reject subscription
+		return fmt.Errorf("certificate missing operator identity")
 	}
-	return px == len(pattern)
+
+	// Check if channel starts with the operator_id
+	// Format: results:<operator_id>:... or heartbeat:<operator_id>
+	parts := strings.Split(channel, ":")
+	if len(parts) < 2 {
+		return fmt.Errorf("invalid channel format")
+	}
+
+	// The second part should be the operator_id
+	if parts[1] != operatorID {
+		return fmt.Errorf("channel operator_id mismatch: channel=%s, cert=%s", parts[1], operatorID)
+	}
+
+	return nil
 }

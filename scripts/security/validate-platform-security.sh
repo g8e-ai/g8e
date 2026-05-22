@@ -87,7 +87,7 @@ check_port() {
     return 0
 }
 
-check_port 443 || FAILED=1 # g8eo (Operator --listen)
+check_port 443 || FAILED=1 # g8eo (Operator --gateway)
 check_port 443 || FAILED=1 # g8eo (WSS)
 check_port 443 || FAILED=1  # g8ee (Engine)
 

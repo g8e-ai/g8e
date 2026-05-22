@@ -118,7 +118,7 @@ class LFAAManager:
             )
             if listen_probe.returncode == 0:
                 raise RuntimeError(
-                    f'Container {self._container!r} is running in listen mode (operator) - '
+                    f'Container {self._container!r} is running in gateway mode (operator) - '
                     f'it has no LFAA audit vault.\n'
                     f'LFAA is written by normal-mode operators. '
                     f'Target an operator-test container instead.'
@@ -184,9 +184,9 @@ class LFAAManager:
         if 'sessions' not in tables or 'events' not in tables:
             if 'documents' in tables or 'kv_store' in tables:
                 raise RuntimeError(
-                    'This is a operator coordination store DB (listen-mode operator), not an LFAA audit vault.\n'
+                    'This is a operator coordination store DB (Gateway-mode operator), not an LFAA audit vault.\n'
                     'LFAA data is written by normal-mode operators running with local storage enabled.\n'
-                    'The operator must be started WITHOUT --listen to write LFAA audit data.'
+                    'The operator must be started WITHOUT Gateway mode (--doctrine/--consensus/--notary) to write LFAA audit data.'
                 )
             raise RuntimeError(
                 f'Database does not contain LFAA schema (missing sessions/events tables).\n'

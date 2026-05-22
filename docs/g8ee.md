@@ -14,9 +14,9 @@ If you are building a BYO client, you do not need g8ee - anything that produces 
 
 ## Position in the Platform
 
-- **Mandatory Gateway**: `g8eg` Governance Gateway (Listen mode via `--listen`) and `g8eo` Governed Operator (runs on target hosts). The gateway owns platform-level PKI, coordination, Pub/Sub, and transaction validation/suspension. The operator owns local validation, local git-backed ledger, and host-level Actuator tool execution.
+- **Mandatory Gateway**: `g8eg` Governance Gateway (Gateway mode via --doctrine, --consensus, or --notary) and `g8eo` Governed Operator (runs on target hosts). The gateway owns platform-level PKI, coordination, Pub/Sub, and transaction validation/suspension. The operator owns local validation, local git-backed ledger, and host-level Actuator tool execution.
 - **Optional reference application layer**: `g8ee` (this component, the g8e Agentic Ensemble / L2 producer). It consumes the Gateway protocol surface and has no privileged Gateway role.
-- **Default start (`./g8e platform start`)**: Operator only. g8ee is started explicitly via `./g8e platform start --with-apps` or `./g8e apps start g8ee`.
+- **Default start (`./g8e platform start`)**: Operator only. g8ee is started explicitly via `./g8e platform start --g8ee` or `./g8e apps start g8ee`.
 - **Wire format**: canonical JSON (protojson) `GovernanceEnvelope` on all client-facing surfaces (HTTP, pub/sub, receipts). Signing is computed over a deterministic transaction hash; wire encoding is independent of the security invariant.
 
 ---
@@ -295,7 +295,7 @@ flowchart LR
     Client((BYO Client<br/>Browser / CLI / Agent))
 
     subgraph Gateway ["Mandatory Gateway"]
-        g8eg["g8eg (Governance Gateway)<br/>Listen mode: --listen<br/>PDP, PKI, SQLite, Pub/Sub"]
+        g8eg["g8eg (Governance Gateway)<br/>Gateway mode: --doctrine/--consensus/--notary<br/>PDP, PKI, SQLite, Pub/Sub"]
         g8eo["g8eo (Governed Operator)<br/>PEP, Actuator, local git ledger"]
     end
 

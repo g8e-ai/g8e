@@ -53,7 +53,7 @@ func (e *AuthError) Is(target error) bool {
 	return ok
 }
 
-// AuthService handles authentication for the Listen service.
+// AuthService handles authentication for the Gateway service.
 type AuthService struct {
 	db         *GatewayDBService
 	pki        *PKIAuthority
@@ -479,7 +479,7 @@ func (s *AuthService) jsonError(w http.ResponseWriter, status int, msg string) {
 }
 
 // WebSessionAuth validates web session cookies and stamps context with user_id.
-// This is for browser-based authentication on the public listener.
+// This is for browser-based authentication on the public gateway.
 func (s *AuthService) WebSessionAuth(next http.Handler, db *GatewayDBService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("g8e_session")
