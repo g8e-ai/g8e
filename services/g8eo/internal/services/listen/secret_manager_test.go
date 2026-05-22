@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/keystore"
@@ -355,4 +356,133 @@ func TestSecretManager_InitPlatformSettings_ReturnsErrorOnMalformedPlatformSetti
 	err = sm2.InitPlatformSettings()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to unmarshal platform_settings document")
+}
+
+func TestSecretManager_APIKeys(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Store and retrieve API key
+	err := sm.StoreAPIKey("openai", "sk-test-key-12345")
+	require.NoError(t, err)
+
+	retrieved, err := sm.GetAPIKey("openai")
+	require.NoError(t, err)
+	assert.Equal(t, "sk-test-key-12345", retrieved)
+
+	// Non-existent service returns error
+	_, err = sm.GetAPIKey("nonexistent")
+	assert.Error(t, err)
+}
+
+func TestSecretManager_OperatorPrivateKey(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Generate and store Operator private key
+	seed := make([]byte, ed25519.SeedSize)
+	for i := range seed {
+		seed[i] = byte(i)
+	}
+	privKey := ed25519.NewKeyFromSeed(seed)
+
+	err := sm.StoreOperatorPrivateKey(privKey)
+	require.NoError(t, err)
+
+	// Retrieve and validate
+	retrieved, err := sm.GetOperatorPrivateKey()
+	require.NoError(t, err)
+	assert.Equal(t, privKey, retrieved)
+
+	// Verify public key matches
+	assert.Equal(t, privKey.Public().(ed25519.PublicKey), retrieved.Public().(ed25519.PublicKey))
+}
+
+func TestSecretManager_OperatorPrivateKey_RejectsInvalidSeed(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Store invalid seed length
+	err := sm.keystore.EncryptSecret("operator_private_key", "deadbeef")
+	require.NoError(t, err)
+
+	_, err = sm.GetOperatorPrivateKey()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid length")
+}
+
+func TestSecretManager_CLIPrivateKey(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Generate and store CLI private key
+	seed := make([]byte, ed25519.SeedSize)
+	for i := range seed {
+		seed[i] = byte(i + 1)
+	}
+	privKey := ed25519.NewKeyFromSeed(seed)
+
+	err := sm.StoreCLIPrivateKey(privKey)
+	require.NoError(t, err)
+
+	// Retrieve and validate
+	retrieved, err := sm.GetCLIPrivateKey()
+	require.NoError(t, err)
+	assert.Equal(t, privKey, retrieved)
+
+	// Verify public key matches
+	assert.Equal(t, privKey.Public().(ed25519.PublicKey), retrieved.Public().(ed25519.PublicKey))
+}
+
+func TestSecretManager_SessionToken(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Store session token with 1 hour TTL
+	token := "session-abc-123"
+	err := sm.StoreSessionToken(token, time.Hour)
+	require.NoError(t, err)
+
+	// Retrieve valid token
+	retrieved, err := sm.GetSessionToken()
+	require.NoError(t, err)
+	assert.Equal(t, token, retrieved)
+}
+
+func TestSecretManager_SessionToken_Expires(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Store session token with 1 millisecond TTL
+	token := "session-expired"
+	err := sm.StoreSessionToken(token, time.Millisecond)
+	require.NoError(t, err)
+
+	// Wait for expiry
+	time.Sleep(10 * time.Millisecond)
+
+	// Retrieve should fail
+	_, err = sm.GetSessionToken()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "expired")
+}
+
+func TestSecretManager_SessionToken_InvalidFormat(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Store malformed token data
+	err := sm.keystore.EncryptSecret("session_token", "invalid-format-no-pipe")
+	require.NoError(t, err)
+
+	_, err = sm.GetSessionToken()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid session token format")
 }
