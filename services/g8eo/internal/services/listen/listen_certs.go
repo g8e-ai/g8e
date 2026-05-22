@@ -346,7 +346,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	if err != nil {
 		return fmt.Errorf("failed to read bootstrap CA: %w", err)
 	}
-	hubBundle := append([]byte(rootPEM), hubPEM...)
+	hubBundle := append(rootPEM, hubPEM...)
 	hubBundle = append(hubBundle, operatorPEM...)
 	hubBundle = append(hubBundle, bootstrapPEM...)
 	if err := os.WriteFile(hubBundlePath, hubBundle, 0644); err != nil {
@@ -355,14 +355,14 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 
 	// Operator bundle (root + operator intermediate)
 	operatorBundlePath := filepath.Join(pki.pkiDir, "trust", "operator-bundle.pem")
-	operatorBundle := append([]byte(rootPEM), operatorPEM...)
+	operatorBundle := append(rootPEM, operatorPEM...)
 	if err := os.WriteFile(operatorBundlePath, operatorBundle, 0644); err != nil {
 		return fmt.Errorf("failed to write operator bundle: %w", err)
 	}
 
 	// Bootstrap bundle (root + bootstrap intermediate)
 	bootstrapBundlePath := filepath.Join(pki.pkiDir, "trust", "bootstrap-bundle.pem")
-	bootstrapBundle := append([]byte(rootPEM), bootstrapPEM...)
+	bootstrapBundle := append(rootPEM, bootstrapPEM...)
 	if err := os.WriteFile(bootstrapBundlePath, bootstrapBundle, 0644); err != nil {
 		return fmt.Errorf("failed to write bootstrap bundle: %w", err)
 	}

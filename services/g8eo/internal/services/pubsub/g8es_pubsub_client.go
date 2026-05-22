@@ -264,8 +264,11 @@ func (c *OperatorPubSubClient) connectPubWs() error {
 		dialer = *httpclient.WebSocketDialerWithTLS(c.tlsConfig)
 	}
 
-	ws, _, err := dialer.Dial(wsURL, nil)
+	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
 		return fmt.Errorf("failed to connect publish WebSocket: %w", err)
 	}
 	c.pubWs = ws

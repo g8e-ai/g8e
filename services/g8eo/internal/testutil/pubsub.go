@@ -37,8 +37,11 @@ func TestPubSubAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client pub/sub TLS setup failed: %v", err)
 	}
-	ws, _, err := dialer.Dial(wsURL, nil)
+	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
 		t.Fatalf("client pub/sub not available at %s: %v", GetTestOperatorDirectURL(), err)
 	}
 	ws.Close()
@@ -57,8 +60,11 @@ func SubscribeToChannel(t *testing.T, _ string, channel string) <-chan []byte {
 	if err != nil {
 		t.Fatalf("Failed to build TLS dialer for operator pub/sub: %v", err)
 	}
-	ws, _, err := dialer.Dial(wsURL, nil)
+	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
 		t.Fatalf("Failed to connect to operator pub/sub at %s: %v", wsURL, err)
 	}
 
@@ -120,8 +126,11 @@ func PublishTestMessage(t *testing.T, _ string, channel string, message string) 
 	if err != nil {
 		t.Fatalf("Failed to build TLS dialer for pub/sub publish: %v", err)
 	}
-	ws, _, err := dialer.Dial(wsURL, nil)
+	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
 		t.Fatalf("Failed to connect to client pub/sub for publish on channel %s: %v", channel, err)
 	}
 	defer ws.Close()

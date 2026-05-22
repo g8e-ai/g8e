@@ -992,6 +992,9 @@ func TestWebSocketAuthIntegration(t *testing.T) {
 	t.Run("Missing token", func(t *testing.T) {
 		ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 		assert.Error(t, err)
+		if resp != nil && resp.Body != nil {
+			resp.Body.Close()
+		}
 		if ws != nil {
 			ws.Close()
 		}
