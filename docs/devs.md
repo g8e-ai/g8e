@@ -261,12 +261,36 @@ g8e defines unique threat doctrines for agentic execution in `mcp_vectors_doctri
 - GovernanceEnvelope field abuse
 - MCP protocol misuse
 
+## Working with Constants
+
+g8e maintains a Single Source of Truth (SSOT) for cross-component constants in Go at `services/g8eo/internal/constants/`. Constants are exported to JSON and Python via a generation pipeline.
+
+### Adding New Constants
+
+1. Add the constant to the appropriate Go file in `services/g8eo/internal/constants/`
+2. Run `make constants` to regenerate JSON and Python exports
+3. Run `cd services/g8eo && go run ./internal/constants/check_registry.go` to verify registration
+4. Commit both the Go source and generated files
+
+### Regeneration Commands
+
+- `make constants` - Generate all constants from Go SSOT
+- `make generate` - Generate both protobuf and constants
+- `make clean-constants` - Remove generated constants
+
+### Tracked vs Internal Files
+
+The registry tracking system distinguishes exportable constants from internal-only constants. Tracked files (collections, events, headers, channels, etc.) are exported to JSON/Python. Internal-only files (status, platform, agents, timestamp) contain Go-specific enums and are not exported.
+
+See `docs/architecture/constants.md` for complete documentation of the constants pipeline.
+
 ## Where to Find Things
 
 | Concern | Location |
 |---|---|
 | Protobuf schemas | `protocol/proto/` |
 | Constants registries | `services/g8eo/internal/constants/` |
+| Constants documentation | `docs/architecture/constants.md` |
 | Operator implementation | `services/g8eo/` |
 | g8e Agentic Ensemble implementation | `services/g8ee/` |
 | Evaluation harness | `evals/` |

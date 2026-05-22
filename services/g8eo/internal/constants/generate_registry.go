@@ -54,9 +54,6 @@ type JSONFile struct {
 	DocumentIds map[string]JSONEntry            `json:"document_ids"`
 	Platform    map[string]JSONEntry            `json:"platform"`
 	Agents      map[string]string               `json:"agents"`
-	Paths       map[string]JSONEntry            `json:"paths"`
-	Ports       map[string]int                  `json:"ports"`
-	EnvVars     map[string]string               `json:"env_vars"`
 	Timestamp   map[string]string               `json:"timestamp"`
 	ApiPaths    interface{}                     `json:"api_paths"`
 }
@@ -149,15 +146,6 @@ func main() {
 		if fileData.Agents != nil {
 			allData.Agents = fileData.Agents
 		}
-		if fileData.Paths != nil {
-			allData.Paths = fileData.Paths
-		}
-		if fileData.Ports != nil {
-			allData.Ports = fileData.Ports
-		}
-		if fileData.EnvVars != nil {
-			allData.EnvVars = fileData.EnvVars
-		}
 		if fileData.Timestamp != nil {
 			allData.Timestamp = fileData.Timestamp
 		}
@@ -215,14 +203,6 @@ func generateRegistry(data JSONFile) string {
 	sb.WriteString("\tSessionType map[string]string `json:\"session.type\"`\n")
 	sb.WriteString("}\n")
 	sb.WriteString("\n")
-	sb.WriteString("// PathsSnapshot represents the nested structure for paths.\n")
-	sb.WriteString("type PathsSnapshot struct {\n")
-	sb.WriteString("\tInfra map[string]string `json:\"infra\"`\n")
-	sb.WriteString("\tG8ee  map[string]string `json:\"g8ee\"`\n")
-	sb.WriteString("\tPorts map[string]int    `json:\"ports\"`\n")
-	sb.WriteString("\tHost  string            `json:\"host\"`\n")
-	sb.WriteString("}\n")
-	sb.WriteString("\n")
 	sb.WriteString("// DocumentIdsSnapshot represents the nested structure for document IDs.\n")
 	sb.WriteString("type DocumentIdsSnapshot struct {\n")
 	sb.WriteString("\tDocumentIds map[string]Entry `json:\"document_ids\"`\n")
@@ -255,9 +235,6 @@ func generateRegistry(data JSONFile) string {
 	sb.WriteString("\tDocumentIds DocumentIdsSnapshot `json:\"document_ids\"`\n")
 	sb.WriteString("\tPlatform    map[string]Entry    `json:\"platform\"`\n")
 	sb.WriteString("\tAgents      map[string]string   `json:\"agents\"`\n")
-	sb.WriteString("\tPaths       PathsSnapshot       `json:\"paths\"`\n")
-	sb.WriteString("\tPorts       map[string]int      `json:\"ports\"`\n")
-	sb.WriteString("\tEnvVars     map[string]string   `json:\"env_vars\"`\n")
 	sb.WriteString("\tTimestamp   map[string]string   `json:\"timestamp\"`\n")
 	sb.WriteString("\tApiPaths    interface{}         `json:\"api_paths\"`\n")
 	sb.WriteString("}\n")
@@ -355,55 +332,6 @@ func generateRegistry(data JSONFile) string {
 			sb.WriteString(fmt.Sprintf("\t\t\t\t\"%s\": \"%s\",\n", key, val))
 		}
 		sb.WriteString("\t\t\t},\n")
-		sb.WriteString("\t\t},\n")
-	}
-
-	// Paths (special handling)
-	sb.WriteString("\t\tPaths: PathsSnapshot{\n")
-	sb.WriteString("\t\t\tInfra: map[string]string{\n")
-	sb.WriteString("\t\t\t\t\"db_path\": Paths.Infra.DbPath,\n")
-	sb.WriteString("\t\t\t\t\"pki_dir\": Paths.Infra.PkiDir,\n")
-	sb.WriteString("\t\t\t\t\"secrets_dir\": Paths.Infra.SecretsDir,\n")
-	sb.WriteString("\t\t\t\t\"ca_cert_path\": Paths.Infra.CaCertPath,\n")
-	sb.WriteString("\t\t\t\t\"app_cert_dir\": Paths.Infra.AppCertDir,\n")
-	sb.WriteString("\t\t\t\t\"docs_dir\": Paths.Infra.DocsDir,\n")
-	sb.WriteString("\t\t\t\t\"protocol_dir\": Paths.Infra.ProtocolDir,\n")
-	sb.WriteString("\t\t\t\t\"protocol_constants_dir\": Paths.Infra.ProtocolConstantsDir,\n")
-	sb.WriteString("\t\t\t\t\"protocol_models_dir\": Paths.Infra.ProtocolModelsDir,\n")
-	sb.WriteString("\t\t\t\t\"ssh_config_path\": Paths.Infra.SshConfigPath,\n")
-	sb.WriteString("\t\t\t},\n")
-	sb.WriteString("\t\t\tG8ee: map[string]string{\n")
-	sb.WriteString("\t\t\t\t\"app_dir\": \"/app/services/g8ee\",\n")
-	sb.WriteString("\t\t\t\t\"config_dir\": \"/app/services/g8ee/config\",\n")
-	sb.WriteString("\t\t\t\t\"tests_dir\": \"/app/services/g8ee/tests\",\n")
-	sb.WriteString("\t\t\t\t\"cert_name\": \"g8ee\",\n")
-	sb.WriteString("\t\t\t},\n")
-	sb.WriteString("\t\t\tPorts: map[string]int{\n")
-	sb.WriteString("\t\t\t\t\"operator_https\": Ports.OperatorHttps,\n")
-	sb.WriteString("\t\t\t\t\"operator_bootstrap_https\": Ports.OperatorBootstrapHttps,\n")
-	sb.WriteString("\t\t\t\t\"operator_public_https\": Ports.OperatorPublicHttps,\n")
-	sb.WriteString("\t\t\t\t\"g8ee_https\": Ports.G8eeHttps,\n")
-	sb.WriteString("\t\t\t\t\"openclaw_gateway\": Ports.OpenclawGateway,\n")
-	sb.WriteString("\t\t\t},\n")
-	sb.WriteString("\t\t\tHost: \"localhost\",\n")
-	sb.WriteString("\t\t},\n")
-
-	// Ports (special handling for snake_case keys with PascalCase field names)
-	sb.WriteString("\t\tPorts: map[string]int{\n")
-	sb.WriteString("\t\t\t\"operator_https\": Ports.OperatorHttps,\n")
-	sb.WriteString("\t\t\t\"operator_bootstrap_https\": Ports.OperatorBootstrapHttps,\n")
-	sb.WriteString("\t\t\t\"operator_public_https\": Ports.OperatorPublicHttps,\n")
-	sb.WriteString("\t\t\t\"g8ee_https\": Ports.G8eeHttps,\n")
-	sb.WriteString("\t\t\t\"openclaw_gateway\": Ports.OpenclawGateway,\n")
-	sb.WriteString("\t\t},\n")
-
-	// EnvVars
-	if data.EnvVars != nil {
-		sb.WriteString("\t\tEnvVars: map[string]string{\n")
-		keys := sortedStringKeys(data.EnvVars)
-		for _, key := range keys {
-			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": string(EnvVar.%s),\n", key, key))
-		}
 		sb.WriteString("\t\t},\n")
 	}
 

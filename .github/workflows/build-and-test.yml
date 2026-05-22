@@ -62,6 +62,10 @@ jobs:
       - name: Validate doctrine JSON schema
         run: make validate-doctrines
 
+      - name: Check constants registry
+        run: go run ./internal/constants/check_registry.go
+        working-directory: services/g8eo
+
   lint-g8eo:
     runs-on: ubuntu-latest
     steps:
