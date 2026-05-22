@@ -17,18 +17,20 @@ import pytest
 
 from app.constants import (
     CommandGenerationOutcome,
+    ComponentName,
     EventType,
     LLMProvider,
 )
+from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.generator import (
     generate_command,
 )
 from app.models.tribunal_commands import TribunalGenerationRequest
-from tests.unit.services.ai.test_command_generator import (
-    _REPUTATION_KWARGS,
-    _make_mock_operator_context,
+from tests.unit.services.ai.tribunal.conftest import (
+    make_tribunal_generation_request,
     _make_mock_provider,
+    _make_mock_operator_context,
 )
 
 
@@ -64,10 +66,9 @@ async def test_generate_command_round_2_triggered():
         mock_event_service.publish = AsyncMock()
 
         result = await generate_command(
-            TribunalGenerationRequest(
+            make_tribunal_generation_request(
                 request="test request",
                 guidelines="",
-                operator_context=_make_mock_operator_context(),
                 event_service=mock_event_service,
                 g8e_context=G8eHttpContext(
                     web_session_id="ws-1",
@@ -77,8 +78,6 @@ async def test_generate_command_round_2_triggered():
                     source_component=ComponentName.G8EE
                 ),
                 settings=settings,
-                reputation_data_service=_REPUTATION_KWARGS["reputation_data_service"],
-                auditor_hmac_key=_REPUTATION_KWARGS["auditor_hmac_key"],
             )
         )
 

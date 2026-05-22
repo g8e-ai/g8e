@@ -23,8 +23,10 @@ the TurnResult alongside streamed chunks.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import logging
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
 from collections.abc import AsyncGenerator
 from httpx import HTTPStatusError as HttpxHTTPStatusError
 from httpx import TimeoutException as HttpxTimeout
@@ -46,13 +48,14 @@ from app.utils.interrogation import extract_interrogation_questions
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class TurnState:
+class TurnState(BaseModel):
     """Mutable state for a single LLM stream turn."""
-    model_response_parts: list[types.Part] = field(default_factory=list[types.Part])
-    pending_tool_calls: list[types.ToolCall] = field(default_factory=list[types.ToolCall])
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
+
+    model_response_parts: list[types.Part] = Field(default_factory=list)
+    pending_tool_calls: list[types.ToolCall] = Field(default_factory=list)
     thinking_active: bool = False
-    thinking_text_parts: list[str] = field(default_factory=list[str])
+    thinking_text_parts: list[str] = Field(default_factory=list)
     thinking_signature: types.ThoughtSignature | None = None
     finish_reason: str = DEFAULT_FINISH_REASON
     input_tokens: int = 0
@@ -245,8 +248,7 @@ async def process_provider_turn(
     ))
 
 
-@dataclass
-class GatedTurnResult:
+class GatedTurnResult(BaseModel):
     """Result of process_turn_with_gate for a single LLM stream turn.
 
     Wraps TurnResult with the interrogation gate decision:
@@ -254,6 +256,8 @@ class GatedTurnResult:
       response text. When True, pending_tool_calls has been cleared so the ReAct
       loop breaks naturally without executing tools.
     """
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
+
     turn_result: TurnResult
     interrogation_detected: bool
 

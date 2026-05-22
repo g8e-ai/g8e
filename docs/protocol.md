@@ -20,7 +20,7 @@ The protocol is the only mandatory layer of g8e. Any conforming implementation -
 *   **Protocol-First Zero Trust:** Every system component inherently distrusts all other components. The execution gateway boundary actively handles workloads via mTLS and device-link tokens, ensuring no unauthenticated or unverified component holds privileged trust.
 *   **Byzantine Fault Tolerant (BFT) Safety:** Agentic automation is treated as a distributed consensus problem. The Quorum (L2) Tribunal is fully provider-agnostic, combining heterogeneous models (e.g., Anthropic, OpenAI, local models) to outvote individual hallucinations or poisonings.
 *   **Deterministic Intent Validation:** Execution authority does not rely on fluid natural language strings. The protocol enforces that explicit execution intent is serialized into a typed Protobuf payload, base64-encoded, and locked into the transaction hash of the envelope.
-*   **3-Layer Inline Governance Gate:** Every mutation must sequentially pass Doctrine (L1) Technical Bedrock (Hard Gates), Quorum (L2) Consensus (Tribunal), and Notary (L3) Authorization (WebAuthn/Passkey) at the Operator boundary before hitting the host shell.
+*   **3-Layer Inline Governance Gate:** Every mutation must sequentially pass Doctrine (L1Doctrine) Technical Bedrock (Hard Gates), Quorum (L2Consensus) Consensus (Tribunal), and Notary (L3Notary) Authorization (WebAuthn/Passkey) at the Operator boundary before hitting the host shell.
 *   **Local-First Data Sovereignty (LFAA):** All raw data, system roots, and execution histories are isolated locally on the managed host. Every file mutation triggers a two-phase Git-backed commit tracking pre-mutation and post-mutation states, guaranteeing a tamper-evident history trail and instant rollbacks.
 *   **Zero Standing Dependencies:** The reference Operator is a single, statically compiled Go binary. The entire platform can deploy in highly hostile, isolated, or air-gapped infrastructure perimeters.
 
@@ -72,7 +72,7 @@ The `GovernanceEnvelope` is the single canonical container for every g8e mutatio
 | `payload` | Base64-encoded binary protobuf message - the **sole authority for execution**. |
 | `intent_data` | `google.protobuf.Struct` view for visibility/audit. Never used as a fallback for execution. |
 | `transaction_hash` | SHA-256 over: `action_type | target_resource | payload_base64 | state_root | nonce | expires_at | intent_data`. |
-| `governance` | Doctrine (L1) status, Quorum (L2) Tribunal signature, Notary (L3) human proof. |
+| `governance` | Doctrine (L1Doctrine) status, Quorum (L2Consensus) Tribunal signature, Notary (L3Notary) human proof. |
 | `state_merkle_root` | Expected host state root at signing time. |
 | `nonce` | Unique replay-protection token. |
 | `expires_at` | UTC timestamp after which the envelope is void. |
@@ -81,7 +81,7 @@ The schema source of truth lives under `@/home/bob/g8e/protocol/proto/`:
 
 | File | Purpose |
 |---|---|
-| `common.proto` | `GovernanceEnvelope`, `GovernanceMetadata`, Doctrine (L1)/Quorum (L2)/Notary (L3) substructures. |
+| `common.proto` | `GovernanceEnvelope`, `GovernanceMetadata`, Doctrine (L1Doctrine)/Quorum (L2Consensus)/Notary (L3Notary) substructures. |
 - `operator.proto` | Typed mutation payloads (`CommandRequested`, `FileEditRequested`, `ActionReceipt`, etc.).
 - `pubsub.proto` | Envelope-aware pub/sub message types.
 
@@ -98,9 +98,9 @@ For BYO clients using the MCP or A2A protocol translation gateway, `g8eg` (servi
 | `-32002` | `ERR_EXPIRED` | `expires_at` timestamp has passed. |
 | `-32003` | `ERR_REPLAY` | `nonce` has already been used within the expiry window. |
 | `-32004` | `ERR_STATE_MISMATCH` | `state_merkle_root` does not match the current host state. |
-| `-32005` | `ERR_L1_FAILED` | Typed payload violates Doctrine (L1) forbidden patterns or Sentinel rules. |
-| `-32006` | `ERR_L2_FAILED` | Quorum (L2) Tribunal signature is missing, invalid, or from an untrusted key. |
-| `-32007` | `ERR_L3_FAILED` | Notary (L3) WebAuthn proof is missing or failed verification. |
+| `-32005` | `ERR_L1_FAILED` | Typed payload violates Doctrine (L1Doctrine) forbidden patterns or Sentinel rules. |
+| `-32006` | `ERR_L2_FAILED` | Quorum (L2Consensus) Tribunal signature is missing, invalid, or from an untrusted key. |
+| `-32007` | `ERR_L3_FAILED` | Notary (L3Notary) WebAuthn proof is missing or failed verification. |
 | `-32008` | `ERR_PAYLOAD_DECODE` | Failed to decode the base64 `payload` into its typed protobuf message. |
 | `-32101` | `ERR_Gateway_NOT_READY` | Governance Gateway (Actuator/Verifier) is not initialized. |
 | `-32603` | `INTERNAL_ERROR` | Unhandled internal error or execution failure. |
@@ -111,7 +111,7 @@ For BYO clients using the MCP or A2A protocol translation gateway, `g8eg` (servi
 
 Every mutation must pass three independent layers in order. A failure at any layer is an immediate rejection.
 
-### Doctrine (L1): Technical Bedrock (Hard Gates)
+### Doctrine (L1Doctrine): Technical Bedrock (Hard Gates)
 
 Static, deterministic checks enforced before any code executes.
 
@@ -119,21 +119,22 @@ Static, deterministic checks enforced before any code executes.
 - **Sentinel pre-execution analysis** - Regex matching against 90+ threat patterns (reverse shells, privilege escalation, exfiltration).
 - **Allow/deny lists** - Per-host policy in `services/g8eo/internal/constants/` and per-user `command_validation` settings.
 
-### Quorum (L2): Consensus (Tribunal)
+### Quorum (L2Consensus): Consensus (Tribunal)
 
 A cryptographic proof that an independent ensemble agreed on the instruction.
 
 - **Mechanism** - Ed25519 signature over `transaction_hash | decision`.
 - **Trust** - The Governed Operator maintains an Operator-owned `SignerStore`; missing or unknown keys cause rejection.
-- **Producer** - Any conforming Quorum (L2) producer (the bundled **agentic ensemble**, a BYO multi-agent system, or a single signer for low-stakes flows).
-- **Reference agentic ensemble producer** - The **agentic ensemble** (`g8ee`) runs its own internal Byzantine cascade upstream of the Quorum (L2) signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Actuator risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Ensemble signs only after Auditor passes. The Gateway gateway and operator do not assume any of this; they re-run every gate below independently. See [g8ee Governance & Safety](g8ee.md) and [position paper §2.3](position_paper.md).
+- **Producer** - Any conforming Quorum (L2Consensus) producer (the bundled **agentic ensemble**, a BYO multi-agent system, or a single signer for low-stakes flows).
+- **Reference agentic ensemble producer** - The **agentic ensemble** (`g8ee`) runs its own internal Byzantine cascade upstream of the Quorum (L2Consensus) signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Actuator risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Ensemble signs only after Auditor passes. The Gateway gateway and operator do not assume any of this; they re-run every gate below independently. See [g8ee Governance & Safety](g8ee.md) and [position paper §2.3](position_paper.md).
 
-### Notary (L3): Authorization (Human)
+### Notary (L3Notary): Authorization (Human)
 
 Hardware-bound proof of human presence, except where policy explicitly permits auto-approval.
 
-- **Mechanism** - Real WebAuthn/FIDO2 `L3Proof` (clientDataJSON, authenticatorData, signature) with the transaction hash as the assertion challenge.
-- **Auto-approval** - Benign diagnostic verbs (e.g., `uptime`, `df`) may be marked Notary (L3)-authorized via policy. **Notary (L3) auto-approval never bypasses Doctrine (L1) or Quorum (L2).**
+- **Web sessions (WebAuthn)** - Real WebAuthn/FIDO2 `L3Proof` (clientDataJSON, authenticatorData, signature) with the transaction hash as the assertion challenge. The user authenticates once with a passkey to establish a `web_session` (24-hour TTL). Within an authenticated session, the user can approve multiple mutations without re-authenticating. The L3 proof is per-transaction, but the session provides the authorization context.
+- **CLI sessions (mTLS)** - CLI sessions authenticate via mTLS certificates with SPIFFE URI SANs (`spiffe://g8e.local/cli/<user_id>/<cli_session_id>`). The L3 proof for CLI sessions is the SHA-256 fingerprint of the mTLS certificate (`mtls_cert_fingerprint`). The verifier validates the certificate fingerprint, checks revocation status, expiry, and ensures the SPIFFE URI SAN matches the expected CLI session. CLI sessions do not require per-transaction re-authentication once the mTLS certificate is validated.
+- **Auto-approval** - Benign diagnostic verbs (e.g., `uptime`, `df`) may be marked Notary (L3Notary)-authorized via policy. **Notary (L3Notary) auto-approval never bypasses Doctrine (L1Doctrine) or Quorum (L2Consensus).**
 
 ---
 
@@ -143,8 +144,8 @@ Hardware-bound proof of human presence, except where policy explicitly permits a
 
 1. Client builds a typed protobuf payload (e.g., `CommandRequested`).
 2. Client embeds the payload in a `GovernanceEnvelope`, populating `nonce`, `expires_at`, and `state_merkle_root`.
-3. The Quorum (L2) producer computes `transaction_hash` and attaches a Tribunal signature.
-4. The Notary (L3) actor (human) signs the same hash via WebAuthn.
+3. The Quorum (L2Consensus) producer computes `transaction_hash` and attaches a Tribunal signature.
+4. The Notary (L3Notary) actor (human) signs the same hash via WebAuthn.
 5. Client submits canonical-JSON envelope over mTLS to the Governance Gateway (`g8eg`), which validates, records/suspends as needed, and dispatches to the target Governed Operator (`g8eo`) over secure mTLS WSS.
 
 ### Verification Phase (Gateway & Operator)
@@ -154,9 +155,9 @@ The `TransactionVerifier` on both `g8eg` and `g8eo` runs the following gates in 
 1. **Integrity** - `id == transaction_hash == SHA256(canonical_fields)`.
 2. **Freshness** - `expires_at` not passed; `nonce` not in the replay store.
 3. **State** - `state_merkle_root` matches local ledger root.
-4. **Doctrine (L1)** - Reflected `forbidden_patterns` over the typed payload + Sentinel threat analysis.
-5. **Quorum (L2)** - Tribunal signature verified against the trusted `SignerStore`.
-6. **Notary (L3)** - WebAuthn `L3Proof` verified for mutations (or auto-approval policy applied after Doctrine (L1)/Quorum (L2) pass).
+4. **Doctrine (L1Doctrine)** - Reflected `forbidden_patterns` over the typed payload + Sentinel threat analysis.
+5. **Quorum (L2Consensus)** - Tribunal signature verified against the trusted `SignerStore`.
+6. **Notary (L3Notary)** - WebAuthn `L3Proof` verified for mutations (or auto-approval policy applied after Doctrine (L1Doctrine)/Quorum (L2Consensus) pass).
 
 ### Execution & Receipt Phase (Operator → Client)
 

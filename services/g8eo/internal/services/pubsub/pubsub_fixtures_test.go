@@ -49,7 +49,7 @@ func (m *mockTransactionAudit) DocSet(collection, id string, data json.RawMessag
 
 type mockL3Verifier struct{}
 
-func (m *mockL3Verifier) VerifyL3Proof(userID, transactionHash string, proof *commonv1.L3Proof) (bool, error) {
+func (m *mockL3Verifier) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	return true, nil // Always verify in tests
 }
 

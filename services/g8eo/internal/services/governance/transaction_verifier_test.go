@@ -59,7 +59,7 @@ type mockL3Verifier struct {
 	shouldPass bool
 }
 
-func (m *mockL3Verifier) VerifyL3Proof(userID, transactionHash string, proof *commonv1.L3Proof) (bool, error) {
+func (m *mockL3Verifier) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	return m.shouldPass, nil
 }
 

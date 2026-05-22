@@ -69,7 +69,7 @@ import (
 
 type acceptingL3Verifier struct{}
 
-func (acceptingL3Verifier) VerifyL3Proof(_ string, _ string, _ *commonv1.L3Proof) (bool, error) {
+func (acceptingL3Verifier) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
 	return true, nil
 }
 
@@ -94,7 +94,9 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
 	fileSvc := execution.NewFileEditService(cfg, testutil.NewTestLogger())
 	govDeps := ls.GetGovernanceDeps()
-	ActuatorPriv, ActuatorKeyID, err := ls.GetSecretManager().GetActuatorKey()
+	sm, err := ls.GetSecretManager()
+	require.NoError(t, err)
+	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
 	require.NoError(t, err)
 	cmdSvc, err := pubsub.NewPubSubCommandService(pubsub.CommandServiceConfig{
 		Config:             cfg,

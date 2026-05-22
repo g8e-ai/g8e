@@ -336,7 +336,7 @@ async def run_auditor(
                 final_cmd = cluster_to_cmd[swap_to_cluster]
                 swap_to_member = cluster_to_members[swap_to_cluster][0] # Pick first member for telemetry
 
-                # RE-VALIDATE SWAP TARGET SAFETY (L1 Technical Bedrock)
+                # RE-VALIDATE SWAP TARGET SAFETY (L1Doctrine Technical Bedrock)
                 safety_result = validate_command_safety(final_cmd, whitelisting_enabled, blacklisting_enabled, operator_context)
                 if not safety_result.is_safe:
                     reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION
@@ -363,7 +363,7 @@ async def run_auditor(
                 if not revised:
                     await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, "Empty revision", target_cmd)
 
-            # RE-VALIDATE REVISION SAFETY (L1 Technical Bedrock)
+            # RE-VALIDATE REVISION SAFETY (L1Doctrine Technical Bedrock)
             # revised is defined if status == "revised" and normalise_command succeeded
             if status == TribunalAuditStatus.REVISED:
                 # Ensure revised is bound for safety, though normalise_command check above handles it

@@ -22,7 +22,7 @@ Alternatively, use direct commands for automation and specific tasks:
 
 The platform is built on security-first architectural invariants that cannot be bypassed:
 
-- **3-Layer Governance Bedrock**: Every action is gated by a hierarchical validation system: Doctrine (L1) Technical Bedrock, Quorum (L2) Consensus/Tribunal, and Notary (L3) Human Authorization.
+- **3-Layer Governance Bedrock**: Every action is gated by a hierarchical validation system: Doctrine (L1Doctrine) Technical Bedrock, Quorum (L2Consensus) Consensus/Tribunal, and Notary (L3Notary) Human Authorization.
 - **Zero Trust**: No standing credentials. Privileges are ephemeral and mathematically bound to locally verifiable protocol proofs.
 - **Binary Safety**: Security is enforced at the binary and network layers, not via fragile LLM prompts.
 - **Data Sovereignty**: Operational data stays on the remote host; only scrubbed context reaches the AI.
@@ -39,7 +39,7 @@ The default platform is the Local Operator plus the shared protocol. Bundled app
 | **Protocol (Local)** | **g8eg** | Go | **Local Operator**: Protocol hub, CA/PKI, persistence, and pub/sub broker in listen mode. |
 | **Protocol (Remote)**| **g8eo** | Go | **Remote Operator**: Sovereign host execution (Actuator), local git ledger, and MCP Server. |
 | **Protocol** | **protocol/proto** | Protobuf | Canonical transaction schemas, typed payloads, and envelope contracts. |
-| **Application Layer** | **g8ee** | Python | Optional reference **g8e-compliant agentic ensemble** adapter for agentic proposal and L2 proof generation. |
+| **Application Layer** | **g8ee** | Python | Optional reference **g8e-compliant agentic ensemble** adapter for agentic proposal and L2Consensus proof generation. |
 
 ### Agent Terminology
 
@@ -58,9 +58,9 @@ A user request moves through the **3-Layer Governance Bedrock**:
 
 1. **Ingress**: A bundled or BYO client builds a typed transaction proposal for the Operator protocol.
 2. **Triage**: The message is classified as `simple` (Dash) or `complex` (Sage).
-3. **Doctrine (L1): Technical Bedrock**: Initial scrubbing and validation against forbidden patterns (sudo, etc.).
-4. **Quorum (L2): Consensus (Tribunal)**: Intent is translated into commands by the ensemble. The Actuator checks for risk, and the Auditor verifies technical correctness.
-5. **Notary (L3): Authorization**: State-changing operations halt for human approval. Benign commands may use auto-approval if configured.
+3. **Doctrine (L1Doctrine): Technical Bedrock**: Initial scrubbing and validation against forbidden patterns (sudo, etc.).
+4. **Quorum (L2Consensus): Consensus (Tribunal)**: Intent is translated into commands by the ensemble. The Actuator checks for risk, and the Auditor verifies technical correctness.
+5. **Notary (L3Notary): Authorization**: State-changing operations halt for human approval. Benign commands may use auto-approval if configured.
 6. **Execution**: The Governed Operator (`g8eo`) verifies protocol proofs locally, executes accepted work, and commits receipts to the host-authoritative audit ledger.
 
 ## Operational Modes

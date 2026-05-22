@@ -80,3 +80,78 @@ type TextContent struct {
 
 // SuspendedTransaction is an alias for the shared models type.
 type SuspendedTransaction = models.SuspendedTransaction
+
+// ListResourcesRequest is the params for the "resources/list" method.
+type ListResourcesRequest struct {
+	// Optional cursor for pagination
+	Cursor *string `json:"cursor,omitempty"`
+}
+
+// Resource represents an MCP resource.
+type Resource struct {
+	URI         string                 `json:"uri"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	MimeType    string                 `json:"mimeType,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// ListResourcesResult is the result for the "resources/list" method.
+type ListResourcesResult struct {
+	Resources []Resource `json:"resources"`
+}
+
+// ReadResourceRequest is the params for the "resources/read" method.
+type ReadResourceRequest struct {
+	URI string `json:"uri"`
+}
+
+// ReadResourceResult is the result for the "resources/read" method.
+type ReadResourceResult struct {
+	Contents []TextContent `json:"contents"`
+	MIMEType string        `json:"mimeType,omitempty"`
+}
+
+// ListPromptsRequest is the params for the "prompts/list" method.
+type ListPromptsRequest struct {
+	// Optional cursor for pagination
+	Cursor *string `json:"cursor,omitempty"`
+}
+
+// Prompt represents an MCP prompt template.
+type Prompt struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	Arguments   []PromptArgument       `json:"arguments,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// PromptArgument represents an argument for a prompt template.
+type PromptArgument struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+}
+
+// ListPromptsResult is the result for the "prompts/list" method.
+type ListPromptsResult struct {
+	Prompts []Prompt `json:"prompts"`
+}
+
+// GetPromptRequest is the params for the "prompts/get" method.
+type GetPromptRequest struct {
+	Name      string                 `json:"name"`
+	Arguments map[string]interface{} `json:"arguments,omitempty"`
+}
+
+// GetPromptResult is the result for the "prompts/get" method.
+type GetPromptResult struct {
+	Description string          `json:"description,omitempty"`
+	Messages    []PromptMessage `json:"messages,omitempty"`
+}
+
+// PromptMessage represents a message in a prompt template.
+type PromptMessage struct {
+	Role    string      `json:"role"`
+	Content TextContent `json:"content"`
+}

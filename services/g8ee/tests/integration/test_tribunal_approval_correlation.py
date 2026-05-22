@@ -25,15 +25,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants import CommandGenerationOutcome, EventType
+from app.constants import CommandGenerationOutcome, ComponentName, EventType
 from app.models.agents.tribunal import (
     CandidateCommand,
 )
+from app.models.http_context import G8eHttpContext
+from app.models.tribunal_commands import TribunalGenerationRequest
 from app.services.ai.generator import generate_command
 from tests.fakes.agent_helpers import (
     make_agent_run_args,
     make_event_service,
 )
+from tests.unit.services.ai.tribunal.conftest import make_tribunal_generation_request
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
@@ -75,24 +78,26 @@ class TestTribunalApprovalCorrelation:
 
             # Generate command via Tribunal
             gen_result = await generate_command(
-                request="list files in current directory",
-                guidelines="show hidden files too",
-                operator_context=None,
-                event_service=event_svc,
-                g8e_context=G8eHttpContext(
-                    web_session_id=inputs.web_session_id,
-                    user_id=inputs.user_id,
-                    case_id=inputs.case_id,
-                    investigation_id=inputs.investigation_id,
-                    source_component=ComponentName.G8EE
-                ),
-                settings=inputs.request_settings,
-                reputation_data_service=AsyncMock(),
-                auditor_hmac_key="test-key",
-                whitelisting_enabled=False,
-                blacklisting_enabled=False,
-                whitelisted_commands=[],
-                blacklisted_commands=[],
+                make_tribunal_generation_request(
+                    request="list files in current directory",
+                    guidelines="show hidden files too",
+                    operator_context=None,
+                    event_service=event_svc,
+                    g8e_context=G8eHttpContext(
+                        web_session_id=inputs.web_session_id,
+                        user_id=inputs.user_id,
+                        case_id=inputs.case_id,
+                        investigation_id=inputs.investigation_id,
+                        source_component=ComponentName.G8EE
+                    ),
+                    settings=inputs.request_settings,
+                    reputation_data_service=AsyncMock(),
+                    auditor_hmac_key="test-key",
+                    whitelisting_enabled=False,
+                    blacklisting_enabled=False,
+                    whitelisted_commands=[],
+                    blacklisted_commands=[],
+                )
             )
 
         # Verify Tribunal generated correlation_id
@@ -143,24 +148,26 @@ class TestTribunalApprovalCorrelation:
 
             # Generate command via Tribunal
             await generate_command(
-                request="list files",
-                guidelines="",
-                operator_context=None,
-                event_service=event_svc,
-                g8e_context=G8eHttpContext(
-                    web_session_id=inputs.web_session_id,
-                    user_id=inputs.user_id,
-                    case_id=inputs.case_id,
-                    investigation_id=inputs.investigation_id,
-                    source_component=ComponentName.G8EE
-                ),
-                settings=inputs.request_settings,
-                reputation_data_service=AsyncMock(),
-                auditor_hmac_key="test-key",
-                whitelisting_enabled=False,
-                blacklisting_enabled=False,
-                whitelisted_commands=[],
-                blacklisted_commands=[],
+                make_tribunal_generation_request(
+                    request="list files",
+                    guidelines="",
+                    operator_context=None,
+                    event_service=event_svc,
+                    g8e_context=G8eHttpContext(
+                        web_session_id=inputs.web_session_id,
+                        user_id=inputs.user_id,
+                        case_id=inputs.case_id,
+                        investigation_id=inputs.investigation_id,
+                        source_component=ComponentName.G8EE
+                    ),
+                    settings=inputs.request_settings,
+                    reputation_data_service=AsyncMock(),
+                    auditor_hmac_key="test-key",
+                    whitelisting_enabled=False,
+                    blacklisting_enabled=False,
+                    whitelisted_commands=[],
+                    blacklisted_commands=[],
+                )
             )
 
         # Verify web_session_id is present in Tribunal events

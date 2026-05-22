@@ -309,7 +309,7 @@ class OperatorCommandService:
         # Primary operator is the first resolved - used for approval identity fields.
         primary = target_operator_docs[0]
 
-        # 2. Command validation (L1 technical bedrock: whitelist/blacklist/forbidden patterns)
+        # 2. Command validation (L1Doctrine technical bedrock: whitelist/blacklist/forbidden patterns)
         # Prefer the per-request (user) command_validation settings - get_user_settings
         # already falls back to platform defaults when no user document exists.
         cv = request_settings.command_validation if request_settings else self._cv

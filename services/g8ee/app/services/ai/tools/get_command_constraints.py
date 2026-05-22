@@ -136,7 +136,7 @@ async def handle(
             parts.append(
                 f"Whitelisting ENABLED: only the {len(whitelisted_commands)} listed commands are permitted. "
                 "Each command has strict 'safe_options' and 'validation' patterns that MUST be followed. "
-                "Any command or argument not explicitly allowed by these rules will be blocked by the technical (L1) validator."
+                "Any command or argument not explicitly allowed by these rules will be blocked by the technical (L1Doctrine) validator."
             )
         if blacklisting_enabled:
             parts.append(

@@ -23,7 +23,7 @@ import logging
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.constants import (
     CommandErrorType,
@@ -201,15 +201,16 @@ class TribunalInvoker:
         return executor_args, gen_result
 
 
-@dataclass
-class ToolCallResult:
+class ToolCallResult(BaseModel):
     """Internal pipeline carrier for a single dispatched tool call."""
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
+
     tool_name: str
     call_info: StreamChunkData
     result_info: StreamChunkData
     result: ToolResult
-    grounding: GroundingMetadata | None = field(default=None)
-    tribunal_result: CommandGenerationResult | None = field(default=None)
+    grounding: GroundingMetadata | None = None
+    tribunal_result: CommandGenerationResult | None = None
 
 
 logger = logging.getLogger(__name__)

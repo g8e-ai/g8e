@@ -34,8 +34,8 @@ The missing layer is an admission boundary: a place where a proposed mutation mu
 **Contributions.** This paper makes four claims and describes the design behind each.
 
 1. **A transaction model for agentic mutation.** The `GovernanceEnvelope` makes governance metadata travel *with* execution intent, so verification is part of the transaction rather than an ambient property of the network (§4).
-2. **A deterministic admission gauntlet.** Three named gates — Doctrine (L1), Quorum (L2), Notary (L3) — reject malformed, stale, unsigned, replayed, mistyped, and locally unsafe instructions before any application code runs, fail-closed at every step (§5).
-3. **Consensus as an interchangeable proof layer.** Quorum (L2) is a verifiable-evidence requirement, not a particular multi-agent design, and its value is quantifiable and bounded (§6).
+2. **A deterministic admission gauntlet.** Three named gates — Doctrine (L1Doctrine), Quorum (L2Consensus), Notary (L3Notary) — reject malformed, stale, unsigned, replayed, mistyped, and locally unsafe instructions before any application code runs, fail-closed at every step (§5).
+3. **Consensus as an interchangeable proof layer.** Quorum (L2Consensus) is a verifiable-evidence requirement, not a particular multi-agent design, and its value is quantifiable and bounded (§6).
 4. **A sovereign, dependency-free execution boundary.** A single statically compiled Operator enforces the protocol on the host, keeps the authoritative audit record local, and reaches the control plane outbound-only — which makes air-gapped and isolated-perimeter deployment ordinary rather than exceptional (§7, §8).
 
 ---
@@ -122,9 +122,9 @@ The Gateway and Operator reject non-conforming transactions before any applicati
 3. **Hash binding** — `id == transaction_hash == SHA-256(canonical_fields)`.
 4. **Freshness** — expiry valid; nonce unseen in the active replay window.
 5. **State binding** — `state_merkle_root` matches the current local root.
-6. **Doctrine (L1)** — reflected forbidden-pattern checks, allow/deny policy, and output-scrubber analysis pass.
-7. **Quorum (L2)** — signer resolves to the trusted store and the Ed25519 signature verifies over the transaction.
-8. **Notary (L3)** — WebAuthn proof validates for human-authorized mutations, or an explicit auto-approval policy applies after Doctrine (L1) and Quorum (L2) pass.
+6. **Doctrine (L1Doctrine)** — reflected forbidden-pattern checks, allow/deny policy, and output-scrubber analysis pass.
+7. **Quorum (L2Consensus)** — signer resolves to the trusted store and the Ed25519 signature verifies over the transaction.
+8. **Notary (L3Notary)** — WebAuthn proof validates for human-authorized mutations, or an explicit auto-approval policy applies after Doctrine (L1Doctrine) and Quorum (L2Consensus) pass.
 
 Any failure produces a typed rejection and an audit record; the payload is dropped at the boundary and the Actuator is never reached. The default is closed. Auto-approval is not a fallback the system drifts into — it is a decision a human makes deliberately, in advance, for a scoped class of low-blast-radius actions, and it still requires Doctrine and Quorum to have passed.
 
@@ -132,7 +132,7 @@ Any failure produces a typed rejection and an audit record; the payload is dropp
 
 ---
 
-## 6. Quorum (L2): consensus as an infrastructure control
+## 6. Quorum (L2Consensus): consensus as an infrastructure control
 
 The case for treating execution as a Byzantine problem rests on one observation that is easy to state and easy to quantify: **single-model control is undiluted exposure.**
 

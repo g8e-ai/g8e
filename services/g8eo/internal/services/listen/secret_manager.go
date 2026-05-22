@@ -28,6 +28,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/keystore"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 )
 
@@ -43,14 +44,26 @@ type SecretManager struct {
 	db         *sqliteutil.DB
 	logger     *slog.Logger
 	secretsDir string
+	keystore   *keystore.Keystore
 }
 
-func NewSecretManager(db *sqliteutil.DB, secretsDir string, logger *slog.Logger) *SecretManager {
+func NewSecretManager(db *sqliteutil.DB, secretsDir string, logger *slog.Logger) (*SecretManager, error) {
+	ks, err := keystore.New(secretsDir, logger)
+	if err != nil {
+		return nil, fmt.Errorf("initialize keystore: %w", err)
+	}
+	if err := ks.Initialize(); err != nil {
+		return nil, fmt.Errorf("initialize master key: %w", err)
+	}
+	if err := ks.EnsurePermissions(); err != nil {
+		return nil, fmt.Errorf("enforce keystore permissions: %w", err)
+	}
 	return &SecretManager{
 		db:         db,
 		secretsDir: secretsDir,
 		logger:     logger,
-	}
+		keystore:   ks,
+	}, nil
 }
 
 // InitPlatformSettings creates secrets on first boot and validates them on later boots.
@@ -179,7 +192,7 @@ func (m *SecretManager) createPlatformSettings(now time.Time) error {
 	m.warmPlatformSettingsCache(string(dataJSON), now)
 
 	for _, name := range requiredBootstrapSecrets {
-		if err := m.writeSecretFile(m.secretPath(name), secrets[name], name); err != nil {
+		if err := m.keystore.EncryptSecret(name, secrets[name]); err != nil {
 			return err
 		}
 	}
@@ -345,7 +358,7 @@ func (m *SecretManager) readDigestManifest() (*bootstrapDigestManifest, error) {
 
 func (m *SecretManager) rejectPreexistingBootstrapState() error {
 	for _, name := range requiredBootstrapSecrets {
-		if _, err := os.Stat(m.secretPath(name)); err == nil {
+		if _, err := os.Stat(filepath.Join(m.secretsDir, name)); err == nil {
 			return fmt.Errorf("found preexisting bootstrap secret %s without platform_settings; delete and recreate runtime state", name)
 		} else if !os.IsNotExist(err) {
 			return fmt.Errorf("inspect bootstrap secret %s: %w", name, err)
@@ -375,31 +388,15 @@ func (m *SecretManager) warmPlatformSettingsCache(dataJSON string, now time.Time
 	}
 }
 
-func (m *SecretManager) secretPath(name string) string {
-	return filepath.Join(m.secretsDir, name)
-}
-
 func (m *SecretManager) readRequiredSecretFile(name string) (string, error) {
-	path := m.secretPath(name)
-	data, err := os.ReadFile(path)
+	value, err := m.keystore.DecryptSecret(name)
 	if err != nil {
-		return "", fmt.Errorf("bootstrap secret %s is required at %s: %w; delete and recreate runtime state", name, path, err)
+		return "", fmt.Errorf("bootstrap secret %s decryption failed: %w; delete and recreate runtime state", name, err)
 	}
-	value := strings.TrimSpace(string(data))
 	if value == "" {
-		return "", fmt.Errorf("bootstrap secret %s is empty at %s; delete and recreate runtime state", name, path)
+		return "", fmt.Errorf("bootstrap secret %s is empty after decryption; delete and recreate runtime state", name)
 	}
 	return value, nil
-}
-
-// writeSecretFile atomically persists a bootstrap secret and fails hard on any I/O error.
-func (m *SecretManager) writeSecretFile(path, value, name string) error {
-	if err := os.WriteFile(path, []byte(value), 0600); err != nil {
-		m.logger.Error("[SecretManager] Failed to write bootstrap secret",
-			"name", name, "path", path, string(constants.ConnectionStateError), err)
-		return fmt.Errorf("write bootstrap secret %s to %s: %w", name, path, err)
-	}
-	return nil
 }
 
 func (m *SecretManager) generateSecureToken(bytes int) (string, error) {

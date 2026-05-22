@@ -275,7 +275,10 @@ func (s *ListenDBService) initSchema(secretsDir string) error {
 	if err != nil {
 		return err
 	}
-	sm := NewSecretManager(s.db, secretsDir, s.logger)
+	sm, err := NewSecretManager(s.db, secretsDir, s.logger)
+	if err != nil {
+		return err
+	}
 	return sm.InitPlatformSettings()
 }
 

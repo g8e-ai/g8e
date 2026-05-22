@@ -90,7 +90,7 @@ func (Component) EnumDescriptor() ([]byte, []int) {
 	return file_common_proto_rawDescGZIP(), []int{0}
 }
 
-// Doctrine (L1) Governance: Technical Bedrock (Hard Gates)
+// Doctrine (L1Doctrine) Governance: Technical Bedrock (Hard Gates)
 type L1Metadata struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Validated     bool                   `protobuf:"varint,1,opt,name=validated,proto3" json:"validated,omitempty"`
@@ -143,7 +143,7 @@ func (x *L1Metadata) GetViolations() []string {
 	return nil
 }
 
-// Quorum (L2) Governance: Consensus (Tribunal)
+// Quorum (L2Consensus) Governance: Consensus (Tribunal)
 type L2Metadata struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	TribunalSignature string                 `protobuf:"bytes,1,opt,name=tribunal_signature,json=tribunalSignature,proto3" json:"tribunal_signature,omitempty"` // ED25519 signature over transaction_hash|decision
@@ -204,15 +204,18 @@ func (x *L2Metadata) GetKeyId() string {
 	return ""
 }
 
-// Notary (L3) Governance: Authorization (Human-in-the-loop)
+// Notary (L3Notary) Governance: Authorization (Human-in-the-loop)
 type L3Proof struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	ClientDataJson    string                 `protobuf:"bytes,1,opt,name=client_data_json,json=clientDataJson,proto3" json:"client_data_json,omitempty"`
 	AuthenticatorData string                 `protobuf:"bytes,2,opt,name=authenticator_data,json=authenticatorData,proto3" json:"authenticator_data,omitempty"`
 	Signature         string                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 	CredentialId      string                 `protobuf:"bytes,4,opt,name=credential_id,json=credentialId,proto3" json:"credential_id,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// CLI mTLS proof: fingerprint of the CLI certificate used for authentication
+	// Used when the L3Notary proof is based on mTLS certificate validation rather than WebAuthn
+	MtlsCertFingerprint string `protobuf:"bytes,5,opt,name=mtls_cert_fingerprint,json=mtlsCertFingerprint,proto3" json:"mtls_cert_fingerprint,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *L3Proof) Reset() {
@@ -269,6 +272,13 @@ func (x *L3Proof) GetSignature() string {
 func (x *L3Proof) GetCredentialId() string {
 	if x != nil {
 		return x.CredentialId
+	}
+	return ""
+}
+
+func (x *L3Proof) GetMtlsCertFingerprint() string {
+	if x != nil {
+		return x.MtlsCertFingerprint
 	}
 	return ""
 }
@@ -649,12 +659,13 @@ const file_common_proto_rawDesc = "" +
 	"L2Metadata\x12-\n" +
 	"\x12tribunal_signature\x18\x01 \x01(\tR\x11tribunalSignature\x12\x1b\n" +
 	"\tagent_ids\x18\x02 \x03(\tR\bagentIds\x12\x15\n" +
-	"\x06key_id\x18\x03 \x01(\tR\x05keyId\"\xa5\x01\n" +
+	"\x06key_id\x18\x03 \x01(\tR\x05keyId\"\xd9\x01\n" +
 	"\aL3Proof\x12(\n" +
 	"\x10client_data_json\x18\x01 \x01(\tR\x0eclientDataJson\x12-\n" +
 	"\x12authenticator_data\x18\x02 \x01(\tR\x11authenticatorData\x12\x1c\n" +
 	"\tsignature\x18\x03 \x01(\tR\tsignature\x12#\n" +
-	"\rcredential_id\x18\x04 \x01(\tR\fcredentialId\"_\n" +
+	"\rcredential_id\x18\x04 \x01(\tR\fcredentialId\x122\n" +
+	"\x15mtls_cert_fingerprint\x18\x05 \x01(\tR\x13mtlsCertFingerprint\"_\n" +
 	"\n" +
 	"L3Metadata\x12,\n" +
 	"\x05proof\x18\x01 \x01(\v2\x16.g8e.common.v1.L3ProofR\x05proof\x12#\n" +

@@ -28,6 +28,8 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict
+
 from app.errors import ConfigurationError
 from app.utils.config_loader import load_json_config
 from app.utils.path import resolve_config_path
@@ -35,9 +37,9 @@ from app.utils.path import resolve_config_path
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class CommandAutoApprovedResult:
+class CommandAutoApprovedResult(BaseModel):
     """Result of checking a command against the auto-approved list."""
+    model_config = ConfigDict(extra="forbid")
 
     is_auto_approved: bool
     reason: str = ""

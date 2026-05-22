@@ -47,6 +47,7 @@ from tests.fakes.agent_helpers import (
     make_agent_run_args,
     make_event_service,
 )
+from tests.unit.services.ai.tribunal.conftest import make_tribunal_generation_request
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
@@ -141,7 +142,7 @@ class TestCommandGeneratorWithCommitment:
 
             # Generate command via Tribunal
             gen_result = await generate_command(
-                TribunalGenerationRequest(
+                make_tribunal_generation_request(
                     request="list files",
                     guidelines="",
                     operator_context=None,
@@ -203,7 +204,7 @@ class TestCommandGeneratorWithCommitment:
             )
 
             gen_result = await generate_command(
-                TribunalGenerationRequest(
+                make_tribunal_generation_request(
                     request="delete all",
                     guidelines="",
                     operator_context=None,
@@ -285,7 +286,7 @@ class TestCommandGeneratorWithCommitment:
 
             with pytest.raises(RuntimeError, match="Reputation commitment failed"):
                 await generate_command(
-                    TribunalGenerationRequest(
+                    make_tribunal_generation_request(
                         request="list",
                         guidelines="",
                         operator_context=None,

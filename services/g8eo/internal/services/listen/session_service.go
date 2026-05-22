@@ -39,7 +39,7 @@ func NewSessionService(db *ListenDBService, logger *slog.Logger) *SessionService
 }
 
 // PersistSessions binds an operator session and a CLI session and persists both documents.
-func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID, orgID, operatorID, fingerprint, loginMethod string) error {
+func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID, orgID, operatorID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error {
 	// CLI session id is a first-class session type, strictly disjoint from
 	// operator_session_id. The operator_session_id authenticates the host
 	// agent (mTLS URI SAN); the cli_session_id is the routing namespace
@@ -55,7 +55,9 @@ func (s *SessionService) PersistSessions(cliSessionID, operatorSessionID, userID
 		ID:                cliSessionID,
 		UserID:            userID,
 		OperatorSessionID: operatorSessionID,
-		SystemFingerprint: fingerprint,
+		SystemFingerprint: systemFingerprint,
+		CertFingerprint:   certFingerprint,
+		CertSerial:        certSerial,
 		CreatedAt:         time.Now().UTC(),
 		ExpiresAt:         cliExpiry,
 		AbsoluteExpiresAt: cliExpiry,

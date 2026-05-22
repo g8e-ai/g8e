@@ -62,6 +62,11 @@ from app.models.http_context import G8eHttpContext
 from app.models.reputation import ReputationCommitment
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tribunal_commands import TribunalGenerationRequest
+from tests.unit.services.ai.tribunal.conftest import (
+    _MOCK_USER_SETTINGS,
+    _make_mock_reputation_service,
+    make_tribunal_generation_request,
+)
 from app.models.tool_results import (
     CommandRiskAnalysis,
     ErrorAnalysisResult,
@@ -83,26 +88,6 @@ from app.utils.agent_persona_loader import get_agent_persona
 _TEST_HMAC_KEY = "a" * 64
 
 
-def _make_mock_reputation_service() -> MagicMock:
-    """Stub ReputationDataService sufficient for ``commit_reputation``.
-
-    These tests assert Tribunal verdict-path behavior; commitment
-    semantics are covered in ``test_auditor_commitment.py``. The stub
-    returns an empty scoreboard and no prior commitment, so the commit
-    step produces a deterministic genesis commitment without hitting any
-    real cache/DB client.
-    """
-    svc = MagicMock()
-    svc.list_states = AsyncMock(return_value=[])
-    svc.get_latest_commitment = AsyncMock(return_value=None)
-
-    async def _create_commitment(commitment: ReputationCommitment) -> ReputationCommitment:
-        return commitment
-
-    svc.create_commitment = AsyncMock(side_effect=_create_commitment)
-    return svc
-
-
 _REPUTATION_KWARGS = {
     "reputation_data_service": _make_mock_reputation_service(),
     "auditor_hmac_key": _TEST_HMAC_KEY,
@@ -113,15 +98,6 @@ _AUDIT_STAGE_REPUTATION_KWARGS = {
     **_REPUTATION_KWARGS,
     "investigation_id": "inv-test",
 }
-
-
-_MOCK_USER_SETTINGS = G8eeUserSettings(
-    llm=LLMSettings(
-        assistant_model="test-assistant",
-        primary_model="test-primary",
-        lite_model="test-lite"
-    )
-)
 
 
 def _make_mock_provider(generate_content_lite_side_effect=None, generate_content_lite_return=None):
@@ -166,68 +142,6 @@ def _make_mock_g8e_context() -> G8eHttpContext:
         case_id="test-case-id",
         investigation_id="test-investigation-id",
         source_component=ComponentName.G8EE,
-    )
-
-
-def _make_tribunal_request(
-    request: str,
-    guidelines: str = "",
-    operator_context: OperatorContext | None = None,
-    event_service: EventServiceProtocol | None = None,
-    g8e_context: G8eHttpContext | None = None,
-    settings: G8eeUserSettings | None = None,
-    reputation_data_service: ReputationDataService | None = None,
-    auditor_hmac_key: str = "test-hmac-key",
-    ai_response_analyzer: AIResponseAnalyzerProtocol | None = None,
-    investigation_state: str = "",
-    investigation_context: str = "",
-    whitelisting_enabled: bool = False,
-    blacklisting_enabled: bool = False,
-    whitelisted_commands: list[WhitelistedCommand] | None = None,
-    blacklisted_commands: list[str] | None = None,
-) -> TribunalGenerationRequest:
-    """Create a TribunalGenerationRequest for tests."""
-    if operator_context is None:
-        operator_context = _make_mock_operator_context()
-    if g8e_context is None:
-        g8e_context = _make_mock_g8e_context()
-    if settings is None:
-        settings = _MOCK_USER_SETTINGS
-    if whitelisted_commands is None:
-        whitelisted_commands = []
-    if blacklisted_commands is None:
-        blacklisted_commands = []
-    # If reputation_data_service is None, create a mock that returns empty results
-    if reputation_data_service is None:
-        reputation_data_service = MagicMock()
-        reputation_data_service.list_states = AsyncMock(return_value=[])
-        reputation_data_service.resolve_stakes = AsyncMock(return_value=MagicMock(resolutions=[]))
-        reputation_data_service.get_latest_commitment = AsyncMock(return_value=None)
-        # Create a proper mock commitment with string fields
-        mock_commitment = MagicMock()
-        mock_commitment.id = "test-commitment-id"
-        mock_commitment.commitment_id = "test-commitment-id"
-        mock_commitment.tribunal_command_id = "test-tribunal-command-id"
-        mock_commitment.investigation_id = "test-investigation-id"
-        mock_commitment.merkle_root = "a" * 64  # Merkle roots must be 64 characters
-        mock_commitment.prev_root = "b" * 64  # Previous roots must be 64 characters
-        reputation_data_service.create_commitment = AsyncMock(return_value=mock_commitment)
-    return TribunalGenerationRequest(
-        request=request,
-        guidelines=guidelines,
-        operator_context=operator_context,
-        event_service=event_service,
-        g8e_context=g8e_context,
-        settings=settings,
-        reputation_data_service=reputation_data_service,
-        auditor_hmac_key=auditor_hmac_key,
-        ai_response_analyzer=ai_response_analyzer,
-        investigation_state=investigation_state,
-        investigation_context=investigation_context,
-        whitelisting_enabled=whitelisting_enabled,
-        blacklisting_enabled=blacklisting_enabled,
-        whitelisted_commands=whitelisted_commands,
-        blacklisted_commands=blacklisted_commands,
     )
 
 
@@ -461,7 +375,7 @@ class TestGenerateCommandOutcomes:
 
         with pytest.raises(TribunalDisabledError) as exc_info:
             await generate_command(
-                _make_tribunal_request(
+                make_tribunal_generation_request(
                     request="list files",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/tmp", username="root", uid=0),
@@ -499,7 +413,7 @@ class TestGenerateCommandSystemError:
         ):
             with pytest.raises(TribunalSystemError) as exc_info:
                 await generate_command(
-                    _make_tribunal_request(
+                    make_tribunal_generation_request(
                         request="list files",
                         guidelines="",
                         operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -535,7 +449,7 @@ class TestGenerateCommandSystemError:
         ):
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
                 await generate_command(
-                    _make_tribunal_request(
+                    make_tribunal_generation_request(
                         request="list files",
                         guidelines="",
                         operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -578,7 +492,7 @@ class TestGenerateCommandSystemError:
             mock_event_service = MagicMock()
             mock_event_service.publish = AsyncMock()
             result = await generate_command(
-                _make_tribunal_request(
+                make_tribunal_generation_request(
                     request="list files",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -631,7 +545,7 @@ class TestMixedErrorFallback:
         ):
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
                 await generate_command(
-                    _make_tribunal_request(
+                    make_tribunal_generation_request(
                         request="list files",
                         guidelines="",
                         operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -676,7 +590,7 @@ class TestTribunalProviderUnavailableError:
         ):
             with pytest.raises(TribunalProviderUnavailableError) as exc_info:
                 await generate_command(
-                    _make_tribunal_request(
+                    make_tribunal_generation_request(
                         request="list files",
                         guidelines="",
                         operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -710,7 +624,7 @@ class TestTribunalModelNotConfiguredError:
         ):
             with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
                 await generate_command(
-                    _make_tribunal_request(
+                    make_tribunal_generation_request(
                         request="list files",
                         guidelines="",
                         operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -1121,7 +1035,7 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                _make_tribunal_request(
+                make_tribunal_generation_request(
                     request="list files with details",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/tmp", username="root", uid=0),
@@ -1165,7 +1079,7 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                _make_tribunal_request(
+                make_tribunal_generation_request(
                     request="find all log files under /var/log",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -1208,7 +1122,7 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                _make_tribunal_request(
+                make_tribunal_generation_request(
                     request="find all TODO comments recursively with line numbers",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user/project", username="user", uid=1000),
@@ -1260,7 +1174,7 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                _make_tribunal_request(
+                make_tribunal_generation_request(
                     request="show disk usage in human-readable format",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -1290,7 +1204,7 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                _make_tribunal_request(
+                make_tribunal_generation_request(
                     request="show current user name",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -1320,7 +1234,7 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             await generate_command(
-                _make_tribunal_request(
+                make_tribunal_generation_request(
                     request="show system uptime",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -1363,7 +1277,7 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                _make_tribunal_request(
+                make_tribunal_generation_request(
                     request="list files in /tmp with details",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -1401,7 +1315,7 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                _make_tribunal_request(
+                make_tribunal_generation_request(
                     request="show the system hostname from /etc/hostname",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -1438,7 +1352,7 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                _make_tribunal_request(
+                make_tribunal_generation_request(
                     request="ls",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -1546,7 +1460,7 @@ class TestGenerateCommandAuditorFailure:
         ):
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
-                    _make_tribunal_request(
+                    make_tribunal_generation_request(
                         request="list files with details",
                         guidelines="",
                         operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -1593,7 +1507,7 @@ class TestGenerateCommandAuditorFailure:
         ):
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
-                    _make_tribunal_request(
+                    make_tribunal_generation_request(
                         request="list files with details",
                         guidelines="",
                         operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -1636,7 +1550,7 @@ class TestGenerateCommandAuditorFailure:
         ):
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
-                    _make_tribunal_request(
+                    make_tribunal_generation_request(
                         request="list files with details",
                         guidelines="",
                         operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -1682,7 +1596,7 @@ class TestGenerateCommandAuditorFailure:
         ):
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
-                    _make_tribunal_request(
+                    make_tribunal_generation_request(
                         request="show system hostname",
                         guidelines="",
                         operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -1714,7 +1628,7 @@ class TestGenerateCommandAuditorFailure:
         ):
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
-                    _make_tribunal_request(
+                    make_tribunal_generation_request(
                         request="show current user",
                         guidelines="",
                         operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
@@ -2006,7 +1920,7 @@ class TestTribunalEmitter:
             mock_event_service.publish = AsyncMock()
 
             result = await generate_command(
-                _make_tribunal_request(
+                make_tribunal_generation_request(
                     request="test round 2",
                     guidelines="",
                     operator_context=_make_mock_operator_context(),
