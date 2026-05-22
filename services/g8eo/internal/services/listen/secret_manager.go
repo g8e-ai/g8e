@@ -494,3 +494,98 @@ func (m *SecretManager) GetServicePrivateKey(name string) ([]byte, error) {
 	}
 	return hex.DecodeString(plaintext)
 }
+
+// StoreAPIKey stores an API key for external service integration in the keystore.
+// service identifies the external service (e.g., "openai", "anthropic").
+func (m *SecretManager) StoreAPIKey(service string, apiKey string) error {
+	keystoreName := fmt.Sprintf("api_key_%s", service)
+	return m.keystore.EncryptSecret(keystoreName, apiKey)
+}
+
+// GetAPIKey retrieves an API key for external service integration from the keystore.
+// service identifies the external service (e.g., "openai", "anthropic").
+func (m *SecretManager) GetAPIKey(service string) (string, error) {
+	keystoreName := fmt.Sprintf("api_key_%s", service)
+	return m.keystore.DecryptSecret(keystoreName)
+}
+
+// StoreOperatorPrivateKey stores an Operator ed25519 private key in the keystore.
+// This is used for BYO-client enrollment where the Operator has its own identity.
+func (m *SecretManager) StoreOperatorPrivateKey(key ed25519.PrivateKey) error {
+	seedHex := hex.EncodeToString(key.Seed())
+	return m.keystore.EncryptSecret("operator_private_key", seedHex)
+}
+
+// GetOperatorPrivateKey retrieves an Operator ed25519 private key from the keystore.
+func (m *SecretManager) GetOperatorPrivateKey() (ed25519.PrivateKey, error) {
+	seedHex, err := m.keystore.DecryptSecret("operator_private_key")
+	if err != nil {
+		return nil, err
+	}
+	seed, err := hex.DecodeString(seedHex)
+	if err != nil {
+		return nil, fmt.Errorf("decode operator private key seed: %w", err)
+	}
+	if len(seed) != ed25519.SeedSize {
+		return nil, fmt.Errorf("operator private key seed has invalid length %d; expected %d", len(seed), ed25519.SeedSize)
+	}
+	return ed25519.NewKeyFromSeed(seed), nil
+}
+
+// StoreCLIPrivateKey stores a CLI ed25519 private key in the keystore.
+// This is used for BYO-client enrollment where the CLI has its own identity.
+func (m *SecretManager) StoreCLIPrivateKey(key ed25519.PrivateKey) error {
+	seedHex := hex.EncodeToString(key.Seed())
+	return m.keystore.EncryptSecret("cli_private_key", seedHex)
+}
+
+// GetCLIPrivateKey retrieves a CLI ed25519 private key from the keystore.
+func (m *SecretManager) GetCLIPrivateKey() (ed25519.PrivateKey, error) {
+	seedHex, err := m.keystore.DecryptSecret("cli_private_key")
+	if err != nil {
+		return nil, err
+	}
+	seed, err := hex.DecodeString(seedHex)
+	if err != nil {
+		return nil, fmt.Errorf("decode CLI private key seed: %w", err)
+	}
+	if len(seed) != ed25519.SeedSize {
+		return nil, fmt.Errorf("CLI private key seed has invalid length %d; expected %d", len(seed), ed25519.SeedSize)
+	}
+	return ed25519.NewKeyFromSeed(seed), nil
+}
+
+// StoreSessionToken stores a session token with TTL in the keystore.
+// The token is stored with a timestamp for TTL validation.
+func (m *SecretManager) StoreSessionToken(token string, ttl time.Duration) error {
+	expiresAt := time.Now().UTC().Add(ttl).Format(time.RFC3339Nano)
+	tokenData := fmt.Sprintf("%s|%s", token, expiresAt)
+	return m.keystore.EncryptSecret("session_token", tokenData)
+}
+
+// GetSessionToken retrieves a session token from the keystore.
+// Returns error if the token has expired.
+func (m *SecretManager) GetSessionToken() (string, error) {
+	tokenData, err := m.keystore.DecryptSecret("session_token")
+	if err != nil {
+		return "", err
+	}
+
+	parts := strings.Split(tokenData, "|")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid session token format")
+	}
+
+	token := parts[0]
+	expiresAtStr := parts[1]
+	expiresAt, err := time.Parse(time.RFC3339Nano, expiresAtStr)
+	if err != nil {
+		return "", fmt.Errorf("parse session token expiry: %w", err)
+	}
+
+	if time.Now().UTC().After(expiresAt) {
+		return "", fmt.Errorf("session token expired at %s", expiresAtStr)
+	}
+
+	return token, nil
+}
