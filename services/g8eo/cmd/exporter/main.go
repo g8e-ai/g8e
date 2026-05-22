@@ -203,9 +203,11 @@ func main() {
 		// or use the original ApiPaths variable which is available in the same package
 		// because we are in the exporter which imports constants.
 		// However, it's safer to just use constants.ApiPaths directly.
-		lines = append(lines, fmt.Sprintf("\tInternalPrefix: %q,", constants.ApiPaths.InternalPrefix))
-		lines = append(lines, fmt.Sprintf("\tOperatorPrefix: %q,", constants.ApiPaths.OperatorPrefix))
-		lines = append(lines, "\tG8ee: map[string]string{")
+		lines = append(lines,
+			fmt.Sprintf("\tInternalPrefix: %q,", constants.ApiPaths.InternalPrefix),
+			fmt.Sprintf("\tOperatorPrefix: %q,", constants.ApiPaths.OperatorPrefix),
+			"\tG8ee: map[string]string{",
+		)
 		g8eeKeys := make([]string, 0, len(constants.ApiPaths.G8ee))
 		for k := range constants.ApiPaths.G8ee {
 			g8eeKeys = append(g8eeKeys, k)
@@ -218,7 +220,9 @@ func main() {
 
 		lines = append(lines, "\tG8eeFull: map[string]string{")
 		for _, k := range g8eeKeys {
-			lines = append(lines, fmt.Sprintf("\t\t%q: %q,", k, constants.ApiPaths.InternalPrefix+constants.ApiPaths.G8ee[k]))
+			lines = append(lines,
+				fmt.Sprintf("\t\t%q: %q,", k, constants.ApiPaths.InternalPrefix+constants.ApiPaths.G8ee[k]),
+			)
 		}
 		lines = append(lines, "\t},")
 
@@ -239,10 +243,11 @@ func main() {
 			// Some client paths already include /internal or similar that might need different prefixing
 			// but based on api_paths.json:
 			// "sse_events": "/internal/sse/events" -> /api/internal/sse/events
-			lines = append(lines, fmt.Sprintf("\t\t%q: %q,", k, prefix+constants.ApiPaths.Client[k]))
+			lines = append(lines,
+				fmt.Sprintf("\t\t%q: %q,", k, prefix+constants.ApiPaths.Client[k]),
+			)
 		}
-		lines = append(lines, "\t},")
-		lines = append(lines, "}")
+		lines = append(lines, "\t},", "}")
 		lines = append(lines, "")
 
 		content := strings.Join(lines, "\n")
@@ -263,6 +268,7 @@ func main() {
 		os.Exit(1)
 	}
 	// Copy the file content
+	// #nosec G304 - internal exporter tool reading from known protocol directory
 	apiPathsData, err := os.ReadFile(apiPathsSrc)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading source api_paths.json: %v\n", err)
@@ -654,8 +660,10 @@ func main() {
 		sort.Strings(g8eeKeys)
 		for _, k := range g8eeKeys {
 			varName := strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
-			lines = append(lines, fmt.Sprintf("export G8E_API_G8EE_%s=%q", varName, constants.ApiPaths.G8ee[k]))
-			lines = append(lines, fmt.Sprintf("export G8E_API_G8EE_%s_FULL=%q", varName, constants.ApiPaths.InternalPrefix+constants.ApiPaths.G8ee[k]))
+			lines = append(lines,
+				fmt.Sprintf("export G8E_API_G8EE_%s=%q", varName, constants.ApiPaths.G8ee[k]),
+				fmt.Sprintf("export G8E_API_G8EE_%s_FULL=%q", varName, constants.ApiPaths.InternalPrefix+constants.ApiPaths.G8ee[k]),
+			)
 		}
 		lines = append(lines, "")
 
@@ -667,8 +675,10 @@ func main() {
 		sort.Strings(clientKeys)
 		for _, k := range clientKeys {
 			varName := strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
-			lines = append(lines, fmt.Sprintf("export G8E_API_CLIENT_%s=%q", varName, constants.ApiPaths.Client[k]))
-			lines = append(lines, fmt.Sprintf("export G8E_API_CLIENT_%s_FULL=%q", varName, constants.ApiPaths.OperatorPrefix+constants.ApiPaths.Client[k]))
+			lines = append(lines,
+				fmt.Sprintf("export G8E_API_CLIENT_%s=%q", varName, constants.ApiPaths.Client[k]),
+				fmt.Sprintf("export G8E_API_CLIENT_%s_FULL=%q", varName, constants.ApiPaths.OperatorPrefix+constants.ApiPaths.Client[k]),
+			)
 		}
 		lines = append(lines, "")
 

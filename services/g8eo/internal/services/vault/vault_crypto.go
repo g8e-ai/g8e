@@ -100,6 +100,13 @@ func APIKeyFingerprint(apiKey string) []byte {
 // AESKeyWrap wraps a plaintext key using AES Key Wrap (RFC 3394).
 // The KEK must be 16, 24, or 32 bytes (AES-128, AES-192, or AES-256).
 // The plaintext must be a multiple of 8 bytes and at least 16 bytes.
+//
+// RFC 3394 algorithm:
+//   - For j = 0 to 5:
+//   - For i = 1 to n:
+//   - B = AES(K, A | R[i])
+//   - A = MSB(64, B) ^ t where t = (n*j)+i
+//   - R[i] = LSB(64, B)
 func AESKeyWrap(kek, plaintext []byte) ([]byte, error) {
 	if len(kek) != 16 && len(kek) != 24 && len(kek) != 32 {
 		return nil, ErrInvalidKeySize
@@ -131,12 +138,10 @@ func AESKeyWrap(kek, plaintext []byte) ([]byte, error) {
 
 	for j := 0; j <= 5; j++ {
 		for i := 1; i <= numBlocks; i++ {
-			// B = AES(K, A | R[i])
 			copy(buf[0:8], a)
 			copy(buf[8:16], r[i-1])
 			block.Encrypt(buf, buf)
 
-			// A = MSB(64, B) ^ t where t = (n*j)+i
 			t := uint64(numBlocks*j + i)
 			copy(a, buf[0:8])
 			for k := 7; k >= 0 && t > 0; k-- {
@@ -144,7 +149,6 @@ func AESKeyWrap(kek, plaintext []byte) ([]byte, error) {
 				t >>= 8
 			}
 
-			// R[i] = LSB(64, B)
 			copy(r[i-1], buf[8:16])
 		}
 	}
@@ -160,6 +164,13 @@ func AESKeyWrap(kek, plaintext []byte) ([]byte, error) {
 
 // AESKeyUnwrap unwraps a ciphertext using AES Key Unwrap (RFC 3394).
 // Returns the original plaintext key if the integrity check passes.
+//
+// RFC 3394 algorithm:
+//   - For j = 5 to 0:
+//   - For i = n to 1:
+//   - B = AES^-1(K, (A ^ t) | R[i])
+//   - A = MSB(64, B)
+//   - R[i] = LSB(64, B)
 func AESKeyUnwrap(kek, ciphertext []byte) ([]byte, error) {
 	if len(kek) != 16 && len(kek) != 24 && len(kek) != 32 {
 		return nil, ErrInvalidKeySize
@@ -198,15 +209,12 @@ func AESKeyUnwrap(kek, ciphertext []byte) ([]byte, error) {
 				t >>= 8
 			}
 
-			// B = AES^-1(K, (A ^ t) | R[i])
 			copy(buf[0:8], aCopy)
 			copy(buf[8:16], r[i-1])
 			block.Decrypt(buf, buf)
 
-			// A = MSB(64, B)
 			copy(a, buf[0:8])
 
-			// R[i] = LSB(64, B)
 			copy(r[i-1], buf[8:16])
 		}
 	}

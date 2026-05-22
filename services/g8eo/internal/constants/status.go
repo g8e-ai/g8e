@@ -53,6 +53,12 @@ const (
 	OperatorTypeCloud  OperatorType = "cloud"
 )
 
+// Plain string versions for use in contexts requiring untyped strings (logger keys, flags, comparisons)
+const (
+	OperatorTypeSystemStr = "system"
+	OperatorTypeCloudStr  = "cloud"
+)
+
 // CloudSubtype is a typed string for cloud subtype.
 type CloudSubtype string
 
@@ -102,6 +108,20 @@ const (
 	SentinelStatusKilled        SentinelStatus = "killed"
 	SentinelStatusTerminated    SentinelStatus = "terminated"
 	SentinelStatusError         SentinelStatus = "error"
+)
+
+// Plain string versions for use in contexts requiring untyped strings (logger keys, flags, comparisons)
+const (
+	SentinelStatusSuccessStr       = "success"
+	SentinelStatusFailureStr       = "failure"
+	SentinelStatusMisuseStr        = "misuse"
+	SentinelStatusNotExecutableStr = "not_executable"
+	SentinelStatusNotFoundStr      = "not_found"
+	SentinelStatusInvalidExitStr   = "invalid_exit"
+	SentinelStatusInterruptedStr   = "interrupted"
+	SentinelStatusKilledStr        = "killed"
+	SentinelStatusTerminatedStr    = "terminated"
+	SentinelStatusErrorStr         = "error"
 )
 
 // VaultMode is a typed string for vault mode.
@@ -194,6 +214,15 @@ const (
 	ApprovalTypeIntent        ApprovalType = "intent"
 	ApprovalTypeAgentContinue ApprovalType = "agent.continue"
 	ApprovalTypeStream        ApprovalType = "stream"
+)
+
+// Plain string versions for use in contexts requiring untyped strings (logger keys, flags, comparisons)
+const (
+	ApprovalTypeCommandStr       = "command"
+	ApprovalTypeFileEditStr      = "file.edit"
+	ApprovalTypeIntentStr        = "intent"
+	ApprovalTypeAgentContinueStr = "agent.continue"
+	ApprovalTypeStreamStr        = "stream"
 )
 
 // ApprovalErrorType is a typed string for approval error type.
@@ -574,6 +603,16 @@ const (
 	ConnectionStateReconnecting ConnectionState = "reconnecting"
 	ConnectionStateClosed       ConnectionState = "closed"
 	ConnectionStateError        ConnectionState = "error"
+)
+
+// Plain string versions for use in contexts requiring untyped strings (logger keys, flags, comparisons)
+const (
+	ConnectionStateDisconnectedStr = "disconnected"
+	ConnectionStateConnectingStr   = "connecting"
+	ConnectionStateConnectedStr    = "connected"
+	ConnectionStateReconnectingStr = "reconnecting"
+	ConnectionStateClosedStr       = "closed"
+	ConnectionStateErrorStr        = "error"
 )
 
 // Environment is a typed string for environment.

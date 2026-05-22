@@ -321,8 +321,13 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	wsHeader := http.Header{}
 	wsHeader.Set(constants.HeaderAuthorization, "Bearer "+regResp.OperatorSessionID)
 
-	wsConn, _, err := dialer.Dial(wssURL, wsHeader)
-	require.NoError(t, err)
+	wsConn, resp, err := dialer.Dial(wssURL, wsHeader)
+	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		require.NoError(t, err)
+	}
 	defer wsConn.Close()
 
 	// Subscribe to results

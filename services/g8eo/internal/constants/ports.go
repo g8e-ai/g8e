@@ -15,15 +15,15 @@ package constants
 
 // Ports defines canonical G8E networking ports.
 var Ports = struct {
-	OperatorHttps      int
+	OperatorHttps          int
 	OperatorBootstrapHttps int
 	OperatorPublicHttps    int
-	G8eeHttps          int
-	OpenclawGateway   int
+	G8eeHttps              int
+	OpenclawGateway        int
 }{
-	OperatorHttps:      8440,
+	OperatorHttps:          8440,
 	OperatorBootstrapHttps: 8441,
 	OperatorPublicHttps:    8442,
-	G8eeHttps:          8443,
-	OpenclawGateway:   18789,
+	G8eeHttps:              8443,
+	OpenclawGateway:        18789,
 }
