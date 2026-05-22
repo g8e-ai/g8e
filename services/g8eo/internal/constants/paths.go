@@ -13,6 +13,11 @@
 
 package constants
 
+import (
+	"os"
+	"path/filepath"
+)
+
 // Paths defines canonical G8E filesystem paths.
 var Paths = struct {
 	Infra struct {
@@ -51,4 +56,101 @@ var Paths = struct {
 		ProtocolModelsDir:    "/app/protocol/models",
 		SshConfigPath:        "/etc/g8e/ssh_config",
 	},
+}
+
+func init() {
+	resolvePaths()
+}
+
+// resolvePaths dynamically resolves filesystem paths from environment variables.
+// Priority:
+// 1. Explicit environment variable (e.g., G8E_PROTOCOL_DIR)
+// 2. Relative to G8E_PROJECT_ROOT if set
+// 3. Fallback to hardcoded default (container path)
+func resolvePaths() {
+	projectRoot := os.Getenv("G8E_PROJECT_ROOT")
+	if projectRoot == "" {
+		projectRoot = resolveProjectRoot()
+	}
+
+	// Resolve ProtocolDir
+	if protocolDir := os.Getenv("G8E_PROTOCOL_DIR"); protocolDir != "" {
+		if filepath.IsAbs(protocolDir) {
+			Paths.Infra.ProtocolDir = protocolDir
+		} else {
+			Paths.Infra.ProtocolDir = filepath.Join(projectRoot, protocolDir)
+		}
+	} else {
+		// Default to protocol/ relative to project root for host-native execution
+		Paths.Infra.ProtocolDir = filepath.Join(projectRoot, "protocol")
+	}
+
+	// Update derived paths
+	Paths.Infra.ProtocolConstantsDir = filepath.Join(Paths.Infra.ProtocolDir, "constants")
+	Paths.Infra.ProtocolModelsDir = filepath.Join(Paths.Infra.ProtocolDir, "models")
+}
+
+// resolveProjectRoot returns the project root directory.
+// This mirrors the logic in services/g8eo/internal/services/system/path.go
+// but is duplicated here to avoid circular dependencies during init.
+func resolveProjectRoot() string {
+	if root := os.Getenv("G8E_PROJECT_ROOT"); root != "" {
+		abs, err := filepath.Abs(root)
+		if err == nil {
+			return abs
+		}
+		return root
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "/home/g8e"
+	}
+
+	// Try to find the root by looking for services/g8eo or .git
+	current := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(current, "services")); err == nil {
+			if _, err := os.Stat(filepath.Join(current, "g8e")); err == nil {
+				return current
+			}
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+
+	// Fallback to relative path from services/g8eo
+	if contains(cwd, filepath.Join("services", "g8eo")) {
+		current = cwd
+		for {
+			if filepath.Base(current) == "g8eo" && filepath.Base(filepath.Dir(current)) == "services" {
+				return filepath.Dir(filepath.Dir(current))
+			}
+			parent := filepath.Dir(current)
+			if parent == current {
+				break
+			}
+			current = parent
+		}
+	}
+
+	return cwd
+}
+
+// contains checks if a string contains a substring (Go < 1.21 compatibility)
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsMiddle(s, substr)))
+}
+
+func containsMiddle(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

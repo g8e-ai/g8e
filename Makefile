@@ -181,7 +181,7 @@ ingest-doctrines:
 	@echo "Running doctrine ingestion scripts..."
 	@if [ -f "scripts/data/ingest_owasp_crs.py" ]; then \
 		echo "Ingesting OWASP CRS doctrines..."; \
-		python3 scripts/data/ingest_owasp_crs.py /tmp/coreruleset 2>/dev/null || echo "OWASP CRS source not found, skipping"; \
+		python3 scripts/data/ingest_owasp_crs.py /tmp/coreruleset/rules 2>/dev/null || echo "OWASP CRS source not found, skipping"; \
 	fi
 	@if [ -f "scripts/data/ingest_gitleaks.py" ]; then \
 		echo "Ingesting Gitleaks doctrines..."; \
@@ -208,9 +208,7 @@ update-doctrines:
 	else \
 		git clone --depth 1 https://github.com/coreruleset/coreruleset.git /tmp/coreruleset; \
 	fi
-	@if [ -f "/tmp/gitleaks.toml" ]; then \
-		curl -sSL https://raw.githubusercontent.com/gitleaks/gitleaks/master/config/gitleaks.toml -o /tmp/gitleaks.toml; \
-	fi
+	@curl -sSL https://raw.githubusercontent.com/gitleaks/gitleaks/master/config/gitleaks.toml -o /tmp/gitleaks.toml
 	@$(MAKE) ingest-doctrines
 	@echo "Doctrine update complete."
 

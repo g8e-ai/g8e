@@ -14,10 +14,13 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass, asdict
 
 try:
-    import tomli
+    import tomllib
 except ImportError:
-    print("Error: tomli library required. Install with: pip install tomli", file=sys.stderr)
-    sys.exit(1)
+    try:
+        import tomli
+    except ImportError:
+        print("Error: tomllib (Python 3.11+) or tomli library required", file=sys.stderr)
+        sys.exit(1)
 
 
 @dataclass
@@ -45,13 +48,22 @@ class GitleaksParser:
 
     def parse_file(self, filepath: Path) -> List[Doctrine]:
         """Parse a Gitleaks TOML configuration file."""
-        with open(filepath, 'rb') as f:
-            data = tomli.load(f)
+        try:
+            import tomllib
+            with open(filepath, 'rb') as f:
+                data = tomllib.load(f)
+        except ImportError:
+            import tomli
+            with open(filepath, 'rb') as f:
+                data = tomli.load(f)
         
         doctrines = []
         
         # Parse rules from [[rules]] sections
         for rule in data.get('rules', []):
+            # Skip non-dict entries (some TOML structures may have mixed types)
+            if not isinstance(rule, dict):
+                continue
             try:
                 doctrine = self._parse_rule(rule)
                 if doctrine:
