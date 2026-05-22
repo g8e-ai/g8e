@@ -116,8 +116,86 @@ Every mutation must pass three independent layers in order. A failure at any lay
 Static, deterministic checks enforced before any code executes.
 
 - **Forbidden patterns** - Custom protobuf field option `(g8e.common.v1.forbidden_patterns)` is reflected at runtime to scan typed payloads (e.g., `command` field) for `sudo`, `su`, `rm -rf /`, etc.
-- **Sentinel pre-execution analysis** - Regex matching against 90+ threat patterns (reverse shells, privilege escalation, exfiltration).
+- **Sentinel pre-execution analysis** - Regex matching against threat doctrines (reverse shells, privilege escalation, exfiltration).
 - **Allow/deny lists** - Per-host policy in `services/g8eo/internal/constants/` and per-user `command_validation` settings.
+
+#### Doctrine Storage
+
+Doctrine definitions are stored in `protocol/constants/doctrine/` as canonical JSON files:
+
+```
+protocol/constants/doctrine/
+  doctrine_registry.json      # Metadata: sources, versions, last_updated
+  owasp_crs_doctrine.json    # OWASP CRS doctrines (RCE, LFI, SQLi, scanner)
+  gitleaks_doctrine.json     # Gitleaks secret doctrines
+  semgrep_doctrine.json      # Semgrep command injection doctrines (P1)
+  mcp_vectors_doctrine.json  # g8e-specific MCP/agentic threat doctrines
+```
+
+#### Doctrine Schema
+
+Each doctrine file follows this canonical schema:
+
+```json
+{
+  "source": "owasp_crs",
+  "version": "4.0.0",
+  "last_updated": "2026-05-22",
+  "license": "Apache-2.0",
+  "doctrines": [
+    {
+      "id": "owasp_crs_932100",
+      "name": "RCE: nc -e reverse shell",
+      "category": "reverse_shell",
+      "severity": "critical",
+      "pattern": "(?i)nc\\s+.*-e\\s+(/bin/)?(sh|bash|zsh)",
+      "mitre_attack": "T1059.004",
+      "mitre_tactic": "Execution",
+      "confidence": 0.95,
+      "enabled": true
+    }
+  ]
+}
+```
+
+#### Doctrine Registry
+
+The `doctrine_registry.json` tracks all doctrine sources:
+
+```json
+{
+  "version": "1.0.0",
+  "last_updated": "2026-05-22",
+  "sources": [
+    {
+      "name": "owasp_crs",
+      "url": "https://github.com/coreruleset/coreruleset",
+      "version": "4.0.0",
+      "license": "Apache-2.0",
+      "enabled": true,
+      "last_ingested": "2026-05-22"
+    }
+  ]
+}
+```
+
+#### Industry Doctrine Sources
+
+- **OWASP CRS** (P0): Apache-2.0 licensed WAF rules for RCE, LFI, SQLi, scanner detection
+- **Gitleaks** (P0): MIT licensed secret detection (800+ pattern types)
+- **Semgrep** (P1): Command injection patterns from bash/, python/, generic/ rule sets
+- **secrets-patterns-db** (P1): CC0 licensed unified pattern database
+
+#### MCP/Agentic-Specific Doctrines
+
+g8e defines unique threat doctrines for agentic execution:
+
+- Tool response injection
+- Unsafe argument handling in MCP tools
+- Prompt injection via tool outputs
+- Credential exposure in tool responses
+- GovernanceEnvelope field abuse
+- MCP protocol misuse
 
 ### Quorum (L2Consensus): Consensus (Tribunal)
 

@@ -202,6 +202,65 @@ The evals harness drives the **real g8e Agentic Ensemble** chat pipeline end-to-
 2. **High signal, low noise.** Focus on system lifecycle and request/data progression.
 3. **Why vs. how.** `.md` files explain high-level concepts; implementation details belong in code.
 
+## Doctrine Ingestion
+
+g8e ingests industry security doctrines from OWASP CRS, Gitleaks, Semgrep, and secrets-patterns-db. Doctrines are stored in `protocol/constants/doctrine/` as canonical JSON and loaded by the g8eo Sentinel at startup.
+
+### Doctrine Schema
+
+Each doctrine file follows this canonical schema:
+
+```json
+{
+  "source": "owasp_crs",
+  "version": "4.0.0",
+  "last_updated": "2026-05-22",
+  "license": "Apache-2.0",
+  "doctrines": [
+    {
+      "id": "owasp_crs_932100",
+      "name": "RCE: nc -e reverse shell",
+      "category": "reverse_shell",
+      "severity": "critical",
+      "pattern": "(?i)nc\\s+.*-e\\s+(/bin/)?(sh|bash|zsh)",
+      "mitre_attack": "T1059.004",
+      "mitre_tactic": "Execution",
+      "confidence": 0.95,
+      "enabled": true
+    }
+  ]
+}
+```
+
+### Ingestion Scripts
+
+- **OWASP CRS**: `scripts/data/ingest_owasp_crs.py` - Parses SecLanguage rules from OWASP Core Rule Set
+- **Gitleaks**: `scripts/data/ingest_gitleaks.py` - Parses TOML configuration from Gitleaks
+
+### Makefile Targets
+
+| Target | Purpose |
+|---|---|
+| `make ingest-doctrines` | Run all doctrine ingestion scripts |
+| `make validate-doctrines` | Validate JSON schema for all doctrine files |
+| `make update-doctrines` | Pull latest sources and re-ingest doctrines |
+
+### Adding New Doctrines
+
+1. Create or update the doctrine JSON file in `protocol/constants/doctrine/`
+2. Run `make validate-doctrines` to ensure JSON validity
+3. Restart g8eo to load the new doctrines (Sentinel loads doctrines at startup)
+
+### MCP/Agentic-Specific Doctrines
+
+g8e defines unique threat doctrines for agentic execution in `mcp_vectors_doctrine.json`:
+- Tool response injection
+- Unsafe argument handling in MCP tools
+- Prompt injection via tool outputs
+- Credential exposure in tool responses
+- GovernanceEnvelope field abuse
+- MCP protocol misuse
+
 ## Where to Find Things
 
 | Concern | Location |

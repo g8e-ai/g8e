@@ -56,6 +56,9 @@ jobs:
       - name: Lint no bare session_id
         run: make lint-no-bare-session-id
 
+      - name: Validate doctrine JSON schema
+        run: make validate-doctrines
+
   lint-g8eo:
     runs-on: ubuntu-latest
     steps:

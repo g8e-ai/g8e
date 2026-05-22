@@ -1,0 +1,63 @@
+{
+  "source": "gitleaks",
+  "version": "8.18.0",
+  "last_updated": "2026-05-22",
+  "license": "MIT",
+  "doctrines": [
+    {
+      "id": "gitleaks_aws_access_key",
+      "name": "AWS Access Key ID",
+      "category": "credential_access",
+      "severity": "critical",
+      "pattern": "(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_github_token",
+      "name": "GitHub Personal Access Token",
+      "category": "credential_access",
+      "severity": "critical",
+      "pattern": "ghp_[a-zA-Z0-9]{36}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_slack_token",
+      "name": "Slack Token",
+      "category": "credential_access",
+      "severity": "critical",
+      "pattern": "xox[baprs]-[a-zA-Z0-9-]+",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_private_key",
+      "name": "RSA Private Key",
+      "category": "credential_access",
+      "severity": "critical",
+      "pattern": "-----BEGIN RSA PRIVATE KEY-----",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "gitleaks_api_key_generic",
+      "name": "Generic API Key",
+      "category": "credential_access",
+      "severity": "high",
+      "pattern": "(?i)api[_-]?key\\s*[\"']?[=:]\\s*[\"']?[a-zA-Z0-9_\\-]{32,}",
+      "mitre_attack": "T1055.001",
+      "mitre_tactic": "Credential Access",
+      "confidence": 0.80,
+      "enabled": true
+    }
+  ]
+}
