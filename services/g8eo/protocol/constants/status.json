@@ -1,139 +1,139 @@
 {
   "status": {
+    "approval.error.type": {
+      "approval.exception": {
+        "_go_const": "ApprovalErrorTypeApprovalException",
+        "_python_const": "APPROVAL_EXCEPTION",
+        "value": "approval.exception"
+      },
+      "approval.publish.failure": {
+        "_go_const": "ApprovalErrorTypeApprovalPublishFailure",
+        "_python_const": "APPROVAL_PUBLISH_FAILURE",
+        "value": "approval.publish.failure"
+      },
+      "approval.timeout": {
+        "_go_const": "ApprovalErrorTypeApprovalTimeout",
+        "_python_const": "APPROVAL_TIMEOUT",
+        "value": "approval.timeout"
+      },
+      "intent.approval.exception": {
+        "_go_const": "ApprovalErrorTypeIntentApprovalException",
+        "_python_const": "INTENT_APPROVAL_EXCEPTION",
+        "value": "intent.approval.exception"
+      },
+      "invalid.intent": {
+        "_go_const": "ApprovalErrorTypeInvalidIntent",
+        "_python_const": "INVALID_INTENT",
+        "value": "invalid.intent"
+      }
+    },
     "attachment.type": {
       "image": {
-        "value": "image",
         "_go_const": "AttachmentTypeImage",
-        "_python_const": "IMAGE"
+        "_python_const": "IMAGE",
+        "value": "image"
       },
       "other": {
-        "value": "other",
         "_go_const": "AttachmentTypeOther",
-        "_python_const": "OTHER"
+        "_python_const": "OTHER",
+        "value": "other"
       },
       "pdf": {
-        "value": "pdf",
         "_go_const": "AttachmentTypePdf",
-        "_python_const": "PDF"
+        "_python_const": "PDF",
+        "value": "pdf"
       },
       "text": {
-        "value": "text",
         "_go_const": "AttachmentTypeText",
-        "_python_const": "TEXT"
-      }
-    },
-    "user_role": {
-      "admin": {
-        "value": "admin",
-        "_go_const": "UserRoleAdmin",
-        "_python_const": "ADMIN"
-      },
-      "user": {
-        "value": "user",
-        "_go_const": "UserRoleUser",
-        "_python_const": "USER"
-      }
-    },
-    "user_status": {
-      "active": {
-        "value": "active",
-        "_go_const": "UserStatusActive",
-        "_python_const": "ACTIVE"
-      },
-      "disabled": {
-        "value": "disabled",
-        "_go_const": "UserStatusDisabled",
-        "_python_const": "DISABLED"
-      }
-    },
-    "operator_status": {
-      "available": {
-        "value": "available",
-        "_go_const": "OperatorStatusAvailable",
-        "_python_const": "AVAILABLE"
-      },
-      "offline": {
-        "value": "offline",
-        "_go_const": "OperatorStatusOffline",
-        "_python_const": "OFFLINE"
+        "_python_const": "TEXT",
+        "value": "text"
       }
     },
     "execution_status": {
       "completed": {
-        "value": "completed",
         "_go_const": "ExecutionStatusCompleted",
-        "_python_const": "COMPLETED"
+        "_python_const": "COMPLETED",
+        "value": "completed"
       },
       "executing": {
-        "value": "executing",
         "_go_const": "ExecutionStatusExecuting",
-        "_python_const": "EXECUTING"
+        "_python_const": "EXECUTING",
+        "value": "executing"
       },
       "failed": {
-        "value": "failed",
         "_go_const": "ExecutionStatusFailed",
-        "_python_const": "FAILED"
+        "_python_const": "FAILED",
+        "value": "failed"
       },
       "pending": {
-        "value": "pending",
         "_go_const": "ExecutionStatusPending",
-        "_python_const": "PENDING"
-      }
-    },
-    "tribunal.outcome": {
-      "consensus": {
-        "value": "consensus",
-        "_go_const": "TribunalOutcomeConsensus",
-        "_python_const": "CONSENSUS"
-      },
-      "consensus_failed": {
-        "value": "consensus_failed",
-        "_go_const": "TribunalOutcomeConsensusFailed",
-        "_python_const": "CONSENSUS_FAILED"
-      },
-      "verification_failed": {
-        "value": "verification_failed",
-        "_go_const": "TribunalOutcomeVerificationFailed",
-        "_python_const": "VERIFICATION_FAILED"
-      },
-      "verified": {
-        "value": "verified",
-        "_go_const": "TribunalOutcomeVerified",
-        "_python_const": "VERIFIED"
-      }
-    },
-    "approval.error.type": {
-      "approval.exception": {
-        "value": "approval.exception",
-        "_go_const": "ApprovalErrorTypeApprovalException",
-        "_python_const": "APPROVAL_EXCEPTION"
-      },
-      "approval.publish.failure": {
-        "value": "approval.publish.failure",
-        "_go_const": "ApprovalErrorTypeApprovalPublishFailure",
-        "_python_const": "APPROVAL_PUBLISH_FAILURE"
-      },
-      "approval.timeout": {
-        "value": "approval.timeout",
-        "_go_const": "ApprovalErrorTypeApprovalTimeout",
-        "_python_const": "APPROVAL_TIMEOUT"
-      },
-      "intent.approval.exception": {
-        "value": "intent.approval.exception",
-        "_go_const": "ApprovalErrorTypeIntentApprovalException",
-        "_python_const": "INTENT_APPROVAL_EXCEPTION"
-      },
-      "invalid.intent": {
-        "value": "invalid.intent",
-        "_go_const": "ApprovalErrorTypeInvalidIntent",
-        "_python_const": "INVALID_INTENT"
+        "_python_const": "PENDING",
+        "value": "pending"
       }
     },
     "llm.models": {
       "llamacpp.gemma4.e2b": {
-        "value": "google_gemma-4-E2B-it-Q4_K_M.gguf",
         "_go_const": "LLMModelsLlamacppGemma4E2b",
-        "_python_const": "LLAMACPP_GEMMA4_E2B"
+        "_python_const": "LLAMACPP_GEMMA4_E2B",
+        "value": "google_gemma-4-E2B-it-Q4_K_M.gguf"
+      }
+    },
+    "operator_status": {
+      "available": {
+        "_go_const": "OperatorStatusAvailable",
+        "_python_const": "AVAILABLE",
+        "value": "available"
+      },
+      "offline": {
+        "_go_const": "OperatorStatusOffline",
+        "_python_const": "OFFLINE",
+        "value": "offline"
+      }
+    },
+    "tribunal.outcome": {
+      "consensus": {
+        "_go_const": "TribunalOutcomeConsensus",
+        "_python_const": "CONSENSUS",
+        "value": "consensus"
+      },
+      "consensus_failed": {
+        "_go_const": "TribunalOutcomeConsensusFailed",
+        "_python_const": "CONSENSUS_FAILED",
+        "value": "consensus_failed"
+      },
+      "verification_failed": {
+        "_go_const": "TribunalOutcomeVerificationFailed",
+        "_python_const": "VERIFICATION_FAILED",
+        "value": "verification_failed"
+      },
+      "verified": {
+        "_go_const": "TribunalOutcomeVerified",
+        "_python_const": "VERIFIED",
+        "value": "verified"
+      }
+    },
+    "user_role": {
+      "admin": {
+        "_go_const": "UserRoleAdmin",
+        "_python_const": "ADMIN",
+        "value": "admin"
+      },
+      "user": {
+        "_go_const": "UserRoleUser",
+        "_python_const": "USER",
+        "value": "user"
+      }
+    },
+    "user_status": {
+      "active": {
+        "_go_const": "UserStatusActive",
+        "_python_const": "ACTIVE",
+        "value": "active"
+      },
+      "disabled": {
+        "_go_const": "UserStatusDisabled",
+        "_python_const": "DISABLED",
+        "value": "disabled"
       }
     }
   }
