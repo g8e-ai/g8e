@@ -30,7 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/mcp"
 )
 
-// GatewayService is the top-level orchestrator for --listen mode (operator).
+// GatewayService is the top-level orchestrator for gateway mode (operator).
 // It acts as the platform's central persistence and messaging backbone.
 // In this mode, the Operator does NOT execute commands or initiate outbound
 // connections. It strictly serves inbound requests from platform components.
@@ -59,7 +59,7 @@ type GatewayService struct {
 	ready   bool
 }
 
-// NewGatewayService creates a new listen mode service.
+// NewGatewayService creates a new gateway mode service.
 func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService, error) {
 	db, err := OpenGatewayDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, false)
 	if err != nil {
@@ -369,18 +369,18 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 	ls.mu.Lock()
 	if ls.running {
 		ls.mu.Unlock()
-		return fmt.Errorf("listen service already running")
+		return fmt.Errorf("gateway service already running")
 	}
 	ls.running = true
 	ls.mu.Unlock()
 
-	ls.logger.Info("operator Listen Mode ready",
+	ls.logger.Info("operator Gateway Mode ready",
 		"http_port", ls.cfg.Gateway.HTTPPort,
 
 		"bootstrap_port", ls.cfg.Gateway.BootstrapPort,
 		"data_dir", ls.cfg.Gateway.DataDir)
 
-	ls.logger.Info("Listen TLS servers starting", "http_port", ls.cfg.Gateway.HTTPPort, "bootstrap_port", ls.cfg.Gateway.BootstrapPort)
+	ls.logger.Info("Gateway TLS servers starting", "http_port", ls.cfg.Gateway.HTTPPort, "bootstrap_port", ls.cfg.Gateway.BootstrapPort)
 
 	// Start background maintenance for MCP gateway
 	go ls.mcpGateway.RunMaintenance(ctx)
@@ -452,7 +452,7 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 		ls.mu.Lock()
 		ls.ready = true
 		ls.mu.Unlock()
-		ls.logger.Info("operator Listen Mode fully operational")
+		ls.logger.Info("operator Gateway Mode fully operational")
 	}()
 
 	return <-errChan
@@ -467,7 +467,7 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 		return nil
 	}
 
-	ls.logger.Info("Shutting down listen service...")
+	ls.logger.Info("Shutting down gateway service...")
 
 	ls.ready = false
 
@@ -492,6 +492,6 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 	}
 
 	ls.running = false
-	ls.logger.Info("Listen service stopped")
+	ls.logger.Info("Gateway service stopped")
 	return nil
 }

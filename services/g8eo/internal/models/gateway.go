@@ -96,16 +96,16 @@ type PubSubPublishRequest struct {
 
 // HealthResponse is the typed response for GET /health.
 type HealthResponse struct {
-	Status          constants.ListenMode `json:"status"`
-	Mode            constants.ListenMode `json:"mode"`
-	Version         string               `json:"version"`
-	GovernanceReady bool                 `json:"governance_ready"`
-	StateMerkleRoot string               `json:"state_merkle_root,omitempty"`
+	Status          constants.GatewayMode `json:"status"`
+	Mode            constants.GatewayMode `json:"mode"`
+	Version         string                `json:"version"`
+	GovernanceReady bool                  `json:"governance_ready"`
+	StateMerkleRoot string                `json:"state_merkle_root,omitempty"`
 }
 
 // StatusResponse is the typed response for simple ok/error replies.
 type StatusResponse struct {
-	Status constants.ListenMode `json:"status"`
+	Status constants.GatewayMode `json:"status"`
 }
 
 // KVGetResponse is the typed response for GET /kv/{key}.

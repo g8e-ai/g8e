@@ -87,7 +87,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, userID, loadedCLISession.UserID)
 
-	// The actual HTTP authentication in listen_auth.go would return 403 Forbidden for this user
+	// The actual HTTP authentication in gateway_auth.go would return 403 Forbidden for this user
 	// at line 357: s.jsonError(w, http.StatusForbidden, "identity disabled")
 	// This test verifies the data model state that enables that check
 	t.Log("Auth integrity test passed: disabled user would be blocked by auth middleware")

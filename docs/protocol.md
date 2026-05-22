@@ -296,7 +296,7 @@ Standardized request/response flow for all host mutations.
 
 ## Pub/Sub Transport
 
-The Operator's `--listen` mode is the WSS broker and governance gate.
+The Operator's Gateway mode (--doctrine, --consensus, or --notary) is the WSS broker and governance gate.
 
 ### Channel taxonomy
 

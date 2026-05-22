@@ -14,7 +14,7 @@
 """
 KVCacheClient - HTTP-based Key-Value client for operator.
 
-Talks to the Operator in --listen mode via HTTP (KV store).
+Talks to the Operator in Gateway mode via HTTP (KV store).
 API: get, set, delete, exists, expire, ttl, keys,
 get_json, set_json, delete_pattern, hget, hset, hgetall, hdel,
 rpush, lpush, lrange, llen, ltrim, incr, decr.

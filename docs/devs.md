@@ -30,7 +30,7 @@ Components run host-native. **Do not use Docker for primary component developmen
 |---|---|
 | `./g8e` | Interactive Platform Manager. |
 | `./g8e platform start` | Start the Governance Gateway (`g8eg`) only. |
-| `./g8e platform start --with-apps` | Gateway plus optional bundled adapters. |
+| `./g8e platform start --g8ee` | Gateway plus optional bundled adapters. |
 | `./g8e apps start [g8ee|all]` | Start optional application-layer adapters. |
 | `./g8e platform status` | Gateway health first, optional app status separately. |
 | `./g8e login` | Authenticate the local CLI. |
@@ -47,7 +47,7 @@ The root `./g8e` script is a Bash-based dispatcher and the single entry point fo
 
 **Technical Invariants:**
 1. **Path Resolution**: All scripts must resolve `G8E_PROJECT_ROOT` relative to their own location.
-2. **Service Readiness**: The platform is not "ready" until the Governance Gateway (`g8eg`) listen-mode health check (`/healthz`) passes.
+2. **Service Readiness**: The platform is not "ready" until the Governance Gateway (`g8eg`) Gateway mode health check (`/healthz`) passes.
 3. **Canonical Wire Format**: All client-facing interaction (HTTP, PubSub, receipts) must use **canonical JSON (protojson)**. Binary Protobuf is reserved for internal storage.
 4. **Fail-Closed Execution**: Scripts must never mask failures or proceed with missing trust material.
 
@@ -56,7 +56,7 @@ The root `./g8e` script is a Bash-based dispatcher and the single entry point fo
 g8e is split into the **Protocol (Gateway)**, the **Governance Gateway (g8eg)**, the **Governed Operator (g8eo)**, and an optional **Application Layer**.
 
 - **Protocol (Gateway)** - Shared `.proto` schemas plus the canonical-JSON wire contract; the source of truth for what every operator and client must honor.
-- **Governance Gateway (`g8eg`)** - The central, BFT-governed Policy Decision Point (PDP) running in `--listen` mode. It provides the platform's central persistence, PKI, and protocol API (including a minimal bootstrap interface).
+- **Governance Gateway (`g8eg`)** - The central, BFT-governed Policy Decision Point (PDP) running in Gateway mode (--doctrine, --consensus, or --notary). It provides the platform's central persistence, PKI, and protocol API (including a minimal bootstrap interface).
 - **Governed Operator (`g8eo`)** - The host-side Policy Execution Point (PEP) and MCP Server. It enforces protocol compliance, verifies Doctrine (L1Doctrine), Quorum (L2Consensus), and Notary (L3Notary) signatures, and executes transactions via the Actuator stage.
 - **Reference Application Layer (optional)** - Optional adapters like the **g8e Agentic Ensemble** (`g8ee`) that extend the platform's reasoning capabilities. All interaction flows through the CLI by default.
 - **Host-native execution** - Core components run as native processes.
@@ -72,7 +72,7 @@ g8e is split into the **Protocol (Gateway)**, the **Governance Gateway (g8eg)**,
 ### Host-native Startup Lifecycle
 
 The `./g8e platform start` command (invoked via `scripts/core/build.sh`) manages the sequence:
-1. **Gateway binary check/build** → Governance Gateway (`g8eg`) starts in `--listen` mode.
+1. **Gateway binary check/build** → Governance Gateway (`g8eg`) starts in Gateway mode (--doctrine, --consensus, or --notary).
 2. **Root of trust generation** (first boot only) - ECDSA P-384 CA hierarchy, intermediate CAs, and trust bundles in `.g8e/pki/`; `session_encryption_key`, `Actuator_signing_key` in `.g8e/secrets/`.
 3. **Optional service initialization** - The **agentic ensemble** (`g8ee`) starts under its venv with mTLS + URI SAN identity.
 4. **Asynchronous convergence** - Services poll health endpoints (e.g., Ensemble polls the Governance Gateway's mTLS API at `https://localhost:<operator_http>/health`; default `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->`).

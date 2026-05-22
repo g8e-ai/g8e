@@ -227,7 +227,7 @@ class DatabaseSettings(G8eBaseModel):
     operators_collection: str = Field(DB_COLLECTION_OPERATORS)
 
 class ListenSettings(G8eBaseModel):
-    """operator (Operator --listen mode) configuration."""
+    """operator (Operator Gateway mode) configuration."""
     http_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}") or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
     pubsub_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_PUBSUB_URL, f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}") or f"wss://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")
     blob_url: str = Field(default_factory=lambda: os.environ.get(EnvVar.OPERATOR_URL, f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}") or f"https://{PATHS.get('host', 'localhost')}:{PATHS['ports']['operator_https']}")

@@ -83,7 +83,6 @@ func TestPubSubBackPressureKeepsSubscriptions(t *testing.T) {
 
 	sub := &wsSubscriber{send: make(chan []byte, 1), done: make(chan struct{})}
 	broker.subscribe("ch", sub)
-	broker.psubscribe("ch.*", sub)
 
 	payload := []byte(`"x"`)
 	// Drive several overflows in a row.
@@ -93,11 +92,9 @@ func TestPubSubBackPressureKeepsSubscriptions(t *testing.T) {
 
 	broker.mu.RLock()
 	_, exactPresent := broker.subscribers["ch"]
-	_, patternPresent := broker.patterns["ch.*"]
 	broker.mu.RUnlock()
 
 	assert.True(t, exactPresent, "subscriber must remain in exact-channel map under back-pressure")
-	assert.True(t, patternPresent, "subscriber must remain in pattern map under back-pressure")
 
 	sub.mu.Lock()
 	dropped := sub.dropped

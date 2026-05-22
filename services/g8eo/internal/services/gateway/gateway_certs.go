@@ -79,7 +79,7 @@ type PKIAuthority struct {
 	bootstrapCert *x509.Certificate
 	bootstrapKey  *ecdsa.PrivateKey
 
-	// Service certificate for operator-listen
+	// Service certificate for operator-gateway
 	serviceCert tls.Certificate
 }
 
@@ -125,7 +125,7 @@ func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
 		return fmt.Errorf("intermediate CA setup failed: %w", err)
 	}
 
-	// Generate or load operator-listen service certificate
+	// Generate or load operator-gateway service certificate
 	if err := pki.ensureServiceCert(extraIPs); err != nil {
 		return fmt.Errorf("service certificate setup failed: %w", err)
 	}
@@ -175,8 +175,8 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 	}
 }
 
-// TLSConfigPlain returns a TLS config for the bootstrap listener.
-// This listener does not require client certificates for unauthenticated routes
+// TLSConfigPlain returns a TLS config for the bootstrap gateway.
+// This gateway does not require client certificates for unauthenticated routes
 // (/.well-known/, /api/auth/device-link/register).
 func (pki *PKIAuthority) TLSConfigPlain() *tls.Config {
 	pki.mu.RLock()
@@ -280,8 +280,8 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 }
 
 func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
-	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.crt")
-	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.chain.pem")
+	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.crt")
+	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.chain.pem")
 
 	needService := !fileExists(serviceCertPath) || !fileExists(chainPath)
 	if !needService {
@@ -295,7 +295,7 @@ func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
 			if pki.secretManager == nil {
 				return fmt.Errorf("SecretManager is required for service private key loading")
 			}
-			keyDER, err := pki.secretManager.GetServicePrivateKey("operator-listen")
+			keyDER, err := pki.secretManager.GetServicePrivateKey("operator-gateway")
 			if err != nil {
 				pki.logger.Warn("[PKI] Failed to load service private key from keystore, regenerating", string(constants.ConnectionStateError), err)
 				needService = true
@@ -323,7 +323,7 @@ func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
 	}
 
 	if needService {
-		pki.logger.Info("[PKI] Generating operator-listen service certificate")
+		pki.logger.Info("[PKI] Generating operator-gateway service certificate")
 		if err := pki.generateServiceCert(extraIPs); err != nil {
 			return err
 		}
@@ -332,7 +332,7 @@ func (pki *PKIAuthority) ensureServiceCert(extraIPs []net.IP) error {
 		if err != nil {
 			return fmt.Errorf("failed to load generated service cert chain: %w", err)
 		}
-		keyDER, err := pki.secretManager.GetServicePrivateKey("operator-listen")
+		keyDER, err := pki.secretManager.GetServicePrivateKey("operator-gateway")
 		if err != nil {
 			return fmt.Errorf("failed to load generated service private key from keystore: %w", err)
 		}
@@ -636,8 +636,8 @@ func (pki *PKIAuthority) loadCertificatePair(certPath, keyPath string, cert **x5
 
 		// Extract service name from cert path
 		var serviceName string
-		if strings.Contains(certPath, "operator-listen.crt") {
-			serviceName = "operator-listen"
+		if strings.Contains(certPath, "operator-gateway.crt") {
+			serviceName = "operator-gateway"
 		} else if strings.Contains(certPath, "issued/apps/") {
 			// Extract app name from path like "issued/apps/g8ee.crt"
 			base := filepath.Base(certPath)
@@ -896,7 +896,7 @@ func (pki *PKIAuthority) generateAppCert(app, certPath string) error {
 }
 
 func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
-	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.crt")
+	serviceCertPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.crt")
 
 	if pki.hubCert == nil || pki.hubKey == nil {
 		return fmt.Errorf("hub CA not loaded - call EnsurePKI first")
@@ -923,7 +923,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	template := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
-			CommonName:   "operator-listen",
+			CommonName:   "operator-gateway",
 			Organization: []string{"g8e"},
 			Country:      []string{"US"},
 		},
@@ -948,7 +948,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	rootPEM, _ := os.ReadFile(filepath.Join(pki.pkiDir, "root", "root_ca.crt"))
 	chainPEM = append(chainPEM, hubPEM...)
 	chainPEM = append(chainPEM, rootPEM...)
-	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-listen.chain.pem")
+	chainPath := filepath.Join(pki.pkiDir, "issued", "hub", "operator-gateway.chain.pem")
 	if err := os.WriteFile(chainPath, chainPEM, 0600); err != nil {
 		return fmt.Errorf("failed to write chain: %w", err)
 	}
@@ -964,8 +964,8 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 	if pki.secretManager == nil {
 		return fmt.Errorf("SecretManager is required for service private key storage")
 	}
-	if err := pki.secretManager.StoreServicePrivateKey("operator-listen", keyDER); err != nil {
-		return fmt.Errorf("store operator-listen private key in keystore: %w", err)
+	if err := pki.secretManager.StoreServicePrivateKey("operator-gateway", keyDER); err != nil {
+		return fmt.Errorf("store operator-gateway private key in keystore: %w", err)
 	}
 
 	return nil

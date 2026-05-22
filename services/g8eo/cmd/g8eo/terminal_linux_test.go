@@ -194,7 +194,7 @@ func TestReadObfuscatedInput_BackspaceErasesStarSequence(t *testing.T) {
 	assert.Equal(t, "**\b \b*\n", out.String())
 }
 
-func TestPromptForAPIKey_FallbackPath(t *testing.T) {
+func TestPromptForAPIKey_InteractivePrompt(t *testing.T) {
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 
@@ -215,7 +215,7 @@ func TestPromptForAPIKey_FallbackPath(t *testing.T) {
 	assert.Equal(t, "my-secret-key", result)
 }
 
-func TestPromptForAPIKey_FallbackPath_TrimsWhitespace(t *testing.T) {
+func TestPromptForAPIKey_InteractivePrompt_TrimsWhitespace(t *testing.T) {
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 
@@ -236,7 +236,7 @@ func TestPromptForAPIKey_FallbackPath_TrimsWhitespace(t *testing.T) {
 	assert.Equal(t, "trimmed-key", result)
 }
 
-func TestPromptForAPIKey_FallbackPath_EmptyKey(t *testing.T) {
+func TestPromptForAPIKey_InteractivePrompt_EmptyKey(t *testing.T) {
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 

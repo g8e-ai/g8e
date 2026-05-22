@@ -14,7 +14,7 @@
 """
 DBClient - operator Document Store shim.
 
-Wraps the operator (Operator --listen mode) Document Store HTTP API.
+Wraps the operator (Operator Gateway mode) Document Store HTTP API.
 No local database - every call goes to operator over HTTP.
 
 operator endpoints:

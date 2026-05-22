@@ -15,12 +15,12 @@
 # Platform lifecycle management for the local g8e environment.
 #
 # Service categories:
-#   Gateway: Operator listen mode (runs as local operator binary)
+#   Gateway: Operator gateway mode (runs as local operator binary)
 #   Optional application layer: g8ee (explicit opt-in only)
 #   Data volumes:
-#     .g8e/data     (Operator listen mode -- SQLite DB, users, settings; wiped by reset)
-#     .g8e/pki      (Operator listen mode -- TLS/PKI material; preserved by reset and wipe)
-#     .g8e/secrets  (Operator listen mode -- bootstrap secrets; wiped by reset, preserved by wipe)
+#     .g8e/data     (Operator gateway mode -- SQLite DB, users, settings; wiped by reset)
+#     .g8e/pki      (Operator gateway mode -- TLS/PKI material; preserved by reset and wipe)
+#     .g8e/secrets  (Operator gateway mode -- bootstrap secrets; wiped by reset, preserved by wipe)
 #     g8ee-data    (g8ee   -- app data; wiped by reset)
 #   Excluded from reset: core data services only
 #
@@ -134,27 +134,27 @@ Usage: $(basename "$0") <command> [options]
 
 Commands:
   status                          Show Gateway and optional app process status
-  up [component ...] [-a|--with-apps] Start Operator listen mode by default
+  up [component ...] [-a|--g8ee] Start Operator gateway mode by default
                                   Default (no components): operator
                                   Valid: operator g8ee
-                                  Optional apps require -a, --with-apps, or --with-g8ee
-  down                            Stop Operator listen mode and optional apps -- nothing is removed
-  rebuild [component ...]         Restart Operator listen mode by default
+                                  Optional apps require -a, --g8ee, or --with-g8ee
+  down                            Stop Operator gateway mode and optional apps -- nothing is removed
+  rebuild [component ...]         Restart Operator gateway mode by default
                                   Default (no components): operator
                                   Valid: operator g8ee
-                                  Optional apps require -a, --with-apps, or --with-g8ee
-  reset                           Wipe Operator listen-mode data. PKI certs and secrets are preserved.
+                                  Optional apps require -a, --g8ee, or --with-g8ee
+  reset                           Wipe Operator gateway-mode data. PKI certs and secrets are preserved.
   clean                           Nuke runtime processes and data.
   operator-build                  Build linux/amd64 operator binary natively
   operator-build-all              Build all operator architectures natively
 
 Examples:
   $(basename "$0") status                       Show host process status and versions
-  $(basename "$0") up                           Start Operator listen mode
+  $(basename "$0") up                           Start Operator gateway mode
   $(basename "$0") up -a                        Start Operator plus optional bundled apps
   $(basename "$0") down                         Stop runtime processes
-  $(basename "$0") rebuild                      Restart Operator listen mode
-  $(basename "$0") reset                        Wipe Operator listen-mode data
+  $(basename "$0") rebuild                      Restart Operator gateway mode
+  $(basename "$0") reset                        Wipe Operator gateway-mode data
   $(basename "$0") clean                        Remove host runtime state
 EOF
 }
@@ -250,7 +250,7 @@ _check_port_available() {
 }
 
 
-_operator_listen_running() {
+_operator_gateway_running() {
     if [ -f "$G8E_OPERATOR_PID_FILE" ]; then
         local pid
         pid=$(cat "$G8E_OPERATOR_PID_FILE")
@@ -383,8 +383,8 @@ _stop_g8ee() {
     rm -f "$G8E_G8EE_PID_FILE"
 }
 
-_start_operator_listen() {
-    if _operator_listen_running; then
+_start_operator_gateway() {
+    if _operator_gateway_running; then
         echo "  Governance Gateway is already running (PID: $(cat "$G8E_OPERATOR_PID_FILE"))."
         return 0
     fi
@@ -441,14 +441,14 @@ _start_operator_listen() {
     echo "$pid" > "$G8E_OPERATOR_PID_FILE"
 
     sleep 2
-    if ! _operator_listen_running; then
-        echo "  Error: Operator listen mode failed to start. See $G8E_OPERATOR_LOG_FILE"
+    if ! _operator_gateway_running; then
+        echo "  Error: Operator gateway mode failed to start. See $G8E_OPERATOR_LOG_FILE"
         rm -f "$G8E_OPERATOR_PID_FILE"
         return 1
     fi
 }
 
-_stop_operator_listen() {
+_stop_operator_gateway() {
     local pid=""
     
     if [ -f "$G8E_OPERATOR_PID_FILE" ]; then
@@ -456,7 +456,7 @@ _stop_operator_listen() {
     fi
     
     if [ -n "$pid" ] && ps -p "$pid" > /dev/null 2>&1; then
-        echo "  Stopping Operator listen mode (PID: $pid)..."
+        echo "  Stopping Operator gateway mode (PID: $pid)..."
         kill "$pid" 2>/dev/null || true
         local waited=0
         while ps -p "$pid" > /dev/null 2>&1 && [ $waited -lt 10 ]; do
@@ -464,7 +464,7 @@ _stop_operator_listen() {
             waited=$((waited + 1))
         done
         if ps -p "$pid" > /dev/null 2>&1; then
-            echo "  Force stopping Operator listen mode..."
+            echo "  Force stopping Operator gateway mode..."
             kill -9 "$pid" 2>/dev/null || true
         fi
     fi
@@ -472,7 +472,7 @@ _stop_operator_listen() {
     # Fallback search for any remaining g8e.gateway or g8e.operator processes
     # We look for both because g8e.gateway is the newer name but g8e.operator may still be used
     # We try to be specific to this project root to avoid killing processes from other workspaces
-    local patterns=("g8e.gateway --listen" "g8e.operator --listen")
+    local patterns=("g8e.gateway --doctrine" "g8e.gateway --consensus" "g8e.gateway --notary" "g8e.operator --doctrine" "g8e.operator --consensus" "g8e.operator --notary")
     for pattern in "${patterns[@]}"; do
         local found_pids
         # Try matching with project root first for specificity
@@ -484,7 +484,7 @@ _stop_operator_listen() {
         
         for f_pid in $found_pids; do
             if [[ "$f_pid" != "$pid" ]]; then
-                echo "  Stopping Operator listen mode (PID: $f_pid, found via pgrep '$pattern')..."
+                echo "  Stopping Operator gateway mode (PID: $f_pid, found via pgrep '$pattern')..."
                 kill "$f_pid" 2>/dev/null || true
                 local waited=0
                 while ps -p "$f_pid" > /dev/null 2>&1 && [ $waited -lt 10 ]; do
@@ -492,7 +492,7 @@ _stop_operator_listen() {
                     waited=$((waited + 1))
                 done
                 if ps -p "$f_pid" > /dev/null 2>&1; then
-                    echo "  Force stopping Operator listen mode (PID: $f_pid)..."
+                    echo "  Force stopping Operator gateway mode (PID: $f_pid)..."
                     kill -9 "$f_pid" 2>/dev/null || true
                 fi
             fi
@@ -502,23 +502,23 @@ _stop_operator_listen() {
     rm -f "$G8E_OPERATOR_PID_FILE"
 }
 
-_wait_operator_listen_healthy() {
+_wait_operator_gateway_healthy() {
     local url="$1" timeout_s="$2" interval="${3:-1}"
     local waited=0
     local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR/trust/hub-bundle.pem}"
-    echo "  Operator listen mode: waiting for $url..."
+    echo "  Operator gateway mode: waiting for $url..."
 
     until [[ -f "$trust_bundle" ]] && curl -sf --cacert "$trust_bundle" "$url" >/dev/null 2>&1; do
         if (( waited >= timeout_s )); then
-            echo -e "  Operator listen mode: \033[0;31mTIMEOUT\033[0m"
-            echo "  Operator listen mode did not become healthy within ${timeout_s}s. See $G8E_OPERATOR_LOG_FILE"
+            echo -e "  Operator gateway mode: \033[0;31mTIMEOUT\033[0m"
+            echo "  Operator gateway mode did not become healthy within ${timeout_s}s. See $G8E_OPERATOR_LOG_FILE"
             tail -n 20 "$G8E_OPERATOR_LOG_FILE"
             exit 1
         fi
         sleep "$interval"
         waited=$(( waited + interval ))
     done
-    echo -e "  Operator listen mode: \033[0;32mready\033[0m (${waited}s)"
+    echo -e "  Operator gateway mode: \033[0;32mready\033[0m (${waited}s)"
 
     # Auto-bootstrap if needed
     source "$PROJECT_ROOT/scripts/cmd/common.sh"
@@ -569,7 +569,7 @@ _load_env
 
 _print_platform_info() {
     local op_pid="-"
-    if _operator_listen_running; then
+    if _operator_gateway_running; then
         op_pid=$(cat "$G8E_OPERATOR_PID_FILE")
     fi
 
@@ -724,7 +724,7 @@ if [[ "$COMMAND" == "status" ]]; then
     printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     printf "\n  \033[1m[Gateway]\033[0m\n"
     
-    if _operator_listen_running; then
+    if _operator_gateway_running; then
         pid=$(cat "$G8E_OPERATOR_PID_FILE")
         
         # Check bootstrap status
@@ -760,9 +760,9 @@ fi
 # ─── down ─────────────────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "down" ]]; then
-    echo "Stopping Operator listen mode and optional application-layer services..."
+    echo "Stopping Operator gateway mode and optional application-layer services..."
     _stop_g8ee
-    _stop_operator_listen
+    _stop_operator_gateway
     echo "Done."
     exit 0
 fi
@@ -776,15 +776,15 @@ if [[ "$COMMAND" == "restart" ]]; then
     if printf '%s\n' "${RESTART_COMPONENTS[@]}" | grep -qx g8ee; then
         _stop_g8ee
     fi
-    _stop_operator_listen
-    _start_operator_listen
+    _stop_operator_gateway
+    _start_operator_gateway
     for svc in "${RESTART_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
         _start_optional_app "$svc"
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 60 1
+    _wait_operator_gateway_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 60 1
     for svc in "${RESTART_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
         _wait_optional_app_healthy "$svc"
@@ -801,9 +801,9 @@ fi
 if [[ "$COMMAND" == "reset" ]]; then
     mapfile -t RESET_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
 
-    echo "Wiping Operator listen-mode data and secrets - PKI certs preserved..."
+    echo "Wiping Operator gateway-mode data and secrets - PKI certs preserved..."
     _stop_g8ee
-    _stop_operator_listen
+    _stop_operator_gateway
     
     # Wipe host data
     rm -rf "$G8E_DATA_DIR/"* 2>/dev/null || true
@@ -815,14 +815,14 @@ if [[ "$COMMAND" == "reset" ]]; then
     _preflight
 
     echo "Starting Gateway services..."
-    _start_operator_listen
+    _start_operator_gateway
     for svc in "${RESET_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
         _start_optional_app "$svc"
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 300 2
+    _wait_operator_gateway_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 300 2
 
     for svc in "${RESET_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -839,7 +839,7 @@ if [[ "$COMMAND" == "clean" ]]; then
     echo "Cleaning all host services and runtime data..."
 
     _stop_g8ee
-    _stop_operator_listen
+    _stop_operator_gateway
     rm -rf "$G8E_RUNTIME_DIR" 2>/dev/null || true
 
     echo "Cleaning Python caches..."
@@ -868,7 +868,7 @@ if [[ "$COMMAND" == "up" ]]; then
     mapfile -t UP_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
     
     if printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx operator; then
-        _start_operator_listen
+        _start_operator_gateway
         UP_COMPONENTS=($(printf '%s\n' "${UP_COMPONENTS[@]}" | grep -vx operator || true))
     fi
 
@@ -882,7 +882,7 @@ if [[ "$COMMAND" == "up" ]]; then
     fi
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 60 1
+    _wait_operator_gateway_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 60 1
     
     for svc in "${UP_COMPONENTS[@]}"; do
         _wait_optional_app_healthy "$svc"
@@ -895,24 +895,24 @@ fi
 # ─── setup ───────────────────────────────────────────────────────────────────
 # Full first-time setup, then start the platform.
 # Does NOT wipe data volumes - safe to run on an existing installation.
-# Operator binary builds provide the listen-mode and remote Operator artifacts.
+# Operator binary builds provide the gateway-mode and remote Operator artifacts.
 
 if [[ "$COMMAND" == "setup" ]]; then
     echo "[g8e] Initializing"
     mapfile -t SETUP_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
     echo "Stopping all runtime services..."
     _stop_g8ee
-    _stop_operator_listen
+    _stop_operator_gateway
 
     echo "Starting Gateway services..."
-    _start_operator_listen
+    _start_operator_gateway
     for svc in "${SETUP_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
         _start_optional_app "$svc"
     done
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 300 2
+    _wait_operator_gateway_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 300 2
 
     for svc in "${SETUP_COMPONENTS[@]}"; do
         [[ "$svc" == "operator" ]] && continue
@@ -930,8 +930,8 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     mapfile -t REBUILD_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
 
     if printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx operator; then
-        _stop_operator_listen
-        _start_operator_listen
+        _stop_operator_gateway
+        _start_operator_gateway
         REBUILD_COMPONENTS=($(printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -vx operator || true))
     fi
 
@@ -948,7 +948,7 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     fi
     echo ""
     echo "Waiting for services..."
-    _wait_operator_listen_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 300 2
+    _wait_operator_gateway_healthy "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/health" 300 2
 
     for svc in "${REBUILD_COMPONENTS[@]}"; do
         _wait_optional_app_healthy "$svc"

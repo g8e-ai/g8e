@@ -181,10 +181,10 @@ const (
 type ComponentName string
 
 const (
-	ComponentNameG8EE       ComponentName = "g8ee"
-	ComponentNameG8EO       ComponentName = "g8eo"
-	ComponentNameG8EOListen ComponentName = "g8eo-listen"
-	ComponentNameClient     ComponentName = "client"
+	ComponentNameG8EE        ComponentName = "g8ee"
+	ComponentNameG8EO        ComponentName = "g8eo"
+	ComponentNameG8EOGateway ComponentName = "g8eo-gateway"
+	ComponentNameClient      ComponentName = "client"
 )
 
 // ComponentStatus is a typed string for component status.
@@ -839,12 +839,12 @@ const (
 	G8eToolNameStreamOperator            OperatorToolName = "stream_operator_to_ssh_fleet"
 )
 
-// ListenMode is a typed string for listen mode.
-type ListenMode string
+// GatewayMode is a typed string for gateway mode.
+type GatewayMode string
 
 const (
-	ListenModeMode     ListenMode = "listen"
-	ListenModeStatusOK ListenMode = "ok"
+	GatewayModeMode     GatewayMode = "gateway"
+	GatewayModeStatusOK GatewayMode = "ok"
 )
 
 // StreamStatus is a typed string for stream status.
@@ -1044,10 +1044,10 @@ var Status = struct {
 		Cancelled  TaskStatus
 	}
 	ComponentName struct {
-		G8EE       ComponentName
-		G8EO       ComponentName
-		G8EOListen ComponentName
-		CLIENT     ComponentName
+		G8EE        ComponentName
+		G8EO        ComponentName
+		G8EOGateway ComponentName
+		CLIENT      ComponentName
 	}
 	ComponentStatus struct {
 		Active      ComponentStatus
@@ -1464,9 +1464,9 @@ var Status = struct {
 		RecursiveGrep             OperatorToolName
 		StreamOperator            OperatorToolName
 	}
-	ListenMode struct {
-		Mode     ListenMode
-		StatusOK ListenMode
+	GatewayMode struct {
+		Mode     GatewayMode
+		StatusOK GatewayMode
 	}
 	StreamStatus struct {
 		Cancelled StreamStatus
@@ -1707,15 +1707,15 @@ var Status = struct {
 		Cancelled:  TaskStatusCancelled,
 	},
 	ComponentName: struct {
-		G8EE       ComponentName
-		G8EO       ComponentName
-		G8EOListen ComponentName
-		CLIENT     ComponentName
+		G8EE        ComponentName
+		G8EO        ComponentName
+		G8EOGateway ComponentName
+		CLIENT      ComponentName
 	}{
-		G8EE:       ComponentNameG8EE,
-		G8EO:       ComponentNameG8EO,
-		G8EOListen: ComponentNameG8EOListen,
-		CLIENT:     ComponentNameClient,
+		G8EE:        ComponentNameG8EE,
+		G8EO:        ComponentNameG8EO,
+		G8EOGateway: ComponentNameG8EOGateway,
+		CLIENT:      ComponentNameClient,
 	},
 	ComponentStatus: struct {
 		Active      ComponentStatus
@@ -2493,12 +2493,12 @@ var Status = struct {
 		RecursiveGrep:             G8eToolNameRecursiveGrep,
 		StreamOperator:            G8eToolNameStreamOperator,
 	},
-	ListenMode: struct {
-		Mode     ListenMode
-		StatusOK ListenMode
+	GatewayMode: struct {
+		Mode     GatewayMode
+		StatusOK GatewayMode
 	}{
-		Mode:     ListenModeMode,
-		StatusOK: ListenModeStatusOK,
+		Mode:     GatewayModeMode,
+		StatusOK: GatewayModeStatusOK,
 	},
 	StreamStatus: struct {
 		Cancelled StreamStatus

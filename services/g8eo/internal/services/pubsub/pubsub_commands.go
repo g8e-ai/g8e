@@ -319,7 +319,7 @@ func (rs *PubSubCommandService) Start(ctx context.Context) error {
 	channelName := constants.CmdChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
 
 	// Only subscribe to pub/sub channel when running as a traditional operator (with identity)
-	// In listen mode, commands arrive via HTTP/WebSocket endpoints directly
+	// In gateway mode, commands arrive via HTTP/WebSocket endpoints directly
 	if rs.config.OperatorID != "" && rs.config.OperatorSessionId != "" {
 		rs.logger.Info("Command service subscribing to operator channel",
 			"operator_id", rs.config.OperatorID,
@@ -333,7 +333,7 @@ func (rs *PubSubCommandService) Start(ctx context.Context) error {
 		}()
 	} else {
 		rs.logger.Info("Command service starting in Gateway mode (no pub/sub subscription)",
-			"mode", "listen")
+			"mode", "gateway")
 	}
 
 	rs.heartbeat.StartSchedulerUnlocked()

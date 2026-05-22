@@ -14,7 +14,7 @@
 """
 PubSubClient - WebSocket-based Pub/Sub client for operator.
 
-Talks to the Operator in --listen mode via WebSocket.
+Talks to the Operator in Gateway mode via WebSocket.
 Supports: subscribe, psubscribe, publish,
 publish_command, subscribe_execution_results, subscribe_heartbeats, check_operator_online.
 """

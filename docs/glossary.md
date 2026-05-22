@@ -113,7 +113,7 @@ The set of standards and regulations that g8e adheres to, including NSA ZIG alig
 
 ## Coordination Store (SQLite)
 
-The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. The Local Operator (`g8eg`) running in `--listen` mode is the single source of truth - a single SQLite database in WAL mode shared by all components via the Local Operator's document store, KV, and pub/sub APIs. The **g8e Agentic Ensemble** and client components are stateless with respect to persistence and access all data through the Local Operator's HTTP API.
+The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. The Local Operator (`g8eg`) running in Gateway mode (--doctrine, --consensus, or --notary) is the single source of truth - a single SQLite database in WAL mode shared by all components via the Local Operator's document store, KV, and pub/sub APIs. The **g8e Agentic Ensemble** and client components are stateless with respect to persistence and access all data through the Local Operator's HTTP API.
 
 ---
 
@@ -181,7 +181,7 @@ The reference **g8e-compliant agentic ensemble** with LLM provider abstraction s
 
 ## Governance Gateway (g8eg)
 
-The central, BFT-governed Policy Decision Point (PDP) running in `--listen` mode (built as the `g8e.gateway` binary from the Go Gateway codebase). It acts as the platform's cryptographic backplane, providing central persistence (SQLite Coordination Store), PKI/CA certificate issuance, a secure pub/sub broker, Server-Sent Events (SSE) buffering, replay protection, and the authoritative audit event vault.
+The central, BFT-governed Policy Decision Point (PDP) running in Gateway mode (--doctrine, --consensus, or --notary) (built as the `g8e.gateway` binary from the Go Gateway codebase). It acts as the platform's cryptographic backplane, providing central persistence (SQLite Coordination Store), PKI/CA certificate issuance, a secure pub/sub broker, Server-Sent Events (SSE) buffering, replay protection, and the authoritative audit event vault.
 
 ---
 

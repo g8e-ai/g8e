@@ -1,7 +1,7 @@
 -- operator SQLite Schema
--- Canonical schema for the g8e coordination store (g8e.operator --listen mode).
--- Embedded into `listen_db.go` via `//go:embed schema.sql` and applied on
--- database open via `ListenDBService.initSchema`. This file is the SINGLE
+-- Canonical schema for the g8e coordination store (g8e.operator --doctrine/--consensus/--notary mode).
+-- Embedded into `gateway_db.go` via `//go:embed schema.sql` and applied on
+-- database open via `GatewayDBService.initSchema`. This file is the SINGLE
 -- source of truth for the operator schema - do not duplicate it elsewhere.
 --
 -- All domain data (users, sessions, operators, cases, etc.) is stored as JSON

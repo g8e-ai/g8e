@@ -24,6 +24,6 @@ Rather than competing with tool-calling standards like Anthropic’s Model Conte
 ## Core Architecture
 
 1. **Protocol Gateway** - the domain-agnostic wire contract, schemas, transaction hash, state binding, receipt model, and Doctrine (L1)/Quorum (L2)/Notary (L3) verification rules.
-2. **Governance Gateway (`g8eg`)** - the reference Policy Decision Point (PDP), running in `--listen` mode for mTLS APIs, PKI, replay defense, transaction suspension, state roots, and dispatch.
+2. **Governance Gateway (`g8eg`)** - the reference Policy Decision Point (PDP), running in Gateway mode (--doctrine, --consensus, or --notary) for mTLS APIs, PKI, replay defense, transaction suspension, state roots, and dispatch.
 3. **Governed Operator (`g8eo`)** - the host-resident Policy Execution Point (PEP), MCP server, Sentinel scrubber, local audit authority, and Actuator execution boundary.
 4. **Application layer** - optional producers and consumers, including the reference **g8e Agentic Ensemble** (`g8ee`), BYO frontends, BYO agents, MCP clients, A2A clients, and native g8e applications.

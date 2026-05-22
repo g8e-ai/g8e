@@ -11,7 +11,7 @@ The **g8e Operator** is the host-side, sovereign agent role defined by the [g8e 
 The reference Operator is **`g8eo`** (built as the `g8e.operator` binary). It functions as a sovereign, **Governed Operator** and **Model Context Protocol (MCP) Server** (the Policy Execution Point).
 
 > **One Codebase, Two Binaries, Two Roles.** The exact same compiled Go codebase is used to power both sides of the governance boundary:
-> - **`g8eg` (Governance Gateway / `g8e.gateway`)**: Runs in `--listen` mode as the central Policy Decision Point (PDP) and cryptographic backplane.
+> - **`g8eg` (Governance Gateway / `g8e.gateway`)**: Runs in Gateway mode (--doctrine, --consensus, or --notary) as the central Policy Decision Point (PDP) and cryptographic backplane.
 > - **`g8eo` (Governed Operator / `g8e.operator`)**: Runs on target hosts (and serves MCP over stdio with `--mcp-serve`) as the host-side Policy Execution Point (PEP).
 >
 > This document focuses on the PEP / Governed Operator role on a managed host.
@@ -129,7 +129,7 @@ The Actuator's Ed25519 signing key lives in `.g8e/secrets/Actuator_signing_key`;
 | Mode | Purpose |
 |---|---|
 | **Standard (default)** | Satellite execution on a managed host. |
-| **Listen** (`--listen`) | Hub mode. See [Governance Gateway (g8eg)](g8eg.md). |
+| **Gateway** (--doctrine/--consensus/--notary) | Hub mode. See [Governance Gateway (g8eg)](g8eg.md). |
 | **Stream** | Concurrent SSH-based fleet deployment (the binary streams itself into memory on remote hosts). |
 | **OpenClaw** | Runs as a standalone capability provider behind an OpenClaw Gateway for external orchestrators. |
 
@@ -142,7 +142,7 @@ The Actuator's Ed25519 signing key lives in `.g8e/secrets/Actuator_signing_key`;
 | `-k`, `--key` | API key for auth and Vault unlock. |
 | `-D`, `--device-token` | Device-link token for automated registration and CSR signing. |
 | `-e`, `--endpoint` | Hub endpoint address. |
-| `--listen` | Start in Hub mode. |
+| `--doctrine`, `--consensus`, `--notary` | Start in Gateway mode (Hub). |
 | `--http-listen-port` | mTLS API and Pub/Sub port (default `<!-- g8e:port:operator_http -->8440<!-- /g8e:port -->`). |
 | `--bootstrap-listen-port` | Device-link enrollment port (default `<!-- g8e:port:operator_bootstrap -->8441<!-- /g8e:port -->`, plain HTTP; must not share a port with any TLS surface). |
 | `--public-listen-port` | Browser/BYO public port (default `<!-- g8e:port:operator_public -->8442<!-- /g8e:port -->`; multiplexes onto the mTLS API listener when equal, using `VerifyClientCertIfGiven`). |
@@ -176,7 +176,7 @@ For `./g8e` lifecycle commands (`platform start`, `apps`, `operator deploy`, `op
 
 ## Air-Gap Operation
 
-The Operator is fully self-contained. There are no runtime internet dependencies; no telemetry leaves the host. All trust material, persistence, and secrets are local. Local LLM inference is supported through `g8ee`'s `LlamaCppProvider` for fully offline reasoning. PKI, CA hierarchy, and trust bundles are generated and rotated locally; the Hub forbids outbound dialing in `--listen` mode.
+The Operator is fully self-contained. There are no runtime internet dependencies; no telemetry leaves the host. All trust material, persistence, and secrets are local. Local LLM inference is supported through `g8ee`'s `LlamaCppProvider` for fully offline reasoning. PKI, CA hierarchy, and trust bundles are generated and rotated locally; the Hub forbids outbound dialing in Gateway mode.
 
 ---
 

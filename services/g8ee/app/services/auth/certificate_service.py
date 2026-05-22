@@ -71,7 +71,7 @@ class CertificateService:
                 logger.error("[CERT-SERVICE] Failed to load revocations from persistence: %s", e)
 
         # 2. Load CA Certificate for local reference
-        # Authority: operator (Operator --listen mode)
+        # Authority: operator (Operator Gateway mode)
         # We no longer read ca.key directly. Key operations are behind the /.well-known/g8e/pki/sign-csr API.
         paths = [
             os.path.join(self.pki_dir, "trust", "hub-bundle.pem"),

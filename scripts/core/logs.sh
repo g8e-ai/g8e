@@ -68,7 +68,7 @@ usage() {
     echo "  ./g8e platform logs --since 1h --level error # errors in last hour"
     echo "  ./g8e platform logs --invert 'cache (HIT|MISS)|healthcheck'"
     echo "  ./g8e platform logs g8ee --tail 50"
-    echo "  ./g8e platform logs operator                # operator listen mode logs"
+    echo "  ./g8e platform logs operator                # operator gateway mode logs"
     exit 0
 }
 
