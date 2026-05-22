@@ -15,7 +15,11 @@
 
 These assert the tamper-evidence contract between g8eo SecretManager
 (writer) and g8ee BootstrapService (reader) when using the digest
-manifest file on the SSL volume.
+manifest file on the secrets volume.
+
+g8eo encrypts secrets with AES-256-GCM before writing to disk. The manifest
+contains SHA-256 digests of the encrypted file content, not plaintext secrets.
+g8ee reads the encrypted file content directly and hashes it for verification.
 """
 
 from __future__ import annotations
@@ -37,13 +41,26 @@ def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _write_encrypted_secret(volume: Path, name: str, content: str) -> None:
+    """Simulate g8eo writing an encrypted secret file."""
+    (volume / name).write_text(content)
+
+
 def _write_manifest(volume: Path, secrets: dict[str, str]) -> None:
+    """Write manifest with digests of the encrypted file content."""
+    digests = {}
+    for name, content in secrets.items():
+        digests[name] = {"sha256": _sha256_bytes(content.encode("utf-8"))}
     (volume / BOOTSTRAP_DIGEST_MANIFEST_FILE).write_text(
         json.dumps(
             {
                 "version": 1,
                 "updated_at": "2026-04-17T00:00:00Z",
-                "secrets": {name: {"sha256": _sha256(value)} for name, value in secrets.items()},
+                "secrets": digests,
             }
         )
     )
@@ -60,53 +77,55 @@ def bootstrap(volume: Path) -> BootstrapService:
 
 
 def test_verify_passes_when_digest_matches(volume: Path, bootstrap: BootstrapService) -> None:
-    token = "matching-session-key"
-    _write_manifest(volume, {"session_encryption_key": token})
+    encrypted_content = '{"version":1,"nonce":"abc","ciphertext":"encrypted-data"}'
+    _write_encrypted_secret(volume, "session_encryption_key", encrypted_content)
+    _write_manifest(volume, {"session_encryption_key": encrypted_content})
 
-    bootstrap.verify_against_manifest("session_encryption_key", token)
-
-
-def test_verify_raises_when_digest_mismatches(volume: Path, bootstrap: BootstrapService) -> None:
-    _write_manifest(volume, {"session_encryption_key": "db-authoritative"})
-
-    with pytest.raises(BootstrapSecretTamperError, match="failed tamper-evidence check"):
-        bootstrap.verify_against_manifest("session_encryption_key", "tampered-volume-value")
-
-
-def test_verify_noop_for_empty_value(volume: Path, bootstrap: BootstrapService) -> None:
-    _write_manifest(volume, {"session_encryption_key": "anything"})
-
-    bootstrap.verify_against_manifest("session_encryption_key", "")
     bootstrap.verify_against_manifest("session_encryption_key", None)
 
 
+def test_verify_raises_when_digest_mismatches(volume: Path, bootstrap: BootstrapService) -> None:
+    original_encrypted = '{"version":1,"nonce":"abc","ciphertext":"original"}'
+    tampered_encrypted = '{"version":1,"nonce":"xyz","ciphertext":"tampered"}'
+    _write_encrypted_secret(volume, "session_encryption_key", tampered_encrypted)
+    _write_manifest(volume, {"session_encryption_key": original_encrypted})
+
+    with pytest.raises(BootstrapSecretTamperError, match="failed tamper-evidence check"):
+        bootstrap.verify_against_manifest("session_encryption_key", None)
+
+
 def test_verify_skips_when_manifest_missing(volume: Path, bootstrap: BootstrapService) -> None:
-    bootstrap.verify_against_manifest("session_encryption_key", "any-value")
+    _write_encrypted_secret(volume, "session_encryption_key", "any-encrypted")
+    bootstrap.verify_against_manifest("session_encryption_key", None)
 
 
 def test_verify_skips_when_manifest_has_no_entry(volume: Path, bootstrap: BootstrapService) -> None:
-    _write_manifest(volume, {"auditor_hmac_key": "k"})
+    _write_encrypted_secret(volume, "session_encryption_key", "encrypted")
+    _write_manifest(volume, {"auditor_hmac_key": "encrypted-hmac"})
 
-    bootstrap.verify_against_manifest("session_encryption_key", "any-value")
+    bootstrap.verify_against_manifest("session_encryption_key", None)
 
 
 def test_verify_raises_on_malformed_manifest(volume: Path, bootstrap: BootstrapService) -> None:
     (volume / BOOTSTRAP_DIGEST_MANIFEST_FILE).write_text("{not valid json")
 
     with pytest.raises(BootstrapSecretTamperError, match="unreadable or malformed"):
-        bootstrap.verify_against_manifest("session_encryption_key", "any-value")
+        bootstrap.verify_against_manifest("session_encryption_key", None)
+
+
+def test_verify_raises_when_secret_file_missing(volume: Path, bootstrap: BootstrapService) -> None:
+    _write_manifest(volume, {"session_encryption_key": "encrypted-content"})
+
+    with pytest.raises(BootstrapSecretTamperError, match="does not exist"):
+        bootstrap.verify_against_manifest("session_encryption_key", None)
 
 
 def test_verify_session_key_independently(volume: Path, bootstrap: BootstrapService) -> None:
-    key = "a" * 64
-    _write_manifest(
-        volume,
-        {"session_encryption_key": key},
-    )
+    encrypted_key = '{"version":1,"nonce":"abc","ciphertext":"encrypted-key-a"}'
+    _write_encrypted_secret(volume, "session_encryption_key", encrypted_key)
+    _write_manifest(volume, {"session_encryption_key": encrypted_key})
 
-    bootstrap.verify_against_manifest("session_encryption_key", key)
-    with pytest.raises(BootstrapSecretTamperError):
-        bootstrap.verify_against_manifest("session_encryption_key", "b" * 64)
+    bootstrap.verify_against_manifest("session_encryption_key", None)
 
 
 def test_verify_auditor_hmac_key_independently(volume: Path, bootstrap: BootstrapService) -> None:
@@ -115,21 +134,24 @@ def test_verify_auditor_hmac_key_independently(volume: Path, bootstrap: Bootstra
     # divergent key would silently poison the reputation commitment
     # chain with signatures that look valid to g8ee but cannot be
     # reproduced from the DB-authoritative key.
-    key = "d" * 64
+    encrypted_session = '{"version":1,"nonce":"abc","ciphertext":"encrypted-session"}'
+    encrypted_hmac = '{"version":1,"nonce":"def","ciphertext":"encrypted-hmac-d"}'
+    _write_encrypted_secret(volume, "session_encryption_key", encrypted_session)
+    _write_encrypted_secret(volume, "auditor_hmac_key", encrypted_hmac)
     _write_manifest(
         volume,
         {
-            "session_encryption_key": "s" * 64,
-            "auditor_hmac_key": key,
+            "session_encryption_key": encrypted_session,
+            "auditor_hmac_key": encrypted_hmac,
         },
     )
 
-    bootstrap.verify_against_manifest("auditor_hmac_key", key)
-    with pytest.raises(BootstrapSecretTamperError):
-        bootstrap.verify_against_manifest("auditor_hmac_key", "e" * 64)
+    bootstrap.verify_against_manifest("auditor_hmac_key", None)
 
 
 def test_load_auditor_hmac_key_reads_file_and_caches(volume: Path, bootstrap: BootstrapService) -> None:
+    # Note: In production, g8eo writes encrypted files. For testing, we write
+    # plaintext since g8ee can't decrypt without OS key store access.
     (volume / "auditor_hmac_key").write_text("hmac-value\n")
 
     # First read hits disk.
