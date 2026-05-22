@@ -484,8 +484,8 @@ run_ci() {
         log_warn "govulncheck not found, skipping"
     fi
 
-    # 4. test-g8eo & apps-g8ee (requires platform)
-    log_header "CI: Running Gateway and app tests"
+    # 4. test-g8eo & test-scripts & apps-g8ee (requires platform)
+    log_header "CI: Running Gateway, scripts, and app tests"
     
     # Skip proto generation in sub-steps since we already did it at start of run_tests.sh
     export G8E_SKIP_PROTO=true
@@ -516,6 +516,13 @@ run_ci() {
     log_header "CI: test-g8eo (standard)"
     if ! run_g8eo; then
         log_err "test-g8eo failed"
+        test_exit_code=1
+    fi
+
+    # test-scripts
+    log_header "CI: test-scripts"
+    if ! make test-scripts; then
+        log_err "test-scripts failed"
         test_exit_code=1
     fi
 
