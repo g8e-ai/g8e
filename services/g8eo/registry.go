@@ -657,15 +657,45 @@ func Registry() Snapshot {
 			"SourceUserTerminal": {Value: "g8e.v1.source.user.terminal", GoConst: "EventSourceUserTerminal", PythonConst: "SOURCE_USER_TERMINAL"},
 		},
 		Status: StatusSnapshot{
-			Other: map[string]Entry{
-				"approval.error.type": {Value: "", GoConst: "", PythonConst: ""},
-				"attachment.type": {Value: "", GoConst: "", PythonConst: ""},
-				"execution_status": {Value: "", GoConst: "", PythonConst: ""},
-				"llm.models": {Value: "", GoConst: "", PythonConst: ""},
-				"operator_status": {Value: "", GoConst: "", PythonConst: ""},
-				"tribunal.outcome": {Value: "", GoConst: "", PythonConst: ""},
-				"user_role": {Value: "", GoConst: "", PythonConst: ""},
-				"user_status": {Value: "", GoConst: "", PythonConst: ""},
+			UserRole: map[string]Entry{
+				"admin": {Value: "admin", GoConst: "UserRoleAdmin", PythonConst: "ADMIN"},
+				"user": {Value: "user", GoConst: "UserRoleUser", PythonConst: "USER"},
+			},
+			UserStatus: map[string]Entry{
+				"active": {Value: "active", GoConst: "UserStatusActive", PythonConst: "ACTIVE"},
+				"disabled": {Value: "disabled", GoConst: "UserStatusDisabled", PythonConst: "DISABLED"},
+			},
+			ApprovalErrorType: map[string]Entry{
+				"approval.exception": {Value: "approval.exception", GoConst: "ApprovalErrorTypeApprovalException", PythonConst: "APPROVAL_EXCEPTION"},
+				"approval.publish.failure": {Value: "approval.publish.failure", GoConst: "ApprovalErrorTypeApprovalPublishFailure", PythonConst: "APPROVAL_PUBLISH_FAILURE"},
+				"approval.timeout": {Value: "approval.timeout", GoConst: "ApprovalErrorTypeApprovalTimeout", PythonConst: "APPROVAL_TIMEOUT"},
+				"intent.approval.exception": {Value: "intent.approval.exception", GoConst: "ApprovalErrorTypeIntentApprovalException", PythonConst: "INTENT_APPROVAL_EXCEPTION"},
+				"invalid.intent": {Value: "invalid.intent", GoConst: "ApprovalErrorTypeInvalidIntent", PythonConst: "INVALID_INTENT"},
+			},
+			AttachmentType: map[string]Entry{
+				"image": {Value: "image", GoConst: "AttachmentTypeImage", PythonConst: "IMAGE"},
+				"other": {Value: "other", GoConst: "AttachmentTypeOther", PythonConst: "OTHER"},
+				"pdf": {Value: "pdf", GoConst: "AttachmentTypePdf", PythonConst: "PDF"},
+				"text": {Value: "text", GoConst: "AttachmentTypeText", PythonConst: "TEXT"},
+			},
+			ExecutionStatus: map[string]Entry{
+				"completed": {Value: "completed", GoConst: "ExecutionStatusCompleted", PythonConst: "COMPLETED"},
+				"executing": {Value: "executing", GoConst: "ExecutionStatusExecuting", PythonConst: "EXECUTING"},
+				"failed": {Value: "failed", GoConst: "ExecutionStatusFailed", PythonConst: "FAILED"},
+				"pending": {Value: "pending", GoConst: "ExecutionStatusPending", PythonConst: "PENDING"},
+			},
+			LlmModels: map[string]Entry{
+				"llamacpp.gemma4.e2b": {Value: "google_gemma-4-E2B-it-Q4_K_M.gguf", GoConst: "LLMModelsLlamacppGemma4E2b", PythonConst: "LLAMACPP_GEMMA4_E2B"},
+			},
+			OperatorStatus: map[string]Entry{
+				"available": {Value: "available", GoConst: "OperatorStatusAvailable", PythonConst: "AVAILABLE"},
+				"offline": {Value: "offline", GoConst: "OperatorStatusOffline", PythonConst: "OFFLINE"},
+			},
+			TribunalOutcome: map[string]Entry{
+				"consensus": {Value: "consensus", GoConst: "TribunalOutcomeConsensus", PythonConst: "CONSENSUS"},
+				"consensus_failed": {Value: "consensus_failed", GoConst: "TribunalOutcomeConsensusFailed", PythonConst: "CONSENSUS_FAILED"},
+				"verification_failed": {Value: "verification_failed", GoConst: "TribunalOutcomeVerificationFailed", PythonConst: "VERIFICATION_FAILED"},
+				"verified": {Value: "verified", GoConst: "TribunalOutcomeVerified", PythonConst: "VERIFIED"},
 			},
 		},
 		Senders: map[string]Entry{

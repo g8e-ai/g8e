@@ -32,26 +32,33 @@ type JSONEntry struct {
 	PythonConst string `json:"_python_const"`
 }
 
+// NestedStatusEntry represents the nested structure of status.json
+type NestedStatusEntry struct {
+	Value       string `json:"value"`
+	GoConst     string `json:"_go_const"`
+	PythonConst string `json:"_python_const"`
+}
+
 // JSONFile represents the structure of a constants JSON file
 type JSONFile struct {
-	Collections map[string]JSONEntry `json:"collections"`
-	Events      map[string]JSONEntry `json:"events"`
-	Status      map[string]JSONEntry `json:"status"`
-	Senders     map[string]JSONEntry `json:"senders"`
-	KVKeys      map[string]JSONEntry `json:"kv_keys"`
-	Channels    map[string]JSONEntry `json:"channels"`
-	PubSub      map[string]JSONEntry `json:"pubsub"`
-	Intents     map[string]JSONEntry `json:"intents"`
-	Prompts     map[string]JSONEntry `json:"prompts"`
-	Headers     map[string]JSONEntry `json:"headers"`
-	DocumentIds map[string]JSONEntry `json:"document_ids"`
-	Platform    map[string]JSONEntry `json:"platform"`
-	Agents      map[string]string    `json:"agents"`
-	Paths       map[string]JSONEntry `json:"paths"`
-	Ports       map[string]int       `json:"ports"`
-	EnvVars     map[string]string    `json:"env_vars"`
-	Timestamp   map[string]string    `json:"timestamp"`
-	ApiPaths    interface{}          `json:"api_paths"`
+	Collections map[string]JSONEntry            `json:"collections"`
+	Events      map[string]JSONEntry            `json:"events"`
+	Status      map[string]map[string]JSONEntry `json:"status"`
+	Senders     map[string]JSONEntry            `json:"senders"`
+	KVKeys      map[string]JSONEntry            `json:"kv_keys"`
+	Channels    map[string]JSONEntry            `json:"channels"`
+	PubSub      map[string]JSONEntry            `json:"pubsub"`
+	Intents     map[string]JSONEntry            `json:"intents"`
+	Prompts     map[string]JSONEntry            `json:"prompts"`
+	Headers     map[string]JSONEntry            `json:"headers"`
+	DocumentIds map[string]JSONEntry            `json:"document_ids"`
+	Platform    map[string]JSONEntry            `json:"platform"`
+	Agents      map[string]string               `json:"agents"`
+	Paths       map[string]JSONEntry            `json:"paths"`
+	Ports       map[string]int                  `json:"ports"`
+	EnvVars     map[string]string               `json:"env_vars"`
+	Timestamp   map[string]string               `json:"timestamp"`
+	ApiPaths    interface{}                     `json:"api_paths"`
 }
 
 func main() {
@@ -417,10 +424,23 @@ func generateRegistry(data JSONFile) string {
 	// Status (nested structure)
 	if data.Status != nil {
 		sb.WriteString("\t\tStatus: StatusSnapshot{\n")
-		// Group status by type based on key prefixes
-		groups := groupStatusKeys(data.Status)
-		for groupType, entries := range groups {
-			sb.WriteString(fmt.Sprintf("\t\t\t%s: map[string]Entry{\n", groupType))
+		// Map nested status categories to Go struct field names
+		categoryMapping := map[string]string{
+			"attachment.type":     "AttachmentType",
+			"user_role":           "UserRole",
+			"user_status":         "UserStatus",
+			"operator_status":     "OperatorStatus",
+			"execution_status":    "ExecutionStatus",
+			"tribunal.outcome":    "TribunalOutcome",
+			"approval.error.type": "ApprovalErrorType",
+			"llm.models":          "LlmModels",
+		}
+		for category, entries := range data.Status {
+			fieldName, ok := categoryMapping[category]
+			if !ok {
+				continue
+			}
+			sb.WriteString(fmt.Sprintf("\t\t\t%s: map[string]Entry{\n", fieldName))
 			keys := sortedKeys(entries)
 			for _, key := range keys {
 				entry := entries[key]
@@ -539,44 +559,4 @@ func sortedIntKeys(m map[string]int) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func groupStatusKeys(status map[string]JSONEntry) map[string]map[string]JSONEntry {
-	groups := make(map[string]map[string]JSONEntry)
-	for key, entry := range status {
-		var group string
-		if strings.HasPrefix(key, "attachment.type.") {
-			group = "AttachmentType"
-			key = strings.TrimPrefix(key, "attachment.type.")
-		} else if strings.HasPrefix(key, "user_role.") {
-			group = "UserRole"
-			key = strings.TrimPrefix(key, "user_role.")
-		} else if strings.HasPrefix(key, "user_status.") {
-			group = "UserStatus"
-			key = strings.TrimPrefix(key, "user_status.")
-		} else if strings.HasPrefix(key, "operator_status.") {
-			group = "OperatorStatus"
-			key = strings.TrimPrefix(key, "operator_status.")
-		} else if strings.HasPrefix(key, "execution_status.") {
-			group = "ExecutionStatus"
-			key = strings.TrimPrefix(key, "execution_status.")
-		} else if strings.HasPrefix(key, "tribunal.outcome.") {
-			group = "TribunalOutcome"
-			key = strings.TrimPrefix(key, "tribunal.outcome.")
-		} else if strings.HasPrefix(key, "approval.error.type.") {
-			group = "ApprovalErrorType"
-			key = strings.TrimPrefix(key, "approval.error.type.")
-		} else if strings.HasPrefix(key, "llm.models.") {
-			group = "LlmModels"
-			key = strings.TrimPrefix(key, "llm.models.")
-		} else {
-			group = "Other"
-		}
-
-		if groups[group] == nil {
-			groups[group] = make(map[string]JSONEntry)
-		}
-		groups[group][key] = entry
-	}
-	return groups
 }
