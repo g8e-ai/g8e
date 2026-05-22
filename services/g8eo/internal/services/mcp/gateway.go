@@ -906,7 +906,7 @@ func (g *GatewayService) mapGatewayError(err error) (int, string) {
 		return ErrCodeL2SignatureInvalid, msg
 
 	case errors.Is(err, governance.ErrL3ProofInvalid),
-		errors.Is(err, governance.ErrL3VerifierNotConfigured):
+		errors.Is(err, governance.ErrL3NotaryNotConfigured):
 		return ErrCodeL3ProofInvalid, msg
 	}
 

@@ -67,9 +67,9 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 )
 
-type acceptingL3Verifier struct{}
+type acceptingL3Notary struct{}
 
-func (acceptingL3Verifier) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
+func (acceptingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
 	return true, nil
 }
 
@@ -109,7 +109,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Verifier:         acceptingL3Verifier{},
+		L3Notary:           acceptingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 	})

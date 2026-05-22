@@ -45,7 +45,7 @@ var (
 	ErrL2KeyNotConfigured      = errors.New("TX_QUORUM_L2_KEY_MISSING: trusted Quorum (L2Consensus) signer key not configured")
 	ErrL3ProofMissing          = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
 	ErrL3ProofInvalid          = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
-	ErrL3VerifierNotConfigured = errors.New("TX_NOTARY_L3_VERIFIER_MISSING: Notary (L3Notary) verifier required but not configured")
+	ErrL3NotaryNotConfigured   = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")
 	ErrTransactionHashMissing  = errors.New("TX_HASH_MISSING: transaction_hash required")
 	ErrTransactionIDMissing    = errors.New("TX_ID_MISSING: id required")
 	ErrExpiresAtMissing        = errors.New("TX_EXPIRES_AT_MISSING: expires_at required")
@@ -121,7 +121,7 @@ type TransactionVerifier struct {
 	replayStore       ReplayStore
 	stateRootProvider StateRootProvider
 	signerStore       SignerStore
-	l3Verifier        L3Verifier
+	l3Notary          L3Notary
 	knownActionTypes  map[constants.ActionType]struct{}
 }
 
@@ -131,7 +131,7 @@ func NewTransactionVerifier(
 	replayStore ReplayStore,
 	stateRootProvider StateRootProvider,
 	signerStore SignerStore,
-	l3Verifier L3Verifier,
+	l3Notary L3Notary,
 	knownActionTypes []constants.ActionType,
 ) *TransactionVerifier {
 	knownActions := make(map[constants.ActionType]struct{})
@@ -144,7 +144,7 @@ func NewTransactionVerifier(
 		replayStore:       replayStore,
 		stateRootProvider: stateRootProvider,
 		signerStore:       signerStore,
-		l3Verifier:        l3Verifier,
+		l3Notary:          l3Notary,
 		knownActionTypes:  knownActions,
 	}
 }
@@ -267,10 +267,10 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		if envelope.Governance == nil || envelope.Governance.L3 == nil || envelope.Governance.L3.Proof == nil {
 			return nil, ErrL3ProofMissing
 		}
-		if tv.l3Verifier == nil {
-			return nil, ErrL3VerifierNotConfigured
+		if tv.l3Notary == nil {
+			return nil, ErrL3NotaryNotConfigured
 		}
-		ok, err := tv.l3Verifier.VerifyL3Proof(
+		ok, err := tv.l3Notary.VerifyL3Proof(
 			envelope.OperatorId,
 			envelope.TransactionHash,
 			envelope.CliSessionId,

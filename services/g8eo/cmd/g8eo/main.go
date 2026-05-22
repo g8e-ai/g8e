@@ -635,7 +635,7 @@ func runListenMode(httpPort, bootstrapPort, publicPort int, dataDir, pkiDir, sec
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
-		L3Verifier:         govDeps.L3Verifier,
+		L3Notary:           govDeps.L3Notary,
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpSvc,

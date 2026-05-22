@@ -239,11 +239,11 @@ func (m *memReplayStore) CheckAndSetNonce(nonce string, _ time.Time) (bool, erro
 	return false, nil
 }
 
-// ── L3 verifier (auto-approve non-mutations; mutations need no L3 here) ───────
+// ── L3 notary (auto-approve non-mutations; mutations need no L3 here) ───────
 
-type chaosL3Verifier struct{}
+type chaosL3Notary struct{}
 
-func (c *chaosL3Verifier) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+func (c *chaosL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	return true, nil
 }
 
@@ -417,7 +417,7 @@ func main() {
 	// ── governance stack ──────────────────────────────────────────────────────
 	replayStore := newMemReplayStore()
 	stateRootProvider := &dynamicStateRoot{root: initialStateRoot}
-	l3Verifier := &chaosL3Verifier{}
+	l3Notary := &chaosL3Notary{}
 
 	knownActionTypes := []constants.ActionType{
 		constants.ActionTypeExecuteBash, constants.ActionTypeFileEdit, constants.ActionTypeRestoreFile, constants.ActionTypeShutdown,
@@ -433,7 +433,7 @@ func main() {
 		replayStore,
 		stateRootProvider,
 		&governance.SimpleSignerStore{Signers: trustedSigners},
-		l3Verifier,
+		l3Notary,
 		knownActionTypes,
 	)
 
@@ -441,7 +441,7 @@ func main() {
 		Logger:            logger,
 		SignerStore:       &governance.SimpleSignerStore{Signers: trustedSigners},
 		AuditVault:        av,
-		L3Verifier:        l3Verifier,
+		L3Notary:          l3Notary,
 		StateRootProvider: stateRootProvider,
 		ExecutionHandler:  &chaosExecutionHandler{ledger: ledger, stateRoot: stateRootProvider},
 		SigningKey:        privKey,

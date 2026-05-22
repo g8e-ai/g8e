@@ -47,9 +47,9 @@ func (m *mockTransactionAudit) DocSet(collection, id string, data json.RawMessag
 	return nil
 }
 
-type mockL3Verifier struct{}
+type mockL3Notary struct{}
 
-func (m *mockL3Verifier) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+func (m *mockL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	return true, nil // Always verify in tests
 }
 
@@ -81,7 +81,7 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		ReplayStore:        &mockReplayStore{},
 		StateRootProvider:  &mockStateRootProvider{},
 		TransactionAudit:   &mockTransactionAudit{},
-		L3Verifier:         &mockL3Verifier{},
+		L3Notary:           &mockL3Notary{},
 		SignerStore:        signerStore,
 		ActuatorSigningKey: priv,
 		ActuatorKeyID:      "Actuator-key",
