@@ -435,6 +435,7 @@ func main() {
 		&governance.SimpleSignerStore{Signers: trustedSigners},
 		l3Notary,
 		knownActionTypes,
+		"notary",
 	)
 
 	act := &governance.Actuator{

@@ -3526,8 +3526,14 @@ type ActionReceipt struct {
 	Signature string `protobuf:"bytes,9,opt,name=signature,proto3" json:"signature,omitempty"`
 	// Flag indicating if the transaction was signed implicitly (gateway-local).
 	ImplicitL2Signature bool `protobuf:"varint,10,opt,name=implicit_l2_signature,json=implicitL2Signature,proto3" json:"implicit_l2_signature,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Flag indicating if L2 (Consensus/Tribunal) signature was valid.
+	// Set to false if signature was missing or invalid but posture allowed execution.
+	L2Valid bool `protobuf:"varint,11,opt,name=l2_valid,json=l2Valid,proto3" json:"l2_valid,omitempty"`
+	// Flag indicating if L3 (Notary/Human) proof was valid.
+	// Set to false if proof was missing or invalid but posture allowed execution.
+	L3Valid       bool `protobuf:"varint,12,opt,name=l3_valid,json=l3Valid,proto3" json:"l3_valid,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ActionReceipt) Reset() {
@@ -3626,6 +3632,20 @@ func (x *ActionReceipt) GetSignature() string {
 func (x *ActionReceipt) GetImplicitL2Signature() bool {
 	if x != nil {
 		return x.ImplicitL2Signature
+	}
+	return false
+}
+
+func (x *ActionReceipt) GetL2Valid() bool {
+	if x != nil {
+		return x.L2Valid
+	}
+	return false
+}
+
+func (x *ActionReceipt) GetL3Valid() bool {
+	if x != nil {
+		return x.L3Valid
 	}
 	return false
 }
@@ -8678,7 +8698,7 @@ const file_operator_proto_rawDesc = "" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\"N\n" +
 	"\x15McpPromptGetRequested\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12!\n" +
-	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\"\xbd\x03\n" +
+	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\"\xf3\x03\n" +
 	"\rActionReceipt\x12%\n" +
 	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x12)\n" +
 	"\x10transaction_hash\x18\x02 \x01(\tR\x0ftransactionHash\x128\n" +
@@ -8690,7 +8710,9 @@ const file_operator_proto_rawDesc = "" +
 	"\rsigner_key_id\x18\b \x01(\tR\vsignerKeyId\x12\x1c\n" +
 	"\tsignature\x18\t \x01(\tR\tsignature\x122\n" +
 	"\x15implicit_l2_signature\x18\n" +
-	" \x01(\bR\x13implicitL2Signature\"\xcc\x04\n" +
+	" \x01(\bR\x13implicitL2Signature\x12\x19\n" +
+	"\bl2_valid\x18\v \x01(\bR\al2Valid\x12\x19\n" +
+	"\bl3_valid\x18\f \x01(\bR\al3Valid\"\xcc\x04\n" +
 	"\x15CommitmentAttestation\x12%\n" +
 	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x12)\n" +
 	"\x10transaction_hash\x18\x02 \x01(\tR\x0ftransactionHash\x122\n" +

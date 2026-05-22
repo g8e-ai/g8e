@@ -242,6 +242,10 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		constants.ActionTypeMcpCall,
 		constants.ActionTypeA2aCall,
 	}
+	posture := string(c.Config.Listen.Posture)
+	if posture == "" {
+		posture = "doctrine"
+	}
 	rs.transactionVerifier = governance.NewTransactionVerifier(
 		c.Logger,
 		c.ReplayStore,
@@ -249,6 +253,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		rs.signerStore,
 		c.L3Notary,
 		knownActionTypes,
+		posture,
 	)
 
 	// Wire MCP gateway with dependencies if configured.

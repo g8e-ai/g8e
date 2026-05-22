@@ -110,6 +110,8 @@ func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg 
 		ExecutedAtUnixMs:    time.Now().UnixMilli(),
 		SignerKeyId:         w.KeyID,
 		ImplicitL2Signature: implicitL2,
+		L2Valid:             vt.L2Valid,
+		L3Valid:             vt.L3Valid,
 	}
 
 	// 2. Sign the initial receipt (intent to execute)
@@ -176,7 +178,7 @@ func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg 
 // CanonicalizeActionReceipt produces a deterministic byte representation for signing/verification.
 // This function must be used by both signing and verification to ensure consistency.
 // Field order: transaction_id, transaction_hash, status, result_summary, state_root_before,
-// state_root_after, executed_at_unix_ms, signer_key_id, implicit_l2_signature.
+// state_root_after, executed_at_unix_ms, signer_key_id, implicit_l2_signature, l2_valid, l3_valid.
 // All fields are included in the canonical form.
 func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 	payload, err := json.Marshal(map[string]interface{}{
@@ -189,6 +191,8 @@ func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 		"executed_at_unix_ms":   r.ExecutedAtUnixMs,
 		"signer_key_id":         r.SignerKeyId,
 		"implicit_l2_signature": r.ImplicitL2Signature,
+		"l2_valid":              r.L2Valid,
+		"l3_valid":              r.L3Valid,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal receipt for canonicalization: %w", err)
