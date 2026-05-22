@@ -35,7 +35,8 @@ func TestAuthStatusIndependence(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	pkiDir := t.TempDir()
-	pki := newPKIAuthority(dbDir, pkiDir, db, logger)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	auth := NewAuthService(db, pki, logger, userSvc, secretsDir)
 

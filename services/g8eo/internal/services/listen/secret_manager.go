@@ -165,10 +165,7 @@ func (m *SecretManager) createPlatformSettings(now time.Time) error {
 
 	platformSettings := models.SettingsDocument{}
 	platformSettings.Settings = map[string]interface{}{
-		"session_encryption_key": secrets["session_encryption_key"],
-		"Actuator_signing_key":   secrets["Actuator_signing_key"],
-		"Actuator_key_id":        secrets["Actuator_key_id"],
-		"auditor_hmac_key":       secrets["auditor_hmac_key"],
+		"Actuator_key_id": secrets["Actuator_key_id"],
 	}
 	platformSettings.CreatedAt = now
 	platformSettings.UpdatedAt = now
@@ -211,31 +208,12 @@ func (m *SecretManager) validatePlatformSettings() error {
 		return fmt.Errorf("bootstrap secrets path %s is not a directory; delete and recreate runtime state", m.secretsDir)
 	}
 
-	dbSecrets, err := m.loadRequiredDBSecrets()
-	if err != nil {
-		return err
-	}
 	manifest, err := m.readDigestManifest()
 	if err != nil {
 		return err
 	}
 
 	for _, name := range requiredBootstrapSecrets {
-		// Decrypt to verify against DB (plaintext comparison)
-		decryptedValue, err := m.readRequiredSecretFile(name)
-		if err != nil {
-			return err
-		}
-		if decryptedValue != dbSecrets[name] {
-			fileDigest := sha256.Sum256([]byte(decryptedValue))
-			dbDigest := sha256.Sum256([]byte(dbSecrets[name]))
-			m.logger.Error("[SecretManager] Bootstrap secret divergence between file and DB",
-				"name", name,
-				"file_sha256", hex.EncodeToString(fileDigest[:]),
-				"db_sha256", hex.EncodeToString(dbDigest[:]))
-			return fmt.Errorf("bootstrap secret %s differs between secrets directory and platform_settings DB; delete and recreate runtime state", name)
-		}
-
 		// Verify encrypted file digest matches manifest (what g8ee will check)
 		entry, ok := manifest.Secrets[name]
 		if !ok || entry.SHA256 == "" {
@@ -253,33 +231,6 @@ func (m *SecretManager) validatePlatformSettings() error {
 	}
 
 	return nil
-}
-
-func (m *SecretManager) loadRequiredDBSecrets() (map[string]string, error) {
-	var dataJSON string
-	if err := m.db.QueryRow(
-		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
-	).Scan(&dataJSON); err != nil {
-		return nil, fmt.Errorf("failed to query platform_settings document: %w", err)
-	}
-
-	var settings models.SettingsDocument
-	if err := json.Unmarshal([]byte(dataJSON), &settings); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal platform_settings document: %w", err)
-	}
-	if settings.Settings == nil {
-		return nil, fmt.Errorf("platform_settings missing settings map; delete and recreate runtime state")
-	}
-
-	secrets := make(map[string]string, len(requiredBootstrapSecrets))
-	for _, name := range requiredBootstrapSecrets {
-		value, ok := settings.Settings[name].(string)
-		if !ok || strings.TrimSpace(value) == "" {
-			return nil, fmt.Errorf("platform_settings missing required bootstrap secret %s; delete and recreate runtime state", name)
-		}
-		secrets[name] = strings.TrimSpace(value)
-	}
-	return secrets, nil
 }
 
 // BootstrapDigestManifestFile is the filename of the tamper-evidence manifest
@@ -430,16 +381,11 @@ func (m *SecretManager) generateSecureTokenBytes(bytes int) ([]byte, error) {
 }
 
 // GetActuatorKey retrieves the Actuator's ED25519 signing key and its KeyID.
-// The KeyID is stored explicitly in platform_settings to avoid recomputation.
+// The signing key is decrypted from the keystore; the KeyID is read from platform_settings.
 func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
-	secrets, err := m.loadRequiredDBSecrets()
+	seedHex, err := m.keystore.DecryptSecret("Actuator_signing_key")
 	if err != nil {
-		return nil, "", err
-	}
-
-	seedHex, ok := secrets["Actuator_signing_key"]
-	if !ok {
-		return nil, "", fmt.Errorf("Actuator_signing_key not found in platform_settings")
+		return nil, "", fmt.Errorf("decrypt Actuator_signing_key: %w", err)
 	}
 
 	seed, err := hex.DecodeString(seedHex)
@@ -452,14 +398,80 @@ func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
 
 	priv := ed25519.NewKeyFromSeed(seed)
 
-	keyID, ok := secrets["Actuator_key_id"]
-	if !ok {
-		return nil, "", fmt.Errorf("Actuator_key_id not found in platform_settings")
+	var dataJSON string
+	if err := m.db.QueryRow(
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+	).Scan(&dataJSON); err != nil {
+		return nil, "", fmt.Errorf("failed to query platform_settings document: %w", err)
 	}
+
+	var settings models.SettingsDocument
+	if err := json.Unmarshal([]byte(dataJSON), &settings); err != nil {
+		return nil, "", fmt.Errorf("failed to unmarshal platform_settings document: %w", err)
+	}
+	if settings.Settings == nil {
+		return nil, "", fmt.Errorf("platform_settings missing settings map; delete and recreate runtime state")
+	}
+
+	keyID, ok := settings.Settings["Actuator_key_id"].(string)
+	if !ok || strings.TrimSpace(keyID) == "" {
+		return nil, "", fmt.Errorf("platform_settings missing Actuator_key_id; delete and recreate runtime state")
+	}
+	keyID = strings.TrimSpace(keyID)
+
 	expectedKeyID := hex.EncodeToString(priv.Public().(ed25519.PublicKey))
 	if keyID != expectedKeyID {
 		return nil, "", fmt.Errorf("Actuator_key_id does not match Actuator_signing_key; delete and recreate runtime state")
 	}
 
 	return priv, keyID, nil
+}
+
+// GetSessionEncryptionKey retrieves the session encryption key from the keystore.
+func (m *SecretManager) GetSessionEncryptionKey() (string, error) {
+	return m.keystore.DecryptSecret("session_encryption_key")
+}
+
+// GetAuditorHMACKey retrieves the auditor HMAC key from the keystore.
+func (m *SecretManager) GetAuditorHMACKey() (string, error) {
+	return m.keystore.DecryptSecret("auditor_hmac_key")
+}
+
+// StoreCAPrivateKey stores a CA private key in the keystore.
+// caType should be "root", "hub", "operator", or "bootstrap".
+func (m *SecretManager) StoreCAPrivateKey(caType string, keyDER []byte) error {
+	name := fmt.Sprintf("ca_%s_key", caType)
+	plaintext := hex.EncodeToString(keyDER)
+	return m.keystore.EncryptSecret(name, plaintext)
+}
+
+// GetCAPrivateKey retrieves a CA private key from the keystore.
+// caType should be "root", "hub", "operator", or "bootstrap".
+func (m *SecretManager) GetCAPrivateKey(caType string) ([]byte, error) {
+	name := fmt.Sprintf("ca_%s_key", caType)
+	plaintext, err := m.keystore.DecryptSecret(name)
+	if err != nil {
+		return nil, err
+	}
+	return hex.DecodeString(plaintext)
+}
+
+// StoreTribunalKey stores a Tribunal signing key in the keystore.
+func (m *SecretManager) StoreTribunalKey(seedHex string) error {
+	return m.keystore.EncryptSecret("tribunal_signing_key", seedHex)
+}
+
+// GetTribunalKey retrieves a Tribunal signing key from the keystore.
+func (m *SecretManager) GetTribunalKey() (string, error) {
+	return m.keystore.DecryptSecret("tribunal_signing_key")
+}
+
+// StoreNotaryKey stores an L3 Notary signing key in the keystore.
+func (m *SecretManager) StoreNotaryKey(seedHex string) error {
+	return m.keystore.EncryptSecret("notary_signing_key", seedHex)
+}
+
+// GetNotaryKey retrieves an L3 Notary signing key from the keystore.
+func (m *SecretManager) GetNotaryKey() (string, error) {
+	return m.keystore.DecryptSecret("notary_signing_key")
 }

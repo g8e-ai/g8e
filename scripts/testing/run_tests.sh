@@ -264,6 +264,7 @@ _show_llm_config() {
     if [[ -n "${G8E_TEST_LLM_PRIMARY_PROVIDER:-}" ]]; then
         local provider="${G8E_TEST_LLM_PRIMARY_PROVIDER}"
         local primary_model="${G8E_TEST_LLM_PRIMARY_MODEL:-}"
+        local primary_endpoint="${G8E_TEST_LLM_PRIMARY_ENDPOINT_URL:-}"
         
         # Determine default model if not set
         if [[ -z "$primary_model" ]]; then
@@ -276,6 +277,17 @@ _show_llm_config() {
             esac
         fi
 
+        # Determine default endpoint if not set
+        if [[ -z "$primary_endpoint" ]]; then
+            case "$provider" in
+                openai)    primary_endpoint="https://api.openai.com/v1 (default)" ;;
+                anthropic) primary_endpoint="https://api.anthropic.com (default)" ;;
+                gemini)    primary_endpoint="https://generativelanguage.googleapis.com (default)" ;;
+                ollama)    primary_endpoint="http://localhost:11434 (default)" ;;
+                llamacpp)  primary_endpoint="http://localhost:8080 (default)" ;;
+            esac
+        fi
+
         echo ""
         echo -e "${CYAN}  LLM Configuration${NC}"
         echo -e "  Primary Provider:   ${provider}"
@@ -284,7 +296,7 @@ _show_llm_config() {
         echo -e "  Primary Model:      ${primary_model}"
         [[ -n "${G8E_TEST_LLM_ASSISTANT_MODEL:-}" ]]     && echo -e "  Assistant Model:    ${G8E_TEST_LLM_ASSISTANT_MODEL}"
         [[ -n "${G8E_TEST_LLM_LITE_MODEL:-}" ]]          && echo -e "  Lite Model:         ${G8E_TEST_LLM_LITE_MODEL}"
-        [[ -n "${G8E_TEST_LLM_PRIMARY_ENDPOINT_URL:-}" ]]   && echo -e "  Primary Endpoint:   ${G8E_TEST_LLM_PRIMARY_ENDPOINT_URL}"
+        echo -e "  Primary Endpoint:   ${primary_endpoint}"
         [[ -n "${G8E_TEST_LLM_ASSISTANT_ENDPOINT_URL:-}" ]] && echo -e "  Assistant Endpoint: ${G8E_TEST_LLM_ASSISTANT_ENDPOINT_URL}"
         [[ -n "${G8E_TEST_LLM_LITE_ENDPOINT_URL:-}" ]]      && echo -e "  Lite Endpoint:      ${G8E_TEST_LLM_LITE_ENDPOINT_URL}"
         [[ -n "${G8E_TEST_LLM_PRIMARY_API_KEY:-}" ]]        && echo -e "  Primary API Key:    (set)"

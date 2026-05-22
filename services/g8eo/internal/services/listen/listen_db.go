@@ -311,11 +311,69 @@ func (s *ListenDBService) initSchema(secretsDir string) error {
 	if err != nil {
 		return err
 	}
+
+	// Run data migrations
+	if err := s.runDataMigrations(); err != nil {
+		return err
+	}
+
 	sm, err := NewSecretManager(s.db, secretsDir, s.logger)
 	if err != nil {
 		return err
 	}
 	return sm.InitPlatformSettings()
+}
+
+// runDataMigrations applies data-only migrations (not schema changes).
+func (s *ListenDBService) runDataMigrations() error {
+	// Migration 1: Scrub plaintext secrets from platform_settings
+	// This is a one-time migration that removes the old plaintext secret fields
+	// from the platform_settings document, since secrets are now stored in the keystore.
+	var count int
+	err := s.db.QueryRow(
+		"SELECT COUNT(*) FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+	).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		// No platform_settings document yet, nothing to migrate
+		return nil
+	}
+
+	// Check if migration already applied by checking for the old secret fields
+	var hasSecrets int
+	err = s.db.QueryRow(
+		"SELECT COUNT(*) FROM documents WHERE collection = 'settings' AND id = 'platform_settings' AND (json_extract(data, '$.settings.session_encryption_key') IS NOT NULL OR json_extract(data, '$.settings.Actuator_signing_key') IS NOT NULL OR json_extract(data, '$.settings.auditor_hmac_key') IS NOT NULL)",
+	).Scan(&hasSecrets)
+	if err != nil {
+		return err
+	}
+	if hasSecrets == 0 {
+		// Already migrated
+		return nil
+	}
+
+	// Apply the migration
+	_, err = s.db.Exec(
+		`UPDATE documents
+		 SET data = json_remove(
+			 json_remove(
+				 json_remove(data, '$.settings.session_encryption_key'),
+				 '$.settings.Actuator_signing_key'
+			 ),
+			 '$.settings.auditor_hmac_key'
+		 ),
+		 updated_at = ?
+		 WHERE collection = 'settings' AND id = 'platform_settings'`,
+		sqliteutil.NowTimestamp(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to scrub plaintext secrets from platform_settings: %w", err)
+	}
+
+	s.logger.Info("Applied data migration: scrubbed plaintext secrets from platform_settings")
+	return nil
 }
 
 // Close closes the database connection.

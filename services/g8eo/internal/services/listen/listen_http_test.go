@@ -59,7 +59,8 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	pki := newPKIAuthority(dbDir, pkiDir, db, logger)
+	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
+	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
 	err = pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
