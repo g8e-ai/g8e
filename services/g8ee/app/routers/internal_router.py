@@ -915,7 +915,7 @@ async def terminate_operator(
     return OperatorTerminateResponse(success=True)
 
 
-@router.post(InternalApiPaths.G8EE_OPERATORS_LISTEN_SESSION_AUTH)
+@router.post(InternalApiPaths.G8EE_OPERATORS_GATEWAY_SESSION_AUTH)
 async def listen_session_auth(
     request: OperatorListenSessionAuthRequest,
     session_auth_listener: SessionAuthListener = Depends(get_g8ee_session_auth_listener),

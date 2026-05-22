@@ -137,7 +137,7 @@ class TestInternalRouterPathRegistration:
     def test_operators_listen_session_auth_path_absolute(self):
         """Operators listen session auth endpoint should be registered at absolute path."""
         route_paths = {route.path for route in internal_router.routes}
-        assert InternalApiPaths.G8EE_OPERATORS_LISTEN_SESSION_AUTH in route_paths
+        assert InternalApiPaths.G8EE_OPERATORS_GATEWAY_SESSION_AUTH in route_paths
 
     def test_operators_update_api_key_path_absolute(self):
         """Operators update api key endpoint should be registered at absolute path."""

@@ -78,27 +78,13 @@ class HeartbeatSnapshotService:
             raise ConfigurationError("pubsub_client must be set before calling start()", component="g8ee")
         await self._pubsub_client.ensure_connected()
 
-        # Pattern-subscribe to every operator heartbeat channel. A single pattern
-        # subscription captures every operator's heartbeats from the first packet
-        # onward without per-session register/deregister races.
-        pattern = f"{OperatorChannel.HEARTBEAT.value}:*"
-        self._pubsub_client.on_pmessage(pattern, self._on_pattern_heartbeat_message)
-        await self._pubsub_client.psubscribe(pattern)
-        logger.info("[HEARTBEAT] Pattern-subscribed to %s", pattern)
-
         self._ready = True
         logger.info("[HEARTBEAT] Pub/sub client ready")
 
     async def stop(self) -> None:
-        if self._pubsub_client:
-            pattern = f"{OperatorChannel.HEARTBEAT.value}:*"
-            try:
-                await self._pubsub_client.punsubscribe(pattern)
-            except Exception:
-                logger.warning("[HEARTBEAT] Failed to punsubscribe %s on stop", pattern, exc_info=True)
         self._active_sessions.clear()
         self._ready = False
-        logger.info("[HEARTBEAT] Heartbeat pattern subscription stopped")
+        logger.info("[HEARTBEAT] Heartbeat service stopped")
 
     async def on_ws_disconnect(self) -> None:
         await self._on_ws_disconnect()
@@ -141,27 +127,27 @@ class HeartbeatSnapshotService:
         logger.warning("[HEARTBEAT] WebSocket disconnected - ready state reset, preserving active sessions for re-subscription")
 
     async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        """Track an operator session as active.
+        """Track an operator session as active and subscribe to its heartbeat channel."""
+        if (operator_id, operator_session_id) in self._active_sessions:
+            return
 
-        Subscription is handled via a single ``heartbeat:*`` pattern set up in
-        ``start()`` - this method only records the (operator, session) pair so
-        callers can observe activity. It is idempotent and never opens a new
-        per-session pubsub subscription.
-        """
+        channel = f"{OperatorChannel.HEARTBEAT.value}:{operator_id}"
+        await self._pubsub_client.subscribe(channel)
+        self._pubsub_client.on_message(channel, self._on_heartbeat_message)
         self._active_sessions.add((operator_id, operator_session_id))
         logger.info(
-            "[HEARTBEAT] Tracked operator session",
-            extra={"operator_id": operator_id, "operator_session_id": operator_session_id},
+            "[HEARTBEAT] Subscribed to operator heartbeat channel",
+            extra={"operator_id": operator_id, "operator_session_id": operator_session_id, "channel": channel},
         )
 
     async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        """Stop tracking an operator session. No pubsub state to release -
-        the pattern subscription is shared across all operators.
-        """
+        """Stop tracking an operator session and unsubscribe from its heartbeat channel."""
+        channel = f"{OperatorChannel.HEARTBEAT.value}:{operator_id}"
+        await self._pubsub_client.unsubscribe(channel)
         self._active_sessions.discard((operator_id, operator_session_id))
         logger.info(
-            "[HEARTBEAT] Untracked operator session",
-            extra={"operator_id": operator_id, "operator_session_id": operator_session_id},
+            "[HEARTBEAT] Unsubscribed from operator heartbeat channel",
+            extra={"operator_id": operator_id, "operator_session_id": operator_session_id, "channel": channel},
         )
 
     async def _on_pattern_heartbeat_message(
