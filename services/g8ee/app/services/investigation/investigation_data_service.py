@@ -46,10 +46,7 @@ from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import InvestigationDataServiceProtocol
 from app.utils.keyed_lock import KeyedAsyncLock
 from app.utils.timestamp import now
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from app.clients.governance_client import GovernanceClient
+from app.clients.governance_client import GovernanceClient
 
 
 logger = logging.getLogger(__name__)

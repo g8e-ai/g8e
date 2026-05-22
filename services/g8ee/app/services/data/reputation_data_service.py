@@ -45,9 +45,7 @@ from app.models.cache import FieldFilter
 from app.models.reputation import ReputationCommitment, ReputationState
 from app.models.http_context import RequestContext
 from app.services.protocols import DocumentServiceProtocol
-
-if TYPE_CHECKING:
-    from app.clients.governance_client import GovernanceClient
+from app.clients.governance_client import GovernanceClient
 
 logger = logging.getLogger(__name__)
 

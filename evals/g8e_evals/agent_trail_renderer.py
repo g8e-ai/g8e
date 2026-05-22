@@ -87,13 +87,13 @@ _EVENT_STYLE: dict[str, tuple[str, str, str]] = {
     "g8e.v1.ai.tribunal.voting.round_2.consensus.failed":  ("TRIBUNAL/round2.consensus-", "red", "line"),
 
     # Reputation
-    "g8e.v1.ai.reputation.commitment.created":  ("REPUTATION/commit",   "magenta", "line"),
-    "g8e.v1.ai.reputation.commitment.verified": ("REPUTATION/verified", "magenta", "line"),
-    "g8e.v1.ai.reputation.commitment.failed":   ("REPUTATION/failed",   "red",     "line"),
-    "g8e.v1.ai.reputation.state.updated":       ("REPUTATION/update",   "magenta", "line"),
-    "g8e.v1.ai.reputation.slash.tier1":         ("REPUTATION/slash.t1", "red",     "line"),
-    "g8e.v1.ai.reputation.slash.tier2":         ("REPUTATION/slash.t2", "red",     "line"),
-    "g8e.v1.ai.reputation.slash.tier3":         ("REPUTATION/slash.t3", "red",     "line"),
+    "g8e.v1.operator.reputation.commitment.created":  ("REPUTATION/commit",   "magenta", "line"),
+    "g8e.v1.operator.reputation.commitment.verified": ("REPUTATION/verified", "magenta", "line"),
+    "g8e.v1.operator.reputation.commitment.failed":   ("REPUTATION/failed",   "red",     "line"),
+    "g8e.v1.operator.reputation.state.updated":       ("REPUTATION/update",   "magenta", "line"),
+    "g8e.v1.operator.reputation.slash.tier1":         ("REPUTATION/slash.t1", "red",     "line"),
+    "g8e.v1.operator.reputation.slash.tier2":         ("REPUTATION/slash.t2", "red",     "line"),
+    "g8e.v1.operator.reputation.slash.tier3":         ("REPUTATION/slash.t3", "red",     "line"),
 
     # LLM lifecycle / chat-level failures (credential errors, provider
     # outages, dead-lettered messages - surface these prominently so the

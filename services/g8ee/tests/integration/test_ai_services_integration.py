@@ -152,6 +152,12 @@ class TestMemoryGenerationServiceIntegration:
             conversation_history=conversation_history,
             investigation=created_investigation,
             settings=user_settings,
+            context=RequestContext(
+                web_session_id="test-session",
+                user_id=created_investigation.user_id,
+                source_component="test",
+                request_id="test-request",
+            ),
         )
 
         # Verify memory was created and populated
@@ -257,6 +263,12 @@ class TestMemoryGenerationServiceIntegration:
             conversation_history=conversation_history,
             investigation=created_investigation,
             settings=user_settings,
+            context=RequestContext(
+                web_session_id="test-session",
+                user_id=created_investigation.user_id,
+                source_component="test",
+                request_id="test-request",
+            ),
         )
 
         # Verify memory was updated
@@ -346,6 +358,12 @@ class TestMemoryGenerationServiceIntegration:
             conversation_history=[],
             investigation=created_investigation,
             settings=user_settings,
+            context=RequestContext(
+                web_session_id="test-session",
+                user_id=created_investigation.user_id,
+                source_component="test",
+                request_id="test-request",
+            ),
         )
 
         # Verify memory was still created with basic information
