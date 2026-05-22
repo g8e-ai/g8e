@@ -34,6 +34,7 @@ help:
 	@echo "  generate      Generate all protocol artifacts (proto + constants + docs)"
 	@echo "  proto         Generate all Protobuf code (Go and Python)"
 	@echo "  constants     Generate all constants and sync documentation ports"
+	@echo "  clean-constants  Remove generated constants files"
 	@echo "  buf-install   Install Buf CLI locally if not found"
 	@echo "  lint-no-bare-session-id  Check for bare session_id regression"
 	@echo "  lint-no-hand-authored-events  Check for hand-authored events.py regression"

@@ -31,14 +31,6 @@ type KVKeysSnapshot struct {
 	SessionType map[string]string `json:"session.type"`
 }
 
-// PathsSnapshot represents the nested structure for paths.
-type PathsSnapshot struct {
-	Infra map[string]string `json:"infra"`
-	G8ee  map[string]string `json:"g8ee"`
-	Ports map[string]int    `json:"ports"`
-	Host  string            `json:"host"`
-}
-
 // DocumentIdsSnapshot represents the nested structure for document IDs.
 type DocumentIdsSnapshot struct {
 	DocumentIds map[string]Entry `json:"document_ids"`
@@ -71,9 +63,6 @@ type Snapshot struct {
 	DocumentIds DocumentIdsSnapshot `json:"document_ids"`
 	Platform    map[string]Entry    `json:"platform"`
 	Agents      map[string]string   `json:"agents"`
-	Paths       PathsSnapshot       `json:"paths"`
-	Ports       map[string]int      `json:"ports"`
-	EnvVars     map[string]string   `json:"env_vars"`
 	Timestamp   map[string]string   `json:"timestamp"`
 	ApiPaths    interface{}         `json:"api_paths"`
 }
@@ -222,137 +211,6 @@ func Registry() Snapshot {
 			"StepfunctionsExecution": {Value: "stepfunctions_execution", GoConst: "IntentStepfunctionsExecution", PythonConst: "STEPFUNCTIONS_EXECUTION"},
 			"TerraformState": {Value: "terraform_state", GoConst: "IntentTerraformState", PythonConst: "TERRAFORM_STATE"},
 			"VpcDiscovery": {Value: "vpc_discovery", GoConst: "IntentVpcDiscovery", PythonConst: "VPC_DISCOVERY"},
-		},
-		Paths: PathsSnapshot{
-			Infra: map[string]string{
-				"db_path": Paths.Infra.DbPath,
-				"pki_dir": Paths.Infra.PkiDir,
-				"secrets_dir": Paths.Infra.SecretsDir,
-				"ca_cert_path": Paths.Infra.CaCertPath,
-				"app_cert_dir": Paths.Infra.AppCertDir,
-				"docs_dir": Paths.Infra.DocsDir,
-				"protocol_dir": Paths.Infra.ProtocolDir,
-				"protocol_constants_dir": Paths.Infra.ProtocolConstantsDir,
-				"protocol_models_dir": Paths.Infra.ProtocolModelsDir,
-				"ssh_config_path": Paths.Infra.SshConfigPath,
-			},
-			G8ee: map[string]string{
-				"app_dir": "/app/services/g8ee",
-				"config_dir": "/app/services/g8ee/config",
-				"tests_dir": "/app/services/g8ee/tests",
-				"cert_name": "g8ee",
-			},
-			Ports: map[string]int{
-				"operator_https": Ports.OperatorHttps,
-				"operator_bootstrap_https": Ports.OperatorBootstrapHttps,
-				"operator_public_https": Ports.OperatorPublicHttps,
-				"g8ee_https": Ports.G8eeHttps,
-				"openclaw_gateway": Ports.OpenclawGateway,
-			},
-			Host: "localhost",
-		},
-		Ports: map[string]int{
-			"operator_https": Ports.OperatorHttps,
-			"operator_bootstrap_https": Ports.OperatorBootstrapHttps,
-			"operator_public_https": Ports.OperatorPublicHttps,
-			"g8ee_https": Ports.G8eeHttps,
-			"openclaw_gateway": Ports.OpenclawGateway,
-		},
-		EnvVars: map[string]string{
-			"AbsoluteSessionTimeout": string(EnvVar.AbsoluteSessionTimeout),
-			"AllowedOrigins": string(EnvVar.AllowedOrigins),
-			"AuditorHMACKey": string(EnvVar.AuditorHMACKey),
-			"CLISessionID": string(EnvVar.CLISessionID),
-			"DashboardURL": string(EnvVar.DashboardURL),
-			"DataDir": string(EnvVar.DataDir),
-			"DeviceToken": string(EnvVar.DeviceToken),
-			"DockerGID": string(EnvVar.DockerGID),
-			"DocsDir": string(EnvVar.DocsDir),
-			"EnableCommandBlacklisting": string(EnvVar.EnableCommandBlacklisting),
-			"EnableCommandWhitelisting": string(EnvVar.EnableCommandWhitelisting),
-			"Environment": string(EnvVar.Environment),
-			"G8EEHTTPSPort": string(EnvVar.G8EEHTTPSPort),
-			"G8EELogFile": string(EnvVar.G8EELogFile),
-			"G8EEPIDFile": string(EnvVar.G8EEPIDFile),
-			"G8EEURL": string(EnvVar.G8EEURL),
-			"GoogleSearchAPIKey": string(EnvVar.GoogleSearchAPIKey),
-			"GoogleSearchEnabled": string(EnvVar.GoogleSearchEnabled),
-			"GoogleSearchEngineID": string(EnvVar.GoogleSearchEngineID),
-			"IPResolver": string(EnvVar.IPResolver),
-			"IPService": string(EnvVar.IPService),
-			"InternalAPIKey": string(EnvVar.InternalAPIKey),
-			"InternalAuthToken": string(EnvVar.InternalAuthToken),
-			"LLMCommandGenAuditor": string(EnvVar.LLMCommandGenAuditor),
-			"LLMCommandGenEnabled": string(EnvVar.LLMCommandGenEnabled),
-			"LLMCommandGenPasses": string(EnvVar.LLMCommandGenPasses),
-			"LLMMaxTokens": string(EnvVar.LLMMaxTokens),
-			"Lang": string(EnvVar.Lang),
-			"LocalDBPath": string(EnvVar.LocalDBPath),
-			"LocalStoreEnabled": string(EnvVar.LocalStoreEnabled),
-			"LocalStoreMaxSizeMB": string(EnvVar.LocalStoreMaxSizeMB),
-			"LocalStoreRetentionDays": string(EnvVar.LocalStoreRetentionDays),
-			"LogDir": string(EnvVar.LogDir),
-			"LogLevel": string(EnvVar.LogLevel),
-			"LogMaxBackups": string(EnvVar.LogMaxBackups),
-			"LogName": string(EnvVar.LogName),
-			"OpenClawGatewayToken": string(EnvVar.OpenClawGatewayToken),
-			"OperatorAPIKey": string(EnvVar.OperatorAPIKey),
-			"OperatorBlobURL": string(EnvVar.OperatorBlobURL),
-			"OperatorBootstrapHTTPSPort": string(EnvVar.OperatorBootstrapHTTPSPort),
-			"OperatorEndpoint": string(EnvVar.OperatorEndpoint),
-			"OperatorHTTPSPort": string(EnvVar.OperatorHTTPSPort),
-			"OperatorID": string(EnvVar.OperatorID),
-			"OperatorLogFile": string(EnvVar.OperatorLogFile),
-			"OperatorPIDFile": string(EnvVar.OperatorPIDFile),
-			"OperatorPubSubURL": string(EnvVar.OperatorPubSubURL),
-			"OperatorPublicHTTPSPort": string(EnvVar.OperatorPublicHTTPSPort),
-			"OperatorSessionID": string(EnvVar.OperatorSessionID),
-			"OperatorURL": string(EnvVar.OperatorURL),
-			"OperatorWSSPort": string(EnvVar.OperatorWSSPort),
-			"PIDDir": string(EnvVar.PIDDir),
-			"PKIDir": string(EnvVar.PKIDir),
-			"PasskeyOrigin": string(EnvVar.PasskeyOrigin),
-			"PasskeyRPID": string(EnvVar.PasskeyRPID),
-			"PasskeyRPName": string(EnvVar.PasskeyRPName),
-			"Path": string(EnvVar.Path),
-			"ProjectRoot": string(EnvVar.ProjectRoot),
-			"ProtocolDir": string(EnvVar.ProtocolDir),
-			"PubSubCACert": string(EnvVar.PubSubCACert),
-			"RuntimeDir": string(EnvVar.RuntimeDir),
-			"SSHAuthSock": string(EnvVar.SSHAuthSock),
-			"SSHConfigPath": string(EnvVar.SSHConfigPath),
-			"SSLCertFile": string(EnvVar.SSLCertFile),
-			"SecretsDir": string(EnvVar.SecretsDir),
-			"SessionEncryptionKey": string(EnvVar.SessionEncryptionKey),
-			"SessionTTL": string(EnvVar.SessionTTL),
-			"Shell": string(EnvVar.Shell),
-			"StrictConstantsLint": string(EnvVar.StrictConstantsLint),
-			"TZ": string(EnvVar.TZ),
-			"Term": string(EnvVar.Term),
-			"TestLLMAssistantAPIKey": string(EnvVar.TestLLMAssistantAPIKey),
-			"TestLLMAssistantEndpoint": string(EnvVar.TestLLMAssistantEndpoint),
-			"TestLLMAssistantModel": string(EnvVar.TestLLMAssistantModel),
-			"TestLLMAssistantProvider": string(EnvVar.TestLLMAssistantProvider),
-			"TestLLMLiteAPIKey": string(EnvVar.TestLLMLiteAPIKey),
-			"TestLLMLiteEndpoint": string(EnvVar.TestLLMLiteEndpoint),
-			"TestLLMLiteModel": string(EnvVar.TestLLMLiteModel),
-			"TestLLMLiteProvider": string(EnvVar.TestLLMLiteProvider),
-			"TestLLMMaxTokens": string(EnvVar.TestLLMMaxTokens),
-			"TestLLMPrimaryAPIKey": string(EnvVar.TestLLMPrimaryAPIKey),
-			"TestLLMPrimaryEndpoint": string(EnvVar.TestLLMPrimaryEndpoint),
-			"TestLLMPrimaryModel": string(EnvVar.TestLLMPrimaryModel),
-			"TestLLMPrimaryProvider": string(EnvVar.TestLLMPrimaryProvider),
-			"TestOperatorPubSubURL": string(EnvVar.TestOperatorPubSubURL),
-			"TestTmpDir": string(EnvVar.TestTmpDir),
-			"UploadPath": string(EnvVar.UploadPath),
-			"User": string(EnvVar.User),
-			"UserID": string(EnvVar.UserID),
-			"Username": string(EnvVar.Username),
-			"VertexSearchAPIKey": string(EnvVar.VertexSearchAPIKey),
-			"VertexSearchEnabled": string(EnvVar.VertexSearchEnabled),
-			"VertexSearchEngineID": string(EnvVar.VertexSearchEngineID),
-			"VertexSearchLocation": string(EnvVar.VertexSearchLocation),
-			"VertexSearchProjectID": string(EnvVar.VertexSearchProjectID),
 		},
 		// Events and Status are large files; emit flat maps for now since Python models use extra="allow"
 		// These will be refined to full Entry structures in a follow-up

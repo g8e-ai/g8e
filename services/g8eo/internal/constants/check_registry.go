@@ -39,9 +39,9 @@ func main() {
 		constantsDir = os.Args[1]
 	}
 
-	// Only check files that are currently represented in registry.go
-	// This is a pragmatic check to catch the most common error: adding a constant
-	// to a tracked file but forgetting to add it to the registry
+	// Only check files that should be exported to JSON/Python
+	// Internal-only files (status.go, platform.go, agents.go, timestamp.go, kv_keys.go) are excluded
+	// as they contain Go-specific enums, platform details, persona data, or internal KV schemas not needed downstream
 	trackedFiles := map[string]bool{
 		"collections.go":  true,
 		"events.go":       true,
@@ -49,14 +49,9 @@ func main() {
 		"channels.go":     true,
 		"intents.go":      true,
 		"document_ids.go": true,
-		"kv_keys.go":      true,
-		"status.go":       true,
 		"senders.go":      true,
 		"prompts.go":      true,
 		"pubsub.go":       true,
-		"platform.go":     true,
-		"agents.go":       true,
-		"timestamp.go":    true,
 	}
 
 	// Parse tracked constant files
@@ -76,16 +71,14 @@ func main() {
 	// Check for missing constants
 	missing := findMissingConstants(constants, registry)
 	if len(missing) > 0 {
-		fmt.Fprintf(os.Stderr, "WARNING: The following constants are missing from registry.go:\n")
+		fmt.Fprintf(os.Stderr, "ERROR: The following constants are missing from registry.go:\n")
 		for _, m := range missing {
 			fmt.Fprintf(os.Stderr, "  - %s (from %s)\n", m.Name, m.SourceFile)
 		}
 		fmt.Fprintf(os.Stderr, "\nTotal missing: %d constants\n", len(missing))
 		fmt.Fprintf(os.Stderr, "Please add these constants to registry.go to keep the registry in sync.\n")
 		fmt.Fprintf(os.Stderr, "Run: go run ./internal/constants/check_registry.go\n")
-		// Exit with 0 for now to avoid blocking builds while registry debt exists
-		// Change to os.Exit(1) once registry is fully synced
-		os.Exit(0)
+		os.Exit(1)
 	}
 
 	fmt.Printf("Registry validation passed: all %d tracked constants are registered.\n", len(constants))
