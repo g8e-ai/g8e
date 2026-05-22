@@ -247,6 +247,7 @@ func containsTraversal(path string) bool {
 
 func isDirectDBMutationAllowed(collection string) bool {
 	switch constants.CollectionName(collection) {
+	// Platform infrastructure collections (internal use, no governance required)
 	case constants.CollectionSettings,
 		constants.CollectionUsers,
 		constants.CollectionOperators,
@@ -256,16 +257,19 @@ func isDirectDBMutationAllowed(collection string) bool {
 		constants.CollectionRevokedCertificates,
 		constants.CollectionTrustedSigners,
 		constants.CollectionConsoleAudit,
-		constants.CollectionCases,
+		constants.CollectionAPIKeys:
+		return true
+	// Governed collections must use POST /api/governance/envelope
+	// See: .local.dev/docs/plans/engine_gateway_secure_link.md §2
+	case constants.CollectionCases,
 		constants.CollectionInvestigations,
 		constants.CollectionTasks,
 		constants.CollectionMemories,
-		constants.CollectionAPIKeys,
 		constants.CollectionReputationState,
 		constants.CollectionReputationCommitments,
 		constants.CollectionAgentActivityMetadata,
 		constants.CollectionStakeResolutions:
-		return true
+		return false
 	default:
 		return false
 	}
