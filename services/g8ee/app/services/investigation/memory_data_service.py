@@ -21,10 +21,7 @@ from app.models.memory import InvestigationMemory
 from app.models.http_context import RequestContext
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import MemoryDataServiceProtocol
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from app.clients.governance_client import GovernanceClient
+from app.clients.governance_client import GovernanceClient
 
 logger = logging.getLogger(__name__)
 

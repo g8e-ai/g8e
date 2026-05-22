@@ -124,7 +124,7 @@ class TestCommandGeneratorWithCommitment:
                 )
                 event = SessionEvent.from_context(
                     context=ctx,
-                    event_type=EventType.AI_REPUTATION_COMMITMENT_CREATED,
+                    event_type=EventType.OPERATOR_REPUTATION_COMMITMENT_CREATED,
                     payload=payload,
                 )
                 await event_svc.publish(event)
@@ -167,7 +167,7 @@ class TestCommandGeneratorWithCommitment:
 
         # 2. Verify SSE event was emitted
         published = event_svc._published_events
-        commitment_events = [e for e in published if e.event_type == EventType.AI_REPUTATION_COMMITMENT_CREATED]
+        commitment_events = [e for e in published if e.event_type == EventType.OPERATOR_REPUTATION_COMMITMENT_CREATED]
         assert len(commitment_events) == 1
         payload = commitment_events[0].payload
         assert payload.commitment_id == gen_result.reputation_commitment_id
@@ -227,7 +227,7 @@ class TestCommandGeneratorWithCommitment:
 
         # Verify no commitment events
         published = event_svc._published_events
-        commitment_events = [e for e in published if e.event_type == EventType.AI_REPUTATION_COMMITMENT_CREATED]
+        commitment_events = [e for e in published if e.event_type == EventType.OPERATOR_REPUTATION_COMMITMENT_CREATED]
         assert len(commitment_events) == 0
 
     async def test_commitment_failure_is_fatal_to_command_generation(self, fake_cache_aside_service):
@@ -275,7 +275,7 @@ class TestCommandGeneratorWithCommitment:
                 )
                 event = SessionEvent.from_context(
                     context=ctx,
-                    event_type=EventType.AI_REPUTATION_COMMITMENT_FAILED,
+                    event_type=EventType.OPERATOR_REPUTATION_COMMITMENT_FAILED,
                     payload=payload,
                 )
                 await event_svc.publish(event)
@@ -306,6 +306,6 @@ class TestCommandGeneratorWithCommitment:
 
         # Should emit a failure event
         published = event_svc._published_events
-        fail_events = [e for e in published if e.event_type == EventType.AI_REPUTATION_COMMITMENT_FAILED]
+        fail_events = [e for e in published if e.event_type == EventType.OPERATOR_REPUTATION_COMMITMENT_FAILED]
         assert len(fail_events) == 1
         assert "DB Offline" in fail_events[0].payload.error

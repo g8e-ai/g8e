@@ -225,8 +225,8 @@ class TestReputationPipelineIntegration:
 
         # Verify events including slashing
         published = [e.event_type for e in event_svc._published_events]
-        assert EventType.AI_REPUTATION_STATE_UPDATED in published
-        assert EventType.AI_REPUTATION_SLASH_TIER2 in published
+        assert EventType.OPERATOR_REPUTATION_STATE_UPDATED in published
+        assert EventType.OPERATOR_REPUTATION_SLASH_TIER2 in published
 
     async def test_non_tribunal_tool_skips_resolution(self, mock_tool_executor):
         """Non-Tribunal tools (e.g. file_read) should never trigger reputation resolution."""

@@ -416,13 +416,13 @@ async def orchestrate_tool_execution(
                 for outcome in res.resolutions:
                     payload = StakeResolutionPayload.model_validate(outcome.model_dump())
                     await event_service.publish_reputation_event(
-                        EventType.AI_REPUTATION_STATE_UPDATED,
+                        EventType.OPERATOR_REPUTATION_STATE_UPDATED,
                         payload,
                         g8e_context
                     )
 
                     if outcome.slash_tier:
-                        slash_event = getattr(EventType, f"AI_REPUTATION_SLASH_TIER{outcome.slash_tier.value}")
+                        slash_event = getattr(EventType, f"OPERATOR_REPUTATION_SLASH_TIER{outcome.slash_tier.value}")
                         await event_service.publish_reputation_event(
                             slash_event,
                             payload,

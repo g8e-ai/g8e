@@ -835,7 +835,7 @@ async def delete_case(
             "[INTERNAL-HTTP] Deleting investigation",
             extra={"investigation_id": investigation.id, "case_id": case_id}
         )
-        await investigation_service.investigation_data_service.delete_investigation(investigation.id)
+        await investigation_service.investigation_data_service.delete_investigation(investigation.id, context=request_context)
 
     logger.info(
         "[INTERNAL-HTTP] Deleted investigations",

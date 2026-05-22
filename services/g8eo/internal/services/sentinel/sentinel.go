@@ -758,6 +758,7 @@ func (s *Sentinel) initializeThreatDetectors() {
 			mitreAttack:    "T1059.004",
 			mitreTactic:    "Execution",
 			recommendation: "Immediately terminate process and investigate source",
+			source:         "hardcoded",
 		},
 		&RegexThreatDetector{
 			name:           "reverse_shell_bash_tcp",
