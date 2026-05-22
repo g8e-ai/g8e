@@ -94,7 +94,7 @@ def mock_tool_executor():
     executor.reputation_data_service = MagicMock()
     executor.auditor_hmac_key = "test-hmac-key"
     executor.ai_response_analyzer = None
-    
+
     # Mock reputation_service with async resolve_stakes
     from app.services.ai.reputation_service import ResolveStakesResult
     mock_reputation_service = MagicMock()

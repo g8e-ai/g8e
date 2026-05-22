@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 
-from app.constants.events import EventType
+from app.constants.generated_events import EventType
 from app.constants.status import AITaskId, ComponentName, ExecutionStatus, CommandErrorType
 from app.errors import BusinessLogicError, ValidationError
 from app.models.http_context import RequestContext

@@ -13,7 +13,7 @@
 
 # Hand-authored mapping functions for event/action type conversion
 
-from app.constants.events import EventType
+from app.constants.generated_events import EventType
 
 def map_event_type_to_action_type(event_type: str) -> str:
     """Map protobuf event types to UAP action types."""

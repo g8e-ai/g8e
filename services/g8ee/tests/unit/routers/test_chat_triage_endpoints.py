@@ -17,7 +17,7 @@ import pytest
 from fastapi import Request
 
 from app.constants import MessageSender, ComponentName
-from app.constants.events import EventType
+from app.constants.generated_events import EventType
 from app.models.http_context import RequestContext, G8eHttpContext
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
 from app.routers.chat_router import (

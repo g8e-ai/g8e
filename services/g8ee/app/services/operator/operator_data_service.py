@@ -25,7 +25,7 @@ from app.constants.settings import (
     MAX_COMMAND_RESULTS_HISTORY,
     MAX_HEARTBEAT_HISTORY,
 )
-from app.constants.events import (
+from app.constants.generated_events import (
     EventType,
 )
 from app.constants.status import (

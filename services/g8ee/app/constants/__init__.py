@@ -70,7 +70,7 @@ from app.constants.errors import (
     ErrorCode,
     ErrorSeverity,
 )
-from app.constants.events import (
+from app.constants.generated_events import (
     EventType,
 )
 from app.constants.message_sender import (

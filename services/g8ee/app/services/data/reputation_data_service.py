@@ -38,8 +38,7 @@ from app.constants import (
     ErrorCode,
 )
 from app.constants.generated_events import (
-    OPERATOR_REPUTATION_COMMITMENT_CREATED,
-    OPERATOR_REPUTATION_STATE_UPDATED,
+    EventType,
 )
 from app.errors import DatabaseError, ValidationError
 from app.models.cache import FieldFilter
@@ -66,7 +65,7 @@ class ReputationDataService:
     state_collection: str
     commitments_collection: str
 
-    def __init__(self, cache: DocumentServiceProtocol, governance_client: "GovernanceClient") -> None:
+    def __init__(self, cache: DocumentServiceProtocol, governance_client: GovernanceClient) -> None:
         self.cache = cache
         self._governance_client = governance_client
         self.state_collection = DB_COLLECTION_REPUTATION_STATE
@@ -142,7 +141,7 @@ class ReputationDataService:
                 collection=self.state_collection,
                 document_id=state.agent_id,
                 updates=state.model_dump(mode="json"),
-                event_type=OPERATOR_REPUTATION_STATE_UPDATED,
+                event_type=EventType.OPERATOR_REPUTATION_STATE_UPDATED,
                 web_session_id=context.web_session_id,
                 user_id=context.user_id,
                 operator_id=context.operator_id,
@@ -177,7 +176,7 @@ class ReputationDataService:
                 collection=self.commitments_collection,
                 document_id=commitment.id,
                 updates=commitment.model_dump(mode="json"),
-                event_type=OPERATOR_REPUTATION_COMMITMENT_CREATED,
+                event_type=EventType.OPERATOR_REPUTATION_COMMITMENT_CREATED,
                 web_session_id=context.web_session_id,
                 user_id=context.user_id,
                 operator_id=context.operator_id,

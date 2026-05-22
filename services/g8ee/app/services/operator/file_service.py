@@ -33,7 +33,7 @@ from app.constants.status import (
     ExecutionStatus,
     FileOperation,
 )
-from app.constants.events import (
+from app.constants.generated_events import (
     EventType,
 )
 from app.constants.settings import (

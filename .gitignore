@@ -26,6 +26,8 @@ Desktop.ini
 .pydevproject
 .settings/
 *.iml
+.windsurf/
+.windsurf/*
 
 # --- Logs & Performance ---
 *.log

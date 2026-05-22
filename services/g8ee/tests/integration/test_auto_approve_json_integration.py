@@ -35,7 +35,7 @@ from pathlib import Path
 
 import pytest
 
-from app.constants.events import EventType
+from app.constants.generated_events import EventType
 from app.constants.status import ComponentName
 from app.models.agent import ExecutorCommandArgs
 from app.models.http_context import G8eHttpContext

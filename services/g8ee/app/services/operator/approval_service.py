@@ -35,7 +35,7 @@ from app.services.protocols import (
 from app.constants.status import (
     FileOperation,
 )
-from app.constants.events import (
+from app.constants.generated_events import (
     EventType,
 )
 from app.constants.intents import (

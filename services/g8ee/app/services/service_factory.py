@@ -212,7 +212,7 @@ class ServiceFactory:
         settings: G8eeAppSettings,
         cache_aside_service: CacheAsideService,
         core_services: CoreServices,
-        governance_client: "GovernanceClient",
+        governance_client: GovernanceClient,
     ) -> DataServices:
         """Create data services for CRUD operations."""
         investigation_data_service = InvestigationDataService(
@@ -358,7 +358,7 @@ class ServiceFactory:
         db_service: DBService,
         kv_service: KVService,
         blob_service: BlobService,
-        governance_client: "GovernanceClient",
+        governance_client: GovernanceClient,
         pubsub_client: PubSubClient | None = None,
         blob_service_client: BlobClient | None = None,
         web_search_provider: WebSearchProvider | None = None,
