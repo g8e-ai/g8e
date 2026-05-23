@@ -100,10 +100,17 @@ func Registry() Snapshot {
 			"web_sessions": {Value: "web_sessions", GoConst: "CollectionWebSessions", PythonConst: "WEB_SESSIONS"},
 		},
 		Channels: map[string]Entry{
+			"Governance": {Value: "governance", GoConst: "ChannelGovernance", PythonConst: "GOVERNANCE"},
 			"Message": {Value: "message", GoConst: "PubSubEventMessage", PythonConst: "MESSAGE"},
+			"OperatorDevice": {Value: "operator_device", GoConst: "ChannelOperatorDevice", PythonConst: "OPERATOR_DEVICE"},
+			"OperatorIntent": {Value: "operator_intent", GoConst: "ChannelOperatorIntent", PythonConst: "OPERATOR_INTENT"},
 			"PMessage": {Value: "pmessage", GoConst: "PubSubEventPMessage", PythonConst: "P_MESSAGE"},
 			"PSubscribe": {Value: "psubscribe", GoConst: "PubSubActionPSubscribe", PythonConst: "P_SUBSCRIBE"},
 			"Publish": {Value: "publish", GoConst: "PubSubActionPublish", PythonConst: "PUBLISH"},
+			"SseEvent": {Value: "sse_event", GoConst: "ChannelSseEvent", PythonConst: "SSE_EVENT"},
+			"StorageBlob": {Value: "storage_blob", GoConst: "ChannelStorageBlob", PythonConst: "STORAGE_BLOB"},
+			"StorageDocument": {Value: "storage_document", GoConst: "ChannelStorageDocument", PythonConst: "STORAGE_DOCUMENT"},
+			"StorageKv": {Value: "storage_kv", GoConst: "ChannelStorageKv", PythonConst: "STORAGE_KV"},
 			"Subscribe": {Value: "subscribe", GoConst: "PubSubActionSubscribe", PythonConst: "SUBSCRIBE"},
 			"Subscribed": {Value: "subscribed", GoConst: "PubSubEventSubscribed", PythonConst: "SUBSCRIBED"},
 			"Unsubscribe": {Value: "unsubscribe", GoConst: "PubSubActionUnsubscribe", PythonConst: "UNSUBSCRIBE"},
@@ -515,6 +522,16 @@ func Registry() Snapshot {
 			"SourceUserTerminal": {Value: "g8e.v1.source.user.terminal", GoConst: "EventSourceUserTerminal", PythonConst: "SOURCE_USER_TERMINAL"},
 		},
 		Status: StatusSnapshot{
+			TribunalOutcome: map[string]Entry{
+				"consensus": {Value: "consensus", GoConst: "TribunalOutcomeConsensus", PythonConst: "CONSENSUS"},
+				"consensus_failed": {Value: "consensus_failed", GoConst: "TribunalOutcomeConsensusFailed", PythonConst: "CONSENSUS_FAILED"},
+				"verification_failed": {Value: "verification_failed", GoConst: "TribunalOutcomeVerificationFailed", PythonConst: "VERIFICATION_FAILED"},
+				"verified": {Value: "verified", GoConst: "TribunalOutcomeVerified", PythonConst: "VERIFIED"},
+			},
+			UserRole: map[string]Entry{
+				"admin": {Value: "admin", GoConst: "UserRoleAdmin", PythonConst: "ADMIN"},
+				"user": {Value: "user", GoConst: "UserRoleUser", PythonConst: "USER"},
+			},
 			UserStatus: map[string]Entry{
 				"active": {Value: "active", GoConst: "UserStatusActive", PythonConst: "ACTIVE"},
 				"disabled": {Value: "disabled", GoConst: "UserStatusDisabled", PythonConst: "DISABLED"},
@@ -544,16 +561,6 @@ func Registry() Snapshot {
 			OperatorStatus: map[string]Entry{
 				"available": {Value: "available", GoConst: "OperatorStatusAvailable", PythonConst: "AVAILABLE"},
 				"offline": {Value: "offline", GoConst: "OperatorStatusOffline", PythonConst: "OFFLINE"},
-			},
-			TribunalOutcome: map[string]Entry{
-				"consensus": {Value: "consensus", GoConst: "TribunalOutcomeConsensus", PythonConst: "CONSENSUS"},
-				"consensus_failed": {Value: "consensus_failed", GoConst: "TribunalOutcomeConsensusFailed", PythonConst: "CONSENSUS_FAILED"},
-				"verification_failed": {Value: "verification_failed", GoConst: "TribunalOutcomeVerificationFailed", PythonConst: "VERIFICATION_FAILED"},
-				"verified": {Value: "verified", GoConst: "TribunalOutcomeVerified", PythonConst: "VERIFIED"},
-			},
-			UserRole: map[string]Entry{
-				"admin": {Value: "admin", GoConst: "UserRoleAdmin", PythonConst: "ADMIN"},
-				"user": {Value: "user", GoConst: "UserRoleUser", PythonConst: "USER"},
 			},
 		},
 		Senders: map[string]Entry{
