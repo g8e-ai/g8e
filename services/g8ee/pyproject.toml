@@ -9,6 +9,7 @@ description = "g8e-Compliant Agentic Ensemble (g8ee) - Reference AI reasoning sy
 requires-python = ">=3.14"
 dependencies = [
     "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
     "sentence-transformers>=2.2.0",
 ]
 

@@ -34,6 +34,41 @@
       "_go_const": "PubSubActionUnsubscribe",
       "_python_const": "UNSUBSCRIBE",
       "value": "unsubscribe"
+    },
+    "StorageDocument": {
+      "_go_const": "ChannelStorageDocument",
+      "_python_const": "STORAGE_DOCUMENT",
+      "value": "storage_document"
+    },
+    "StorageKv": {
+      "_go_const": "ChannelStorageKv",
+      "_python_const": "STORAGE_KV",
+      "value": "storage_kv"
+    },
+    "StorageBlob": {
+      "_go_const": "ChannelStorageBlob",
+      "_python_const": "STORAGE_BLOB",
+      "value": "storage_blob"
+    },
+    "Governance": {
+      "_go_const": "ChannelGovernance",
+      "_python_const": "GOVERNANCE",
+      "value": "governance"
+    },
+    "OperatorIntent": {
+      "_go_const": "ChannelOperatorIntent",
+      "_python_const": "OPERATOR_INTENT",
+      "value": "operator_intent"
+    },
+    "OperatorDevice": {
+      "_go_const": "ChannelOperatorDevice",
+      "_python_const": "OPERATOR_DEVICE",
+      "value": "operator_device"
+    },
+    "SseEvent": {
+      "_go_const": "ChannelSseEvent",
+      "_python_const": "SSE_EVENT",
+      "value": "sse_event"
     }
   }
 }

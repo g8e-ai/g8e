@@ -204,7 +204,7 @@ A cryptographic proof that an independent ensemble agreed on the instruction.
 - **Mechanism** - Ed25519 signature over `transaction_hash | decision`.
 - **Trust** - The Governed Operator maintains an Operator-owned `SignerStore`; missing or unknown keys cause rejection.
 - **Producer** - Any conforming Quorum (L2Consensus) producer (the bundled **agentic ensemble**, a BYO multi-agent system, or a single signer for low-stakes flows).
-- **Reference agentic ensemble producer** - The **agentic ensemble** (`g8ee`) runs its own internal Byzantine cascade upstream of the Quorum (L2Consensus) signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Actuator risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Ensemble signs only after Auditor passes. The Gateway gateway and operator do not assume any of this; they re-run every gate below independently. See [g8ee Governance & Safety](g8ee.md) and [position paper §2.3](position_paper.md).
+- **Reference agentic ensemble producer** - The **agentic ensemble** (`g8ee`) runs its own internal Byzantine cascade upstream of the Quorum (L2Consensus) signature: Triage → Dash/Sage (intent articulation) → 5-member Tribunal generation → R1 vote → optional R2 anonymized peer review → Actuator risk analysis (Two-Strike Circuit Breaker) → Auditor verification + Merkle reputation commitment. The Ensemble signs only after Auditor passes. The Gateway gateway and operator do not assume any of this; they re-run every gate below independently. See [g8ee Governance & Safety](../concepts/g8ee.md) and [position paper §2.3](../concepts/position_paper.md).
 
 ### Notary (L3Notary): Authorization (Human)
 

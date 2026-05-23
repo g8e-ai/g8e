@@ -739,3 +739,78 @@ class PubSubClient:
                 exc_info=True
             )
             return False
+
+    async def publish_storage_request(
+        self,
+        operator_id: str,
+        operator_session_id: str,
+        storage_type: str,
+        operation: str,
+        payload: dict[str, Any],
+        timeout: float = 30.0,
+    ) -> dict[str, Any]:
+        """Publish a storage operation request and wait for response.
+
+        Args:
+            operator_id: Target operator ID
+            operator_session_id: Target operator session ID
+            storage_type: Type of storage (document, kv, blob)
+            operation: Operation type (get, put, delete, query, etc.)
+            payload: Operation-specific payload
+            timeout: Timeout in seconds
+
+        Returns:
+            Response payload from g8eo
+
+        Raises:
+            NetworkError: If request fails or times out
+        """
+        channel = f"{storage_type}:{operator_id}:{operator_session_id}"
+        request_id = str(uuid.uuid4())
+
+        # Create a future to wait for the response
+        response_future: asyncio.Future[dict[str, Any]] = asyncio.Future()
+
+        # Register temporary callback for this specific request
+        def _handle_response(ch: str, data: bytes) -> None:
+            try:
+                msg = PubSubMessage.from_bytes(data)
+                if msg.action == PubSubAction.PUBLISH:
+                    response_data = json.loads(msg.data.decode("utf-8"))
+                    if response_data.get("request_id") == request_id:
+                        if not response_future.done():
+                            response_future.set_result(response_data)
+            except Exception as e:
+                logger.error("[PUBSUB-CLIENT] Failed to handle storage response: %s", e)
+                if not response_future.done():
+                    response_future.set_exception(e)
+
+        self.on_channel_message(channel, _handle_response)
+
+        # Subscribe to the channel to receive responses
+        await self.subscribe(channel)
+
+        # Publish the request
+        request_payload = {
+            "request_id": request_id,
+            "operation": operation,
+            "payload": payload,
+        }
+
+        try:
+            payload_bytes = json.dumps(request_payload).encode("utf-8")
+            await self.publish(channel, payload_bytes)
+
+            # Wait for response with timeout
+            try:
+                response = await asyncio.wait_for(response_future, timeout=timeout)
+                return response
+            except asyncio.TimeoutError:
+                raise NetworkError(
+                    f"Storage request timed out after {timeout}s",
+                    component="g8ee",
+                )
+        finally:
+            # Clean up subscription
+            await self.unsubscribe(channel)
+            self.off_channel_message(channel, _handle_response)

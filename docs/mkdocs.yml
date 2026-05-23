@@ -15,7 +15,39 @@ copyright: Copyright &copy; 2026 Lateralus Labs, LLC
 
 # Theme
 theme:
-  name: readthedocs
+  name: material
+  palette:
+    - scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - content.code.copy
+    - content.tabs.link
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+  font:
+    text: false
+    code: false
+
+# Plugins
+plugins:
+  - search:
+      lang: en
 
 # Extensions
 markdown_extensions:
@@ -63,6 +95,12 @@ nav:
       - MCP: reference/mcp.md
   - Developer:
       - Developer Guidelines: devs.md
+      - Codemaps:
+          - High-Level Architecture: codemaps/00_high_level_architecture.md
+          - g8eo Internal Structure: codemaps/01_g8eo_internal_structure.md
+          - g8ee Internal Structure: codemaps/02_g8ee_internal_structure.md
+          - Protocol Layer: codemaps/03_protocol_layer.md
+          - Data Flow Lifecycle: codemaps/04_data_flow_lifecycle.md
   - External:
       - A2A Protocol: external/a2a.json
       - Ollama API: external/ollam_api.md
