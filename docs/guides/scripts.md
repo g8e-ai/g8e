@@ -33,7 +33,7 @@ Running `./g8e` without arguments launches the Interactive Platform Manager. Dir
 
 ### Platform Management - `./g8e platform`
 
-Orchestrates the Gateway lifecycle via `scripts/core/build.sh`.
+Orchestrates the Gateway lifecycle via native Go process management.
 
 | Command | Purpose |
 |---|---|
@@ -173,8 +173,8 @@ scripts/
 │   ├── infra.sh      # Data/Security dispatcher
 │   ├── operator.sh   # Operator binary/deployment
 │   └── tests.sh      # Test execution bridge
-├── core/          # Internal orchestrators
-│   ├── build.sh      # Main process manager
+├── core/          # Internal orchestrators (deprecated - replaced by Go native)
+│   ├── build.sh      # Main process manager (deprecated)
 │   ├── manage-env.sh # Variable resolution
 │   └── path_utils.sh # PROJECT_ROOT resolution
 ├── data/          # Gateway interaction (Python)
@@ -190,7 +190,7 @@ scripts/
 1. **Path resolution** - Scripts resolve `G8E_PROJECT_ROOT` relative to their own location.
    - Bash: `$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)`
    - Python: `Path(__file__).parent.parent.parent.absolute()`
-2. **Service readiness** - The platform is not "ready" until the Hub `/healthz` passes. `build.sh` blocks until this state.
+2. **Service readiness** - The platform is not "ready" until the Hub `/healthz` passes. The Go CLI blocks until this state.
 3. **Canonical wire format** - All client-facing interaction uses canonical JSON (protojson). Binary protobuf is reserved for internal storage.
 4. **Fail-closed execution** - Scripts never mask failures or proceed with missing trust material. Missing trust bundles or secrets exit with an actionable error pointing at the platform Gateway.
 

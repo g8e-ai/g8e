@@ -39,24 +39,13 @@ if [ -f "${PROJECT_ROOT}/g8e" ]; then
     echo "" >> "${OUTPUT_FILE}"
     echo "The \`g8e\` CLI is the primary interface for platform management." >> "${OUTPUT_FILE}"
     echo "" >> "${OUTPUT_FILE}"
-    echo "### Available Commands" >> "${OUTPUT_FILE}"
-    echo "" >> "${OUTPUT_FILE}"
-    echo "- \`./g8e platform\` - Gateway lifecycle management (start, stop, status, wipe, reset, clean)" >> "${OUTPUT_FILE}"
-    echo "- \`./g8e apps\` - Application layer management (start, stop, status for g8ee and other adapters)" >> "${OUTPUT_FILE}"
-    echo "- \`./g8e operator\` - Operator lifecycle and fleet deployment" >> "${OUTPUT_FILE}"
-    echo "- \`./g8e data\` - Data and infrastructure operations" >> "${OUTPUT_FILE}"
-    echo "- \`./g8e security\` - Security and PKI operations" >> "${OUTPUT_FILE}"
-    echo "- \`./g8e protocol\` - Protocol and constants management" >> "${OUTPUT_FILE}"
-    echo "- \`./g8e testing\` - Test execution and evaluation" >> "${OUTPUT_FILE}"
-    echo "- \`./g8e setup\` - Interactive setup wizard" >> "${OUTPUT_FILE}"
-    echo "- \`./g8e login\` - Authenticate the local CLI" >> "${OUTPUT_FILE}"
-    echo "- \`./g8e test\` - Run tests (default: g8eo)" >> "${OUTPUT_FILE}"
-    echo "- \`./g8e evals\` - Evaluation harness for AI benchmarks" >> "${OUTPUT_FILE}"
-    echo "" >> "${OUTPUT_FILE}"
-    echo "For detailed command help, run \`./g8e\` and navigate the interactive menu." >> "${OUTPUT_FILE}"
+    echo '```' >> "${OUTPUT_FILE}"
+    "${PROJECT_ROOT}/g8e" --help >> "${OUTPUT_FILE}" 2>&1 || true
+    echo '```' >> "${OUTPUT_FILE}"
     echo "" >> "${OUTPUT_FILE}"
 else
     echo "Warning: g8e CLI not found at ${PROJECT_ROOT}/g8e" >&2
+    echo "Hint: Run 'make build-cli' to build the CLI binary." >&2
 fi
 
 # Extract g8eo binary help if it exists
