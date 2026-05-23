@@ -35,6 +35,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/responder"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,7 +71,8 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 	apiKeySvc := NewApiKeyService(db, logger)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
-	h := newHTTPHandler(cfg, logger, db, pubsub, auth, pki, sessionSvc, reg, passkey, userSvc, apiKeySvc, nil, func() bool { return true }, func() bool { return true })
+	resp := responder.New(logger)
+	h := newHTTPHandler(cfg, logger, db, pubsub, auth, pki, sessionSvc, reg, passkey, userSvc, apiKeySvc, resp, nil, func() bool { return true }, func() bool { return true })
 	return h, cfg
 }
 
@@ -109,6 +111,8 @@ func TestReadBody(t *testing.T) {
 }
 
 func TestPathTraversalGuard(t *testing.T) {
+	h, _ := setupTestHTTPHandler(t)
+
 	tests := []struct {
 		name       string
 		path       string
@@ -121,7 +125,7 @@ func TestPathTraversalGuard(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := pathTraversalGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := h.pathTraversalGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			}))
 
