@@ -14,6 +14,7 @@
 package sentinel
 
 import (
+	"fmt"
 	"regexp"
 	"testing"
 
@@ -31,6 +32,43 @@ func newTestSentinelWithThreatDetection(t *testing.T) *Sentinel {
 		SentinelEnabled: true,
 	}
 	return NewSentinel(config, testutil.NewTestLogger())
+}
+
+func TestSentinel_AnalyzeMCPArguments_DepthLimit(t *testing.T) {
+	t.Parallel()
+	sentinel := newTestSentinelWithThreatDetection(t)
+
+	// Create a deeply nested JSON structure that exceeds the 50-level limit
+	deepJSON := buildDeepJSON(60)
+
+	result := sentinel.AnalyzeMCPArguments(deepJSON)
+
+	// Should be blocked due to depth limit
+	assert.False(t, result.Safe)
+	assert.Contains(t, result.BlockReason, "depth exceeded")
+	assert.Equal(t, ThreatLevelHigh, result.ThreatLevel)
+}
+
+func TestSentinel_AnalyzeMCPArguments_DepthLimitSafe(t *testing.T) {
+	t.Parallel()
+	sentinel := newTestSentinelWithThreatDetection(t)
+
+	// Create a JSON structure within the 50-level limit
+	deepJSON := buildDeepJSON(30)
+
+	result := sentinel.AnalyzeMCPArguments(deepJSON)
+
+	// Should be safe (no threats in the benign data)
+	assert.True(t, result.Safe)
+	assert.Equal(t, ThreatLevelNone, result.ThreatLevel)
+}
+
+// buildDeepJSON creates a nested JSON structure with the specified depth
+func buildDeepJSON(depth int) string {
+	if depth <= 0 {
+		return `"end"`
+	}
+	return fmt.Sprintf(`{"level":%d,"nested":%s}`, depth, buildDeepJSON(depth-1))
 }
 
 func TestSentinel_AnalyzeCommand_DestructiveCommands(t *testing.T) {
@@ -107,7 +145,7 @@ func TestSentinel_AnalyzeCommand_DestructiveCommands(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 
@@ -151,7 +189,7 @@ func TestSentinel_AnalyzeCommand_SystemTampering(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -177,7 +215,7 @@ func TestSentinel_AnalyzeCommand_SecurityBypass(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -211,7 +249,7 @@ func TestSentinel_AnalyzeCommand_MalwareDeployment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -250,7 +288,7 @@ func TestSentinel_AnalyzeCommand_ReverseShells(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -287,7 +325,7 @@ func TestSentinel_AnalyzeCommand_PrivilegeEscalation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -323,7 +361,7 @@ func TestSentinel_AnalyzeCommand_CredentialAccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -358,7 +396,7 @@ func TestSentinel_AnalyzeCommand_DefenseEvasion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -390,7 +428,7 @@ func TestSentinel_AnalyzeCommand_Cryptominer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -423,7 +461,7 @@ func TestSentinel_AnalyzeCommand_ContainerEscape(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 
@@ -457,7 +495,7 @@ func TestSentinel_AnalyzeCommand_KernelModule(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -501,7 +539,7 @@ func TestSentinel_AnalyzeCommand_SafeCommands(t *testing.T) {
 
 	for _, cmd := range safeCommands {
 		t.Run(cmd, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(cmd)
 			require.NotNil(t, result)
 			assert.True(t, result.Safe, "Should be safe: %s", cmd)
@@ -567,7 +605,7 @@ func TestSentinel_AnalyzeFileEdit_CriticalFiles(t *testing.T) {
 
 	for _, path := range criticalFiles {
 		t.Run(path, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeFileEdit(path, constants.FileOperationWrite, "some content")
 			require.NotNil(t, result)
 			assert.True(t, result.IsCriticalSystemFile, "Should be critical: %s", path)
@@ -594,7 +632,7 @@ func TestSentinel_AnalyzeFileEdit_BlockedOperations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeFileEdit(tt.path, tt.operation, tt.content)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s on %s", tt.operation, tt.path)
@@ -684,7 +722,7 @@ func TestSentinel_AnalyzeFileEdit_SafeOperations(t *testing.T) {
 
 	for _, op := range safeOps {
 		t.Run(op.path, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeFileEdit(op.path, op.operation, op.content)
 			require.NotNil(t, result)
 			assert.True(t, result.Safe, "Should be safe: %s on %s", op.operation, op.path)
@@ -732,7 +770,7 @@ func TestSentinel_isCriticalSystemFile(t *testing.T) {
 
 	for _, path := range criticalPaths {
 		t.Run(path, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			assert.True(t, sentinel.isCriticalSystemFile(path), "Should be critical: %s", path)
 		})
 	}
@@ -747,7 +785,7 @@ func TestSentinel_isCriticalSystemFile(t *testing.T) {
 
 	for _, path := range nonCriticalPaths {
 		t.Run(path, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			assert.False(t, sentinel.isCriticalSystemFile(path), "Should not be critical: %s", path)
 		})
 	}
@@ -797,7 +835,7 @@ func TestSentinel_AnalyzeCommand_MITREMapping(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			require.Greater(t, len(result.ThreatSignals), 0)
@@ -890,7 +928,7 @@ func TestSentinel_AnalyzeCommand_Persistence(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -925,7 +963,7 @@ func TestSentinel_AnalyzeCommand_Exfiltration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -960,7 +998,7 @@ func TestSentinel_AnalyzeCommand_NetworkManipulation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -1087,7 +1125,7 @@ func TestSentinel_AnalyzeCommand_CaseInsensitivity(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block case-insensitive: %s", tt.command)
@@ -1445,7 +1483,7 @@ func TestSentinel_AnalyzeCommand_DestructiveVariants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -1501,7 +1539,7 @@ func TestSentinel_AnalyzeCommand_ReverseShellVariants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -1533,7 +1571,7 @@ func TestSentinel_AnalyzeCommand_CredentialAccessVariants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -1568,7 +1606,7 @@ func TestSentinel_AnalyzeCommand_SecurityBypassVariants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.AnalyzeCommand(tt.command)
 			require.NotNil(t, result)
 			assert.False(t, result.Safe, "Should block: %s", tt.command)
@@ -1700,7 +1738,7 @@ func TestSentinel_AnalyzeFileEdit_WriteCreateReplaceOnAuthFilesBlocked(t *testin
 		for _, op := range writeOps {
 			path, op := path, op
 			t.Run(path+"_"+string(op), func(t *testing.T) {
-		t.Parallel()
+				t.Parallel()
 				result := sentinel.AnalyzeFileEdit(path, op, "malicious content")
 				require.NotNil(t, result)
 				assert.False(t, result.Safe, "Operation %s on %s must be blocked", op, path)
@@ -1748,7 +1786,7 @@ func TestSentinel_CriticalSystemPaths_Completeness(t *testing.T) {
 	for _, path := range paths {
 		path := path
 		t.Run(path, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			assert.True(t, sentinel.isCriticalSystemFile(path), "Must be recognized as critical: %s", path)
 		})
 	}

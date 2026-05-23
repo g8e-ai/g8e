@@ -55,7 +55,7 @@ func TestPruner_InvokesFnOnTick(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	var callCount atomic.Int64
 	fn := func(_ *DB, _ *slog.Logger) {
@@ -97,7 +97,7 @@ func TestPruner_Stop_HaltsInvocations(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	var callCount atomic.Int64
 	fn := func(_ *DB, _ *slog.Logger) {
@@ -127,7 +127,7 @@ func TestPruner_FnReceivesCorrectLogger(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	var receivedLogger *slog.Logger
 	done := make(chan struct{})
@@ -161,7 +161,7 @@ func TestPruner_StartAfterStop_DoesNotInvokeFn(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	var callCount atomic.Int64
 	fn := func(_ *DB, _ *slog.Logger) {
@@ -194,7 +194,7 @@ func TestPruner_FnReceivesCorrectDB(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	var receivedDB *DB
 	done := make(chan struct{})

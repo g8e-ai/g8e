@@ -155,8 +155,7 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 		h.muLimiters.Lock()
 		limiter, ok := h.limiters[ip]
 		if !ok {
-			// 5 requests per second, burst of 10
-			limiter = rate.NewLimiter(rate.Limit(5), 10)
+			limiter = rate.NewLimiter(rate.Limit(h.cfg.Gateway.RateLimitRPS), h.cfg.Gateway.RateLimitBurst)
 			h.limiters[ip] = limiter
 		}
 		h.muLimiters.Unlock()

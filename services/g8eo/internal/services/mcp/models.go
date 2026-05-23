@@ -142,3 +142,60 @@ type PromptMessage struct {
 	Role    string      `json:"role"`
 	Content TextContent `json:"content"`
 }
+
+// ToolsListResult is the result for the "tools/list" method.
+type ToolsListResult struct {
+	Tools []Tool `json:"tools"`
+}
+
+// Tool represents an MCP tool.
+type Tool struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	InputSchema map[string]interface{} `json:"inputSchema,omitempty"`
+}
+
+// ResourcesListResult is the result for the "resources/list" method.
+type ResourcesListResult struct {
+	Resources []Resource `json:"resources"`
+}
+
+// PromptsListResult is the result for the "prompts/list" method.
+type PromptsListResult struct {
+	Prompts []Prompt `json:"prompts"`
+}
+
+// A2ASuspensionResponse is returned when an A2A call is suspended for L3 approval.
+type A2ASuspensionResponse struct {
+	ID          string `json:"id"`
+	Status      string `json:"status"`
+	TxHash      string `json:"tx_hash"`
+	ApprovalURL string `json:"approval_url"`
+	Message     string `json:"message"`
+}
+
+// A2ASuccessResponse is returned when an A2A call succeeds.
+type A2ASuccessResponse struct {
+	ID     string      `json:"id"`
+	Result interface{} `json:"result"`
+}
+
+// A2ADownstreamRequest is the request sent to a downstream A2A server.
+type A2ADownstreamRequest struct {
+	SkillName   string          `json:"skill_name"`
+	PayloadJSON json.RawMessage `json:"payload"`
+	ExecutionID string          `json:"execution_id,omitempty"`
+}
+
+// FieldReadRequest is the params for the "read_field" tool.
+type FieldReadRequest struct {
+	Collection         string `json:"collection"`
+	DocumentID         string `json:"document_id"`
+	FieldPath          string `json:"field_path"`
+	OperatorSessionID  string `json:"operator_session_id"`
+}
+
+// FieldReadResult is the result for the "read_field" tool.
+type FieldReadResult struct {
+	Value interface{} `json:"value"`
+}

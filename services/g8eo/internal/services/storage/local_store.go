@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
@@ -87,6 +88,8 @@ type LocalStoreService struct {
 	config *LocalStoreConfig
 	logger *slog.Logger
 	pruner *sqliteutil.Pruner
+
+	wg sync.WaitGroup
 }
 
 // NewLocalStoreService creates a new local storage service.
@@ -217,6 +220,8 @@ func (ls *LocalStoreService) StoreExecution(record *ExecutionRecord) error {
 	if ls == nil || ls.db == nil {
 		return nil
 	}
+	ls.wg.Add(1)
+	defer ls.wg.Done()
 	var stdoutCompressed, stderrCompressed []byte
 	var stdoutHash, stderrHash string
 
@@ -467,11 +472,18 @@ func (ls *LocalStoreService) IsEnabled() bool {
 	return ls != nil && ls.db != nil
 }
 
+// Wait blocks until all local store background workers and writes have finished.
+func (ls *LocalStoreService) Wait() {
+	ls.wg.Wait()
+}
+
 // KVSet sets a key-value pair with an optional TTL (in seconds).
 func (ls *LocalStoreService) KVSet(key, value string, ttlSeconds int) error {
 	if ls == nil || ls.db == nil {
 		return nil
 	}
+	ls.wg.Add(1)
+	defer ls.wg.Done()
 
 	var expiresAt *string
 	if ttlSeconds > 0 {
@@ -496,7 +508,7 @@ func (ls *LocalStoreService) KVGet(key string) (string, bool) {
 	}
 
 	query := `
-	SELECT value FROM kv 
+	SELECT value FROM kv
 	WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)
 	`
 	now := sqliteutil.FormatTimestamp(time.Now())
@@ -508,11 +520,58 @@ func (ls *LocalStoreService) KVGet(key string) (string, bool) {
 	return value, true
 }
 
+// KVScanPrefix retrieves all key-value pairs with a given prefix, honoring TTL.
+func (ls *LocalStoreService) KVScanPrefix(prefix string) (map[string]string, error) {
+	if ls == nil || ls.db == nil {
+		return nil, fmt.Errorf("local storage is disabled")
+	}
+
+	query := `
+	SELECT key, value FROM kv
+	WHERE key LIKE ? AND (expires_at IS NULL OR expires_at > ?)
+	`
+	now := sqliteutil.FormatTimestamp(time.Now())
+	rows, err := ls.db.Query(query, prefix+"%", now)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan keys: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]string)
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		result[key] = value
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	return result, nil
+}
+
+// KVDelete deletes a key-value pair.
+func (ls *LocalStoreService) KVDelete(key string) error {
+	if ls == nil || ls.db == nil {
+		return nil
+	}
+	ls.wg.Add(1)
+	defer ls.wg.Done()
+
+	_, err := ls.db.Exec("DELETE FROM kv WHERE key = ?", key)
+	return err
+}
+
 // StoreFileDiff stores a Sentinel-scrubbed file diff in the scrubbed vault.
 func (ls *LocalStoreService) StoreFileDiff(record *FileDiffRecord) error {
 	if ls == nil || ls.db == nil {
 		return nil
 	}
+	ls.wg.Add(1)
+	defer ls.wg.Done()
 
 	var diffCompressed []byte
 	var diffHash string

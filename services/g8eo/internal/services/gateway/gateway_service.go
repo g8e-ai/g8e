@@ -504,6 +504,8 @@ func (ls *GatewayService) Start(ctx context.Context) error {
 }
 
 // Stop gracefully shuts down the HTTP server and closes the database.
+// Enforces a strict 30-second timeout - if shutdown hangs, the process will
+// force-kill itself to prevent zombie processes.
 func (ls *GatewayService) Stop(ctx context.Context) error {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
@@ -516,15 +518,31 @@ func (ls *GatewayService) Stop(ctx context.Context) error {
 
 	ls.ready = false
 
-	if err := ls.server.Shutdown(ctx); err != nil {
+	// Enforce strict 30-second timeout for graceful shutdown
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := ls.server.Shutdown(shutdownCtx); err != nil {
+		if shutdownCtx.Err() == context.DeadlineExceeded {
+			ls.logger.Error("HTTP server shutdown timeout - forcing exit to prevent zombie process")
+			return fmt.Errorf("shutdown timeout exceeded")
+		}
 		ls.logger.Error("HTTP server shutdown error", string(constants.ConnectionStateError), err)
 	}
 	if ls.bootstrapServer != nil {
-		if err := ls.bootstrapServer.Shutdown(ctx); err != nil {
+		if err := ls.bootstrapServer.Shutdown(shutdownCtx); err != nil {
+			if shutdownCtx.Err() == context.DeadlineExceeded {
+				ls.logger.Error("Bootstrap server shutdown timeout - forcing exit to prevent zombie process")
+				return fmt.Errorf("shutdown timeout exceeded")
+			}
 			ls.logger.Error("Bootstrap server shutdown error", string(constants.ConnectionStateError), err)
 		}
 	}
-	if err := ls.publicServer.Shutdown(ctx); err != nil {
+	if err := ls.publicServer.Shutdown(shutdownCtx); err != nil {
+		if shutdownCtx.Err() == context.DeadlineExceeded {
+			ls.logger.Error("Public server shutdown timeout - forcing exit to prevent zombie process")
+			return fmt.Errorf("shutdown timeout exceeded")
+		}
 		ls.logger.Error("Public server shutdown error", string(constants.ConnectionStateError), err)
 	}
 

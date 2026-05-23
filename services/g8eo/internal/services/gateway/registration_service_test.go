@@ -61,7 +61,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	secretsDir := t.TempDir()
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
@@ -482,7 +482,7 @@ func TestRegistrationService_DeviceLinks(t *testing.T) {
 	secretsDir := t.TempDir()
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
@@ -525,7 +525,7 @@ func TestRegistrationService_CreateDeviceLinkRejectsWrongOperatorOwner(t *testin
 	secretsDir := t.TempDir()
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
@@ -574,7 +574,7 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 	secretsDir := t.TempDir()
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
@@ -632,7 +632,7 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	secretsDir := t.TempDir()
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
@@ -683,7 +683,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	secretsDir := t.TempDir()
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
@@ -773,7 +773,7 @@ func TestRegistrationService_Binding(t *testing.T) {
 	secretsDir := t.TempDir()
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)
@@ -882,7 +882,7 @@ func TestRegistration_SessionDocuments(t *testing.T) {
 	secretsDir := t.TempDir()
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
 	pki := newPKIAuthority(dbDir, secretsDir, db, sm, logger)

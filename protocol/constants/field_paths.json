@@ -1,0 +1,74 @@
+{
+  "field_paths": {
+    "investigations": {
+      "_go_const": "FieldPathInvestigations",
+      "_python_const": "FIELD_PATHS_INVESTIGATIONS",
+      "allowed_paths": [
+        "suspect_ip_addresses",
+        "suspect_hostnames",
+        "suspect_domains",
+        "malware_hashes",
+        "ioc_sources",
+        "attack_patterns",
+        "timeline_events",
+        "evidence_summary",
+        "status",
+        "priority",
+        "assigned_analyst",
+        "created_at",
+        "updated_at"
+      ],
+      "forbidden_paths": [
+        "credentials",
+        "api_keys",
+        "passwords",
+        "tokens",
+        "private_keys",
+        "secrets"
+      ]
+    },
+    "memories": {
+      "_go_const": "FieldPathMemories",
+      "_python_const": "FIELD_PATHS_MEMORIES",
+      "allowed_paths": [
+        "content",
+        "summary",
+        "tags",
+        "source",
+        "context",
+        "created_at",
+        "updated_at"
+      ],
+      "forbidden_paths": [
+        "credentials",
+        "api_keys",
+        "passwords",
+        "tokens",
+        "private_keys",
+        "secrets"
+      ]
+    },
+    "cases": {
+      "_go_const": "FieldPathCases",
+      "_python_const": "FIELD_PATHS_CASES",
+      "allowed_paths": [
+        "title",
+        "description",
+        "status",
+        "priority",
+        "assigned_to",
+        "created_at",
+        "updated_at",
+        "resolution_summary"
+      ],
+      "forbidden_paths": [
+        "credentials",
+        "api_keys",
+        "passwords",
+        "tokens",
+        "private_keys",
+        "secrets"
+      ]
+    }
+  }
+}

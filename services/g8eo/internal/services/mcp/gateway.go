@@ -63,6 +63,10 @@ type GatewayService struct {
 	a2aDownstreamURL  string
 	publicBaseURL     string
 	suspendedStore    SuspendedTransactionStore
+	fieldPathRegistry *FieldPathRegistry
+	dbService         interface {
+		GetField(collection, id, fieldPath string) (interface{}, error)
+	}
 
 	// Circuit breaker state
 	mu               sync.RWMutex
@@ -71,22 +75,33 @@ type GatewayService struct {
 	circuitOpen      bool
 	cooldownDuration time.Duration
 	maxFailures      int
+
+	maxPayloadBytes int64
 }
 
 // Dependencies groups all dependencies for NewGatewayService to reduce constructor bloat.
 type Dependencies struct {
-	Logger         *slog.Logger
-	Responder      *responder.Responder
-	SuspendedStore SuspendedTransactionStore
+	Logger          *slog.Logger
+	Responder       *responder.Responder
+	SuspendedStore  SuspendedTransactionStore
+	MaxPayloadBytes int64
 }
 
 func NewGatewayService(deps Dependencies) *GatewayService {
+	fieldPathRegistry, err := NewFieldPathRegistry(deps.Logger)
+	if err != nil {
+		deps.Logger.Error("Failed to initialize field path registry", "error", err)
+		// Continue without field path registry - read_field will be disabled
+	}
+
 	g := &GatewayService{
-		logger:           deps.Logger,
-		responder:        deps.Responder,
-		suspendedStore:   deps.SuspendedStore,
-		maxFailures:      5,
-		cooldownDuration: 1 * time.Minute,
+		logger:            deps.Logger,
+		responder:         deps.Responder,
+		suspendedStore:    deps.SuspendedStore,
+		fieldPathRegistry: fieldPathRegistry,
+		maxFailures:       5,
+		cooldownDuration:  1 * time.Minute,
+		maxPayloadBytes:   deps.MaxPayloadBytes,
 	}
 	return g
 }
@@ -127,6 +142,12 @@ func (g *GatewayService) SetA2ADependencies(downstreamURL string) {
 
 func (g *GatewayService) SetPublicBaseURL(baseURL string) {
 	g.publicBaseURL = baseURL
+}
+
+func (g *GatewayService) SetDBService(dbService interface {
+	GetField(collection, id, fieldPath string) (interface{}, error)
+}) {
+	g.dbService = dbService
 }
 
 func (g *GatewayService) isCircuitOpen() bool {
@@ -178,7 +199,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 
 	if g.downstreamURL == "" {
 		// Mock response if no downstream configured
-		g.responder.RPCResponse(w, 1, map[string]interface{}{"tools": []interface{}{}})
+		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: []Tool{}})
 		return
 	}
 
@@ -247,7 +268,7 @@ func (g *GatewayService) HandleResourcesList(w http.ResponseWriter, r *http.Requ
 
 	if g.downstreamURL == "" {
 		// Mock response if no downstream configured
-		g.responder.RPCResponse(w, 1, map[string]interface{}{"resources": []interface{}{}})
+		g.responder.RPCResponse(w, 1, ResourcesListResult{Resources: []Resource{}})
 		return
 	}
 
@@ -316,8 +337,8 @@ func (g *GatewayService) handleMCPRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// P1-1: Enforce payload limits (10MB)
-	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
+	// P1-1: Enforce payload limits from config
+	r.Body = http.MaxBytesReader(w, r.Body, g.maxPayloadBytes)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -378,6 +399,11 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 
 		if callParams.Name == "" {
 			return nil, errors.New("tool name required")
+		}
+
+		// Handle read_field tool locally (JIT field resolution)
+		if callParams.Name == "read_field" {
+			return g.handleReadField(ctx, callParams.Arguments)
 		}
 
 		argumentsJSON := "{}"
@@ -444,6 +470,94 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// handleReadField processes the read_field tool with governed access controls
+func (g *GatewayService) handleReadField(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
+	if g.fieldPathRegistry == nil {
+		return nil, errors.New("field path registry not initialized")
+	}
+
+	if g.dbService == nil {
+		return nil, errors.New("database service not configured")
+	}
+
+	var req FieldReadRequest
+	if err := json.Unmarshal(arguments, &req); err != nil {
+		return nil, fmt.Errorf("invalid read_field arguments: %w", err)
+	}
+
+	// Validate required fields
+	if req.Collection == "" {
+		return nil, errors.New("collection required")
+	}
+	if req.DocumentID == "" {
+		return nil, errors.New("document_id required")
+	}
+	if req.FieldPath == "" {
+		return nil, errors.New("field_path required")
+	}
+	if req.OperatorSessionID == "" {
+		return nil, errors.New("operator_session_id required")
+	}
+
+	// L1: Validate field path against schema registry
+	if err := g.fieldPathRegistry.ValidateFieldPath(req.Collection, req.FieldPath); err != nil {
+		return nil, fmt.Errorf("field path validation failed: %w", err)
+	}
+
+	// Extract field value from database
+	value, err := g.dbService.GetField(req.Collection, req.DocumentID, req.FieldPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get field: %w", err)
+	}
+
+	// L1: Scan field value for forbidden patterns
+	if err := g.scanForForbiddenPatterns(value); err != nil {
+		return nil, fmt.Errorf("field value contains forbidden patterns: %w", err)
+	}
+
+	// TODO: L3 session validation (operator_session_id)
+	// TODO: Audit vault logging
+
+	return CallToolResult{
+		Content: []TextContent{
+			{
+				Type: "text",
+				Text: fmt.Sprintf("%v", value),
+			},
+		},
+	}, nil
+}
+
+// scanForbiddenPatterns checks if a value contains forbidden patterns (L1 hard gates)
+func (g *GatewayService) scanForForbiddenPatterns(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	valueStr := fmt.Sprintf("%v", value)
+
+	// Forbidden patterns from L1 hard gates
+	forbiddenPatterns := []string{
+		"sudo",
+		"su ",
+		"rm -rf /",
+		"://",
+		"password",
+		"api_key",
+		"secret",
+		"token",
+		"private_key",
+	}
+
+	for _, pattern := range forbiddenPatterns {
+		if strings.Contains(strings.ToLower(valueStr), pattern) {
+			return fmt.Errorf("forbidden pattern detected: %s", pattern)
+		}
+	}
+
+	return nil
+}
+
 func (g *GatewayService) HandleResourcesRead(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "resources/read", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 		var readParams ReadResourceRequest
@@ -501,7 +615,7 @@ func (g *GatewayService) HandlePromptsList(w http.ResponseWriter, r *http.Reques
 
 	if g.downstreamURL == "" {
 		// Mock response if no downstream configured
-		g.responder.RPCResponse(w, 1, map[string]interface{}{"prompts": []interface{}{}})
+		g.responder.RPCResponse(w, 1, PromptsListResult{Prompts: []Prompt{}})
 		return
 	}
 
@@ -809,20 +923,20 @@ func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 				g.storeSuspendedTransaction(hash, uapBytes, req.SkillName, req.PayloadJSON, userID, operatorID)
 
 				approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
-				return map[string]interface{}{
-					"id":           hash,
-					"status":       "suspended",
-					"tx_hash":      hash,
-					"approval_url": approvalURL,
-					"message":      "Execution paused for L3 authorization",
+				return A2ASuspensionResponse{
+					ID:          hash,
+					Status:      "suspended",
+					TxHash:      hash,
+					ApprovalURL: approvalURL,
+					Message:     "Execution paused for L3 authorization",
 				}, nil
 			}
 			return nil, err
 		}
 
-		return map[string]interface{}{
-			"id":     hash,
-			"result": receipt,
+		return A2ASuccessResponse{
+			ID:     hash,
+			Result: receipt,
 		}, nil
 	})
 }
@@ -1060,9 +1174,9 @@ func (g *GatewayService) DispatchToA2ADownstream(ctx context.Context, skillName 
 	}
 
 	// Construct A2A request
-	a2aReq := map[string]interface{}{
-		"skill_name": skillName,
-		"payload":    payload,
+	a2aReq := A2ADownstreamRequest{
+		SkillName:   skillName,
+		PayloadJSON: payload,
 	}
 
 	reqBody, err := json.Marshal(a2aReq)

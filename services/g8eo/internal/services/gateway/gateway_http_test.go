@@ -151,7 +151,7 @@ func TestPathTraversalGuard(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			handler := h.pathTraversalGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			}))
@@ -1100,7 +1100,6 @@ func TestWebSocketAuthIntegration(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/pubsub"
 
 	t.Run("Missing token", func(t *testing.T) {
-		t.Parallel()
 		ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 		assert.Error(t, err)
 		if resp != nil && resp.Body != nil {
@@ -1109,6 +1108,7 @@ func TestWebSocketAuthIntegration(t *testing.T) {
 		if ws != nil {
 			ws.Close()
 		}
+		require.NotNil(t, resp, "response should not be nil even on dial error")
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
 }

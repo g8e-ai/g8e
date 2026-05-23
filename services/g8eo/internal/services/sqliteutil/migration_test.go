@@ -31,7 +31,7 @@ func TestRunMigrations_AppliesInOrder(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	migrations := []Migration{
 		{Version: 1, Description: "create table a", SQL: `CREATE TABLE a (id INTEGER PRIMARY KEY)`},
@@ -60,7 +60,7 @@ func TestRunMigrations_IdempotentOnRerun(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	migrations := []Migration{
 		{Version: 1, Description: "create table x", SQL: `CREATE TABLE x (id INTEGER PRIMARY KEY)`},
@@ -82,7 +82,7 @@ func TestRunMigrations_SkipsAlreadyApplied(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	first := []Migration{
 		{Version: 1, Description: "create table c", SQL: `CREATE TABLE c (id INTEGER PRIMARY KEY)`},
@@ -108,7 +108,7 @@ func TestRunMigrations_EmptyListIsNoOp(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	err = db.RunMigrations([]Migration{})
 	require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestRunMigrations_RecordsDescriptionAndTimestamp(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	migrations := []Migration{
 		{Version: 1, Description: "initial schema", SQL: `CREATE TABLE e (id INTEGER PRIMARY KEY)`},
@@ -147,7 +147,7 @@ func TestRunMigrations_InvalidSQLReturnsError(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	migrations := []Migration{
 		{Version: 1, Description: "bad sql", SQL: `THIS IS NOT VALID SQL`},
@@ -166,7 +166,7 @@ func TestColumnExists_ReturnsTrueForExistingColumn(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	_, err = db.Exec(`CREATE TABLE things (id INTEGER PRIMARY KEY, name TEXT)`)
 	require.NoError(t, err)
@@ -184,7 +184,7 @@ func TestColumnExists_ReturnsFalseForMissingColumn(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	_, err = db.Exec(`CREATE TABLE things (id INTEGER PRIMARY KEY)`)
 	require.NoError(t, err)
@@ -202,7 +202,7 @@ func TestColumnExists_ReturnsFalseForMissingTable(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	exists, err := db.ColumnExists("no_such_table", "col")
 	require.NoError(t, err)

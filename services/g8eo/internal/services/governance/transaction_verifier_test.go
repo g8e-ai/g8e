@@ -45,8 +45,8 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
 		l3Notary,
-		nil, // Sentinel not used in tests
-		[]constants.ActionType{constants.ActionTypeExecuteBash, constants.ActionTypeFsList},
+		nil,                        // Sentinel not used in tests
+		constants.AllActionTypes(), // Use SSOT for action types
 		"notary",
 	), privKey
 }
@@ -57,8 +57,51 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 	switch actionType {
 	case constants.ActionTypeExecuteBash:
 		msg = &operatorv1.CommandRequested{Command: "uptime", ExecutionId: "exec-1", Justification: "test"}
+	case constants.ActionTypeFileEdit:
+		msg = &operatorv1.FileEditRequested{FilePath: "/tmp/test", Content: "test", ExecutionId: "exec-1"}
 	case constants.ActionTypeFsList:
 		msg = &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-1"}
+	case constants.ActionTypeFsRead:
+		msg = &operatorv1.FsReadRequested{Path: "/tmp/test", ExecutionId: "exec-1"}
+	case constants.ActionTypeFsGrep:
+		msg = &operatorv1.FsGrepRequested{Path: ".", Pattern: "test", ExecutionId: "exec-1"}
+	case constants.ActionTypePortCheck:
+		msg = &operatorv1.CheckPortRequested{Port: 8080, ExecutionId: "exec-1"}
+	case constants.ActionTypeFetchLogs:
+		msg = &operatorv1.FetchLogsRequested{ExecutionId: "exec-1"}
+	case constants.ActionTypeFetchHistory:
+		msg = &operatorv1.FetchHistoryRequested{ExecutionId: "exec-1"}
+	case constants.ActionTypeFetchFileHistory:
+		msg = &operatorv1.FetchFileHistoryRequested{FilePath: "/tmp/test", ExecutionId: "exec-1"}
+	case constants.ActionTypeRestoreFile:
+		msg = &operatorv1.RestoreFileRequested{FilePath: "/tmp/test", ExecutionId: "exec-1"}
+	case constants.ActionTypeFetchFileDiff:
+		msg = &operatorv1.FetchFileDiffRequested{FilePath: "/tmp/test", ExecutionId: "exec-1"}
+	case constants.ActionTypeShutdown:
+		msg = &operatorv1.ShutdownRequested{Reason: "test"}
+	case constants.ActionTypeHeartbeat:
+		msg = &operatorv1.HeartbeatRequested{}
+	case constants.ActionTypeEvalAnswer:
+		msg = &operatorv1.EvalAnswerRequested{PromptId: "test", Benchmark: "test", Model: "test", Answer: "test"}
+	case constants.ActionTypeGrantIntent:
+		msg = &operatorv1.GrantIntentRequested{IntentName: "test", ExecutionId: "exec-1"}
+	case constants.ActionTypeRevokeIntent:
+		msg = &operatorv1.RevokeIntentRequested{IntentName: "test", ExecutionId: "exec-1"}
+	case constants.ActionTypeMcpCall:
+		msg = &operatorv1.McpCallRequested{ToolName: "test", ArgumentsJson: "{}", ExecutionId: "exec-1"}
+	case constants.ActionTypeA2aCall:
+		msg = &operatorv1.A2ACallRequested{SkillName: "test", PayloadJson: "{}", ExecutionId: "exec-1"}
+	case constants.ActionTypeMcpResourceList:
+		msg = &operatorv1.McpResourceListRequested{ExecutionId: "exec-1"}
+	case constants.ActionTypeMcpResourceRead:
+		msg = &operatorv1.McpResourceReadRequested{Uri: "test://resource", ExecutionId: "exec-1"}
+	case constants.ActionTypeMcpPromptList:
+		msg = &operatorv1.McpPromptListRequested{ExecutionId: "exec-1"}
+	case constants.ActionTypeMcpPromptGet:
+		msg = &operatorv1.McpPromptGetRequested{Name: "test", ExecutionId: "exec-1"}
+	case constants.ActionTypeInvestigationCreate:
+		// INVESTIGATION_CREATE has no typed payload, uses raw bytes
+		return []byte(`{"test": "data"}`)
 	default:
 		t.Fatalf("unsupported action type: %v", actionType)
 	}
@@ -71,6 +114,15 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 
 func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey) *uap.UAPEnvelope {
 	t.Helper()
+	// Generate a safe nonce from action type and payload (handle empty payloads)
+	nonceSuffix := hex.EncodeToString(payload)
+	if len(nonceSuffix) > 8 {
+		nonceSuffix = nonceSuffix[:8]
+	}
+	if nonceSuffix == "" {
+		nonceSuffix = "empty"
+	}
+
 	env := &uap.UAPEnvelope{
 		ProtocolVersion:   "1.0",
 		Timestamp:         timestamppb.Now(),
@@ -82,7 +134,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		TargetResource:    "localhost",
 		Payload:           payload,
 		StateMerkleRoot:   "root-1",
-		Nonce:             "nonce-" + string(actionType) + "-" + hex.EncodeToString(payload[:4]),
+		Nonce:             "nonce-" + string(actionType) + "-" + nonceSuffix,
 	}
 	hash, err := uap.GenerateMessageID(env)
 	if err != nil {
@@ -96,7 +148,8 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 			TribunalSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
 		},
 	}
-	if actionType == constants.ActionTypeExecuteBash {
+	// Add L3 proof for mutation actions
+	if isMutationAction(actionType) {
 		env.Governance.L3 = &commonv1.L3Metadata{
 			Proof: &commonv1.L3Proof{
 				Signature: "human-proof",
@@ -104,6 +157,18 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		}
 	}
 	return env
+}
+
+// isMutationAction returns true if the action type is a mutation.
+// This mirrors the logic in TransactionVerifier.isMutation.
+func isMutationAction(actionType constants.ActionType) bool {
+	switch actionType {
+	case constants.ActionTypeExecuteBash, constants.ActionTypeFileEdit, constants.ActionTypeRestoreFile, constants.ActionTypeShutdown,
+		constants.ActionTypeMcpCall, constants.ActionTypeA2aCall:
+		return true
+	default:
+		return false
+	}
 }
 
 func TestTransactionVerifier_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
@@ -158,7 +223,7 @@ func TestTransactionVerifier_FailClosedProofs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 			env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 			tc.mutate(env)
@@ -274,7 +339,7 @@ func TestTransactionVerifier_NonceRaceCondition(t *testing.T) {
 
 	replayCount := 0
 	for err := range errs {
-		if errors.Is(err, ErrTransactionReplay) {
+		if errors.Is(err, ErrTransactionReplay) || errors.Is(err, ErrTxInFlight) {
 			replayCount++
 		}
 	}
@@ -282,8 +347,10 @@ func TestTransactionVerifier_NonceRaceCondition(t *testing.T) {
 	if successCount != 1 {
 		t.Errorf("expected exactly 1 success, got %d", successCount)
 	}
+	// The mutex + SQLite replay store should prevent all concurrent identical requests
+	// except one. All remaining should be rejected as replays (either in-flight or SQLite).
 	if replayCount != numConcurrent-1 {
-		t.Errorf("expected %d replays, got %d", numConcurrent-1, replayCount)
+		t.Errorf("expected exactly %d replays, got %d", numConcurrent-1, replayCount)
 	}
 }
 
@@ -295,4 +362,77 @@ func rehash(t *testing.T, env *uap.UAPEnvelope) {
 	}
 	env.Id = hash
 	env.TransactionHash = hash
+}
+
+// TestNewGovernancePosture_PanicsOnInvalidPosture verifies that invalid posture
+// strings cause a panic at startup rather than silently defaulting.
+func TestNewGovernancePosture_PanicsOnInvalidPosture(t *testing.T) {
+	t.Parallel()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("expected panic for invalid posture, but did not panic")
+		}
+	}()
+	NewGovernancePosture("invalid-posture")
+}
+
+// TestNewGovernancePosture_AcceptsValidPostures verifies that all valid posture
+// strings are accepted without panicking.
+func TestNewGovernancePosture_AcceptsValidPostures(t *testing.T) {
+	t.Parallel()
+	validPostures := []string{"doctrine", "consensus", "notary"}
+	for _, posture := range validPostures {
+		t.Run(posture, func(t *testing.T) {
+			t.Parallel()
+			p := NewGovernancePosture(posture)
+			if p == nil {
+				t.Errorf("expected non-nil posture for %s", posture)
+			}
+			if p.Name() != posture {
+				t.Errorf("expected posture name %s, got %s", posture, p.Name())
+			}
+		})
+	}
+}
+
+// TestTransactionVerifier_AllActionTypesFromSSOT verifies that every action type
+// defined in the SSOT (constants.AllActionTypes) can be successfully decoded
+// and verified. This prevents action type drift where new action types are added
+// to constants but not to the decodePayloadForAction switch.
+func TestTransactionVerifier_AllActionTypesFromSSOT(t *testing.T) {
+	t.Parallel()
+	allActionTypes := constants.AllActionTypes()
+	if len(allActionTypes) == 0 {
+		t.Fatal("AllActionTypes() returned empty list")
+	}
+
+	for _, actionType := range allActionTypes {
+		t.Run(string(actionType), func(t *testing.T) {
+			t.Parallel()
+			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+			payload := typedPayload(t, actionType)
+			env := signedEnvelope(t, actionType, payload, privKey)
+
+			// signedEnvelope now adds L3 for mutation actions, so no manual adjustment needed
+
+			verified, err := verifier.VerifyEnvelope(env)
+			// HEARTBEAT has an empty protobuf message that marshals to empty bytes
+			// The verifier rejects empty payloads, so skip this special case
+			if actionType == constants.ActionTypeHeartbeat {
+				if err == nil {
+					t.Fatalf("expected error for HEARTBEAT (empty payload), got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("verification failed for action type %s: %v", actionType, err)
+			}
+			if verified == nil {
+				t.Fatalf("verified transaction is nil for action type %s", actionType)
+			}
+			if verified.ActionType != actionType {
+				t.Fatalf("action type mismatch: expected %s, got %s", actionType, verified.ActionType)
+			}
+		})
+	}
 }

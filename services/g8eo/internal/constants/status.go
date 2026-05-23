@@ -13,6 +13,8 @@
 
 package constants
 
+import "fmt"
+
 // UserRole is a typed string for user role.
 type UserRole string
 
@@ -489,6 +491,7 @@ const (
 )
 
 // ActionType is a typed string for action type.
+
 type ActionType string
 
 const (
@@ -516,6 +519,90 @@ const (
 	ActionTypeMcpPromptGet        ActionType = "MCP_PROMPT_GET"
 	ActionTypeInvestigationCreate ActionType = "INVESTIGATION_CREATE"
 )
+
+// AllActionTypes returns the complete list of defined action types.
+// This is the single source of truth for valid action types in the system.
+// Any new action type must be added to the constants above and will automatically
+// be included in this list.
+func AllActionTypes() []ActionType {
+	return []ActionType{
+		ActionTypeExecuteBash,
+		ActionTypeFileEdit,
+		ActionTypeFsList,
+		ActionTypeFsRead,
+		ActionTypeFsGrep,
+		ActionTypePortCheck,
+		ActionTypeFetchLogs,
+		ActionTypeFetchHistory,
+		ActionTypeFetchFileHistory,
+		ActionTypeRestoreFile,
+		ActionTypeFetchFileDiff,
+		ActionTypeShutdown,
+		ActionTypeHeartbeat,
+		ActionTypeEvalAnswer,
+		ActionTypeGrantIntent,
+		ActionTypeRevokeIntent,
+		ActionTypeMcpCall,
+		ActionTypeA2aCall,
+		ActionTypeMcpResourceList,
+		ActionTypeMcpResourceRead,
+		ActionTypeMcpPromptList,
+		ActionTypeMcpPromptGet,
+		ActionTypeInvestigationCreate,
+	}
+}
+
+// ValidateAllActionTypes checks that AllActionTypes() includes all defined ActionType constants.
+// This is a compile-time invariant check to prevent action type drift.
+func ValidateAllActionTypes() error {
+	allTypes := AllActionTypes()
+	typeMap := make(map[ActionType]bool)
+	for _, t := range allTypes {
+		typeMap[t] = true
+	}
+
+	// All defined constants must be in the list
+	requiredTypes := []ActionType{
+		ActionTypeExecuteBash,
+		ActionTypeFileEdit,
+		ActionTypeFsList,
+		ActionTypeFsRead,
+		ActionTypeFsGrep,
+		ActionTypePortCheck,
+		ActionTypeFetchLogs,
+		ActionTypeFetchHistory,
+		ActionTypeFetchFileHistory,
+		ActionTypeRestoreFile,
+		ActionTypeFetchFileDiff,
+		ActionTypeShutdown,
+		ActionTypeHeartbeat,
+		ActionTypeEvalAnswer,
+		ActionTypeGrantIntent,
+		ActionTypeRevokeIntent,
+		ActionTypeMcpCall,
+		ActionTypeA2aCall,
+		ActionTypeMcpResourceList,
+		ActionTypeMcpResourceRead,
+		ActionTypeMcpPromptList,
+		ActionTypeMcpPromptGet,
+		ActionTypeInvestigationCreate,
+	}
+
+	for _, t := range requiredTypes {
+		if !typeMap[t] {
+			return fmt.Errorf("action type %s is missing from AllActionTypes()", t)
+		}
+	}
+
+	return nil
+}
+
+// init validates action type SSOT at package load time.
+func init() {
+	if err := ValidateAllActionTypes(); err != nil {
+		panic(fmt.Sprintf("action type SSOT validation failed: %v", err))
+	}
+}
 
 // CommandErrorType is a typed string for command error type.
 type CommandErrorType string

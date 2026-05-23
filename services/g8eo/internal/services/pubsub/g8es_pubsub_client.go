@@ -31,6 +31,8 @@ import (
 	pubsubv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/pubsubv1"
 )
 
+//go:generate mockery --name PubSubClient --output ./mocks --dir .
+
 // PubSubClient is the interface implemented by both OperatorPubSubClient and MockOperatorPubSubClient.
 // All service fields and function parameters use this interface to allow test doubles.
 type PubSubClient interface {

@@ -722,7 +722,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	logger.Info("Received signal, shutting down", "signal", sig.String())
 	cancel()
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
 	if cmdSvc != nil {

@@ -405,7 +405,7 @@ func TestSchemaIdempotent(t *testing.T) {
 	// Re-open same database - schema init should not fail or lose data
 	db2, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
 	require.NoError(t, err)
-	defer db2.Close()
+	t.Cleanup(func() { db2.Close() })
 
 	doc, err := db2.DocGet("test", "1")
 	require.NoError(t, err)
@@ -424,7 +424,7 @@ func TestCreateDataDir(t *testing.T) {
 
 	db, err := OpenGatewayDBService(dir, secretsDir, testutil.NewTestLogger(), true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	_, err = os.Stat(filepath.Join(dir, "g8e.db"))
 	assert.NoError(t, err)
