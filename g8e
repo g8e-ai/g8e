@@ -231,22 +231,23 @@ _menu() {
         clear
         echo -e "\033[1;34m  __ _   ___   ___  \033[0m"; echo -e "\033[1;34m / _\` | ( _ ) / _ \\ \033[0m"; echo -e "\033[1;34m| (_| | / _ \\|  __/ \033[0m"; echo -e "\033[1;34m \\__, | \\___/ \\___| \033[0m"; echo -e "\033[1;34m  ___/              \033[0m"
         echo ""; echo -e "\033[1;32m   Interactive g8e Platform Manager\033[0m"; echo ""
+        echo "0) Setup Environment"
+        echo ""
         echo "1) Gateway (g8eg)"
         echo "2) Operator (g8eo)"
         echo "3) Apps (g8ee)"
         echo "4) Protocol & Infrastructure"
         echo "5) Testing & Evaluation"
         echo ""
-        echo "0) Setup Environment"
         echo "q) Exit"
         echo ""; read -p "Choose an option: " choice; echo ""
         case $choice in
+            0) ./g8e setup ;;
             1) _gateway_menu ;;
             2) _operator_menu ;;
             3) _apps_menu ;;
             4) _protocol_menu ;;
             5) _testing_menu ;;
-            0) ./g8e setup ;;
             q|Q) exit 0 ;;
             *) echo "Invalid option." ;;
         esac
