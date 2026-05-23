@@ -1,5 +1,5 @@
 {
   "cache.prefix": "",
-  "key.schema": null,
-  "session.type": null
+  "key.schema": {},
+  "session.type": {}
 }

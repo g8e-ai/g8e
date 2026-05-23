@@ -11,7 +11,7 @@
   ],
   "pythonVersion": "3.12",
   "pythonPlatform": "Linux",
-  "venvPath": ".",
+  "venvPath": "../..",
   "venv": ".venv",
   "typeCheckingMode": "basic",
   "reportMissingImports": "none",

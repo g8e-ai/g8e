@@ -53,7 +53,7 @@ _footer() {
 trap _footer EXIT
 
 _ensure_g8ee_venv() {
-    local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
+    local venv_dir="$PROJECT_ROOT/.venv"
     if [[ ! -d "$venv_dir" ]]; then
         log_warn "g8ee virtualenv not found at $venv_dir. Bootstrapping automatically..."
         python3 -m venv "$venv_dir"
@@ -333,7 +333,7 @@ run_g8ee() {
     log_header "Running g8ee tests (host)"
     _ensure_g8ee_venv
     _check_pki_exists
-    local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
+    local venv_dir="$PROJECT_ROOT/.venv"
     
     export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol/python"
     export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
@@ -368,7 +368,7 @@ run_e2e() {
     log_header "Running E2E operator lifecycle tests (host)"
     _ensure_g8ee_venv
     _check_pki_exists
-    local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
+    local venv_dir="$PROJECT_ROOT/.venv"
     export PYTHONPATH="$PROJECT_ROOT/services/g8ee:$PROJECT_ROOT/protocol/python"
     export G8E_PROTOCOL_DIR="$PROJECT_ROOT/protocol"
     cd "$PROJECT_ROOT/services/g8ee"

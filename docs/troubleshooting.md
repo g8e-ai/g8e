@@ -129,7 +129,7 @@ state. They intentionally remove runtime data under `.g8e/`.
 ## **g8e Agentic Ensemble** (`g8ee`) virtualenv is missing
 
 The **agentic ensemble** is optional. Ensemble and eval commands expect the local
-virtualenv under `services/g8ee/.venv`.
+virtualenv under `.venv` at the project root.
 
 To maximize developer ergonomics, **both the platform start script and the test runner will automatically bootstrap this virtualenv for you** if it is not found.
 

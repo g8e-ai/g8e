@@ -58,7 +58,7 @@ transaction — and the host verifies that transaction before it executes.
 
 ## Quickstart
 
-**Prerequisites:** Go 1.22+ · Python 3.12+ (only for the optional reference Ensemble)
+**Prerequisites:** Go 1.26+ (required) · Python 3.14+ (optional, only for the reference g8ee Ensemble)
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e

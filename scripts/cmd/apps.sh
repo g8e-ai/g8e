@@ -57,9 +57,9 @@ case "$_APP_ACTION" in
         case "$_APP_TARGET" in
             g8ee)
                 _banner "apps build g8ee"
-                python3 -m venv "$SCRIPT_DIR/services/g8ee/.venv"
-                "$SCRIPT_DIR/services/g8ee/.venv/bin/pip" install --upgrade pip
-                exec "$SCRIPT_DIR/services/g8ee/.venv/bin/pip" install -r "$SCRIPT_DIR/services/g8ee/requirements.txt" ;;
+                python3 -m venv "$SCRIPT_DIR/.venv"
+                "$SCRIPT_DIR/.venv/bin/pip" install --upgrade pip
+                exec "$SCRIPT_DIR/.venv/bin/pip" install -r "$SCRIPT_DIR/services/g8ee/requirements.txt" ;;
         esac ;;
     *)
         echo "[g8e] unknown apps subcommand: '$_APP_ACTION'" >&2
