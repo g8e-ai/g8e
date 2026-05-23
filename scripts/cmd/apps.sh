@@ -21,9 +21,17 @@ _APP_TARGET="${2:-g8ee}"
 
 case "$_APP_ACTION" in
     -h|--help|"")
-        echo "Usage: ./g8e apps {start|stop|restart|status|build} [g8ee]"
-        echo ""
-        echo "Optional reference ensembles are application-layer adapters and are not part of the default platform lifecycle."
+        cat <<'EOF'
+### apps (Optional app lifecycle)
+Apps are optional application-layer adapters that use the public protocol surface. The reference app is g8ee (Python Agentic Ensemble).
+
+Subcommands:
+  start [g8ee]    Start optional reference g8e-compliant agentic ensemble app
+  stop [g8ee]     Stop optional reference g8e-compliant agentic ensemble app
+  restart [g8ee] Restart optional reference g8e-compliant agentic ensemble app
+  status         Show optional g8ee status alongside Gateway status
+  build [g8ee]   Install optional g8e-compliant agentic ensemble dependencies
+EOF
         [[ -z "$_APP_ACTION" ]] && exit 1 || exit 0
         ;;
 esac

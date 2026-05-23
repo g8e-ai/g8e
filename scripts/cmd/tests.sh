@@ -21,24 +21,30 @@ if [[ -z "$_TEST_COMPONENT" || "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" 
         _TEST_COMPONENT="g8eo"
         set -- "$_TEST_COMPONENT" "${@:2}"
     else
-        help_file="$SCRIPT_DIR/docs/cli_help.md"
-        if [[ -f "$help_file" ]]; then
-            awk '/^### test/,/^### security/' "$help_file" | head -n -1
-        else
-            echo "[g8e] Help file not found: $help_file" >&2
-            exit 1
-        fi
+        cat <<'EOF'
+### test (Unit tests)
+Testing and evaluation tools for the substrate and applications.
+
+Subcommands:
+  g8eo [path]  Remote Operator tests with race detection. This is the default when no component is provided.
+  g8ee [path]  Optional Python Ensemble adapter tests with LLM provider support.
+  ci           Run all CI workflow steps locally (proto verify, lint, vulncheck, Operator tests, app tests).
+  chaos [options]  Run the g8eo Chaos Tester against the local audit stack.
+EOF
         exit 0
     fi
 fi
 if [[ "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" == "--help" ]]; then
-    help_file="$SCRIPT_DIR/docs/cli_help.md"
-    if [[ -f "$help_file" ]]; then
-        awk '/^### test/,/^### security/' "$help_file" | head -n -1
-    else
-        echo "[g8e] Help file not found: $help_file" >&2
-        exit 1
-    fi
+    cat <<'EOF'
+### test (Unit tests)
+Testing and evaluation tools for the substrate and applications.
+
+Subcommands:
+  g8eo [path]  Remote Operator tests with race detection. This is the default when no component is provided.
+  g8ee [path]  Optional Python Ensemble adapter tests with LLM provider support.
+  ci           Run all CI workflow steps locally (proto verify, lint, vulncheck, Operator tests, app tests).
+  chaos [options]  Run the g8eo Chaos Tester against the local audit stack.
+EOF
     exit 0
 fi
 if [[ "$_TEST_COMPONENT" != "g8ee" && "$_TEST_COMPONENT" != "g8eo" && "$_TEST_COMPONENT" != "chaos" && "$_TEST_COMPONENT" != "ci" ]]; then

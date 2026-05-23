@@ -20,13 +20,20 @@ DEV_MODE="${DEV_MODE:-false}"
 
 case "$SUB" in
     -h|--help|"")
-        help_file="$SCRIPT_DIR/docs/cli_help.md"
-        if [[ -f "$help_file" ]]; then
-            awk '/^### platform/,/^### operator/' "$help_file" | head -n -1
-        else
-            echo "[g8e] Help file not found: $help_file" >&2
-            exit 1
-        fi
+        cat <<'EOF'
+### platform (Gateway lifecycle)
+The Gateway is the local Protocol hub that runs in listen mode, managing CA/PKI, persistence, and pub/sub broker.
+
+Subcommands:
+  start [-a|--with-g8ee]    Start Gateway (g8eg) in listen mode by default; optional g8e Agentic Ensemble (g8ee) requires explicit opt-in
+  stop                      Stop Gateway and any optional app processes
+  restart [-a|--with-g8ee]  Restart Gateway listen mode by default; optional g8e Agentic Ensemble (g8ee) requires explicit opt-in
+  status                    Show Gateway health first and optional g8e Agentic Ensemble status separately
+  reset                     Destructive. Wipes Ensemble data, Gateway listen-mode data, and bootstrap secrets while preserving PKI material in .g8e/pki (prompts for confirmation; bypass with -y, --yes, or --force)
+  clean                     Nuke all processes and the .g8e runtime directory (prompts for confirmation; bypass with -y, --yes, or --force)
+  logs                      Stream logs from all components
+  settings                  Manage platform configuration (sections: general, llm, etc.)
+EOF
         [[ -z "$SUB" ]] && exit 1 || exit 0
         ;;
     status|start|stop|restart|reset|clean|settings|logs)

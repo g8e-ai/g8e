@@ -81,12 +81,22 @@ fi
 
 case "$SUB" in
     -h|--help|"")
-        help_file="$SCRIPT_DIR/docs/cli_help.md"
-        if [[ -f "$help_file" ]]; then
-            awk '/^### demo/,/^### evals/' "$help_file" | head -n -1
-        else
-            echo "[g8e] Help file not found: $help_file" >&2; exit 1
-        fi
+        cat <<'EOF'
+### demo (Fleet simulation)
+Fleet simulation and testing.
+
+Subcommands:
+  deploy [-n <count>] -d <token>  Start and authenticate a simulated fleet of N devices
+  down                           Stop all simulation nodes
+  status                         View container status and node counts
+  clean                          Forcefully remove all demo artifacts
+  profile [list|switch]          Manage demo scenarios (e.g., acme-corp, nginx)
+  shell <node>                  Drop into a simulation node's shell
+  devices|broken                List discovered or unhealthy devices
+  operators                     Show status of g8e operator processes in the fleet
+
+To start a demo, use deploy -d <token>. This will automatically bring up the fleet and authenticate the operators.
+EOF
         [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
     up|down|status|clean|health|nginx-check|operators|logs|discover-hosts|stream|vanish|devices|broken)
         _banner "demo $SUB"; exec make -C "$DEMO_DIR" "$SUB" "${demo_args[@]}" ;;
