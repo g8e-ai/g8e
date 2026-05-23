@@ -131,36 +131,77 @@ SECRETS_VOLUME="$G8E_SECRETS_DIR"
 
 usage() {
     cat <<EOF
-Usage: $(basename "$0") <command> [options]
+Usage: $(basename "$0") <command> [options] [component ...]
+
+Platform lifecycle management for the local g8e environment.
 
 Commands:
-  status                          Show Gateway and optional app process status
-  up [component ...] [-a|--g8ee] Start Operator gateway mode by default
+  status                          Show Gateway and optional app process status, endpoints, and
+                                  enforcement posture
+  up [component ...]              Start Operator gateway mode by default
                                   Default (no components): operator
-                                  Valid: operator g8ee
-                                  Optional apps require -a, --g8ee, or --with-g8ee
-  down                            Stop Operator gateway mode and optional apps -- nothing is removed
-  rebuild [component ...]         Restart Operator gateway mode by default
+                                  Valid components: operator g8ee
+                                  Optional apps require -a, --g8ee, or --with-g8ee flag
+  down                            Stop Operator gateway mode and optional apps
+                                  Nothing is removed
+  restart [component ...]        Restart Gateway components
                                   Default (no components): operator
-                                  Valid: operator g8ee
-                                  Optional apps require -a, --g8ee, or --with-g8ee
-  reset                           Wipe Operator gateway-mode data. PKI certs and secrets are preserved.
-  clean                           Nuke runtime processes and data.
+                                  Valid components: operator g8ee
+                                  Optional apps require -a, --g8ee, or --with-g8ee flag
+  rebuild [component ...]         Restart Gateway components (alias for restart)
+                                  Default (no components): operator
+                                  Valid components: operator g8ee
+                                  Optional apps require -a, --g8ee, or --with-g8ee flag
+  setup [component ...]           First-time setup and start platform
+                                  Does NOT wipe data volumes - safe to run on existing installation
+                                  Default (no components): operator
+                                  Valid components: operator g8ee
+                                  Optional apps require -a, --g8ee, or --with-g8ee flag
+  reset [component ...]           Wipe Operator gateway-mode data and secrets
+                                  PKI certs are preserved across reset
+                                  Use 'clean' to remove everything including PKI
+                                  Default (no components): operator
+                                  Valid components: operator g8ee
+                                  Optional apps require -a, --g8ee, or --with-g8ee flag
+  clean                           Remove all host runtime processes and data
+                                  Includes .g8e runtime directory, Python caches, and .venv
   operator-build                  Build linux/amd64 operator binary natively
   operator-build-all              Build all operator architectures natively
   operator-build-upload          Build and upload operator binary to gateway blob storage
+                                  Requires gateway to be running
 
 Options:
+  -h, --help                      Show this help message
+  --dev                           Enable development mode
+  -a, --g8ee, --with-g8ee         Include optional g8ee application layer
   --build-upload                  Build, compress, and upload operator binary during gateway startup
+
+Data Volumes:
+  .g8e/data                       Operator gateway-mode SQLite DB, users, settings
+                                  Wiped by reset
+  .g8e/pki                        Operator gateway-mode TLS/PKI material
+                                  Preserved by reset and wipe
+  .g8e/secrets                    Operator gateway-mode bootstrap secrets
+                                  Wiped by reset, preserved by wipe
+  g8ee-data                       g8ee app data
+                                  Wiped by reset
+
+Prerequisites:
+  - Go available on host for operator builds
+  - Node and Python available on host when optional apps are enabled
 
 Examples:
   $(basename "$0") status                       Show host process status and versions
   $(basename "$0") up                           Start Operator gateway mode
   $(basename "$0") up -a                        Start Operator plus optional bundled apps
+  $(basename "$0") up operator g8ee             Start specific components (requires -a)
   $(basename "$0") down                         Stop runtime processes
-  $(basename "$0") rebuild                      Restart Operator gateway mode
+  $(basename "$0") restart                       Restart Operator gateway mode
+  $(basename "$0") rebuild                      Restart Operator gateway mode (alias)
   $(basename "$0") reset                        Wipe Operator gateway-mode data
   $(basename "$0") clean                        Remove host runtime state
+  $(basename "$0") operator-build               Build operator binary for current arch
+  $(basename "$0") operator-build-upload        Build and upload operator to gateway
 EOF
 }
 

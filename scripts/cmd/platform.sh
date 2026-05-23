@@ -14,6 +14,7 @@
 
 set -e
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../core/_utils.sh"
 
 SUB="${1:-}"
 DEV_MODE="${DEV_MODE:-false}"
@@ -71,23 +72,12 @@ EOF
                     fi
                 done
                 if [[ "$skip_confirm" != "true" ]]; then
-                    if [[ ! -t 0 ]]; then
-                        echo "[g8e] Error: stdin is not a TTY. Interactive confirmation required. Use -y/--yes/--force to bypass." >&2
-                        exit 1
-                    fi
-                    echo ""
-                    echo -e "\033[1;31mWARNING: You are about to RESET the g8e platform!\033[0m"
-                    echo "This command will:"
-                    echo "  1. Stop all running g8e services (Operator and any optional apps)."
-                    echo "  2. Wipe the SQLite databases (users, settings, audits, etc.) and bootstrap secrets."
-                    echo "  3. Preserve your existing TLS/PKI certificates and keys."
-                    echo "  4. Restart the services with a fresh database."
-                    echo ""
-                    read -p "Are you sure you want to continue? (y/n): " confirm
-                    if [[ ! "$confirm" =~ ^[Yy]([Ee][Ss])?$ ]]; then
-                        echo "Reset cancelled."
-                        exit 0
-                    fi
+                    _confirm_destructive "RESET the g8e platform" \
+"This command will:
+  1. Stop all running g8e services (Operator and any optional apps).
+  2. Wipe the SQLite databases (users, settings, audits, etc.) and bootstrap secrets.
+  3. Preserve your existing TLS/PKI certificates and keys.
+  4. Restart the services with a fresh database." "${@:2}"
                 fi
                 exec bash "$SCRIPT_DIR/scripts/core/build.sh" reset   "${@:2}" ;;
             clean)
@@ -99,24 +89,13 @@ EOF
                     fi
                 done
                 if [[ "$skip_confirm" != "true" ]]; then
-                    if [[ ! -t 0 ]]; then
-                        echo "[g8e] Error: stdin is not a TTY. Interactive confirmation required. Use -y/--yes/--force to bypass." >&2
-                        exit 1
-                    fi
-                    echo ""
-                    echo -e "\033[1;31mWARNING: You are about to CLEAN the g8e platform!\033[0m"
-                    echo "This command will:"
-                    echo "  1. Stop all running g8e services (Operator and any optional apps)."
-                    echo "  2. Completely delete the entire runtime directory ($G8E_RUNTIME_DIR)."
-                    echo "  3. Delete all SQLite databases, bootstrap secrets, logs, AND TLS/PKI certificates/keys."
-                    echo "  4. Clean Python caches (__pycache__, .pyc, .pyo)."
-                    echo "  5. All trust routes and credentials will be permanently destroyed."
-                    echo ""
-                    read -p "Are you sure you want to continue? (y/n): " confirm
-                    if [[ ! "$confirm" =~ ^[Yy]([Ee][Ss])?$ ]]; then
-                        echo "Clean cancelled."
-                        exit 0
-                    fi
+                    _confirm_destructive "CLEAN the g8e platform" \
+"This command will:
+  1. Stop all running g8e services (Operator and any optional apps).
+  2. Completely delete the entire runtime directory ($G8E_RUNTIME_DIR).
+  3. Delete all SQLite databases, bootstrap secrets, logs, AND TLS/PKI certificates/keys.
+  4. Clean Python caches (__pycache__, .pyc, .pyo).
+  5. All trust routes and credentials will be permanently destroyed." "${@:2}"
                 fi
                 exec bash "$SCRIPT_DIR/scripts/core/build.sh" clean   "${@:2}" ;;
             settings)
@@ -128,7 +107,5 @@ EOF
                 tail -f "$G8E_RUNTIME_DIR/logs/"*.log ;;
         esac ;;
     *)
-        echo "[g8e] unknown platform subcommand: '$SUB'" >&2
-        echo "  Valid: settings, status, start, stop, restart, reset, clean, logs" >&2
-        exit 1 ;;
+        _unknown_subcommand "$SUB" "settings, status, start, stop, restart, reset, clean, logs" ;;
 esac
