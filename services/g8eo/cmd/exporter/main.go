@@ -169,7 +169,7 @@ func main() {
 	}
 
 	emitJSON("collections.json", CollectionsExport{Collections: snapshot.Collections}, true)
-	emitJSON("events.json", EventsExport{Events: snapshot.Events}, false)
+	emitJSON("events.json", EventsExport{Events: snapshot.Events}, true)
 	emitJSON("status.json", StatusExport{Status: snapshot.Status}, true)
 	emitJSON("senders.json", SendersExport{Senders: snapshot.Senders}, true)
 	emitJSON("kv_keys.json", KVKeysExport{

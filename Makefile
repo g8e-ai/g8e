@@ -30,6 +30,11 @@ BUF := $(shell command -v buf 2>/dev/null || echo "./buf")
 help:
 	@echo "g8e Platform Root Makefile"
 	@echo ""
+	@echo "CI/CD (Local):"
+	@echo "  ci            Run full CI pipeline locally (mirrors GitHub Actions)"
+	@echo "  ci-substrate  Run substrate-only CI (g8eo, protocol, proto, docs)"
+	@echo "  ci-apps       Run app-layer CI (g8ee tests, requires LLM creds)"
+	@echo ""
 	@echo "Development:"
 	@echo "  generate      Generate all protocol artifacts (proto + constants + docs)"
 	@echo "  proto         Generate all Protobuf code (Go and Python)"
@@ -144,7 +149,7 @@ lint-no-bare-session-id:
 	@echo "Checking for bare session_id regression..."
 	@if grep -rE "\bsession_id\b" . \
 		--exclude-dir={.git,vendor,node_modules,.g8e,.ruff_cache,.venv,dist,build,__pycache__,.local.dev,.github} \
-		--exclude={*.pb.go,*_pb2.py,*_pb2_grpc.py,*.pyc,Makefile,*.sh} \
+		--exclude={*.pb.go,*_pb2.py,*_pb2_grpc.py,*.pyc,Makefile,*.sh,*.json} \
 		-I; then \
 		echo "Error: Bare 'session_id' found. Use 'operator_session_id', 'cli_session_id', or 'web_session_id' instead."; \
 		exit 1; \
@@ -227,6 +232,96 @@ update-doctrines:
 	@curl -sSL https://raw.githubusercontent.com/gitleaks/gitleaks/master/config/gitleaks.toml -o /tmp/gitleaks.toml
 	@$(MAKE) ingest-doctrines
 	@echo "Doctrine update complete."
+
+# =============================================================================
+# CI/CD (LOCAL)
+# =============================================================================
+.PHONY: ci
+ci: ci-substrate
+	@echo "Running full CI pipeline (substrate + apps)..."
+	@echo "Note: apps-g8ee requires G8E_LLM_PRIMARY_API_KEY environment variable"
+	@if [ -n "$$G8E_LLM_PRIMARY_API_KEY" ]; then \
+		$(MAKE) ci-apps; \
+	else \
+		echo "Skipping apps-g8ee (G8E_LLM_PRIMARY_API_KEY not set)"; \
+		echo "Set it with: export G8E_LLM_PRIMARY_API_KEY=your_key"; \
+	fi
+	@echo "CI complete."
+
+.PHONY: ci-substrate
+ci-substrate: _ci-verify-proto _ci-lint-g8eo _ci-vulncheck-g8eo _ci-test-g8eo _ci-docs
+	@echo "Substrate CI complete."
+
+.PHONY: ci-apps
+ci-apps: _ci-apps-g8ee
+	@echo "Apps CI complete."
+
+.PHONY: _ci-verify-proto
+_ci-verify-proto:
+	@echo "=== verify-proto ==="
+	@$(MAKE) proto
+	@$(MAKE) constants
+	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.go$$|^\s*M.*\.py$$|^\s*M.*\.sh$$" || true); \
+	if [ -n "$$CHANGES" ]; then \
+		echo "Error: Generated constant files are out of sync with protocol/constants/*.json"; \
+		echo "$$CHANGES"; \
+		git diff; \
+		exit 1; \
+	fi
+	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$$|^\s*M.*_pb2.*\.py$$|^\s*M.*\.proto$$" || true); \
+	if [ -n "$$CHANGES" ]; then \
+		echo "Error: Generated proto files are out of sync with protocol/proto/*.proto"; \
+		echo "$$CHANGES"; \
+		git diff -- $$(git status --porcelain | grep -E "^\s*M" | awk '{print $$2}'); \
+		exit 1; \
+	fi
+	@$(MAKE) lint-no-bare-session-id
+	@$(MAKE) lint-no-hand-authored-events
+	@$(MAKE) validate-doctrines
+	@cd services/g8eo/internal/constants && go run check_registry.go
+
+.PHONY: _ci-lint-g8eo
+_ci-lint-g8eo:
+	@echo "=== lint-g8eo ==="
+	@$(MAKE) lint-g8eo
+	@cd protocol && golangci-lint run
+
+.PHONY: _ci-vulncheck-g8eo
+_ci-vulncheck-g8eo:
+	@echo "=== vulncheck-g8eo ==="
+	@$(MAKE) vulncheck-g8eo
+
+.PHONY: _ci-test-g8eo
+_ci-test-g8eo:
+	@echo "=== test-g8eo ==="
+	@./g8e platform start
+	@cd services/g8eo && go test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic ./...
+	@COVERAGE=$$(cd services/g8eo && go tool cover -func=coverage.out | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	if [ $$(echo "$$COVERAGE < 85" | bc -l) -eq 1 ]; then \
+		echo "Coverage $$COVERAGE% is below 85% threshold"; \
+		exit 1; \
+	fi; \
+	echo "Coverage $$COVERAGE% meets 85% threshold"
+	@./g8e platform stop
+
+.PHONY: _ci-docs
+_ci-docs:
+	@echo "=== docs-lint ==="
+	@if command -v markdownlint >/dev/null 2>&1; then \
+		markdownlint . -c .markdownlint.json --ignore node_modules; \
+	else \
+		echo "markdownlint not found, skipping docs-lint. Install with: npm install -g markdownlint-cli"; \
+	fi
+	@echo "=== docs-build ==="
+	@$(MAKE) docs-build
+
+.PHONY: _ci-apps-g8ee
+_ci-apps-g8ee:
+	@echo "=== apps-g8ee ==="
+	@./g8e platform start
+	@./g8e apps start g8ee
+	@./g8e test g8ee -p gemini -k "$$G8E_LLM_PRIMARY_API_KEY" -m gemini-3.1-pro-preview-customtools -a gemini-3-flash-preview -l gemini-3.1-flash-lite -j auto -- tests
+	@./g8e platform stop
 
 # =============================================================================
 # SERVICE DISPATCH
