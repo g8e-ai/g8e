@@ -27,6 +27,7 @@ import (
 )
 
 func TestAuditVaultService_GitGetCurrentHash_ReturnsHash(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -51,6 +52,7 @@ func TestAuditVaultService_GitGetCurrentHash_ReturnsHash(t *testing.T) {
 }
 
 func TestAuditVaultService_GitGetCurrentHash_HashChangesAfterCommit(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,
@@ -105,6 +107,7 @@ func TestAuditVaultService_GitGetCurrentHash_HashChangesAfterCommit(t *testing.T
 }
 
 func TestAuditVaultService_GitGetCurrentHash_ErrorWhenGitUnavailable(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	config := &AuditVaultConfig{
 		DataDir:                   tempDir,

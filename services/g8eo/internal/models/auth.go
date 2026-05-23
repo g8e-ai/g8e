@@ -44,7 +44,6 @@ type DeviceLinkData struct {
 
 type CreateDeviceLinkRequest struct {
 	UserID         string `json:"user_id"`
-	Email          string `json:"email,omitempty"`
 	OrganizationID string `json:"organization_id,omitempty"`
 	OperatorID     string `json:"operator_id,omitempty"`
 	WebSessionID   string `json:"web_session_id,omitempty"`
@@ -304,11 +303,13 @@ func (u *User) WebAuthnID() []byte {
 }
 
 func (u *User) WebAuthnName() string {
-	return u.Email
+	// Zero-PII: Use user ID as the WebAuthn identifier instead of email
+	return u.ID
 }
 
 func (u *User) WebAuthnDisplayName() string {
-	return u.Name
+	// Zero-PII: Use user ID as the display name instead of name
+	return u.ID
 }
 
 func (u *User) WebAuthnIcon() string {
@@ -361,6 +362,11 @@ type CLISession struct {
 
 // User represents a platform user with passkey credentials.
 //
+// Zero-PII Architecture: This struct contains NO personally identifiable information.
+// The platform persists only the device-link token and public key (passkey credentials).
+// Email and name are NOT stored - users are identified solely by their device-link
+// enrollment and cryptographic credentials.
+//
 // IsBootstrap identifies the ephemeral local-superadmin identity created by
 // `./g8e platform start -a` over loopback. It is *not* a privilege tier - it
 // marks an identity that exists purely to make a fresh local install usable
@@ -368,8 +374,6 @@ type CLISession struct {
 // device-link login completes.
 type User struct {
 	ID                 string              `json:"id"`
-	Email              string              `json:"email"`
-	Name               string              `json:"name,omitempty"`
 	PasskeyCredentials []PasskeyCredential `json:"passkey_credentials,omitempty"`
 	Provider           string              `json:"provider,omitempty"`
 

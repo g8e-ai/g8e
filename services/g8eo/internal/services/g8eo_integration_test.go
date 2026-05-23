@@ -26,6 +26,7 @@ import (
 )
 
 func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
+	t.Parallel()
 
 	cfg := testutil.NewTestConfig(t)
 	cfg.APIKey = "invalid-api-key-for-testing"
@@ -48,7 +49,9 @@ func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
 }
 
 func TestG8eoService_SubServices_Initialization(t *testing.T) {
+	t.Parallel()
 	t.Run("execution service", func(t *testing.T) {
+		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 
@@ -57,6 +60,7 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 	})
 
 	t.Run("file edit service", func(t *testing.T) {
+		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 
@@ -65,6 +69,7 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 	})
 
 	t.Run("pub/sub command service", func(t *testing.T) {
+		t.Parallel()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -88,6 +93,7 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 	})
 
 	t.Run("pub/sub results service", func(t *testing.T) {
+		t.Parallel()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()

@@ -26,6 +26,7 @@ import (
 )
 
 func TestUserService_CreateBootstrapUser(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -36,25 +37,27 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 	userSvc := NewUserService(db, logger)
 
 	t.Run("Success - creates bootstrap user", func(t *testing.T) {
-		user, err := userSvc.CreateBootstrapUser("bootstrap@g8e.local", "Bootstrap User")
+		t.Parallel()
+		user, err := userSvc.CreateBootstrapUser()
 		require.NoError(t, err)
 		require.NotNil(t, user)
-		require.Equal(t, "bootstrap@g8e.local", user.Email)
-		require.Equal(t, "Bootstrap User", user.Name)
 		require.True(t, user.IsBootstrap)
 		require.Equal(t, constants.UserStatusActive, user.Status)
 	})
 
 	t.Run("Success - second bootstrap user fails", func(t *testing.T) {
+		t.Parallel()
 		// First bootstrap user already exists from previous test
-		_, err := userSvc.CreateBootstrapUser("bootstrap2@g8e.local", "Second Bootstrap")
+		_, err := userSvc.CreateBootstrapUser()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "bootstrap user already exists")
 	})
 }
 
 func TestUserService_Disable(t *testing.T) {
+	t.Parallel()
 	t.Run("Success - disables user", func(t *testing.T) {
+		t.Parallel()
 		logger := testutil.NewTestLogger()
 		dbDir := t.TempDir()
 		secretsDir := t.TempDir()
@@ -65,7 +68,7 @@ func TestUserService_Disable(t *testing.T) {
 		userSvc := NewUserService(db, logger)
 
 		// Create a bootstrap user
-		user, err := userSvc.CreateBootstrapUser("bootstrap@g8e.local", "Bootstrap User")
+		user, err := userSvc.CreateBootstrapUser()
 		require.NoError(t, err)
 
 		err = userSvc.Disable(user.ID, "test_reason", "actor_user_id", "operator_id")
@@ -95,6 +98,7 @@ func TestUserService_Disable(t *testing.T) {
 	})
 
 	t.Run("Error - user not found", func(t *testing.T) {
+		t.Parallel()
 		logger := testutil.NewTestLogger()
 		db, _ := OpenGatewayDBService(t.TempDir(), t.TempDir(), logger, true)
 		defer db.Close()
@@ -113,14 +117,16 @@ func mustMarshal(t *testing.T, v any) []byte {
 }
 
 func TestUserService_FindBootstrapUser(t *testing.T) {
+	t.Parallel()
 	t.Run("Success - finds bootstrap user", func(t *testing.T) {
+		t.Parallel()
 		logger := testutil.NewTestLogger()
 		db, _ := OpenGatewayDBService(t.TempDir(), t.TempDir(), logger, true)
 		defer db.Close()
 		userSvc := NewUserService(db, logger)
 
 		// Create bootstrap user
-		created, err := userSvc.CreateBootstrapUser("bootstrap@g8e.local", "Bootstrap User")
+		created, err := userSvc.CreateBootstrapUser()
 		require.NoError(t, err)
 
 		// Find bootstrap user
@@ -128,18 +134,18 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, found)
 		require.Equal(t, created.ID, found.ID)
-		require.Equal(t, created.Email, found.Email)
 		require.True(t, found.IsBootstrap)
 	})
 
 	t.Run("Success - returns nil when no bootstrap user", func(t *testing.T) {
+		t.Parallel()
 		logger := testutil.NewTestLogger()
 		db, _ := OpenGatewayDBService(t.TempDir(), t.TempDir(), logger, true)
 		defer db.Close()
 		userSvc := NewUserService(db, logger)
 
 		// Create a non-bootstrap user
-		_, err := userSvc.CreateUser("regular@g8e.local", "Regular User")
+		_, err := userSvc.CreateUser()
 		require.NoError(t, err)
 
 		// Find bootstrap user should return nil
@@ -150,7 +156,9 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 }
 
 func TestUser_IsActive(t *testing.T) {
+	t.Parallel()
 	t.Run("Active status returns true", func(t *testing.T) {
+		t.Parallel()
 		user := &models.User{
 			Status: constants.UserStatusActive,
 		}
@@ -158,6 +166,7 @@ func TestUser_IsActive(t *testing.T) {
 	})
 
 	t.Run("Disabled status returns false", func(t *testing.T) {
+		t.Parallel()
 		user := &models.User{
 			Status: constants.UserStatusDisabled,
 		}
@@ -165,6 +174,7 @@ func TestUser_IsActive(t *testing.T) {
 	})
 
 	t.Run("Empty status returns true (backward compatibility)", func(t *testing.T) {
+		t.Parallel()
 		user := &models.User{
 			Status: "",
 		}
@@ -172,12 +182,14 @@ func TestUser_IsActive(t *testing.T) {
 	})
 
 	t.Run("Nil user returns false", func(t *testing.T) {
+		t.Parallel()
 		var user *models.User = nil
 		require.False(t, user.IsActive())
 	})
 }
 
 func TestUserService_HasAnyUsers(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -188,13 +200,15 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 	userSvc := NewUserService(db, logger)
 
 	t.Run("False when no users exist", func(t *testing.T) {
+		t.Parallel()
 		hasUsers, err := userSvc.HasAnyUsers()
 		require.NoError(t, err)
 		require.False(t, hasUsers)
 	})
 
 	t.Run("True when user exists", func(t *testing.T) {
-		_, err := userSvc.CreateUser("test@g8e.local", "Test User")
+		t.Parallel()
+		_, err := userSvc.CreateUser()
 		require.NoError(t, err)
 
 		hasUsers, err := userSvc.HasAnyUsers()

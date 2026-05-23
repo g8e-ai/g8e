@@ -27,24 +27,28 @@ import (
 )
 
 func TestNewPruner_DefaultsNegativeIntervalToOneHour(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	p := NewPruner(nil, logger, -1*time.Second, func(_ *DB, _ *slog.Logger) {})
 	assert.Equal(t, time.Hour, p.interval)
 }
 
 func TestNewPruner_DefaultsZeroIntervalToOneHour(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	p := NewPruner(nil, logger, 0, func(_ *DB, _ *slog.Logger) {})
 	assert.Equal(t, time.Hour, p.interval)
 }
 
 func TestNewPruner_RespectsPositiveInterval(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	p := NewPruner(nil, logger, 5*time.Minute, func(_ *DB, _ *slog.Logger) {})
 	assert.Equal(t, 5*time.Minute, p.interval)
 }
 
 func TestPruner_InvokesFnOnTick(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "pruner.db"))
@@ -68,6 +72,7 @@ func TestPruner_InvokesFnOnTick(t *testing.T) {
 }
 
 func TestPruner_Stop_IsIdempotent(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	p := NewPruner(nil, logger, time.Hour, func(_ *DB, _ *slog.Logger) {})
 	p.Start()
@@ -77,6 +82,7 @@ func TestPruner_Stop_IsIdempotent(t *testing.T) {
 }
 
 func TestPruner_Stop_BeforeStart_DoesNotPanic(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	p := NewPruner(nil, logger, time.Hour, func(_ *DB, _ *slog.Logger) {})
 
@@ -84,6 +90,7 @@ func TestPruner_Stop_BeforeStart_DoesNotPanic(t *testing.T) {
 }
 
 func TestPruner_Stop_HaltsInvocations(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "halt.db"))
@@ -107,11 +114,13 @@ func TestPruner_Stop_HaltsInvocations(t *testing.T) {
 	p.Stop()
 	countAfterStop := callCount.Load()
 
-	time.Sleep(60 * time.Millisecond)
-	assert.Equal(t, countAfterStop, callCount.Load(), "no more invocations after Stop")
+	require.Eventually(t, func() bool {
+		return callCount.Load() == countAfterStop
+	}, 200*time.Millisecond, 10*time.Millisecond, "no more invocations after Stop")
 }
 
 func TestPruner_FnReceivesCorrectLogger(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "logarg.db"))
@@ -145,6 +154,7 @@ func TestPruner_FnReceivesCorrectLogger(t *testing.T) {
 }
 
 func TestPruner_StartAfterStop_DoesNotInvokeFn(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "postStop.db"))
@@ -171,11 +181,13 @@ func TestPruner_StartAfterStop_DoesNotInvokeFn(t *testing.T) {
 	t.Cleanup(p.Stop)
 
 	countAfterRestart := callCount.Load()
-	time.Sleep(60 * time.Millisecond)
-	assert.Equal(t, countAfterRestart, callCount.Load(), "fn must not be invoked after Start on a stopped pruner")
+	require.Eventually(t, func() bool {
+		return callCount.Load() == countAfterRestart
+	}, 200*time.Millisecond, 10*time.Millisecond, "fn must not be invoked after Start on a stopped pruner")
 }
 
 func TestPruner_FnReceivesCorrectDB(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "dbarg.db"))

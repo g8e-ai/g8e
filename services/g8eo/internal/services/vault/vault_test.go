@@ -33,7 +33,9 @@ const (
 )
 
 func TestDeriveKEK(t *testing.T) {
+	t.Parallel()
 	t.Run("deterministic derivation", func(t *testing.T) {
+		t.Parallel()
 		kek1, err := DeriveKEK(testAPIKey1)
 		require.NoError(t, err)
 		require.Len(t, kek1, KeySize)
@@ -45,6 +47,7 @@ func TestDeriveKEK(t *testing.T) {
 	})
 
 	t.Run("different keys produce different KEKs", func(t *testing.T) {
+		t.Parallel()
 		kek1, err := DeriveKEK(testAPIKey1)
 		require.NoError(t, err)
 
@@ -55,19 +58,23 @@ func TestDeriveKEK(t *testing.T) {
 	})
 
 	t.Run("empty key rejected", func(t *testing.T) {
+		t.Parallel()
 		_, err := DeriveKEK("")
 		assert.Error(t, err)
 	})
 }
 
 func TestGenerateDEK(t *testing.T) {
+	t.Parallel()
 	t.Run("generates correct size", func(t *testing.T) {
+		t.Parallel()
 		dek, err := GenerateDEK()
 		require.NoError(t, err)
 		assert.Len(t, dek, KeySize)
 	})
 
 	t.Run("generates unique keys", func(t *testing.T) {
+		t.Parallel()
 		dek1, err := GenerateDEK()
 		require.NoError(t, err)
 
@@ -79,13 +86,16 @@ func TestGenerateDEK(t *testing.T) {
 }
 
 func TestGenerateNonce(t *testing.T) {
+	t.Parallel()
 	t.Run("generates correct size", func(t *testing.T) {
+		t.Parallel()
 		nonce, err := GenerateNonce()
 		require.NoError(t, err)
 		assert.Len(t, nonce, NonceSize)
 	})
 
 	t.Run("generates unique nonces", func(t *testing.T) {
+		t.Parallel()
 		nonce1, err := GenerateNonce()
 		require.NoError(t, err)
 
@@ -97,13 +107,16 @@ func TestGenerateNonce(t *testing.T) {
 }
 
 func TestKeyFingerprint(t *testing.T) {
+	t.Parallel()
 	t.Run("correct size", func(t *testing.T) {
+		t.Parallel()
 		key := []byte("test-key-material")
 		fp := KeyFingerprint(key)
 		assert.Len(t, fp, KeyFingerprintSize)
 	})
 
 	t.Run("deterministic", func(t *testing.T) {
+		t.Parallel()
 		key := []byte("test-key-material")
 		fp1 := KeyFingerprint(key)
 		fp2 := KeyFingerprint(key)
@@ -111,6 +124,7 @@ func TestKeyFingerprint(t *testing.T) {
 	})
 
 	t.Run("different keys produce different fingerprints", func(t *testing.T) {
+		t.Parallel()
 		fp1 := KeyFingerprint([]byte("key1"))
 		fp2 := KeyFingerprint([]byte("key2"))
 		assert.NotEqual(t, fp1, fp2)
@@ -118,7 +132,9 @@ func TestKeyFingerprint(t *testing.T) {
 }
 
 func TestAESKeyWrapUnwrap(t *testing.T) {
+	t.Parallel()
 	t.Run("wrap and unwrap 32-byte key", func(t *testing.T) {
+		t.Parallel()
 		kek, err := GenerateDEK()
 		require.NoError(t, err)
 
@@ -135,6 +151,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 	})
 
 	t.Run("wrap and unwrap 16-byte key", func(t *testing.T) {
+		t.Parallel()
 		kek, _ := GenerateDEK()
 		plaintext := make([]byte, 16)
 		copy(plaintext, []byte("sixteen-byte-key"))
@@ -148,6 +165,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 	})
 
 	t.Run("wrong KEK fails unwrap", func(t *testing.T) {
+		t.Parallel()
 		kek1, _ := GenerateDEK()
 		kek2, _ := GenerateDEK()
 		plaintext, _ := GenerateDEK()
@@ -160,6 +178,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 	})
 
 	t.Run("tampered ciphertext fails unwrap", func(t *testing.T) {
+		t.Parallel()
 		kek, _ := GenerateDEK()
 		plaintext, _ := GenerateDEK()
 
@@ -173,6 +192,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 	})
 
 	t.Run("invalid key sizes rejected", func(t *testing.T) {
+		t.Parallel()
 		invalidKEK := make([]byte, 15)
 		plaintext, _ := GenerateDEK()
 
@@ -181,6 +201,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 	})
 
 	t.Run("invalid plaintext size rejected", func(t *testing.T) {
+		t.Parallel()
 		kek, _ := GenerateDEK()
 		invalidPlaintext := make([]byte, 15)
 
@@ -189,6 +210,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 	})
 
 	t.Run("too short plaintext rejected", func(t *testing.T) {
+		t.Parallel()
 		kek, _ := GenerateDEK()
 		shortPlaintext := make([]byte, 8)
 
@@ -198,7 +220,9 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 }
 
 func TestAESGCMEncryptDecrypt(t *testing.T) {
+	t.Parallel()
 	t.Run("encrypt and decrypt", func(t *testing.T) {
+		t.Parallel()
 		key, _ := GenerateDEK()
 		nonce, _ := GenerateNonce()
 		plaintext := []byte("Hello, World! This is a test message.")
@@ -213,6 +237,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 	})
 
 	t.Run("with additional data", func(t *testing.T) {
+		t.Parallel()
 		key, _ := GenerateDEK()
 		nonce, _ := GenerateNonce()
 		plaintext := []byte("Secret message")
@@ -227,6 +252,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 	})
 
 	t.Run("wrong AAD fails decryption", func(t *testing.T) {
+		t.Parallel()
 		key, _ := GenerateDEK()
 		nonce, _ := GenerateNonce()
 		plaintext := []byte("Secret message")
@@ -240,6 +266,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 	})
 
 	t.Run("wrong key fails decryption", func(t *testing.T) {
+		t.Parallel()
 		key1, _ := GenerateDEK()
 		key2, _ := GenerateDEK()
 		nonce, _ := GenerateNonce()
@@ -253,6 +280,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 	})
 
 	t.Run("tampered ciphertext fails decryption", func(t *testing.T) {
+		t.Parallel()
 		key, _ := GenerateDEK()
 		nonce, _ := GenerateNonce()
 		plaintext := []byte("Secret message")
@@ -267,6 +295,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 	})
 
 	t.Run("invalid key size rejected", func(t *testing.T) {
+		t.Parallel()
 		invalidKey := make([]byte, 16)
 		nonce, _ := GenerateNonce()
 		plaintext := []byte("test")
@@ -276,6 +305,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 	})
 
 	t.Run("invalid nonce size rejected", func(t *testing.T) {
+		t.Parallel()
 		key, _ := GenerateDEK()
 		invalidNonce := make([]byte, 8)
 		plaintext := []byte("test")
@@ -286,7 +316,9 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 }
 
 func TestSecureZero(t *testing.T) {
+	t.Parallel()
 	t.Run("zeros out slice", func(t *testing.T) {
+		t.Parallel()
 		data := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 		SecureZero(data)
 
@@ -297,7 +329,9 @@ func TestSecureZero(t *testing.T) {
 }
 
 func TestNewVaultHeader(t *testing.T) {
+	t.Parallel()
 	t.Run("creates valid header", func(t *testing.T) {
+		t.Parallel()
 		header, dek, err := NewVaultHeader(testAPIKey1)
 		require.NoError(t, err)
 		require.NotNil(t, header)
@@ -315,6 +349,7 @@ func TestNewVaultHeader(t *testing.T) {
 	})
 
 	t.Run("fingerprint matches API key", func(t *testing.T) {
+		t.Parallel()
 		header, dek, err := NewVaultHeader(testAPIKey1)
 		require.NoError(t, err)
 		defer SecureZero(dek)
@@ -325,7 +360,9 @@ func TestNewVaultHeader(t *testing.T) {
 }
 
 func TestVaultHeaderUnwrapDEK(t *testing.T) {
+	t.Parallel()
 	t.Run("unwrap with correct key", func(t *testing.T) {
+		t.Parallel()
 		header, originalDEK, err := NewVaultHeader(testAPIKey1)
 		require.NoError(t, err)
 		defer SecureZero(originalDEK)
@@ -338,6 +375,7 @@ func TestVaultHeaderUnwrapDEK(t *testing.T) {
 	})
 
 	t.Run("unwrap with wrong key fails", func(t *testing.T) {
+		t.Parallel()
 		header, dek, err := NewVaultHeader(testAPIKey1)
 		require.NoError(t, err)
 		defer SecureZero(dek)
@@ -348,7 +386,9 @@ func TestVaultHeaderUnwrapDEK(t *testing.T) {
 }
 
 func TestVaultHeaderRekey(t *testing.T) {
+	t.Parallel()
 	t.Run("rekey to new API key", func(t *testing.T) {
+		t.Parallel()
 		header, originalDEK, err := NewVaultHeader(testAPIKey1)
 		require.NoError(t, err)
 		defer SecureZero(originalDEK)
@@ -368,6 +408,7 @@ func TestVaultHeaderRekey(t *testing.T) {
 	})
 
 	t.Run("rekey with wrong old key fails", func(t *testing.T) {
+		t.Parallel()
 		header, dek, err := NewVaultHeader(testAPIKey1)
 		require.NoError(t, err)
 		defer SecureZero(dek)
@@ -378,9 +419,11 @@ func TestVaultHeaderRekey(t *testing.T) {
 }
 
 func TestVaultHeaderSaveLoad(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	t.Run("save and load", func(t *testing.T) {
+		t.Parallel()
 		header, dek, err := NewVaultHeader(testAPIKey1)
 		require.NoError(t, err)
 		defer SecureZero(dek)
@@ -397,19 +440,23 @@ func TestVaultHeaderSaveLoad(t *testing.T) {
 	})
 
 	t.Run("load non-existent returns error", func(t *testing.T) {
+		t.Parallel()
 		_, err := LoadVaultHeader(filepath.Join(tempDir, "nonexistent"))
 		assert.ErrorIs(t, err, ErrHeaderNotFound)
 	})
 }
 
 func TestVaultHeaderExists(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	t.Run("returns false when not exists", func(t *testing.T) {
+		t.Parallel()
 		assert.False(t, VaultHeaderExists(tempDir))
 	})
 
 	t.Run("returns true when exists", func(t *testing.T) {
+		t.Parallel()
 		header, dek, _ := NewVaultHeader(testAPIKey1)
 		defer SecureZero(dek)
 		header.Save(tempDir)
@@ -419,14 +466,17 @@ func TestVaultHeaderExists(t *testing.T) {
 }
 
 func TestVaultHeaderValidateAPIKey(t *testing.T) {
+	t.Parallel()
 	header, dek, _ := NewVaultHeader(testAPIKey1)
 	defer SecureZero(dek)
 
 	t.Run("correct key validates", func(t *testing.T) {
+		t.Parallel()
 		assert.True(t, header.ValidateAPIKey(testAPIKey1))
 	})
 
 	t.Run("wrong key fails validation", func(t *testing.T) {
+		t.Parallel()
 		assert.False(t, header.ValidateAPIKey(testAPIKey2))
 	})
 }
@@ -445,7 +495,9 @@ func newTestVault(t *testing.T, dataDir, apiKey string) *Vault {
 }
 
 func TestVaultUnlock(t *testing.T) {
+	t.Parallel()
 	t.Run("unlock existing vault", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
@@ -461,6 +513,7 @@ func TestVaultUnlock(t *testing.T) {
 	})
 
 	t.Run("unlock with wrong key fails", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
@@ -475,6 +528,7 @@ func TestVaultUnlock(t *testing.T) {
 	})
 
 	t.Run("unlock non-existent vault fails", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "nonexistent")
 
@@ -487,7 +541,9 @@ func TestVaultUnlock(t *testing.T) {
 }
 
 func TestVaultRekey(t *testing.T) {
+	t.Parallel()
 	t.Run("rekey vault", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
@@ -523,7 +579,9 @@ func TestVaultRekey(t *testing.T) {
 }
 
 func TestVaultLock(t *testing.T) {
+	t.Parallel()
 	t.Run("lock clears DEK", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
@@ -541,7 +599,9 @@ func TestVaultLock(t *testing.T) {
 }
 
 func TestVaultEncryptDecrypt(t *testing.T) {
+	t.Parallel()
 	t.Run("encrypt and decrypt", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		v := newTestVault(t, filepath.Join(tempDir, "data"), testAPIKey1)
 		defer v.Close()
@@ -559,6 +619,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 	})
 
 	t.Run("encrypt empty data", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		v := newTestVault(t, filepath.Join(tempDir, "data"), testAPIKey1)
 		defer v.Close()
@@ -574,6 +635,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 	})
 
 	t.Run("large data", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		v := newTestVault(t, filepath.Join(tempDir, "data"), testAPIKey1)
 		defer v.Close()
@@ -589,6 +651,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 	})
 
 	t.Run("decrypt ciphertext too short", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		v := newTestVault(t, filepath.Join(tempDir, "data"), testAPIKey1)
 		defer v.Close()
@@ -598,6 +661,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 	})
 
 	t.Run("encrypt fails when locked", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		v := newTestVault(t, filepath.Join(tempDir, "data"), testAPIKey1)
 		defer v.Close()
@@ -608,6 +672,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 	})
 
 	t.Run("decrypt fails when locked", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		v := newTestVault(t, filepath.Join(tempDir, "data"), testAPIKey1)
 		defer v.Close()
@@ -619,6 +684,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 }
 
 func TestVaultVerifyIntegrity(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	dataDir := filepath.Join(tempDir, "data")
 
@@ -626,6 +692,7 @@ func TestVaultVerifyIntegrity(t *testing.T) {
 	vault.Close()
 
 	t.Run("verify with correct key", func(t *testing.T) {
+		t.Parallel()
 		vault2, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 		defer vault2.Close()
 
@@ -634,6 +701,7 @@ func TestVaultVerifyIntegrity(t *testing.T) {
 	})
 
 	t.Run("verify with wrong key fails", func(t *testing.T) {
+		t.Parallel()
 		vault2, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 		defer vault2.Close()
 
@@ -643,7 +711,9 @@ func TestVaultVerifyIntegrity(t *testing.T) {
 }
 
 func TestVaultReset(t *testing.T) {
+	t.Parallel()
 	t.Run("reset requires confirmation", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
@@ -655,6 +725,7 @@ func TestVaultReset(t *testing.T) {
 	})
 
 	t.Run("reset destroys vault", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
@@ -669,6 +740,7 @@ func TestVaultReset(t *testing.T) {
 }
 
 func TestVaultFullLifecycle(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	dataDir := filepath.Join(tempDir, "data")
 
@@ -712,17 +784,21 @@ func TestVaultFullLifecycle(t *testing.T) {
 }
 
 func TestNewVault(t *testing.T) {
+	t.Parallel()
 	t.Run("nil config rejected", func(t *testing.T) {
+		t.Parallel()
 		_, err := NewVault(nil)
 		assert.Error(t, err)
 	})
 
 	t.Run("empty data dir rejected", func(t *testing.T) {
+		t.Parallel()
 		_, err := NewVault(&VaultConfig{DataDir: "", Logger: testutil.NewTestLogger()})
 		assert.Error(t, err)
 	})
 
 	t.Run("nil logger uses default", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		v, err := NewVault(&VaultConfig{DataDir: tempDir})
 		require.NoError(t, err)
@@ -732,7 +808,9 @@ func TestNewVault(t *testing.T) {
 }
 
 func TestVaultUnlockAlreadyOpen(t *testing.T) {
+	t.Parallel()
 	t.Run("unlock already unlocked vault fails", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
@@ -745,7 +823,9 @@ func TestVaultUnlockAlreadyOpen(t *testing.T) {
 }
 
 func TestVaultGetDataDir(t *testing.T) {
+	t.Parallel()
 	t.Run("returns configured data dir", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		dataDir := filepath.Join(tempDir, "data")
 
@@ -757,7 +837,9 @@ func TestVaultGetDataDir(t *testing.T) {
 }
 
 func TestAESKeyUnwrapInvalidKEK(t *testing.T) {
+	t.Parallel()
 	t.Run("invalid KEK size rejected on unwrap", func(t *testing.T) {
+		t.Parallel()
 		invalidKEK := make([]byte, 15)
 		wrapped := make([]byte, 40)
 
@@ -767,7 +849,9 @@ func TestAESKeyUnwrapInvalidKEK(t *testing.T) {
 }
 
 func TestDeleteVaultHeader(t *testing.T) {
+	t.Parallel()
 	t.Run("deletes existing header", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 
 		header, dek, err := NewVaultHeader(testAPIKey1)
@@ -782,6 +866,7 @@ func TestDeleteVaultHeader(t *testing.T) {
 	})
 
 	t.Run("delete non-existent is no-op", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		err := DeleteVaultHeader(filepath.Join(tempDir, "nonexistent"))
 		assert.NoError(t, err)
@@ -789,7 +874,9 @@ func TestDeleteVaultHeader(t *testing.T) {
 }
 
 func TestLoadVaultHeaderCorrupted(t *testing.T) {
+	t.Parallel()
 	t.Run("corrupted JSON returns error", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		headerPath := filepath.Join(tempDir, VaultHeaderFile)
 
@@ -801,6 +888,7 @@ func TestLoadVaultHeaderCorrupted(t *testing.T) {
 }
 
 func TestVaultConcurrentAccess(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	dataDir := filepath.Join(tempDir, "data")
 

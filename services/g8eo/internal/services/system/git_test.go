@@ -25,44 +25,52 @@ import (
 )
 
 func TestResolveGitBinary_SystemGit(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	resolved := ResolveGitBinary(logger)
 	assert.Equal(t, "embedded", resolved)
 }
 
 func TestValidateGitBinary_Valid(t *testing.T) {
+	t.Parallel()
 	version, err := ValidateGitBinary("embedded")
 	require.NoError(t, err)
 	assert.Contains(t, version, "go-git v5")
 }
 
 func TestValidateGitBinary_Empty(t *testing.T) {
+	t.Parallel()
 	_, err := ValidateGitBinary("")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no git binary path provided")
 }
 
 func TestIsExecutable_NotExist(t *testing.T) {
+	t.Parallel()
 	assert.False(t, isExecutable(filepath.Join(t.TempDir(), "nonexistent")))
 }
 
 func TestIsExecutable_Directory(t *testing.T) {
+	t.Parallel()
 	assert.False(t, isExecutable(t.TempDir()))
 }
 
 func TestIsExecutable_NotExecutable(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "file")
 	require.NoError(t, os.WriteFile(path, []byte("data"), 0644))
 	assert.False(t, isExecutable(path))
 }
 
 func TestIsExecutable_Executable(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "bin")
 	require.NoError(t, os.WriteFile(path, []byte("data"), 0755))
 	assert.True(t, isExecutable(path))
 }
 
 func TestTruncateHash(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "abcdef012345", truncateHash("abcdef0123456789"))
 	assert.Equal(t, "abcdef012345", truncateHash("abcdef012345"))
 	assert.Equal(t, "short", truncateHash("short"))

@@ -34,6 +34,7 @@ import (
 // connections on any transient burst (e.g., large stdout followed by rapid
 // heartbeats).
 func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	broker := NewPubSubBroker(logger)
@@ -78,6 +79,7 @@ func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
 // channels. The prior kill-on-overflow policy synchronously evicted the
 // subscriber from broker maps; drop-oldest must not.
 func TestPubSubBackPressureKeepsSubscriptions(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewPubSubBroker(logger)
 
@@ -112,6 +114,7 @@ func TestPubSubBackPressureKeepsSubscriptions(t *testing.T) {
 // triple-signal (closed bool + close(send) + ws.Close) bookkeeping that
 // was the root cause of a subtle double-close race.
 func TestPubSubSubscriberShutdownIsIdempotentAndFailsFast(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewPubSubBroker(logger)
 
@@ -145,6 +148,7 @@ func TestPubSubSubscriberShutdownIsIdempotentAndFailsFast(t *testing.T) {
 // TestPubSubHappyPathDoesNotLogDrop ensures the back-pressure warning
 // is not emitted on normal delivery.
 func TestPubSubHappyPathDoesNotLogDrop(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
 	broker := NewPubSubBroker(logger)

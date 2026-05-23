@@ -109,6 +109,7 @@ func updatePlatformSetting(t *testing.T, db *sqliteutil.DB, name string, value s
 }
 
 func TestSecretManager_InitAppSettings_CreatesSecretsAndFiles(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -126,6 +127,7 @@ func TestSecretManager_InitAppSettings_CreatesSecretsAndFiles(t *testing.T) {
 }
 
 func TestSecretManager_InitAppSettings_CreatesValidActuatorKey(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -147,6 +149,7 @@ func TestSecretManager_InitAppSettings_CreatesValidActuatorKey(t *testing.T) {
 }
 
 func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -162,6 +165,7 @@ func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {
 }
 
 func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -175,6 +179,7 @@ func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -193,6 +198,7 @@ func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
 }
 
 func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -211,6 +217,7 @@ func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
 }
 
 func TestSecretManager_InitAppSettings_WritesDigestManifest(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -234,6 +241,7 @@ func TestSecretManager_InitAppSettings_WritesDigestManifest(t *testing.T) {
 }
 
 func TestSecretManager_InitAppSettings_ManifestPermissions(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -245,6 +253,7 @@ func TestSecretManager_InitAppSettings_ManifestPermissions(t *testing.T) {
 }
 
 func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -264,6 +273,7 @@ func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *tes
 }
 
 func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSettings(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -277,6 +287,7 @@ func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSetting
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -293,6 +304,7 @@ func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *tes
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenDigestManifestMissing(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -309,6 +321,7 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestMissing(t *testing
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -332,6 +345,7 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *te
 }
 
 func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedAppSettings(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -353,6 +367,7 @@ func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedAppSettings(t *tes
 }
 
 func TestSecretManager_APIKeys(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -371,6 +386,7 @@ func TestSecretManager_APIKeys(t *testing.T) {
 }
 
 func TestSecretManager_OperatorPrivateKey(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -395,6 +411,7 @@ func TestSecretManager_OperatorPrivateKey(t *testing.T) {
 }
 
 func TestSecretManager_OperatorPrivateKey_RejectsInvalidSeed(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -409,6 +426,7 @@ func TestSecretManager_OperatorPrivateKey_RejectsInvalidSeed(t *testing.T) {
 }
 
 func TestSecretManager_CLIPrivateKey(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -433,6 +451,7 @@ func TestSecretManager_CLIPrivateKey(t *testing.T) {
 }
 
 func TestSecretManager_SessionToken(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -449,6 +468,7 @@ func TestSecretManager_SessionToken(t *testing.T) {
 }
 
 func TestSecretManager_SessionToken_Expires(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -458,16 +478,15 @@ func TestSecretManager_SessionToken_Expires(t *testing.T) {
 	err := sm.StoreSessionToken(token, time.Millisecond)
 	require.NoError(t, err)
 
-	// Wait for expiry
-	time.Sleep(10 * time.Millisecond)
-
-	// Retrieve should fail
-	_, err = sm.GetSessionToken()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "expired")
+	// Wait for expiry with polling
+	require.Eventually(t, func() bool {
+		_, err := sm.GetSessionToken()
+		return err != nil && strings.Contains(err.Error(), "expired")
+	}, 100*time.Millisecond, 10*time.Millisecond, "session token should expire")
 }
 
 func TestSecretManager_SessionToken_InvalidFormat(t *testing.T) {
+	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)

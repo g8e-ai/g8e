@@ -25,6 +25,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestRegexScrubber_Name_ReturnsConstructedName(t *testing.T) {
+	t.Parallel()
 	s := &RegexScrubber{
 		name:        "test_scrubber",
 		pattern:     regexp.MustCompile(`secret`),
@@ -34,6 +35,7 @@ func TestRegexScrubber_Name_ReturnsConstructedName(t *testing.T) {
 }
 
 func TestRegexScrubber_Name_EmptyString(t *testing.T) {
+	t.Parallel()
 	s := &RegexScrubber{
 		name:        "",
 		pattern:     regexp.MustCompile(`x`),
@@ -43,6 +45,7 @@ func TestRegexScrubber_Name_EmptyString(t *testing.T) {
 }
 
 func TestRegexScrubber_Name_DoesNotScrub(t *testing.T) {
+	t.Parallel()
 	s := &RegexScrubber{
 		name:        "my_scrubber",
 		pattern:     regexp.MustCompile(`secret`),
@@ -57,6 +60,7 @@ func TestRegexScrubber_Name_DoesNotScrub(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRegexScrubber_Scrub_RemovesPattern(t *testing.T) {
+	t.Parallel()
 	s := &RegexScrubber{
 		name:        "api_key",
 		pattern:     regexp.MustCompile(`secret\d+`),
@@ -72,6 +76,7 @@ func TestRegexScrubber_Scrub_RemovesPattern(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSentinel_AllBuiltInScrubbers_HaveNonEmptyNames(t *testing.T) {
+	t.Parallel()
 	cfg := DefaultSentinelConfig()
 	s := NewSentinel(cfg, nil)
 

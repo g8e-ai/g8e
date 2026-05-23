@@ -75,7 +75,8 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 	}
 	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
-	auth := NewAuthService(db, pki, logger, userSvc, cfg.Gateway.SecretsDir)
+	res := responder.New(logger)
+	auth := NewAuthService(db, pki, logger, userSvc, res, cfg.Gateway.SecretsDir)
 	sessionSvc := NewSessionService(db, logger)
 
 	var extraIPs []net.IP
@@ -114,7 +115,6 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 	}
 
 	apiKeySvc := NewApiKeyService(db, logger)
-	responder := responder.New(logger)
 
 	ls := &GatewayService{
 		cfg:        cfg,
@@ -128,22 +128,29 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
 		apiKeySvc:  apiKeySvc,
-		mcpGateway: mcp.NewGatewayService(logger, responder, db),
-		responder:  responder,
+		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
+			Logger:         logger,
+			Responder:      res,
+			SuspendedStore: db,
+		}),
+		responder: res,
 	}
 
-	ls.initHandlersAndServers()
+	if err := ls.initHandlersAndServers(); err != nil {
+		return nil, fmt.Errorf("failed to initialize handlers and servers: %w", err)
+	}
 
 	return ls, nil
 }
 
 // newGatewayServiceFromComponents assembles a GatewayService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
-func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, pubsub *PubSubBroker) *GatewayService {
+func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, pubsub *PubSubBroker) (*GatewayService, error) {
 	sm, _ := NewSecretManager(db.db, cfg.Gateway.SecretsDir, logger)
 	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
-	auth := NewAuthService(db, pki, logger, userSvc, cfg.Gateway.SecretsDir)
+	res := responder.New(logger)
+	auth := NewAuthService(db, pki, logger, userSvc, res, cfg.Gateway.SecretsDir)
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 
@@ -156,7 +163,6 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
 
 	apiKeySvc := NewApiKeyService(db, logger)
-	responder := responder.New(logger)
 
 	ls := &GatewayService{
 		cfg:        cfg,
@@ -170,16 +176,22 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
 		apiKeySvc:  apiKeySvc,
-		mcpGateway: mcp.NewGatewayService(logger, responder, db),
-		responder:  responder,
+		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
+			Logger:         logger,
+			Responder:      res,
+			SuspendedStore: db,
+		}),
+		responder: res,
 	}
 
-	ls.initHandlersAndServers()
+	if err := ls.initHandlersAndServers(); err != nil {
+		return nil, fmt.Errorf("failed to initialize handlers and servers: %w", err)
+	}
 
-	return ls
+	return ls, nil
 }
 
-func (ls *GatewayService) initHandlersAndServers() {
+func (ls *GatewayService) initHandlersAndServers() error {
 	cfg := ls.cfg
 	logger := ls.logger
 	db := ls.db
@@ -195,7 +207,23 @@ func (ls *GatewayService) initHandlersAndServers() {
 	ls.mcpGateway.SetA2ADependencies(cfg.Gateway.A2ADownstreamURL)
 	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Gateway.PublicPort)
 	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, sessionSvc, reg, passkey, userSvc, apiKeySvc, ls.responder, ls.mcpGateway, ls.IsReady, ls.IsGovernanceReady)
+	ls.handler = newHTTPHandler(HTTPHandlerDependencies{
+		Cfg:               cfg,
+		Logger:            logger,
+		DB:                db,
+		Pubsub:            pubsub,
+		Auth:              auth,
+		PKI:               pki,
+		SessionSvc:        sessionSvc,
+		Reg:               reg,
+		Passkey:           passkey,
+		UserSvc:           userSvc,
+		APIKey:            apiKeySvc,
+		Responder:         ls.responder,
+		MCPGateway:        ls.mcpGateway,
+		IsReady:           ls.IsReady,
+		IsGovernanceReady: ls.IsGovernanceReady,
+	})
 
 	// Build a map of ports to identify port assignments.
 	// Surfaces with different TLS client-auth requirements MUST NOT share a
@@ -207,7 +235,7 @@ func (ls *GatewayService) initHandlersAndServers() {
 	portUsage[cfg.Gateway.BootstrapPort] = append(portUsage[cfg.Gateway.BootstrapPort], "Bootstrap")
 	portUsage[cfg.Gateway.PublicPort] = append(portUsage[cfg.Gateway.PublicPort], "Public")
 
-	// Validate up front so collisions panic during init, not only when a
+	// Validate up front so collisions fail during init, not only when a
 	// fresh gateway is built. HTTP and WSS may share a port (both mTLS);
 	// every other combination is rejected. Port 0 is reserved for tests
 	// (net.Listen picks a random free port per server) and is exempt.
@@ -227,7 +255,7 @@ func (ls *GatewayService) initHandlersAndServers() {
 			}
 		}
 		if (hasMTLS && hasPublic) || (hasMTLS && hasBootstrap) || (hasPublic && hasBootstrap) {
-			panic(fmt.Sprintf("listen: port %d binds incompatible surfaces %v; assign distinct ports", port, usage))
+			return fmt.Errorf("listen: port %d binds incompatible surfaces %v; assign distinct ports", port, usage)
 		}
 	}
 
@@ -243,31 +271,36 @@ func (ls *GatewayService) initHandlersAndServers() {
 		Addr:              fmt.Sprintf(":%d", cfg.Gateway.HTTPPort),
 		Handler:           ls.handler,
 		TLSConfig:         tlsConfig,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
+		ReadTimeout:       cfg.Gateway.ReadTimeout,
+		WriteTimeout:      cfg.Gateway.WriteTimeout,
+		IdleTimeout:       cfg.Gateway.IdleTimeout,
+		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
 	}
 
 	ls.bootstrapServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Gateway.BootstrapPort),
 		Handler:           ls.handler.buildBootstrapRouter(),
 		TLSConfig:         nil, // Plain HTTP for bootstrap discovery
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
+		ReadTimeout:       15 * time.Second, // Shorter timeout for bootstrap
 		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		IdleTimeout:       cfg.Gateway.IdleTimeout,
+		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
 	}
 
 	ls.publicServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Gateway.PublicPort),
 		Handler:           ls.handler.buildPublicRouter(),
 		TLSConfig:         tlsConfigPlain,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: cfg.Gateway.ReadHeaderTimeout,
+		ReadTimeout:       cfg.Gateway.ReadTimeout,
+		WriteTimeout:      cfg.Gateway.WriteTimeout,
+		IdleTimeout:       cfg.Gateway.IdleTimeout,
+		MaxHeaderBytes:    cfg.Gateway.MaxHeaderBytes,
 	}
+
+	return nil
 }
 
 // GetDB returns the underlying database service.

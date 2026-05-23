@@ -726,6 +726,10 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	defer shutdownCancel()
 
 	if cmdSvc != nil {
+		if cmdSvc.Actuator != nil {
+			logger.Info("Waiting for in-flight transactions to drain...")
+			cmdSvc.Actuator.Wait()
+		}
 		if err := cmdSvc.Stop(); err != nil {
 			logger.Error("Command service stop error", constants.ConnectionStateErrorStr, err)
 		}

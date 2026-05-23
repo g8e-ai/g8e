@@ -27,10 +27,12 @@ import (
 )
 
 func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	token := "dlk_abcdefghijklmnopqrstuvwxyz012345"
 
 	t.Run("successful authentication", func(t *testing.T) {
+		t.Parallel()
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
 			assert.Equal(t, "/api/auth/device-link/register", r.URL.Path)
@@ -74,6 +76,7 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 	})
 
 	t.Run("invalid token format", func(t *testing.T) {
+		t.Parallel()
 		result, err := authenticateWithDeviceTokenUsingClient("invalid", "localhost", logger, http.DefaultClient, "")
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -81,6 +84,7 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 	})
 
 	t.Run("server omits success field (contract regression)", func(t *testing.T) {
+		t.Parallel()
 		// Regression: before the fix, client's DeviceRegistrationResponse model
 		// did not include `success`, so every operator reported
 		// "registration failed with status 200" despite the server having
@@ -99,6 +103,7 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 	})
 
 	t.Run("server error response", func(t *testing.T) {
+		t.Parallel()
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			resp := deviceRegisterResponse{
 				Success: false,
@@ -116,6 +121,7 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 	})
 
 	t.Run("server returns client error-object envelope", func(t *testing.T) {
+		t.Parallel()
 		// Regression: client returns `{error: {code, message, ...}}`, not a bare
 		// string. Before the fix, json.Unmarshal into Error(string) failed with
 		// `cannot unmarshal object into Go struct field ... of type string`,
@@ -135,6 +141,7 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 	})
 
 	t.Run("server returns 500 without error field", func(t *testing.T) {
+		t.Parallel()
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -149,6 +156,7 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 	})
 
 	t.Run("missing operator session ID", func(t *testing.T) {
+		t.Parallel()
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			resp := deviceRegisterResponse{
 				Success: true,
@@ -166,6 +174,7 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 }
 
 func TestValidateDeviceToken(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		token string
@@ -230,6 +239,7 @@ func TestValidateDeviceToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			if got := ValidateDeviceToken(tt.token); got != tt.want {
 				t.Errorf("ValidateDeviceToken(%q) = %v, want %v", tt.token, got, tt.want)
 			}

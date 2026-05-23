@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -120,18 +121,22 @@ func WebSocketDialerWithServerName(serverName string) (*websocket.Dialer, error)
 	}, nil
 }
 
+// Deprecated: Use New() and handle the error properly
 func MustNew() *http.Client {
 	c, err := New()
 	if err != nil {
-		panic(fmt.Errorf("httpclient: %w", err))
+		fmt.Fprintf(os.Stderr, "httpclient error: %v\n", err)
+		os.Exit(1)
 	}
 	return c
 }
 
+// Deprecated: Use WebSocketDialer() and handle the error properly
 func MustWebSocketDialer() *websocket.Dialer {
 	d, err := WebSocketDialer()
 	if err != nil {
-		panic(fmt.Errorf("httpclient: %w", err))
+		fmt.Fprintf(os.Stderr, "websocket dialer error: %v\n", err)
+		os.Exit(1)
 	}
 	return d
 }

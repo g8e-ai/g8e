@@ -20,6 +20,7 @@ import (
 )
 
 func TestResolveProjectRootConsistency(t *testing.T) {
+	t.Parallel()
 	// Save original directory and restore after test
 	originalDir, err := os.Getwd()
 	if err != nil {
@@ -71,6 +72,7 @@ func TestResolveProjectRootConsistency(t *testing.T) {
 }
 
 func TestResolveProjectRootWithEnvVar(t *testing.T) {
+	t.Parallel()
 	// Save original value
 	originalValue := os.Getenv("G8E_PROJECT_ROOT")
 	defer func() {

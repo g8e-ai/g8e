@@ -30,14 +30,16 @@ func sanitizeHost(host string) string {
 	return hostSanitizeRe.ReplaceAllString(host, "")
 }
 
-func executeTemplate(name, tmpl string, data interface{}) string {
-	t := template.Must(template.New(name).Parse(tmpl))
+func executeTemplate(name, tmpl string, data interface{}) (string, error) {
+	t, err := template.New(name).Parse(tmpl)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse template %s: %w", name, err)
+	}
 	var buf strings.Builder
 	if err := t.Execute(&buf, data); err != nil {
-		// Should never happen with fixed templates
-		panic(fmt.Sprintf("template execution failed: %v", err))
+		return "", fmt.Errorf("template execution failed: %w", err)
 	}
-	return buf.String()
+	return buf.String(), nil
 }
 
 // WindowsTrustScriptBat returns a Windows batch script that trusts the platform CA.
@@ -134,12 +136,16 @@ echo Restart your browser and navigate to https://%HOST%{{.PublicPortSuffix}}/
 echo.
 pause
 `
-	return executeTemplate(string(constants.Status.Platform.Windows), tmpl, map[string]interface{}{
+	res, err := executeTemplate(string(constants.Status.Platform.Windows), tmpl, map[string]interface{}{
 		"Host":             host,
 		"URL":              url,
 		"Port":             port,
 		"PublicPortSuffix": publicPortSuffix,
 	})
+	if err != nil {
+		return fmt.Sprintf("echo Error: %v", err)
+	}
+	return res
 }
 
 // UniversalTrustScript returns a POSIX shell script for macOS and Linux.
@@ -247,13 +253,17 @@ _log "----------------------------------------------------"
 _log "Restart your browser and navigate to https://$HOST{{.PublicPortSuffix}}/"
 _log ""
 `
-	return executeTemplate(string(constants.ToolScopeUniversal), tmpl, map[string]interface{}{
+	res, err := executeTemplate(string(constants.ToolScopeUniversal), tmpl, map[string]interface{}{
 		"Host":             host,
 		"URL":              fmt.Sprintf(urlTmpl, host),
 		"PortSuffix":       portSuffix,
 		"Port":             port,
 		"PublicPortSuffix": publicPortSuffix,
 	})
+	if err != nil {
+		return fmt.Sprintf("echo Error: %v", err)
+	}
+	return res
 }
 
 // G8eDeployScript returns a POSIX shell script that deploys the operator binary on any Linux system.
@@ -396,7 +406,7 @@ trap - EXIT INT TERM
 _log "Starting operator..."
 exec ./g8e.operator --device-token "$_token" --endpoint "$G8E_HOST"{{.PortFlags}}
 `
-	return executeTemplate("deploy", tmpl, map[string]interface{}{
+	res, err := executeTemplate("deploy", tmpl, map[string]interface{}{
 		"Timestamp":       time.Now().Format(time.RFC3339),
 		"Host":            host,
 		"HttpsHost":       httpsHost,
@@ -407,6 +417,10 @@ exec ./g8e.operator --device-token "$_token" --endpoint "$G8E_HOST"{{.PortFlags}
 		"HttpsPort":       httpsPort,
 		"PortFlags":       portFlags,
 	})
+	if err != nil {
+		return fmt.Sprintf("echo Error: %v", err)
+	}
+	return res
 }
 
 // WindowsPowerShellTrustScript returns a PowerShell script for Windows.
@@ -494,10 +508,14 @@ Write-Host "----------------------------------------------------"
 Write-Host "Restart your browser and navigate to https://${g8eHost}{{.PublicPortSuffix}}/"
 Write-Host ""
 `
-	return executeTemplate("powershell", tmpl, map[string]interface{}{
+	res, err := executeTemplate("powershell", tmpl, map[string]interface{}{
 		"URL":              url,
 		"Host":             host,
 		"Port":             port,
 		"PublicPortSuffix": publicPortSuffix,
 	})
+	if err != nil {
+		return fmt.Sprintf("echo Error: %v", err)
+	}
+	return res
 }

@@ -24,6 +24,7 @@ import (
 )
 
 func TestDefaultDBConfig(t *testing.T) {
+	t.Parallel()
 	cfg := DefaultDBConfig("/some/path/db.sqlite")
 	assert.Equal(t, "/some/path/db.sqlite", cfg.Path)
 	assert.Equal(t, 64, cfg.CacheSizeMB)
@@ -32,6 +33,7 @@ func TestDefaultDBConfig(t *testing.T) {
 }
 
 func TestOpenDB_CreatesFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "test.db"))
@@ -46,6 +48,7 @@ func TestOpenDB_CreatesFile(t *testing.T) {
 }
 
 func TestOpenDB_CreatesParentDirectories(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "nested", "deep", "test.db"))
@@ -60,6 +63,7 @@ func TestOpenDB_CreatesParentDirectories(t *testing.T) {
 }
 
 func TestOpenDB_WALModeEnabled(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "wal.db"))
@@ -74,6 +78,7 @@ func TestOpenDB_WALModeEnabled(t *testing.T) {
 }
 
 func TestOpenDB_ForeignKeysEnabled(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "fk.db"))
@@ -88,6 +93,7 @@ func TestOpenDB_ForeignKeysEnabled(t *testing.T) {
 }
 
 func TestOpenDB_SingleConnectionPool(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "pool.db"))
@@ -97,10 +103,11 @@ func TestOpenDB_SingleConnectionPool(t *testing.T) {
 	defer db.Close()
 
 	stats := db.Stats()
-	assert.Equal(t, 1, stats.MaxOpenConnections)
+	assert.Equal(t, 20, stats.MaxOpenConnections)
 }
 
 func TestOpenDB_SetFilePermissions_False(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "noperm.db"))
@@ -116,6 +123,7 @@ func TestOpenDB_SetFilePermissions_False(t *testing.T) {
 }
 
 func TestRunIncrementalVacuum(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "vacuum.db"))
@@ -129,6 +137,7 @@ func TestRunIncrementalVacuum(t *testing.T) {
 }
 
 func TestRunIncrementalVacuum_ZeroPages(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "vacuum0.db"))
@@ -142,6 +151,7 @@ func TestRunIncrementalVacuum_ZeroPages(t *testing.T) {
 }
 
 func TestRunIncrementalVacuum_WrapsError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "wraperrdb.db"))
@@ -156,6 +166,7 @@ func TestRunIncrementalVacuum_WrapsError(t *testing.T) {
 }
 
 func TestGetPath(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	path := filepath.Join(dir, "getpath.db")
@@ -169,6 +180,7 @@ func TestGetPath(t *testing.T) {
 }
 
 func TestGetDBSizeBytes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "size.db"))
@@ -183,6 +195,7 @@ func TestGetDBSizeBytes(t *testing.T) {
 }
 
 func TestGetDBSizeBytes_GrowsWithData(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "grow.db"))
@@ -208,6 +221,7 @@ func TestGetDBSizeBytes_GrowsWithData(t *testing.T) {
 }
 
 func TestGetDBSizeBytes_ReturnsErrorOnClosedDB(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "closederr.db"))

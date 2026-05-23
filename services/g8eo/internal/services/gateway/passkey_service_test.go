@@ -31,7 +31,7 @@ func newPasskeyServiceForTest(t *testing.T) (*PasskeyService, *models.User) {
 
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	user, err := NewUserService(db, logger).CreateUser("alice@example.com", "Alice")
+	user, err := NewUserService(db, logger).CreateUser()
 	require.NoError(t, err)
 
 	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
@@ -40,6 +40,7 @@ func newPasskeyServiceForTest(t *testing.T) (*PasskeyService, *models.User) {
 }
 
 func TestPasskeyServiceVerifyL3ProofRejectsMissingInputs(t *testing.T) {
+	t.Parallel()
 	svc, user := newPasskeyServiceForTest(t)
 	validProof := &commonv1.L3Proof{
 		CredentialId:      base64.RawURLEncoding.EncodeToString([]byte("credential-id-123456")),
@@ -66,6 +67,7 @@ func TestPasskeyServiceVerifyL3ProofRejectsMissingInputs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+		t.Parallel()
 			ok, err := svc.VerifyL3Proof(tc.userID, tc.transactionHash, "", tc.proof)
 			require.Error(t, err)
 			assert.False(t, ok)
@@ -75,6 +77,7 @@ func TestPasskeyServiceVerifyL3ProofRejectsMissingInputs(t *testing.T) {
 }
 
 func TestPasskeyServiceVerifyL3ProofRejectsUsersWithoutPasskeys(t *testing.T) {
+	t.Parallel()
 	svc, user := newPasskeyServiceForTest(t)
 
 	ok, err := svc.VerifyL3Proof(user.ID, strings.Repeat("a", 64), "", &commonv1.L3Proof{
@@ -90,6 +93,7 @@ func TestPasskeyServiceVerifyL3ProofRejectsUsersWithoutPasskeys(t *testing.T) {
 }
 
 func TestPasskeyServiceVerifyL3ProofRejectsUnregisteredCredential(t *testing.T) {
+	t.Parallel()
 	svc, user := newPasskeyServiceForTest(t)
 
 	// Add a dummy credential
@@ -113,6 +117,7 @@ func TestPasskeyServiceVerifyL3ProofRejectsUnregisteredCredential(t *testing.T) 
 }
 
 func TestPasskeyServiceVerifyL3ProofRejectsMismatchedChallenge(t *testing.T) {
+	t.Parallel()
 	svc, user := newPasskeyServiceForTest(t)
 
 	// Add a dummy credential (we won't get to signature verification if challenge check fails first)

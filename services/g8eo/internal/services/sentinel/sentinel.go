@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
@@ -57,6 +58,12 @@ type Sentinel struct {
 	scrubbers            []Scrubber
 	threatDetectors      []ThreatDetector
 	inputThreatDetectors []ThreatDetector
+
+	// Tokenized context state for data sovereignty
+	tokenMu       sync.RWMutex
+	tokenMap      map[string]string // {{UEI_1}} -> "sensitive value"
+	reverseMap    map[string]string // "sensitive value" -> {{UEI_1}}
+	tokenSequence int
 }
 
 // ThreatSeverity represents the severity level of a detected threat
@@ -342,8 +349,10 @@ func NewSentinel(config *SentinelConfig, logger *slog.Logger) *Sentinel {
 	}
 
 	s := &Sentinel{
-		config: config,
-		logger: logger,
+		config:     config,
+		logger:     logger,
+		tokenMap:   make(map[string]string),
+		reverseMap: make(map[string]string),
 	}
 
 	s.initializeScrubbers()
@@ -1665,6 +1674,87 @@ func (s *Sentinel) categorizeWarning(line string) string {
 	default:
 		return ""
 	}
+}
+
+// RehydrateText replaces placeholders like {{UEI_N}} with their original values.
+// This is used right before dispatch to restore sensitive data that was hidden from the cloud.
+func (s *Sentinel) RehydrateText(input string) string {
+	if input == "" {
+		return input
+	}
+
+	s.tokenMu.RLock()
+	defer s.tokenMu.RUnlock()
+
+	if len(s.tokenMap) == 0 {
+		return input
+	}
+
+	result := input
+	// Replace in reverse order of sequence to handle nested tokens if any (unlikely but safe)
+	for token, value := range s.tokenMap {
+		result = strings.ReplaceAll(result, token, value)
+	}
+
+	return result
+}
+
+// RehydratePayload recursively rehydrates all string values in a JSON payload.
+func (s *Sentinel) RehydratePayload(payload []byte) ([]byte, error) {
+	if len(payload) == 0 {
+		return payload, nil
+	}
+
+	// Try to parse as JSON first
+	var data interface{}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		// Not JSON, try text rehydration
+		return []byte(s.RehydrateText(string(payload))), nil
+	}
+
+	rehydrated := s.rehydrateValueRecursive(data)
+	return json.Marshal(rehydrated)
+}
+
+func (s *Sentinel) rehydrateValueRecursive(val interface{}) interface{} {
+	switch v := val.(type) {
+	case string:
+		return s.RehydrateText(v)
+	case map[string]interface{}:
+		newMap := make(map[string]interface{}, len(v))
+		for k, v2 := range v {
+			newMap[k] = s.rehydrateValueRecursive(v2)
+		}
+		return newMap
+	case []interface{}:
+		newSlice := make([]interface{}, len(v))
+		for i, v2 := range v {
+			newSlice[i] = s.rehydrateValueRecursive(v2)
+		}
+		return newSlice
+	default:
+		return v
+	}
+}
+
+// GetTokenForValue registers a sensitive value and returns a unique token for it.
+func (s *Sentinel) GetTokenForValue(value string) string {
+	if value == "" {
+		return ""
+	}
+
+	s.tokenMu.Lock()
+	defer s.tokenMu.Unlock()
+
+	if token, ok := s.reverseMap[value]; ok {
+		return token
+	}
+
+	s.tokenSequence++
+	token := fmt.Sprintf("{{UEI_%d}}", s.tokenSequence)
+	s.tokenMap[token] = value
+	s.reverseMap[value] = token
+	return token
 }
 
 // IsEnabled returns whether Sentinel scrubbing is active

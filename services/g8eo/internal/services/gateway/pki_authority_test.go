@@ -30,7 +30,9 @@ import (
 )
 
 func TestPKIAuthority_EnsurePKI(t *testing.T) {
+	t.Parallel()
 	t.Run("Full PKI hierarchy initialization", func(t *testing.T) {
+		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
@@ -58,6 +60,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 	})
 
 	t.Run("Root CA generation", func(t *testing.T) {
+		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
@@ -92,6 +95,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 	})
 
 	t.Run("Intermediate CA generation", func(t *testing.T) {
+		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
@@ -124,6 +128,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 	})
 
 	t.Run("Service certificate generation", func(t *testing.T) {
+		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
@@ -156,6 +161,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 	})
 
 	t.Run("Trust bundle generation", func(t *testing.T) {
+		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
@@ -181,6 +187,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 	})
 
 	t.Run("No root-level ca.crt mirror", func(t *testing.T) {
+		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
@@ -199,6 +206,7 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 }
 
 func TestPKIAuthority_ChainValidity(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
@@ -210,6 +218,7 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("Root CA is self-signed", func(t *testing.T) {
+		t.Parallel()
 		rootCertPEM, err := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
 		require.NoError(t, err)
 
@@ -226,6 +235,7 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 	})
 
 	t.Run("Intermediate CA chain validity", func(t *testing.T) {
+		t.Parallel()
 		rootCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
 		hubCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "hub_ca.crt"))
 
@@ -242,6 +252,7 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 	})
 
 	t.Run("Service certificate chain validity", func(t *testing.T) {
+		t.Parallel()
 		hubCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "hub_ca.crt"))
 		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
 
@@ -259,6 +270,7 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 }
 
 func TestPKIAuthority_IssuerSeparation(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
@@ -270,6 +282,7 @@ func TestPKIAuthority_IssuerSeparation(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("Distinct intermediate CAs", func(t *testing.T) {
+		t.Parallel()
 		hubCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "hub_ca.crt"))
 		operatorCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "operator_ca.crt"))
 		bootstrapCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "bootstrap_ca.crt"))
@@ -299,6 +312,7 @@ func TestPKIAuthority_IssuerSeparation(t *testing.T) {
 }
 
 func TestPKIAuthority_URISAN(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
@@ -310,6 +324,7 @@ func TestPKIAuthority_URISAN(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("Service certificate has SPIFFE URI SAN", func(t *testing.T) {
+		t.Parallel()
 		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
 		block, _ := pem.Decode(serviceCertPEM)
 		serviceCert, _ := x509.ParseCertificate(block.Bytes)
@@ -332,6 +347,7 @@ func TestPKIAuthority_URISAN(t *testing.T) {
 }
 
 func TestPKIAuthority_ValidityPeriods(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
@@ -343,6 +359,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("Root CA validity period", func(t *testing.T) {
+		t.Parallel()
 		rootCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
 		block, _ := pem.Decode(rootCertPEM)
 		rootCert, _ := x509.ParseCertificate(block.Bytes)
@@ -355,6 +372,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 	})
 
 	t.Run("Intermediate CA validity period", func(t *testing.T) {
+		t.Parallel()
 		hubCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "authorities", "hub_ca.crt"))
 		block, _ := pem.Decode(hubCertPEM)
 		hubCert, _ := x509.ParseCertificate(block.Bytes)
@@ -366,6 +384,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 	})
 
 	t.Run("Service certificate validity period", func(t *testing.T) {
+		t.Parallel()
 		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
 		block, _ := pem.Decode(serviceCertPEM)
 		serviceCert, _ := x509.ParseCertificate(block.Bytes)
@@ -378,6 +397,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 }
 
 func TestPKIAuthority_EKU(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
@@ -389,6 +409,7 @@ func TestPKIAuthority_EKU(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("CA has correct KeyUsage", func(t *testing.T) {
+		t.Parallel()
 		rootCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "root", "root_ca.crt"))
 		block, _ := pem.Decode(rootCertPEM)
 		rootCert, _ := x509.ParseCertificate(block.Bytes)
@@ -398,6 +419,7 @@ func TestPKIAuthority_EKU(t *testing.T) {
 	})
 
 	t.Run("Service certificate has correct EKU", func(t *testing.T) {
+		t.Parallel()
 		serviceCertPEM, _ := os.ReadFile(filepath.Join(pkiDir, "issued", "hub", "operator-gateway.crt"))
 		block, _ := pem.Decode(serviceCertPEM)
 		serviceCert, _ := x509.ParseCertificate(block.Bytes)
@@ -409,6 +431,7 @@ func TestPKIAuthority_EKU(t *testing.T) {
 }
 
 func TestPKIAuthority_TLSConfig(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
@@ -420,11 +443,13 @@ func TestPKIAuthority_TLSConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("TLS 1.3 only", func(t *testing.T) {
+		t.Parallel()
 		tlsConfig := pki.TLSConfig()
 		assert.Equal(t, uint16(tls.VersionTLS13), tlsConfig.MinVersion)
 	})
 
 	t.Run("GetCertificate returns valid cert", func(t *testing.T) {
+		t.Parallel()
 		tlsConfig := pki.TLSConfig()
 		cert, err := tlsConfig.GetCertificate(nil)
 		require.NoError(t, err)
@@ -434,6 +459,7 @@ func TestPKIAuthority_TLSConfig(t *testing.T) {
 }
 
 func TestPKIAuthority_TrustBundlePath(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
@@ -454,6 +480,7 @@ func TestPKIAuthority_TrustBundlePath(t *testing.T) {
 }
 
 func TestPKIAuthority_PKIDir(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
@@ -465,6 +492,7 @@ func TestPKIAuthority_PKIDir(t *testing.T) {
 }
 
 func TestPKIAuthority_ReuseExisting(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()

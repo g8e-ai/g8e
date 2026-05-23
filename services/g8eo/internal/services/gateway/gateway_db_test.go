@@ -63,6 +63,7 @@ func newTestDB(t *testing.T) *GatewayDBService {
 // ---------------------------------------------------------------------------
 
 func TestDocSetAndGet(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	err := db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "role": "admin"}))
@@ -79,6 +80,7 @@ func TestDocSetAndGet(t *testing.T) {
 }
 
 func TestDocGetNotFound(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	doc, err := db.DocGet("users", "nonexistent")
@@ -87,6 +89,7 @@ func TestDocGetNotFound(t *testing.T) {
 }
 
 func TestDocUpdate(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	err := db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "role": "user"}))
@@ -99,6 +102,7 @@ func TestDocUpdate(t *testing.T) {
 }
 
 func TestDocUpdateNotFound(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	_, err := db.DocUpdate("users", "nonexistent", mustDocJSON(t, map[string]string{"role": "admin"}))
@@ -107,6 +111,7 @@ func TestDocUpdateNotFound(t *testing.T) {
 }
 
 func TestDocUpdateDeleteField(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	err := db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "temp": "remove_me"}))
@@ -119,6 +124,7 @@ func TestDocUpdateDeleteField(t *testing.T) {
 }
 
 func TestDocDelete(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	err := db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice"}))
@@ -134,6 +140,7 @@ func TestDocDelete(t *testing.T) {
 }
 
 func TestDocDeleteNotFound(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	deleted, err := db.DocDelete("users", "non-existent-id")
@@ -142,6 +149,7 @@ func TestDocDeleteNotFound(t *testing.T) {
 }
 
 func TestDocQuery(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocSet("operators", "op1", mustDocJSON(t, map[string]string{"status": "active", "name": "op-a"})))
@@ -158,6 +166,7 @@ func TestDocQuery(t *testing.T) {
 }
 
 func TestDocQueryWithOrderAndLimit(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocSet("items", "a", mustDocJSON(t, map[string]int{"priority": 3})))
@@ -170,6 +179,7 @@ func TestDocQueryWithOrderAndLimit(t *testing.T) {
 }
 
 func TestDocQueryEmptyCollection(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	results, err := db.DocQuery("empty_collection", nil, "", 0)
@@ -178,6 +188,7 @@ func TestDocQueryEmptyCollection(t *testing.T) {
 }
 
 func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocSet("things", "t1", mustDocJSON(t, map[string]interface{}{"label": "foo", "count": 5})))
@@ -185,6 +196,7 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 	require.NoError(t, db.DocSet("things", "t3", mustDocJSON(t, map[string]interface{}{"label": "foo", "count": 20})))
 
 	t.Run("string equality", func(t *testing.T) {
+		t.Parallel()
 		results, err := db.DocQuery("things", []models.DocFilter{
 			{Field: "label", Op: "==", Value: json.RawMessage(`"foo"`)},
 		}, "", 0)
@@ -193,6 +205,7 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 	})
 
 	t.Run("numeric greater-than", func(t *testing.T) {
+		t.Parallel()
 		results, err := db.DocQuery("things", []models.DocFilter{
 			{Field: "count", Op: ">", Value: json.RawMessage(`7`)},
 		}, "", 0)
@@ -201,6 +214,7 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 	})
 
 	t.Run("numeric equality", func(t *testing.T) {
+		t.Parallel()
 		results, err := db.DocQuery("things", []models.DocFilter{
 			{Field: "count", Op: "==", Value: json.RawMessage(`10`)},
 		}, "", 0)
@@ -214,6 +228,7 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestKVSetAndGet(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	err := db.KVSet("session:abc", `{"user":"alice"}`, 0)
@@ -225,6 +240,7 @@ func TestKVSetAndGet(t *testing.T) {
 }
 
 func TestKVGetNotFound(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	_, found := db.KVGet("nonexistent")
@@ -232,6 +248,7 @@ func TestKVGetNotFound(t *testing.T) {
 }
 
 func TestKVSetWithTTL(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	err := db.KVSet("temp:key", "value", 1)
@@ -241,14 +258,15 @@ func TestKVSetWithTTL(t *testing.T) {
 	assert.True(t, found)
 	assert.Equal(t, "value", val)
 
-	// Wait for expiry
-	time.Sleep(1100 * time.Millisecond)
-
-	_, found = db.KVGet("temp:key")
-	assert.False(t, found)
+	// Wait for expiry with polling
+	require.Eventually(t, func() bool {
+		_, found := db.KVGet("temp:key")
+		return !found
+	}, 2*time.Second, 100*time.Millisecond, "temp key should expire")
 }
 
 func TestKVDelete(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.KVSet("key1", "val1", 0))
@@ -259,6 +277,7 @@ func TestKVDelete(t *testing.T) {
 }
 
 func TestKVDeletePattern(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.KVSet("cache:user:1", "a", 0))
@@ -274,6 +293,7 @@ func TestKVDeletePattern(t *testing.T) {
 }
 
 func TestKVKeys(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.KVSet("session:a", "1", 0))
@@ -286,6 +306,7 @@ func TestKVKeys(t *testing.T) {
 }
 
 func TestKVKeys_SpecialCharacters(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	// Keys with dots - SQL GLOB treats dots as literal characters
@@ -331,6 +352,7 @@ func TestKVKeys_SpecialCharacters(t *testing.T) {
 }
 
 func TestKVExists(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.KVSet("exists:key", "val", 0))
@@ -339,6 +361,7 @@ func TestKVExists(t *testing.T) {
 }
 
 func TestKVTTL(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.KVSet("ttl:key", "val", 60))
@@ -349,6 +372,7 @@ func TestKVTTL(t *testing.T) {
 }
 
 func TestKVExpire(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.KVSet("exp:key", "val", 0))
@@ -369,6 +393,7 @@ func TestKVExpire(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSchemaIdempotent(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	secretsDir := t.TempDir()
 
@@ -393,6 +418,7 @@ func TestSchemaIdempotent(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCreateDataDir(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "nested", "deep", "data")
 	secretsDir := t.TempDir()
 
@@ -409,6 +435,7 @@ func TestCreateDataDir(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDocSet_UpsertReplacesDataAndUpdatesTimestamp(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice"})))
@@ -418,7 +445,11 @@ func TestDocSet_UpsertReplacesDataAndUpdatesTimestamp(t *testing.T) {
 	createdAt1 := doc1.CreatedAt
 	updatedAt1 := doc1.UpdatedAt
 
-	time.Sleep(2 * time.Millisecond)
+	// Small delay to ensure timestamp changes
+	require.Eventually(t, func() bool {
+		time.Sleep(2 * time.Millisecond)
+		return true
+	}, 10*time.Millisecond, 1*time.Millisecond)
 
 	require.NoError(t, db.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "admin"})))
 
@@ -435,6 +466,7 @@ func TestDocSet_UpsertReplacesDataAndUpdatesTimestamp(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDocUpdate_PreservesCreatedAt(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocSet("things", "t1", mustDocJSON(t, map[string]string{"x": "original"})))
@@ -443,7 +475,11 @@ func TestDocUpdate_PreservesCreatedAt(t *testing.T) {
 	require.NoError(t, err)
 	createdAt := doc1.CreatedAt
 
-	time.Sleep(2 * time.Millisecond)
+	// Small delay to ensure timestamp changes
+	require.Eventually(t, func() bool {
+		time.Sleep(2 * time.Millisecond)
+		return true
+	}, 10*time.Millisecond, 1*time.Millisecond)
 
 	doc2, err := db.DocUpdate("things", "t1", mustDocJSON(t, map[string]string{"x": "updated"}))
 	require.NoError(t, err)
@@ -457,6 +493,7 @@ func TestDocUpdate_PreservesCreatedAt(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDocQuery_InvalidFilterFieldReturnsError(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
@@ -469,6 +506,7 @@ func TestDocQuery_InvalidFilterFieldReturnsError(t *testing.T) {
 }
 
 func TestDocQuery_InvalidOrderByFieldReturnsError(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
@@ -479,6 +517,7 @@ func TestDocQuery_InvalidOrderByFieldReturnsError(t *testing.T) {
 }
 
 func TestDocQuery_UnknownOpIsSkipped(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
@@ -496,6 +535,7 @@ func TestDocQuery_UnknownOpIsSkipped(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestKVSet_OverwriteReplacesValue(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.KVSet("key1", "first", 0))
@@ -511,6 +551,7 @@ func TestKVSet_OverwriteReplacesValue(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestKVTTL_NoExpiry(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.KVSet("persistent", "val", 0))
@@ -522,6 +563,7 @@ func TestKVTTL_NoExpiry(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestKVScan_BasicScan(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.KVSet("scan:a", "1", 0))
@@ -536,6 +578,7 @@ func TestKVScan_BasicScan(t *testing.T) {
 }
 
 func TestKVScan_Pagination(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	for i := 0; i < 5; i++ {
@@ -559,6 +602,7 @@ func TestKVScan_Pagination(t *testing.T) {
 }
 
 func TestKVScan_EmptyResult(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	next, keys, err := db.KVScan("nothing:*", 0, 10)
@@ -568,6 +612,7 @@ func TestKVScan_EmptyResult(t *testing.T) {
 }
 
 func TestKVScan_DefaultCountApplied(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	for i := 0; i < 5; i++ {
@@ -580,18 +625,23 @@ func TestKVScan_DefaultCountApplied(t *testing.T) {
 }
 
 func TestKVScan_ExcludesExpiredKeys(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.KVSet("live:key", "val", 0))
 	require.NoError(t, db.KVSet("exp:key", "val", 1))
 
-	time.Sleep(1100 * time.Millisecond)
-
-	_, keys, err := db.KVScan("*", 0, 100)
-	require.NoError(t, err)
-	for _, k := range keys {
-		assert.NotEqual(t, "exp:key", k, "expired key must not appear in scan results")
-	}
+	// Wait for expiry with polling
+	require.Eventually(t, func() bool {
+		_, keys, err := db.KVScan("*", 0, 100)
+		require.NoError(t, err)
+		for _, k := range keys {
+			if k == "exp:key" {
+				return false
+			}
+		}
+		return true
+	}, 2*time.Second, 100*time.Millisecond, "expired key must not appear in scan results")
 }
 
 // ---------------------------------------------------------------------------
@@ -599,6 +649,7 @@ func TestKVScan_ExcludesExpiredKeys(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSSEEventsCount_EmptyTable(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	count, err := db.SSEEventsCount()
@@ -607,6 +658,7 @@ func TestSSEEventsCount_EmptyTable(t *testing.T) {
 }
 
 func TestSSEEventsAppendAndCount(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"hello"}`))
@@ -619,6 +671,7 @@ func TestSSEEventsAppendAndCount(t *testing.T) {
 }
 
 func TestSSEEventsWipe_DeletesAllRows(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"a"}`))
@@ -634,6 +687,7 @@ func TestSSEEventsWipe_DeletesAllRows(t *testing.T) {
 }
 
 func TestSSEEventsWipe_EmptyTableReturnsZero(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	deleted, err := db.SSEEventsWipe()
@@ -646,12 +700,17 @@ func TestSSEEventsWipe_EmptyTableReturnsZero(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRunTTLCleanup_RemovesExpiredKVEntries(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.KVSet("ttl:keep", "val", 0))
 	require.NoError(t, db.KVSet("ttl:expire", "val", 1))
 
-	time.Sleep(1100 * time.Millisecond)
+	// Wait for expiry with polling
+	require.Eventually(t, func() bool {
+		_, found := db.KVGet("ttl:expire")
+		return !found
+	}, 2*time.Second, 100*time.Millisecond, "ttl:expire should expire")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

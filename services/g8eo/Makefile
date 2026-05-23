@@ -239,6 +239,23 @@ _build-release:
 test:
 	@$(GO) test -race -timeout 180s ./...
 
+.PHONY: test-coverage
+test-coverage:
+	@$(GO) test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic ./...
+	@$(GO) tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+	@$(GO) tool cover -func=coverage.out | tail -1
+
+.PHONY: test-coverage-check
+test-coverage-check:
+	@$(GO) test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic ./...
+	@COVERAGE=$$($(GO) tool cover -func=coverage.out | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	if [ $$(echo "$$COVERAGE < 85" | bc -l) -eq 1 ]; then \
+		echo "Coverage $$COVERAGE% is below 85% threshold"; \
+		exit 1; \
+	fi; \
+	echo "Coverage $$COVERAGE% meets 85% threshold"
+
 .PHONY: test-sudo
 test-sudo:
 	@sudo $(GO) test -race -timeout 180s ./...
@@ -290,6 +307,14 @@ install-tools:
 	@if [ -z "$$(command -v govulncheck)" ]; then \
 		echo "Installing govulncheck..."; \
 		$(GO) install golang.org/x/vuln/cmd/govulncheck@latest; \
+	fi
+	@if [ -z "$$(command -v gotestsum)" ]; then \
+		echo "Installing gotestsum..."; \
+		$(GO) install gotest.tools/gotestsum@latest; \
+	fi
+	@if [ -z "$$(command -v mockery)" ]; then \
+		echo "Installing mockery..."; \
+		$(GO) install github.com/vektra/mockery/v2@latest; \
 	fi
 	@echo "Tools installed successfully."
 

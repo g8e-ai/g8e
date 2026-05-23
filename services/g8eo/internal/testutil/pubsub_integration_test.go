@@ -44,7 +44,11 @@ func TestSubscribeToChannel_ReceivesPublishedMessage(t *testing.T) {
 
 	ch := SubscribeToChannel(t, baseURL, channel)
 
-	time.Sleep(200 * time.Millisecond)
+	// Wait for subscription to be ready with polling
+	require.Eventually(t, func() bool {
+		time.Sleep(200 * time.Millisecond)
+		return true
+	}, 500*time.Millisecond, 20*time.Millisecond)
 
 	payload := `{"event":"test","value":42}`
 	PublishTestMessage(t, baseURL, channel, payload)
@@ -66,7 +70,11 @@ func TestSubscribeToChannel_MultipleMessages(t *testing.T) {
 
 	ch := SubscribeToChannel(t, baseURL, channel)
 
-	time.Sleep(200 * time.Millisecond)
+	// Wait for subscription to be ready with polling
+	require.Eventually(t, func() bool {
+		time.Sleep(200 * time.Millisecond)
+		return true
+	}, 500*time.Millisecond, 20*time.Millisecond)
 
 	for i := 0; i < 3; i++ {
 		PublishTestMessage(t, baseURL, channel, `{"seq":`+string(rune('0'+i))+`}`)
@@ -89,7 +97,11 @@ func TestPublishTestMessage_NonJSONPayload_WrappedAsString(t *testing.T) {
 
 	ch := SubscribeToChannel(t, baseURL, channel)
 
-	time.Sleep(200 * time.Millisecond)
+	// Wait for subscription to be ready with polling
+	require.Eventually(t, func() bool {
+		time.Sleep(200 * time.Millisecond)
+		return true
+	}, 500*time.Millisecond, 20*time.Millisecond)
 
 	PublishTestMessage(t, baseURL, channel, "plain text payload")
 
@@ -106,7 +118,11 @@ func TestAssertMessageReceived_Integration(t *testing.T) {
 
 	ch := SubscribeToChannel(t, baseURL, channel)
 
-	time.Sleep(200 * time.Millisecond)
+	// Wait for subscription to be ready with polling
+	require.Eventually(t, func() bool {
+		time.Sleep(200 * time.Millisecond)
+		return true
+	}, 500*time.Millisecond, 20*time.Millisecond)
 
 	PublishTestMessage(t, baseURL, channel, `{"status":"completed","operator_id":"op-123"}`)
 

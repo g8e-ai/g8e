@@ -14,6 +14,7 @@
 package sqliteutil
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -75,8 +76,10 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 		return nil, fmt.Errorf("failed to open database %s: %w", cfg.Path, err)
 	}
 
-	sqlDB.SetMaxOpenConns(1)
-	sqlDB.SetMaxIdleConns(1)
+	// Increase connection pool size to fully utilize WAL mode
+	// WAL mode allows multiple readers and one writer concurrently
+	sqlDB.SetMaxOpenConns(20)
+	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetConnMaxLifetime(0)
 
 	if err := sqlDB.Ping(); err != nil {
@@ -137,4 +140,13 @@ func (db *DB) GetSizeBytes() (int64, error) {
 		return 0, fmt.Errorf("failed to query page_size: %w", err)
 	}
 	return pageCount * pageSize, nil
+}
+
+// HealthCheck performs a context-aware ping to verify database connectivity.
+// This is used for fail-fast health checks during startup and runtime.
+func (db *DB) HealthCheck(ctx context.Context) error {
+	if err := db.PingContext(ctx); err != nil {
+		return fmt.Errorf("database health check failed: %w", err)
+	}
+	return nil
 }

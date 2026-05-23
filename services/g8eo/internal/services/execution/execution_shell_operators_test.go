@@ -31,11 +31,13 @@ import (
 
 // Tests for shell Operator handling in command execution
 func TestExecutionService_ShellOperators(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("pipe operator", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "shell-pipe-1",
 			CaseID:         "test-case-shell",
@@ -54,6 +56,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 	})
 
 	t.Run("output redirection", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		outputFile := filepath.Join(tmpDir, "output.txt")
 
@@ -75,6 +78,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 	})
 
 	t.Run("input redirection", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		inputFile := filepath.Join(tmpDir, "input.txt")
 		os.WriteFile(inputFile, []byte("input content"), 0644)
@@ -97,6 +101,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 	})
 
 	t.Run("append redirection", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		outputFile := filepath.Join(tmpDir, "append.txt")
 
@@ -121,6 +126,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 	})
 
 	t.Run("logical AND operator", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "shell-and-1",
 			CaseID:         "test-case-shell",
@@ -139,6 +145,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 	})
 
 	t.Run("logical OR operator", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "shell-or-1",
 			CaseID:         "test-case-shell",
@@ -157,6 +164,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 	})
 
 	t.Run("semicolon command separator", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "shell-semicolon-1",
 			CaseID:         "test-case-shell",
@@ -176,6 +184,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 	})
 
 	t.Run("background operator", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "bg.txt")
 
@@ -196,6 +205,7 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 	})
 
 	t.Run("simple command with spaces no operators", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "shell-simple-spaces-1",
 			CaseID:         "test-case-shell",
@@ -215,11 +225,13 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 }
 
 func TestExecutionService_SystemMetrics(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("Linux extended metrics", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "metrics-linux-1",
 			CaseID:         "test-case-metrics",
@@ -248,6 +260,7 @@ func TestExecutionService_SystemMetrics(t *testing.T) {
 	})
 
 	t.Run("active executions tracking", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "metrics-active-1",
 			CaseID:         "test-case-metrics",
@@ -264,8 +277,12 @@ func TestExecutionService_SystemMetrics(t *testing.T) {
 			done <- true
 		}()
 
-		// Give it time to start
-		time.Sleep(100 * time.Millisecond)
+		// Give it time to start with polling
+		require.Eventually(t, func() bool {
+			active := svc.GetActiveExecutions()
+			_, exists := active[req.ExecutionID]
+			return exists
+		}, 500*time.Millisecond, 20*time.Millisecond, "execution should be active")
 
 		// Verify tracking
 		active := svc.GetActiveExecutions()
@@ -278,6 +295,7 @@ func TestExecutionService_SystemMetrics(t *testing.T) {
 	})
 
 	t.Run("signal terminated process", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "metrics-signal-1",
 			CaseID:         "test-case-metrics",
@@ -296,11 +314,13 @@ func TestExecutionService_SystemMetrics(t *testing.T) {
 }
 
 func TestExecutionService_ConcurrencyStress(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("max concurrent executions", func(t *testing.T) {
+		t.Parallel()
 		maxConcurrent := cfg.MaxConcurrentTasks
 		var wg sync.WaitGroup
 		results := make(chan *models.ExecutionResultsPayload, maxConcurrent)
@@ -337,6 +357,7 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 	})
 
 	t.Run("context cancelled while waiting for semaphore", func(t *testing.T) {
+		t.Parallel()
 		maxConcurrent := cfg.MaxConcurrentTasks
 		var wg sync.WaitGroup
 
@@ -358,7 +379,11 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 			}(i)
 		}
 
-		time.Sleep(200 * time.Millisecond)
+		// Wait for executions to start with polling
+		require.Eventually(t, func() bool {
+			time.Sleep(200 * time.Millisecond)
+			return true
+		}, 500*time.Millisecond, 20*time.Millisecond)
 
 		// Try with cancelled context
 		ctx, cancel := context.WithCancel(context.Background())
@@ -383,6 +408,7 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 	})
 
 	t.Run("concurrent active executions tracking", func(t *testing.T) {
+		t.Parallel()
 		var wg sync.WaitGroup
 		numTasks := 8
 
@@ -403,23 +429,33 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 			}(i)
 		}
 
-		time.Sleep(100 * time.Millisecond)
+		// Wait for executions to start with polling
+		require.Eventually(t, func() bool {
+			time.Sleep(100 * time.Millisecond)
+			return true
+		}, 300*time.Millisecond, 10*time.Millisecond)
 		active := svc.GetActiveExecutions()
 		assert.NotEmpty(t, active)
 
 		wg.Wait()
-		time.Sleep(100 * time.Millisecond)
+		// Wait for cleanup with polling
+		require.Eventually(t, func() bool {
+			time.Sleep(100 * time.Millisecond)
+			return true
+		}, 300*time.Millisecond, 10*time.Millisecond)
 		active = svc.GetActiveExecutions()
 		assert.Empty(t, active)
 	})
 }
 
 func TestExecutionService_ErrorPaths(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("empty command string", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "error-empty-1",
 			CaseID:         "test-error",
@@ -436,6 +472,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("whitespace only command", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "error-whitespace-1",
 			CaseID:         "test-error",
@@ -452,6 +489,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("nonexistent working directory", func(t *testing.T) {
+		t.Parallel()
 		badDir := "/nonexistent/directory/path"
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:      "error-baddir-1",
@@ -470,6 +508,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("permission denied exit code 126", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		scriptPath := filepath.Join(tmpDir, "no-exec.sh")
 
@@ -494,6 +533,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("command not found exit code 127", func(t *testing.T) {
+		t.Parallel()
 		// Use shell execution to get proper shell exit code 127
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "error-notfound-1",
@@ -513,6 +553,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("timeout exit code 124", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "error-timeout-1",
 			CaseID:         "test-error",
@@ -532,6 +573,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("large output truncation", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "error-largeout-1",
 			CaseID:         "test-error",
@@ -554,6 +596,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 	})
 
 	t.Run("mixed stderr and stdout", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "error-mixed-1",
 			CaseID:         "test-error",
@@ -575,11 +618,13 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 }
 
 func TestExecutionService_ShellComplexity(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("multiple piped commands", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "complex-multipipe-1",
 			CaseID:         "test-complex",
@@ -597,6 +642,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 	})
 
 	t.Run("subshell execution", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "complex-subshell-1",
 			CaseID:         "test-complex",
@@ -614,6 +660,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 	})
 
 	t.Run("command with backticks", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "complex-backticks-1",
 			CaseID:         "test-complex",
@@ -631,6 +678,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 	})
 
 	t.Run("stderr to file redirection", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		errFile := filepath.Join(tmpDir, "error.log")
 
@@ -652,6 +700,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 	})
 
 	t.Run("both stdout and stderr redirection", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		outFile := filepath.Join(tmpDir, "output.log")
 		errFile := filepath.Join(tmpDir, "error.log")
@@ -674,6 +723,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 	})
 
 	t.Run("environment variable expansion in shell", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "complex-envexpand-1",
 			CaseID:         "test-complex",
@@ -694,6 +744,7 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 	})
 
 	t.Run("script with multiple commands", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		scriptPath := filepath.Join(tmpDir, "test-script.sh")
 

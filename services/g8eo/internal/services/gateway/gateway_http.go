@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/protocol"
@@ -41,12 +42,33 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/mcp"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	"github.com/google/uuid"
+	"golang.org/x/time/rate"
 )
 
 const governanceEnvelopeRedirectError = "submit via POST /api/governance/envelope"
 
-func readBody(r *http.Request) ([]byte, error) {
-	return io.ReadAll(io.LimitReader(r.Body, 50*1024*1024))
+// HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
+type HTTPHandlerDependencies struct {
+	Cfg               *config.Config
+	Logger            *slog.Logger
+	DB                *GatewayDBService
+	Pubsub            *PubSubBroker
+	Auth              *AuthService
+	PKI               *PKIAuthority
+	SessionSvc        *SessionService
+	Reg               *RegistrationService
+	Passkey           *PasskeyService
+	UserSvc           *UserService
+	APIKey            *ApiKeyService
+	Responder         *responder.Responder
+	MCPGateway        *mcp.GatewayService
+	IsReady           func() bool
+	IsGovernanceReady func() bool
+}
+
+func (h *HTTPHandler) readBody(r *http.Request) ([]byte, error) {
+	r.Body = http.MaxBytesReader(nil, r.Body, h.cfg.Gateway.MaxPayloadBytes)
+	return io.ReadAll(r.Body)
 }
 
 // HTTPHandler manages the web API for the gateway service.
@@ -71,25 +93,30 @@ type HTTPHandler struct {
 	// the in-process command service has initialized the verifier and
 	// Actuator. While nil, /api/governance/envelope returns 503.
 	envProc governance.EnvelopeProcessor
+
+	// Rate limiting state
+	muLimiters sync.Mutex
+	limiters   map[string]*rate.Limiter
 }
 
-func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, sessionSvc *SessionService, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, responder *responder.Responder, mcpGateway *mcp.GatewayService, isReady func() bool, isGovernanceReady func() bool) *HTTPHandler {
+func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 	return &HTTPHandler{
-		cfg:               cfg,
-		logger:            logger,
-		db:                db,
-		pubsub:            pubsub,
-		auth:              auth,
-		pki:               pki,
-		sessionSvc:        sessionSvc,
-		reg:               reg,
-		passkey:           passkey,
-		userSvc:           userSvc,
-		apiKey:            apiKey,
-		responder:         responder,
-		mcp:               mcpGateway,
-		isReady:           isReady,
-		isGovernanceReady: isGovernanceReady,
+		cfg:               deps.Cfg,
+		logger:            deps.Logger,
+		db:                deps.DB,
+		pubsub:            deps.Pubsub,
+		auth:              deps.Auth,
+		pki:               deps.PKI,
+		sessionSvc:        deps.SessionSvc,
+		reg:               deps.Reg,
+		passkey:           deps.Passkey,
+		userSvc:           deps.UserSvc,
+		apiKey:            deps.APIKey,
+		responder:         deps.Responder,
+		mcp:               deps.MCPGateway,
+		isReady:           deps.IsReady,
+		isGovernanceReady: deps.IsGovernanceReady,
+		limiters:          make(map[string]*rate.Limiter),
 	}
 }
 
@@ -118,8 +145,48 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	return h.pathTraversalGuard(mux)
 }
 
+func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			ip = r.RemoteAddr
+		}
+
+		h.muLimiters.Lock()
+		limiter, ok := h.limiters[ip]
+		if !ok {
+			// 5 requests per second, burst of 10
+			limiter = rate.NewLimiter(rate.Limit(5), 10)
+			h.limiters[ip] = limiter
+		}
+		h.muLimiters.Unlock()
+
+		if !limiter.Allow() {
+			h.logger.Warn("Rate limit exceeded", "ip", ip, "path", r.URL.Path)
+			h.responder.Error(w, http.StatusTooManyRequests, "rate limit exceeded")
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (h *HTTPHandler) buildRouter() http.Handler {
 	mux := http.NewServeMux()
+
+	// MCP Ingress routes with rate limiting
+	mcpMux := http.NewServeMux()
+	mcpMux.HandleFunc("/api/governance/envelope", h.handleGovernanceEnvelope)
+	mcpMux.HandleFunc("/api/mcp/v1/tools/list", h.mcp.HandleToolsList)
+	mcpMux.HandleFunc("/api/mcp/v1/tools/call", h.mcp.HandleToolsCall)
+	mcpMux.HandleFunc("/api/mcp/v1/tools/call/sse", h.mcp.HandleToolsCallSSE)
+	mcpMux.HandleFunc("/api/mcp/v1/resources/list", h.mcp.HandleResourcesList)
+	mcpMux.HandleFunc("/api/mcp/v1/resources/read", h.mcp.HandleResourcesRead)
+	mcpMux.HandleFunc("/api/mcp/v1/prompts/list", h.mcp.HandlePromptsList)
+	mcpMux.HandleFunc("/api/mcp/v1/prompts/get", h.mcp.HandlePromptsGet)
+	mcpMux.HandleFunc("/api/a2a/v1/call", h.mcp.HandleA2aCall)
+
+	mcpHandler := h.rateLimitMiddleware(mcpMux)
 
 	// Health check (available internally)
 	mux.HandleFunc("/health", h.handleHealth)
@@ -137,20 +204,14 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/operators/target", h.handleSetTargetContext)
 	mux.HandleFunc("/api/governance/signers", h.handleTrustedSigners)
 	mux.HandleFunc("/api/governance/signers/", h.handleTrustedSignerByID)
-	// Canonical synchronous fail-closed mutation entry. BYO clients submit
-	// UAP JSON envelopes here to receive a signed ActionReceipt.
-	mux.HandleFunc("/api/governance/envelope", h.handleGovernanceEnvelope)
+
+	// Register rate-limited MCP routes
+	mux.Handle("/api/governance/envelope", mcpHandler)
+	mux.Handle("/api/mcp/", mcpHandler)
+	mux.Handle("/api/a2a/", mcpHandler)
+
 	mux.HandleFunc("/api/audit/receipts", h.handleAuditReceipts)
 	mux.HandleFunc("/api/audit/receipts/export", h.handleAuditReceiptsExport)
-
-	mux.HandleFunc("/api/mcp/v1/tools/list", h.mcp.HandleToolsList)
-	mux.HandleFunc("/api/mcp/v1/tools/call", h.mcp.HandleToolsCall)
-	mux.HandleFunc("/api/mcp/v1/tools/call/sse", h.mcp.HandleToolsCallSSE)
-	mux.HandleFunc("/api/mcp/v1/resources/list", h.mcp.HandleResourcesList)
-	mux.HandleFunc("/api/mcp/v1/resources/read", h.mcp.HandleResourcesRead)
-	mux.HandleFunc("/api/mcp/v1/prompts/list", h.mcp.HandlePromptsList)
-	mux.HandleFunc("/api/mcp/v1/prompts/get", h.mcp.HandlePromptsGet)
-	mux.HandleFunc("/api/a2a/v1/call", h.mcp.HandleA2aCall)
 
 	// Internal SSE event bridge (used by g8ee Ensemble to publish typed events
 	// for browser/CLI subscribers to consume). Producers are authenticated by
@@ -233,8 +294,8 @@ func (h *HTTPHandler) pathTraversalGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Clean the path to handle multiple slashes, etc.
 		cleaned := filepath.ToSlash(filepath.Clean(r.URL.Path))
-		if containsTraversal(r.URL.Path) || (cleaned != r.URL.Path && cleaned != r.URL.Path+"/" && r.URL.Path != "/") {
-			if containsTraversal(r.URL.Path) || strings.Contains(cleaned, "..") {
+		if h.containsTraversal(r.URL.Path) || (cleaned != r.URL.Path && cleaned != r.URL.Path+"/" && r.URL.Path != "/") {
+			if h.containsTraversal(r.URL.Path) || strings.Contains(cleaned, "..") {
 				h.responder.Error(w, http.StatusBadRequest, "invalid path")
 				return
 			}
@@ -243,7 +304,7 @@ func (h *HTTPHandler) pathTraversalGuard(next http.Handler) http.Handler {
 	})
 }
 
-func containsTraversal(path string) bool {
+func (h *HTTPHandler) containsTraversal(path string) bool {
 	for _, seg := range strings.Split(path, "/") {
 		if seg == ".." {
 			return true
@@ -289,21 +350,6 @@ func isMutationPubSubChannelAllowed(channel string) bool {
 		}
 	}
 	return false
-}
-
-func jsonResponse(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set(constants.HeaderContentType, "application/json")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
-}
-
-func jsonError(w http.ResponseWriter, status int, msg string) {
-	jsonResponse(w, status, struct {
-		Error string `json:"error"`
-	}{Error: msg})
 }
 
 func (h *HTTPHandler) GetMCPGateway() *mcp.GatewayService {
@@ -385,19 +431,19 @@ func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) 
 
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if h.isReady != nil && !h.isReady() {
-		jsonError(w, http.StatusServiceUnavailable, "service initializing")
+		h.responder.Error(w, http.StatusServiceUnavailable, "service initializing")
 		return
 	}
 
 	doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDAppSettings))
 	if err != nil {
 		h.logger.Error("Health check failed to query app_settings", string(constants.ConnectionStateError), err)
-		jsonError(w, http.StatusServiceUnavailable, "app_settings not ready")
+		h.responder.Error(w, http.StatusServiceUnavailable, "app_settings not ready")
 		return
 	}
 	if doc == nil {
 		h.logger.Warn("Health check: app_settings not found")
-		jsonError(w, http.StatusServiceUnavailable, "app_settings not ready")
+		h.responder.Error(w, http.StatusServiceUnavailable, "app_settings not ready")
 		return
 	}
 
@@ -406,7 +452,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("Health check failed to get state root", string(constants.ConnectionStateError), err)
 	}
 
-	jsonResponse(w, http.StatusOK, models.HealthResponse{
+	h.responder.JSON(w, http.StatusOK, models.HealthResponse{
 		Status:          constants.Status.GatewayMode.StatusOK,
 		Mode:            constants.Status.GatewayMode.Mode,
 		Version:         h.cfg.Version,
@@ -417,12 +463,12 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (h *HTTPHandler) handlePKIRoot(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	pem, err := os.ReadFile(filepath.Join(h.pki.PKIDir(), "root", "root_ca.crt"))
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, "failed to read root CA")
+		h.responder.Error(w, http.StatusInternalServerError, "failed to read root CA")
 		return
 	}
 	w.Header().Set(constants.HeaderContentType, "application/x-pem-file")
@@ -434,12 +480,12 @@ func (h *HTTPHandler) handlePKIRoot(w http.ResponseWriter, r *http.Request) {
 
 func (h *HTTPHandler) handlePKIHubBundle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	pem, err := h.pki.HubTrustBundle()
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, "failed to read hub bundle")
+		h.responder.Error(w, http.StatusInternalServerError, "failed to read hub bundle")
 		return
 	}
 	w.Header().Set(constants.HeaderContentType, "application/x-pem-file")
@@ -451,39 +497,39 @@ func (h *HTTPHandler) handlePKIHubBundle(w http.ResponseWriter, r *http.Request)
 
 func (h *HTTPHandler) handlePKIFingerprint(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	// Return the SHA-256 fingerprint of the root CA
 	pemData, err := os.ReadFile(filepath.Join(h.pki.PKIDir(), "root", "root_ca.crt"))
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, "failed to read root CA")
+		h.responder.Error(w, http.StatusInternalServerError, "failed to read root CA")
 		return
 	}
 
 	block, _ := pem.Decode(pemData)
 	if block == nil {
-		jsonError(w, http.StatusInternalServerError, "invalid root CA PEM")
+		h.responder.Error(w, http.StatusInternalServerError, "invalid root CA PEM")
 		return
 	}
 
 	hash := sha256.Sum256(block.Bytes)
 	fingerprint := hex.EncodeToString(hash[:])
 
-	jsonResponse(w, http.StatusOK, map[string]string{
+	h.responder.JSON(w, http.StatusOK, map[string]string{
 		"root_ca": "sha256:" + fingerprint,
 	})
 }
 
 func (h *HTTPHandler) handlePKISignCSR(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "failed to read body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
@@ -496,17 +542,17 @@ func (h *HTTPHandler) handlePKISignCSR(w http.ResponseWriter, r *http.Request) {
 		WorkloadSessionID string `json:"workload_session_id"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
 	certPEM, chainPEM, err := h.pki.SignCSR(req.CSR, req.LeafType, req.OrganizationID, req.OperatorID, req.UserID, req.WorkloadSessionID)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]string{
+	h.responder.JSON(w, http.StatusOK, map[string]string{
 		"certificate_pem":       certPEM,
 		"certificate_chain_pem": chainPEM,
 	})
@@ -514,13 +560,13 @@ func (h *HTTPHandler) handlePKISignCSR(w http.ResponseWriter, r *http.Request) {
 
 func (h *HTTPHandler) handlePKIRevoke(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "failed to read body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
@@ -529,36 +575,36 @@ func (h *HTTPHandler) handlePKIRevoke(w http.ResponseWriter, r *http.Request) {
 		Reason string `json:"reason"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
 	if req.Serial == "" {
-		jsonError(w, http.StatusBadRequest, "serial required")
+		h.responder.Error(w, http.StatusBadRequest, "serial required")
 		return
 	}
 
 	if err := h.pki.RevokeCertificate(req.Serial, req.Reason); err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+	h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
 }
 
 func (h *HTTPHandler) handlePKIRevocationBundle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	bundleJSON, signature, err := h.pki.GenerateRevocationBundle()
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]string{
+	h.responder.JSON(w, http.StatusOK, map[string]string{
 		"bundle_json": bundleJSON,
 		"signature":   signature,
 	})
@@ -566,19 +612,19 @@ func (h *HTTPHandler) handlePKIRevocationBundle(w http.ResponseWriter, r *http.R
 
 func (h *HTTPHandler) handleDeviceLinkRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "failed to read body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
 	var req models.CreateDeviceLinkRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -589,22 +635,22 @@ func (h *HTTPHandler) handleDeviceLinkRequest(w http.ResponseWriter, r *http.Req
 
 	resp, err := h.reg.CreateDeviceLink(req)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusCreated, resp)
+	h.responder.JSON(w, http.StatusCreated, resp)
 }
 
 func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "failed to read body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
@@ -614,23 +660,23 @@ func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Re
 	// For now, let's just forward to handleDeviceLink style if we have a token.
 	token := r.Header.Get(constants.HeaderDeviceToken)
 	if token == "" {
-		jsonError(w, http.StatusBadRequest, "missing X-G8E-Device-Token header")
+		h.responder.Error(w, http.StatusBadRequest, "missing X-G8E-Device-Token header")
 		return
 	}
 
 	var req models.OperatorRegistrationRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	resp, err := h.reg.RegisterDevice(token, req)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, resp)
+	h.responder.JSON(w, http.StatusOK, resp)
 }
 
 // =============================================================================
@@ -648,18 +694,18 @@ func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDAppSettings))
 		if err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		if doc == nil {
-			jsonError(w, http.StatusNotFound, "settings not found")
+			h.responder.Error(w, http.StatusNotFound, "settings not found")
 			return
 		}
-		jsonResponse(w, http.StatusOK, doc.ForWire())
+		h.responder.JSON(w, http.StatusOK, doc.ForWire())
 	case http.MethodPut, http.MethodPatch:
-		body, err := readBody(r)
+		body, err := h.readBody(r)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid body")
 			return
 		}
 		var err2 error
@@ -669,86 +715,86 @@ func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 			_, err2 = h.db.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDAppSettings), json.RawMessage(body))
 		}
 		if err2 != nil {
-			jsonError(w, http.StatusInternalServerError, err2.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err2.Error())
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
 	default:
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
 func (h *HTTPHandler) handleDeviceLinks(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		body, err := readBody(r)
+		body, err := h.readBody(r)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 		var req models.CreateDeviceLinkRequest
 		if err := json.Unmarshal(body, &req); err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 		resp, err := h.reg.CreateDeviceLink(req)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, err.Error())
+			h.responder.Error(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		jsonResponse(w, http.StatusCreated, resp)
+		h.responder.JSON(w, http.StatusCreated, resp)
 	case http.MethodGet:
 		userID := r.URL.Query().Get("user_id")
 		links, err := h.reg.ListDeviceLinks(userID)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, err.Error())
+			h.responder.Error(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.DeviceLinkListResponse{Success: true, Links: links})
+		h.responder.JSON(w, http.StatusOK, models.DeviceLinkListResponse{Success: true, Links: links})
 	default:
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
 func (h *HTTPHandler) handleDeviceLinkByToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	token := strings.TrimPrefix(r.URL.Path, "/api/device-links/")
 	if token == "" || strings.Contains(token, "/") {
-		jsonError(w, http.StatusBadRequest, "token required")
+		h.responder.Error(w, http.StatusBadRequest, "token required")
 		return
 	}
 	userID := r.URL.Query().Get("user_id")
 	if err := h.reg.DeleteDeviceLink(token, userID); err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+	h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
 }
 
 func (h *HTTPHandler) handleOperators(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	userID := r.URL.Query().Get("user_id")
 	if userID == "" {
-		jsonError(w, http.StatusBadRequest, "user_id required")
+		h.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
 	}
 	slots, err := h.reg.ListOperatorSlots(userID)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: slots})
+	h.responder.JSON(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: slots})
 }
 
 func (h *HTTPHandler) handleG8eDeploy(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	host := r.Host
@@ -771,7 +817,7 @@ func (h *HTTPHandler) handleG8eDeploy(w http.ResponseWriter, r *http.Request) {
 
 func (h *HTTPHandler) handleTrustScript(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	host := r.Host
@@ -806,7 +852,7 @@ func (h *HTTPHandler) handleTrustScript(w http.ResponseWriter, r *http.Request) 
 
 func (h *HTTPHandler) handleTrustScriptPS1(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	host := r.Host
@@ -829,7 +875,7 @@ func (h *HTTPHandler) handleTrustScriptPS1(w http.ResponseWriter, r *http.Reques
 
 func (h *HTTPHandler) handleTrustScriptBat(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	host := r.Host
@@ -852,171 +898,171 @@ func (h *HTTPHandler) handleTrustScriptBat(w http.ResponseWriter, r *http.Reques
 
 func (h *HTTPHandler) handleRotateAPIKey(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	var req models.RotateAPIKeyRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 	userID := r.URL.Query().Get("user_id")
 	if userID == "" {
-		jsonError(w, http.StatusBadRequest, "user_id required")
+		h.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
 	}
 	if err := h.reg.RotateOperatorAPIKey(req.OperatorID, userID); err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, models.RotateAPIKeyResponse{Success: true})
+	h.responder.JSON(w, http.StatusOK, models.RotateAPIKeyResponse{Success: true})
 }
 
 func (h *HTTPHandler) handleTerminateOperator(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	var req models.TerminateOperatorRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 	if req.OperatorID == "" {
-		jsonError(w, http.StatusBadRequest, "operator_id required")
+		h.responder.Error(w, http.StatusBadRequest, "operator_id required")
 		return
 	}
 	if req.UserID == "" {
-		jsonError(w, http.StatusBadRequest, "user_id required")
+		h.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
 	}
 	if err := h.reg.TerminateOperator(req.OperatorID, req.UserID, req.Reason); err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, models.TerminateOperatorResponse{Success: true, Message: "Operator terminated"})
+	h.responder.JSON(w, http.StatusOK, models.TerminateOperatorResponse{Success: true, Message: "Operator terminated"})
 }
 
 func (h *HTTPHandler) handleBindOperators(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	var req models.BindOperatorsRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	// Validate ownership
 	userID := r.URL.Query().Get("user_id")
 	if userID != "" && req.UserID != userID {
-		jsonError(w, http.StatusForbidden, "user_id mismatch")
+		h.responder.Error(w, http.StatusForbidden, "user_id mismatch")
 		return
 	}
 
 	resp, err := h.reg.BindOperators(req)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, resp)
+	h.responder.JSON(w, http.StatusOK, resp)
 }
 
 func (h *HTTPHandler) handleUnbindOperators(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	var req models.UnbindOperatorsRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	// Validate ownership
 	userID := r.URL.Query().Get("user_id")
 	if userID != "" && req.UserID != userID {
-		jsonError(w, http.StatusForbidden, "user_id mismatch")
+		h.responder.Error(w, http.StatusForbidden, "user_id mismatch")
 		return
 	}
 
 	resp, err := h.reg.UnbindOperators(req)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, resp)
+	h.responder.JSON(w, http.StatusOK, resp)
 }
 
 func (h *HTTPHandler) handleSetTargetContext(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	var req models.SetTargetContextRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	// Validate ownership
 	userID := r.URL.Query().Get("user_id")
 	if userID != "" && req.UserID != userID {
-		jsonError(w, http.StatusForbidden, "user_id mismatch")
+		h.responder.Error(w, http.StatusForbidden, "user_id mismatch")
 		return
 	}
 
 	resp, err := h.reg.SetTargetContext(req)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, resp)
+	h.responder.JSON(w, http.StatusOK, resp)
 }
 
 func (h *HTTPHandler) handleReauth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	// Reauth is basically a session refresh. For now, we validate the current session.
 	sessionID := h.auth.ExtractOperatorSessionID(r)
 	if sessionID == "" {
-		jsonError(w, http.StatusUnauthorized, "missing session id")
+		h.responder.Error(w, http.StatusUnauthorized, "missing session id")
 		return
 	}
 	op, err := h.auth.ValidateOperatorSession(sessionID)
 	if err != nil {
-		jsonError(w, http.StatusUnauthorized, err.Error())
+		h.responder.Error(w, http.StatusUnauthorized, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, models.ReauthResponse{
+	h.responder.JSON(w, http.StatusOK, models.ReauthResponse{
 		Success:  true,
 		Operator: op,
 	})
@@ -1026,7 +1072,7 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/db/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) == 0 || parts[0] == "" {
-		jsonError(w, http.StatusBadRequest, "collection required")
+		h.responder.Error(w, http.StatusBadRequest, "collection required")
 		return
 	}
 
@@ -1047,7 +1093,7 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if id == "" {
-		jsonError(w, http.StatusBadRequest, "document id required")
+		h.responder.Error(w, http.StatusBadRequest, "document id required")
 		return
 	}
 
@@ -1055,86 +1101,86 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		doc, err := h.db.DocGet(collection, id)
 		if err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		if doc == nil {
-			jsonError(w, http.StatusNotFound, fmt.Sprintf("document %s/%s not found", collection, id))
+			h.responder.Error(w, http.StatusNotFound, fmt.Sprintf("document %s/%s not found", collection, id))
 			return
 		}
-		jsonResponse(w, http.StatusOK, doc.ForWire())
+		h.responder.JSON(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodPut:
 		if !isDirectDBMutationAllowed(collection) {
-			jsonError(w, http.StatusConflict, governanceEnvelopeRedirectError)
+			h.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
-		body, err := readBody(r)
+		body, err := h.readBody(r)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 		if !json.Valid(body) {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 		if err := h.db.DocSet(collection, id, json.RawMessage(body)); err != nil {
 			if strings.Contains(err.Error(), "locked") {
-				jsonError(w, http.StatusServiceUnavailable, "database is locked")
+				h.responder.Error(w, http.StatusServiceUnavailable, "database is locked")
 			} else {
-				jsonError(w, http.StatusInternalServerError, err.Error())
+				h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			}
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
 
 	case http.MethodPatch:
 		if !isDirectDBMutationAllowed(collection) {
-			jsonError(w, http.StatusConflict, governanceEnvelopeRedirectError)
+			h.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
-		body, err := readBody(r)
+		body, err := h.readBody(r)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 		if !json.Valid(body) {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 		doc, err := h.db.DocUpdate(collection, id, json.RawMessage(body))
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
-				jsonError(w, http.StatusNotFound, err.Error())
+				h.responder.Error(w, http.StatusNotFound, err.Error())
 			} else if strings.Contains(err.Error(), "constraint") {
-				jsonError(w, http.StatusConflict, "database constraint violation")
+				h.responder.Error(w, http.StatusConflict, "database constraint violation")
 			} else if strings.Contains(err.Error(), "locked") {
-				jsonError(w, http.StatusServiceUnavailable, "database is locked")
+				h.responder.Error(w, http.StatusServiceUnavailable, "database is locked")
 			} else {
-				jsonError(w, http.StatusInternalServerError, err.Error())
+				h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			}
 			return
 		}
-		jsonResponse(w, http.StatusOK, doc.ForWire())
+		h.responder.JSON(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodDelete:
 		if !isDirectDBMutationAllowed(collection) {
-			jsonError(w, http.StatusConflict, governanceEnvelopeRedirectError)
+			h.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
 		deleted, err := h.db.DocDelete(collection, id)
 		if err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		if !deleted {
-			jsonError(w, http.StatusNotFound, "document not found")
+			h.responder.Error(w, http.StatusNotFound, "document not found")
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
 
 	default:
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
@@ -1147,7 +1193,7 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 
 func (h *HTTPHandler) handleAuditReceipts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -1155,14 +1201,14 @@ func (h *HTTPHandler) handleAuditReceipts(w http.ResponseWriter, r *http.Request
 	if txID != "" {
 		receipt, err := h.db.AuditVault.GetActionReceipt(txID)
 		if err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		if receipt == nil {
-			jsonError(w, http.StatusNotFound, "receipt not found")
+			h.responder.Error(w, http.StatusNotFound, "receipt not found")
 			return
 		}
-		jsonResponse(w, http.StatusOK, receipt)
+		h.responder.JSON(w, http.StatusOK, receipt)
 		return
 	}
 
@@ -1185,11 +1231,11 @@ func (h *HTTPHandler) handleAuditReceipts(w http.ResponseWriter, r *http.Request
 
 	receipts, err := h.db.AuditVault.ListActionReceipts(operatorSessionID, limit, offset)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, models.AuditReceiptsResponse{
+	h.responder.JSON(w, http.StatusOK, models.AuditReceiptsResponse{
 		Success:  true,
 		Receipts: receipts,
 	})
@@ -1197,7 +1243,7 @@ func (h *HTTPHandler) handleAuditReceipts(w http.ResponseWriter, r *http.Request
 
 func (h *HTTPHandler) handleAuditReceiptsExport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -1222,7 +1268,7 @@ func (h *HTTPHandler) handleAuditReceiptsExport(w http.ResponseWriter, r *http.R
 
 	receipts, err := h.db.AuditVault.ListActionReceiptsSince(since, limit)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -1242,44 +1288,44 @@ func (h *HTTPHandler) handleTrustedSigners(w http.ResponseWriter, r *http.Reques
 	case http.MethodGet:
 		signers, err := h.db.ListTrustedSigners()
 		if err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.TrustedSignersResponse{
+		h.responder.JSON(w, http.StatusOK, models.TrustedSignersResponse{
 			Success: true,
 			Signers: signers,
 		})
 
 	case http.MethodPost:
-		body, err := readBody(r)
+		body, err := h.readBody(r)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "failed to read body")
+			h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 			return
 		}
 		var signer models.TrustedSigner
 		if err := json.Unmarshal(body, &signer); err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid JSON")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
 			return
 		}
 		if signer.ID == "" || signer.PublicKey == "" {
-			jsonError(w, http.StatusBadRequest, "id and public_key_hex required")
+			h.responder.Error(w, http.StatusBadRequest, "id and public_key_hex required")
 			return
 		}
 		if err := h.db.AddTrustedSigner(signer); err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		jsonResponse(w, http.StatusCreated, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
 
 	default:
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
 func (h *HTTPHandler) handleTrustedSignerByID(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/api/governance/signers/")
 	if id == "" || strings.Contains(id, "/") {
-		jsonError(w, http.StatusBadRequest, "invalid signer id")
+		h.responder.Error(w, http.StatusBadRequest, "invalid signer id")
 		return
 	}
 
@@ -1287,31 +1333,31 @@ func (h *HTTPHandler) handleTrustedSignerByID(w http.ResponseWriter, r *http.Req
 	case http.MethodGet:
 		pubKey, err := h.db.GetTrustedSigner(id)
 		if err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		if pubKey == nil {
-			jsonError(w, http.StatusNotFound, "signer not found")
+			h.responder.Error(w, http.StatusNotFound, "signer not found")
 			return
 		}
 		// Return metadata rather than raw bytes
 		doc, _ := h.db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
-		jsonResponse(w, http.StatusOK, doc.ForWire())
+		h.responder.JSON(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodDelete:
 		deleted, err := h.db.DeleteTrustedSigner(id)
 		if err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		if !deleted {
-			jsonError(w, http.StatusNotFound, "signer not found")
+			h.responder.Error(w, http.StatusNotFound, "signer not found")
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
 
 	default:
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
@@ -1319,24 +1365,24 @@ func (h *HTTPHandler) handleSSEEvents(w http.ResponseWriter, r *http.Request, id
 	if id == "count" && r.Method == http.MethodGet {
 		count, err := h.db.SSEEventsCount()
 		if err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		jsonResponse(w, http.StatusOK, map[string]int64{"count": count})
+		h.responder.JSON(w, http.StatusOK, map[string]int64{"count": count})
 		return
 	}
 
 	if id == "" && r.Method == http.MethodDelete {
 		deleted, err := h.db.SSEEventsWipe()
 		if err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		jsonResponse(w, http.StatusOK, map[string]int64{"deleted": deleted})
+		h.responder.JSON(w, http.StatusOK, map[string]int64{"deleted": deleted})
 		return
 	}
 
-	jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+	h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 }
 
 // =============================================================================
@@ -1368,14 +1414,14 @@ type internalSSEPushPayload struct {
 
 func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	// Strictly verify that the caller is the G8EE app identity via mTLS peer certificate URI SAN
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 		h.logger.Warn("Unauthorized SSE push attempt: missing mTLS client certificate", "path", r.URL.Path)
-		jsonError(w, http.StatusUnauthorized, "mTLS client certificate required")
+		h.responder.Error(w, http.StatusUnauthorized, "mTLS client certificate required")
 		return
 	}
 
@@ -1390,24 +1436,24 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	}
 	if !isG8EE {
 		h.logger.Warn("Unauthorized SSE push attempt: not G8EE app identity", "path", r.URL.Path, "uris", cert.URIs)
-		jsonError(w, http.StatusForbidden, "unauthorized client identity")
+		h.responder.Error(w, http.StatusForbidden, "unauthorized client identity")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "failed to read body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
 	var p internalSSEPushPayload
 	if err := json.Unmarshal(body, &p); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	if len(p.Event) == 0 {
-		jsonError(w, http.StatusBadRequest, "event field is required")
+		h.responder.Error(w, http.StatusBadRequest, "event field is required")
 		return
 	}
 
@@ -1428,7 +1474,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 
 	if err := h.db.SSEEventsAppend(route, inner.Type, string(body)); err != nil {
 		h.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
-		jsonError(w, http.StatusBadRequest, err.Error())
+		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -1450,7 +1496,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		h.pubsub.Publish(channel, body)
 	}
 
-	jsonResponse(w, http.StatusOK, models.SSEPushResponse{
+	h.responder.JSON(w, http.StatusOK, models.SSEPushResponse{
 		Success:   true,
 		Delivered: 1,
 	})
@@ -1458,7 +1504,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 
 func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	q := r.URL.Query()
@@ -1476,7 +1522,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	// data leak.
 	operatorSessionID := h.auth.ExtractOperatorSessionID(r)
 	if operatorSessionID == "" {
-		jsonError(w, http.StatusUnauthorized, "missing operator session id")
+		h.responder.Error(w, http.StatusUnauthorized, "missing operator session id")
 		return
 	}
 
@@ -1489,22 +1535,22 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil {
 			h.logger.Error("Failed to fetch CLI session", string(constants.ConnectionStateError), err, "cli_session_id", route.CLISessionID)
-			jsonError(w, http.StatusInternalServerError, "failed to verify cli session")
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
 			return
 		}
 		if doc == nil {
-			jsonError(w, http.StatusForbidden, "cli session not found")
+			h.responder.Error(w, http.StatusForbidden, "cli session not found")
 			return
 		}
 		var cliSess models.CLISession
 		b, _ := json.Marshal(doc.ForWire())
 		if err := json.Unmarshal(b, &cliSess); err != nil {
 			h.logger.Error("Failed to unmarshal CLI session", string(constants.ConnectionStateError), err)
-			jsonError(w, http.StatusInternalServerError, "failed to verify cli session")
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
 			return
 		}
 		if cliSess.OperatorSessionID != operatorSessionID {
-			jsonError(w, http.StatusForbidden, "operator session does not own this cli session")
+			h.responder.Error(w, http.StatusForbidden, "operator session does not own this cli session")
 			return
 		}
 	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
@@ -1512,31 +1558,31 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
 		boundWebSessionID, found := h.db.KVGet(operatorBindKey)
 		if !found || boundWebSessionID != route.WebSessionID {
-			jsonError(w, http.StatusForbidden, "operator session does not own this web session")
+			h.responder.Error(w, http.StatusForbidden, "operator session does not own this web session")
 			return
 		}
 	case route.UserID != "" && route.WebSessionID == "" && route.CLISessionID == "":
 		// User-scoped events are accessible to any operator owned by that user.
 		op, err := h.auth.ValidateOperatorSession(operatorSessionID)
 		if err != nil {
-			jsonError(w, http.StatusUnauthorized, "invalid operator session")
+			h.responder.Error(w, http.StatusUnauthorized, "invalid operator session")
 			return
 		}
 		if op.UserID != route.UserID {
-			jsonError(w, http.StatusForbidden, "operator does not belong to this user")
+			h.responder.Error(w, http.StatusForbidden, "operator does not belong to this user")
 			return
 		}
 	default:
-		jsonError(w, http.StatusBadRequest, "exactly one of web_session_id, cli_session_id, user_id is required")
+		h.responder.Error(w, http.StatusBadRequest, "exactly one of web_session_id, cli_session_id, user_id is required")
 		return
 	}
 
 	rows, err := h.db.SSEEventsListSince(route, sinceID, limit)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, models.SSEEventsResponse{
+	h.responder.JSON(w, http.StatusOK, models.SSEEventsResponse{
 		Events: rows,
 		Count:  len(rows),
 	})
@@ -1544,7 +1590,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 
 func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -1563,7 +1609,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	// 1. Authorization (re-use logic from handleInternalSSEEvents)
 	operatorSessionID := h.auth.ExtractOperatorSessionID(r)
 	if operatorSessionID == "" {
-		jsonError(w, http.StatusUnauthorized, "missing operator session id")
+		h.responder.Error(w, http.StatusUnauthorized, "missing operator session id")
 		return
 	}
 
@@ -1572,17 +1618,17 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
 		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil || doc == nil {
-			jsonError(w, http.StatusForbidden, "not authorized for this cli session")
+			h.responder.Error(w, http.StatusForbidden, "not authorized for this cli session")
 			return
 		}
 		var cliSess models.CLISession
 		b, _ := json.Marshal(doc.ForWire())
 		if err := json.Unmarshal(b, &cliSess); err != nil {
-			jsonError(w, http.StatusInternalServerError, "failed to verify cli session")
+			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
 			return
 		}
 		if cliSess.OperatorSessionID != operatorSessionID {
-			jsonError(w, http.StatusForbidden, "not authorized for this cli session")
+			h.responder.Error(w, http.StatusForbidden, "not authorized for this cli session")
 			return
 		}
 		channel = "sse:cli:" + route.CLISessionID
@@ -1590,19 +1636,19 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
 		boundWebSessionID, found := h.db.KVGet(operatorBindKey)
 		if !found || boundWebSessionID != route.WebSessionID {
-			jsonError(w, http.StatusForbidden, "not authorized for this web session")
+			h.responder.Error(w, http.StatusForbidden, "not authorized for this web session")
 			return
 		}
 		channel = "sse:web:" + route.WebSessionID
 	case route.UserID != "" && route.WebSessionID == "" && route.CLISessionID == "":
 		op, err := h.auth.ValidateOperatorSession(operatorSessionID)
 		if err != nil || op.UserID != route.UserID {
-			jsonError(w, http.StatusForbidden, "not authorized for this user")
+			h.responder.Error(w, http.StatusForbidden, "not authorized for this user")
 			return
 		}
 		channel = "sse:user:" + route.UserID
 	default:
-		jsonError(w, http.StatusBadRequest, "exactly one routing target required")
+		h.responder.Error(w, http.StatusBadRequest, "exactly one routing target required")
 		return
 	}
 
@@ -1684,30 +1730,30 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 }
 
 func (h *HTTPHandler) handleDBQuery(w http.ResponseWriter, r *http.Request, collection string) {
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	var req models.DocQueryRequest
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &req); err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 	}
 
 	docs, err := h.db.DocQuery(collection, req.Filters, req.OrderBy, req.Limit)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	wire := make([]map[string]json.RawMessage, 0, len(docs))
 	for _, d := range docs {
 		wire = append(wire, d.ForWire())
 	}
-	jsonResponse(w, http.StatusOK, wire)
+	h.responder.JSON(w, http.StatusOK, wire)
 }
 
 // =============================================================================
@@ -1726,7 +1772,7 @@ func (h *HTTPHandler) handleDBQuery(w http.ResponseWriter, r *http.Request, coll
 func (h *HTTPHandler) handleKV(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/kv/")
 	if path == "" {
-		jsonError(w, http.StatusBadRequest, "key required")
+		h.responder.Error(w, http.StatusBadRequest, "key required")
 		return
 	}
 
@@ -1746,31 +1792,31 @@ func (h *HTTPHandler) handleKV(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(path, "/_ttl") {
 		key := strings.TrimSuffix(path, "/_ttl")
 		ttl := h.db.KVTTL(key)
-		jsonResponse(w, http.StatusOK, models.KVTTLResponse{TTL: ttl})
+		h.responder.JSON(w, http.StatusOK, models.KVTTLResponse{TTL: ttl})
 		return
 	}
 	if strings.HasSuffix(path, "/_expire") && r.Method == http.MethodPut {
 		key := strings.TrimSuffix(path, "/_expire")
-		body, err := readBody(r)
+		body, err := h.readBody(r)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 		var req models.KVExpireRequest
 		if err := json.Unmarshal(body, &req); err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 		if req.TTL <= 0 {
-			jsonError(w, http.StatusBadRequest, "ttl required and must be > 0")
+			h.responder.Error(w, http.StatusBadRequest, "ttl required and must be > 0")
 			return
 		}
 		ok := h.db.KVExpire(key, req.TTL)
 		if !ok {
-			jsonError(w, http.StatusNotFound, "key not found")
+			h.responder.Error(w, http.StatusNotFound, "key not found")
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
 		return
 	}
 
@@ -1780,50 +1826,50 @@ func (h *HTTPHandler) handleKV(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		value, found := h.db.KVGet(key)
 		if !found {
-			jsonError(w, http.StatusNotFound, "key not found")
+			h.responder.Error(w, http.StatusNotFound, "key not found")
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.KVGetResponse{Value: value})
+		h.responder.JSON(w, http.StatusOK, models.KVGetResponse{Value: value})
 
 	case http.MethodPut:
-		body, err := readBody(r)
+		body, err := h.readBody(r)
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 		var req models.KVSetRequest
 		if err := json.Unmarshal(body, &req); err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 		if err := h.db.KVSet(key, req.Value, req.TTL); err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
 
 	case http.MethodDelete:
 		if err := h.db.KVDelete(key); err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
 
 	default:
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
 func (h *HTTPHandler) handleKVKeys(w http.ResponseWriter, r *http.Request) {
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 	var req models.KVPatternRequest
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &req); err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 	}
@@ -1832,25 +1878,25 @@ func (h *HTTPHandler) handleKVKeys(w http.ResponseWriter, r *http.Request) {
 	}
 	keys, err := h.db.KVKeys(req.Pattern)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if keys == nil {
 		keys = []string{}
 	}
-	jsonResponse(w, http.StatusOK, models.KVKeysResponse{Keys: keys})
+	h.responder.JSON(w, http.StatusOK, models.KVKeysResponse{Keys: keys})
 }
 
 func (h *HTTPHandler) handleKVScan(w http.ResponseWriter, r *http.Request) {
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 	var req models.KVPatternRequest
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &req); err != nil {
-			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
 	}
@@ -1862,36 +1908,36 @@ func (h *HTTPHandler) handleKVScan(w http.ResponseWriter, r *http.Request) {
 	}
 	nextCursor, keys, err := h.db.KVScan(req.Pattern, req.Cursor, req.Count)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if keys == nil {
 		keys = []string{}
 	}
-	jsonResponse(w, http.StatusOK, models.KVScanResponse{Cursor: nextCursor, Keys: keys})
+	h.responder.JSON(w, http.StatusOK, models.KVScanResponse{Cursor: nextCursor, Keys: keys})
 }
 
 func (h *HTTPHandler) handleKVDeletePattern(w http.ResponseWriter, r *http.Request) {
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 	var req models.KVPatternRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 	if req.Pattern == "" {
-		jsonError(w, http.StatusBadRequest, "pattern required")
+		h.responder.Error(w, http.StatusBadRequest, "pattern required")
 		return
 	}
 	count, err := h.db.KVDeletePattern(req.Pattern)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	jsonResponse(w, http.StatusOK, models.KVDeletePatternResponse{Deleted: count})
+	h.responder.JSON(w, http.StatusOK, models.KVDeletePatternResponse{Deleted: count})
 }
 
 // =============================================================================
@@ -1925,54 +1971,54 @@ const maxBlobBodySize = 50 * 1024 * 1024 // 50 MB hard cap at the transport laye
 func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/blob/")
 	if path == "" {
-		jsonError(w, http.StatusBadRequest, "namespace required")
+		h.responder.Error(w, http.StatusBadRequest, "namespace required")
 		return
 	}
 
 	parts := strings.SplitN(path, "/", 3)
 	namespace := parts[0]
 	if !blobSegmentValid(namespace) {
-		jsonError(w, http.StatusBadRequest, "invalid namespace")
+		h.responder.Error(w, http.StatusBadRequest, "invalid namespace")
 		return
 	}
 
 	// DELETE /blob/{namespace} - delete entire namespace
 	if len(parts) == 1 {
 		if r.Method != http.MethodDelete {
-			jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+			h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
 		count, err := h.db.BlobDeleteNamespace(namespace)
 		if err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.BlobDeleteResponse{Deleted: count})
+		h.responder.JSON(w, http.StatusOK, models.BlobDeleteResponse{Deleted: count})
 		return
 	}
 
 	blobID := parts[1]
 	if !blobSegmentValid(blobID) {
-		jsonError(w, http.StatusBadRequest, "invalid blob id")
+		h.responder.Error(w, http.StatusBadRequest, "invalid blob id")
 		return
 	}
 
 	// GET /blob/{namespace}/{id}/meta
 	if len(parts) == 3 {
 		if parts[2] != "meta" {
-			jsonError(w, http.StatusBadRequest, "invalid path")
+			h.responder.Error(w, http.StatusBadRequest, "invalid path")
 			return
 		}
 		if r.Method != http.MethodGet {
-			jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+			h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
 		rec, ok := h.db.BlobMeta(namespace, blobID)
 		if !ok {
-			jsonError(w, http.StatusNotFound, "blob not found")
+			h.responder.Error(w, http.StatusNotFound, "blob not found")
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.BlobMetaResponse{
+		h.responder.JSON(w, http.StatusOK, models.BlobMetaResponse{
 			ID:          rec.ID,
 			Namespace:   rec.Namespace,
 			Size:        rec.Size,
@@ -1986,7 +2032,7 @@ func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		contentType := r.Header.Get("Content-Type")
 		if contentType == "" {
-			jsonError(w, http.StatusBadRequest, "Content-Type header required")
+			h.responder.Error(w, http.StatusBadRequest, "Content-Type header required")
 			return
 		}
 
@@ -1994,7 +2040,7 @@ func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 		if v := r.Header.Get("X-Blob-TTL"); v != "" {
 			n, err := strconv.Atoi(v)
 			if err != nil || n < 0 {
-				jsonError(w, http.StatusBadRequest, "X-Blob-TTL must be a non-negative integer")
+				h.responder.Error(w, http.StatusBadRequest, "X-Blob-TTL must be a non-negative integer")
 				return
 			}
 			ttl = n
@@ -2002,28 +2048,28 @@ func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 
 		body, err := io.ReadAll(io.LimitReader(r.Body, maxBlobBodySize+1))
 		if err != nil {
-			jsonError(w, http.StatusBadRequest, "failed to read body")
+			h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 			return
 		}
 		if int64(len(body)) > maxBlobBodySize {
-			jsonError(w, http.StatusRequestEntityTooLarge, "blob exceeds maximum size")
+			h.responder.Error(w, http.StatusRequestEntityTooLarge, "blob exceeds maximum size")
 			return
 		}
 		if len(body) == 0 {
-			jsonError(w, http.StatusBadRequest, "body must not be empty")
+			h.responder.Error(w, http.StatusBadRequest, "body must not be empty")
 			return
 		}
 
 		if err := h.db.BlobPut(namespace, blobID, body, contentType, ttl); err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
 
 	case http.MethodGet:
 		data, contentType, ok := h.db.BlobGet(namespace, blobID)
 		if !ok {
-			jsonError(w, http.StatusNotFound, "blob not found")
+			h.responder.Error(w, http.StatusNotFound, "blob not found")
 			return
 		}
 
@@ -2055,17 +2101,17 @@ func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		deleted, err := h.db.BlobDelete(namespace, blobID)
 		if err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		if !deleted {
-			jsonError(w, http.StatusNotFound, "blob not found")
+			h.responder.Error(w, http.StatusNotFound, "blob not found")
 			return
 		}
-		jsonResponse(w, http.StatusOK, models.BlobDeleteResponse{Deleted: 1})
+		h.responder.JSON(w, http.StatusOK, models.BlobDeleteResponse{Deleted: 1})
 
 	default:
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
@@ -2077,26 +2123,26 @@ func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 
 func (h *HTTPHandler) handlePubSubPublish(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 	var req models.PubSubPublishRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 	if req.Channel == "" {
-		jsonError(w, http.StatusBadRequest, "channel required")
+		h.responder.Error(w, http.StatusBadRequest, "channel required")
 		return
 	}
 	if !isMutationPubSubChannelAllowed(req.Channel) {
-		jsonError(w, http.StatusConflict, governanceEnvelopeRedirectError)
+		h.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 		return
 	}
 
@@ -2110,7 +2156,7 @@ func (h *HTTPHandler) handlePubSubPublish(w http.ResponseWriter, r *http.Request
 		// Not a string or not base64, treat as raw JSON fragment
 		receivers = h.pubsub.Publish(req.Channel, req.Data)
 	}
-	jsonResponse(w, http.StatusOK, models.PubSubPublishResponse{Receivers: receivers})
+	h.responder.JSON(w, http.StatusOK, models.PubSubPublishResponse{Receivers: receivers})
 }
 
 // =============================================================================
@@ -2120,13 +2166,13 @@ func (h *HTTPHandler) handlePubSubPublish(w http.ResponseWriter, r *http.Request
 // handlePasskeyRegisterChallenge generates a WebAuthn registration challenge.
 func (h *HTTPHandler) handlePasskeyRegisterChallenge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -2136,32 +2182,32 @@ func (h *HTTPHandler) handlePasskeyRegisterChallenge(w http.ResponseWriter, r *h
 		UserName string `json:"user_name"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	// [PIVOT] Enforce session-to-user binding for public browser registration
 	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
 		if req.UserID != "" && req.UserID != ctxUserID {
-			jsonError(w, http.StatusForbidden, "user_id mismatch with session")
+			h.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
 		}
 		req.UserID = ctxUserID
 	}
 
 	if req.UserID == "" {
-		jsonError(w, http.StatusBadRequest, "user_id required")
+		h.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
 	}
 
 	options, err := h.passkey.GenerateRegistrationChallenge(req.UserID, req.Email, req.UserName)
 	if err != nil {
 		h.logger.Warn("Passkey register challenge failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
-		jsonError(w, http.StatusBadRequest, err.Error())
+		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
+	h.responder.JSON(w, http.StatusOK, map[string]interface{}{
 		string(constants.AuthAuditResultSuccess): true,
 		"options":                                options,
 	})
@@ -2170,13 +2216,13 @@ func (h *HTTPHandler) handlePasskeyRegisterChallenge(w http.ResponseWriter, r *h
 // handlePasskeyRegisterVerify verifies a WebAuthn registration attestation.
 func (h *HTTPHandler) handlePasskeyRegisterVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -2185,35 +2231,35 @@ func (h *HTTPHandler) handlePasskeyRegisterVerify(w http.ResponseWriter, r *http
 		AttestationResponse *AttestationResponse `json:"attestation_response"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	// [PIVOT] Enforce session-to-user binding for public browser registration
 	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
 		if req.UserID != "" && req.UserID != ctxUserID {
-			jsonError(w, http.StatusForbidden, "user_id mismatch with session")
+			h.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
 		}
 		req.UserID = ctxUserID
 	}
 
 	if req.UserID == "" {
-		jsonError(w, http.StatusBadRequest, "user_id required")
+		h.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
 	}
 
 	cred, err := h.passkey.VerifyRegistration(req.UserID, r)
 	if err != nil {
 		h.logger.Warn("Passkey register verify failed", string(constants.ConnectionStateError), err, "userID", req.UserID)
-		jsonResponse(w, http.StatusOK, models.PasskeyVerifyResponse{
+		h.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
 			Success: false,
 			Error:   err.Error(),
 		})
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, models.PasskeyVerifyResponse{
+	h.responder.JSON(w, http.StatusOK, models.PasskeyVerifyResponse{
 		Success:    true,
 		Credential: cred,
 	})
@@ -2222,13 +2268,13 @@ func (h *HTTPHandler) handlePasskeyRegisterVerify(w http.ResponseWriter, r *http
 // handlePasskeyAuthChallenge generates a WebAuthn authentication challenge.
 func (h *HTTPHandler) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -2237,28 +2283,28 @@ func (h *HTTPHandler) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.
 		UserID string `json:"user_id"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	userID := req.UserID
 	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
 		if userID != "" && userID != ctxUserID {
-			jsonError(w, http.StatusForbidden, "user_id mismatch with session")
+			h.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
 		}
 		userID = ctxUserID
 	}
 
 	if userID == "" {
-		jsonError(w, http.StatusBadRequest, "user_id required")
+		h.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
 	}
 
 	options, err := h.passkey.GenerateAuthenticationChallenge(userID)
 	if err != nil {
 		h.logger.Warn("Passkey auth challenge failed", string(constants.ConnectionStateError), err, "userID", userID)
-		jsonResponse(w, http.StatusOK, models.PasskeyChallengeResponse{
+		h.responder.JSON(w, http.StatusOK, models.PasskeyChallengeResponse{
 			Success:    false,
 			Error:      err.Error(),
 			NeedsSetup: err.Error() == "no passkeys registered",
@@ -2266,7 +2312,7 @@ func (h *HTTPHandler) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, models.PasskeyChallengeResponse{
+	h.responder.JSON(w, http.StatusOK, models.PasskeyChallengeResponse{
 		Success: true,
 		Options: options,
 	})
@@ -2275,13 +2321,13 @@ func (h *HTTPHandler) handlePasskeyAuthChallenge(w http.ResponseWriter, r *http.
 // handlePasskeyAuthVerify verifies a WebAuthn authentication assertion.
 func (h *HTTPHandler) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -2291,28 +2337,28 @@ func (h *HTTPHandler) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Req
 		AssertionResponse *AssertionResponse `json:"assertion_response"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	userID := req.UserID
 	if ctxUserID, ok := r.Context().Value("user_id").(string); ok {
 		if userID != "" && userID != ctxUserID {
-			jsonError(w, http.StatusForbidden, "user_id mismatch with session")
+			h.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
 		}
 		userID = ctxUserID
 	}
 
 	if userID == "" {
-		jsonError(w, http.StatusBadRequest, "user_id required")
+		h.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
 	}
 
 	cred, err := h.passkey.VerifyAuthentication(userID, r)
 	if err != nil {
 		h.logger.Warn("Passkey auth verify failed", string(constants.ConnectionStateError), err, "userID", userID)
-		jsonResponse(w, http.StatusOK, map[string]interface{}{
+		h.responder.JSON(w, http.StatusOK, map[string]interface{}{
 			string(constants.AuthAuditResultSuccess): false,
 			string(constants.ConnectionStateError):   err.Error(),
 		})
@@ -2322,14 +2368,14 @@ func (h *HTTPHandler) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Req
 	webSession, err := h.passkey.CreateWebSession(userID)
 	if err != nil {
 		h.logger.Error("Failed to create web session after auth", string(constants.ConnectionStateError), err, "userID", userID)
-		jsonResponse(w, http.StatusOK, map[string]interface{}{
+		h.responder.JSON(w, http.StatusOK, map[string]interface{}{
 			string(constants.AuthAuditResultSuccess): false,
 			string(constants.ConnectionStateError):   "authentication succeeded but session creation failed",
 		})
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
+	h.responder.JSON(w, http.StatusOK, map[string]interface{}{
 		string(constants.AuthAuditResultSuccess): true,
 		"user_id":                                userID,
 		"credential":                             cred,
@@ -2343,24 +2389,24 @@ func (h *HTTPHandler) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Req
 // handlePasskeyCredentials lists passkey credentials for a user.
 func (h *HTTPHandler) handlePasskeyCredentials(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	userID := r.URL.Query().Get("user_id")
 	if userID == "" {
-		jsonError(w, http.StatusBadRequest, "user_id required")
+		h.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
 	}
 
 	creds, err := h.passkey.ListCredentials(userID)
 	if err != nil {
 		h.logger.Error("Failed to list credentials", string(constants.ConnectionStateError), err, "userID", userID)
-		jsonError(w, http.StatusInternalServerError, "failed to list credentials")
+		h.responder.Error(w, http.StatusInternalServerError, "failed to list credentials")
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, models.PasskeyCredentialsResponse{
+	h.responder.JSON(w, http.StatusOK, models.PasskeyCredentialsResponse{
 		Success:     true,
 		Credentials: creds,
 	})
@@ -2369,30 +2415,30 @@ func (h *HTTPHandler) handlePasskeyCredentials(w http.ResponseWriter, r *http.Re
 // handlePasskeyRevokeCredential revokes a specific passkey credential.
 func (h *HTTPHandler) handlePasskeyRevokeCredential(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	userID := r.URL.Query().Get("user_id")
 	if userID == "" {
-		jsonError(w, http.StatusBadRequest, "user_id required")
+		h.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
 	}
 
 	path := strings.TrimPrefix(r.URL.Path, "/api/auth/passkey/credentials/")
 	if path == "" {
-		jsonError(w, http.StatusBadRequest, "credential_id required")
+		h.responder.Error(w, http.StatusBadRequest, "credential_id required")
 		return
 	}
 
 	found, remaining, err := h.passkey.RevokeCredential(userID, path)
 	if err != nil {
 		h.logger.Error("Failed to revoke credential", string(constants.ConnectionStateError), err, "userID", userID)
-		jsonError(w, http.StatusInternalServerError, "failed to revoke credential")
+		h.responder.Error(w, http.StatusInternalServerError, "failed to revoke credential")
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, models.PasskeyRevokeResponse{
+	h.responder.JSON(w, http.StatusOK, models.PasskeyRevokeResponse{
 		Success:   true,
 		Found:     found,
 		Remaining: remaining,
@@ -2403,13 +2449,13 @@ func (h *HTTPHandler) handlePasskeyRevokeCredential(w http.ResponseWriter, r *ht
 // Requires mTLS - only CLI/internal callers with a signed certificate can create users.
 func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "failed to read body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
@@ -2418,26 +2464,22 @@ func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 		Name  string `json:"name"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
-	if req.Email == "" {
-		jsonError(w, http.StatusBadRequest, "email required")
-		return
-	}
-
-	user, err := h.userSvc.CreateUser(req.Email, req.Name)
+	// Zero-PII: Email-based user creation removed
+	// Users are created with only a generated ID and passkey credentials
+	user, err := h.userSvc.CreateUser()
 	if err != nil {
-		h.logger.Warn("Failed to create user", string(constants.ConnectionStateError), err, "email", req.Email)
-		jsonError(w, http.StatusConflict, err.Error())
+		h.logger.Warn("Failed to create user", string(constants.ConnectionStateError), err)
+		h.responder.Error(w, http.StatusConflict, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusCreated, map[string]interface{}{
+	h.responder.JSON(w, http.StatusCreated, map[string]interface{}{
 		string(constants.AuthAuditResultSuccess): true,
 		"user_id":                                user.ID,
-		"email":                                  user.Email,
 	})
 }
 
@@ -2447,7 +2489,7 @@ func (h *HTTPHandler) handleApprovalAction(w http.ResponseWriter, r *http.Reques
 	path := strings.TrimPrefix(r.URL.Path, "/api/approve/")
 	parts := strings.Split(path, "/")
 	if len(parts) < 1 {
-		jsonError(w, http.StatusBadRequest, "invalid request path")
+		h.responder.Error(w, http.StatusBadRequest, "invalid request path")
 		return
 	}
 
@@ -2459,14 +2501,14 @@ func (h *HTTPHandler) handleApprovalAction(w http.ResponseWriter, r *http.Reques
 
 	userID, ok := r.Context().Value(userIDKey).(string)
 	if !ok || userID == "" {
-		jsonError(w, http.StatusUnauthorized, "unauthorized")
+		h.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	// If no action specified, treat as direct CLI approval (POST with mtls_cert_fingerprint)
 	if action == "" {
 		if r.Method != http.MethodPost {
-			jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+			h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
 		h.handleCLIApproval(w, r, txHash, userID)
@@ -2479,13 +2521,13 @@ func (h *HTTPHandler) handleApprovalAction(w http.ResponseWriter, r *http.Reques
 	case "verify":
 		h.handleApprovalVerify(w, r, txHash, userID)
 	default:
-		jsonError(w, http.StatusBadRequest, "unknown action")
+		h.responder.Error(w, http.StatusBadRequest, "unknown action")
 	}
 }
 
 func (h *HTTPHandler) handleApprovalChallenge(w http.ResponseWriter, r *http.Request, txHash, userID string) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -2493,7 +2535,7 @@ func (h *HTTPHandler) handleApprovalChallenge(w http.ResponseWriter, r *http.Req
 	// (or the user is authorized to approve it)
 	suspendedTx, ok := h.mcp.GetSuspendedTransaction(txHash)
 	if !ok {
-		jsonError(w, http.StatusNotFound, "transaction not found or expired")
+		h.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
 		return
 	}
 
@@ -2501,47 +2543,47 @@ func (h *HTTPHandler) handleApprovalChallenge(w http.ResponseWriter, r *http.Req
 	// want to restrict this to the UserID stashed in the suspended transaction
 	// if it was initiated by a specific user.
 	if suspendedTx.UserID != "" && suspendedTx.UserID != userID {
-		jsonError(w, http.StatusForbidden, "transaction belongs to another user")
+		h.responder.Error(w, http.StatusForbidden, "transaction belongs to another user")
 		return
 	}
 
 	options, err := h.passkey.GenerateApprovalChallenge(userID, txHash)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, options)
+	h.responder.JSON(w, http.StatusOK, options)
 }
 
 func (h *HTTPHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Request, txHash, userID string) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	// Retrieve suspended transaction to ensure it exists and belongs to the user
 	suspendedTx, ok := h.mcp.GetSuspendedTransaction(txHash)
 	if !ok {
-		jsonError(w, http.StatusNotFound, "transaction not found or expired")
+		h.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
 		return
 	}
 
 	// Verify the logged-in user is authorized to approve this transaction
 	if suspendedTx.UserID != "" && suspendedTx.UserID != userID {
-		jsonError(w, http.StatusForbidden, "transaction belongs to another user")
+		h.responder.Error(w, http.StatusForbidden, "transaction belongs to another user")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "failed to read body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
 	var req AssertionResponse
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -2558,14 +2600,14 @@ func (h *HTTPHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		// If it's still a verification failure, return the receipt if available
 		if receipt != nil {
-			jsonResponse(w, http.StatusForbidden, receipt)
+			h.responder.JSON(w, http.StatusForbidden, receipt)
 			return
 		}
-		jsonError(w, http.StatusForbidden, err.Error())
+		h.responder.Error(w, http.StatusForbidden, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, receipt)
+	h.responder.JSON(w, http.StatusOK, receipt)
 }
 
 // handleCLIApproval handles CLI-based approval using mTLS cert fingerprint.
@@ -2573,19 +2615,19 @@ func (h *HTTPHandler) handleCLIApproval(w http.ResponseWriter, r *http.Request, 
 	// Retrieve suspended transaction to ensure it exists and belongs to the user
 	suspendedTx, ok := h.mcp.GetSuspendedTransaction(txHash)
 	if !ok {
-		jsonError(w, http.StatusNotFound, "transaction not found or expired")
+		h.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
 		return
 	}
 
 	// Verify the logged-in user is authorized to approve this transaction
 	if suspendedTx.UserID != "" && suspendedTx.UserID != userID {
-		jsonError(w, http.StatusForbidden, "transaction belongs to another user")
+		h.responder.Error(w, http.StatusForbidden, "transaction belongs to another user")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "failed to read body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
@@ -2593,12 +2635,12 @@ func (h *HTTPHandler) handleCLIApproval(w http.ResponseWriter, r *http.Request, 
 		MtlsCertFingerprint string `json:"mtls_cert_fingerprint"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
 	if req.MtlsCertFingerprint == "" {
-		jsonError(w, http.StatusBadRequest, "mtls_cert_fingerprint required")
+		h.responder.Error(w, http.StatusBadRequest, "mtls_cert_fingerprint required")
 		return
 	}
 
@@ -2612,20 +2654,20 @@ func (h *HTTPHandler) handleCLIApproval(w http.ResponseWriter, r *http.Request, 
 	if err != nil {
 		// If it's still a verification failure, return the receipt if available
 		if receipt != nil {
-			jsonResponse(w, http.StatusForbidden, receipt)
+			h.responder.JSON(w, http.StatusForbidden, receipt)
 			return
 		}
-		jsonError(w, http.StatusForbidden, err.Error())
+		h.responder.Error(w, http.StatusForbidden, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, receipt)
+	h.responder.JSON(w, http.StatusOK, receipt)
 }
 
 // handleApprovalPage serves the OOB approval UI for suspended MCP/A2A transactions.
 func (h *HTTPHandler) handleApprovalPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -2809,13 +2851,13 @@ func (h *HTTPHandler) handleApprovalPage(w http.ResponseWriter, r *http.Request)
 // handleListSuspendedTransactions lists all suspended transactions awaiting approval.
 func (h *HTTPHandler) handleListSuspendedTransactions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	userID, ok := r.Context().Value(userIDKey).(string)
 	if !ok || userID == "" {
-		jsonError(w, http.StatusUnauthorized, "unauthorized")
+		h.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -2828,7 +2870,7 @@ func (h *HTTPHandler) handleListSuspendedTransactions(w http.ResponseWriter, r *
 	// Get suspended transactions from the gateway DB service
 	transactions, err := h.db.ListSuspendedTransactions(queryUserID)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, fmt.Sprintf("failed to list suspended transactions: %v", err))
+		h.responder.Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to list suspended transactions: %v", err))
 		return
 	}
 
@@ -2854,7 +2896,7 @@ func (h *HTTPHandler) handleListSuspendedTransactions(w http.ResponseWriter, r *
 		})
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
+	h.responder.JSON(w, http.StatusOK, map[string]interface{}{
 		"transactions": txResponses,
 	})
 }
@@ -2866,13 +2908,13 @@ func (h *HTTPHandler) handleListSuspendedTransactions(w http.ResponseWriter, r *
 // handleAuthLoginChallenge generates an auth challenge for a user email.
 func (h *HTTPHandler) handleAuthLoginChallenge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "failed to read body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
@@ -2880,27 +2922,27 @@ func (h *HTTPHandler) handleAuthLoginChallenge(w http.ResponseWriter, r *http.Re
 		Email string `json:"email"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
 	user, err := h.userSvc.FindByEmail(req.Email)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, "failed to find user")
+		h.responder.Error(w, http.StatusInternalServerError, "failed to find user")
 		return
 	}
 	if user == nil {
-		jsonError(w, http.StatusNotFound, "user not found")
+		h.responder.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
 
 	options, err := h.passkey.GenerateAuthenticationChallenge(user.ID)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, models.AuthLoginChallengeResponse{
+	h.responder.JSON(w, http.StatusOK, models.AuthLoginChallengeResponse{
 		Success: true,
 		UserID:  user.ID,
 		Options: options,
@@ -2910,13 +2952,13 @@ func (h *HTTPHandler) handleAuthLoginChallenge(w http.ResponseWriter, r *http.Re
 // handleAuthLoginVerify verifies an auth assertion and sets a web session cookie.
 func (h *HTTPHandler) handleAuthLoginVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "failed to read body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
@@ -2925,19 +2967,19 @@ func (h *HTTPHandler) handleAuthLoginVerify(w http.ResponseWriter, r *http.Reque
 		AssertionResponse *AssertionResponse `json:"assertion_response"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
 	_, err = h.passkey.VerifyAuthentication(req.UserID, r)
 	if err != nil {
-		jsonError(w, http.StatusUnauthorized, err.Error())
+		h.responder.Error(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
 	webSession, err := h.passkey.CreateWebSession(req.UserID)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, "failed to create web session")
+		h.responder.Error(w, http.StatusInternalServerError, "failed to create web session")
 		return
 	}
 
@@ -2952,7 +2994,7 @@ func (h *HTTPHandler) handleAuthLoginVerify(w http.ResponseWriter, r *http.Reque
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	jsonResponse(w, http.StatusOK, models.AuthLoginVerifyResponse{
+	h.responder.JSON(w, http.StatusOK, models.AuthLoginVerifyResponse{
 		Success:      true,
 		UserID:       req.UserID,
 		WebSessionID: webSession.ID,
@@ -2978,20 +3020,20 @@ func (h *HTTPHandler) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+	h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
 }
 
 // handleBootstrap creates the first user in the system and optionally issues a CLI mTLS cert.
 // Rejects with 403 Forbidden if any users already exist (unless rotating an active bootstrap user over loopback).
 func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "failed to read body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
@@ -3003,12 +3045,12 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		SystemFingerprint string `json:"system_fingerprint"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
 
 	if req.Email == "" {
-		jsonError(w, http.StatusBadRequest, "email required")
+		h.responder.Error(w, http.StatusBadRequest, "email required")
 		return
 	}
 
@@ -3024,7 +3066,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		ip := net.ParseIP(host)
 		if ip == nil || !ip.IsLoopback() {
 			h.logger.Warn("Bootstrap CSR request rejected: not from loopback", "remote_addr", r.RemoteAddr)
-			jsonError(w, http.StatusForbidden, "CSR auto-issue only available over loopback")
+			h.responder.Error(w, http.StatusForbidden, "CSR auto-issue only available over loopback")
 			return
 		}
 	}
@@ -3033,7 +3075,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	bootstrapUser, err := h.userSvc.FindBootstrapUser()
 	if err != nil {
 		h.logger.Error("Failed to check for existing bootstrap user", string(constants.ConnectionStateError), err)
-		jsonError(w, http.StatusInternalServerError, "bootstrap check failed")
+		h.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
 		return
 	}
 
@@ -3042,17 +3084,17 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		// Bootstrap user exists - check if rotation is allowed
 		if !bootstrapUser.IsActive() {
 			h.logger.Warn("Bootstrap user is disabled, refusing rotation", "user_id", bootstrapUser.ID)
-			jsonError(w, http.StatusConflict, "bootstrap user is disabled, cannot rotate")
+			h.responder.Error(w, http.StatusConflict, "bootstrap user is disabled, cannot rotate")
 			return
 		}
 		if !csrRequested {
 			h.logger.Warn("Bootstrap user exists but no CSR requested", "user_id", bootstrapUser.ID)
-			jsonError(w, http.StatusForbidden, "bootstrap already exists, CSR required for rotation")
+			h.responder.Error(w, http.StatusForbidden, "bootstrap already exists, CSR required for rotation")
 			return
 		}
 		// Rotation allowed: active bootstrap user + CSR + loopback
 		user = bootstrapUser
-		h.logger.Info("[BOOTSTRAP] Rotating existing bootstrap user", "user_id", user.ID, "email", user.Email)
+		h.logger.Info("[BOOTSTRAP] Rotating existing bootstrap user", "user_id", user.ID)
 	} else {
 		// No bootstrap user exists - create one.
 		// Defense-in-depth: refuse if any user already exists, so bootstrap can
@@ -3060,20 +3102,21 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		hasUsers, err := h.userSvc.HasAnyUsers()
 		if err != nil {
 			h.logger.Error("Failed to check for existing users during bootstrap", string(constants.ConnectionStateError), err)
-			jsonError(w, http.StatusInternalServerError, "bootstrap check failed")
+			h.responder.Error(w, http.StatusInternalServerError, "bootstrap check failed")
 			return
 		}
 		if hasUsers {
 			h.logger.Warn("Bootstrap attempted on non-empty system", "remote_addr", r.RemoteAddr)
-			jsonError(w, http.StatusForbidden, "bootstrap only available for initial setup")
+			h.responder.Error(w, http.StatusForbidden, "bootstrap only available for initial setup")
 			return
 		}
 
 		// Create the bootstrap user
-		user, err = h.userSvc.CreateBootstrapUser(req.Email, req.Name)
+		// Zero-PII: Bootstrap user created with only generated ID
+		user, err = h.userSvc.CreateBootstrapUser()
 		if err != nil {
-			h.logger.Error("Failed to create bootstrap user", string(constants.ConnectionStateError), err, "email", req.Email)
-			jsonError(w, http.StatusInternalServerError, "failed to create user")
+			h.logger.Error("Failed to create bootstrap user", string(constants.ConnectionStateError), err)
+			h.responder.Error(w, http.StatusInternalServerError, "failed to create user")
 			return
 		}
 	}
@@ -3082,7 +3125,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	webSession, err := h.passkey.CreateWebSession(user.ID)
 	if err != nil {
 		h.logger.Error("Failed to create web session for bootstrap user", string(constants.ConnectionStateError), err, "user_id", user.ID)
-		jsonError(w, http.StatusInternalServerError, "user created but web session failed")
+		h.responder.Error(w, http.StatusInternalServerError, "user created but web session failed")
 		return
 	}
 
@@ -3131,7 +3174,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		certPEM, chainPEM, err := h.pki.SignCSR(req.CSRPEM, constants.LeafTypeOperator, orgID, operatorID, user.ID, sessionID)
 		if err != nil {
 			h.logger.Error("Failed to sign bootstrap CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
-			jsonError(w, http.StatusInternalServerError, "failed to sign CSR")
+			h.responder.Error(w, http.StatusInternalServerError, "failed to sign CSR")
 			return
 		}
 
@@ -3140,14 +3183,14 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		// CLI certificate generation (mandatory)
 		if req.CLICSRPEM == "" {
 			h.logger.Error("Bootstrap request missing mandatory CLI CSR", "user_id", user.ID)
-			jsonError(w, http.StatusBadRequest, "cli_csr_pem is mandatory")
+			h.responder.Error(w, http.StatusBadRequest, "cli_csr_pem is mandatory")
 			return
 		}
 
 		cliCertPEM, cliCertChainPEM, err := h.pki.SignCSR(req.CLICSRPEM, constants.LeafTypeCLI, "", "", user.ID, cliSessionID)
 		if err != nil {
 			h.logger.Error("Failed to sign bootstrap CLI CSR", string(constants.ConnectionStateError), err, "user_id", user.ID)
-			jsonError(w, http.StatusInternalServerError, "failed to sign CLI CSR")
+			h.responder.Error(w, http.StatusInternalServerError, "failed to sign CLI CSR")
 			return
 		}
 
@@ -3159,12 +3202,12 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		opBytes, err := json.Marshal(operator)
 		if err != nil {
 			h.logger.Error("Failed to marshal operator document", string(constants.ConnectionStateError), err)
-			jsonError(w, http.StatusInternalServerError, "failed to create operator")
+			h.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 			return
 		}
 		if err := h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 			h.logger.Error("Failed to persist operator document", string(constants.ConnectionStateError), err)
-			jsonError(w, http.StatusInternalServerError, "failed to create operator")
+			h.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 			return
 		}
 
@@ -3188,7 +3231,7 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		)
 		if err != nil {
 			h.logger.Error("Failed to persist sessions during bootstrap", string(constants.ConnectionStateError), err)
-			jsonError(w, http.StatusInternalServerError, "failed to persist sessions")
+			h.responder.Error(w, http.StatusInternalServerError, "failed to persist sessions")
 			return
 		}
 
@@ -3201,29 +3244,29 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		response["cli_cert"] = cliCertPEM
 		response["cli_cert_chain"] = cliCertChainPEM
 
-		h.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI cert", "user_id", user.ID, "email", user.Email, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
+		h.logger.Info("[BOOTSTRAP] System initialized with bootstrap user and CLI cert", "user_id", user.ID, "operator_id", operatorID, "cli_session_id_prefix", cliSessionID[:8])
 	} else {
-		h.logger.Info("[BOOTSTRAP] System initialized with bootstrap user (no CSR)", "user_id", user.ID, "email", user.Email)
+		h.logger.Info("[BOOTSTRAP] System initialized with bootstrap user (no CSR)", "user_id", user.ID)
 	}
 
-	jsonResponse(w, http.StatusCreated, response)
+	h.responder.JSON(w, http.StatusCreated, response)
 }
 
 // handleBootstrapStatus returns whether the system has been bootstrapped (at least one user exists).
 func (h *HTTPHandler) handleBootstrapStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	hasUsers, err := h.userSvc.HasAnyUsers()
 	if err != nil {
 		h.logger.Error("Failed to check for existing users", string(constants.ConnectionStateError), err)
-		jsonError(w, http.StatusInternalServerError, "status check failed")
+		h.responder.Error(w, http.StatusInternalServerError, "status check failed")
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, models.BootstrapStatusResponse{
+	h.responder.JSON(w, http.StatusOK, models.BootstrapStatusResponse{
 		Bootstrapped: hasUsers,
 	})
 }
@@ -3232,21 +3275,21 @@ func (h *HTTPHandler) handleBootstrapStatus(w http.ResponseWriter, r *http.Reque
 func (h *HTTPHandler) handleUserMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value("user_id").(string)
 	if !ok {
-		jsonError(w, http.StatusUnauthorized, "unauthorized")
+		h.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	user, err := h.userSvc.GetByID(userID)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, "failed to get user")
+		h.responder.Error(w, http.StatusInternalServerError, "failed to get user")
 		return
 	}
 	if user == nil {
-		jsonError(w, http.StatusNotFound, "user not found")
+		h.responder.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, models.UserMeResponse{
+	h.responder.JSON(w, http.StatusOK, models.UserMeResponse{
 		Success: true,
 		User:    user,
 	})
@@ -3256,7 +3299,7 @@ func (h *HTTPHandler) handleUserMe(w http.ResponseWriter, r *http.Request) {
 func (h *HTTPHandler) handleWebSession(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value("user_id").(string)
 	if !ok {
-		jsonError(w, http.StatusUnauthorized, "unauthorized")
+		h.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -3266,7 +3309,7 @@ func (h *HTTPHandler) handleWebSession(w http.ResponseWriter, r *http.Request) {
 		webSessionID = cookie.Value
 	}
 
-	jsonResponse(w, http.StatusOK, models.WebSessionResponse{
+	h.responder.JSON(w, http.StatusOK, models.WebSessionResponse{
 		Success:      true,
 		UserID:       userID,
 		WebSessionID: webSessionID,

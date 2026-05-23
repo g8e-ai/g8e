@@ -27,6 +27,7 @@ import (
 )
 
 func TestActuatorPublicKeyExport(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)

@@ -23,6 +23,7 @@ import (
 )
 
 func TestCompress_RoundTrip(t *testing.T) {
+	t.Parallel()
 	original := []byte("hello world, this is some data to compress")
 
 	compressed, err := Compress(original)
@@ -36,6 +37,7 @@ func TestCompress_RoundTrip(t *testing.T) {
 }
 
 func TestCompress_EmptyInput(t *testing.T) {
+	t.Parallel()
 	compressed, err := Compress(nil)
 	require.NoError(t, err)
 	assert.Nil(t, compressed)
@@ -46,6 +48,7 @@ func TestCompress_EmptyInput(t *testing.T) {
 }
 
 func TestCompress_LargeInput(t *testing.T) {
+	t.Parallel()
 	original := []byte(strings.Repeat("abcdefghij", 10000))
 
 	compressed, err := Compress(original)
@@ -59,6 +62,7 @@ func TestCompress_LargeInput(t *testing.T) {
 }
 
 func TestCompress_BinaryData(t *testing.T) {
+	t.Parallel()
 	original := make([]byte, 256)
 	for i := range original {
 		original[i] = byte(i)
@@ -74,6 +78,7 @@ func TestCompress_BinaryData(t *testing.T) {
 }
 
 func TestDecompress_EmptyInput(t *testing.T) {
+	t.Parallel()
 	decompressed, err := Decompress(nil)
 	require.NoError(t, err)
 	assert.Nil(t, decompressed)
@@ -84,12 +89,14 @@ func TestDecompress_EmptyInput(t *testing.T) {
 }
 
 func TestDecompress_InvalidData(t *testing.T) {
+	t.Parallel()
 	_, err := Decompress([]byte("this is not gzip data"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "gzip reader init failed")
 }
 
 func TestDecompress_TruncatedData(t *testing.T) {
+	t.Parallel()
 	original := []byte("some data to compress and then truncate")
 	compressed, err := Compress(original)
 	require.NoError(t, err)
@@ -103,6 +110,7 @@ func TestDecompress_TruncatedData(t *testing.T) {
 }
 
 func TestHashBytes_Deterministic(t *testing.T) {
+	t.Parallel()
 	data := []byte("test input")
 	h1 := HashBytes(data)
 	h2 := HashBytes(data)
@@ -110,17 +118,20 @@ func TestHashBytes_Deterministic(t *testing.T) {
 }
 
 func TestHashBytes_KnownValue(t *testing.T) {
+	t.Parallel()
 	h := HashBytes([]byte(""))
 	assert.Equal(t, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", h)
 }
 
 func TestHashBytes_DifferentInputsDifferentHashes(t *testing.T) {
+	t.Parallel()
 	h1 := HashBytes([]byte("aaa"))
 	h2 := HashBytes([]byte("bbb"))
 	assert.NotEqual(t, h1, h2)
 }
 
 func TestHashBytes_HexEncoded(t *testing.T) {
+	t.Parallel()
 	h := HashBytes([]byte("data"))
 	assert.Len(t, h, 64, "SHA-256 hex string must be 64 characters")
 	for _, c := range h {
@@ -130,21 +141,25 @@ func TestHashBytes_HexEncoded(t *testing.T) {
 }
 
 func TestHashString_MatchesHashBytes(t *testing.T) {
+	t.Parallel()
 	s := "some string value"
 	assert.Equal(t, HashBytes([]byte(s)), HashString(s))
 }
 
 func TestHashString_Empty(t *testing.T) {
+	t.Parallel()
 	h := HashString("")
 	assert.Equal(t, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", h)
 }
 
 func TestHashBytes_NilInput(t *testing.T) {
+	t.Parallel()
 	h := HashBytes(nil)
 	assert.Equal(t, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", h, "nil should hash the same as empty")
 }
 
 func TestCompress_SingleByte(t *testing.T) {
+	t.Parallel()
 	original := []byte{0x42}
 
 	compressed, err := Compress(original)
@@ -157,6 +172,7 @@ func TestCompress_SingleByte(t *testing.T) {
 }
 
 func TestCompress_Decompress_AllZeroBytes(t *testing.T) {
+	t.Parallel()
 	original := make([]byte, 1024)
 
 	compressed, err := Compress(original)
@@ -169,6 +185,7 @@ func TestCompress_Decompress_AllZeroBytes(t *testing.T) {
 }
 
 func TestCompress_OutputIsValidGzip(t *testing.T) {
+	t.Parallel()
 	compressed, err := Compress([]byte("valid gzip test"))
 	require.NoError(t, err)
 
@@ -177,6 +194,7 @@ func TestCompress_OutputIsValidGzip(t *testing.T) {
 }
 
 func TestCompress_Decompress_PreservesEmptyString(t *testing.T) {
+	t.Parallel()
 	original := []byte(" ")
 
 	compressed, err := Compress(original)

@@ -21,12 +21,14 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/responder"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAuthStatusIndependence(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -38,9 +40,11 @@ func TestAuthStatusIndependence(t *testing.T) {
 	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
-	auth := NewAuthService(db, pki, logger, userSvc, secretsDir)
+	resp := responder.New(logger)
+	auth := NewAuthService(db, pki, logger, userSvc, resp, secretsDir)
 
 	t.Run("ValidateOperatorSession succeeds even if status is OFFLINE", func(t *testing.T) {
+		t.Parallel()
 		sessionID := "test-session-offline"
 		opID := "op-offline"
 		userID := "user-offline"
@@ -76,6 +80,7 @@ func TestAuthStatusIndependence(t *testing.T) {
 	})
 
 	t.Run("ValidateOperatorSession fails if session is expired", func(t *testing.T) {
+		t.Parallel()
 		sessionID := "test-session-expired"
 		opID := "op-expired"
 		userID := "user-expired"
@@ -112,6 +117,7 @@ func TestAuthStatusIndependence(t *testing.T) {
 	})
 
 	t.Run("ValidateOperatorSession fails if status is TERMINATED", func(t *testing.T) {
+		t.Parallel()
 		sessionID := "test-session-terminated"
 		opID := "op-terminated"
 		userID := "user-terminated"
@@ -141,6 +147,7 @@ func TestAuthStatusIndependence(t *testing.T) {
 }
 
 func TestApiKeyStatusIndependence(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -151,6 +158,7 @@ func TestApiKeyStatusIndependence(t *testing.T) {
 	apiKeySvc := NewApiKeyService(db, logger)
 
 	t.Run("ValidateKey succeeds even if status is STALE", func(t *testing.T) {
+		t.Parallel()
 		rawKey := "g8e-test-key-stale-12345678901234"
 		docID := rawKey[:20]
 		userID := "user-stale"
@@ -174,6 +182,7 @@ func TestApiKeyStatusIndependence(t *testing.T) {
 	})
 
 	t.Run("ValidateKey fails if status is TERMINATED", func(t *testing.T) {
+		t.Parallel()
 		rawKey := "g8e-test-key-term-12345678901234"
 		docID := rawKey[:20]
 		userID := "user-term"

@@ -23,6 +23,7 @@ import (
 )
 
 func TestFormatTimestamp_NormalizesToUTC(t *testing.T) {
+	t.Parallel()
 	loc, err := time.LoadLocation("America/New_York")
 	require.NoError(t, err)
 
@@ -36,6 +37,7 @@ func TestFormatTimestamp_NormalizesToUTC(t *testing.T) {
 }
 
 func TestFormatTimestamp_RFC3339Nano(t *testing.T) {
+	t.Parallel()
 	ts := time.Date(2025, 1, 2, 3, 4, 5, 123456789, time.UTC)
 	result := FormatTimestamp(ts)
 
@@ -43,11 +45,13 @@ func TestFormatTimestamp_RFC3339Nano(t *testing.T) {
 }
 
 func TestFormatTimestamp_AlreadyUTC(t *testing.T) {
+	t.Parallel()
 	ts := time.Date(2025, 3, 10, 8, 30, 0, 0, time.UTC)
 	assert.Equal(t, "2025-03-10T08:30:00Z", FormatTimestamp(ts))
 }
 
 func TestNowTimestamp_IsUTCRFC3339Nano(t *testing.T) {
+	t.Parallel()
 	before := time.Now().UTC()
 	result := NowTimestamp()
 	after := time.Now().UTC()
@@ -59,6 +63,7 @@ func TestNowTimestamp_IsUTCRFC3339Nano(t *testing.T) {
 }
 
 func TestParseTimestamp_CanonicalFormat(t *testing.T) {
+	t.Parallel()
 	ts := time.Date(2025, 6, 15, 10, 20, 30, 99443000, time.UTC)
 	formatted := FormatTimestamp(ts)
 
@@ -68,18 +73,21 @@ func TestParseTimestamp_CanonicalFormat(t *testing.T) {
 }
 
 func TestParseTimestamp_EmptyString(t *testing.T) {
+	t.Parallel()
 	_, err := ParseTimestamp("")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "empty timestamp string")
 }
 
 func TestParseTimestamp_UnrecognizedFormat(t *testing.T) {
+	t.Parallel()
 	_, err := ParseTimestamp("not-a-timestamp")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unrecognized timestamp format")
 }
 
 func TestFormatParseRoundTrip(t *testing.T) {
+	t.Parallel()
 	original := time.Date(2025, 12, 31, 23, 59, 59, 987654321, time.UTC)
 	formatted := FormatTimestamp(original)
 
@@ -89,6 +97,7 @@ func TestFormatParseRoundTrip(t *testing.T) {
 }
 
 func TestFormatTimestamp_ZSuffixNotOffsetNotation(t *testing.T) {
+	t.Parallel()
 	ts := time.Date(2026, 3, 3, 19, 5, 0, 0, time.UTC)
 	result := FormatTimestamp(ts)
 
@@ -98,24 +107,28 @@ func TestFormatTimestamp_ZSuffixNotOffsetNotation(t *testing.T) {
 }
 
 func TestFormatTimestamp_WholeSectionOmitsFractional(t *testing.T) {
+	t.Parallel()
 	ts := time.Date(2026, 3, 3, 19, 5, 0, 0, time.UTC)
 	result := FormatTimestamp(ts)
 	assert.Equal(t, "2026-03-03T19:05:00Z", result)
 }
 
 func TestNowTimestamp_NoOffsetNotation(t *testing.T) {
+	t.Parallel()
 	result := NowTimestamp()
 	assert.NotContains(t, result, "+", "NowTimestamp must not contain offset notation")
 	assert.True(t, strings.HasSuffix(result, "Z"), "NowTimestamp must end with Z")
 }
 
 func TestNowTimestamp_LexicographicOrderIsChronological(t *testing.T) {
+	t.Parallel()
 	a := NowTimestamp()
 	b := NowTimestamp()
 	assert.True(t, a <= b, "timestamps must be lexicographically non-decreasing: a=%q b=%q", a, b)
 }
 
 func TestFormatTimestamp_ParseableByStdlibRFC3339Nano(t *testing.T) {
+	t.Parallel()
 	ts := time.Date(2026, 6, 15, 10, 20, 30, 123456789, time.UTC)
 	formatted := FormatTimestamp(ts)
 
@@ -125,6 +138,7 @@ func TestFormatTimestamp_ParseableByStdlibRFC3339Nano(t *testing.T) {
 }
 
 func TestParseTimestamp_AcceptsMillisecondPrecision(t *testing.T) {
+	t.Parallel()
 	s := "2026-03-03T19:05:00.123Z"
 	parsed, err := ParseTimestamp(s)
 	require.NoError(t, err)
@@ -134,6 +148,7 @@ func TestParseTimestamp_AcceptsMillisecondPrecision(t *testing.T) {
 }
 
 func TestParseTimestamp_AcceptsMicrosecondPrecision(t *testing.T) {
+	t.Parallel()
 	s := "2026-03-03T19:05:00.123456Z"
 	parsed, err := ParseTimestamp(s)
 	require.NoError(t, err)
@@ -142,6 +157,7 @@ func TestParseTimestamp_AcceptsMicrosecondPrecision(t *testing.T) {
 }
 
 func TestParseTimestamp_AcceptsNanosecondPrecision(t *testing.T) {
+	t.Parallel()
 	s := "2026-03-03T19:05:00.123456789Z"
 	parsed, err := ParseTimestamp(s)
 	require.NoError(t, err)

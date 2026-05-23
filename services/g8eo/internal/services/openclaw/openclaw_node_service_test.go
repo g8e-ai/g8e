@@ -128,6 +128,7 @@ func (mg *mockGateway) waitForReceived(n int, timeout time.Duration) bool {
 		if count >= n {
 			return true
 		}
+		// Small delay in polling loop
 		time.Sleep(10 * time.Millisecond)
 	}
 	return false
@@ -163,6 +164,7 @@ func newTestLogger() *slog.Logger {
 // ────────────────────────────────────────────────────────────────
 
 func TestNewOpenClawNodeService_RequiresURL(t *testing.T) {
+	t.Parallel()
 	_, err := NewOpenClawNodeService("", "", "", "", "", newTestLogger())
 	if err == nil {
 		t.Fatal("expected error for missing gateway URL")
@@ -170,6 +172,7 @@ func TestNewOpenClawNodeService_RequiresURL(t *testing.T) {
 }
 
 func TestNewOpenClawNodeService_DefaultsNodeID(t *testing.T) {
+	t.Parallel()
 	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.OpenclawGateway), "", "", "", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -180,6 +183,7 @@ func TestNewOpenClawNodeService_DefaultsNodeID(t *testing.T) {
 }
 
 func TestNewOpenClawNodeService_DisplayNameFallsBackToNodeID(t *testing.T) {
+	t.Parallel()
 	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.OpenclawGateway), "", "my-node", "", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -190,6 +194,7 @@ func TestNewOpenClawNodeService_DisplayNameFallsBackToNodeID(t *testing.T) {
 }
 
 func TestNewOpenClawNodeService_ExplicitDisplayName(t *testing.T) {
+	t.Parallel()
 	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.OpenclawGateway), "", "my-node", "My Server", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -204,6 +209,7 @@ func TestNewOpenClawNodeService_ExplicitDisplayName(t *testing.T) {
 // ────────────────────────────────────────────────────────────────
 
 func TestHandshake_SendsCorrectConnectFrame(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	svc, err := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "Test Node", "", newTestLogger())
 	if err != nil {
@@ -263,6 +269,7 @@ func TestHandshake_SendsCorrectConnectFrame(t *testing.T) {
 }
 
 func TestHandshake_WithToken(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "secret-token", "node-1", "", "", newTestLogger())
 
@@ -293,6 +300,7 @@ func TestHandshake_WithToken(t *testing.T) {
 // ────────────────────────────────────────────────────────────────
 
 func TestSystemWhich_FindsExistingBinary(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("wh-1", "test-node", "system.which", `{"bins":["sh","nonexistent_xyz_abc"]}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
@@ -324,6 +332,7 @@ func TestSystemWhich_FindsExistingBinary(t *testing.T) {
 }
 
 func TestSystemWhich_EmptyBins(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("wh-2", "test-node", "system.which", `{"bins":[]}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
@@ -353,6 +362,7 @@ func TestSystemWhich_EmptyBins(t *testing.T) {
 // ────────────────────────────────────────────────────────────────
 
 func TestSystemRun_EchoCommand(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-1", "test-node", "command", `{"command":["/bin/sh","-c","echo hello"]}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
@@ -387,6 +397,7 @@ func TestSystemRun_EchoCommand(t *testing.T) {
 }
 
 func TestSystemRun_NonZeroExit(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-2", "test-node", "command", `{"command":["/bin/sh","-c","exit 42"]}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
@@ -415,6 +426,7 @@ func TestSystemRun_NonZeroExit(t *testing.T) {
 }
 
 func TestSystemRun_StderrCaptured(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-3", "test-node", "command", `{"command":["/bin/sh","-c","echo err_msg >&2"]}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
@@ -440,6 +452,7 @@ func TestSystemRun_StderrCaptured(t *testing.T) {
 }
 
 func TestSystemRun_WithCwd(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-5", "test-node", "command", `{"command":["/bin/sh","-c","pwd"],"cwd":"/tmp"}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
@@ -465,6 +478,7 @@ func TestSystemRun_WithCwd(t *testing.T) {
 }
 
 func TestSystemRun_WithEnvVar(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-6", "test-node", "command", `{"command":["/bin/sh","-c","echo $MY_OCT_VAR"],"env":{"MY_OCT_VAR":"from_test"}}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
@@ -490,6 +504,7 @@ func TestSystemRun_WithEnvVar(t *testing.T) {
 }
 
 func TestSystemRun_EmptyCommandArray(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-7", "test-node", "command", `{"command":[]}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
@@ -520,6 +535,7 @@ func TestSystemRun_EmptyCommandArray(t *testing.T) {
 // ────────────────────────────────────────────────────────────────
 
 func TestUnknownCommand_ReturnsUnavailable(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("unk-1", "test-node", "system.nope", `{}`)
 	svc, _ := NewOpenClawNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
@@ -550,6 +566,7 @@ func TestUnknownCommand_ReturnsUnavailable(t *testing.T) {
 // ────────────────────────────────────────────────────────────────
 
 func TestRunCommand_Success(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	result, timedOut := runCommand(ctx, systemRunParams{
 		Command: []string{"/bin/sh", "-c", "echo unit_test_output"},
@@ -566,6 +583,7 @@ func TestRunCommand_Success(t *testing.T) {
 }
 
 func TestRunCommand_NonZeroExit(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	result, _ := runCommand(ctx, systemRunParams{Command: []string{"/bin/sh", "-c", "exit 7"}})
 	if result.exitCode == nil || *result.exitCode != 7 {
@@ -574,6 +592,7 @@ func TestRunCommand_NonZeroExit(t *testing.T) {
 }
 
 func TestRunCommand_Timeout(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	_, timedOut := runCommand(ctx, systemRunParams{Command: []string{"/bin/sh", "-c", "sleep 10"}})
@@ -583,6 +602,7 @@ func TestRunCommand_Timeout(t *testing.T) {
 }
 
 func TestRunCommand_Cwd(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	result, _ := runCommand(ctx, systemRunParams{
 		Command: []string{"/bin/sh", "-c", "pwd"},
@@ -594,6 +614,7 @@ func TestRunCommand_Cwd(t *testing.T) {
 }
 
 func TestRunCommand_EnvOverride(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	result, _ := runCommand(ctx, systemRunParams{
 		Command: []string{"/bin/sh", "-c", "echo $OC_TEST_ENV"},
@@ -605,6 +626,7 @@ func TestRunCommand_EnvOverride(t *testing.T) {
 }
 
 func TestRunCommand_BadBinary(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	result, timedOut := runCommand(ctx, systemRunParams{
 		Command: []string{"/nonexistent_binary_g8e_xyz"},
@@ -623,6 +645,7 @@ func TestRunCommand_BadBinary(t *testing.T) {
 // ────────────────────────────────────────────────────────────────
 
 func TestTruncateOutput_NoTruncation(t *testing.T) {
+	t.Parallel()
 	s := "hello world"
 	if got := truncateOutput(s, 100); got != s {
 		t.Errorf("expected no truncation, got %q", got)
@@ -630,6 +653,7 @@ func TestTruncateOutput_NoTruncation(t *testing.T) {
 }
 
 func TestTruncateOutput_Truncates(t *testing.T) {
+	t.Parallel()
 	s := strings.Repeat("x", 300)
 	got := truncateOutput(s, 200)
 	if !strings.Contains(got, "(truncated)") {
@@ -638,6 +662,7 @@ func TestTruncateOutput_Truncates(t *testing.T) {
 }
 
 func TestTruncateOutput_ExactSize(t *testing.T) {
+	t.Parallel()
 	s := strings.Repeat("a", 100)
 	if got := truncateOutput(s, 100); got != s {
 		t.Error("exact-size output should not be truncated")
@@ -649,6 +674,7 @@ func TestTruncateOutput_ExactSize(t *testing.T) {
 // ────────────────────────────────────────────────────────────────
 
 func TestStop_BeforeStart_DoesNotPanic(t *testing.T) {
+	t.Parallel()
 	svc, err := NewOpenClawNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.OpenclawGateway), "", "node-stop", "", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("NewOpenClawNodeService: %v", err)
@@ -658,6 +684,7 @@ func TestStop_BeforeStart_DoesNotPanic(t *testing.T) {
 }
 
 func TestStop_CancelsRunningService(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	svc, err := NewOpenClawNodeService(mg.wsURL(), "", "node-stop-2", "", "", newTestLogger())
 	if err != nil {
@@ -683,6 +710,7 @@ func TestStop_CancelsRunningService(t *testing.T) {
 }
 
 func TestStop_IdempotentDoubleStop(t *testing.T) {
+	t.Parallel()
 	mg := newMockGateway(t)
 	svc, err := NewOpenClawNodeService(mg.wsURL(), "", "node-stop-3", "", "", newTestLogger())
 	if err != nil {

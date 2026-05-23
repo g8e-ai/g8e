@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/responder"
 )
 
 // contextKey is a custom type for context keys to avoid collisions.
@@ -59,16 +60,18 @@ type AuthService struct {
 	pki        *PKIAuthority
 	logger     *slog.Logger
 	userSvc    *UserService
+	responder  *responder.Responder
 	secretsDir string
 }
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, secretsDir string) *AuthService {
+func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, responder *responder.Responder, secretsDir string) *AuthService {
 	return &AuthService{
 		db:         db,
 		pki:        pki,
 		logger:     logger,
 		userSvc:    userSvc,
+		responder:  responder,
 		secretsDir: secretsDir,
 	}
 }
@@ -471,11 +474,7 @@ func (s *AuthService) WebSocketAuth(next http.Handler) http.Handler {
 }
 
 func (s *AuthService) jsonError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set(constants.HeaderContentType, "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(struct {
-		Error string `json:"error"`
-	}{Error: msg})
+	s.responder.Error(w, status, msg)
 }
 
 // WebSessionAuth validates web session cookies and stamps context with user_id.

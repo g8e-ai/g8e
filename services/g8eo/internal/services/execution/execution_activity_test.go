@@ -28,11 +28,13 @@ import (
 
 // TestExecutionService_CommandExecution tests reliable command execution behavior
 func TestExecutionService_CommandExecution(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("shell_variable_expansion", func(t *testing.T) {
+		t.Parallel()
 		// Test that shell variables are properly expanded
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-var-expand-" + time.Now().Format("20060102150405"),
@@ -52,6 +54,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 	})
 
 	t.Run("tilde_expansion", func(t *testing.T) {
+		t.Parallel()
 		// Test that tilde is properly expanded
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-tilde-expand-" + time.Now().Format("20060102150405"),
@@ -71,6 +74,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 	})
 
 	t.Run("pipe_commands", func(t *testing.T) {
+		t.Parallel()
 		// Test that pipes work correctly
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-pipe-" + time.Now().Format("20060102150405"),
@@ -88,6 +92,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 	})
 
 	t.Run("command_timeout", func(t *testing.T) {
+		t.Parallel()
 		// Test that timeout works correctly
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-timeout-" + time.Now().Format("20060102150405"),
@@ -107,6 +112,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 	})
 
 	t.Run("stdin_closed_prevents_hang", func(t *testing.T) {
+		t.Parallel()
 		// Commands that try to read stdin should fail fast with EOF, not hang
 		// The 'read' command will get EOF immediately since stdin is nil
 		req := &models.ExecutionRequestPayload{
@@ -128,6 +134,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 	})
 
 	t.Run("glob_expansion", func(t *testing.T) {
+		t.Parallel()
 		// Test that glob patterns work
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-glob-" + time.Now().Format("20060102150405"),
@@ -146,6 +153,7 @@ func TestExecutionService_CommandExecution(t *testing.T) {
 	})
 
 	t.Run("command_with_delayed_output", func(t *testing.T) {
+		t.Parallel()
 		// Commands with initial silence should complete normally
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-delayed-" + time.Now().Format("20060102150405"),

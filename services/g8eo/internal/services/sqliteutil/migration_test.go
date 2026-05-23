@@ -24,6 +24,7 @@ import (
 )
 
 func TestRunMigrations_AppliesInOrder(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "migrations.db"))
@@ -52,6 +53,7 @@ func TestRunMigrations_AppliesInOrder(t *testing.T) {
 }
 
 func TestRunMigrations_IdempotentOnRerun(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "idempotent.db"))
@@ -73,6 +75,7 @@ func TestRunMigrations_IdempotentOnRerun(t *testing.T) {
 }
 
 func TestRunMigrations_SkipsAlreadyApplied(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "skip.db"))
@@ -98,6 +101,7 @@ func TestRunMigrations_SkipsAlreadyApplied(t *testing.T) {
 }
 
 func TestRunMigrations_EmptyListIsNoOp(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "empty.db"))
@@ -115,6 +119,7 @@ func TestRunMigrations_EmptyListIsNoOp(t *testing.T) {
 }
 
 func TestRunMigrations_RecordsDescriptionAndTimestamp(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "meta.db"))
@@ -135,6 +140,7 @@ func TestRunMigrations_RecordsDescriptionAndTimestamp(t *testing.T) {
 }
 
 func TestRunMigrations_InvalidSQLReturnsError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "invalid.db"))
@@ -153,6 +159,7 @@ func TestRunMigrations_InvalidSQLReturnsError(t *testing.T) {
 }
 
 func TestColumnExists_ReturnsTrueForExistingColumn(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "colexist.db"))
@@ -170,6 +177,7 @@ func TestColumnExists_ReturnsTrueForExistingColumn(t *testing.T) {
 }
 
 func TestColumnExists_ReturnsFalseForMissingColumn(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "colmissing.db"))
@@ -187,6 +195,7 @@ func TestColumnExists_ReturnsFalseForMissingColumn(t *testing.T) {
 }
 
 func TestColumnExists_ReturnsFalseForMissingTable(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	cfg := DefaultDBConfig(filepath.Join(dir, "notable.db"))

@@ -260,7 +260,15 @@ func (s *GatewayDBService) calculateStateRoot() (string, error) {
 
 // CheckAndSetNonce returns true if the nonce was already used (replay detected).
 // If not used, it marks the nonce as used and returns false.
+// This is the legacy method for backward compatibility.
 func (s *GatewayDBService) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
+	return s.ReserveNonce(nonce, expiresAt)
+}
+
+// ReserveNonce atomically reserves a nonce for early replay protection.
+// Returns true if the nonce was already reserved/used (replay detected).
+// If not used, it reserves the nonce and returns false.
+func (s *GatewayDBService) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
 	// 1. Check if exists
 	var existing string
 	err := s.db.QueryRow("SELECT nonce FROM nonces WHERE nonce = ?", nonce).Scan(&existing)
@@ -271,9 +279,9 @@ func (s *GatewayDBService) CheckAndSetNonce(nonce string, expiresAt time.Time) (
 		return false, err
 	}
 
-	// 2. Not used, insert
+	// 2. Not used, insert as reserved
 	expStr := sqliteutil.FormatTimestamp(expiresAt)
-	_, err = s.db.Exec("INSERT INTO nonces (nonce, expires_at) VALUES (?, ?)", nonce, expStr)
+	_, err = s.db.Exec("INSERT INTO nonces (nonce, expires_at, status) VALUES (?, ?, 'reserved')", nonce, expStr)
 	if err != nil {
 		// Concurrent insert might fail with constraint violation - that's a replay
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -283,6 +291,24 @@ func (s *GatewayDBService) CheckAndSetNonce(nonce string, expiresAt time.Time) (
 	}
 
 	return false, nil
+}
+
+// FinalizeNonce marks a reserved nonce as fully consumed.
+func (s *GatewayDBService) FinalizeNonce(nonce string) error {
+	_, err := s.db.Exec("UPDATE nonces SET status = 'used' WHERE nonce = ? AND status = 'reserved'", nonce)
+	if err != nil {
+		return fmt.Errorf("failed to finalize nonce: %w", err)
+	}
+	return nil
+}
+
+// ReleaseNonce removes a reservation for a failed transaction.
+func (s *GatewayDBService) ReleaseNonce(nonce string) error {
+	_, err := s.db.Exec("DELETE FROM nonces WHERE nonce = ? AND status = 'reserved'", nonce)
+	if err != nil {
+		return fmt.Errorf("failed to release nonce: %w", err)
+	}
+	return nil
 }
 
 // RunMaintenance periodically removes expired entries.

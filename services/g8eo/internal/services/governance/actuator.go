@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
@@ -62,6 +63,8 @@ type Actuator struct {
 	// Actuator's own signing identity for ActionReceipts
 	SigningKey ed25519.PrivateKey
 	KeyID      string
+
+	wg sync.WaitGroup
 }
 
 // Execute is the single execution boundary for all verified transactions.
@@ -70,6 +73,9 @@ type Actuator struct {
 //
 // Fail-closed: if receipt signing or initial audit logging fails, the handler is NOT executed.
 func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg interface{}) (*operatorv1.ActionReceipt, error) {
+	w.wg.Add(1)
+	defer w.wg.Done()
+
 	if w.ExecutionHandler == nil {
 		return nil, errors.New("Actuator ExecutionHandler not set")
 	}
@@ -292,4 +298,9 @@ func (w *Actuator) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.Action
 		return err
 	}
 	return nil
+}
+
+// Wait blocks until all in-flight transactions have finished executing.
+func (w *Actuator) Wait() {
+	w.wg.Wait()
 }

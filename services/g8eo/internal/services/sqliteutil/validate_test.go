@@ -21,6 +21,7 @@ import (
 )
 
 func TestValidateIdentifier(t *testing.T) {
+	t.Parallel()
 	valid := []string{
 		"column",
 		"column_name",
@@ -35,6 +36,7 @@ func TestValidateIdentifier(t *testing.T) {
 
 	for _, name := range valid {
 		t.Run("valid/"+name, func(t *testing.T) {
+		t.Parallel()
 			err := ValidateIdentifier(name)
 			require.NoError(t, err)
 		})
@@ -60,6 +62,7 @@ func TestValidateIdentifier(t *testing.T) {
 
 	for _, tc := range invalid {
 		t.Run("invalid/"+tc.name, func(t *testing.T) {
+		t.Parallel()
 			err := ValidateIdentifier(tc.input)
 			require.Error(t, err)
 			if tc.input == "" {

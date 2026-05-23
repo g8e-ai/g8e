@@ -502,6 +502,7 @@ const (
 	ActionTypeFetchHistory        ActionType = "FETCH_HISTORY"
 	ActionTypeFetchFileHistory    ActionType = "FETCH_FILE_HISTORY"
 	ActionTypeRestoreFile         ActionType = "RESTORE_FILE"
+	ActionTypeFetchFileDiff       ActionType = "FETCH_FILE_DIFF"
 	ActionTypeShutdown            ActionType = "SHUTDOWN"
 	ActionTypeHeartbeat           ActionType = "HEARTBEAT"
 	ActionTypeEvalAnswer          ActionType = "EVAL_ANSWER"
@@ -509,7 +510,9 @@ const (
 	ActionTypeRevokeIntent        ActionType = "REVOKE_INTENT"
 	ActionTypeMcpCall             ActionType = "MCP_CALL"
 	ActionTypeA2aCall             ActionType = "A2A_CALL"
+	ActionTypeMcpResourceList     ActionType = "MCP_RESOURCE_LIST"
 	ActionTypeMcpResourceRead     ActionType = "MCP_RESOURCE_READ"
+	ActionTypeMcpPromptList       ActionType = "MCP_PROMPT_LIST"
 	ActionTypeMcpPromptGet        ActionType = "MCP_PROMPT_GET"
 	ActionTypeInvestigationCreate ActionType = "INVESTIGATION_CREATE"
 )

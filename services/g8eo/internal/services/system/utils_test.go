@@ -21,6 +21,7 @@ import (
 )
 
 func TestStringPtr(t *testing.T) {
+	t.Parallel()
 	s := "test"
 	ptr := StringPtr(s)
 	require.NotNil(t, ptr)
@@ -28,12 +29,14 @@ func TestStringPtr(t *testing.T) {
 }
 
 func TestStringPtrValue(t *testing.T) {
+	t.Parallel()
 	s := "hello"
 	assert.Equal(t, "hello", StringPtrValue(&s))
 	assert.Equal(t, "<nil>", StringPtrValue(nil))
 }
 
 func TestIntPtr(t *testing.T) {
+	t.Parallel()
 	i := 42
 	ptr := IntPtr(i)
 	require.NotNil(t, ptr)
@@ -41,6 +44,7 @@ func TestIntPtr(t *testing.T) {
 }
 
 func TestIntPtrValue(t *testing.T) {
+	t.Parallel()
 	i := 7
 	assert.Equal(t, "7", IntPtrValue(&i))
 	assert.Equal(t, "<nil>", IntPtrValue(nil))

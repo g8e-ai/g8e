@@ -45,6 +45,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
 		l3Notary,
+		nil, // Sentinel not used in tests
 		[]constants.ActionType{constants.ActionTypeExecuteBash, constants.ActionTypeFsList},
 		"notary",
 	), privKey
@@ -106,6 +107,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 }
 
 func TestTransactionVerifier_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
+	t.Parallel()
 	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 
@@ -119,6 +121,7 @@ func TestTransactionVerifier_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
 }
 
 func TestTransactionVerifier_AcceptsValidMutationUAPEnvelopeWithL3(t *testing.T) {
+	t.Parallel()
 	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 
@@ -129,6 +132,7 @@ func TestTransactionVerifier_AcceptsValidMutationUAPEnvelopeWithL3(t *testing.T)
 }
 
 func TestTransactionVerifier_FailClosedProofs(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		mutate func(*uap.UAPEnvelope)
@@ -154,6 +158,7 @@ func TestTransactionVerifier_FailClosedProofs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+		t.Parallel()
 			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 			env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 			tc.mutate(env)
@@ -167,7 +172,9 @@ func TestTransactionVerifier_FailClosedProofs(t *testing.T) {
 }
 
 func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
+	t.Parallel()
 	t.Run("replayed nonce", func(t *testing.T) {
+		t.Parallel()
 		replayStore := testutil.NewStatefulMockReplayStore()
 		verifier, privKey := createStrictVerifier(t, replayStore, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
@@ -181,6 +188,7 @@ func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
 	})
 
 	t.Run("state root mismatch", func(t *testing.T) {
+		t.Parallel()
 		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("other-root"), testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 		_, err := verifier.VerifyEnvelope(env)
@@ -191,7 +199,9 @@ func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
 }
 
 func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
+	t.Parallel()
 	t.Run("missing replay store", func(t *testing.T) {
+		t.Parallel()
 		verifier, privKey := createStrictVerifier(t, nil, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 		_, err := verifier.VerifyEnvelope(env)
@@ -201,6 +211,7 @@ func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 	})
 
 	t.Run("missing state root provider", func(t *testing.T) {
+		t.Parallel()
 		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), nil, testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 		_, err := verifier.VerifyEnvelope(env)
@@ -210,6 +221,7 @@ func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 	})
 
 	t.Run("missing l3 notary", func(t *testing.T) {
+		t.Parallel()
 		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), nil)
 		env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 		_, err := verifier.VerifyEnvelope(env)
@@ -220,6 +232,7 @@ func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 }
 
 func TestTransactionVerifier_NonceRaceCondition(t *testing.T) {
+	t.Parallel()
 	replayStore := testutil.NewStatefulMockReplayStore()
 	stateRootProvider := testutil.NewMockStateRootProvider("root-1")
 

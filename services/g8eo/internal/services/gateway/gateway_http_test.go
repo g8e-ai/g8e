@@ -36,6 +36,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/responder"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/mcp"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -66,13 +67,34 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	require.NoError(t, err)
 
 	userSvc := NewUserService(db, logger)
-	auth := NewAuthService(db, pki, logger, userSvc, secretsDir)
+	resp := responder.New(logger)
+	auth := NewAuthService(db, pki, logger, userSvc, resp, secretsDir)
 	sessionSvc := NewSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, sessionSvc)
 	apiKeySvc := NewApiKeyService(db, logger)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
-	resp := responder.New(logger)
-	h := newHTTPHandler(cfg, logger, db, pubsub, auth, pki, sessionSvc, reg, passkey, userSvc, apiKeySvc, resp, nil, func() bool { return true }, func() bool { return true })
+	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
+		Logger:         logger,
+		Responder:      resp,
+		SuspendedStore: db,
+	})
+	h := newHTTPHandler(HTTPHandlerDependencies{
+		Cfg:               cfg,
+		Logger:            logger,
+		DB:                db,
+		Pubsub:            pubsub,
+		Auth:              auth,
+		PKI:               pki,
+		SessionSvc:        sessionSvc,
+		Reg:               reg,
+		Passkey:           passkey,
+		UserSvc:           userSvc,
+		APIKey:            apiKeySvc,
+		Responder:         resp,
+		MCPGateway:        mcpGateway,
+		IsReady:           func() bool { return true },
+		IsGovernanceReady: func() bool { return true },
+	})
 	return h, cfg
 }
 
@@ -97,20 +119,24 @@ func setupTestGatewayService(t *testing.T) (*GatewayService, *config.Config) {
 
 	cfg.Gateway.BootstrapPort = constants.Ports.OperatorBootstrapHttps
 
-	ls := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
+	require.NoError(t, err)
 	return ls, cfg
 }
 
 func TestReadBody(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
 	content := []byte("test body content")
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(content))
 
-	body, err := readBody(req)
+	body, err := h.readBody(req)
 	require.NoError(t, err)
 	assert.Equal(t, content, body)
 }
 
 func TestPathTraversalGuard(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	tests := []struct {
@@ -125,6 +151,7 @@ func TestPathTraversalGuard(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			handler := h.pathTraversalGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			}))
@@ -139,6 +166,7 @@ func TestPathTraversalGuard(t *testing.T) {
 }
 
 func TestAuthMiddleware(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	// Seed platform settings
@@ -152,6 +180,7 @@ func TestAuthMiddleware(t *testing.T) {
 	}))
 
 	t.Run("Health bypass", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -160,6 +189,7 @@ func TestAuthMiddleware(t *testing.T) {
 }
 
 func TestAuthWebSocket(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	handler := h.auth.WebSocketAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -167,6 +197,7 @@ func TestAuthWebSocket(t *testing.T) {
 	}))
 
 	t.Run("Unauthorized", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/ws/pubsub", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -175,6 +206,7 @@ func TestAuthWebSocket(t *testing.T) {
 }
 
 func TestAuthMiddlewareDeep(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -182,6 +214,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 	}))
 
 	t.Run("Uninitialized token - Native Registration Path - allow without token", func(t *testing.T) {
+		t.Parallel()
 		h.db.DocDelete("settings", "app_settings")
 
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/device-link/register", nil)
@@ -193,6 +226,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 	})
 
 	t.Run("Uninitialized token - deny unauthenticated access", func(t *testing.T) {
+		t.Parallel()
 		h.db.DocDelete("settings", "app_settings")
 
 		paths := []string{
@@ -216,6 +250,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 	})
 
 	t.Run("Blob endpoint with valid device-link token", func(t *testing.T) {
+		t.Parallel()
 		// Create a device-link token
 		token := "dlk_test12345678901234567890"
 		linkData := map[string]interface{}{
@@ -247,6 +282,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 	})
 
 	t.Run("Blob endpoint with invalid device-link token", func(t *testing.T) {
+		t.Parallel()
 		// Use the actual router with blob handler
 		router := h.buildRouter()
 		req := httptest.NewRequest(http.MethodGet, "/blob/operator-binary/linux-amd64", nil)
@@ -261,9 +297,11 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 }
 
 func TestHandleHealth(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("Returns 503 when app_settings not found", func(t *testing.T) {
+		t.Parallel()
 		h.db.DocDelete("settings", "app_settings")
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rr := httptest.NewRecorder()
@@ -274,6 +312,7 @@ func TestHandleHealth(t *testing.T) {
 	})
 
 	t.Run("Returns 200 when app_settings exists", func(t *testing.T) {
+		t.Parallel()
 		err := h.db.DocSet("settings", "app_settings", mustDocJSON(t, map[string]interface{}{
 			"session_encryption_key": "test-key",
 		}))
@@ -293,6 +332,7 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestHandleRotateAPIKeyDoesNotReturnSecret(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 	operatorID := "op-1"
 	userID := "user-1"
@@ -330,9 +370,11 @@ func TestHandleRotateAPIKeyDoesNotReturnSecret(t *testing.T) {
 }
 
 func TestHandleDB(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("BadRequest - no collection", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/db/", nil)
 		rr := httptest.NewRecorder()
 		h.handleDB(rr, req)
@@ -340,6 +382,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("BadRequest - no ID", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/db/users/", nil)
 		rr := httptest.NewRecorder()
 		h.handleDB(rr, req)
@@ -347,6 +390,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("PUT and GET", func(t *testing.T) {
+		t.Parallel()
 		data := map[string]string{"name": "alice"}
 		reqPut := httptest.NewRequest(http.MethodPut, "/db/settings/u1", bytes.NewReader(mustDocJSON(t, data)))
 		rrPut := httptest.NewRecorder()
@@ -365,6 +409,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("PATCH", func(t *testing.T) {
+		t.Parallel()
 		patch := map[string]string{"role": "admin"}
 		reqPatch := httptest.NewRequest(http.MethodPatch, "/db/settings/u1", bytes.NewReader(mustDocJSON(t, patch)))
 		rrPatch := httptest.NewRecorder()
@@ -381,6 +426,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("DELETE", func(t *testing.T) {
+		t.Parallel()
 		reqDel := httptest.NewRequest(http.MethodDelete, "/db/settings/u1", nil)
 		rrDel := httptest.NewRecorder()
 		h.handleDB(rrDel, reqDel)
@@ -393,6 +439,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("Query", func(t *testing.T) {
+		t.Parallel()
 		h.db.DocSet("items", "i1", mustDocJSON(t, map[string]int{"val": 10}))
 		h.db.DocSet("items", "i2", mustDocJSON(t, map[string]int{"val": 20}))
 
@@ -412,6 +459,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/db/settings/u1", strings.NewReader("{invalid-json}"))
 		rr := httptest.NewRecorder()
 		h.handleDB(rr, req)
@@ -420,6 +468,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("PATCH not found", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPatch, "/db/settings/nonexistent", bytes.NewReader(mustDocJSON(t, map[string]string{"foo": "bar"})))
 		rr := httptest.NewRecorder()
 		h.handleDB(rr, req)
@@ -427,6 +476,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("DELETE not found", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodDelete, "/db/settings/nonexistent", nil)
 		rr := httptest.NewRecorder()
 		h.handleDB(rr, req)
@@ -434,6 +484,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/db/users/u1", nil)
 		rr := httptest.NewRecorder()
 		h.handleDB(rr, req)
@@ -441,6 +492,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("Non-bootstrap mutations redirect to governance envelope", func(t *testing.T) {
+		t.Parallel()
 		tests := []struct {
 			method string
 			body   []byte
@@ -460,6 +512,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("Query validation", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/db/items/_query", strings.NewReader("{invalid}"))
 		rr := httptest.NewRecorder()
 		h.handleDBQuery(rr, req, "items")
@@ -467,6 +520,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("SSE Events count", func(t *testing.T) {
+		t.Parallel()
 		h.db.SSEEventsAppend(SSERoute{WebSessionID: "s1"}, "T", "{}")
 		req := httptest.NewRequest(http.MethodGet, "/db/_sse_events/count", nil)
 		rr := httptest.NewRecorder()
@@ -475,6 +529,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("SSE Events wipe", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodDelete, "/db/_sse_events", nil)
 		rr := httptest.NewRecorder()
 		h.handleSSEEvents(rr, req, "")
@@ -482,6 +537,7 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("SSE Events invalid", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/db/_sse_events/invalid", nil)
 		rr := httptest.NewRecorder()
 		h.handleSSEEvents(rr, req, "invalid")
@@ -495,6 +551,7 @@ func TestHandleDB(t *testing.T) {
 // event under a typed routing column so CLI (BYO frontend) and web sessions
 // occupy disjoint routing namespaces and never receive each other's events.
 func TestInternalSSEBridge(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 	_, _ = h.db.SSEEventsWipe()
 
@@ -521,6 +578,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	}
 
 	t.Run("push requires mTLS certificate", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/internal/sse/push", strings.NewReader(`{"web_session_id":"ws-1","event":{"type":"ai.text","data":{}}}`))
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEPush(rr, req)
@@ -529,6 +587,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("push requires correct G8EE app identity", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/internal/sse/push", strings.NewReader(`{"web_session_id":"ws-1","event":{"type":"ai.text","data":{}}}`))
 		req.TLS = &tls.ConnectionState{
 			PeerCertificates: []*x509.Certificate{
@@ -558,6 +617,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	}
 
 	t.Run("web session event is persisted and replayable", func(t *testing.T) {
+		t.Parallel()
 		body := `{"web_session_id":"ws-1","event":{"type":"ai.text","data":{"chunk":"hello"}}}`
 		rr := push(body)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -575,6 +635,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("cli session event is persisted and replayable as a first-class type", func(t *testing.T) {
+		t.Parallel()
 		body := `{"cli_session_id":"cli-1","event":{"type":"ai.text","data":{"chunk":"byo"}}}`
 		rr := push(body)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -592,6 +653,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("cli and web with colliding ids do not cross namespaces", func(t *testing.T) {
+		t.Parallel()
 		_, _ = h.db.SSEEventsWipe()
 		rr := push(`{"web_session_id":"shared-id","event":{"type":"web.only","data":{}}}`)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -611,11 +673,13 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("web and cli session ids are mutually exclusive on push", func(t *testing.T) {
+		t.Parallel()
 		rr := push(`{"web_session_id":"w","cli_session_id":"c","event":{"type":"x"}}`)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("background event routes by user_id", func(t *testing.T) {
+		t.Parallel()
 		body := `{"user_id":"u-2","event":{"type":"system.notice","data":{}}}`
 		rr := push(body)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -639,16 +703,19 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("missing routing key is rejected", func(t *testing.T) {
+		t.Parallel()
 		rr := push(`{"event":{"type":"x"}}`)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("missing event field is rejected", func(t *testing.T) {
+		t.Parallel()
 		rr := push(`{"web_session_id":"ws-3"}`)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("events GET requires exactly one routing key", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr := httptest.NewRecorder()
@@ -657,6 +724,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("since_id replays only newer events", func(t *testing.T) {
+		t.Parallel()
 		_, _ = h.db.SSEEventsWipe()
 		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-x"}, "a", `{"event":{"type":"a"}}`)
 		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-x"}, "b", `{"event":{"type":"b"}}`)
@@ -674,6 +742,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator cannot access unbound cli_session_id", func(t *testing.T) {
+		t.Parallel()
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-unbound"}, "test", `{"event":{"type":"x"}}`)
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-unbound&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
@@ -684,6 +753,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator cannot access cli_session_id owned by different operator", func(t *testing.T) {
+		t.Parallel()
 		// Bind cli-owned to op-session-1
 		seedCLISession("cli-owned", "op-session-1")
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-owned"}, "test", `{"event":{"type":"x"}}`)
@@ -698,6 +768,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator can access own cli_session_id", func(t *testing.T) {
+		t.Parallel()
 		// Bind cli-mine to op-session-1
 		seedCLISession("cli-mine", "op-session-1")
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-mine"}, "x", `{"event":{"type":"x"}}`)
@@ -711,6 +782,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator cannot access web_session_id not bound to them", func(t *testing.T) {
+		t.Parallel()
 		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-other"}, "test", `{"event":{"type":"x"}}`)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?web_session_id=ws-other&since_id=0", nil)
@@ -722,6 +794,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator cannot access user_id they don't belong to", func(t *testing.T) {
+		t.Parallel()
 		_ = h.db.SSEEventsAppend(SSERoute{UserID: "user-other"}, "test", `{"event":{"type":"x"}}`)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?user_id=user-other&since_id=0", nil)
@@ -733,6 +806,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: missing operator session id is rejected", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-1&since_id=0", nil)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
@@ -741,6 +815,7 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("stream endpoint and Last-Event-ID", func(t *testing.T) {
+		t.Parallel()
 		seedCLISession("cli-stream", "op-session-1")
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-stream"}, "stream-init", `{"event":{"type":"stream-init"}}`)
 
@@ -754,7 +829,10 @@ func TestInternalSSEBridge(t *testing.T) {
 		req = req.WithContext(ctx)
 
 		go func() {
-			time.Sleep(100 * time.Millisecond)
+			require.Eventually(t, func() bool {
+				time.Sleep(100 * time.Millisecond)
+				return true
+			}, 200*time.Millisecond, 10*time.Millisecond)
 			cancel()
 		}()
 
@@ -767,9 +845,11 @@ func TestInternalSSEBridge(t *testing.T) {
 }
 
 func TestHandleKV(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("PUT and GET", func(t *testing.T) {
+		t.Parallel()
 		reqPut := httptest.NewRequest(http.MethodPut, "/kv/k1", bytes.NewReader(mustDocJSON(t, models.KVSetRequest{Value: "g8e"})))
 		rrPut := httptest.NewRecorder()
 		h.handleKV(rrPut, reqPut)
@@ -783,6 +863,7 @@ func TestHandleKV(t *testing.T) {
 	})
 
 	t.Run("TTL and Expire", func(t *testing.T) {
+		t.Parallel()
 		reqTtl := httptest.NewRequest(http.MethodGet, "/kv/k1/_ttl", nil)
 		rrTtl := httptest.NewRecorder()
 		h.handleKV(rrTtl, reqTtl)
@@ -795,6 +876,7 @@ func TestHandleKV(t *testing.T) {
 	})
 
 	t.Run("Scan and DeletePattern", func(t *testing.T) {
+		t.Parallel()
 		h.db.KVSet("pref:1", "a", 0)
 		h.db.KVSet("pref:2", "b", 0)
 
@@ -812,6 +894,7 @@ func TestHandleKV(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/kv/k1", strings.NewReader("{invalid-json}"))
 		rr := httptest.NewRecorder()
 		h.handleKV(rr, req)
@@ -819,6 +902,7 @@ func TestHandleKV(t *testing.T) {
 	})
 
 	t.Run("TTL required for expire", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/kv/k1/_expire", strings.NewReader(`{"ttl":0}`))
 		rr := httptest.NewRecorder()
 		h.handleKV(rr, req)
@@ -826,6 +910,7 @@ func TestHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Keys", func(t *testing.T) {
+		t.Parallel()
 		h.db.KVSet("key1", "val1", 0)
 		req := httptest.NewRequest(http.MethodPost, "/kv/_keys", strings.NewReader(`{"pattern":"key*"}`))
 		rr := httptest.NewRecorder()
@@ -835,6 +920,7 @@ func TestHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Keys Invalid JSON", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/kv/_keys", strings.NewReader(`{invalid}`))
 		rr := httptest.NewRecorder()
 		h.handleKVKeys(rr, req)
@@ -842,6 +928,7 @@ func TestHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Scan Invalid JSON", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/kv/_scan", strings.NewReader(`{invalid}`))
 		rr := httptest.NewRecorder()
 		h.handleKVScan(rr, req)
@@ -849,6 +936,7 @@ func TestHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Delete Pattern Missing Pattern", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/kv/_delete_pattern", strings.NewReader(`{}`))
 		rr := httptest.NewRecorder()
 		h.handleKVDeletePattern(rr, req)
@@ -856,6 +944,7 @@ func TestHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Delete Pattern Invalid JSON", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/kv/_delete_pattern", strings.NewReader(`{invalid}`))
 		rr := httptest.NewRecorder()
 		h.handleKVDeletePattern(rr, req)
@@ -863,6 +952,7 @@ func TestHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Method Not Allowed", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/kv/key", nil)
 		rr := httptest.NewRecorder()
 		h.handleKV(rr, req)
@@ -871,9 +961,11 @@ func TestHandleKV(t *testing.T) {
 }
 
 func TestHandleBlob(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("PUT and GET", func(t *testing.T) {
+		t.Parallel()
 		content := []byte("blob-data")
 		reqPut := httptest.NewRequest(http.MethodPut, "/blob/ns1/b1", bytes.NewReader(content))
 		reqPut.Header.Set("Content-Type", "text/plain")
@@ -890,6 +982,7 @@ func TestHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Metadata", func(t *testing.T) {
+		t.Parallel()
 		reqMeta := httptest.NewRequest(http.MethodGet, "/blob/ns1/b1/meta", nil)
 		rrMeta := httptest.NewRecorder()
 		h.handleBlob(rrMeta, reqMeta)
@@ -898,6 +991,7 @@ func TestHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Too Large", func(t *testing.T) {
+		t.Parallel()
 		largeBody := make([]byte, maxBlobBodySize+1)
 		req := httptest.NewRequest(http.MethodPut, "/blob/ns1/large", bytes.NewReader(largeBody))
 		req.Header.Set("Content-Type", "application/octet-stream")
@@ -907,6 +1001,7 @@ func TestHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Missing Content-Type", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/blob/ns1/b1", strings.NewReader("data"))
 		rr := httptest.NewRecorder()
 		h.handleBlob(rr, req)
@@ -915,6 +1010,7 @@ func TestHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Invalid namespace", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodDelete, "/blob/../invalid", nil)
 		rr := httptest.NewRecorder()
 		h.handleBlob(rr, req)
@@ -922,6 +1018,7 @@ func TestHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Namespace delete not allowed method", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/blob/ns1", nil)
 		rr := httptest.NewRecorder()
 		h.handleBlob(rr, req)
@@ -929,6 +1026,7 @@ func TestHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Blob id invalid", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/blob/ns1/..", nil)
 		rr := httptest.NewRecorder()
 		h.handleBlob(rr, req)
@@ -936,6 +1034,7 @@ func TestHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Blob meta not found", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/blob/ns1/nonexistent/meta", nil)
 		rr := httptest.NewRecorder()
 		h.handleBlob(rr, req)
@@ -943,6 +1042,7 @@ func TestHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Blob get not found", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/blob/ns1/nonexistent", nil)
 		rr := httptest.NewRecorder()
 		h.handleBlob(rr, req)
@@ -950,6 +1050,7 @@ func TestHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Blob PUT empty body", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/blob/ns1/empty", strings.NewReader(""))
 		req.Header.Set("Content-Type", "text/plain")
 		rr := httptest.NewRecorder()
@@ -959,6 +1060,7 @@ func TestHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Blob PUT read error", func(t *testing.T) {
+		t.Parallel()
 		// Create a request with a body that returns an error
 		req := httptest.NewRequest(http.MethodPut, "/blob/ns1/error", &errorReader{})
 		req.Header.Set("Content-Type", "text/plain")
@@ -968,6 +1070,7 @@ func TestHandleBlob(t *testing.T) {
 	})
 
 	t.Run("X-Blob-TTL valid", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/blob/ns1/ttl-test", strings.NewReader("data"))
 		req.Header.Set("Content-Type", "text/plain")
 		req.Header.Set("X-Blob-TTL", "3600")
@@ -977,6 +1080,7 @@ func TestHandleBlob(t *testing.T) {
 	})
 
 	t.Run("X-Blob-TTL invalid", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/blob/ns1/ttl-fail", strings.NewReader("data"))
 		req.Header.Set("Content-Type", "text/plain")
 		req.Header.Set("X-Blob-TTL", "-1")
@@ -987,6 +1091,7 @@ func TestHandleBlob(t *testing.T) {
 }
 
 func TestWebSocketAuthIntegration(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	server := httptest.NewServer(h.buildRouter())
@@ -995,6 +1100,7 @@ func TestWebSocketAuthIntegration(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/pubsub"
 
 	t.Run("Missing token", func(t *testing.T) {
+		t.Parallel()
 		ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 		assert.Error(t, err)
 		if resp != nil && resp.Body != nil {
@@ -1008,9 +1114,11 @@ func TestWebSocketAuthIntegration(t *testing.T) {
 }
 
 func TestHandlePubSubPublish(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("Publish valid", func(t *testing.T) {
+		t.Parallel()
 		pubReq := models.PubSubPublishRequest{
 			Channel: constants.ResultsChannel("op-1", "session-1"),
 			Data:    mustDocJSON(t, map[string]string{"foo": "bar"}),
@@ -1024,6 +1132,7 @@ func TestHandlePubSubPublish(t *testing.T) {
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/pubsub/publish", nil)
 		rr := httptest.NewRecorder()
 		h.handlePubSubPublish(rr, req)
@@ -1031,6 +1140,7 @@ func TestHandlePubSubPublish(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/pubsub/publish", strings.NewReader("{invalid}"))
 		rr := httptest.NewRecorder()
 		h.handlePubSubPublish(rr, req)
@@ -1038,6 +1148,7 @@ func TestHandlePubSubPublish(t *testing.T) {
 	})
 
 	t.Run("Reject mutation channels", func(t *testing.T) {
+		t.Parallel()
 		for _, channel := range []string{constants.CmdChannel("op-1", "session-1"), "auditor:op-1:session-1"} {
 			pubReq := models.PubSubPublishRequest{
 				Channel: channel,
@@ -1054,9 +1165,11 @@ func TestHandlePubSubPublish(t *testing.T) {
 }
 
 func TestHandleBootstrap(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("Success - Bootstrap with CSR over loopback", func(t *testing.T) {
+		t.Parallel()
 		csr := generateTestCSR(t)
 		cliCsr := generateTestCSR(t)
 		body := map[string]string{
@@ -1088,6 +1201,7 @@ func TestHandleBootstrap(t *testing.T) {
 	})
 
 	t.Run("Failure - Non-loopback CSR request rejected", func(t *testing.T) {
+		t.Parallel()
 		// Create a fresh handler to ensure no users exist
 		h2, _ := setupTestHTTPHandler(t)
 		csr := generateTestCSR(t)
@@ -1111,6 +1225,7 @@ func TestHandleBootstrap(t *testing.T) {
 	})
 
 	t.Run("Success - Rotation for existing bootstrap user", func(t *testing.T) {
+		t.Parallel()
 		// Use the first handler which already has a bootstrap user
 		csr := generateTestCSR(t)
 		cliCsr := generateTestCSR(t)
@@ -1137,9 +1252,10 @@ func TestHandleBootstrap(t *testing.T) {
 	})
 
 	t.Run("Failure - Rotation fails for disabled bootstrap user", func(t *testing.T) {
+		t.Parallel()
 		h3, _ := setupTestHTTPHandler(t)
 		// 1. Bootstrap
-		user, _ := h3.userSvc.CreateBootstrapUser("superadmin@g8e.local", "Superadmin")
+		user, _ := h3.userSvc.CreateBootstrapUser()
 		// 2. Disable
 		h3.userSvc.Disable(user.ID, "retired", "actor", "op")
 
@@ -1165,9 +1281,10 @@ func TestHandleBootstrap(t *testing.T) {
 	})
 
 	t.Run("Failure - Rejects bootstrap if ANY other users exist", func(t *testing.T) {
+		t.Parallel()
 		h4, _ := setupTestHTTPHandler(t)
 		// Create a regular user first
-		h4.userSvc.CreateUser("alice@example.com", "Alice")
+		h4.userSvc.CreateUser()
 
 		body := map[string]string{
 			"email": "superadmin@g8e.local",
@@ -1185,9 +1302,11 @@ func TestHandleBootstrap(t *testing.T) {
 }
 
 func TestHandleBootstrapStatus(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("Initially not bootstrapped", func(t *testing.T) {
+		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
 		rr := httptest.NewRecorder()
 		h.handleBootstrapStatus(rr, req)
@@ -1200,7 +1319,8 @@ func TestHandleBootstrapStatus(t *testing.T) {
 	})
 
 	t.Run("Bootstrapped after creating a user", func(t *testing.T) {
-		_, err := h.userSvc.CreateUser("superadmin@g8e.local", "Superadmin")
+		t.Parallel()
+		_, err := h.userSvc.CreateUser()
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
@@ -1216,12 +1336,15 @@ func TestHandleBootstrapStatus(t *testing.T) {
 }
 
 func TestContainsTraversal(t *testing.T) {
-	assert.True(t, containsTraversal("/a/../b"))
-	assert.True(t, containsTraversal("../etc/passwd"))
-	assert.False(t, containsTraversal("/a/b/c"))
+	t.Parallel()
+	h := &HTTPHandler{}
+	assert.True(t, h.containsTraversal("/a/../b"))
+	assert.True(t, h.containsTraversal("../etc/passwd"))
+	assert.False(t, h.containsTraversal("/a/b/c"))
 }
 
 func TestBlobSegmentValid(t *testing.T) {
+	t.Parallel()
 	assert.True(t, blobSegmentValid("valid-segment"))
 	assert.False(t, blobSegmentValid(""))
 	assert.False(t, blobSegmentValid(".."))
@@ -1242,6 +1365,7 @@ func (e *errorReader) Read(p []byte) (n int, err error) {
 // accepted on internal routes when the cli session is owned by the bound
 // operator session.
 func TestCLICertBoundToOperator(t *testing.T) {
+	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	const (
@@ -1267,24 +1391,28 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("CLI cert bound to operator session is accepted", func(t *testing.T) {
+		t.Parallel()
 		assert.True(t, h.auth.cliCertBoundToOperator(
 			[]*url.URL{cliURI}, cliSessionID, userID, operatorSessionID,
 		))
 	})
 
 	t.Run("CLI cert bound to a different operator session is rejected", func(t *testing.T) {
+		t.Parallel()
 		assert.False(t, h.auth.cliCertBoundToOperator(
 			[]*url.URL{cliURI}, cliSessionID, userID, otherOpSessionID,
 		))
 	})
 
 	t.Run("operator URI is not accepted via the CLI path", func(t *testing.T) {
+		t.Parallel()
 		assert.False(t, h.auth.cliCertBoundToOperator(
 			[]*url.URL{opURI}, cliSessionID, userID, operatorSessionID,
 		))
 	})
 
 	t.Run("expired CLI session is rejected", func(t *testing.T) {
+		t.Parallel()
 		expired := models.CLISession{
 			ID:                "cli-expired",
 			UserID:            userID,
