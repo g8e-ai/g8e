@@ -156,8 +156,8 @@ It binds identity, intent, state, and governance proofs into one transaction.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | id | [string](#string) |  | Identity &amp; Metadata |
-| timestamp | [google.protobuf.Timestamp](https://protobuf.dev/reference/protobuf/google.protobuf/#timestamp) |  |  |
-| expires_at | [google.protobuf.Timestamp](https://protobuf.dev/reference/protobuf/google.protobuf/#timestamp) |  |  |
+| timestamp | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| expires_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
 | source_component | [Component](#g8e-common-v1-Component) |  |  |
 | operator_id | [string](#string) |  |  |
 | operator_session_id | [string](#string) |  |  |
@@ -165,7 +165,7 @@ It binds identity, intent, state, and governance proofs into one transaction.
 | cli_session_id | [string](#string) |  |  |
 | event_type | [string](#string) |  | Intent &amp; Payload |
 | payload | [bytes](#bytes) |  | Raw protobuf payload |
-| intent_data | [google.protobuf.Struct](https://protobuf.dev/reference/protobuf/google.protobuf/#struct) |  | Structured JSON-first view |
+| intent_data | [google.protobuf.Struct](#google-protobuf-Struct) |  | Structured JSON-first view |
 | action_type | [string](#string) |  | UAP-compatible action type (e.g., EXECUTE_BASH) |
 | target_resource | [string](#string) |  | UAP-compatible target resource |
 | state_merkle_root | [string](#string) |  | State &amp; Replay Protection |
