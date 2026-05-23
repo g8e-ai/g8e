@@ -69,9 +69,9 @@ message GovernanceMetadata {
   L1Metadata l1 = 1;
   L2Metadata l2 = 2;
   L3Metadata l3 = 3;
-  // Metadata about the implicit/standalone nature of the transaction.
-  // Set to true if signed by a local gateway signer without full Tribunal consensus.
-  bool implicit_l2_signature = 4;
+  // Set to true if signed by the local gateway without full Tribunal consensus.
+  // This is used for single-agent MCP clients that bypass the L2 consensus layer.
+  bool gateway_signed = 4;
 }
 
 // GovernanceEnvelope is the single canonical container for all g8e mutations.

@@ -341,11 +341,11 @@ type GovernanceMetadata struct {
 	L1    *L1Metadata            `protobuf:"bytes,1,opt,name=l1,proto3" json:"l1,omitempty"`
 	L2    *L2Metadata            `protobuf:"bytes,2,opt,name=l2,proto3" json:"l2,omitempty"`
 	L3    *L3Metadata            `protobuf:"bytes,3,opt,name=l3,proto3" json:"l3,omitempty"`
-	// Metadata about the implicit/standalone nature of the transaction.
-	// Set to true if signed by a local gateway signer without full Tribunal consensus.
-	ImplicitL2Signature bool `protobuf:"varint,4,opt,name=implicit_l2_signature,json=implicitL2Signature,proto3" json:"implicit_l2_signature,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Set to true if signed by the local gateway without full Tribunal consensus.
+	// This is used for single-agent MCP clients that bypass the L2 consensus layer.
+	GatewaySigned bool `protobuf:"varint,4,opt,name=gateway_signed,json=gatewaySigned,proto3" json:"gateway_signed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GovernanceMetadata) Reset() {
@@ -399,9 +399,9 @@ func (x *GovernanceMetadata) GetL3() *L3Metadata {
 	return nil
 }
 
-func (x *GovernanceMetadata) GetImplicitL2Signature() bool {
+func (x *GovernanceMetadata) GetGatewaySigned() bool {
 	if x != nil {
-		return x.ImplicitL2Signature
+		return x.GatewaySigned
 	}
 	return false
 }
@@ -669,12 +669,12 @@ const file_common_proto_rawDesc = "" +
 	"\n" +
 	"L3Metadata\x12,\n" +
 	"\x05proof\x18\x01 \x01(\v2\x16.g8e.common.v1.L3ProofR\x05proof\x12#\n" +
-	"\rauto_approved\x18\x02 \x01(\bR\fautoApproved\"\xc9\x01\n" +
+	"\rauto_approved\x18\x02 \x01(\bR\fautoApproved\"\xbc\x01\n" +
 	"\x12GovernanceMetadata\x12)\n" +
 	"\x02l1\x18\x01 \x01(\v2\x19.g8e.common.v1.L1MetadataR\x02l1\x12)\n" +
 	"\x02l2\x18\x02 \x01(\v2\x19.g8e.common.v1.L2MetadataR\x02l2\x12)\n" +
-	"\x02l3\x18\x03 \x01(\v2\x19.g8e.common.v1.L3MetadataR\x02l3\x122\n" +
-	"\x15implicit_l2_signature\x18\x04 \x01(\bR\x13implicitL2Signature\"\x9f\a\n" +
+	"\x02l3\x18\x03 \x01(\v2\x19.g8e.common.v1.L3MetadataR\x02l3\x12%\n" +
+	"\x0egateway_signed\x18\x04 \x01(\bR\rgatewaySigned\"\x9f\a\n" +
 	"\x12GovernanceEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x128\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x129\n" +

@@ -25,7 +25,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
@@ -345,4 +347,36 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 	body := w.Body.String()
 	require.Contains(t, body, "data:")
 	require.Contains(t, body, "streamed result")
+}
+
+func TestGatewayService_EnvelopeGatewaySigned(t *testing.T) {
+	// Test that MCP gateway sets GatewaySigned=true in envelope
+	pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
+	_ = pubKey
+
+	g := &GatewayService{
+		signingKey:        privKey,
+		keyID:             "test-key",
+		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+	}
+
+	opts := processGatewayOptions{
+		actionType:     constants.ActionTypeMcpCall,
+		targetResource: "test-tool",
+		payloadBytes:   []byte("{}"),
+	}
+
+	hash, uapBytes, err := g.processGatewayTransaction(context.Background(), opts)
+	require.NoError(t, err)
+	require.NotEmpty(t, hash)
+	require.NotEmpty(t, uapBytes)
+
+	// Parse the envelope to verify GatewaySigned is set
+	var envelope commonv1.GovernanceEnvelope
+	err = protojson.Unmarshal(uapBytes, &envelope)
+	require.NoError(t, err)
+
+	// Verify GatewaySigned is set to true
+	require.NotNil(t, envelope.Governance)
+	require.True(t, envelope.Governance.GatewaySigned, "MCP gateway should set GatewaySigned=true for single-agent clients")
 }

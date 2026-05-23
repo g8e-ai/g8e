@@ -14,7 +14,10 @@
 package storage
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -131,6 +134,87 @@ func (ls *LocalStoreService) GetDB() *sqliteutil.DB {
 	return ls.db
 }
 
+// GetCurrentStateRoot calculates and returns the current state merkle root.
+// This provides real state binding for transaction verification in outbound mode.
+func (ls *LocalStoreService) GetCurrentStateRoot() (string, error) {
+	type row struct {
+		Table  string        `json:"table"`
+		Values []interface{} `json:"values"`
+	}
+
+	rowsToHash := make([]row, 0)
+	now := sqliteutil.NowTimestamp()
+
+	// 1. Execution log (authoritative command history)
+	// Include only content fields, exclude metadata-only timestamps
+	execRows, err := ls.db.Query("SELECT id, command, exit_code, duration_ms, stdout_hash, stderr_hash, operator_id FROM execution_log ORDER BY id")
+	if err != nil {
+		return "", fmt.Errorf("failed to query execution_log for state root: %w", err)
+	}
+	for execRows.Next() {
+		var id, command, stdoutHash, stderrHash, operatorID string
+		var exitCode, durationMs int64
+		if err := execRows.Scan(&id, &command, &exitCode, &durationMs, &stdoutHash, &stderrHash, &operatorID); err != nil {
+			execRows.Close()
+			return "", fmt.Errorf("failed to scan execution_log row: %w", err)
+		}
+		rowsToHash = append(rowsToHash, row{"execution_log", []interface{}{id, command, exitCode, durationMs, stdoutHash, stderrHash, operatorID}})
+	}
+	if err := execRows.Err(); err != nil {
+		execRows.Close()
+		return "", fmt.Errorf("execution_log iteration error: %w", err)
+	}
+	execRows.Close()
+
+	// 2. File diff log (authoritative file mutation history)
+	diffRows, err := ls.db.Query("SELECT id, file_path, operation, ledger_hash_before, ledger_hash_after, diff_hash FROM file_diff_log ORDER BY id")
+	if err != nil {
+		return "", fmt.Errorf("failed to query file_diff_log for state root: %w", err)
+	}
+	for diffRows.Next() {
+		var id, filePath, operation, hashBefore, hashAfter, diffHash string
+		if err := diffRows.Scan(&id, &filePath, &operation, &hashBefore, &hashAfter, &diffHash); err != nil {
+			diffRows.Close()
+			return "", fmt.Errorf("failed to scan file_diff_log row: %w", err)
+		}
+		rowsToHash = append(rowsToHash, row{"file_diff_log", []interface{}{id, filePath, operation, hashBefore, hashAfter, diffHash}})
+	}
+	if err := diffRows.Err(); err != nil {
+		diffRows.Close()
+		return "", fmt.Errorf("file_diff_log iteration error: %w", err)
+	}
+	diffRows.Close()
+
+	// 3. KV store (authoritative key-value state)
+	// Filter for active entries only (not expired)
+	kvRows, err := ls.db.Query("SELECT key, value, COALESCE(expires_at, '') FROM kv WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", now)
+	if err != nil {
+		return "", fmt.Errorf("failed to query kv for state root: %w", err)
+	}
+	for kvRows.Next() {
+		var key, value, expiresAt string
+		if err := kvRows.Scan(&key, &value, &expiresAt); err != nil {
+			kvRows.Close()
+			return "", fmt.Errorf("failed to scan kv row: %w", err)
+		}
+		rowsToHash = append(rowsToHash, row{"kv", []interface{}{key, value, expiresAt}})
+	}
+	if err := kvRows.Err(); err != nil {
+		kvRows.Close()
+		return "", fmt.Errorf("kv iteration error: %w", err)
+	}
+	kvRows.Close()
+
+	// 4. Nonces are EXCLUDED (volatile replay protection metadata)
+
+	payload, err := json.Marshal(rowsToHash)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal state root payload: %w", err)
+	}
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:]), nil
+}
+
 var localStoreMigrations = []sqliteutil.Migration{
 	{
 		Version:     1,
@@ -191,6 +275,23 @@ var localStoreMigrations = []sqliteutil.Migration{
 			expires_at TEXT
 		);
 		CREATE INDEX IF NOT EXISTS idx_kv_expiry ON kv(expires_at);
+		`,
+	},
+	{
+		Version:     3,
+		Description: "Add suspended_transactions table for L3 OOB approval in outbound mode",
+		SQL: `
+		CREATE TABLE IF NOT EXISTS suspended_transactions (
+			transaction_hash TEXT PRIMARY KEY,
+			envelope TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL,
+			tool_name TEXT,
+			tool_arguments TEXT,
+			user_id TEXT,
+			operator_id TEXT
+		);
+		CREATE INDEX IF NOT EXISTS idx_suspended_expires_at ON suspended_transactions(expires_at);
 		`,
 	},
 }
@@ -714,4 +815,173 @@ func (ls *LocalStoreService) GetFileDiffsBySession(operatorSessionID string, lim
 	}
 
 	return records, rows.Err()
+}
+
+// SuspendedTransaction represents a transaction awaiting L3 approval.
+type SuspendedTransaction struct {
+	TransactionHash string
+	Envelope        []byte
+	CreatedAt       time.Time
+	ExpiresAt       time.Time
+	ToolName        string
+	ToolArguments   []byte
+	UserID          string
+	OperatorID      string
+}
+
+// StoreSuspendedTransaction stores a transaction awaiting L3 approval.
+func (ls *LocalStoreService) StoreSuspendedTransaction(tx *SuspendedTransaction) error {
+	if ls == nil || ls.db == nil {
+		return fmt.Errorf("local store not initialized")
+	}
+	query := `
+	INSERT INTO suspended_transactions (
+		transaction_hash, envelope, created_at, expires_at,
+		tool_name, tool_arguments, user_id, operator_id
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(transaction_hash) DO UPDATE SET
+		envelope = excluded.envelope,
+		expires_at = excluded.expires_at
+	`
+	_, err := ls.db.Exec(
+		query,
+		tx.TransactionHash,
+		string(tx.Envelope),
+		sqliteutil.FormatTimestamp(tx.CreatedAt),
+		sqliteutil.FormatTimestamp(tx.ExpiresAt),
+		tx.ToolName,
+		string(tx.ToolArguments),
+		tx.UserID,
+		tx.OperatorID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to store suspended transaction: %w", err)
+	}
+	return nil
+}
+
+// GetSuspendedTransaction retrieves a suspended transaction by hash.
+// Returns (nil, false) if not found or expired.
+func (ls *LocalStoreService) GetSuspendedTransaction(txHash string) (*SuspendedTransaction, bool) {
+	if ls == nil || ls.db == nil {
+		return nil, false
+	}
+	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID sql.NullString
+	err := ls.db.QueryRow(
+		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
+		txHash, sqliteutil.NowTimestamp(),
+	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, false
+		}
+		ls.logger.Error("Failed to query suspended transaction", "tx_hash", txHash, string(constants.ConnectionStateError), err)
+		return nil, false
+	}
+
+	createdAt, _ := sqliteutil.ParseTimestamp(createdAtStr.String)
+	expiresAt, _ := sqliteutil.ParseTimestamp(expiresAtStr.String)
+
+	var toolArgs []byte
+	if toolArgsStr.Valid {
+		toolArgs = []byte(toolArgsStr.String)
+	}
+
+	return &SuspendedTransaction{
+		TransactionHash: txHash,
+		Envelope:        []byte(envelopeStr.String),
+		CreatedAt:       createdAt,
+		ExpiresAt:       expiresAt,
+		ToolName:        toolName.String,
+		ToolArguments:   toolArgs,
+		UserID:          userID.String,
+		OperatorID:      operatorID.String,
+	}, true
+}
+
+// ListSuspendedTransactions retrieves all non-expired suspended transactions.
+// Optionally filters by user_id if provided.
+func (ls *LocalStoreService) ListSuspendedTransactions(userID string) ([]*SuspendedTransaction, error) {
+	if ls == nil || ls.db == nil {
+		return nil, fmt.Errorf("local store not initialized")
+	}
+
+	var rows *sql.Rows
+	var err error
+
+	if userID != "" {
+		rows, err = ls.db.Query(
+			"SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC",
+			userID, sqliteutil.NowTimestamp(),
+		)
+	} else {
+		rows, err = ls.db.Query(
+			"SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC",
+			sqliteutil.NowTimestamp(),
+		)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to query suspended transactions: %w", err)
+	}
+	defer rows.Close()
+
+	var transactions []*SuspendedTransaction
+	for rows.Next() {
+		var txHash, envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID sql.NullString
+		if err := rows.Scan(&txHash, &envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID); err != nil {
+			ls.logger.Error("Failed to scan suspended transaction row", string(constants.ConnectionStateError), err)
+			continue
+		}
+
+		createdAt, _ := sqliteutil.ParseTimestamp(createdAtStr.String)
+		expiresAt, _ := sqliteutil.ParseTimestamp(expiresAtStr.String)
+
+		var toolArgs []byte
+		if toolArgsStr.Valid {
+			toolArgs = []byte(toolArgsStr.String)
+		}
+
+		transactions = append(transactions, &SuspendedTransaction{
+			TransactionHash: txHash.String,
+			Envelope:        []byte(envelopeStr.String),
+			CreatedAt:       createdAt,
+			ExpiresAt:       expiresAt,
+			ToolName:        toolName.String,
+			ToolArguments:   toolArgs,
+			UserID:          userID.String,
+			OperatorID:      operatorID.String,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating suspended transactions: %w", err)
+	}
+
+	return transactions, nil
+}
+
+// DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
+func (ls *LocalStoreService) DeleteSuspendedTransaction(txHash string) error {
+	if ls == nil || ls.db == nil {
+		return fmt.Errorf("local store not initialized")
+	}
+	_, err := ls.db.Exec("DELETE FROM suspended_transactions WHERE transaction_hash = ?", txHash)
+	if err != nil {
+		return fmt.Errorf("failed to delete suspended transaction: %w", err)
+	}
+	return nil
+}
+
+// CleanupExpiredSuspendedTransactions removes expired suspended transactions.
+// Returns the count of deleted transactions.
+func (ls *LocalStoreService) CleanupExpiredSuspendedTransactions() (int64, error) {
+	if ls == nil || ls.db == nil {
+		return 0, nil
+	}
+	result, err := ls.db.Exec("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
+	if err != nil {
+		return 0, fmt.Errorf("failed to cleanup expired suspended transactions: %w", err)
+	}
+	return result.RowsAffected()
 }

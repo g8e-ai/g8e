@@ -48,6 +48,8 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, constants.Status.ComponentName.G8EO, cfg.ComponentName)
 	assert.Equal(t, "g8e", cfg.ProjectID)
 	assert.Equal(t, 25, cfg.MaxConcurrentTasks)
+	// Outbound mode defaults to notary posture since L3Notary is nil
+	assert.Equal(t, PostureNotary, cfg.Posture)
 	assert.Equal(t, 2048, cfg.MaxMemoryMB)
 	assert.Equal(t, 30*time.Second, cfg.HeartbeatInterval)
 	assert.Equal(t, int64(1024), cfg.LocalStoreMaxSizeMB)

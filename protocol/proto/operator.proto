@@ -466,8 +466,9 @@ message ActionReceipt {
   // ED25519 signature over canonical serialization of fields 1-8
   string signature = 9;
 
-  // Flag indicating if the transaction was signed implicitly (gateway-local).
-  bool implicit_l2_signature = 10;
+  // Flag indicating if the transaction was signed by the local gateway without full Tribunal consensus.
+  // This is used for single-agent MCP clients that bypass the L2 consensus layer.
+  bool gateway_signed = 10;
 
   // Flag indicating if L2 (Consensus/Tribunal) signature was valid.
   // Set to false if signature was missing or invalid but posture allowed execution.

@@ -599,7 +599,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		Nonce:           uuid.New().String(),
 		StateMerkleRoot: stateRoot,
 		Governance: &commonv1.GovernanceMetadata{
-			ImplicitL2Signature: true,
+			GatewaySigned: true,
 		},
 	}
 

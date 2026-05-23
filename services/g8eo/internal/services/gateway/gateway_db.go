@@ -355,7 +355,7 @@ func (s *GatewayDBService) runDataMigrations() error {
 	// Check if migration already applied by checking for the old secret fields
 	var hasSecrets int
 	err = s.db.QueryRow(
-		"SELECT COUNT(*) FROM documents WHERE collection = 'settings' AND id = 'app_settings' AND (json_extract(data, '$.settings.session_encryption_key') IS NOT NULL OR json_extract(data, '$.settings.Actuator_signing_key') IS NOT NULL OR json_extract(data, '$.settings.auditor_hmac_key') IS NOT NULL)",
+		"SELECT COUNT(*) FROM documents WHERE collection = 'settings' AND id = 'app_settings' AND (json_extract(data, '$.settings.session_encryption_key') IS NOT NULL OR json_extract(data, '$.settings.actuator_signing_key') IS NOT NULL OR json_extract(data, '$.settings.auditor_hmac_key') IS NOT NULL)",
 	).Scan(&hasSecrets)
 	if err != nil {
 		return err
@@ -371,7 +371,7 @@ func (s *GatewayDBService) runDataMigrations() error {
 		 SET data = json_remove(
 			 json_remove(
 				 json_remove(data, '$.settings.session_encryption_key'),
-				 '$.settings.Actuator_signing_key'
+				 '$.settings.actuator_signing_key'
 			 ),
 			 '$.settings.auditor_hmac_key'
 		 ),
@@ -1310,6 +1310,65 @@ func (s *GatewayDBService) GetSuspendedTransaction(txHash string) (*models.Suspe
 		UserID:          userID,
 		OperatorID:      operatorID,
 	}, true
+}
+
+// ListSuspendedTransactions retrieves all non-expired suspended transactions.
+// Optionally filters by user_id if provided.
+func (s *GatewayDBService) ListSuspendedTransactions(userID string) ([]*models.SuspendedTransaction, error) {
+	var rows *sql.Rows
+	var err error
+
+	if userID != "" {
+		rows, err = s.db.Query(
+			"SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC",
+			userID, sqliteutil.NowTimestamp(),
+		)
+	} else {
+		rows, err = s.db.Query(
+			"SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC",
+			sqliteutil.NowTimestamp(),
+		)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var transactions []*models.SuspendedTransaction
+	for rows.Next() {
+		var txHash, envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID string
+		if err := rows.Scan(&txHash, &envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID); err != nil {
+			continue
+		}
+
+		createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
+		if err != nil {
+			continue
+		}
+		expiresAt, err := sqliteutil.ParseTimestamp(expiresAtStr)
+		if err != nil {
+			continue
+		}
+
+		var toolArgs json.RawMessage
+		if toolArgsStr != "" {
+			toolArgs = json.RawMessage(toolArgsStr)
+		}
+
+		transactions = append(transactions, &models.SuspendedTransaction{
+			TransactionHash: txHash,
+			Envelope:        json.RawMessage(envelopeStr),
+			CreatedAt:       createdAt,
+			ExpiresAt:       expiresAt,
+			ToolName:        toolName,
+			ToolArguments:   toolArgs,
+			UserID:          userID,
+			OperatorID:      operatorID,
+		})
+	}
+
+	return transactions, nil
 }
 
 // DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.

@@ -25,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 	"github.com/google/uuid"
@@ -352,4 +353,73 @@ func TestCanonicalizeActionReceipt(t *testing.T) {
 	require.Equal(t, "root-after", parsed["state_root_after"])
 	require.Equal(t, float64(1234567890), parsed["executed_at_unix_ms"])
 	require.Equal(t, "test-key-id", parsed["signer_key_id"])
+}
+
+func TestActuatorGatewaySignedPropagation(t *testing.T) {
+	Actuator, _ := newTestActuator(t)
+
+	// Create envelope with GatewaySigned=true
+	envelope := &uap.UAPEnvelope{
+		Id:                uuid.New().String(),
+		TransactionHash:   "test-hash-1234567890abcdef",
+		OperatorId:        "test-operator",
+		OperatorSessionId: "test-operator-session",
+		ActionType:        string(constants.ActionTypeExecuteBash),
+		TargetResource:    "localhost",
+		Governance: &commonv1.GovernanceMetadata{
+			GatewaySigned: true,
+		},
+	}
+
+	vt := &VerifiedTransaction{
+		Envelope:   envelope,
+		ActionType: constants.ActionTypeExecuteBash,
+	}
+
+	// Execute
+	receipt, err := Actuator.Execute(context.Background(), vt, nil)
+	require.NoError(t, err)
+	require.NotNil(t, receipt)
+
+	// Verify GatewaySigned is propagated to receipt
+	require.True(t, receipt.GatewaySigned, "GatewaySigned should be propagated from envelope to receipt")
+
+	// Verify audit record also has GatewaySigned
+	auditStore := Actuator.AuditStore.(*mockAuditStore)
+	require.Len(t, auditStore.calls, 2)
+
+	var finalRecord models.ActionReceiptRecord
+	err = json.Unmarshal(auditStore.calls[1].data, &finalRecord)
+	require.NoError(t, err)
+	require.True(t, finalRecord.GatewaySigned, "Audit record should have GatewaySigned=true")
+}
+
+func TestActuatorGatewaySignedFalse(t *testing.T) {
+	Actuator, _ := newTestActuator(t)
+
+	// Create envelope with GatewaySigned=false (normal Tribunal path)
+	envelope := &uap.UAPEnvelope{
+		Id:                uuid.New().String(),
+		TransactionHash:   "test-hash-1234567890abcdef",
+		OperatorId:        "test-operator",
+		OperatorSessionId: "test-operator-session",
+		ActionType:        string(constants.ActionTypeExecuteBash),
+		TargetResource:    "localhost",
+		Governance: &commonv1.GovernanceMetadata{
+			GatewaySigned: false,
+		},
+	}
+
+	vt := &VerifiedTransaction{
+		Envelope:   envelope,
+		ActionType: constants.ActionTypeExecuteBash,
+	}
+
+	// Execute
+	receipt, err := Actuator.Execute(context.Background(), vt, nil)
+	require.NoError(t, err)
+	require.NotNil(t, receipt)
+
+	// Verify GatewaySigned is false in receipt
+	require.False(t, receipt.GatewaySigned, "GatewaySigned should be false for Tribunal-signed transactions")
 }

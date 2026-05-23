@@ -206,6 +206,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// OOB Approval UI for suspended MCP/A2A transactions
 	mux.HandleFunc("/approve/", h.handleApprovalPage)
 	authedMux.HandleFunc("/api/approve/", h.handleApprovalAction)
+	authedMux.HandleFunc("/api/suspended-transactions", h.handleListSuspendedTransactions)
 
 	// Wrap authed routes in WebSessionAuth middleware
 	mux.Handle("/api/user/", h.auth.WebSessionAuth(authedMux, h.db))
@@ -2434,22 +2435,35 @@ func (h *HTTPHandler) handleUsers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleApprovalAction handles WebAuthn challenge/verify for suspended transactions.
+// handleApprovalAction handles WebAuthn challenge/verify and CLI approval for suspended transactions.
 func (h *HTTPHandler) handleApprovalAction(w http.ResponseWriter, r *http.Request) {
-	// Path format: /api/approve/{txHash}/{action}
+	// Path format: /api/approve/{txHash} or /api/approve/{txHash}/{action}
 	path := strings.TrimPrefix(r.URL.Path, "/api/approve/")
 	parts := strings.Split(path, "/")
-	if len(parts) < 2 {
+	if len(parts) < 1 {
 		jsonError(w, http.StatusBadRequest, "invalid request path")
 		return
 	}
 
 	txHash := parts[0]
-	action := parts[1]
+	action := ""
+	if len(parts) > 1 {
+		action = parts[1]
+	}
 
 	userID, ok := r.Context().Value(userIDKey).(string)
 	if !ok || userID == "" {
 		jsonError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	// If no action specified, treat as direct CLI approval (POST with mtls_cert_fingerprint)
+	if action == "" {
+		if r.Method != http.MethodPost {
+			jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.handleCLIApproval(w, r, txHash, userID)
 		return
 	}
 
@@ -2531,6 +2545,60 @@ func (h *HTTPHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Reques
 		AuthenticatorData: req.AuthenticatorData,
 		Signature:         req.Signature,
 		CredentialId:      req.ID,
+	}
+
+	// Resume the transaction with the proof
+	receipt, err := h.mcp.ResumeWithL3Proof(r.Context(), txHash, userID, proof)
+	if err != nil {
+		// If it's still a verification failure, return the receipt if available
+		if receipt != nil {
+			jsonResponse(w, http.StatusForbidden, receipt)
+			return
+		}
+		jsonError(w, http.StatusForbidden, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, receipt)
+}
+
+// handleCLIApproval handles CLI-based approval using mTLS cert fingerprint.
+func (h *HTTPHandler) handleCLIApproval(w http.ResponseWriter, r *http.Request, txHash, userID string) {
+	// Retrieve suspended transaction to ensure it exists and belongs to the user
+	suspendedTx, ok := h.mcp.GetSuspendedTransaction(txHash)
+	if !ok {
+		jsonError(w, http.StatusNotFound, "transaction not found or expired")
+		return
+	}
+
+	// Verify the logged-in user is authorized to approve this transaction
+	if suspendedTx.UserID != "" && suspendedTx.UserID != userID {
+		jsonError(w, http.StatusForbidden, "transaction belongs to another user")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req struct {
+		MtlsCertFingerprint string `json:"mtls_cert_fingerprint"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.MtlsCertFingerprint == "" {
+		jsonError(w, http.StatusBadRequest, "mtls_cert_fingerprint required")
+		return
+	}
+
+	// Create L3 proof with mtls_cert_fingerprint for CLI approval
+	proof := &commonv1.L3Proof{
+		MtlsCertFingerprint: req.MtlsCertFingerprint,
 	}
 
 	// Resume the transaction with the proof
@@ -2730,6 +2798,59 @@ func (h *HTTPHandler) handleApprovalPage(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(html))
+}
+
+// handleListSuspendedTransactions lists all suspended transactions awaiting approval.
+func (h *HTTPHandler) handleListSuspendedTransactions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	userID, ok := r.Context().Value(userIDKey).(string)
+	if !ok || userID == "" {
+		jsonError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	// Query the user ID from the URL if provided (for admin access)
+	queryUserID := r.URL.Query().Get("user_id")
+	if queryUserID == "" {
+		queryUserID = userID
+	}
+
+	// Get suspended transactions from the gateway DB service
+	transactions, err := h.db.ListSuspendedTransactions(queryUserID)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, fmt.Sprintf("failed to list suspended transactions: %v", err))
+		return
+	}
+
+	// Convert to JSON-serializable format
+	type SuspendedTxResponse struct {
+		TransactionHash string    `json:"transaction_hash"`
+		CreatedAt       time.Time `json:"created_at"`
+		ExpiresAt       time.Time `json:"expires_at"`
+		ToolName        string    `json:"tool_name"`
+		UserID          string    `json:"user_id"`
+		OperatorID      string    `json:"operator_id"`
+	}
+
+	var txResponses []SuspendedTxResponse
+	for _, tx := range transactions {
+		txResponses = append(txResponses, SuspendedTxResponse{
+			TransactionHash: tx.TransactionHash,
+			CreatedAt:       tx.CreatedAt,
+			ExpiresAt:       tx.ExpiresAt,
+			ToolName:        tx.ToolName,
+			UserID:          tx.UserID,
+			OperatorID:      tx.OperatorID,
+		})
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"transactions": txResponses,
+	})
 }
 
 // =============================================================================

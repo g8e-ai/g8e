@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/auth"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/gateway"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
@@ -38,6 +39,7 @@ type G8eoService struct {
 	logger *slog.Logger
 
 	bootstrap      *auth.BootstrapService
+	secretManager  *gateway.SecretManager
 	execution      *execution.ExecutionService
 	fileEdit       *execution.FileEditService
 	pubSubCommands *pubsub.PubSubCommandService
@@ -122,36 +124,47 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.execution = execution.NewExecutionService(vs.config, vs.logger)
 	vs.fileEdit = execution.NewFileEditService(vs.config, vs.logger)
 
-	// Initialize Data Services
-	if vs.config.LocalStoreEnabled {
-		localStoreConfig := &storage.LocalStoreConfig{
-			DBPath:               vs.config.LocalStoreDBPath,
-			MaxDBSizeMB:          vs.config.LocalStoreMaxSizeMB,
-			RetentionDays:        vs.config.LocalStoreRetentionDays,
-			PruneIntervalMinutes: 60,
-			Enabled:              true,
-		}
-		vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger)
-		if err != nil {
-			vs.logger.Warn("Failed to initialize scrubbed vault - continuing without it", string(constants.ConnectionStateError), err)
-		} else if vs.localStore != nil {
-			vs.logger.Info("Scrubbed vault initialized (AI-accessible)")
-		}
-
-		rawVaultConfig := &storage.RawVaultConfig{
-			DBPath:               filepath.Join(vs.config.WorkDir, ".g8e", "raw_vault.db"),
-			MaxDBSizeMB:          2048,
-			RetentionDays:        30,
-			PruneIntervalMinutes: 60,
-			Enabled:              true,
-		}
-		vs.rawVault, err = storage.NewRawVaultService(rawVaultConfig, vs.logger)
-		if err != nil {
-			vs.logger.Warn("Failed to initialize raw vault - continuing without it", string(constants.ConnectionStateError), err)
-		} else if vs.rawVault != nil {
-			vs.logger.Info("Raw vault initialized (customer data store)")
-		}
+	// Initialize Data Services - mandatory for replay protection
+	if !vs.config.LocalStoreEnabled {
+		return fmt.Errorf("local storage must be enabled for replay protection - set LocalStorageEnabled=true")
 	}
+
+	localStoreConfig := &storage.LocalStoreConfig{
+		DBPath:               vs.config.LocalStoreDBPath,
+		MaxDBSizeMB:          vs.config.LocalStoreMaxSizeMB,
+		RetentionDays:        vs.config.LocalStoreRetentionDays,
+		PruneIntervalMinutes: 60,
+		Enabled:              true,
+	}
+	vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize local store (required for replay protection): %w", err)
+	}
+	vs.logger.Info("Local store initialized (AI-accessible)")
+
+	// Initialize SecretManager for loading signing keys (Actuator and Tribunal)
+	secretsDir := filepath.Join(vs.config.WorkDir, ".g8e", "secrets")
+	vs.secretManager, err = gateway.NewSecretManager(vs.localStore.GetDB(), secretsDir, vs.logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize secret manager: %w", err)
+	}
+	if err := vs.secretManager.InitAppSettings(); err != nil {
+		return fmt.Errorf("failed to initialize app settings: %w", err)
+	}
+	vs.logger.Info("Secret manager initialized")
+
+	rawVaultConfig := &storage.RawVaultConfig{
+		DBPath:               filepath.Join(vs.config.WorkDir, ".g8e", "raw_vault.db"),
+		MaxDBSizeMB:          2048,
+		RetentionDays:        30,
+		PruneIntervalMinutes: 60,
+		Enabled:              true,
+	}
+	vs.rawVault, err = storage.NewRawVaultService(rawVaultConfig, vs.logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize raw vault: %w", err)
+	}
+	vs.logger.Info("Raw vault initialized (customer data store)")
 
 	vs.logger.Info("Initializing Local-First Audit Architecture (LFAA)...")
 
@@ -197,15 +210,16 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 
 	// Initialize P0 Transaction Gate infrastructure (replay protection and state root verification)
-	if vs.localStore != nil {
-		replayStore, err := storage.NewSQLReplayStore(vs.localStore.GetDB().DB, vs.logger)
-		if err != nil {
-			vs.logger.Warn("Failed to initialize replay store - transaction verification will not enforce replay protection", string(constants.ConnectionStateError), err)
-		} else {
-			vs.replayStore = replayStore
-			vs.logger.Info("Replay store initialized for transaction verification")
-		}
+	// ReplayStore is mandatory for fail-closed replay protection
+	if vs.localStore == nil {
+		return fmt.Errorf("local store is required for replay protection initialization")
 	}
+	replayStore, err := storage.NewSQLReplayStore(vs.localStore.GetDB().DB, vs.logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize replay store (required for transaction verification): %w", err)
+	}
+	vs.replayStore = replayStore
+	vs.logger.Info("Replay store initialized for transaction verification")
 
 	// Initialize PubSub Layer
 	vs.logger.Info("Establishing g8e connectivity...")
@@ -223,30 +237,54 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 
 	// Create governance dependencies for transaction verification
-	// Outbound mode does not configure L3Notary - mutations will fail-closed at verification layer
-	stateRootProvider := &governance.SimpleStateRootProvider{Root: vs.config.SystemFingerprint}
+	// Use real state root calculation from LocalStoreService for state binding
+	stateRootProvider := vs.localStore
 	transactionAudit := &auditVaultTransactionStore{vault: vs.auditVault}
-	// NoOpL3Notary removed - outbound mode now fails-closed when mutations require L3 verification
-	// This is intentional: outbound operators must connect to a platform that provides L3 verification
+	// L3Notary for outbound mode: CLI-based approval via suspended transactions
+	// Mutations requiring L3 are suspended and must be approved via CLI command
+	cliL3Notary := governance.NewCLIL3Notary(vs.localStore, vs.logger)
+
+	// Load signing keys for Actuator and Tribunal (fail-closed if missing)
+	actuatorPriv, actuatorKeyID, err := vs.secretManager.GetActuatorKey()
+	if err != nil {
+		return fmt.Errorf("failed to load Actuator signing key: %w", err)
+	}
+	tribunalPriv, err := vs.secretManager.GetTribunalKey()
+	if err != nil {
+		return fmt.Errorf("failed to load Tribunal signing key: %w", err)
+	}
+	vs.logger.Info("Tribunal signing key loaded successfully")
+
+	// Load trusted L2 signers from filesystem (fail-closed if directory doesn't exist)
+	trustedSignersDir := filepath.Join(vs.config.PKIDir, "trusted_signers")
+	signerStore, err := governance.NewFilesystemSignerStore(trustedSignersDir, vs.logger)
+	if err != nil {
+		return fmt.Errorf("failed to load trusted signers from %s: %w", trustedSignersDir, err)
+	}
+	vs.logger.Info("Trusted L2 signers loaded from filesystem", "directory", trustedSignersDir)
 
 	// PubSubCommandService Construction
 	psConfig := pubsub.CommandServiceConfig{
-		Config:            vs.config,
-		Logger:            vs.logger,
-		Execution:         vs.execution,
-		FileEdit:          vs.fileEdit,
-		PubSubClient:      vs.pubSubClient,
-		ResultsService:    vs.pubSubResults,
-		LocalStore:        vs.localStore,
-		RawVault:          vs.rawVault,
-		AuditVault:        vs.auditVault,
-		Ledger:            vs.ledger,
-		HistoryHandler:    vs.historyHandler,
-		Sentinel:          sentinel.NewSentinel(ProductionSentinelConfig(), vs.logger),
-		ReplayStore:       vs.replayStore,
-		StateRootProvider: stateRootProvider,
-		TransactionAudit:  transactionAudit,
-		// L3Notary intentionally nil - mutations will fail-closed at TransactionVerifier
+		Config:             vs.config,
+		Logger:             vs.logger,
+		Execution:          vs.execution,
+		FileEdit:           vs.fileEdit,
+		PubSubClient:       vs.pubSubClient,
+		ResultsService:     vs.pubSubResults,
+		LocalStore:         vs.localStore,
+		RawVault:           vs.rawVault,
+		AuditVault:         vs.auditVault,
+		Ledger:             vs.ledger,
+		HistoryHandler:     vs.historyHandler,
+		Sentinel:           sentinel.NewSentinel(ProductionSentinelConfig(), vs.logger),
+		ReplayStore:        vs.replayStore,
+		StateRootProvider:  stateRootProvider,
+		TransactionAudit:   transactionAudit,
+		SignerStore:        signerStore,
+		ActuatorSigningKey: actuatorPriv,
+		ActuatorKeyID:      actuatorKeyID,
+		TribunalSigningKey: tribunalPriv,
+		L3Notary:           cliL3Notary,
 	}
 
 	vs.pubSubCommands, err = pubsub.NewPubSubCommandService(psConfig)
