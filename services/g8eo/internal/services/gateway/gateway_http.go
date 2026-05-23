@@ -36,6 +36,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/responder"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/mcp"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
@@ -61,6 +62,7 @@ type HTTPHandler struct {
 	passkey           *PasskeyService
 	userSvc           *UserService
 	apiKey            *ApiKeyService
+	responder         *responder.Responder
 	mcp               *mcp.GatewayService
 	isReady           func() bool
 	isGovernanceReady func() bool
@@ -71,7 +73,7 @@ type HTTPHandler struct {
 	envProc governance.EnvelopeProcessor
 }
 
-func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, sessionSvc *SessionService, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, mcpGateway *mcp.GatewayService, isReady func() bool, isGovernanceReady func() bool) *HTTPHandler {
+func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *GatewayDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, sessionSvc *SessionService, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, apiKey *ApiKeyService, responder *responder.Responder, mcpGateway *mcp.GatewayService, isReady func() bool, isGovernanceReady func() bool) *HTTPHandler {
 	return &HTTPHandler{
 		cfg:               cfg,
 		logger:            logger,
@@ -84,6 +86,7 @@ func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *GatewayDBServic
 		passkey:           passkey,
 		userSvc:           userSvc,
 		apiKey:            apiKey,
+		responder:         responder,
 		mcp:               mcpGateway,
 		isReady:           isReady,
 		isGovernanceReady: isGovernanceReady,
@@ -112,7 +115,7 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux.HandleFunc("/trust.bat", h.handleTrustScriptBat)
 	mux.HandleFunc("/g8e", h.handleG8eDeploy)
 
-	return pathTraversalGuard(mux)
+	return h.pathTraversalGuard(mux)
 }
 
 func (h *HTTPHandler) buildRouter() http.Handler {
@@ -177,7 +180,7 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/auth/passkey/credentials", h.handlePasskeyCredentials)
 	mux.HandleFunc("/api/auth/passkey/credentials/", h.handlePasskeyRevokeCredential)
 
-	return pathTraversalGuard(h.auth.Middleware(mux))
+	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
 
 func (h *HTTPHandler) buildPublicRouter() http.Handler {
@@ -226,13 +229,13 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // pathTraversalGuard rejects any request whose raw URL path contains a ".."
 // segment before Go's ServeMux can normalize the path and issue a 301 redirect.
-func pathTraversalGuard(next http.Handler) http.Handler {
+func (h *HTTPHandler) pathTraversalGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Clean the path to handle multiple slashes, etc.
 		cleaned := filepath.ToSlash(filepath.Clean(r.URL.Path))
 		if containsTraversal(r.URL.Path) || (cleaned != r.URL.Path && cleaned != r.URL.Path+"/" && r.URL.Path != "/") {
 			if containsTraversal(r.URL.Path) || strings.Contains(cleaned, "..") {
-				jsonError(w, http.StatusBadRequest, "invalid path")
+				h.responder.Error(w, http.StatusBadRequest, "invalid path")
 				return
 			}
 		}

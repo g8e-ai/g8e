@@ -27,32 +27,11 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
-
-// mockAuditStore is a test implementation of TransactionAuditStore.
-type mockAuditStore struct {
-	docSetFunc func(collection, id string, data json.RawMessage) error
-	calls      []struct {
-		collection string
-		id         string
-		data       json.RawMessage
-	}
-}
-
-func (m *mockAuditStore) DocSet(collection, id string, data json.RawMessage) error {
-	m.calls = append(m.calls, struct {
-		collection string
-		id         string
-		data       json.RawMessage
-	}{collection, id, data})
-	if m.docSetFunc != nil {
-		return m.docSetFunc(collection, id, data)
-	}
-	return nil
-}
 
 func newTestActuator(t *testing.T) (*Actuator, ed25519.PublicKey) {
 	t.Helper()
@@ -63,8 +42,8 @@ func newTestActuator(t *testing.T) (*Actuator, ed25519.PublicKey) {
 
 	// Create mock dependencies
 	mockHandler := &mockExecutionHandler{err: nil}
-	mockAuditStore := &mockAuditStore{}
-	mockStateRoot := &mockStateRootProvider{root: "test-state-root-123"}
+	mockAuditStore := testutil.NewConfigurableMockAuditStore(nil)
+	mockStateRoot := testutil.NewMockStateRootProvider("test-state-root-123")
 
 	logger := slog.Default()
 
@@ -126,24 +105,24 @@ func TestActuatorExecuteHappyPath(t *testing.T) {
 	require.True(t, valid, "Receipt signature should verify against Actuator public key")
 
 	// Verify audit store was called twice (initial EXECUTING receipt + final COMPLETED receipt)
-	auditStore := Actuator.AuditStore.(*mockAuditStore)
-	require.Len(t, auditStore.calls, 2)
+	auditStore := Actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
+	require.Len(t, auditStore.Calls, 2)
 
 	// Verify both calls were to console_audit collection
-	for _, call := range auditStore.calls {
-		require.Equal(t, marshaler.CollectionName(constants.CollectionConsoleAudit), call.collection)
-		require.Equal(t, envelope.Id, call.id)
+	for _, call := range auditStore.Calls {
+		require.Equal(t, marshaler.CollectionName(constants.CollectionConsoleAudit), call.Collection)
+		require.Equal(t, envelope.Id, call.ID)
 	}
 
 	// Verify initial receipt has EXECUTING status
 	var initialRecord models.ActionReceiptRecord
-	err = json.Unmarshal(auditStore.calls[0].data, &initialRecord)
+	err = json.Unmarshal(auditStore.Calls[0].Data, &initialRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING, initialRecord.Status)
 
 	// Verify final receipt has COMPLETED status
 	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(auditStore.calls[1].data, &finalRecord)
+	err = json.Unmarshal(auditStore.Calls[1].Data, &finalRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, finalRecord.Status)
 }
@@ -190,12 +169,12 @@ func TestActuatorExecuteHandlerError(t *testing.T) {
 	require.True(t, valid, "Receipt signature should verify even when handler fails")
 
 	// Verify audit store was called twice
-	auditStore := Actuator.AuditStore.(*mockAuditStore)
-	require.Len(t, auditStore.calls, 2)
+	auditStore := Actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
+	require.Len(t, auditStore.Calls, 2)
 
 	// Verify final receipt has FAILED status
 	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(auditStore.calls[1].data, &finalRecord)
+	err = json.Unmarshal(auditStore.Calls[1].Data, &finalRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, finalRecord.Status)
 }
@@ -204,9 +183,9 @@ func TestActuatorExecuteAuditWriteFailInitial(t *testing.T) {
 	Actuator, _ := newTestActuator(t)
 
 	// Configure audit store to fail on first call (initial receipt)
-	auditStore := Actuator.AuditStore.(*mockAuditStore)
+	auditStore := Actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
 	callCount := 0
-	auditStore.docSetFunc = func(collection, id string, data json.RawMessage) error {
+	auditStore.DocSetFunc = func(collection, id string, data json.RawMessage) error {
 		callCount++
 		if callCount == 1 {
 			return errors.New("audit write failed")
@@ -242,8 +221,8 @@ func TestActuatorExecuteReceiptPersistFail(t *testing.T) {
 	Actuator, _ := newTestActuator(t)
 
 	// Configure audit store to fail on DocSet
-	auditStore := Actuator.AuditStore.(*mockAuditStore)
-	auditStore.docSetFunc = func(collection, id string, data json.RawMessage) error {
+	auditStore := Actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
+	auditStore.DocSetFunc = func(collection, id string, data json.RawMessage) error {
 		return errors.New("doc set failed")
 	}
 
@@ -385,11 +364,11 @@ func TestActuatorGatewaySignedPropagation(t *testing.T) {
 	require.True(t, receipt.GatewaySigned, "GatewaySigned should be propagated from envelope to receipt")
 
 	// Verify audit record also has GatewaySigned
-	auditStore := Actuator.AuditStore.(*mockAuditStore)
-	require.Len(t, auditStore.calls, 2)
+	auditStore := Actuator.AuditStore.(*testutil.ConfigurableMockAuditStore)
+	require.Len(t, auditStore.Calls, 2)
 
 	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(auditStore.calls[1].data, &finalRecord)
+	err = json.Unmarshal(auditStore.Calls[1].Data, &finalRecord)
 	require.NoError(t, err)
 	require.True(t, finalRecord.GatewaySigned, "Audit record should have GatewaySigned=true")
 }

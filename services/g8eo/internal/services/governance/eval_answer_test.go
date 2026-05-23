@@ -24,6 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -41,8 +42,8 @@ func TestEvalAnswerVerification(t *testing.T) {
 	// Create verifier with EVAL_ANSWER in known action types
 	verifier := NewTransactionVerifier(
 		nil,
-		createMockReplayStore(),
-		&mockStateRootProvider{root: "test-state-root-v1"},
+		testutil.NewStatefulMockReplayStore(),
+		testutil.NewMockStateRootProvider("test-state-root-v1"),
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key-id": pubKey}},
 		nil, // L3 verifier not needed for EVAL_ANSWER (non-mutation)
 		[]constants.ActionType{constants.ActionTypeEvalAnswer},
@@ -130,7 +131,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 	Actuator := &Actuator{
 		Logger:            slog.Default(),
 		SignerStore:       &SimpleSignerStore{Signers: map[string]ed25519.PublicKey{keyID: pubKey}},
-		StateRootProvider: &mockStateRootProvider{root: "test-state-root-v1"},
+		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root-v1"),
 		ExecutionHandler: &mockExecutionHandler{
 			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
 				return payload.Answer, nil

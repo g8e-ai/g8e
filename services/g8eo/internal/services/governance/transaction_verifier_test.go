@@ -19,6 +19,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,39 +30,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
-
-type mockReplayStore struct {
-	nonces map[string]bool
-}
-
-func createMockReplayStore() *mockReplayStore {
-	return &mockReplayStore{nonces: make(map[string]bool)}
-}
-
-func (m *mockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
-	if m.nonces[nonce] {
-		return true, nil
-	}
-	m.nonces[nonce] = true
-	return false, nil
-}
-
-type mockStateRootProvider struct {
-	root string
-}
-
-func (m *mockStateRootProvider) GetCurrentStateRoot() (string, error) {
-	return m.root, nil
-}
-
-type mockL3Notary struct {
-	shouldPass bool
-}
-
-func (m *mockL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
-	return m.shouldPass, nil
-}
 
 func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary) (*TransactionVerifier, ed25519.PrivateKey) {
 	t.Helper()
@@ -136,7 +106,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 }
 
 func TestTransactionVerifier_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
-	verifier, privKey := createStrictVerifier(t, createMockReplayStore(), &mockStateRootProvider{root: "root-1"}, &mockL3Notary{shouldPass: true})
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 
 	verified, err := verifier.VerifyEnvelope(env)
@@ -149,7 +119,7 @@ func TestTransactionVerifier_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
 }
 
 func TestTransactionVerifier_AcceptsValidMutationUAPEnvelopeWithL3(t *testing.T) {
-	verifier, privKey := createStrictVerifier(t, createMockReplayStore(), &mockStateRootProvider{root: "root-1"}, &mockL3Notary{shouldPass: true})
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 
 	_, err := verifier.VerifyEnvelope(env)
@@ -184,7 +154,7 @@ func TestTransactionVerifier_FailClosedProofs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			verifier, privKey := createStrictVerifier(t, createMockReplayStore(), &mockStateRootProvider{root: "root-1"}, &mockL3Notary{shouldPass: true})
+			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 			env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 			tc.mutate(env)
 
@@ -198,8 +168,8 @@ func TestTransactionVerifier_FailClosedProofs(t *testing.T) {
 
 func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
 	t.Run("replayed nonce", func(t *testing.T) {
-		replayStore := createMockReplayStore()
-		verifier, privKey := createStrictVerifier(t, replayStore, &mockStateRootProvider{root: "root-1"}, &mockL3Notary{shouldPass: true})
+		replayStore := testutil.NewStatefulMockReplayStore()
+		verifier, privKey := createStrictVerifier(t, replayStore, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 		if _, err := verifier.VerifyEnvelope(env); err != nil {
 			t.Fatalf("first verification failed: %v", err)
@@ -211,7 +181,7 @@ func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
 	})
 
 	t.Run("state root mismatch", func(t *testing.T) {
-		verifier, privKey := createStrictVerifier(t, createMockReplayStore(), &mockStateRootProvider{root: "other-root"}, &mockL3Notary{shouldPass: true})
+		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("other-root"), testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 		_, err := verifier.VerifyEnvelope(env)
 		if !errors.Is(err, ErrStateRootMismatch) {
@@ -222,7 +192,7 @@ func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
 
 func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 	t.Run("missing replay store", func(t *testing.T) {
-		verifier, privKey := createStrictVerifier(t, nil, &mockStateRootProvider{root: "root-1"}, &mockL3Notary{shouldPass: true})
+		verifier, privKey := createStrictVerifier(t, nil, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 		_, err := verifier.VerifyEnvelope(env)
 		if !errors.Is(err, ErrReplayStoreMissing) {
@@ -231,7 +201,7 @@ func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 	})
 
 	t.Run("missing state root provider", func(t *testing.T) {
-		verifier, privKey := createStrictVerifier(t, createMockReplayStore(), nil, &mockL3Notary{shouldPass: true})
+		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), nil, testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 		_, err := verifier.VerifyEnvelope(env)
 		if !errors.Is(err, ErrStateRootMissing) {
@@ -240,13 +210,68 @@ func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 	})
 
 	t.Run("missing l3 notary", func(t *testing.T) {
-		verifier, privKey := createStrictVerifier(t, createMockReplayStore(), &mockStateRootProvider{root: "root-1"}, nil)
+		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), nil)
 		env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 		_, err := verifier.VerifyEnvelope(env)
 		if !errors.Is(err, ErrL3NotaryNotConfigured) {
 			t.Fatalf("expected l3 notary rejection, got %v", err)
 		}
 	})
+}
+
+func TestTransactionVerifier_NonceRaceCondition(t *testing.T) {
+	replayStore := testutil.NewStatefulMockReplayStore()
+	stateRootProvider := testutil.NewMockStateRootProvider("root-1")
+
+	// Slow mock notary to hold transactions in-flight
+	l3Notary := testutil.NewSlowMockL3Notary(50 * time.Millisecond)
+
+	verifier, privKey := createStrictVerifier(t, replayStore, stateRootProvider, l3Notary)
+
+	// Prepare an envelope
+	payload := typedPayload(t, constants.ActionTypeExecuteBash)
+	env := signedEnvelope(t, constants.ActionTypeExecuteBash, payload, privKey)
+
+	const numConcurrent = 5
+	var wg sync.WaitGroup
+	errs := make(chan error, numConcurrent)
+	successes := make(chan bool, numConcurrent)
+
+	for i := 0; i < numConcurrent; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := verifier.VerifyEnvelope(env)
+			if err != nil {
+				errs <- err
+			} else {
+				successes <- true
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errs)
+	close(successes)
+
+	successCount := 0
+	for range successes {
+		successCount++
+	}
+
+	replayCount := 0
+	for err := range errs {
+		if errors.Is(err, ErrTransactionReplay) {
+			replayCount++
+		}
+	}
+
+	if successCount != 1 {
+		t.Errorf("expected exactly 1 success, got %d", successCount)
+	}
+	if replayCount != numConcurrent-1 {
+		t.Errorf("expected %d replays, got %d", numConcurrent-1, replayCount)
+	}
 }
 
 func rehash(t *testing.T, env *uap.UAPEnvelope) {

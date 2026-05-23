@@ -17,47 +17,34 @@ import (
 	"encoding/json"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/responder"
 )
 
-// JSONRPCRequest represents a standard JSON-RPC 2.0 request.
-type JSONRPCRequest struct {
-	JSONRPC string          `json:"jsonrpc"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params,omitempty"`
-	ID      interface{}     `json:"id,omitempty"`
-}
+// JSONRPCRequest is an alias for responder.JSONRPCRequest
+type JSONRPCRequest = responder.JSONRPCRequest
 
-// JSONRPCResponse represents a standard JSON-RPC 2.0 response.
-type JSONRPCResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *JSONRPCError   `json:"error,omitempty"`
-	ID      interface{}     `json:"id"`
-}
+// JSONRPCResponse is an alias for responder.JSONRPCResponse
+type JSONRPCResponse = responder.JSONRPCResponse
 
-// JSONRPCError represents a standard JSON-RPC 2.0 error.
-type JSONRPCError struct {
-	Code    int             `json:"code"`
-	Message string          `json:"message"`
-	Data    json.RawMessage `json:"data,omitempty"`
-}
+// JSONRPCError is an alias for responder.JSONRPCError
+type JSONRPCError = responder.JSONRPCError
 
 // Protocol-specific error codes for g8eo (reserved range -32000 to -32099)
 const (
 	// Verification Errors (-32000 range)
-	ErrCodeInvalidEnvelope     = -32000
-	ErrCodeHashMismatch        = -32001
-	ErrCodeExpired             = -32002
-	ErrCodeReplay              = -32003
-	ErrCodeStateMismatch       = -32004
-	ErrCodeL1ValidationFailed  = -32005
-	ErrCodeL2SignatureInvalid  = -32006
-	ErrCodeL3ProofInvalid      = -32007
-	ErrCodePayloadDecodeFailed = -32008
+	ErrCodeInvalidEnvelope     = responder.ErrCodeInvalidEnvelope
+	ErrCodeHashMismatch        = responder.ErrCodeHashMismatch
+	ErrCodeExpired             = responder.ErrCodeExpired
+	ErrCodeReplay              = responder.ErrCodeReplay
+	ErrCodeStateMismatch       = responder.ErrCodeStateMismatch
+	ErrCodeL1ValidationFailed  = responder.ErrCodeL1ValidationFailed
+	ErrCodeL2SignatureInvalid  = responder.ErrCodeL2SignatureInvalid
+	ErrCodeL3ProofInvalid      = responder.ErrCodeL3ProofInvalid
+	ErrCodePayloadDecodeFailed = responder.ErrCodePayloadDecodeFailed
 
 	// Resource/State Errors (-32100 range)
-	ErrCodeResourceNotFound = -32100
-	ErrCodeGatewayNotReady  = -32101
+	ErrCodeResourceNotFound = responder.ErrCodeResourceNotFound
+	ErrCodeGatewayNotReady  = responder.ErrCodeGatewayNotReady
 )
 
 // CallToolRequest is the params for the "tools/call" method.
