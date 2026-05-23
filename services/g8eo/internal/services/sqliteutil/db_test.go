@@ -28,7 +28,7 @@ func TestDefaultDBConfig(t *testing.T) {
 	cfg := DefaultDBConfig("/some/path/db.sqlite")
 	assert.Equal(t, "/some/path/db.sqlite", cfg.Path)
 	assert.Equal(t, 64, cfg.CacheSizeMB)
-	assert.Equal(t, 5000, cfg.BusyTimeoutMs)
+	assert.Equal(t, 30000, cfg.BusyTimeoutMs)
 	assert.True(t, cfg.SetFilePermissions)
 }
 

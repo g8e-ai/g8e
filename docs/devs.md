@@ -311,7 +311,7 @@ g8e maintains a Single Source of Truth (SSOT) for cross-component constants in G
 
 The registry tracking system distinguishes exportable constants from internal-only constants. Tracked files (collections, events, headers, channels, etc.) are exported to JSON/Python. Internal-only files (status, platform, agents, timestamp) contain Go-specific enums and are not exported.
 
-See `docs/architecture/constants.md` for complete documentation of the constants pipeline.
+See `docs/reference/constants.md` for complete documentation of the constants pipeline.
 
 ## Where to Find Things
 
@@ -319,7 +319,7 @@ See `docs/architecture/constants.md` for complete documentation of the constants
 |---|---|
 | Protobuf schemas | `protocol/proto/` |
 | Constants registries | `services/g8eo/internal/constants/` |
-| Constants documentation | `docs/architecture/constants.md` |
+| Constants documentation | `docs/reference/constants.md` |
 | Operator implementation | `services/g8eo/` |
 | g8e Agentic Ensemble implementation | `services/g8ee/` |
 | Evaluation harness | `evals/` |

@@ -17,14 +17,15 @@ import (
 	"encoding/json"
 	"testing"
 
+	"log/slog"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"log/slog"
 )
 
 func TestNewFieldPathRegistry(t *testing.T) {
 	t.Parallel()
-	
+
 	logger := slog.Default()
 	registry, err := NewFieldPathRegistry(logger)
 	require.NoError(t, err)
@@ -33,88 +34,88 @@ func TestNewFieldPathRegistry(t *testing.T) {
 
 func TestValidateFieldPath_AllowedPaths(t *testing.T) {
 	t.Parallel()
-	
+
 	logger := slog.Default()
 	registry, err := NewFieldPathRegistry(logger)
 	require.NoError(t, err)
 
 	tests := []struct {
-		name      string
+		name       string
 		collection string
 		fieldPath  string
-		wantErr   error
+		wantErr    error
 	}{
 		{
-			name:      "valid investigation field",
+			name:       "valid investigation field",
 			collection: "investigations",
 			fieldPath:  "suspect_ip_addresses",
-			wantErr:   nil,
+			wantErr:    nil,
 		},
 		{
-			name:      "valid nested field",
+			name:       "valid nested field",
 			collection: "investigations",
 			fieldPath:  "metadata.tags.priority",
-			wantErr:   nil,
+			wantErr:    nil,
 		},
 		{
-			name:      "valid memory field",
+			name:       "valid memory field",
 			collection: "memories",
 			fieldPath:  "content",
-			wantErr:   nil,
+			wantErr:    nil,
 		},
 		{
-			name:      "valid case field",
+			name:       "valid case field",
 			collection: "cases",
 			fieldPath:  "status",
-			wantErr:   nil,
+			wantErr:    nil,
 		},
 		{
-			name:      "empty collection",
+			name:       "empty collection",
 			collection: "",
 			fieldPath:  "status",
-			wantErr:   ErrEmptyCollection,
+			wantErr:    ErrEmptyCollection,
 		},
 		{
-			name:      "empty field path",
+			name:       "empty field path",
 			collection: "investigations",
 			fieldPath:  "",
-			wantErr:   ErrEmptyFieldPath,
+			wantErr:    ErrEmptyFieldPath,
 		},
 		{
-			name:      "invalid collection",
+			name:       "invalid collection",
 			collection: "unknown_collection",
 			fieldPath:  "status",
-			wantErr:   ErrInvalidCollection,
+			wantErr:    ErrInvalidCollection,
 		},
 		{
-			name:      "forbidden field - credentials",
+			name:       "forbidden field - credentials",
 			collection: "investigations",
 			fieldPath:  "credentials",
-			wantErr:   ErrForbiddenFieldPath,
+			wantErr:    ErrForbiddenFieldPath,
 		},
 		{
-			name:      "forbidden field - api_keys",
+			name:       "forbidden field - api_keys",
 			collection: "memories",
 			fieldPath:  "api_keys",
-			wantErr:   ErrForbiddenFieldPath,
+			wantErr:    ErrForbiddenFieldPath,
 		},
 		{
-			name:      "forbidden nested field",
-			collection: "cases",
+			name:       "forbidden nested field",
+			collection: "investigations",
 			fieldPath:  "metadata.credentials.password",
-			wantErr:   ErrForbiddenFieldPath,
+			wantErr:    ErrForbiddenFieldPath,
 		},
 		{
-			name:      "field not in allowlist",
+			name:       "field not in allowlist",
 			collection: "investigations",
 			fieldPath:  "unknown_field",
-			wantErr:   ErrInvalidFieldPath,
+			wantErr:    ErrInvalidFieldPath,
 		},
 		{
-			name:      "invalid path syntax - empty component",
+			name:       "invalid path syntax - empty component",
 			collection: "investigations",
 			fieldPath:  "suspect_ip_addresses.",
-			wantErr:   ErrInvalidPathSyntax,
+			wantErr:    ErrInvalidPathSyntax,
 		},
 	}
 

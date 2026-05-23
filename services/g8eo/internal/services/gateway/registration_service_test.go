@@ -55,7 +55,6 @@ func generateTestCSR(t *testing.T) string {
 }
 
 func TestRegistrationService_RegisterDevice(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -115,7 +114,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	})
 
 	t.Run("Success - Single-operator link", func(t *testing.T) {
-		t.Parallel()
 		opID := "op-single-1"
 		// Create operator slot first
 		op := &models.OperatorDocumentGo{
@@ -164,7 +162,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	})
 
 	t.Run("Failure - Link not found", func(t *testing.T) {
-		t.Parallel()
 		req := models.OperatorRegistrationRequest{
 			SystemFingerprint: "fp",
 		}
@@ -175,7 +172,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	})
 
 	t.Run("Failure - Link expired", func(t *testing.T) {
-		t.Parallel()
 		token3 := "dlk_expired"
 		linkData := models.DeviceLinkData{
 			Token:     token3,
@@ -196,7 +192,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	})
 
 	t.Run("Failure - Link revoked", func(t *testing.T) {
-		t.Parallel()
 		token4 := "dlk_revoked"
 		linkData := models.DeviceLinkData{
 			Token:     token4,
@@ -217,7 +212,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	})
 
 	t.Run("Failure - Link exhausted", func(t *testing.T) {
-		t.Parallel()
 		token5 := "dlk_exhausted"
 		linkData := models.DeviceLinkData{
 			Token:     token5,
@@ -238,7 +232,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	})
 
 	t.Run("Failure - Missing system fingerprint", func(t *testing.T) {
-		t.Parallel()
 		token6 := "dlk_no_fp"
 		linkData := models.DeviceLinkData{
 			Token:     token6,
@@ -259,7 +252,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	})
 
 	t.Run("Failure - Missing CSR", func(t *testing.T) {
-		t.Parallel()
 		token7 := "dlk_no_csr"
 		linkData := models.DeviceLinkData{
 			Token:          token7,
@@ -283,7 +275,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	})
 
 	t.Run("Success - Multi-use link with claim tracking", func(t *testing.T) {
-		t.Parallel()
 		token8 := "dlk_multi_claim"
 		linkData := models.DeviceLinkData{
 			Token:          token8,
@@ -323,7 +314,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	})
 
 	t.Run("Success - Device re-registration reuses claim", func(t *testing.T) {
-		t.Parallel()
 		token9 := "dlk_reuse"
 		linkData := models.DeviceLinkData{
 			Token:          token9,
@@ -375,7 +365,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	})
 
 	t.Run("Failure - Fingerprint dedup prevents double registration", func(t *testing.T) {
-		t.Parallel()
 		token10 := "dlk_dedup"
 		linkData := models.DeviceLinkData{
 			Token:          token10,
@@ -430,7 +419,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	})
 
 	t.Run("Failure - Max uses enforced", func(t *testing.T) {
-		t.Parallel()
 		token11 := "dlk_maxuses"
 		linkData := models.DeviceLinkData{
 			Token:          token11,
@@ -476,7 +464,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 }
 
 func TestRegistrationService_DeviceLinks(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -519,7 +506,6 @@ func TestRegistrationService_DeviceLinks(t *testing.T) {
 }
 
 func TestRegistrationService_CreateDeviceLinkRejectsWrongOperatorOwner(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -568,7 +554,6 @@ func docFieldString(t *testing.T, doc *models.Document, field string) string {
 }
 
 func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -599,7 +584,6 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 	require.NoError(t, db.DocSet("operators", opID, opBytes))
 
 	t.Run("Success", func(t *testing.T) {
-		t.Parallel()
 		require.NoError(t, reg.RotateOperatorAPIKey(opID, userID))
 
 		doc, err := db.DocGet("operators", opID)
@@ -611,14 +595,12 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 	})
 
 	t.Run("Failure - Wrong user", func(t *testing.T) {
-		t.Parallel()
 		err := reg.RotateOperatorAPIKey(opID, "wrong-user")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "does not belong to user")
 	})
 
 	t.Run("Failure - Not found", func(t *testing.T) {
-		t.Parallel()
 		err := reg.RotateOperatorAPIKey("nonexistent", userID)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
@@ -626,7 +608,6 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 }
 
 func TestRegistrationService_ListOperatorSlots(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -660,7 +641,6 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	db.DocSet("operators", "non-slot", json.RawMessage(`{"user_id": "user-1", "is_slot": false}`))
 
 	t.Run("Success", func(t *testing.T) {
-		t.Parallel()
 		slots, err := reg.ListOperatorSlots(userID)
 		require.NoError(t, err)
 		assert.Len(t, slots, 2)
@@ -669,7 +649,6 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	})
 
 	t.Run("Empty for other user", func(t *testing.T) {
-		t.Parallel()
 		slots, err := reg.ListOperatorSlots("other-user")
 		require.NoError(t, err)
 		assert.Empty(t, slots)
@@ -677,7 +656,6 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 }
 
 func TestRegistrationService_TerminateOperator(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -707,7 +685,6 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	require.NoError(t, db.DocSet("operators", opID, opBytes))
 
 	t.Run("Success", func(t *testing.T) {
-		t.Parallel()
 		err := reg.TerminateOperator(opID, userID, "test termination")
 		require.NoError(t, err)
 
@@ -719,7 +696,6 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	})
 
 	t.Run("Success - Already terminated", func(t *testing.T) {
-		t.Parallel()
 		// First termination
 		err := reg.TerminateOperator(opID, userID, "first termination")
 		require.NoError(t, err)
@@ -733,7 +709,6 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	})
 
 	t.Run("Failure - Wrong user", func(t *testing.T) {
-		t.Parallel()
 		// Reset operator to active for this test
 		update := map[string]interface{}{"status": constants.Status.OperatorStatus.Active}
 		updateBytes, _ := json.Marshal(update)
@@ -745,21 +720,18 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	})
 
 	t.Run("Failure - Not found", func(t *testing.T) {
-		t.Parallel()
 		err := reg.TerminateOperator("nonexistent", userID, "test")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("Failure - Missing operator_id", func(t *testing.T) {
-		t.Parallel()
 		err := reg.TerminateOperator("", userID, "test")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "operator_id is required")
 	})
 
 	t.Run("Failure - Missing user_id", func(t *testing.T) {
-		t.Parallel()
 		err := reg.TerminateOperator(opID, "", "test")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "user_id is required")
@@ -767,7 +739,6 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 }
 
 func TestRegistrationService_Binding(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -797,7 +768,6 @@ func TestRegistrationService_Binding(t *testing.T) {
 	require.NoError(t, db.DocSet("operators", opID, opBytes))
 
 	t.Run("BindOperators", func(t *testing.T) {
-		t.Parallel()
 		req := models.BindOperatorsRequest{
 			OperatorIDs:  []string{opID},
 			UserID:       userID,
@@ -833,7 +803,6 @@ func TestRegistrationService_Binding(t *testing.T) {
 	})
 
 	t.Run("SetTargetContext", func(t *testing.T) {
-		t.Parallel()
 		req := models.SetTargetContextRequest{
 			OperatorID:   opID,
 			UserID:       userID,
@@ -846,7 +815,6 @@ func TestRegistrationService_Binding(t *testing.T) {
 	})
 
 	t.Run("UnbindOperators", func(t *testing.T) {
-		t.Parallel()
 		req := models.UnbindOperatorsRequest{
 			OperatorIDs:  []string{opID},
 			UserID:       userID,
@@ -876,7 +844,6 @@ func TestRegistrationService_Binding(t *testing.T) {
 // (which extend SessionDocument and require absolute_expires_at, idle_expires_at,
 // session_type, is_active).
 func TestRegistration_SessionDocuments(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -934,7 +901,6 @@ func TestRegistration_SessionDocuments(t *testing.T) {
 	}
 
 	t.Run("operator_sessions document has required fields", func(t *testing.T) {
-		t.Parallel()
 		doc, err := db.DocGet(string(constants.CollectionOperatorSessions), resp.OperatorSessionID)
 		require.NoError(t, err, "operator_sessions document must exist after registration")
 		require.NotNil(t, doc)
@@ -948,7 +914,6 @@ func TestRegistration_SessionDocuments(t *testing.T) {
 	})
 
 	t.Run("cli_sessions document has required fields", func(t *testing.T) {
-		t.Parallel()
 		doc, err := db.DocGet(string(constants.CollectionCLISessions), resp.CLISessionID)
 		require.NoError(t, err, "cli_sessions document must exist after registration")
 		require.NotNil(t, doc)

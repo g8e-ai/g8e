@@ -376,7 +376,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			A2ADownstreamURL: a2aDownstreamURL,
 
 			// HTTP server limits with fail-closed defaults
-			MaxPayloadBytes:   10 * 1024 * 1024, // 10MB
+			MaxPayloadBytes:   512 * 1024, // 512KB
 			ReadHeaderTimeout: 10 * time.Second,
 			ReadTimeout:       30 * time.Second,
 			WriteTimeout:      30 * time.Second,

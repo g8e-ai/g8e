@@ -1,0 +1,68 @@
+site_name: g8e Documentation
+site_description: Zero-trust execution substrate for agentic infrastructure
+site_author: g8e.ai
+site_url: https://docs.g8e.ai
+
+docs_dir: .
+site_dir: ../site
+
+# Repository
+repo_name: g8e-ai/g8e
+repo_url: https://github.com/g8e-ai/g8e
+
+# Copyright
+copyright: Copyright &copy; 2026 Lateralus Labs, LLC
+
+# Theme
+theme:
+  name: readthedocs
+
+# Extensions
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+# Navigation
+nav:
+  - Home: index.md
+  - Concepts:
+      - About: concepts/about.md
+      - Position Paper: concepts/position_paper.md
+      - Protocol: concepts/protocol.md
+      - Operator: concepts/operator.md
+      - Governance Gateway: concepts/g8eg.md
+      - Agentic Ensemble: concepts/g8ee.md
+  - Guides:
+      - Quickstart: quickstart/index.md
+      - Air Gap: guides/air_gap.md
+      - Demos: guides/demos.md
+      - Evals: guides/evals.md
+      - Scripts: guides/scripts.md
+      - Testing: guides/tests.md
+      - Troubleshooting: guides/troubleshooting.md
+  - Reference:
+      - API: reference/api/index.md
+      - CLI: reference/cli.md
+      - Constants: reference/constants.md
+      - Glossary: reference/glossary.md
+      - MCP: reference/mcp.md
+  - Developer:
+      - Developer Guidelines: devs.md
+  - External:
+      - A2A Protocol: external/a2a.json
+      - Ollama API: external/ollam_api.md

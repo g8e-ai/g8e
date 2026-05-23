@@ -5,3 +5,8 @@ plugins:
     out: .
     opt:
       - module=github.com/g8e-ai/g8e
+  # Markdown documentation generation
+  - local: protoc-gen-doc
+    out: docs/reference/api
+    opt:
+      - markdown,index.md

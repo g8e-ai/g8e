@@ -50,7 +50,7 @@ Validates the optional bundled **g8e Agentic Ensemble** (`g8ee`). Requires the r
 ./g8e evals bench --suite ifeval
 ```
 
-Evaluates AI agent reasoning and tool-calling accuracy using signed `ActionReceipts`. Uses a real Operator and produces verified audit references. Exercises the product exactly as a user would. Detailed in [Evals](evals.md).
+Evaluates AI agent reasoning and tool-calling accuracy using signed `ActionReceipts`. Uses a real Operator and produces verified audit references. Exercises the product exactly as a user would. Detailed in [Evals](./evals.md).
 
 ---
 
@@ -139,4 +139,4 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 - **`test-g8eo`** (blocking) - Installs Go, starts the platform, runs `./g8e test`.
 - **`apps-g8ee`** (non-blocking, `continue-on-error: true`) - Installs Python, starts the **agentic ensemble**, runs its suite.
 
-See also: [Evals](evals.md), [Scripts](scripts.md), [Contribution Guide](../CONTRIBUTING.md).
+See also: [Evals](./evals.md), [Scripts](./scripts.md).

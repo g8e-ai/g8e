@@ -12,7 +12,7 @@ The evals harness drives the **real g8e Agentic Ensemble** chat pipeline end-to-
 
 ## Architecture
 
-```
+```text
 evals/
 ├── g8e_evals/
 │   ├── harness.py                # Task / Response / Score / SUTConfig
@@ -169,4 +169,4 @@ Acceptable for v1; the long-term fix is to consume an Operator-native `text/even
 | All tasks `UNBOUND` with `answer-only turn` | Expected for IFEval-style prompts that never trigger a Actuator mutation. Receipt binding only occurs when the agent stack escalates a typed mutation through Tribunal→Actuator. |
 | Receipt verification failure | Confirm `.g8e/pki/Actuator_pub.pem` was exported by the running Operator and `--operator-url` points at the same instance. |
 
-See also: [Protocol](protocol.md), [Operator](operator.md), [g8e Agentic Ensemble](g8ee.md), [Tests](tests.md).
+See also: [Protocol](../concepts/protocol.md), [Operator](../concepts/operator.md), [g8e Agentic Ensemble](../concepts/g8ee.md), [Tests](./tests.md).

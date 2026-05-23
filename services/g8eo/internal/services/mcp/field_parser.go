@@ -18,16 +18,20 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 )
 
 var (
-	ErrInvalidCollection    = errors.New("FIELD_PATH_INVALID_COLLECTION: collection not in schema registry")
-	ErrInvalidFieldPath    = errors.New("FIELD_PATH_INVALID: field path not in allowlist")
-	ErrForbiddenFieldPath   = errors.New("FIELD_PATH_FORBIDDEN: field path in denylist")
-	ErrInvalidPathSyntax   = errors.New("FIELD_PATH_SYNTAX: invalid dot-notation syntax")
-	ErrEmptyFieldPath      = errors.New("FIELD_PATH_EMPTY: field path cannot be empty")
-	ErrEmptyCollection     = errors.New("FIELD_PATH_EMPTY_COLLECTION: collection cannot be empty")
+	ErrInvalidCollection  = errors.New("FIELD_PATH_INVALID_COLLECTION: collection not in schema registry")
+	ErrInvalidFieldPath   = errors.New("FIELD_PATH_INVALID: field path not in allowlist")
+	ErrForbiddenFieldPath = errors.New("FIELD_PATH_FORBIDDEN: field path in denylist")
+	ErrInvalidPathSyntax  = errors.New("FIELD_PATH_SYNTAX: invalid dot-notation syntax")
+	ErrEmptyFieldPath     = errors.New("FIELD_PATH_EMPTY: field path cannot be empty")
+	ErrEmptyCollection    = errors.New("FIELD_PATH_EMPTY_COLLECTION: collection cannot be empty")
 )
 
 // FieldPathRegistry holds the schema registry for allowed field paths per collection
@@ -59,75 +63,51 @@ func NewFieldPathRegistry(logger *slog.Logger) (*FieldPathRegistry, error) {
 
 // loadFromConstants loads field paths from the protocol constants JSON
 func (r *FieldPathRegistry) loadFromConstants() error {
-	// This would typically load from protocol/constants/field_paths.json
-	// For now, we hardcode the schema to match the JSON file we created
-	r.registry["investigations"] = CollectionFieldPaths{
-		AllowedPaths: []string{
-			"suspect_ip_addresses",
-			"suspect_hostnames",
-			"suspect_domains",
-			"malware_hashes",
-			"ioc_sources",
-			"attack_patterns",
-			"timeline_events",
-			"evidence_summary",
-			"status",
-			"priority",
-			"assigned_analyst",
-			"created_at",
-			"updated_at",
-		},
-		ForbiddenPaths: []string{
-			"credentials",
-			"api_keys",
-			"passwords",
-			"tokens",
-			"private_keys",
-			"secrets",
-		},
+	fieldPathsPath := filepath.Join(constants.Paths.Infra.ProtocolConstantsDir, "field_paths.json")
+	data, err := os.ReadFile(fieldPathsPath)
+	if err != nil {
+		return fmt.Errorf("failed to read field_paths.json from %s: %w", fieldPathsPath, err)
 	}
 
-	r.registry["memories"] = CollectionFieldPaths{
-		AllowedPaths: []string{
-			"content",
-			"summary",
-			"tags",
-			"source",
-			"context",
-			"created_at",
-			"updated_at",
-		},
-		ForbiddenPaths: []string{
-			"credentials",
-			"api_keys",
-			"passwords",
-			"tokens",
-			"private_keys",
-			"secrets",
-		},
+	var rawJSON map[string]interface{}
+	if err := json.Unmarshal(data, &rawJSON); err != nil {
+		return fmt.Errorf("failed to parse field_paths.json: %w", err)
 	}
 
-	r.registry["cases"] = CollectionFieldPaths{
-		AllowedPaths: []string{
-			"title",
-			"description",
-			"status",
-			"priority",
-			"assigned_to",
-			"created_at",
-			"updated_at",
-			"resolution_summary",
-		},
-		ForbiddenPaths: []string{
-			"credentials",
-			"api_keys",
-			"passwords",
-			"tokens",
-			"private_keys",
-			"secrets",
-		},
+	fieldPaths, ok := rawJSON["field_paths"].(map[string]interface{})
+	if !ok {
+		return errors.New("field_paths.json missing 'field_paths' key or invalid type")
 	}
 
+	for collection, pathsData := range fieldPaths {
+		collectionMap, ok := pathsData.(map[string]interface{})
+		if !ok {
+			r.logger.Warn("invalid field path data for collection", "collection", collection)
+			continue
+		}
+
+		var fieldPaths CollectionFieldPaths
+
+		if allowedPaths, ok := collectionMap["allowed_paths"].([]interface{}); ok {
+			for _, path := range allowedPaths {
+				if pathStr, ok := path.(string); ok {
+					fieldPaths.AllowedPaths = append(fieldPaths.AllowedPaths, pathStr)
+				}
+			}
+		}
+
+		if forbiddenPaths, ok := collectionMap["forbidden_paths"].([]interface{}); ok {
+			for _, path := range forbiddenPaths {
+				if pathStr, ok := path.(string); ok {
+					fieldPaths.ForbiddenPaths = append(fieldPaths.ForbiddenPaths, pathStr)
+				}
+			}
+		}
+
+		r.registry[collection] = fieldPaths
+	}
+
+	r.logger.Info("loaded field path registry from protocol constants", "collections", len(r.registry))
 	return nil
 }
 
@@ -160,10 +140,14 @@ func (r *FieldPathRegistry) ValidateFieldPath(collection string, fieldPath strin
 		}
 	}
 
-	// Check if the base field is in the forbidden list
-	baseField := components[0]
+	// Check if any component or prefix is in the forbidden list
 	for _, forbidden := range collectionPaths.ForbiddenPaths {
-		if strings.HasPrefix(fieldPath, forbidden) || baseField == forbidden {
+		for _, component := range components {
+			if component == forbidden {
+				return ErrForbiddenFieldPath
+			}
+		}
+		if strings.HasPrefix(fieldPath, forbidden+".") || fieldPath == forbidden {
 			return ErrForbiddenFieldPath
 		}
 	}

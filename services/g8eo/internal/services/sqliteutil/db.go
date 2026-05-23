@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	_ "modernc.org/sqlite"
@@ -49,7 +50,7 @@ func DefaultDBConfig(path string) DBConfig {
 	return DBConfig{
 		Path:               path,
 		CacheSizeMB:        64,
-		BusyTimeoutMs:      5000,
+		BusyTimeoutMs:      30000, // Increased to 30s for parallel test concurrency
 		SetFilePermissions: true,
 	}
 }
@@ -68,7 +69,7 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 		return nil, fmt.Errorf("failed to create database directory %s: %w", dir, err)
 	}
 
-	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=%d",
+	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=%d&_mutex=full",
 		cfg.Path, cfg.BusyTimeoutMs)
 
 	sqlDB, err := sql.Open("sqlite", dsn)
@@ -149,4 +150,107 @@ func (db *DB) HealthCheck(ctx context.Context) error {
 		return fmt.Errorf("database health check failed: %w", err)
 	}
 	return nil
+}
+
+// ExecWithRetry executes a SQL statement with automatic retry on SQLITE_BUSY.
+// This is useful for high-concurrency scenarios where WAL mode may still encounter transient locks.
+func (db *DB) ExecWithRetry(query string, args ...interface{}) (sql.Result, error) {
+	var result sql.Result
+	var err error
+
+	maxRetries := 10
+	for i := 0; i < maxRetries; i++ {
+		result, err = db.Exec(query, args...)
+		if err == nil {
+			return result, nil
+		}
+
+		// Check if it's a busy error
+		if isBusyError(err) {
+			db.logger.Debug("Database busy, retrying", "attempt", i+1, "max_retries", maxRetries)
+			time.Sleep(time.Duration(i+1) * 50 * time.Millisecond) // Exponential backoff
+			continue
+		}
+
+		// Non-busy error, return immediately
+		return nil, err
+	}
+
+	return nil, fmt.Errorf("exec failed after %d retries: %w", maxRetries, err)
+}
+
+// QueryWithRetry executes a query with automatic retry on SQLITE_BUSY.
+func (db *DB) QueryWithRetry(query string, args ...interface{}) (*sql.Rows, error) {
+	var rows *sql.Rows
+	var err error
+
+	maxRetries := 10
+	for i := 0; i < maxRetries; i++ {
+		rows, err = db.Query(query, args...)
+		if err == nil {
+			return rows, nil
+		}
+
+		if isBusyError(err) {
+			db.logger.Debug("Database busy, retrying query", "attempt", i+1, "max_retries", maxRetries)
+			time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
+			continue
+		}
+
+		return nil, err
+	}
+
+	return nil, fmt.Errorf("query failed after %d retries: %w", maxRetries, err)
+}
+
+// QueryRowWithRetry executes a query that returns a single row with automatic retry on SQLITE_BUSY.
+// Returns the row and an error (nil on success).
+func (db *DB) QueryRowWithRetry(query string, args ...interface{}) (*sql.Row, error) {
+	maxRetries := 10
+	var lastErr error
+
+	for i := 0; i < maxRetries; i++ {
+		row := db.QueryRow(query, args...)
+		err := row.Err()
+		if err == nil {
+			return row, nil
+		}
+
+		lastErr = err
+		if isBusyError(err) {
+			db.logger.Debug("Database busy, retrying query row", "attempt", i+1, "max_retries", maxRetries)
+			time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
+			continue
+		}
+
+		// Non-busy error, return the row with the error
+		return row, err
+	}
+
+	// All retries exhausted
+	return nil, fmt.Errorf("query row failed after %d retries: %w", maxRetries, lastErr)
+}
+
+// isBusyError checks if an error is a SQLITE_BUSY error.
+func isBusyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return contains(errStr, "database is locked") || contains(errStr, "SQLITE_BUSY")
+}
+
+// contains is a simple string contains helper to avoid importing strings.
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && findSubstring(s, substr))
+}
+
+// findSubstring checks if substr exists in s.
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

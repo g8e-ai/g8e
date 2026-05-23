@@ -43,3 +43,7 @@ pytest-xdist[psutil]==3.8.0
 # Lint and static type checking
 pyright==1.1.409
 ruff==0.15.12
+
+# Documentation
+mkdocs>=1.6.0
+sentence-transformers>=2.2.0

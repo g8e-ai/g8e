@@ -327,6 +327,6 @@ The Hub keeps an authoritative encrypted audit vault keyed by `transaction_hash`
 
 ## Related Documentation
 
-- [**g8e Protocol**](protocol.md) - The wire contract and governance hierarchy.
-- [**g8eo Operator**](operator.md) - Sovereign host-side execution agent and MCP server.
-- [**g8ee Ensemble**](g8ee.md) - Reference **g8e-compliant agentic ensemble** application.
+- [**g8e Protocol**](./protocol.md) - The wire contract and governance hierarchy.
+- [**g8eo Operator**](./operator.md) - Sovereign host-side execution agent and MCP server.
+- [**g8ee Ensemble**](./g8ee.md) - Reference **g8e-compliant agentic ensemble** application.

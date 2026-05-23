@@ -647,7 +647,7 @@ func TestLedgerService_CompleteWorkflow(t *testing.T) {
 }
 
 func TestLedgerService_MultiSessionConcurrency(t *testing.T) {
-	// t.Parallel() - Disabled: Causes SQLITE_BUSY in parallel CI runs
+	t.Parallel()
 	lms, avs, tempDir := setupTestLedger(t)
 	defer avs.Close()
 

@@ -168,6 +168,36 @@ jobs:
         env:
           G8E_STRICT_CONSTANTS_LINT: "1"
 
+  docs-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Lint Markdown with markdownlint
+        uses: articulate/actions-markdownlint@v1
+        with:
+          config: .markdownlint.json
+          ignore: node_modules
+
+  docs-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install MkDocs dependencies
+        run: |
+          pip install mkdocs>=1.6.0
+
+      - name: Build documentation
+        run: mkdocs build -f docs/mkdocs.yml
+
   apps-g8ee:
     runs-on: ubuntu-latest
     timeout-minutes: 45
