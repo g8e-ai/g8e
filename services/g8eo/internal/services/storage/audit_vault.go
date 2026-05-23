@@ -129,7 +129,8 @@ type AuditVaultService struct {
 	pruner          *sqliteutil.Pruner
 	closeOnce       sync.Once
 
-	mu sync.RWMutex // Protects session ledger initialization
+	mu       sync.RWMutex // Protects session ledger initialization
+	muWrites sync.WaitGroup
 }
 
 // NewAuditVaultService creates a new audit vault service
@@ -511,6 +512,9 @@ func (avs *AuditVaultService) RecordEvents(events []*Event) error {
 		return nil
 	}
 
+	avs.muWrites.Add(1)
+	defer avs.muWrites.Done()
+
 	tx, err := avs.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to start batch transaction: %w", err)
@@ -701,6 +705,9 @@ func (avs *AuditVaultService) RecordEvent(event *Event) (int64, error) {
 		return 0, nil
 	}
 
+	avs.muWrites.Add(1)
+	defer avs.muWrites.Done()
+
 	tx, err := avs.db.Begin()
 	if err != nil {
 		return 0, fmt.Errorf("failed to start transaction: %w", err)
@@ -789,6 +796,9 @@ func (avs *AuditVaultService) RecordActionReceipt(record *models.ActionReceiptRe
 	if avs == nil || avs.db == nil {
 		return nil
 	}
+
+	avs.muWrites.Add(1)
+	defer avs.muWrites.Done()
 
 	query := `
 	INSERT INTO receipts (
@@ -1292,11 +1302,21 @@ func (avs *AuditVaultService) GetEncryptionVault() *vault.Vault {
 	return avs.encryptionVault
 }
 
+// Wait blocks until all in-flight writes have finished.
+func (avs *AuditVaultService) Wait() {
+	if avs == nil {
+		return
+	}
+	avs.muWrites.Wait()
+}
+
 // Close shuts down the audit vault service. Idempotent.
 func (avs *AuditVaultService) Close() error {
 	if avs == nil {
 		return nil
 	}
+
+	avs.Wait()
 
 	var closeErr error
 	avs.closeOnce.Do(func() {

@@ -30,9 +30,11 @@ import (
 )
 
 func TestGenerateSystemFingerprint(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("generates valid fingerprint", func(t *testing.T) {
+		t.Parallel()
 		fingerprint, err := GenerateSystemFingerprint(logger)
 
 		require.NoError(t, err)
@@ -45,6 +47,7 @@ func TestGenerateSystemFingerprint(t *testing.T) {
 	})
 
 	t.Run("fingerprint is stable across calls", func(t *testing.T) {
+		t.Parallel()
 		fp1, err1 := GenerateSystemFingerprint(logger)
 		require.NoError(t, err1)
 
@@ -58,6 +61,7 @@ func TestGenerateSystemFingerprint(t *testing.T) {
 	})
 
 	t.Run("includes machine ID when available", func(t *testing.T) {
+		t.Parallel()
 		fingerprint, err := GenerateSystemFingerprint(logger)
 
 		require.NoError(t, err)
@@ -66,9 +70,11 @@ func TestGenerateSystemFingerprint(t *testing.T) {
 }
 
 func TestGetMachineID(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("returns machine ID for current OS", func(t *testing.T) {
+		t.Parallel()
 		machineID, err := getMachineID(logger)
 
 		switch runtime.GOOS {
@@ -82,6 +88,7 @@ func TestGetMachineID(t *testing.T) {
 	})
 
 	t.Run("handles each supported OS correctly", func(t *testing.T) {
+		t.Parallel()
 		machineID, err := getMachineID(logger)
 
 		switch runtime.GOOS {
@@ -97,9 +104,11 @@ func TestGetMachineID(t *testing.T) {
 }
 
 func TestGetLinuxMachineID(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("reads machine ID from standard locations", func(t *testing.T) {
+		t.Parallel()
 		if runtime.GOOS != string(constants.Status.Platform.Linux) {
 			t.Skip("Linux only")
 		}
@@ -109,6 +118,7 @@ func TestGetLinuxMachineID(t *testing.T) {
 	})
 
 	t.Run("handles missing machine ID files", func(t *testing.T) {
+		t.Parallel()
 		_, err := getLinuxMachineID(logger)
 
 		if err != nil {
@@ -118,9 +128,11 @@ func TestGetLinuxMachineID(t *testing.T) {
 }
 
 func TestFingerprintComponents(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("fingerprint changes with different system properties", func(t *testing.T) {
+		t.Parallel()
 		fp, err := GenerateSystemFingerprint(logger)
 		require.NoError(t, err)
 
@@ -132,9 +144,11 @@ func TestFingerprintComponents(t *testing.T) {
 }
 
 func TestMachineIDWithTemporaryFile(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("reads from first available path", func(t *testing.T) {
+		t.Parallel()
 		if runtime.GOOS != string(constants.Status.Platform.Linux) {
 			t.Skip("Linux only")
 		}
@@ -145,9 +159,11 @@ func TestMachineIDWithTemporaryFile(t *testing.T) {
 }
 
 func TestFingerprintIncludesHostname(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("fingerprint incorporates hostname for Docker container differentiation", func(t *testing.T) {
+		t.Parallel()
 		fp, err := GenerateSystemFingerprint(logger)
 		require.NoError(t, err)
 
@@ -179,9 +195,11 @@ func TestFingerprintIncludesHostname(t *testing.T) {
 }
 
 func TestFingerprintStability(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("multiple calls produce identical results", func(t *testing.T) {
+		t.Parallel()
 		var fingerprints []string
 
 		for i := 0; i < 5; i++ {
@@ -198,9 +216,11 @@ func TestFingerprintStability(t *testing.T) {
 }
 
 func TestGetLinuxMachineIDFromCustomPath(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("empty machine ID file is handled", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		emptyFile := filepath.Join(tmpDir, "empty-machine-id")
 		err := os.WriteFile(emptyFile, []byte(""), 0644)
@@ -218,6 +238,7 @@ func TestGetLinuxMachineIDFromCustomPath(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGetDarwinMachineID_PreferencesFileMissing_ReturnsFallback(t *testing.T) {
+	t.Parallel()
 	// On Linux (the test environment) the macOS plist path does not exist.
 	// getDarwinMachineID must handle the missing-file case and return a
 	// hostname-based fallback instead of erroring.
@@ -232,6 +253,7 @@ func TestGetDarwinMachineID_PreferencesFileMissing_ReturnsFallback(t *testing.T)
 }
 
 func TestGetDarwinMachineID_PreferencesFileExists_ReturnsHash(t *testing.T) {
+	t.Parallel()
 	if _, err := os.Stat("/Library/Preferences/SystemConfiguration/preferences.plist"); os.IsNotExist(err) {
 		t.Skip("skipping hash path test: macOS preferences plist does not exist in this environment")
 	}
@@ -243,6 +265,7 @@ func TestGetDarwinMachineID_PreferencesFileExists_ReturnsHash(t *testing.T) {
 }
 
 func TestGetDarwinMachineID_FallbackContainsHostname(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == string(constants.Status.Platform.Darwin) {
 		t.Skip("skipped on Darwin: plist file exists so fallback branch not taken")
 	}

@@ -76,6 +76,7 @@ func (f *fakeSuspendedStore) DeleteSuspendedTransaction(txHash string) error {
 }
 
 func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name         string
 		GatewayErr   error
@@ -135,6 +136,7 @@ func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+		t.Parallel()
 			proc := &fakeEnvelopeProcessor{err: tc.GatewayErr}
 			g := &GatewayService{
 				envProc: proc,
@@ -161,6 +163,7 @@ func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
 }
 
 func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
+	t.Parallel()
 	proc := &fakeEnvelopeProcessor{err: governance.ErrL3ProofMissing}
 	store := &fakeSuspendedStore{}
 	pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
@@ -204,6 +207,7 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 }
 
 func TestGatewayService_ResumeWithL3Proof(t *testing.T) {
+	t.Parallel()
 	receipt := &operatorv1.ActionReceipt{
 		TransactionId: "tx-1",
 		Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
@@ -241,6 +245,7 @@ func TestGatewayService_ResumeWithL3Proof(t *testing.T) {
 }
 
 func TestGatewayService_HandleResourcesRead(t *testing.T) {
+	t.Parallel()
 	receipt := &operatorv1.ActionReceipt{
 		TransactionId: "tx-1",
 		Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
@@ -279,6 +284,7 @@ func TestGatewayService_HandleResourcesRead(t *testing.T) {
 }
 
 func TestGatewayService_HandlePromptsGet(t *testing.T) {
+	t.Parallel()
 	receipt := &operatorv1.ActionReceipt{
 		TransactionId: "tx-1",
 		Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
@@ -318,6 +324,7 @@ func TestGatewayService_HandlePromptsGet(t *testing.T) {
 }
 
 func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
+	t.Parallel()
 	receipt := &operatorv1.ActionReceipt{
 		TransactionId: "tx-1",
 		Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
@@ -350,6 +357,7 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 }
 
 func TestGatewayService_EnvelopeGatewaySigned(t *testing.T) {
+	t.Parallel()
 	// Test that MCP gateway sets GatewaySigned=true in envelope
 	pubKey, privKey, _ := ed25519.GenerateKey(rand.Reader)
 	_ = pubKey

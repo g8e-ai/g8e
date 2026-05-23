@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,26 +41,22 @@ func NewUserService(db *GatewayDBService, logger *slog.Logger) *UserService {
 	}
 }
 
-// CreateUser creates a new active user with email uniqueness enforcement.
-func (s *UserService) CreateUser(email, name string) (*models.User, error) {
-	return s.createUser(email, name, false)
+// CreateUser creates a new active user with a generated ID.
+// Zero-PII: No email or name is stored - only the user ID and passkey credentials.
+func (s *UserService) CreateUser() (*models.User, error) {
+	return s.createUser(false)
 }
 
 // CreateBootstrapUser creates the ephemeral local-superadmin identity used by
 // `./g8e platform start -a`. The resulting user carries IsBootstrap=true so
 // the device-link registration path can identify and retire it the first time
 // a real identity is provisioned.
-func (s *UserService) CreateBootstrapUser(email, name string) (*models.User, error) {
-	return s.createUser(email, name, true)
+func (s *UserService) CreateBootstrapUser() (*models.User, error) {
+	return s.createUser(true)
 }
 
-func (s *UserService) createUser(email, name string, isBootstrap bool) (*models.User, error) {
-	sanitizedEmail := strings.TrimSpace(strings.ToLower(email))
-	if sanitizedEmail == "" {
-		return nil, fmt.Errorf("email is required")
-	}
-
-	s.logger.Info("[USER-SERVICE] Creating new user", "email", sanitizedEmail, "is_bootstrap", isBootstrap)
+func (s *UserService) createUser(isBootstrap bool) (*models.User, error) {
+	s.logger.Info("[USER-SERVICE] Creating new user", "is_bootstrap", isBootstrap)
 
 	if isBootstrap {
 		existingBootstrap, err := s.FindBootstrapUser()
@@ -73,26 +68,11 @@ func (s *UserService) createUser(email, name string, isBootstrap bool) (*models.
 		}
 	}
 
-	// Enforce email uniqueness
-	existing, err := s.FindByEmail(sanitizedEmail)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check email uniqueness: %w", err)
-	}
-	if existing != nil {
-		return nil, fmt.Errorf("user with email %s already exists", sanitizedEmail)
-	}
-
 	userID := uuid.New().String()
 
-	userName := name
-	if userName == "" {
-		userName = strings.Split(sanitizedEmail, "@")[0]
-	}
-
+	// Zero-PII: Only user ID and passkey credentials are stored
 	user := &models.User{
 		ID:                 userID,
-		Email:              sanitizedEmail,
-		Name:               userName,
 		PasskeyCredentials: []models.PasskeyCredential{},
 		Provider:           string(constants.AuthProviderPasskey),
 		Status:             constants.UserStatusActive,
@@ -108,7 +88,7 @@ func (s *UserService) createUser(email, name string, isBootstrap bool) (*models.
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	s.logger.Info("[USER-SERVICE] User created", "user_id", userID, "email", sanitizedEmail, "is_bootstrap", isBootstrap)
+	s.logger.Info("[USER-SERVICE] User created", "user_id", userID, "is_bootstrap", isBootstrap)
 	return user, nil
 }
 
@@ -203,26 +183,11 @@ func (s *UserService) appendAdminAudit(entry models.AdminAuditEntry) error {
 	return s.db.DocSet(marshaler.CollectionName(constants.CollectionAuthAdminAudit), entry.ID, data)
 }
 
-// FindByEmail finds a user by email address.
+// FindByEmail is removed as part of zero-PII architecture.
+// Users are identified solely by user ID, not email.
+// This method returns an error to prevent accidental use.
 func (s *UserService) FindByEmail(email string) (*models.User, error) {
-	sanitizedEmail := strings.TrimSpace(strings.ToLower(email))
-	if sanitizedEmail == "" {
-		return nil, nil
-	}
-
-	filters := []models.DocFilter{
-		{Field: "email", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sanitizedEmail))},
-	}
-
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), filters, "", 1)
-	if err != nil {
-		return nil, err
-	}
-	if len(docs) == 0 {
-		return nil, nil
-	}
-
-	return s.docToUser(docs[0])
+	return nil, fmt.Errorf("FindByEmail is not supported in zero-PII architecture. Use GetByID instead.")
 }
 
 // GetByID retrieves a user by ID.

@@ -31,6 +31,7 @@ import (
 )
 
 func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	workDir := t.TempDir()
 
@@ -44,6 +45,7 @@ func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 	service := NewFsGrepService(workDir, logger)
 
 	t.Run("simple grep search", func(t *testing.T) {
+		t.Parallel()
 		req := &models.FsGrepRequest{
 			ExecutionID: "test-1",
 			CaseID:      "case-1",
@@ -68,6 +70,7 @@ func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 	})
 
 	t.Run("grep with regex pattern", func(t *testing.T) {
+		t.Parallel()
 		req := &models.FsGrepRequest{
 			ExecutionID: "test-2",
 			CaseID:      "case-2",
@@ -84,6 +87,7 @@ func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 	})
 
 	t.Run("grep with include filter", func(t *testing.T) {
+		t.Parallel()
 		req := &models.FsGrepRequest{
 			ExecutionID: "test-3",
 			CaseID:      "case-3",
@@ -101,6 +105,7 @@ func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 	})
 
 	t.Run("respects max_matches limit", func(t *testing.T) {
+		t.Parallel()
 		req := &models.FsGrepRequest{
 			ExecutionID: "test-4",
 			CaseID:      "case-4",
@@ -117,6 +122,7 @@ func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 	})
 
 	t.Run("handles invalid regex", func(t *testing.T) {
+		t.Parallel()
 		req := &models.FsGrepRequest{
 			ExecutionID: "test-5",
 			CaseID:      "case-5",

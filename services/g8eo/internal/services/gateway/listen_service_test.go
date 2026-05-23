@@ -24,6 +24,7 @@ import (
 )
 
 func TestNewGatewayService(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -33,6 +34,7 @@ func TestNewGatewayService(t *testing.T) {
 	cfg.Gateway.SecretsDir = t.TempDir()
 
 	t.Run("Default configuration with self-signed certs", func(t *testing.T) {
+		t.Parallel()
 		db, err := OpenGatewayDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, true)
 		require.NoError(t, err)
 		defer db.Close()
@@ -44,7 +46,8 @@ func TestNewGatewayService(t *testing.T) {
 		cfg.Gateway.SecretsDir = t.TempDir()
 		cfg.Gateway.BootstrapPort = constants.Ports.OperatorBootstrapHttps
 
-		ls := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
+		ls, err := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
+		require.NoError(t, err)
 		assert.NotNil(t, ls)
 		assert.NotNil(t, ls.server)
 		assert.NotNil(t, ls.pki)
@@ -53,6 +56,7 @@ func TestNewGatewayService(t *testing.T) {
 }
 
 func TestGatewayService_StateManagement(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -69,14 +73,17 @@ func TestGatewayService_StateManagement(t *testing.T) {
 
 	cfg.Gateway.BootstrapPort = constants.Ports.OperatorBootstrapHttps
 
-	ls := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
+	require.NoError(t, err)
 
 	t.Run("Initial state", func(t *testing.T) {
+		t.Parallel()
 		assert.False(t, ls.IsRunning())
 		assert.False(t, ls.IsReady())
 	})
 
 	t.Run("State getters are thread-safe", func(t *testing.T) {
+		t.Parallel()
 		// Test that we can call state methods concurrently
 		done := make(chan bool, 10)
 		for i := 0; i < 10; i++ {
@@ -99,6 +106,7 @@ func TestGatewayService_StateManagement(t *testing.T) {
 }
 
 func TestNewGatewayServiceFromComponents(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -116,7 +124,8 @@ func TestNewGatewayServiceFromComponents(t *testing.T) {
 	cfg.Gateway.SecretsDir = secretsDir
 	cfg.Gateway.BootstrapPort = constants.Ports.OperatorBootstrapHttps
 
-	ls := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayServiceFromComponents(cfg, logger, db, pubsub)
+	require.NoError(t, err)
 	assert.NotNil(t, ls)
 	assert.Equal(t, db, ls.db)
 	assert.Equal(t, pubsub, ls.pubsub)

@@ -24,6 +24,7 @@ import (
 )
 
 func TestNewWithBackend(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -39,6 +40,7 @@ func TestNewWithBackend(t *testing.T) {
 }
 
 func TestNewWithBackend_CreatesSecretsDir(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	baseDir := t.TempDir()
 	secretsDir := filepath.Join(baseDir, "secrets")
@@ -55,6 +57,7 @@ func TestNewWithBackend_CreatesSecretsDir(t *testing.T) {
 }
 
 func TestKeystore_Initialize_GeneratesNewKey(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -73,6 +76,7 @@ func TestKeystore_Initialize_GeneratesNewKey(t *testing.T) {
 }
 
 func TestKeystore_Initialize_RetrievesExistingKey(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -98,6 +102,7 @@ func TestKeystore_Initialize_RetrievesExistingKey(t *testing.T) {
 }
 
 func TestKeystore_Initialize_RejectsInvalidKeyLength(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -117,6 +122,7 @@ func TestKeystore_Initialize_RejectsInvalidKeyLength(t *testing.T) {
 }
 
 func TestKeystore_EncryptSecret(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -137,6 +143,7 @@ func TestKeystore_EncryptSecret(t *testing.T) {
 }
 
 func TestKeystore_EncryptSecret_Atomically(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -156,6 +163,7 @@ func TestKeystore_EncryptSecret_Atomically(t *testing.T) {
 }
 
 func TestKeystore_DecryptSecret(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -176,6 +184,7 @@ func TestKeystore_DecryptSecret(t *testing.T) {
 }
 
 func TestKeystore_DecryptSecret_MissingFile(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -192,6 +201,7 @@ func TestKeystore_DecryptSecret_MissingFile(t *testing.T) {
 }
 
 func TestKeystore_DecryptSecret_CorruptedFile(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -213,6 +223,7 @@ func TestKeystore_DecryptSecret_CorruptedFile(t *testing.T) {
 }
 
 func TestKeystore_DeleteSecret(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -235,6 +246,7 @@ func TestKeystore_DeleteSecret(t *testing.T) {
 }
 
 func TestKeystore_DeleteSecret_Nonexistent(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -250,6 +262,7 @@ func TestKeystore_DeleteSecret_Nonexistent(t *testing.T) {
 }
 
 func TestKeystore_Purge(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -278,6 +291,7 @@ func TestKeystore_Purge(t *testing.T) {
 }
 
 func TestKeystore_EnsurePermissions(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -305,6 +319,7 @@ func TestKeystore_EnsurePermissions(t *testing.T) {
 }
 
 func TestKeystore_BackendName(t *testing.T) {
+	t.Parallel()
 	ResetTestStorage()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()

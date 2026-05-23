@@ -33,6 +33,7 @@ import (
 )
 
 func TestNewBootstrapService(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -44,6 +45,7 @@ func TestNewBootstrapService(t *testing.T) {
 }
 
 func TestNewBootstrapService_TLSPinning(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -59,6 +61,7 @@ func TestNewBootstrapService_TLSPinning(t *testing.T) {
 }
 
 func TestNewBootstrapService_HasTimeout(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -91,6 +94,7 @@ func newTestBootstrapService(t *testing.T, server *httptest.Server) *BootstrapSe
 }
 
 func TestRequestHTTPAuth_Success(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "POST", r.Method)
 		require.Equal(t, "/api/auth/operator", r.URL.Path)
@@ -125,6 +129,7 @@ func TestRequestHTTPAuth_Success(t *testing.T) {
 }
 
 func TestRequestHTTPAuth_PropagatesCerts(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := AuthServicesResponse{
 			Success:           true,
@@ -148,6 +153,7 @@ func TestRequestHTTPAuth_PropagatesCerts(t *testing.T) {
 }
 
 func TestRequestHTTPAuth_Failure(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := AuthServicesResponse{
 			Success: false,
@@ -166,6 +172,7 @@ func TestRequestHTTPAuth_Failure(t *testing.T) {
 }
 
 func TestRequestHTTPAuth_MissingSessionID(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := AuthServicesResponse{
 			Success:           true,
@@ -185,6 +192,7 @@ func TestRequestHTTPAuth_MissingSessionID(t *testing.T) {
 }
 
 func TestRequestHTTPAuth_MissingConfig(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := AuthServicesResponse{
 			Success:           true,
@@ -204,6 +212,7 @@ func TestRequestHTTPAuth_MissingConfig(t *testing.T) {
 }
 
 func TestRequestHTTPAuth_InvalidJSON(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, "not-json{{{")
@@ -217,6 +226,7 @@ func TestRequestHTTPAuth_InvalidJSON(t *testing.T) {
 }
 
 func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
+	t.Parallel()
 	var capturedBody operatorAuthRequest
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -266,6 +276,7 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 }
 
 func TestRequestHTTPAuth_APIKeyOnly(t *testing.T) {
+	t.Parallel()
 	var capturedBody operatorAuthRequest
 	var capturedAuthHeader string
 
@@ -306,6 +317,7 @@ func TestRequestHTTPAuth_APIKeyOnly(t *testing.T) {
 }
 
 func TestApplyBootstrapConfig_AppliesAllFields(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -331,6 +343,7 @@ func TestApplyBootstrapConfig_AppliesAllFields(t *testing.T) {
 }
 
 func TestApplyBootstrapConfig_ZeroValuesNotOverridden(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	originalTasks := cfg.MaxConcurrentTasks
 	originalMemory := cfg.MaxMemoryMB
@@ -359,6 +372,7 @@ func TestApplyBootstrapConfig_ZeroValuesNotOverridden(t *testing.T) {
 }
 
 func TestApplyBootstrapConfig_InvalidCertIsFatal(t *testing.T) {
+	t.Parallel()
 	// Regression: an unparseable per-operator mTLS cert must be a fatal
 	// cert-trust failure rather than a warn-and-continue. The operator's
 	// security contract requires mTLS on every outbound connection once a
@@ -384,7 +398,9 @@ func TestApplyBootstrapConfig_InvalidCertIsFatal(t *testing.T) {
 }
 
 func TestAuthServicesResponse_JSONParsing(t *testing.T) {
+	t.Parallel()
 	t.Run("successful response", func(t *testing.T) {
+		t.Parallel()
 		jsonData := `{
 			"success": true,
 			"operator_session_id": "session-123",
@@ -411,6 +427,7 @@ func TestAuthServicesResponse_JSONParsing(t *testing.T) {
 	})
 
 	t.Run("error response (bare string)", func(t *testing.T) {
+		t.Parallel()
 		jsonData := `{"success": false, "error": "invalid api key"}`
 
 		var resp AuthServicesResponse
@@ -422,6 +439,7 @@ func TestAuthServicesResponse_JSONParsing(t *testing.T) {
 	})
 
 	t.Run("error response (client error envelope object)", func(t *testing.T) {
+		t.Parallel()
 		// Regression: the server actually returns the object envelope.
 		jsonData := `{"success": false, "error": {"code": "G8E-1800", "message": "already registered", "category": "auth"}}`
 
@@ -434,6 +452,7 @@ func TestAuthServicesResponse_JSONParsing(t *testing.T) {
 	})
 
 	t.Run("cert fields present", func(t *testing.T) {
+		t.Parallel()
 		jsonData := `{
 			"success": true,
 			"operator_session_id": "s",
@@ -453,6 +472,7 @@ func TestAuthServicesResponse_JSONParsing(t *testing.T) {
 }
 
 func TestSanitizeURL(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		input    string
@@ -465,6 +485,7 @@ func TestSanitizeURL(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+		t.Parallel()
 			result := SanitizeURL(tc.input)
 			assert.Contains(t, result, tc.contains)
 			if tc.excludes != "" {
@@ -474,76 +495,94 @@ func TestSanitizeURL(t *testing.T) {
 	}
 
 	t.Run("empty URL returns empty", func(t *testing.T) {
+		t.Parallel()
 		assert.Empty(t, SanitizeURL(""))
 	})
 
 	t.Run("invalid URL returns invalid-url", func(t *testing.T) {
+		t.Parallel()
 		assert.Equal(t, "invalid-url", SanitizeURL("://bad url"))
 	})
 }
 
 func TestSystemInfoTools(t *testing.T) {
+	t.Parallel()
 	t.Run("system.GetHostname", func(t *testing.T) {
+		t.Parallel()
 		assert.NotEmpty(t, system.GetHostname())
 	})
 
 	t.Run("system.GetOSName", func(t *testing.T) {
+		t.Parallel()
 		osName := system.GetOSName()
 		assert.NotEmpty(t, osName)
 		assert.Contains(t, []string{"linux", "darwin"}, osName)
 	})
 
 	t.Run("system.GetArchitecture", func(t *testing.T) {
+		t.Parallel()
 		assert.NotEmpty(t, system.GetArchitecture())
 	})
 
 	t.Run("system.GetNumCPU", func(t *testing.T) {
+		t.Parallel()
 		assert.Greater(t, system.GetNumCPU(), 0)
 	})
 
 	t.Run("system.GetNetworkInterfaces returns non-nil", func(t *testing.T) {
+		t.Parallel()
 		assert.NotNil(t, system.GetNetworkInterfaces())
 	})
 
 	t.Run("system.GetLocalIP returns non-empty", func(t *testing.T) {
+		t.Parallel()
 		assert.NotEmpty(t, system.GetLocalIP(""))
 	})
 
 	t.Run("system.GetCurrentUser returns non-empty", func(t *testing.T) {
+		t.Parallel()
 		assert.NotEmpty(t, system.GetCurrentUser())
 	})
 }
 
 func TestPerformanceMetrics(t *testing.T) {
+	t.Parallel()
 	t.Run("system.GetCPUPercent in range", func(t *testing.T) {
+		t.Parallel()
 		v := system.GetCPUPercent()
 		assert.GreaterOrEqual(t, v, float64(0))
 		assert.LessOrEqual(t, v, float64(100))
 	})
 
 	t.Run("system.GetMemoryPercent in range", func(t *testing.T) {
+		t.Parallel()
 		v := system.GetMemoryPercent()
 		assert.GreaterOrEqual(t, v, float64(0))
 		assert.LessOrEqual(t, v, float64(100))
 	})
 
 	t.Run("system.GetMemoryMB non-negative", func(t *testing.T) {
+		t.Parallel()
 		assert.GreaterOrEqual(t, system.GetMemoryMB(), 0)
 	})
 
 	t.Run("system.GetNetworkLatency non-negative", func(t *testing.T) {
+		t.Parallel()
 		assert.GreaterOrEqual(t, system.GetNetworkLatency(), float64(0))
 	})
 
 	t.Run("system.GetUptime non-empty", func(t *testing.T) {
+		t.Parallel()
 		assert.NotEmpty(t, system.GetUptime())
 	})
 
 	t.Run("system.GetUptimeSeconds positive", func(t *testing.T) {
+		t.Parallel()
 		assert.Greater(t, system.GetUptimeSeconds(), int64(0))
 	})
 
 	t.Run("system.GetConnectivityStatus non-nil", func(t *testing.T) {
+		t.Parallel()
 		assert.NotNil(t, system.GetConnectivityStatus())
 	})
 }

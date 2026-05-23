@@ -35,6 +35,7 @@ import (
 // through envelope processing to receipt generation, verifying that GatewaySigned
 // is properly propagated through the entire chain.
 func TestGatewaySignedEndToEndIntegration(t *testing.T) {
+	t.Parallel()
 	// Setup: Create a real envelope processor that will verify GatewaySigned
 	processorCalled := false
 	var receivedEnvelope *commonv1.GovernanceEnvelope
@@ -113,6 +114,7 @@ func (e *envelopeCaptureProcessor) ProcessEnvelope(ctx context.Context, payload 
 // TestGatewaySignedReceiptIntegration tests that GatewaySigned is properly
 // set in the receipt returned by the envelope processor.
 func TestGatewaySignedReceiptIntegration(t *testing.T) {
+	t.Parallel()
 	processor := &fakeEnvelopeProcessor{
 		receipt: &operatorv1.ActionReceipt{
 			TransactionId:    "tx-1",
@@ -161,6 +163,7 @@ func TestGatewaySignedReceiptIntegration(t *testing.T) {
 // TestGatewaySignedCanonicalizationIntegration tests that GatewaySigned is included
 // in the canonical form used for receipt signing.
 func TestGatewaySignedCanonicalizationIntegration(t *testing.T) {
+	t.Parallel()
 	receipt := &operatorv1.ActionReceipt{
 		TransactionId:    "tx-1",
 		TransactionHash:  "hash-1",
@@ -197,6 +200,7 @@ func TestGatewaySignedCanonicalizationIntegration(t *testing.T) {
 
 // TestGatewaySignedFalseIntegration tests the Tribunal path where GatewaySigned=false
 func TestGatewaySignedFalseIntegration(t *testing.T) {
+	t.Parallel()
 	processor := &fakeEnvelopeProcessor{
 		receipt: &operatorv1.ActionReceipt{
 			TransactionId: "tx-1",

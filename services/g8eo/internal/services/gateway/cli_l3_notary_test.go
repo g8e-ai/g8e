@@ -37,6 +37,7 @@ import (
 )
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -93,6 +94,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+		t.Parallel()
 			ok, err := notary.VerifyL3Proof(tc.userID, tc.transactionHash, "", tc.proof)
 			require.Error(t, err)
 			require.False(t, ok)
@@ -102,6 +104,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
 }
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -116,8 +119,6 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
 	userID := "disabled-user"
 	user := &models.User{
 		ID:     userID,
-		Email:  "disabled@test.com",
-		Name:   "Disabled User",
 		Status: constants.UserStatusDisabled,
 	}
 	userBytes, _ := json.Marshal(user)
@@ -132,6 +133,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
 }
 
 func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -146,8 +148,6 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 	userID := "active-user"
 	user := &models.User{
 		ID:     userID,
-		Email:  "active@test.com",
-		Name:   "Active User",
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
@@ -180,6 +180,7 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 }
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -194,8 +195,6 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
 	userID := "active-user"
 	user := &models.User{
 		ID:     userID,
-		Email:  "active@test.com",
-		Name:   "Active User",
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
@@ -211,6 +210,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
 }
 
 func TestCertFingerprint(t *testing.T) {
+	t.Parallel()
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
@@ -235,6 +235,7 @@ func TestCertFingerprint(t *testing.T) {
 }
 
 func TestExtractCLISessionFromCert(t *testing.T) {
+	t.Parallel()
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
@@ -265,6 +266,7 @@ func TestExtractCLISessionFromCert(t *testing.T) {
 }
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -283,7 +285,6 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 	userID := "user-123"
 	user := &models.User{
 		ID:     userID,
-		Email:  "test@example.com",
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
@@ -320,6 +321,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 }
 
 func TestExtractUserIDFromCert(t *testing.T) {
+	t.Parallel()
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
@@ -350,6 +352,7 @@ func TestExtractUserIDFromCert(t *testing.T) {
 }
 
 func TestCompositeL3Verifier_DelegatesToCLI(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -365,8 +368,6 @@ func TestCompositeL3Verifier_DelegatesToCLI(t *testing.T) {
 	userID := "active-user"
 	user := &models.User{
 		ID:     userID,
-		Email:  "active@test.com",
-		Name:   "Active User",
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
@@ -399,6 +400,7 @@ func TestCompositeL3Verifier_DelegatesToCLI(t *testing.T) {
 }
 
 func TestCompositeL3Verifier_DelegatesToPasskey(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	passkeyL3, user := newPasskeyServiceForTest(t)
 	composite := NewCompositeL3Verifier(passkeyL3, nil, logger)

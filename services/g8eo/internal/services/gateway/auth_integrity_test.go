@@ -31,6 +31,7 @@ import (
 // is successfully blocked from authenticating with a valid CLI certificate.
 // This test ensures the identity hardening (Plan §4.6) is working correctly.
 func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	dbDir := t.TempDir()
@@ -45,8 +46,6 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	userID := "user-retired-test"
 	disabledUser := &models.User{
 		ID:     userID,
-		Email:  "retired@example.com",
-		Name:   "Retired User",
 		Status: constants.UserStatusDisabled,
 	}
 	userBytes, err := json.Marshal(disabledUser)
@@ -97,6 +96,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 // is allowed to authenticate with a valid CLI certificate.
 // This is a control test to ensure the auth logic works correctly for valid users.
 func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	dbDir := t.TempDir()
@@ -111,8 +111,6 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 	userID := "user-active-test"
 	activeUser := &models.User{
 		ID:     userID,
-		Email:  "active@example.com",
-		Name:   "Active User",
 		Status: constants.UserStatusActive,
 	}
 	userBytes, err := json.Marshal(activeUser)

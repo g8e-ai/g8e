@@ -25,6 +25,7 @@ import (
 )
 
 func TestNewG8eoService_InitialState(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -60,6 +61,7 @@ func TestNewG8eoService_InitialState(t *testing.T) {
 }
 
 func TestNewG8eoService_PreservesConfig(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	cfg.MaxConcurrentTasks = 42
 	logger := testutil.NewTestLogger()
@@ -73,6 +75,7 @@ func TestNewG8eoService_PreservesConfig(t *testing.T) {
 }
 
 func TestNewG8eoService_IndependentInstances(t *testing.T) {
+	t.Parallel()
 	cfg1 := testutil.NewTestConfig(t)
 	cfg2 := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -88,6 +91,7 @@ func TestNewG8eoService_IndependentInstances(t *testing.T) {
 }
 
 func TestG8eoService_Start_AlreadyRunning(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -104,6 +108,7 @@ func TestG8eoService_Start_AlreadyRunning(t *testing.T) {
 }
 
 func TestG8eoService_ProductionSentinelConfig(t *testing.T) {
+	t.Parallel()
 	cfg := ProductionSentinelConfig()
 
 	assert.True(t, cfg.Enabled, "production sentinel must be enabled")
@@ -113,6 +118,7 @@ func TestG8eoService_ProductionSentinelConfig(t *testing.T) {
 }
 
 func TestG8eoService_Stop(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -134,6 +140,7 @@ func TestG8eoService_Stop(t *testing.T) {
 }
 
 func TestG8eoService_ConcurrentStateAccess(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 

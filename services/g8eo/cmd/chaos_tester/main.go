@@ -239,6 +239,30 @@ func (m *memReplayStore) CheckAndSetNonce(nonce string, _ time.Time) (bool, erro
 	return false, nil
 }
 
+func (m *memReplayStore) ReserveNonce(nonce string, _ time.Time) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.nonces[nonce] {
+		return true, nil
+	}
+	m.nonces[nonce] = true
+	return false, nil
+}
+
+func (m *memReplayStore) FinalizeNonce(nonce string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// No-op for in-memory store - nonce is already marked as used
+	return nil
+}
+
+func (m *memReplayStore) ReleaseNonce(nonce string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.nonces, nonce)
+	return nil
+}
+
 // ── L3 notary (auto-approve non-mutations; mutations need no L3 here) ───────
 
 type chaosL3Notary struct{}
@@ -434,6 +458,7 @@ func main() {
 		stateRootProvider,
 		&governance.SimpleSignerStore{Signers: trustedSigners},
 		l3Notary,
+		nil, // Sentinel not used in chaos tester
 		knownActionTypes,
 		"notary",
 	)

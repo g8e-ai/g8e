@@ -28,6 +28,18 @@ func (m *MockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (b
 	return false, nil
 }
 
+func (m *MockReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
+	return false, nil
+}
+
+func (m *MockReplayStore) FinalizeNonce(nonce string) error {
+	return nil
+}
+
+func (m *MockReplayStore) ReleaseNonce(nonce string) error {
+	return nil
+}
+
 // StatefulMockReplayStore implements ReplayStore with nonce tracking.
 type StatefulMockReplayStore struct {
 	Nonces map[string]bool
@@ -43,6 +55,25 @@ func (m *StatefulMockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.
 	}
 	m.Nonces[nonce] = true
 	return false, nil
+}
+
+func (m *StatefulMockReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
+	if m.Nonces[nonce] {
+		return true, nil
+	}
+	m.Nonces[nonce] = true
+	return false, nil
+}
+
+func (m *StatefulMockReplayStore) FinalizeNonce(nonce string) error {
+	// No-op for mock - nonce is already marked as used
+	return nil
+}
+
+func (m *StatefulMockReplayStore) ReleaseNonce(nonce string) error {
+	// Release the nonce for retry
+	delete(m.Nonces, nonce)
+	return nil
 }
 
 // MockStateRootProvider implements StateRootProvider interface for testing.

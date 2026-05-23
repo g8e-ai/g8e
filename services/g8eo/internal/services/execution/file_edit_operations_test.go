@@ -31,11 +31,13 @@ import (
 
 // Comprehensive tests for all file edit operations
 func TestFileEditService_ReadOperations(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewFileEditService(cfg, logger)
 
 	t.Run("read with end line only", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "endonly.txt")
 
@@ -64,6 +66,7 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 	})
 
 	t.Run("read with max lines from middle", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "maxlines.txt")
 
@@ -98,6 +101,7 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 	})
 
 	t.Run("read with complete file stats", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "stats.txt")
 
@@ -127,6 +131,7 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 	})
 
 	t.Run("read symlink with stats", func(t *testing.T) {
+		t.Parallel()
 
 		tmpDir := t.TempDir()
 		targetFile := filepath.Join(tmpDir, "target.txt")
@@ -159,11 +164,13 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 }
 
 func TestFileEditService_WriteOperations(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewFileEditService(cfg, logger)
 
 	t.Run("write to existing file without create flag", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "exists.txt")
 
@@ -190,6 +197,7 @@ func TestFileEditService_WriteOperations(t *testing.T) {
 	})
 
 	t.Run("write new file without backup", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "new.txt")
 
@@ -213,6 +221,7 @@ func TestFileEditService_WriteOperations(t *testing.T) {
 	})
 
 	t.Run("write with nested directory creation", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		nestedPath := filepath.Join(tmpDir, "a", "b", "c", "test.txt")
 		content := "nested"
@@ -236,11 +245,13 @@ func TestFileEditService_WriteOperations(t *testing.T) {
 }
 
 func TestFileEditService_ReplaceOperations(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewFileEditService(cfg, logger)
 
 	t.Run("replace with backup", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "replace.txt")
 
@@ -271,6 +282,7 @@ func TestFileEditService_ReplaceOperations(t *testing.T) {
 	})
 
 	t.Run("replace with empty new content", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "replace-empty.txt")
 
@@ -300,11 +312,13 @@ func TestFileEditService_ReplaceOperations(t *testing.T) {
 }
 
 func TestFileEditService_InsertOperations(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewFileEditService(cfg, logger)
 
 	t.Run("insert with backup", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "insert.txt")
 
@@ -332,6 +346,7 @@ func TestFileEditService_InsertOperations(t *testing.T) {
 	})
 
 	t.Run("insert multiline content", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "insert-multi.txt")
 
@@ -362,11 +377,13 @@ func TestFileEditService_InsertOperations(t *testing.T) {
 }
 
 func TestFileEditService_DeleteOperations(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewFileEditService(cfg, logger)
 
 	t.Run("delete with backup", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "delete.txt")
 
@@ -394,6 +411,7 @@ func TestFileEditService_DeleteOperations(t *testing.T) {
 	})
 
 	t.Run("delete first line", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "delete-first.txt")
 
@@ -420,11 +438,13 @@ func TestFileEditService_DeleteOperations(t *testing.T) {
 }
 
 func TestFileEditService_ErrorHandling(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewFileEditService(cfg, logger)
 
 	t.Run("patch operation not implemented", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "patch.txt")
 
@@ -448,6 +468,7 @@ func TestFileEditService_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("unsupported operation", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "unsupported.txt")
 

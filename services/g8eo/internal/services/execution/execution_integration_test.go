@@ -31,12 +31,14 @@ import (
 
 // Integration tests for ExecutionService
 func TestExecutionService_Integration(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("execute and publish result", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "exec-1",
 			CaseID:         "test-case-1",
@@ -57,6 +59,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("concurrent command execution", func(t *testing.T) {
+		t.Parallel()
 		var wg sync.WaitGroup
 		numCommands := 5
 		results := make(chan *models.ExecutionResultsPayload, numCommands)
@@ -96,6 +99,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("complex command with file I/O", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "test-output.txt")
 
@@ -121,6 +125,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("command with working directory and environment", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 
 		req := &models.ExecutionRequestPayload{
@@ -147,6 +152,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("pipeline commands with multiple steps", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 
 		// Step 1: Create a file
@@ -199,6 +205,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("command timeout", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "timeout-exec-1",
 			CaseID:         "test-case-timeout",
@@ -218,6 +225,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("command with large output", func(t *testing.T) {
+		t.Parallel()
 		// Generate large output (100 lines)
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "large-output-exec-1",
@@ -245,6 +253,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("command cancellation with cleanup", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "cancel-exec-1",
 			CaseID:         "test-case-cancel",
@@ -262,8 +271,12 @@ func TestExecutionService_Integration(t *testing.T) {
 			done <- result
 		}()
 
-		// Wait for execution to start
-		time.Sleep(200 * time.Millisecond)
+		// Wait for execution to start with polling
+		require.Eventually(t, func() bool {
+			active := svc.GetActiveExecutions()
+			_, exists := active[req.ExecutionID]
+			return exists
+		}, 500*time.Millisecond, 20*time.Millisecond, "execution should be active")
 
 		// Verify it's in active executions
 		active := svc.GetActiveExecutions()
@@ -285,6 +298,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("command with stderr output", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "stderr-exec-1",
 			CaseID:         "test-case-stderr",
@@ -305,6 +319,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("system info collection accuracy", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "sysinfo-exec-1",
 			CaseID:         "test-case-sysinfo",
@@ -331,6 +346,7 @@ func TestExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("multiple commands in quick succession", func(t *testing.T) {
+		t.Parallel()
 		const numCommands = 10
 		requestIDs := make([]string, numCommands)
 
@@ -365,11 +381,13 @@ func TestExecutionService_Integration(t *testing.T) {
 }
 
 func TestExecutionService_AdvancedScenarios(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("script execution with multiple commands", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		scriptPath := filepath.Join(tmpDir, "test-script.sh")
 
@@ -405,6 +423,7 @@ exit 0
 	})
 
 	t.Run("command with specific return codes", func(t *testing.T) {
+		t.Parallel()
 		testCases := []struct {
 			name           string
 			exitCode       int
@@ -418,6 +437,7 @@ exit 0
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
+		t.Parallel()
 				req := &models.ExecutionRequestPayload{
 					ExecutionID:    fmt.Sprintf("exitcode-exec-%d", tc.exitCode),
 					CaseID:         "test-case-exitcode",
@@ -439,6 +459,7 @@ exit 0
 	})
 
 	t.Run("resource-intensive command tracking", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 
 		// Create a command that does some work

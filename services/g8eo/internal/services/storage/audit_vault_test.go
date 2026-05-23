@@ -29,6 +29,7 @@ import (
 )
 
 func TestAuditVaultConfig_Default(t *testing.T) {
+	t.Parallel()
 	// Ensure no environment variable override is set
 	os.Unsetenv("G8E_DATA_DIR")
 
@@ -46,6 +47,7 @@ func TestAuditVaultConfig_Default(t *testing.T) {
 }
 
 func TestAuditVaultService_Bootstrap(t *testing.T) {
+	t.Parallel()
 	gitPath := testGitPath(t)
 
 	// Create temporary directory for test
@@ -86,6 +88,7 @@ func TestAuditVaultService_Bootstrap(t *testing.T) {
 }
 
 func TestAuditVaultService_Session(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -120,6 +123,7 @@ func TestAuditVaultService_Session(t *testing.T) {
 }
 
 func TestAuditVaultService_Event(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -174,6 +178,7 @@ func TestAuditVaultService_Event(t *testing.T) {
 }
 
 func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -216,6 +221,7 @@ func TestAuditVaultService_RecordEvent_RejectsUnknownSession(t *testing.T) {
 }
 
 func TestAuditVaultService_RecordEvent_RejectsMissingSession(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -245,6 +251,7 @@ func TestAuditVaultService_RecordEvent_RejectsMissingSession(t *testing.T) {
 }
 
 func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -291,6 +298,7 @@ func TestAuditVaultService_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 }
 
 func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -335,6 +343,7 @@ func TestAuditVaultService_RecordEvents_SucceedsWithExistingSessions(t *testing.
 }
 
 func TestAuditVaultService_OutputTruncation(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -392,6 +401,7 @@ func TestAuditVaultService_OutputTruncation(t *testing.T) {
 }
 
 func TestAuditVaultService_FileMutation(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -456,6 +466,7 @@ func TestAuditVaultService_FileMutation(t *testing.T) {
 }
 
 func TestAuditVaultService_Disabled(t *testing.T) {
+	t.Parallel()
 	config := &AuditVaultConfig{
 		Enabled: false,
 	}
@@ -466,6 +477,7 @@ func TestAuditVaultService_Disabled(t *testing.T) {
 }
 
 func TestAuditVaultService_MultipleSessions(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -512,6 +524,7 @@ func TestAuditVaultService_MultipleSessions(t *testing.T) {
 }
 
 func TestAuditVaultService_EventPagination(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -578,6 +591,7 @@ func TestAuditVaultService_EventPagination(t *testing.T) {
 }
 
 func TestAuditVaultService_EventOrdering(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -626,6 +640,7 @@ func TestAuditVaultService_EventOrdering(t *testing.T) {
 }
 
 func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -688,6 +703,7 @@ func TestAuditVaultService_MultipleFileMutationsPerEvent(t *testing.T) {
 }
 
 func TestAuditVaultService_NullExitCode(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -730,6 +746,7 @@ func TestAuditVaultService_NullExitCode(t *testing.T) {
 }
 
 func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -785,6 +802,7 @@ func TestAuditVaultService_DifferentEventTypes(t *testing.T) {
 }
 
 func TestAuditVaultService_StderrTruncation(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -837,6 +855,7 @@ func TestAuditVaultService_StderrTruncation(t *testing.T) {
 }
 
 func TestAuditVaultService_GetSessionNotFound(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -861,6 +880,7 @@ func TestAuditVaultService_GetSessionNotFound(t *testing.T) {
 }
 
 func TestAuditVaultService_GetEventsEmptySession(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -889,6 +909,7 @@ func TestAuditVaultService_GetEventsEmptySession(t *testing.T) {
 }
 
 func TestAuditVaultService_GetFileMutationsNoMutations(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -914,6 +935,7 @@ func TestAuditVaultService_GetFileMutationsNoMutations(t *testing.T) {
 }
 
 func TestAuditVaultService_WALMode(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -946,6 +968,7 @@ func TestAuditVaultService_WALMode(t *testing.T) {
 }
 
 func TestAuditVaultService_IsEnabled(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -972,6 +995,7 @@ func TestAuditVaultService_IsEnabled(t *testing.T) {
 }
 
 func TestAuditVaultService_GetDataDir(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -998,6 +1022,7 @@ func TestAuditVaultService_GetDataDir(t *testing.T) {
 }
 
 func TestAuditVaultService_GetLedgerPath(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -1026,6 +1051,7 @@ func TestAuditVaultService_GetLedgerPath(t *testing.T) {
 }
 
 func TestAuditVaultService_NilServiceMethods(t *testing.T) {
+	t.Parallel()
 	var avs *AuditVaultService
 
 	// These should not panic and return gracefully
@@ -1044,6 +1070,7 @@ func TestAuditVaultService_NilServiceMethods(t *testing.T) {
 }
 
 func TestAuditVaultService_DefaultConfig(t *testing.T) {
+	t.Parallel()
 	// Verify default config uses hardcoded values (no env var overrides)
 	// g8eo uses CLI flags only, not environment variables for configuration
 	config := DefaultAuditVaultConfig()
@@ -1055,6 +1082,7 @@ func TestAuditVaultService_DefaultConfig(t *testing.T) {
 }
 
 func TestAuditVaultService_GetEncryptionVault(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
@@ -1094,6 +1122,7 @@ func TestAuditVaultService_GetEncryptionVault(t *testing.T) {
 }
 
 func TestAuditVaultPrune(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 	config := &AuditVaultConfig{
@@ -1173,6 +1202,7 @@ func TestAuditVaultPrune(t *testing.T) {
 }
 
 func TestAuditVaultService_LongContentFields(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -1226,6 +1256,7 @@ func TestAuditVaultService_LongContentFields(t *testing.T) {
 }
 
 func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -1280,6 +1311,7 @@ func TestAuditVaultService_FileMutationOperationTypes(t *testing.T) {
 }
 
 func TestAuditVaultService_SessionWithNullFields(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -1312,6 +1344,7 @@ func TestAuditVaultService_SessionWithNullFields(t *testing.T) {
 }
 
 func TestAuditVaultService_CloseIdempotent(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config := &AuditVaultConfig{
@@ -1342,6 +1375,7 @@ func TestAuditVaultService_CloseIdempotent(t *testing.T) {
 // ============================================================================
 
 func TestAuditVaultService_WithEncryption(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	// Create and initialize vault for encryption
@@ -1405,6 +1439,7 @@ func TestAuditVaultService_WithEncryption(t *testing.T) {
 }
 
 func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	apiKey := "test-api-key-for-locking-test"
@@ -1482,6 +1517,7 @@ func TestAuditVaultService_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 }
 
 func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	oldAPIKey := "old-api-key-before-refresh"
@@ -1564,6 +1600,7 @@ func TestAuditVaultService_EncryptionWithRekey(t *testing.T) {
 }
 
 func TestAuditVaultService_MixedEncryptedUnencrypted(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	config1 := &AuditVaultConfig{

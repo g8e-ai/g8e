@@ -31,12 +31,14 @@ import (
 )
 
 func TestFsListService_ExecuteFsList(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	workDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(workDir, "sentinel.txt"), []byte("x"), 0644))
 	service := NewFsListService(workDir, logger)
 
 	t.Run("lists current directory", func(t *testing.T) {
+		t.Parallel()
 		req := &models.FsListRequest{
 			ExecutionID: "test-1",
 			CaseID:      "case-1",
@@ -54,6 +56,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 	})
 
 	t.Run("lists temp directory with file metadata", func(t *testing.T) {
+		t.Parallel()
 		// Create temp directory with test files
 		tmpDir := t.TempDir()
 
@@ -101,6 +104,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 	})
 
 	t.Run("respects max_entries limit", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 
 		// Create 10 files
@@ -126,6 +130,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 	})
 
 	t.Run("recursive listing with max_depth", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 
 		// Create nested structure: tmpDir/a/b/c.txt
@@ -164,6 +169,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 	})
 
 	t.Run("handles non-existent path", func(t *testing.T) {
+		t.Parallel()
 		req := &models.FsListRequest{
 			ExecutionID: "test-5",
 			CaseID:      "case-5",
@@ -180,6 +186,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 	})
 
 	t.Run("handles file path (not directory)", func(t *testing.T) {
+		t.Parallel()
 		tmpFile, err := os.CreateTemp("", "fslist-file-*")
 		require.NoError(t, err)
 		tmpFile.Close()

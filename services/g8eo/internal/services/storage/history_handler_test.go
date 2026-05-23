@@ -53,6 +53,7 @@ func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *AuditVaultService,
 }
 
 func TestHistoryHandler_FetchHistory(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -92,6 +93,7 @@ func TestHistoryHandler_FetchHistory(t *testing.T) {
 }
 
 func TestHistoryHandler_FetchHistoryMissingSession(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -107,6 +109,7 @@ func TestHistoryHandler_FetchHistoryMissingSession(t *testing.T) {
 }
 
 func TestHistoryHandler_FetchHistoryInvalidRequest(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -121,6 +124,7 @@ func TestHistoryHandler_FetchHistoryInvalidRequest(t *testing.T) {
 }
 
 func TestHistoryHandler_IsEnabled(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -132,6 +136,7 @@ func TestHistoryHandler_IsEnabled(t *testing.T) {
 }
 
 func TestHistoryHandler_FetchHistoryWithFileMutations(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -183,6 +188,7 @@ func TestHistoryHandler_FetchHistoryWithFileMutations(t *testing.T) {
 }
 
 func TestHistoryHandler_FetchHistoryPagination(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -228,6 +234,7 @@ func TestHistoryHandler_FetchHistoryPagination(t *testing.T) {
 }
 
 func TestHistoryHandler_FetchHistoryDefaultLimit(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -258,6 +265,7 @@ func TestHistoryHandler_FetchHistoryDefaultLimit(t *testing.T) {
 }
 
 func TestHistoryHandler_FetchHistoryInvalidJSON(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -270,6 +278,7 @@ func TestHistoryHandler_FetchHistoryInvalidJSON(t *testing.T) {
 }
 
 func TestHistoryHandler_FetchFileHistory(t *testing.T) {
+	t.Parallel()
 	hh, avs, tempDir := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -302,6 +311,7 @@ func TestHistoryHandler_FetchFileHistory(t *testing.T) {
 }
 
 func TestHistoryHandler_FetchFileHistoryMissingFilePath(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -315,6 +325,7 @@ func TestHistoryHandler_FetchFileHistoryMissingFilePath(t *testing.T) {
 }
 
 func TestHistoryHandler_FetchFileHistoryDefaultLimit(t *testing.T) {
+	t.Parallel()
 	hh, avs, tempDir := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -336,6 +347,7 @@ func TestHistoryHandler_FetchFileHistoryDefaultLimit(t *testing.T) {
 }
 
 func TestHistoryHandler_FetchFileHistoryInvalidJSON(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -347,6 +359,7 @@ func TestHistoryHandler_FetchFileHistoryInvalidJSON(t *testing.T) {
 }
 
 func TestHistoryHandler_RestoreFile(t *testing.T) {
+	t.Parallel()
 	hh, avs, tempDir := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -387,6 +400,7 @@ func TestHistoryHandler_RestoreFile(t *testing.T) {
 }
 
 func TestHistoryHandler_RestoreFileMissingFilePath(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -400,6 +414,7 @@ func TestHistoryHandler_RestoreFileMissingFilePath(t *testing.T) {
 }
 
 func TestHistoryHandler_RestoreFileMissingCommitHash(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -413,6 +428,7 @@ func TestHistoryHandler_RestoreFileMissingCommitHash(t *testing.T) {
 }
 
 func TestHistoryHandler_RestoreFileMissingSessionID(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -426,6 +442,7 @@ func TestHistoryHandler_RestoreFileMissingSessionID(t *testing.T) {
 }
 
 func TestHistoryHandler_RestoreFileInvalidJSON(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -437,6 +454,7 @@ func TestHistoryHandler_RestoreFileInvalidJSON(t *testing.T) {
 }
 
 func TestHistoryHandler_RestoreFileInvalidCommit(t *testing.T) {
+	t.Parallel()
 	hh, avs, tempDir := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -453,6 +471,7 @@ func TestHistoryHandler_RestoreFileInvalidCommit(t *testing.T) {
 }
 
 func TestHistoryHandler_GetFileAtCommit(t *testing.T) {
+	t.Parallel()
 	hh, avs, tempDir := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -478,17 +497,20 @@ func TestHistoryHandler_GetFileAtCommit(t *testing.T) {
 }
 
 func TestHistoryHandler_NilHandler(t *testing.T) {
+	t.Parallel()
 	var hh *HistoryHandler
 	assert.False(t, hh.IsEnabled())
 }
 
 func TestHistoryHandler_NilAuditVault(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	hh := NewHistoryHandler(nil, nil, logger)
 	assert.False(t, hh.IsEnabled())
 }
 
 func TestHistoryHandler_AllEventTypes(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 
@@ -537,6 +559,7 @@ func TestHistoryHandler_AllEventTypes(t *testing.T) {
 }
 
 func TestHistoryHandler_EventWithTruncatedOutput(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	// Small truncation threshold
@@ -595,6 +618,7 @@ func TestHistoryHandler_EventWithTruncatedOutput(t *testing.T) {
 }
 
 func TestHistoryHandler_MultipleFileMutationsInHistory(t *testing.T) {
+	t.Parallel()
 	hh, avs, _ := setupTestHistoryHandler(t)
 	defer avs.Close()
 

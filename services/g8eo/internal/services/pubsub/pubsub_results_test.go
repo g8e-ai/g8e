@@ -44,7 +44,9 @@ func mustUnmarshalGovernanceEnvelope(t *testing.T, data []byte) *commonv1.Govern
 }
 
 func TestNewPubSubResultsService(t *testing.T) {
+	t.Parallel()
 	t.Run("creates service", func(t *testing.T) {
+		t.Parallel()
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -55,7 +57,9 @@ func TestNewPubSubResultsService(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
+	t.Parallel()
 	t.Run("successful publish", func(t *testing.T) {
+		t.Parallel()
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -100,7 +104,9 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
+	t.Parallel()
 	t.Run("successful publish", func(t *testing.T) {
+		t.Parallel()
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -131,7 +137,9 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
+	t.Parallel()
 	t.Run("successful heartbeat publish", func(t *testing.T) {
+		t.Parallel()
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()

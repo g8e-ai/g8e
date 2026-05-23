@@ -60,6 +60,7 @@ func newTestActuator(t *testing.T) (*Actuator, ed25519.PublicKey) {
 }
 
 func TestActuatorExecuteHappyPath(t *testing.T) {
+	t.Parallel()
 	Actuator, pubKey := newTestActuator(t)
 
 	// Configure handler to succeed (already set in newTestActuator)
@@ -128,6 +129,7 @@ func TestActuatorExecuteHappyPath(t *testing.T) {
 }
 
 func TestActuatorExecuteHandlerError(t *testing.T) {
+	t.Parallel()
 	Actuator, pubKey := newTestActuator(t)
 
 	// Configure handler to return error
@@ -180,6 +182,7 @@ func TestActuatorExecuteHandlerError(t *testing.T) {
 }
 
 func TestActuatorExecuteAuditWriteFailInitial(t *testing.T) {
+	t.Parallel()
 	Actuator, _ := newTestActuator(t)
 
 	// Configure audit store to fail on first call (initial receipt)
@@ -218,6 +221,7 @@ func TestActuatorExecuteAuditWriteFailInitial(t *testing.T) {
 }
 
 func TestActuatorExecuteReceiptPersistFail(t *testing.T) {
+	t.Parallel()
 	Actuator, _ := newTestActuator(t)
 
 	// Configure audit store to fail on DocSet
@@ -248,6 +252,7 @@ func TestActuatorExecuteReceiptPersistFail(t *testing.T) {
 }
 
 func TestActuatorExecuteMissingSigningKey(t *testing.T) {
+	t.Parallel()
 	Actuator, _ := newTestActuator(t)
 	Actuator.SigningKey = nil
 
@@ -273,6 +278,7 @@ func TestActuatorExecuteMissingSigningKey(t *testing.T) {
 }
 
 func TestActuatorExecuteMissingExecutionHandler(t *testing.T) {
+	t.Parallel()
 	Actuator, _ := newTestActuator(t)
 	Actuator.ExecutionHandler = nil
 
@@ -298,6 +304,7 @@ func TestActuatorExecuteMissingExecutionHandler(t *testing.T) {
 }
 
 func TestCanonicalizeActionReceipt(t *testing.T) {
+	t.Parallel()
 	receipt := &operatorv1.ActionReceipt{
 		TransactionId:    "test-tx-id",
 		TransactionHash:  "test-hash",
@@ -335,6 +342,7 @@ func TestCanonicalizeActionReceipt(t *testing.T) {
 }
 
 func TestActuatorGatewaySignedPropagation(t *testing.T) {
+	t.Parallel()
 	Actuator, _ := newTestActuator(t)
 
 	// Create envelope with GatewaySigned=true
@@ -374,6 +382,7 @@ func TestActuatorGatewaySignedPropagation(t *testing.T) {
 }
 
 func TestActuatorGatewaySignedFalse(t *testing.T) {
+	t.Parallel()
 	Actuator, _ := newTestActuator(t)
 
 	// Create envelope with GatewaySigned=false (normal Tribunal path)

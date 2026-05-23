@@ -96,6 +96,14 @@ type GatewayConfig struct {
 	PasskeyRpName    string         // RP Name for passkey operations (default: g8e)
 	MCPDownstreamURL string         // URL of the downstream MCP server to proxy discovery and execution to
 	A2ADownstreamURL string         // URL of the downstream A2A server to proxy execution to
+
+	// HTTP server limits
+	MaxPayloadBytes   int64         // Maximum request payload size in bytes (default: 10MB)
+	ReadHeaderTimeout time.Duration // Timeout for reading request headers (default: 10s)
+	ReadTimeout       time.Duration // Timeout for reading entire request (default: 30s)
+	WriteTimeout      time.Duration // Timeout for writing response (default: 30s)
+	IdleTimeout       time.Duration // Timeout for idle connections (default: 120s)
+	MaxHeaderBytes    int           // Maximum size of request headers in bytes (default: 1MB)
 }
 
 // OpenClawConfig holds configuration for --openclaw mode.
@@ -362,6 +370,14 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			PasskeyRpName:    passkeyRpName,
 			MCPDownstreamURL: mcpDownstreamURL,
 			A2ADownstreamURL: a2aDownstreamURL,
+
+			// HTTP server limits with fail-closed defaults
+			MaxPayloadBytes:   10 * 1024 * 1024, // 10MB
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       120 * time.Second,
+			MaxHeaderBytes:    1 << 20, // 1MB
 		},
 	}, nil
 }

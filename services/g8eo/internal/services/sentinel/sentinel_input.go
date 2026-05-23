@@ -14,6 +14,7 @@
 package sentinel
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 
@@ -49,6 +50,92 @@ func (d *InputThreatDetector) Detect(input string) []ThreatSignal {
 		}}
 	}
 	return nil
+}
+
+// AnalyzeMCPArguments recursively analyzes MCP tool arguments for L1 forbidden patterns.
+// This extends L1 validation beyond tool_name to include the arguments_json payload.
+func (s *Sentinel) AnalyzeMCPArguments(argumentsJSON string) *CommandAnalysisResult {
+	result := &CommandAnalysisResult{
+		Command:     s.ScrubText(argumentsJSON),
+		Safe:        true,
+		ThreatLevel: ThreatLevelNone,
+		RiskScore:   0,
+	}
+
+	if !s.config.SentinelEnabled {
+		return result
+	}
+
+	// Parse the JSON arguments
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
+		// Invalid JSON - fail closed for safety
+		result.Safe = false
+		result.BlockReason = "Invalid JSON arguments"
+		result.ThreatLevel = ThreatLevelHigh
+		result.RiskScore = 50
+		return result
+	}
+
+	// Recursively analyze all string values in the arguments
+	var signals []ThreatSignal
+	s.analyzeValueRecursive(args, "", &signals)
+
+	result.ThreatSignals = signals
+	result.ThreatLevel = s.aggregateThreatLevel(signals)
+	result.RiskScore = s.calculateRiskScore(signals)
+
+	for _, sig := range signals {
+		if sig.BlockRecommended {
+			result.Safe = false
+			result.BlockReason = sig.Recommendation
+			break
+		}
+	}
+
+	if result.Safe && (result.ThreatLevel == ThreatLevelHigh || result.ThreatLevel == ThreatLevelElevated) {
+		result.RequiresApproval = true
+	}
+
+	return result
+}
+
+// analyzeValueRecursive recursively traverses a value and detects threats in string fields.
+func (s *Sentinel) analyzeValueRecursive(value interface{}, path string, signals *[]ThreatSignal) {
+	switch v := value.(type) {
+	case string:
+		// Analyze string values for threat patterns
+		for _, detector := range s.inputThreatDetectors {
+			detected := detector.Detect(v)
+			for _, sig := range detected {
+				// Add path context to the signal
+				sig.Context = path
+				*signals = append(*signals, sig)
+			}
+		}
+	case map[string]interface{}:
+		// Recursively analyze object fields
+		for key, val := range v {
+			newPath := path
+			if newPath != "" {
+				newPath += "."
+			}
+			newPath += key
+			s.analyzeValueRecursive(val, newPath, signals)
+		}
+	case []interface{}:
+		// Recursively analyze array elements
+		for i, val := range v {
+			newPath := path
+			if newPath != "" {
+				newPath += "["
+				newPath += string(rune('0' + i))
+				newPath += "]"
+			}
+			s.analyzeValueRecursive(val, newPath, signals)
+		}
+		// Numbers, booleans, and null are ignored
+	}
 }
 
 // CriticalSystemPaths lists paths that should trigger elevated scrutiny

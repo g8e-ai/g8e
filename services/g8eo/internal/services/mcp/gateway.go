@@ -24,6 +24,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
@@ -62,13 +63,30 @@ type GatewayService struct {
 	a2aDownstreamURL  string
 	publicBaseURL     string
 	suspendedStore    SuspendedTransactionStore
+
+	// Circuit breaker state
+	mu               sync.RWMutex
+	failureCount     int
+	lastFailure      time.Time
+	circuitOpen      bool
+	cooldownDuration time.Duration
+	maxFailures      int
 }
 
-func NewGatewayService(logger *slog.Logger, responder *responder.Responder, suspendedStore SuspendedTransactionStore) *GatewayService {
+// Dependencies groups all dependencies for NewGatewayService to reduce constructor bloat.
+type Dependencies struct {
+	Logger         *slog.Logger
+	Responder      *responder.Responder
+	SuspendedStore SuspendedTransactionStore
+}
+
+func NewGatewayService(deps Dependencies) *GatewayService {
 	g := &GatewayService{
-		logger:         logger,
-		responder:      responder,
-		suspendedStore: suspendedStore,
+		logger:           deps.Logger,
+		responder:        deps.Responder,
+		suspendedStore:   deps.SuspendedStore,
+		maxFailures:      5,
+		cooldownDuration: 1 * time.Minute,
 	}
 	return g
 }
@@ -111,6 +129,47 @@ func (g *GatewayService) SetPublicBaseURL(baseURL string) {
 	g.publicBaseURL = baseURL
 }
 
+func (g *GatewayService) isCircuitOpen() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	if !g.circuitOpen {
+		return false
+	}
+
+	// Check if cooldown period has elapsed
+	if time.Since(g.lastFailure) > g.cooldownDuration {
+		return false // Half-open state implicitly (next request will either succeed or re-open)
+	}
+
+	return true
+}
+
+func (g *GatewayService) recordFailure() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.failureCount++
+	g.lastFailure = time.Now()
+	if g.failureCount >= g.maxFailures {
+		if !g.circuitOpen {
+			g.logger.Warn("MCP downstream circuit breaker OPENED", "url", g.downstreamURL, "failures", g.failureCount)
+		}
+		g.circuitOpen = true
+	}
+}
+
+func (g *GatewayService) recordSuccess() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	if g.circuitOpen {
+		g.logger.Info("MCP downstream circuit breaker CLOSED", "url", g.downstreamURL)
+	}
+	g.failureCount = 0
+	g.circuitOpen = false
+}
+
 func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -119,11 +178,13 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 
 	if g.downstreamURL == "" {
 		// Mock response if no downstream configured
-		w.Header().Set(constants.HeaderContentType, "application/json")
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`)); err != nil {
-			g.logger.Error("Failed to write mock tools/list response", "error", err)
-		}
+		g.responder.RPCResponse(w, 1, map[string]interface{}{"tools": []interface{}{}})
+		return
+	}
+
+	if g.isCircuitOpen() {
+		g.logger.Warn("MCP downstream circuit is open, rejecting tools/list", "url", g.downstreamURL)
+		g.responder.RPCError(w, 1, -32603, "downstream MCP server is temporarily unavailable (circuit open)")
 		return
 	}
 
@@ -154,6 +215,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err != nil {
+		g.recordFailure()
 		g.logger.Error("Failed to query downstream MCP server", "url", g.downstreamURL, "error", err)
 		g.responder.RPCError(w, 1, -32603, fmt.Sprintf("failed to query downstream MCP server: %v", err))
 		return
@@ -163,6 +225,12 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			g.logger.Error("Failed to close response body", "error", err)
 		}
 	}()
+
+	if resp.StatusCode >= 500 {
+		g.recordFailure()
+	} else {
+		g.recordSuccess()
+	}
 
 	w.Header().Set(constants.HeaderContentType, "application/json")
 	w.WriteHeader(resp.StatusCode)
@@ -179,11 +247,13 @@ func (g *GatewayService) HandleResourcesList(w http.ResponseWriter, r *http.Requ
 
 	if g.downstreamURL == "" {
 		// Mock response if no downstream configured
-		w.Header().Set(constants.HeaderContentType, "application/json")
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"resources":[]}}`)); err != nil {
-			g.logger.Error("Failed to write mock resources/list response", "error", err)
-		}
+		g.responder.RPCResponse(w, 1, map[string]interface{}{"resources": []interface{}{}})
+		return
+	}
+
+	if g.isCircuitOpen() {
+		g.logger.Warn("MCP downstream circuit is open, rejecting resources/list", "url", g.downstreamURL)
+		g.responder.RPCError(w, 1, -32603, "downstream MCP server is temporarily unavailable (circuit open)")
 		return
 	}
 
@@ -210,6 +280,7 @@ func (g *GatewayService) HandleResourcesList(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err != nil {
+		g.recordFailure()
 		g.logger.Error("Failed to query downstream MCP server", "url", g.downstreamURL, "error", err)
 		g.responder.RPCError(w, 1, -32603, fmt.Sprintf("failed to query downstream MCP server: %v", err))
 		return
@@ -219,6 +290,12 @@ func (g *GatewayService) HandleResourcesList(w http.ResponseWriter, r *http.Requ
 			g.logger.Error("Failed to close response body", "error", err)
 		}
 	}()
+
+	if resp.StatusCode >= 500 {
+		g.recordFailure()
+	} else {
+		g.recordSuccess()
+	}
 
 	w.Header().Set(constants.HeaderContentType, "application/json")
 	w.WriteHeader(resp.StatusCode)
@@ -230,6 +307,12 @@ func (g *GatewayService) HandleResourcesList(w http.ResponseWriter, r *http.Requ
 func (g *GatewayService) handleMCPRequest(w http.ResponseWriter, r *http.Request, method string, handler func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error)) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if g.isCircuitOpen() {
+		g.logger.Warn("MCP downstream circuit is open, rejecting request", "method", method, "url", g.downstreamURL)
+		g.responder.RPCError(w, nil, -32603, "downstream MCP server is temporarily unavailable (circuit open)")
 		return
 	}
 
@@ -256,6 +339,11 @@ func (g *GatewayService) handleMCPRequest(w http.ResponseWriter, r *http.Request
 	// Validate JSON-RPC 2.0
 	if req.JSONRPC != "2.0" {
 		g.responder.RPCError(w, req.ID, -32600, "invalid request: jsonrpc version must be 2.0")
+		return
+	}
+
+	if req.Method == "" {
+		g.responder.RPCError(w, req.ID, -32600, "invalid request: method required")
 		return
 	}
 
@@ -412,11 +500,14 @@ func (g *GatewayService) HandlePromptsList(w http.ResponseWriter, r *http.Reques
 	}
 
 	if g.downstreamURL == "" {
-		w.Header().Set(constants.HeaderContentType, "application/json")
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"prompts":[]}}`)); err != nil {
-			g.logger.Error("Failed to write mock prompts/list response", "error", err)
-		}
+		// Mock response if no downstream configured
+		g.responder.RPCResponse(w, 1, map[string]interface{}{"prompts": []interface{}{}})
+		return
+	}
+
+	if g.isCircuitOpen() {
+		g.logger.Warn("MCP downstream circuit is open, rejecting prompts/list", "url", g.downstreamURL)
+		g.responder.RPCError(w, 1, -32603, "downstream MCP server is temporarily unavailable (circuit open)")
 		return
 	}
 
@@ -442,6 +533,7 @@ func (g *GatewayService) HandlePromptsList(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err != nil {
+		g.recordFailure()
 		g.logger.Error("Failed to query downstream MCP server", "url", g.downstreamURL, "error", err)
 		g.responder.RPCError(w, 1, -32603, fmt.Sprintf("failed to query downstream MCP server: %v", err))
 		return
@@ -451,6 +543,12 @@ func (g *GatewayService) HandlePromptsList(w http.ResponseWriter, r *http.Reques
 			g.logger.Error("Failed to close response body", "error", err)
 		}
 	}()
+
+	if resp.StatusCode >= 500 {
+		g.recordFailure()
+	} else {
+		g.recordSuccess()
+	}
 
 	w.Header().Set(constants.HeaderContentType, "application/json")
 	w.WriteHeader(resp.StatusCode)
@@ -664,91 +762,68 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 }
 
 func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	if g.envProc == nil {
-		g.responder.Error(w, http.StatusServiceUnavailable, "governance Gateway not ready")
-		return
-	}
-
-	// P1-1: Enforce payload limits (10MB)
-	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		g.responder.Error(w, http.StatusBadRequest, "failed to read request body")
-		return
-	}
-
-	var req struct {
-		SkillName   string          `json:"skill_name"`
-		PayloadJSON json.RawMessage `json:"payload"`
-		ExecutionID string          `json:"execution_id,omitempty"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		g.responder.Error(w, http.StatusBadRequest, "invalid A2A request")
-		return
-	}
-
-	if req.SkillName == "" {
-		g.responder.Error(w, http.StatusBadRequest, "skill_name required")
-		return
-	}
-
-	payloadStr := "{}"
-	if len(req.PayloadJSON) > 0 {
-		payloadStr = string(req.PayloadJSON)
-	}
-
-	a2aPayload := &operatorv1.A2ACallRequested{
-		SkillName:   req.SkillName,
-		PayloadJson: payloadStr,
-		ExecutionId: req.ExecutionID,
-	}
-	payloadBytes, err := proto.Marshal(a2aPayload)
-	if err != nil {
-		g.responder.Error(w, http.StatusInternalServerError, "failed to marshal A2A payload")
-		return
-	}
-
-	hash, uapBytes, err := g.processGatewayTransaction(r.Context(), processGatewayOptions{
-		actionType:     constants.ActionTypeA2aCall,
-		targetResource: req.SkillName,
-		payloadBytes:   payloadBytes,
-	})
-	if err != nil {
-		g.responder.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	receipt, err := g.envProc.ProcessEnvelope(r.Context(), uapBytes)
-	if err != nil {
-		if errors.Is(err, governance.ErrL3ProofMissing) {
-			userID := r.Header.Get(constants.HeaderUserID)
-			operatorID := r.Header.Get(constants.HeaderOperatorID)
-
-			g.storeSuspendedTransaction(hash, uapBytes, req.SkillName, req.PayloadJSON, userID, operatorID)
-
-			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
-			g.responder.JSON(w, http.StatusOK, map[string]interface{}{
-				"id":           hash,
-				"status":       "suspended",
-				"tx_hash":      hash,
-				"approval_url": approvalURL,
-				"message":      "Execution paused for L3 authorization",
-			})
-			return
+	g.handleMCPRequest(w, r, "a2a/call", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		var req struct {
+			SkillName   string          `json:"skill_name"`
+			PayloadJSON json.RawMessage `json:"payload"`
+			ExecutionID string          `json:"execution_id,omitempty"`
 		}
-		g.responder.Error(w, http.StatusForbidden, err.Error())
-		return
-	}
+		if err := json.Unmarshal(params, &req); err != nil {
+			return nil, fmt.Errorf("invalid a2a/call params: %w", err)
+		}
 
-	g.responder.JSON(w, http.StatusOK, map[string]interface{}{
-		"id":     hash,
-		"result": receipt,
+		if req.SkillName == "" {
+			return nil, errors.New("skill_name required")
+		}
+
+		payloadStr := "{}"
+		if len(req.PayloadJSON) > 0 {
+			payloadStr = string(req.PayloadJSON)
+		}
+
+		a2aPayload := &operatorv1.A2ACallRequested{
+			SkillName:   req.SkillName,
+			PayloadJson: payloadStr,
+			ExecutionId: req.ExecutionID,
+		}
+		payloadBytes, err := proto.Marshal(a2aPayload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal A2A payload: %w", err)
+		}
+
+		hash, uapBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+			actionType:     constants.ActionTypeA2aCall,
+			targetResource: req.SkillName,
+			payloadBytes:   payloadBytes,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		receipt, err := g.envProc.ProcessEnvelope(ctx, uapBytes)
+		if err != nil {
+			if errors.Is(err, governance.ErrL3ProofMissing) {
+				userID := r.Header.Get(constants.HeaderUserID)
+				operatorID := r.Header.Get(constants.HeaderOperatorID)
+
+				g.storeSuspendedTransaction(hash, uapBytes, req.SkillName, req.PayloadJSON, userID, operatorID)
+
+				approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
+				return map[string]interface{}{
+					"id":           hash,
+					"status":       "suspended",
+					"tx_hash":      hash,
+					"approval_url": approvalURL,
+					"message":      "Execution paused for L3 authorization",
+				}, nil
+			}
+			return nil, err
+		}
+
+		return map[string]interface{}{
+			"id":     hash,
+			"result": receipt,
+		}, nil
 	})
 }
 
@@ -901,20 +976,15 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 		return "", fmt.Errorf("no downstream MCP server configured")
 	}
 
-	// Construct MCP tools/call request
-	callParams := CallToolRequest{
-		Name:      toolName,
-		Arguments: toolArgs,
-	}
-	paramsJSON, err := json.Marshal(callParams)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal call params: %w", err)
+	if g.isCircuitOpen() {
+		return "", fmt.Errorf("downstream MCP server is temporarily unavailable (circuit open)")
 	}
 
-	mcpReq := JSONRPCRequest{
+	// Construct MCP tools/call request
+	mcpReq := &responder.JSONRPCRequest{
 		JSONRPC: "2.0",
 		Method:  "tools/call",
-		Params:  json.RawMessage(paramsJSON),
+		Params:  toolArgs,
 		ID:      1,
 	}
 
@@ -926,6 +996,7 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Post(g.downstreamURL, "application/json", strings.NewReader(string(reqBody)))
 	if err != nil {
+		g.recordFailure()
 		return "", fmt.Errorf("failed to call downstream MCP server: %w", err)
 	}
 	defer func() {
@@ -935,8 +1006,13 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	}()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode >= 500 {
+			g.recordFailure()
+		}
 		return "", fmt.Errorf("downstream MCP server returned status %d", resp.StatusCode)
 	}
+
+	g.recordSuccess()
 
 	// Parse MCP response
 	var mcpResp JSONRPCResponse
@@ -977,6 +1053,12 @@ func (g *GatewayService) DispatchToA2ADownstream(ctx context.Context, skillName 
 		return "", fmt.Errorf("no downstream A2A server configured")
 	}
 
+	// TODO: Circuit breaker for A2A if needed. For now we use the same cooldown logic
+	// if we decide to share the state or add a separate one.
+	if g.isCircuitOpen() {
+		return "", fmt.Errorf("downstream A2A server is temporarily unavailable (circuit open)")
+	}
+
 	// Construct A2A request
 	a2aReq := map[string]interface{}{
 		"skill_name": skillName,
@@ -991,6 +1073,7 @@ func (g *GatewayService) DispatchToA2ADownstream(ctx context.Context, skillName 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Post(g.a2aDownstreamURL, "application/json", strings.NewReader(string(reqBody)))
 	if err != nil {
+		g.recordFailure()
 		return "", fmt.Errorf("failed to call downstream A2A server: %w", err)
 	}
 	defer func() {
@@ -1000,8 +1083,13 @@ func (g *GatewayService) DispatchToA2ADownstream(ctx context.Context, skillName 
 	}()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode >= 500 {
+			g.recordFailure()
+		}
 		return "", fmt.Errorf("downstream A2A server returned status %d", resp.StatusCode)
 	}
+
+	g.recordSuccess()
 
 	// Parse A2A response
 	var a2aResp struct {

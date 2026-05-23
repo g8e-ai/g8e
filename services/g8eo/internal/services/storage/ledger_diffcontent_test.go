@@ -23,6 +23,7 @@ import (
 )
 
 func TestLedgerService_GetDiffContent(t *testing.T) {
+	t.Parallel()
 	lms, avs, tempDir := setupTestLedger(t)
 	defer avs.Close()
 

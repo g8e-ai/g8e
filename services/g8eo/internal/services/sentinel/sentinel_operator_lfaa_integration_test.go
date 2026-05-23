@@ -29,7 +29,9 @@ import (
 // TestSentinelOperatorLFAAIntegration_Setup verifies that all three components
 // can be initialized and wired together correctly
 func TestSentinelOperatorLFAAIntegration_Setup(t *testing.T) {
+	t.Parallel()
 	t.Run("all components initialize together", func(t *testing.T) {
+		t.Parallel()
 		tempDir := t.TempDir()
 		logger := testutil.NewTestLogger()
 
@@ -84,10 +86,12 @@ func TestSentinelOperatorLFAAIntegration_Setup(t *testing.T) {
 
 // TestSentinelScrubbing_Integration tests the full scrubbing pipeline
 func TestSentinelScrubbing_Integration(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(DefaultSentinelConfig(), logger)
 
 	t.Run("scrubs database query output", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "psql -c 'SELECT * FROM users'",
 			ExitCode:   0,
@@ -106,6 +110,7 @@ func TestSentinelScrubbing_Integration(t *testing.T) {
 	})
 
 	t.Run("scrubs network diagnostics", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "netstat -an",
 			ExitCode:   0,
@@ -123,6 +128,7 @@ func TestSentinelScrubbing_Integration(t *testing.T) {
 	})
 
 	t.Run("scrubs configuration file output", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:  "cat /etc/app/config.yaml",
 			ExitCode: 0,
@@ -144,6 +150,7 @@ func TestSentinelScrubbing_Integration(t *testing.T) {
 	})
 
 	t.Run("scrubs error output with paths", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "cat /home/admin/.ssh/id_rsa",
 			ExitCode:   1,
@@ -160,6 +167,7 @@ func TestSentinelScrubbing_Integration(t *testing.T) {
 	})
 
 	t.Run("preserves safe metadata", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "wc -l /tmp/data.csv",
 			ExitCode:   0,
@@ -180,10 +188,12 @@ func TestSentinelScrubbing_Integration(t *testing.T) {
 // TestSentinelWithExecutionService_Integration tests Sentinel scrubbing command output
 // that would come from ExecutionService. Uses simulated output to avoid environment deps.
 func TestSentinelWithExecutionService_Integration(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(DefaultSentinelConfig(), logger)
 
 	t.Run("scrubs command output with sensitive data", func(t *testing.T) {
+		t.Parallel()
 		// Simulate command output that would come from reading a file with sensitive data
 		cmdResult := &CommandResult{
 			Command:    "cat [PATH]",
@@ -204,6 +214,7 @@ func TestSentinelWithExecutionService_Integration(t *testing.T) {
 	})
 
 	t.Run("scrubs multi-format sensitive output", func(t *testing.T) {
+		t.Parallel()
 		// Simulate command output with various sensitive data patterns
 		cmdResult := &CommandResult{
 			Command:  "grep -r 'config' [PATH]",
@@ -228,6 +239,7 @@ connection_string=postgres://user:pass@db.internal.net:5432/prod`,
 
 // TestSentinelAuditIntegration tests that Sentinel works with AuditVault
 func TestSentinelAuditIntegration(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
@@ -250,6 +262,7 @@ func TestSentinelAuditIntegration(t *testing.T) {
 	sentinel := NewSentinel(DefaultSentinelConfig(), logger)
 
 	t.Run("sensitive command output can be scrubbed before cloud transmission", func(t *testing.T) {
+		t.Parallel()
 		_ = context.Background()
 
 		// Simulate command output with sensitive data that would be stored in audit
@@ -275,12 +288,14 @@ func TestSentinelAuditIntegration(t *testing.T) {
 
 // TestSentinelJSONScrubbing tests scrubbing of JSON payloads
 func TestSentinelJSONScrubbing(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	// Use non-strict mode for pattern-based scrubbing verification
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("scrubs JSON API response", func(t *testing.T) {
+		t.Parallel()
 		jsonData := map[string]interface{}{
 			"users": []interface{}{
 				map[string]interface{}{
@@ -309,22 +324,26 @@ func TestSentinelJSONScrubbing(t *testing.T) {
 
 // TestSentinelMetricsExtraction tests safe metric extraction
 func TestSentinelMetricsExtraction(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(DefaultSentinelConfig(), logger)
 
 	t.Run("extracts row counts from SQL output", func(t *testing.T) {
+		t.Parallel()
 		output := "Query OK, 150 rows affected (0.05 sec)"
 		metrics := sentinel.ExtractSafeMetrics(output)
 		assert.Equal(t, 150, metrics["row_count"])
 	})
 
 	t.Run("extracts file counts from find output", func(t *testing.T) {
+		t.Parallel()
 		output := "Found 25 files matching pattern"
 		metrics := sentinel.ExtractSafeMetrics(output)
 		assert.Equal(t, 25, metrics["file_count"])
 	})
 
 	t.Run("extracts error counts", func(t *testing.T) {
+		t.Parallel()
 		output := "Compilation finished with 3 errors and 7 warnings"
 		metrics := sentinel.ExtractSafeMetrics(output)
 		assert.Equal(t, 3, metrics["error_count"])
@@ -334,10 +353,12 @@ func TestSentinelMetricsExtraction(t *testing.T) {
 
 // TestSentinelValidateNoLeakage_Integration tests the leakage validation
 func TestSentinelValidateNoLeakage_Integration(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(DefaultSentinelConfig(), logger)
 
 	t.Run("IPs are allowed (preserved for troubleshooting)", func(t *testing.T) {
+		t.Parallel()
 		text := "Server at 192.168.1.1 returned error"
 		ok, violations := sentinel.ValidateNoLeakage(text)
 		assert.True(t, ok)
@@ -345,6 +366,7 @@ func TestSentinelValidateNoLeakage_Integration(t *testing.T) {
 	})
 
 	t.Run("detects unscrubbed email", func(t *testing.T) {
+		t.Parallel()
 		text := "Contact admin@corp.com for help"
 		ok, violations := sentinel.ValidateNoLeakage(text)
 		assert.False(t, ok)
@@ -352,6 +374,7 @@ func TestSentinelValidateNoLeakage_Integration(t *testing.T) {
 	})
 
 	t.Run("passes properly scrubbed output", func(t *testing.T) {
+		t.Parallel()
 		text := "Server at 192.168.1.1 returned error type: connection_refused, contact [EMAIL]"
 		ok, violations := sentinel.ValidateNoLeakage(text)
 		assert.True(t, ok)
@@ -361,16 +384,19 @@ func TestSentinelValidateNoLeakage_Integration(t *testing.T) {
 
 // TestSentinelDisabled tests behavior when Sentinel is disabled
 func TestSentinelDisabled(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: false}
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("ScrubText returns suppressed message", func(t *testing.T) {
+		t.Parallel()
 		result := sentinel.ScrubText("sensitive data: 192.168.1.1")
 		assert.Equal(t, "[OUTPUT_SUPPRESSED]", result)
 	})
 
 	t.Run("ScrubCommandResult still provides structure", func(t *testing.T) {
+		t.Parallel()
 		cmdResult := &CommandResult{
 			Command:    "cat /etc/passwd",
 			ExitCode:   0,
@@ -389,6 +415,7 @@ func TestSentinelDisabled(t *testing.T) {
 
 // TestSentinelStrictMode tests aggressive scrubbing in strict mode
 func TestSentinelStrictMode(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{
 		Enabled:    true,
@@ -397,6 +424,7 @@ func TestSentinelStrictMode(t *testing.T) {
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("preserves tabular structure but scrubs sensitive values", func(t *testing.T) {
+		t.Parallel()
 		input := "id\tname\temail\n1\tJohn Doe\tjohn@example.com\n2\tJane Smith\tjane@test.org"
 		result := sentinel.ScrubText(input)
 		// Structure preserved, emails scrubbed
@@ -410,6 +438,7 @@ func TestSentinelStrictMode(t *testing.T) {
 	})
 
 	t.Run("scrubs sensitive key-value pairs", func(t *testing.T) {
+		t.Parallel()
 		input := "salary_info: 75000\nincome_data: 4430"
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "salary_info: [VALUE]")
@@ -417,6 +446,7 @@ func TestSentinelStrictMode(t *testing.T) {
 	})
 
 	t.Run("preserves non-sensitive key-value pairs", func(t *testing.T) {
+		t.Parallel()
 		input := "hostname: prod-server-01.internal.net\nstatus: running\nconnections: 150"
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "hostname: prod-server-01.internal.net")
@@ -427,6 +457,7 @@ func TestSentinelStrictMode(t *testing.T) {
 
 // TestSentinelErrorCategorization tests error type detection
 func TestSentinelErrorCategorization(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(DefaultSentinelConfig(), logger)
 
@@ -448,6 +479,7 @@ func TestSentinelErrorCategorization(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.expectType, func(t *testing.T) {
+		t.Parallel()
 			result := sentinel.categorizeError(tc.stderr, tc.exitCode)
 			assert.Equal(t, tc.expectType, result)
 		})
@@ -456,10 +488,12 @@ func TestSentinelErrorCategorization(t *testing.T) {
 
 // TestSentinelWarningExtraction tests warning message handling
 func TestSentinelWarningExtraction(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(DefaultSentinelConfig(), logger)
 
 	t.Run("categorizes warning types", func(t *testing.T) {
+		t.Parallel()
 		cmdResult := &CommandResult{
 			Command:  "npm install",
 			ExitCode: 0,
@@ -480,20 +514,24 @@ npm WARN performance slow network detected`,
 
 // TestSentinelStructureHints tests output structure detection
 func TestSentinelStructureHints(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(DefaultSentinelConfig(), logger)
 
 	t.Run("detects JSON object format", func(t *testing.T) {
+		t.Parallel()
 		hints := sentinel.extractStructureHints(`{"key": "value", "count": 42}`)
 		assert.Contains(t, hints, "format: json_object")
 	})
 
 	t.Run("detects JSON array format", func(t *testing.T) {
+		t.Parallel()
 		hints := sentinel.extractStructureHints(`[{"id": 1}, {"id": 2}]`)
 		assert.Contains(t, hints, "format: json_array")
 	})
 
 	t.Run("detects tabular column count", func(t *testing.T) {
+		t.Parallel()
 		// With "id | name | email" there are 2 pipes, so columns = 2 - 1 = 1 based on code logic
 		// Actually the code does: colCount := strings.Count(firstLine, "|") - 1
 		// For "id | name | email | created_at" with 3 pipes: 3 - 1 = 2
@@ -510,6 +548,7 @@ func TestSentinelStructureHints(t *testing.T) {
 
 // TestSentinelOutputResultSerialization tests that scrubbed results serialize correctly
 func TestSentinelOutputResultSerialization(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(DefaultSentinelConfig(), logger)
 

@@ -28,11 +28,13 @@ import (
 )
 
 func TestExecutionService_ExecuteCommand(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("simple command execution", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-1",
 			CaseID:         "test-case-1",
@@ -57,6 +59,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("command with non-zero exit code", func(t *testing.T) {
+		t.Parallel()
 		// Use shell execution to get proper exit code handling
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-2",
@@ -77,6 +80,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("command not found", func(t *testing.T) {
+		t.Parallel()
 		// Use shell execution to get proper shell exit code 127
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-3",
@@ -99,6 +103,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("command timeout", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-4",
 			CaseID:         "test-case-4",
@@ -120,6 +125,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("command with working directory", func(t *testing.T) {
+		t.Parallel()
 		workDir := t.TempDir()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:      "test-req-5",
@@ -141,6 +147,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("command with environment variables", func(t *testing.T) {
+		t.Parallel()
 		// Use single command string - shell handles variable expansion
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-6",
@@ -163,6 +170,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("shell command with pipes", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-7",
 			CaseID:         "test-case-7",
@@ -182,6 +190,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("context cancellation during wait", func(t *testing.T) {
+		t.Parallel()
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -204,8 +213,12 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 			done <- true
 		}()
 
-		// Cancel after a brief delay
-		time.Sleep(100 * time.Millisecond)
+		// Wait for execution to be tracked before cancelling
+		require.Eventually(t, func() bool {
+			active := svc.GetActiveExecutions()
+			_, exists := active[req.ExecutionID]
+			return exists
+		}, 1*time.Second, 10*time.Millisecond)
 		cancel()
 
 		// Wait for completion
@@ -217,6 +230,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("terminal output creation", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-9",
 			CaseID:         "test-case-9",
@@ -237,6 +251,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("system info collection", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-10",
 			CaseID:         "test-case-10",
@@ -257,6 +272,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("environment info collection", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-11",
 			CaseID:         "test-case-11",
@@ -275,6 +291,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 }
 
 func TestExecutionService_BuildCommandString(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
@@ -307,6 +324,7 @@ func TestExecutionService_BuildCommandString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := svc.BuildCommandString(tt.command, tt.args)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -314,11 +332,13 @@ func TestExecutionService_BuildCommandString(t *testing.T) {
 }
 
 func TestExecutionService_CreateTerminalOutput(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("basic output", func(t *testing.T) {
+		t.Parallel()
 		output := svc.createTerminalOutput("echo", []string{"test"}, "test output\n", "")
 
 		assert.Equal(t, "echo", output.Command)
@@ -329,6 +349,7 @@ func TestExecutionService_CreateTerminalOutput(t *testing.T) {
 	})
 
 	t.Run("output with stderr", func(t *testing.T) {
+		t.Parallel()
 		output := svc.createTerminalOutput("test", []string{}, "stdout\n", "stderr\n")
 
 		assert.Contains(t, output.CombinedOutput, "stdout")
@@ -336,6 +357,7 @@ func TestExecutionService_CreateTerminalOutput(t *testing.T) {
 	})
 
 	t.Run("truncated output", func(t *testing.T) {
+		t.Parallel()
 		// Create output with more than 50 lines
 		stdout := ""
 		for i := 0; i < 100; i++ {
@@ -351,17 +373,20 @@ func TestExecutionService_CreateTerminalOutput(t *testing.T) {
 }
 
 func TestExecutionService_Stop(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("stop with no active executions", func(t *testing.T) {
+		t.Parallel()
 		assert.NotPanics(t, func() {
 			svc.Stop()
 		})
 	})
 
 	t.Run("stop with active executions", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "stop-test-1",
 			Command:        "sleep",
@@ -399,6 +424,7 @@ func TestExecutionService_Stop(t *testing.T) {
 }
 
 func TestExecutionService_GetActiveExecutions(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
@@ -409,17 +435,20 @@ func TestExecutionService_GetActiveExecutions(t *testing.T) {
 }
 
 func TestExecutionService_CancelExecution(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
 
 	t.Run("cancel non-existent execution", func(t *testing.T) {
+		t.Parallel()
 		err := svc.CancelExecution("non-existent-id")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "execution not found")
 	})
 
 	t.Run("cancel running execution", func(t *testing.T) {
+		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "cancel-test-1",
 			CaseID:         "test-case",
@@ -437,8 +466,11 @@ func TestExecutionService_CancelExecution(t *testing.T) {
 			done <- true
 		}()
 
-		// Wait for execution to start
-		time.Sleep(200 * time.Millisecond)
+		// Wait for execution to start with polling
+		require.Eventually(t, func() bool {
+			active := svc.GetActiveExecutions()
+			return len(active) > 0
+		}, 1*time.Second, 10*time.Millisecond)
 
 		// Cancel the execution
 		err := svc.CancelExecution("cancel-test-1")
@@ -461,6 +493,7 @@ func TestExecutionService_CancelExecution(t *testing.T) {
 }
 
 func TestExecutionService_CancelExecution_DoesNotSetCancelledStatus(t *testing.T) {
+	t.Parallel()
 	// Regression: CancelExecution previously wrote ExecutionStatusCancelled after
 	// unlocking the mutex, creating a window where it raced with
 	// executeCommandInternal's authoritative status write. The dead write was
@@ -485,7 +518,11 @@ func TestExecutionService_CancelExecution_DoesNotSetCancelledStatus(t *testing.T
 		result, _ = svc.ExecuteCommand(context.Background(), req)
 	}()
 
-	time.Sleep(150 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		active := svc.GetActiveExecutions()
+		_, exists := active["cancel-status-1"]
+		return exists
+	}, 1*time.Second, 10*time.Millisecond)
 	require.NoError(t, svc.CancelExecution("cancel-status-1"))
 
 	select {
@@ -503,6 +540,7 @@ func TestExecutionService_CancelExecution_DoesNotSetCancelledStatus(t *testing.T
 }
 
 func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
@@ -529,7 +567,11 @@ func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
 				defer close(execDone)
 				svc.ExecuteCommand(context.Background(), req) //nolint:errcheck
 			}()
-			time.Sleep(100 * time.Millisecond)
+			require.Eventually(t, func() bool {
+				active := svc.GetActiveExecutions()
+				_, exists := active[id]
+				return exists
+			}, 1*time.Second, 10*time.Millisecond)
 			svc.CancelExecution(id) //nolint:errcheck
 			select {
 			case <-execDone:
@@ -549,6 +591,7 @@ func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
 }
 
 func TestExecutionService_CollectSystemInfo(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
@@ -563,6 +606,7 @@ func TestExecutionService_CollectSystemInfo(t *testing.T) {
 }
 
 func TestExecutionService_CollectEnvironmentInfo(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
@@ -575,6 +619,7 @@ func TestExecutionService_CollectEnvironmentInfo(t *testing.T) {
 }
 
 func TestExecutionService_FinalizeResult(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
@@ -595,6 +640,7 @@ func TestExecutionService_FinalizeResult(t *testing.T) {
 }
 
 func TestExecutionService_GetActiveExecutionsEmpty(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)

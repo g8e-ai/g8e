@@ -28,6 +28,7 @@ import (
 )
 
 func TestNewLocalStoreService(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	dbPath := filepath.Join(t.TempDir(), "test_local_state.db")
@@ -45,6 +46,7 @@ func TestNewLocalStoreService(t *testing.T) {
 }
 
 func TestLocalStoreService_Disabled(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	config := &LocalStoreConfig{
@@ -57,6 +59,7 @@ func TestLocalStoreService_Disabled(t *testing.T) {
 }
 
 func TestLocalStoreService_StoreAndRetrieve(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	config := DefaultLocalStoreConfig()
@@ -102,6 +105,7 @@ func TestLocalStoreService_StoreAndRetrieve(t *testing.T) {
 }
 
 func TestLocalStoreService_HashConsistency(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	config := DefaultLocalStoreConfig()
@@ -124,6 +128,7 @@ func TestLocalStoreService_HashConsistency(t *testing.T) {
 }
 
 func TestLocalStoreService_UpsertBehavior(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	config := DefaultLocalStoreConfig()
@@ -166,6 +171,7 @@ func TestLocalStoreService_UpsertBehavior(t *testing.T) {
 }
 
 func TestLocalStoreService_NonExistentRecord(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	config := DefaultLocalStoreConfig()
@@ -182,6 +188,7 @@ func TestLocalStoreService_NonExistentRecord(t *testing.T) {
 }
 
 func TestLocalStoreService_NilSafety(t *testing.T) {
+	t.Parallel()
 	var ls *LocalStoreService
 
 	assert.False(t, ls.IsEnabled())
@@ -194,7 +201,9 @@ func TestLocalStoreService_NilSafety(t *testing.T) {
 }
 
 func TestDefaultLocalStoreConfig(t *testing.T) {
+	t.Parallel()
 	t.Run("returns valid default config", func(t *testing.T) {
+		t.Parallel()
 		cfg := DefaultLocalStoreConfig()
 
 		assert.NotNil(t, cfg)
@@ -207,6 +216,7 @@ func TestDefaultLocalStoreConfig(t *testing.T) {
 }
 
 func TestLocalStoreService_StoreAndRetrieveFileDiff(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	config := DefaultLocalStoreConfig()
@@ -257,6 +267,7 @@ func TestLocalStoreService_StoreAndRetrieveFileDiff(t *testing.T) {
 }
 
 func TestLocalStoreService_GetFileDiffsBySession(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	config := DefaultLocalStoreConfig()
@@ -306,6 +317,7 @@ func TestLocalStoreService_GetFileDiffsBySession(t *testing.T) {
 }
 
 func TestLocalStoreService_GetFileDiff_NotFound(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	config := DefaultLocalStoreConfig()
@@ -322,6 +334,7 @@ func TestLocalStoreService_GetFileDiff_NotFound(t *testing.T) {
 }
 
 func TestLocalStorePrune(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "prune_test.db")
@@ -422,6 +435,7 @@ func TestLocalStorePrune(t *testing.T) {
 }
 
 func TestLocalStoreService_FileDiffUpsert(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	config := DefaultLocalStoreConfig()

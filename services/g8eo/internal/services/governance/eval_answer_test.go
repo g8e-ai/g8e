@@ -33,6 +33,7 @@ import (
 // TestEvalAnswerVerification tests that EVAL_ANSWER envelopes are accepted by the verifier
 // and can be executed by the Actuator with a signed receipt.
 func TestEvalAnswerVerification(t *testing.T) {
+	t.Parallel()
 	// Generate test key
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -46,6 +47,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		testutil.NewMockStateRootProvider("test-state-root-v1"),
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key-id": pubKey}},
 		nil, // L3 verifier not needed for EVAL_ANSWER (non-mutation)
+		nil, // Sentinel not used in tests
 		[]constants.ActionType{constants.ActionTypeEvalAnswer},
 		"doctrine",
 	)
@@ -166,6 +168,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 // TestEvalAnswerIsNotMutation verifies that EVAL_ANSWER is not treated as a mutation
 // and does not require L3 verification.
 func TestEvalAnswerIsNotMutation(t *testing.T) {
+	t.Parallel()
 	verifier := &TransactionVerifier{}
 
 	if verifier.isMutation(constants.ActionTypeEvalAnswer) {

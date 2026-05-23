@@ -39,7 +39,9 @@ import (
 )
 
 func TestNewPubSubCommandService(t *testing.T) {
+	t.Parallel()
 	t.Run("creates service successfully", func(t *testing.T) {
+		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewPubSubCommandService(CommandServiceConfig{
 			Config:            cfg,
@@ -56,6 +58,7 @@ func TestNewPubSubCommandService(t *testing.T) {
 }
 
 func TestNewPubSubCommandService_StartsWithoutTrustedSignersButRejectsL2(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	cfg.PKIDir = filepath.Join(t.TempDir(), "pki")
 	cfg.Gateway.Posture = config.PostureConsensus // Set Consensus posture to enforce L2
@@ -112,9 +115,11 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *uap.UA
 }
 
 func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
+	t.Parallel()
 	f := newPubsubFixture(t)
 
 	t.Run("successful synchronous processing", func(t *testing.T) {
+		t.Parallel()
 		req := &operatorv1.FsListRequested{Path: ".", ExecutionId: "exec-sync"}
 		payload, _ := proto.Marshal(req)
 

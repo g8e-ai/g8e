@@ -118,21 +118,21 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 //   - 405 Method Not Allowed: non-POST methods.
 func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	if h.envProc == nil {
-		jsonError(w, http.StatusServiceUnavailable, "envelope processor not initialized")
+		h.responder.Error(w, http.StatusServiceUnavailable, "envelope processor not initialized")
 		return
 	}
 
-	body, err := readBody(r)
+	body, err := h.readBody(r)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "failed to read request body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read request body")
 		return
 	}
 	if len(body) == 0 {
-		jsonError(w, http.StatusBadRequest, "empty request body")
+		h.responder.Error(w, http.StatusBadRequest, "empty request body")
 		return
 	}
 
@@ -143,7 +143,7 @@ func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Re
 	// Skip identity binding if no TLS is present (test mode)
 	if r.TLS != nil {
 		if err := verifyEnvelopeIdentityBinding(r, body); err != nil {
-			jsonError(w, http.StatusForbidden, fmt.Sprintf("identity binding failed: %s", err.Error()))
+			h.responder.Error(w, http.StatusForbidden, fmt.Sprintf("identity binding failed: %s", err.Error()))
 			return
 		}
 	}
@@ -151,20 +151,20 @@ func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Re
 	receipt, procErr := h.envProc.ProcessEnvelope(r.Context(), body)
 	if procErr != nil {
 		status := classifyEnvelopeError(procErr)
-		jsonError(w, status, procErr.Error())
+		h.responder.Error(w, status, procErr.Error())
 		return
 	}
 	if receipt == nil {
 		// Defensive: a nil receipt with nil error should never happen, but if
 		// the processor regresses, do not mask the failure.
-		jsonError(w, http.StatusInternalServerError, "envelope processor returned nil receipt without error")
+		h.responder.Error(w, http.StatusInternalServerError, "envelope processor returned nil receipt without error")
 		return
 	}
 
 	// Receipt is returned as JSON. Execution-failure receipts (status=FAILED)
 	// are still HTTP 200 because they represent a verified, audited outcome
 	// - the caller has cryptographic evidence of the attempt.
-	jsonResponse(w, http.StatusOK, receipt)
+	h.responder.JSON(w, http.StatusOK, receipt)
 }
 
 // classifyEnvelopeError maps a governance verification error to an HTTP status.

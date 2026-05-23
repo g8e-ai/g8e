@@ -40,6 +40,7 @@ func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, e
 }
 
 func TestGovernanceFlow(t *testing.T) {
+	t.Parallel()
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	nodeID := "test-node-1"
 
@@ -112,10 +113,12 @@ func TestGovernanceFlow(t *testing.T) {
 }
 
 func TestGovernanceFailClosed(t *testing.T) {
+	t.Parallel()
 	_, priv, _ := ed25519.GenerateKey(nil)
 	nodeID := "test-node-1"
 
 	t.Run("SentinelNil_FailClosed", func(t *testing.T) {
+		t.Parallel()
 		tribunal := &Tribunal{
 			NodeID:     nodeID,
 			PrivateKey: priv,
@@ -128,6 +131,7 @@ func TestGovernanceFailClosed(t *testing.T) {
 	})
 
 	t.Run("MissingPrivateKey_Error", func(t *testing.T) {
+		t.Parallel()
 		tribunal := &Tribunal{NodeID: nodeID, PrivateKey: nil}
 		_, err := tribunal.SignDecision("test-id", true)
 		if err == nil {

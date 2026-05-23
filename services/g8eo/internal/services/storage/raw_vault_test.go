@@ -28,6 +28,7 @@ import (
 )
 
 func TestNewRawVaultService(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	tmpDir := t.TempDir()
@@ -53,6 +54,7 @@ func TestNewRawVaultService(t *testing.T) {
 }
 
 func TestRawVaultService_Disabled(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	config := &RawVaultConfig{
@@ -65,6 +67,7 @@ func TestRawVaultService_Disabled(t *testing.T) {
 }
 
 func TestRawVaultService_StoreAndRetrieve(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	tmpDir := t.TempDir()
@@ -121,6 +124,7 @@ func TestRawVaultService_StoreAndRetrieve(t *testing.T) {
 }
 
 func TestRawVaultService_NotFound(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	tmpDir := t.TempDir()
@@ -145,6 +149,7 @@ func TestRawVaultService_NotFound(t *testing.T) {
 }
 
 func TestRawVaultService_HashString(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	tmpDir := t.TempDir()
@@ -171,6 +176,7 @@ func TestRawVaultService_HashString(t *testing.T) {
 }
 
 func TestDualVaultIsolation(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	tmpDir := t.TempDir()
@@ -248,6 +254,7 @@ func TestDualVaultIsolation(t *testing.T) {
 // LFAA Dual-Vault File Diff Tests (Raw Vault)
 
 func TestRawVaultService_StoreAndRetrieveFileDiff(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	tmpDir := t.TempDir()
@@ -307,6 +314,7 @@ func TestRawVaultService_StoreAndRetrieveFileDiff(t *testing.T) {
 }
 
 func TestRawVaultService_GetRawFileDiffsBySession(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	tmpDir := t.TempDir()
@@ -364,6 +372,7 @@ func TestRawVaultService_GetRawFileDiffsBySession(t *testing.T) {
 }
 
 func TestRawVaultService_GetRawFileDiff_NotFound(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	tmpDir := t.TempDir()
@@ -386,6 +395,7 @@ func TestRawVaultService_GetRawFileDiff_NotFound(t *testing.T) {
 }
 
 func TestDualVaultFileDiffIsolation(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	tmpDir := t.TempDir()
@@ -463,6 +473,7 @@ func TestDualVaultFileDiffIsolation(t *testing.T) {
 }
 
 func TestRawVaultPrune(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "raw_prune_test.db")
@@ -563,6 +574,7 @@ func TestRawVaultPrune(t *testing.T) {
 }
 
 func TestDefaultRawVaultConfig_ReturnsExpectedDefaults(t *testing.T) {
+	t.Parallel()
 	cfg := DefaultRawVaultConfig()
 
 	require.NotNil(t, cfg)

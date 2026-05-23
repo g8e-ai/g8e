@@ -23,6 +23,7 @@ import (
 )
 
 func TestStateRootSemantics(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 
 	// 1. Initial state root must be deterministic
@@ -42,7 +43,11 @@ func TestStateRootSemantics(t *testing.T) {
 	assert.NotEqual(t, root1, root2, "Content change must alter state root")
 
 	// 3. Document metadata change (updated_at) does NOT alter root
-	time.Sleep(2 * time.Millisecond) // Ensure updated_at is different
+	require.Eventually(t, func() bool {
+		// Small delay to ensure updated_at timestamp changes
+		time.Sleep(2 * time.Millisecond)
+		return true
+	}, 10*time.Millisecond, 1*time.Millisecond)
 	err = db.DocSet("test", "d1", json.RawMessage(`{"val":1}`))
 	require.NoError(t, err)
 	root3, err := db.GetCurrentStateRoot()
@@ -85,13 +90,15 @@ func TestStateRootSemantics(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEqual(t, root7, rootWithExp)
 
-	time.Sleep(1100 * time.Millisecond)
-	rootAfterExp, err := db.GetCurrentStateRoot()
-	require.NoError(t, err)
-	assert.Equal(t, root7, rootAfterExp, "Expired KV must be excluded from state root calculation")
+	require.Eventually(t, func() bool {
+		rootAfterExp, err := db.GetCurrentStateRoot()
+		require.NoError(t, err)
+		return root7 == rootAfterExp
+	}, 2*time.Second, 100*time.Millisecond, "Expired KV must be excluded from state root calculation")
 }
 
 func TestStateRootDeterministicOrder(t *testing.T) {
+	t.Parallel()
 	db1 := newTestDB(t)
 	db2 := newTestDB(t)
 

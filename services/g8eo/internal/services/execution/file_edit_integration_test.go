@@ -32,11 +32,13 @@ import (
 
 // Integration tests for FileEditService
 func TestFileEditService_Integration(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewFileEditService(cfg, logger)
 
 	t.Run("write and track file", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "test-file.txt")
 		content := "This is test content\nLine 2\nLine 3"
@@ -64,6 +66,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("read file content", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "read-test.txt")
 		content := "Content to read\nSecond line\nThird line"
@@ -93,6 +96,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("write with backup", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "backup-test.txt")
 
@@ -129,6 +133,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("replace content", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "replace-test.txt")
 
@@ -161,6 +166,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("insert lines", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "insert-test.txt")
 
@@ -194,6 +200,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("delete lines", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "delete-test.txt")
 
@@ -228,6 +235,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("concurrent file edits", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		var wg sync.WaitGroup
 		numEdits := 5
@@ -264,6 +272,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("read specific line range with caching", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "range-test.txt")
 
@@ -301,6 +310,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("large file operations", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "large-file.txt")
 
@@ -330,6 +340,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("file edit pipeline", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "pipeline.txt")
 		pipelineID := "pipeline-1"
@@ -392,6 +403,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("error handling", func(t *testing.T) {
+		t.Parallel()
 		// Test 1: Non-existent file without create flag
 		tmpDir := t.TempDir()
 		nonExistent := filepath.Join(tmpDir, "does-not-exist.txt")
@@ -416,6 +428,7 @@ func TestFileEditService_Integration(t *testing.T) {
 	})
 
 	t.Run("file with special characters", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "special-chars.txt")
 
@@ -444,11 +457,13 @@ func TestFileEditService_Integration(t *testing.T) {
 }
 
 func TestFileEditService_AdvancedScenarios(t *testing.T) {
+	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 	svc := NewFileEditService(cfg, logger)
 
 	t.Run("multiple backups", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "multi-backup.txt")
 
@@ -487,6 +502,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 	})
 
 	t.Run("read with max lines limit", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "maxlines-test.txt")
 
@@ -519,6 +535,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 	})
 
 	t.Run("complex replace with multiple occurrences", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "multi-replace.txt")
 
@@ -550,6 +567,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 	})
 
 	t.Run("file permissions and stats collection", func(t *testing.T) {
+		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "perms-test.txt")
 

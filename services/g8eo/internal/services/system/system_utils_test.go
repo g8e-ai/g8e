@@ -39,6 +39,7 @@ func TestGetConnectivityStatus(t *testing.T) {
 }
 
 func TestGetUptime(t *testing.T) {
+	t.Parallel()
 	uptime := GetUptime()
 
 	assert.NotEmpty(t, uptime)
@@ -49,6 +50,7 @@ func TestGetUptime(t *testing.T) {
 }
 
 func TestGetUptimeSeconds(t *testing.T) {
+	t.Parallel()
 	uptime := GetUptimeSeconds()
 
 	assert.GreaterOrEqual(t, uptime, int64(0))
@@ -56,6 +58,7 @@ func TestGetUptimeSeconds(t *testing.T) {
 }
 
 func TestReadCPUStat(t *testing.T) {
+	t.Parallel()
 	stat, err := readCPUStat()
 
 	require.NoError(t, err)
@@ -74,6 +77,7 @@ func TestReadCPUStat(t *testing.T) {
 }
 
 func TestGetCPUPercent(t *testing.T) {
+	t.Parallel()
 	cpuPercent := GetCPUPercent()
 
 	assert.GreaterOrEqual(t, cpuPercent, 0.0)
@@ -83,6 +87,7 @@ func TestGetCPUPercent(t *testing.T) {
 }
 
 func TestGetMemoryPercent(t *testing.T) {
+	t.Parallel()
 	memPercent := GetMemoryPercent()
 
 	assert.GreaterOrEqual(t, memPercent, 0.0)
@@ -92,6 +97,7 @@ func TestGetMemoryPercent(t *testing.T) {
 }
 
 func TestGetNetworkLatency(t *testing.T) {
+	t.Parallel()
 
 	latency := GetNetworkLatency()
 
@@ -105,6 +111,7 @@ func TestSystemUtilsIntegration(t *testing.T) {
 	t.Parallel()
 
 	t.Run("all functions execute without panic", func(t *testing.T) {
+		t.Parallel()
 		require.NotNil(t, GetConnectivityStatus())
 		assert.NotEmpty(t, GetUptime())
 		assert.GreaterOrEqual(t, GetUptimeSeconds(), int64(0))
@@ -122,6 +129,7 @@ func TestSystemUtilsIntegration(t *testing.T) {
 }
 
 func TestDetectContainerEnvironment(t *testing.T) {
+	t.Parallel()
 	info := detectContainerEnvironment()
 
 	assert.NotNil(t, info.Signals)
@@ -139,6 +147,7 @@ func TestDetectContainerEnvironment(t *testing.T) {
 }
 
 func TestGetInitProcessName(t *testing.T) {
+	t.Parallel()
 	initName := getInitProcessName()
 
 	assert.NotEmpty(t, initName)
@@ -147,10 +156,12 @@ func TestGetInitProcessName(t *testing.T) {
 }
 
 func TestDetectInitSystem(t *testing.T) {
+	t.Parallel()
 	assert.NotEmpty(t, detectInitSystem())
 }
 
 func TestGetEnvironmentDetails_ContainerFields(t *testing.T) {
+	t.Parallel()
 	details := GetEnvironmentDetails("", "", "")
 
 	assert.NotNil(t, details.ContainerSignals)
@@ -160,10 +171,12 @@ func TestGetEnvironmentDetails_ContainerFields(t *testing.T) {
 }
 
 func TestContainerInfo_EmptySignals(t *testing.T) {
+	t.Parallel()
 	require.NotNil(t, detectContainerEnvironment().Signals)
 }
 
 func TestCPUStatConsistency(t *testing.T) {
+	t.Parallel()
 	stat1, err := readCPUStat()
 	require.NoError(t, err)
 
@@ -177,6 +190,7 @@ func TestCPUStatConsistency(t *testing.T) {
 }
 
 func TestGetDiskPercent(t *testing.T) {
+	t.Parallel()
 	diskPercent := GetDiskPercent()
 
 	assert.GreaterOrEqual(t, diskPercent, 0.0)
@@ -184,6 +198,7 @@ func TestGetDiskPercent(t *testing.T) {
 }
 
 func TestGetDiskDetails(t *testing.T) {
+	t.Parallel()
 	details := GetDiskDetails()
 
 	assert.GreaterOrEqual(t, details.TotalGB, 0.0)
@@ -199,18 +214,21 @@ func TestGetDiskDetails(t *testing.T) {
 }
 
 func TestGetDiskUsedGB(t *testing.T) {
+	t.Parallel()
 	usedGB := GetDiskUsedGB()
 
 	assert.GreaterOrEqual(t, usedGB, 0.0)
 }
 
 func TestGetDiskTotalGB(t *testing.T) {
+	t.Parallel()
 	totalGB := GetDiskTotalGB()
 
 	assert.GreaterOrEqual(t, totalGB, 0.0)
 }
 
 func TestGetDiskDetails_Consistency(t *testing.T) {
+	t.Parallel()
 	details := GetDiskDetails()
 	usedGB := GetDiskUsedGB()
 	totalGB := GetDiskTotalGB()
@@ -220,6 +238,7 @@ func TestGetDiskDetails_Consistency(t *testing.T) {
 }
 
 func TestGetOSDetails(t *testing.T) {
+	t.Parallel()
 	details := GetOSDetails()
 
 	assert.NotEmpty(t, details.Kernel)
@@ -227,6 +246,7 @@ func TestGetOSDetails(t *testing.T) {
 }
 
 func TestReadOSReleaseField_KnownField(t *testing.T) {
+	t.Parallel()
 	name := readOSReleaseField("NAME")
 
 	assert.NotEmpty(t, name)
@@ -234,12 +254,14 @@ func TestReadOSReleaseField_KnownField(t *testing.T) {
 }
 
 func TestReadOSReleaseField_MissingField(t *testing.T) {
+	t.Parallel()
 	result := readOSReleaseField("NONEXISTENT_FIELD_XYZ")
 
 	assert.Equal(t, "unknown", result)
 }
 
 func TestGetUserDetails(t *testing.T) {
+	t.Parallel()
 	details := GetUserDetails("/bin/bash")
 
 	assert.NotEmpty(t, details.Username)
@@ -249,6 +271,7 @@ func TestGetUserDetails(t *testing.T) {
 }
 
 func TestParseUserID_EnforcesInt32Bounds(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		value    string
@@ -263,24 +286,28 @@ func TestParseUserID_EnforcesInt32Bounds(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+		t.Parallel()
 			assert.Equal(t, tc.expected, parseUserID(tc.value))
 		})
 	}
 }
 
 func TestGetUserDetails_ShellEmpty_DefaultsToSh(t *testing.T) {
+	t.Parallel()
 	details := GetUserDetails("")
 
 	assert.Equal(t, "/bin/sh", details.Shell)
 }
 
 func TestGetUserDetails_ShellInjected(t *testing.T) {
+	t.Parallel()
 	details := GetUserDetails("/bin/zsh")
 
 	assert.Equal(t, "/bin/zsh", details.Shell)
 }
 
 func TestGetMemoryDetails(t *testing.T) {
+	t.Parallel()
 	details := GetMemoryDetails()
 
 	assert.Greater(t, details.TotalMB, int64(0))
@@ -292,12 +319,14 @@ func TestGetMemoryDetails(t *testing.T) {
 }
 
 func TestGetMemoryMB(t *testing.T) {
+	t.Parallel()
 	totalMB := GetMemoryMB()
 
 	assert.Greater(t, totalMB, 0)
 }
 
 func TestGetMemoryDetails_Consistency(t *testing.T) {
+	t.Parallel()
 	details := GetMemoryDetails()
 	totalMB := GetMemoryMB()
 
@@ -305,6 +334,7 @@ func TestGetMemoryDetails_Consistency(t *testing.T) {
 }
 
 func TestGetHostname(t *testing.T) {
+	t.Parallel()
 	hostname := GetHostname()
 
 	assert.NotEmpty(t, hostname)
@@ -312,6 +342,7 @@ func TestGetHostname(t *testing.T) {
 }
 
 func TestGetOSName(t *testing.T) {
+	t.Parallel()
 	osName := GetOSName()
 
 	assert.NotEmpty(t, osName)
@@ -319,6 +350,7 @@ func TestGetOSName(t *testing.T) {
 }
 
 func TestGetArchitecture(t *testing.T) {
+	t.Parallel()
 	arch := GetArchitecture()
 
 	assert.NotEmpty(t, arch)
@@ -326,6 +358,7 @@ func TestGetArchitecture(t *testing.T) {
 }
 
 func TestGetNumCPU(t *testing.T) {
+	t.Parallel()
 	numCPU := GetNumCPU()
 
 	assert.Greater(t, numCPU, 0)
@@ -333,6 +366,7 @@ func TestGetNumCPU(t *testing.T) {
 }
 
 func TestGetCurrentUser(t *testing.T) {
+	t.Parallel()
 	currentUser := GetCurrentUser()
 
 	assert.NotEmpty(t, currentUser)
@@ -340,6 +374,7 @@ func TestGetCurrentUser(t *testing.T) {
 }
 
 func TestGetNetworkInterfaces(t *testing.T) {
+	t.Parallel()
 	interfaces := GetNetworkInterfaces()
 
 	require.NotNil(t, interfaces)
@@ -351,6 +386,7 @@ func TestGetNetworkInterfaces(t *testing.T) {
 }
 
 func TestGetLocalIP(t *testing.T) {
+	t.Parallel()
 	ip := GetLocalIP("")
 
 	assert.NotEmpty(t, ip)
@@ -358,12 +394,14 @@ func TestGetLocalIP(t *testing.T) {
 }
 
 func TestGetLocalIP_CustomResolver(t *testing.T) {
+	t.Parallel()
 	ip := GetLocalIP("8.8.8.8:80")
 
 	assert.NotEmpty(t, ip)
 }
 
 func TestGetPublicIP(t *testing.T) {
+	t.Parallel()
 
 	ip := GetPublicIP("")
 
@@ -371,18 +409,21 @@ func TestGetPublicIP(t *testing.T) {
 }
 
 func TestGetTimezone_InjectedValue(t *testing.T) {
+	t.Parallel()
 	tz := getTimezone("America/Los_Angeles")
 
 	assert.Equal(t, "America/Los_Angeles", tz)
 }
 
 func TestGetTimezone_EmptyFallsBackToSystem(t *testing.T) {
+	t.Parallel()
 	tz := getTimezone("")
 
 	assert.NotEmpty(t, tz)
 }
 
 func TestGetEnvironmentDetails_AllFields(t *testing.T) {
+	t.Parallel()
 	details := GetEnvironmentDetails("", "", "")
 
 	assert.NotEmpty(t, details.PWD)
@@ -392,12 +433,14 @@ func TestGetEnvironmentDetails_AllFields(t *testing.T) {
 }
 
 func TestGetEnvironmentDetails_TimezoneInjected(t *testing.T) {
+	t.Parallel()
 	details := GetEnvironmentDetails("", "", "America/New_York")
 
 	assert.Equal(t, "America/New_York", details.Timezone)
 }
 
 func TestGetEnvironmentDetails_LangAndTermInjected(t *testing.T) {
+	t.Parallel()
 	details := GetEnvironmentDetails("en_US.UTF-8", "xterm-256color", "")
 
 	assert.Equal(t, "en_US.UTF-8", details.Lang)

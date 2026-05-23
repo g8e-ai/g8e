@@ -171,8 +171,6 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	// Create user with a dummy passkey so VerifyL3Proof passes
 	user := models.User{
 		ID:     userID,
-		Email:  "mcp@test.com",
-		Name:   "MCP User",
 		Status: constants.UserStatusActive,
 		PasskeyCredentials: []models.PasskeyCredential{
 			{
@@ -437,8 +435,6 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	// Create user with a dummy passkey so VerifyL3Proof passes
 	user := models.User{
 		ID:     userID,
-		Email:  "a2a@test.com",
-		Name:   "A2A User",
 		Status: constants.UserStatusActive,
 		PasskeyCredentials: []models.PasskeyCredential{
 			{
@@ -626,8 +622,6 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 
 	user := models.User{
 		ID:     userID,
-		Email:  "payload@test.com",
-		Name:   "Payload User",
 		Status: constants.UserStatusActive,
 		PasskeyCredentials: []models.PasskeyCredential{
 			{
@@ -973,8 +967,6 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 
 	user := models.User{
 		ID:     userID,
-		Email:  "error@test.com",
-		Name:   "Error User",
 		Status: constants.UserStatusActive,
 		PasskeyCredentials: []models.PasskeyCredential{
 			{

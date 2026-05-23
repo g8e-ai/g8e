@@ -141,6 +141,9 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize local store (required for replay protection): %w", err)
 	}
+	if vs.localStore == nil {
+		return fmt.Errorf("local store is required but was not initialized")
+	}
 	vs.logger.Info("Local store initialized (AI-accessible)")
 
 	// Initialize SecretManager for loading signing keys (Actuator and Tribunal)
@@ -176,6 +179,9 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize raw vault: %w", err)
 	}
+	if vs.rawVault == nil {
+		return fmt.Errorf("raw vault is required but was not initialized")
+	}
 	vs.logger.Info("Raw vault initialized (customer data store)")
 
 	vs.logger.Info("Initializing Local-First Audit Architecture (LFAA)...")
@@ -196,6 +202,9 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.auditVault, err = storage.NewAuditVaultService(auditVaultConfig, vs.logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize audit vault: %w", err)
+	}
+	if vs.auditVault == nil {
+		return fmt.Errorf("audit vault is required but was not initialized")
 	}
 	if vs.config.OperatorSessionId == "" {
 		return fmt.Errorf("operator session ID required before audit vault can accept events")
@@ -352,6 +361,10 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 
 	// Stop pubsub command service first to stop receiving new commands
 	if vs.pubSubCommands != nil {
+		if vs.pubSubCommands.Actuator != nil {
+			vs.logger.Info("Waiting for in-flight transactions to drain...")
+			vs.pubSubCommands.Actuator.Wait()
+		}
 		if err := vs.pubSubCommands.Stop(); err != nil {
 			vs.logger.Error("Failed to stop pubsub command service", string(constants.ConnectionStateError), err)
 		}
@@ -360,6 +373,12 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 	// Stop execution service to kill any active tasks
 	if vs.execution != nil {
 		vs.execution.Stop()
+	}
+
+	// Drain audit vault writes
+	if vs.auditVault != nil {
+		vs.logger.Info("Waiting for audit writes to drain...")
+		vs.auditVault.Wait()
 	}
 
 	// Close vaults and stores

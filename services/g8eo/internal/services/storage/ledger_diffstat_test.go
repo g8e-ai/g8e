@@ -27,6 +27,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestLedgerService_GetDiffStat_EmptyHashesReturnsEmpty(t *testing.T) {
+	t.Parallel()
 	lms, avs, _ := setupTestLedger(t)
 	defer avs.Close()
 
@@ -35,6 +36,7 @@ func TestLedgerService_GetDiffStat_EmptyHashesReturnsEmpty(t *testing.T) {
 }
 
 func TestLedgerService_GetDiffStat_BetweenTwoCommits(t *testing.T) {
+	t.Parallel()
 	lms, avs, tempDir := setupTestLedger(t)
 	defer avs.Close()
 
@@ -63,6 +65,7 @@ func TestLedgerService_GetDiffStat_BetweenTwoCommits(t *testing.T) {
 }
 
 func TestLedgerService_GetDiffStat_SameHashReturnsEmpty(t *testing.T) {
+	t.Parallel()
 	lms, avs, tempDir := setupTestLedger(t)
 	defer avs.Close()
 
@@ -81,6 +84,7 @@ func TestLedgerService_GetDiffStat_SameHashReturnsEmpty(t *testing.T) {
 }
 
 func TestLedgerService_GetDiffStat_InvalidHashesReturnsEmpty(t *testing.T) {
+	t.Parallel()
 	lms, avs, _ := setupTestLedger(t)
 	defer avs.Close()
 
@@ -89,6 +93,7 @@ func TestLedgerService_GetDiffStat_InvalidHashesReturnsEmpty(t *testing.T) {
 }
 
 func TestLedgerService_GetDiffStat_GitDisabledReturnsEmpty(t *testing.T) {
+	t.Parallel()
 	lms := NewLedgerService(nil, nil, nil)
 
 	stat := lms.GetDiffStat("abc123", "def456", "operator-session")

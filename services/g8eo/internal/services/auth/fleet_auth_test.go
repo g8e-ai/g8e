@@ -46,6 +46,7 @@ func newTestDeviceServiceFromServer(t *testing.T, server *httptest.Server) (endp
 }
 
 func TestAuthenticateWithDeviceToken_MultiUse_InvalidFormat(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	_, err := AuthenticateWithDeviceToken("bad-token", "localhost", logger, "")
 	require.Error(t, err)
@@ -53,6 +54,7 @@ func TestAuthenticateWithDeviceToken_MultiUse_InvalidFormat(t *testing.T) {
 }
 
 func TestAuthenticateWithDeviceToken_MultiUse_FdlPrefixRejected(t *testing.T) {
+	t.Parallel()
 	logger := testutil.NewTestLogger()
 	_, err := AuthenticateWithDeviceToken("fdl_abcdefghijklmnopqrstuvwxyz123456", "localhost", logger, "")
 	require.Error(t, err)
@@ -60,6 +62,7 @@ func TestAuthenticateWithDeviceToken_MultiUse_FdlPrefixRejected(t *testing.T) {
 }
 
 func TestAuthenticateWithDeviceToken_MultiUse_Success(t *testing.T) {
+	t.Parallel()
 	const validToken = "dlk_abcdefghijklmnopqrstuvwxyz123456"
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +101,7 @@ func TestAuthenticateWithDeviceToken_MultiUse_Success(t *testing.T) {
 }
 
 func TestAuthenticateWithDeviceToken_MultiUse_RegistrationFailure(t *testing.T) {
+	t.Parallel()
 	const validToken = "dlk_abcdefghijklmnopqrstuvwxyz123456"
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +124,7 @@ func TestAuthenticateWithDeviceToken_MultiUse_RegistrationFailure(t *testing.T) 
 }
 
 func TestAuthenticateWithDeviceToken_MultiUse_RegistrationFailureNoMessage(t *testing.T) {
+	t.Parallel()
 	const validToken = "dlk_abcdefghijklmnopqrstuvwxyz123456"
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +145,7 @@ func TestAuthenticateWithDeviceToken_MultiUse_RegistrationFailureNoMessage(t *te
 }
 
 func TestAuthenticateWithDeviceToken_MultiUse_MissingSessionID(t *testing.T) {
+	t.Parallel()
 	const validToken = "dlk_abcdefghijklmnopqrstuvwxyz123456"
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -163,6 +169,7 @@ func TestAuthenticateWithDeviceToken_MultiUse_MissingSessionID(t *testing.T) {
 }
 
 func TestAuthenticateWithDeviceToken_MultiUse_InvalidJSON(t *testing.T) {
+	t.Parallel()
 	const validToken = "dlk_abcdefghijklmnopqrstuvwxyz123456"
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -180,6 +187,7 @@ func TestAuthenticateWithDeviceToken_MultiUse_InvalidJSON(t *testing.T) {
 }
 
 func TestAuthenticateWithDeviceToken_MultiUse_RegistersAtLinkEndpoint(t *testing.T) {
+	t.Parallel()
 	const validToken = "dlk_MultiUseLinkAbCdEfGhIjKlMnOpQrSt"
 	var capturedPath string
 	var capturedToken string
