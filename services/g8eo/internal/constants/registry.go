@@ -515,20 +515,6 @@ func Registry() Snapshot {
 			"SourceUserTerminal": {Value: "g8e.v1.source.user.terminal", GoConst: "EventSourceUserTerminal", PythonConst: "SOURCE_USER_TERMINAL"},
 		},
 		Status: StatusSnapshot{
-			OperatorStatus: map[string]Entry{
-				"available": {Value: "available", GoConst: "OperatorStatusAvailable", PythonConst: "AVAILABLE"},
-				"offline": {Value: "offline", GoConst: "OperatorStatusOffline", PythonConst: "OFFLINE"},
-			},
-			TribunalOutcome: map[string]Entry{
-				"consensus": {Value: "consensus", GoConst: "TribunalOutcomeConsensus", PythonConst: "CONSENSUS"},
-				"consensus_failed": {Value: "consensus_failed", GoConst: "TribunalOutcomeConsensusFailed", PythonConst: "CONSENSUS_FAILED"},
-				"verification_failed": {Value: "verification_failed", GoConst: "TribunalOutcomeVerificationFailed", PythonConst: "VERIFICATION_FAILED"},
-				"verified": {Value: "verified", GoConst: "TribunalOutcomeVerified", PythonConst: "VERIFIED"},
-			},
-			UserRole: map[string]Entry{
-				"admin": {Value: "admin", GoConst: "UserRoleAdmin", PythonConst: "ADMIN"},
-				"user": {Value: "user", GoConst: "UserRoleUser", PythonConst: "USER"},
-			},
 			UserStatus: map[string]Entry{
 				"active": {Value: "active", GoConst: "UserStatusActive", PythonConst: "ACTIVE"},
 				"disabled": {Value: "disabled", GoConst: "UserStatusDisabled", PythonConst: "DISABLED"},
@@ -554,6 +540,20 @@ func Registry() Snapshot {
 			},
 			LlmModels: map[string]Entry{
 				"llamacpp.gemma4.e2b": {Value: "google_gemma-4-E2B-it-Q4_K_M.gguf", GoConst: "LLMModelsLlamacppGemma4E2b", PythonConst: "LLAMACPP_GEMMA4_E2B"},
+			},
+			OperatorStatus: map[string]Entry{
+				"available": {Value: "available", GoConst: "OperatorStatusAvailable", PythonConst: "AVAILABLE"},
+				"offline": {Value: "offline", GoConst: "OperatorStatusOffline", PythonConst: "OFFLINE"},
+			},
+			TribunalOutcome: map[string]Entry{
+				"consensus": {Value: "consensus", GoConst: "TribunalOutcomeConsensus", PythonConst: "CONSENSUS"},
+				"consensus_failed": {Value: "consensus_failed", GoConst: "TribunalOutcomeConsensusFailed", PythonConst: "CONSENSUS_FAILED"},
+				"verification_failed": {Value: "verification_failed", GoConst: "TribunalOutcomeVerificationFailed", PythonConst: "VERIFICATION_FAILED"},
+				"verified": {Value: "verified", GoConst: "TribunalOutcomeVerified", PythonConst: "VERIFIED"},
+			},
+			UserRole: map[string]Entry{
+				"admin": {Value: "admin", GoConst: "UserRoleAdmin", PythonConst: "ADMIN"},
+				"user": {Value: "user", GoConst: "UserRoleUser", PythonConst: "USER"},
 			},
 		},
 		Senders: map[string]Entry{

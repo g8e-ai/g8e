@@ -70,6 +70,8 @@ func main() {
 	}
 
 	// Read all JSON files
+	// Note: paths.json, ports.json, env_vars.json, and api_paths.json are internal-only
+	// constants not exported to the registry snapshot (see check_registry.go)
 	jsonFiles := map[string]string{
 		"collections.json":  "Collections",
 		"events.json":       "Events",
@@ -85,10 +87,6 @@ func main() {
 		"platform.json":     "Platform",
 		"agents.json":       "Agents",
 		"timestamp.json":    "Timestamp",
-		"ports.json":        "Ports",
-		"env_vars.json":     "EnvVars",
-		"paths.json":        "Paths",
-		"api_paths.json":    "ApiPaths",
 	}
 
 	var allData JSONFile
