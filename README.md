@@ -11,9 +11,9 @@ g8e is a zero-trust execution protocol and outbound-only gateway that forces eve
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
 [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status)
-[![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/position-paper.md)
+[![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/concepts/position_paper.md)
 
-[Quickstart](#quickstart) · [How it works](#how-it-works) · [Self-hosting](#self-hosting--air-gap) · [Docs](#documentation) · [Paper](docs/position-paper.md)
+[Quickstart](docs/quickstart/) · [How it works](#how-it-works) · [Self-hosting](#self-hosting--air-gap) · [Docs](#documentation) · [Paper](docs/concepts/position_paper.md)
 
 </div>
 
@@ -53,34 +53,6 @@ transaction — and the host verifies that transaction before it executes.
 - **Local-first audit with instant rollback.** Every decision, accepted or blocked, is written to a host-local vault *before* the side effect. A two-phase Git-backed commit architecture gives tamper-evident history and one-command rollback.
 - **Fail-closed, in order.** Doctrine → Quorum → Notary, enforced at the host boundary. Each layer has to pass before the next is even reached.
 - **Protocol-native.** MCP, A2A, and OpenAI-style tool calls all normalize into one signed envelope. The Operator is itself an MCP server.
-
----
-
-## Quickstart
-
-**Prerequisites:** Go 1.26+ (required) · Python 3.14+ (optional, only for the reference g8ee Ensemble)
-
-```bash
-git clone https://github.com/g8e-ai/g8e.git && cd g8e
-
-# Start the mandatory Operator gateway
-./g8e platform start
-
-# (Optional) Start the reference g8e-Compliant Agentic Ensemble
-./g8e apps start g8ee
-```
-
-1. **Bootstrap** — follow the CLI to initialize the Operator and generate a device-link token.
-2. **Login** — `./g8e login` authenticates the CLI over mTLS.
-3. **Audit** — watch live transaction logs in `.g8e/logs/operator-listen.log`.
-
-<!-- ============================================================= -->
-<!-- INSERT: SCREENSHOT — `./g8e platform start` running, with the -->
-<!-- live audit log streaming a couple of transactions. Proves     -->
-<!-- it's real and self-hosted. -->
-<!-- ============================================================= -->
-
-> *Insert screenshot of the running Operator + live audit log here.*
 
 ---
 
@@ -212,11 +184,14 @@ g8e is built to run entirely inside your perimeter. The Operator has no inbound 
 
 ## Documentation
 
-- **[Position Paper](docs/position-paper.md)** — the full design rationale, threat model, and BFT analysis.
-- **[Protocol](docs/protocol.md)** — wire format, transaction hash, and the Doctrine / Quorum / Notary definitions.
-- **[Operator (g8eo)](docs/g8eo.md)** — execution boundary, gateway modes, and host storage.
-- **[Ensemble (g8ee)](docs/g8ee.md)** — reference g8e-Compliant Agentic Ensemble and agentic orchestration.
-- **[Troubleshooting](docs/developer/troubleshooting.md)** — common setup failures and recovery checks.
+- **[Quickstart](docs/quickstart/)** — get started with g8e in minutes.
+- **[Position Paper](docs/concepts/position_paper.md)** — the full design rationale, threat model, and BFT analysis.
+- **[Protocol](docs/concepts/protocol.md)** — wire format, transaction hash, and the Doctrine / Quorum / Notary definitions.
+- **[Operator (g8eo)](docs/concepts/operator.md)** — execution boundary, gateway modes, and host storage.
+- **[Ensemble (g8ee)](docs/concepts/g8ee.md)** — reference g8e-Compliant Agentic Ensemble and agentic orchestration.
+- **[Gateway (g8eg)](docs/concepts/g8eg.md)** — Governance Gateway architecture and modes.
+- **[Guides](docs/guides/)** — operational guides for testing, evals, demos, and troubleshooting.
+- **[Reference](docs/reference/)** — glossary, constants, and protocol references.
 - **[Contributing](CONTRIBUTING.md)** — build instructions, testing workflows, and standards.
 
 ---

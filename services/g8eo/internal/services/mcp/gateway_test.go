@@ -14,12 +14,12 @@
 package mcp
 
 import (
-	"fmt"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -137,10 +137,11 @@ func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			proc := &fakeEnvelopeProcessor{err: tc.GatewayErr}
 			g := &GatewayService{
-				envProc: proc,
+				envProc:         proc,
+				maxPayloadBytes: 10 * 1024 * 1024, // 10MB
 			}
 
 			// Valid MCP tools/call request
@@ -166,11 +167,12 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 	_ = pubKey
 
 	g := &GatewayService{
-		envProc:        proc,
-		suspendedStore: store,
-		signingKey:     privKey,
-		keyID:          "test-key",
-		publicBaseURL:  "https://localhost:8442",
+		envProc:         proc,
+		suspendedStore:  store,
+		signingKey:      privKey,
+		keyID:           "test-key",
+		publicBaseURL:   "https://localhost:8442",
+		maxPayloadBytes: 10 * 1024 * 1024, // 10MB
 	}
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{"foo":"bar"}}}`
@@ -182,14 +184,14 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	require.Len(t, store.txs, 1)
-		var txHash string
-		for k, tx := range store.txs {
-			txHash = k
-			require.Equal(t, "test-tool", tx.ToolName)
-			require.Equal(t, `{"foo":"bar"}`, string(tx.ToolArguments))
-		}
-		expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Execution paused. Please visit https://localhost:8442/approve/%s to authorize via WebAuthn, then retry."}]}}`, txHash)
-		require.JSONEq(t, expectedJSON, w.Body.String())
+	var txHash string
+	for k, tx := range store.txs {
+		txHash = k
+		require.Equal(t, "test-tool", tx.ToolName)
+		require.Equal(t, `{"foo":"bar"}`, string(tx.ToolArguments))
+	}
+	expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Execution paused. Please visit https://localhost:8442/approve/%s to authorize via WebAuthn, then retry."}]}}`, txHash)
+	require.JSONEq(t, expectedJSON, w.Body.String())
 }
 
 func TestGatewayService_ResumeWithL3Proof(t *testing.T) {
@@ -210,8 +212,9 @@ func TestGatewayService_ResumeWithL3Proof(t *testing.T) {
 	})
 
 	g := &GatewayService{
-		envProc:        proc,
-		suspendedStore: store,
+		envProc:         proc,
+		suspendedStore:  store,
+		maxPayloadBytes: 10 * 1024 * 1024, // 10MB
 	}
 
 	proof := &commonv1.L3Proof{
@@ -246,6 +249,7 @@ func TestGatewayService_HandleResourcesRead(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
 	}
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"file:///test.txt"}}`
@@ -257,7 +261,7 @@ func TestGatewayService_HandleResourcesRead(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	expectedJSON := `{"jsonrpc":"2.0","id":1,"result":{"contents":[{"type":"text","text":"resource content"}]}}`
-		require.JSONEq(t, expectedJSON, w.Body.String())
+	require.JSONEq(t, expectedJSON, w.Body.String())
 }
 
 func TestGatewayService_HandlePromptsGet(t *testing.T) {
@@ -276,6 +280,7 @@ func TestGatewayService_HandlePromptsGet(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
 	}
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"test-prompt"}}`
@@ -287,7 +292,7 @@ func TestGatewayService_HandlePromptsGet(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	expectedJSON := `{"jsonrpc":"2.0","id":1,"result":{"description":"prompt template","messages":[{"role":"user","content":{"type":"text","text":"prompt template"}}]}}`
-		require.JSONEq(t, expectedJSON, w.Body.String())
+	require.JSONEq(t, expectedJSON, w.Body.String())
 }
 
 func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
@@ -306,6 +311,7 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
 	}
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
@@ -333,6 +339,7 @@ func TestGatewayService_EnvelopeGatewaySigned(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
 	}
 
 	opts := processGatewayOptions{

@@ -57,4 +57,4 @@ The runnable demo assets are sourced from `/demo` in the repo:
 
 For full details on profiles, taxonomy, failure modes, and customization, see `@/home/bob/g8e/demo/demo.md` and the profile READMEs under `@/home/bob/g8e/demo/profiles/`.
 
-See also: [Scripts](scripts.md), [Operator](operator.md).
+See also: [Scripts](./scripts.md), [Operator](../concepts/operator.md).

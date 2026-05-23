@@ -74,9 +74,10 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	apiKeySvc := NewApiKeyService(db, logger)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	mcpGateway := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:         logger,
-		Responder:      resp,
-		SuspendedStore: db,
+		Logger:          logger,
+		Responder:       resp,
+		SuspendedStore:  db,
+		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 	})
 	h := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:               cfg,
@@ -370,7 +371,6 @@ func TestHandleRotateAPIKeyDoesNotReturnSecret(t *testing.T) {
 }
 
 func TestHandleDB(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("BadRequest - no collection", func(t *testing.T) {
@@ -390,7 +390,6 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("PUT and GET", func(t *testing.T) {
-		t.Parallel()
 		data := map[string]string{"name": "alice"}
 		reqPut := httptest.NewRequest(http.MethodPut, "/db/settings/u1", bytes.NewReader(mustDocJSON(t, data)))
 		rrPut := httptest.NewRecorder()
@@ -409,7 +408,6 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("PATCH", func(t *testing.T) {
-		t.Parallel()
 		patch := map[string]string{"role": "admin"}
 		reqPatch := httptest.NewRequest(http.MethodPatch, "/db/settings/u1", bytes.NewReader(mustDocJSON(t, patch)))
 		rrPatch := httptest.NewRecorder()
@@ -426,7 +424,6 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("DELETE", func(t *testing.T) {
-		t.Parallel()
 		reqDel := httptest.NewRequest(http.MethodDelete, "/db/settings/u1", nil)
 		rrDel := httptest.NewRecorder()
 		h.handleDB(rrDel, reqDel)
@@ -439,7 +436,6 @@ func TestHandleDB(t *testing.T) {
 	})
 
 	t.Run("Query", func(t *testing.T) {
-		t.Parallel()
 		h.db.DocSet("items", "i1", mustDocJSON(t, map[string]int{"val": 10}))
 		h.db.DocSet("items", "i2", mustDocJSON(t, map[string]int{"val": 20}))
 
@@ -551,7 +547,6 @@ func TestHandleDB(t *testing.T) {
 // event under a typed routing column so CLI (BYO frontend) and web sessions
 // occupy disjoint routing namespaces and never receive each other's events.
 func TestInternalSSEBridge(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 	_, _ = h.db.SSEEventsWipe()
 
@@ -578,7 +573,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	}
 
 	t.Run("push requires mTLS certificate", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/internal/sse/push", strings.NewReader(`{"web_session_id":"ws-1","event":{"type":"ai.text","data":{}}}`))
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEPush(rr, req)
@@ -587,7 +581,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("push requires correct G8EE app identity", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/internal/sse/push", strings.NewReader(`{"web_session_id":"ws-1","event":{"type":"ai.text","data":{}}}`))
 		req.TLS = &tls.ConnectionState{
 			PeerCertificates: []*x509.Certificate{
@@ -617,7 +610,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	}
 
 	t.Run("web session event is persisted and replayable", func(t *testing.T) {
-		t.Parallel()
 		body := `{"web_session_id":"ws-1","event":{"type":"ai.text","data":{"chunk":"hello"}}}`
 		rr := push(body)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -635,7 +627,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("cli session event is persisted and replayable as a first-class type", func(t *testing.T) {
-		t.Parallel()
 		body := `{"cli_session_id":"cli-1","event":{"type":"ai.text","data":{"chunk":"byo"}}}`
 		rr := push(body)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -653,7 +644,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("cli and web with colliding ids do not cross namespaces", func(t *testing.T) {
-		t.Parallel()
 		_, _ = h.db.SSEEventsWipe()
 		rr := push(`{"web_session_id":"shared-id","event":{"type":"web.only","data":{}}}`)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -673,13 +663,11 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("web and cli session ids are mutually exclusive on push", func(t *testing.T) {
-		t.Parallel()
 		rr := push(`{"web_session_id":"w","cli_session_id":"c","event":{"type":"x"}}`)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("background event routes by user_id", func(t *testing.T) {
-		t.Parallel()
 		body := `{"user_id":"u-2","event":{"type":"system.notice","data":{}}}`
 		rr := push(body)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -703,19 +691,16 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("missing routing key is rejected", func(t *testing.T) {
-		t.Parallel()
 		rr := push(`{"event":{"type":"x"}}`)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("missing event field is rejected", func(t *testing.T) {
-		t.Parallel()
 		rr := push(`{"web_session_id":"ws-3"}`)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("events GET requires exactly one routing key", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
 		rr := httptest.NewRecorder()
@@ -724,7 +709,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("since_id replays only newer events", func(t *testing.T) {
-		t.Parallel()
 		_, _ = h.db.SSEEventsWipe()
 		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-x"}, "a", `{"event":{"type":"a"}}`)
 		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-x"}, "b", `{"event":{"type":"b"}}`)
@@ -742,7 +726,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator cannot access unbound cli_session_id", func(t *testing.T) {
-		t.Parallel()
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-unbound"}, "test", `{"event":{"type":"x"}}`)
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-unbound&since_id=0", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer op-session-1")
@@ -753,7 +736,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator cannot access cli_session_id owned by different operator", func(t *testing.T) {
-		t.Parallel()
 		// Bind cli-owned to op-session-1
 		seedCLISession("cli-owned", "op-session-1")
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-owned"}, "test", `{"event":{"type":"x"}}`)
@@ -768,7 +750,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator can access own cli_session_id", func(t *testing.T) {
-		t.Parallel()
 		// Bind cli-mine to op-session-1
 		seedCLISession("cli-mine", "op-session-1")
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-mine"}, "x", `{"event":{"type":"x"}}`)
@@ -782,7 +763,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator cannot access web_session_id not bound to them", func(t *testing.T) {
-		t.Parallel()
 		_ = h.db.SSEEventsAppend(SSERoute{WebSessionID: "ws-other"}, "test", `{"event":{"type":"x"}}`)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?web_session_id=ws-other&since_id=0", nil)
@@ -794,7 +774,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: operator cannot access user_id they don't belong to", func(t *testing.T) {
-		t.Parallel()
 		_ = h.db.SSEEventsAppend(SSERoute{UserID: "user-other"}, "test", `{"event":{"type":"x"}}`)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?user_id=user-other&since_id=0", nil)
@@ -806,7 +785,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("authorization: missing operator session id is rejected", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/internal/sse/events?cli_session_id=cli-1&since_id=0", nil)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
@@ -815,7 +793,6 @@ func TestInternalSSEBridge(t *testing.T) {
 	})
 
 	t.Run("stream endpoint and Last-Event-ID", func(t *testing.T) {
-		t.Parallel()
 		seedCLISession("cli-stream", "op-session-1")
 		_ = h.db.SSEEventsAppend(SSERoute{CLISessionID: "cli-stream"}, "stream-init", `{"event":{"type":"stream-init"}}`)
 
@@ -845,11 +822,9 @@ func TestInternalSSEBridge(t *testing.T) {
 }
 
 func TestHandleKV(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("PUT and GET", func(t *testing.T) {
-		t.Parallel()
 		reqPut := httptest.NewRequest(http.MethodPut, "/kv/k1", bytes.NewReader(mustDocJSON(t, models.KVSetRequest{Value: "g8e"})))
 		rrPut := httptest.NewRecorder()
 		h.handleKV(rrPut, reqPut)
@@ -863,7 +838,6 @@ func TestHandleKV(t *testing.T) {
 	})
 
 	t.Run("TTL and Expire", func(t *testing.T) {
-		t.Parallel()
 		reqTtl := httptest.NewRequest(http.MethodGet, "/kv/k1/_ttl", nil)
 		rrTtl := httptest.NewRecorder()
 		h.handleKV(rrTtl, reqTtl)
@@ -876,7 +850,6 @@ func TestHandleKV(t *testing.T) {
 	})
 
 	t.Run("Scan and DeletePattern", func(t *testing.T) {
-		t.Parallel()
 		h.db.KVSet("pref:1", "a", 0)
 		h.db.KVSet("pref:2", "b", 0)
 

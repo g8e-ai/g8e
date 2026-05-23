@@ -446,7 +446,7 @@ func (avs *AuditVaultService) CreateSession(id, title, userIdentity string) erro
 	}
 
 	query := `INSERT INTO sessions (id, title, user_identity) VALUES (?, ?, ?)`
-	_, err := avs.db.Exec(query, id, title, userIdentity)
+	_, err := avs.db.ExecWithRetry(query, id, title, userIdentity)
 	if err != nil {
 		return fmt.Errorf("failed to create operator session: %w", err)
 	}

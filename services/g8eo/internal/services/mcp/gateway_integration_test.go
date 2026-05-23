@@ -65,6 +65,7 @@ func TestGatewaySignedEndToEndIntegration(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
 	}
 
 	// Execute a tools/call request
@@ -140,6 +141,7 @@ func TestGatewaySignedReceiptIntegration(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
 	}
 
 	// Execute a tools/call request

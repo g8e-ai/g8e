@@ -344,7 +344,8 @@ func (g *GatewayService) handleMCPRequest(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
-			g.responder.RPCError(w, nil, -32600, "request payload too large (max 10MB)")
+			maxMB := g.maxPayloadBytes / (1024 * 1024)
+			g.responder.RPCError(w, nil, -32600, fmt.Sprintf("request payload too large (max %dMB)", maxMB))
 			return
 		}
 		g.responder.RPCError(w, nil, -32603, "failed to read request body")
@@ -725,94 +726,161 @@ func (g *GatewayService) HandlePromptsGet(w http.ResponseWriter, r *http.Request
 }
 
 func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Request) {
-	g.handleMCPRequest(w, r, "tools/call", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
-		var callParams CallToolRequest
-		if err := json.Unmarshal(params, &callParams); err != nil {
-			return nil, fmt.Errorf("invalid tools/call params: %w", err)
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if g.isCircuitOpen() {
+		g.logger.Warn("MCP downstream circuit is open, rejecting SSE request", "url", g.downstreamURL)
+		g.responder.RPCError(w, nil, -32603, "downstream MCP server is temporarily unavailable (circuit open)")
+		return
+	}
+
+	// P1-1: Enforce payload limits from config
+	r.Body = http.MaxBytesReader(w, r.Body, g.maxPayloadBytes)
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			maxMB := g.maxPayloadBytes / (1024 * 1024)
+			g.responder.RPCError(w, nil, -32600, fmt.Sprintf("request payload too large (max %dMB)", maxMB))
+			return
 		}
+		g.responder.RPCError(w, nil, -32603, "failed to read request body")
+		return
+	}
 
-		argumentsJSON := "{}"
-		if len(callParams.Arguments) > 0 {
-			var probe interface{}
-			if err := json.Unmarshal(callParams.Arguments, &probe); err != nil {
-				return nil, errors.New("invalid tool arguments")
-			}
-			argumentsJSON = string(callParams.Arguments)
+	var req JSONRPCRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		g.responder.RPCError(w, nil, -32700, "parse error: invalid JSON")
+		return
+	}
+
+	// Validate JSON-RPC 2.0
+	if req.JSONRPC != "2.0" {
+		g.responder.RPCError(w, req.ID, -32600, "invalid request: jsonrpc version must be 2.0")
+		return
+	}
+
+	if req.Method == "" {
+		g.responder.RPCError(w, req.ID, -32600, "invalid request: method required")
+		return
+	}
+
+	if req.Method != "tools/call" {
+		g.responder.RPCError(w, req.ID, -32601, fmt.Sprintf("method not found: expected tools/call, got %s", req.Method))
+		return
+	}
+
+	var callParams CallToolRequest
+	if err := json.Unmarshal(req.Params, &callParams); err != nil {
+		g.responder.RPCError(w, req.ID, -32600, fmt.Sprintf("invalid tools/call params: %v", err))
+		return
+	}
+
+	if callParams.Name == "" {
+		g.responder.RPCError(w, req.ID, -32600, "tool name required")
+		return
+	}
+
+	argumentsJSON := "{}"
+	if len(callParams.Arguments) > 0 {
+		var probe interface{}
+		if err := json.Unmarshal(callParams.Arguments, &probe); err != nil {
+			g.responder.RPCError(w, req.ID, -32600, "invalid tool arguments")
+			return
 		}
+		argumentsJSON = string(callParams.Arguments)
+	}
 
-		mcpPayload := &operatorv1.McpCallRequested{
-			ToolName:      callParams.Name,
-			ArgumentsJson: argumentsJSON,
-			ExecutionId:   uuid.New().String(),
-		}
-		payloadBytes, err := proto.Marshal(mcpPayload)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
-		}
+	mcpPayload := &operatorv1.McpCallRequested{
+		ToolName:      callParams.Name,
+		ArgumentsJson: argumentsJSON,
+		ExecutionId:   uuid.New().String(),
+	}
+	payloadBytes, err := proto.Marshal(mcpPayload)
+	if err != nil {
+		g.responder.RPCError(w, req.ID, -32603, fmt.Sprintf("failed to marshal MCP payload: %v", err))
+		return
+	}
 
-		hash, uapBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-			actionType:     constants.ActionTypeMcpCall,
-			targetResource: callParams.Name,
-			payloadBytes:   payloadBytes,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		receipt, err := g.envProc.ProcessEnvelope(ctx, uapBytes)
-		if err != nil {
-			if errors.Is(err, governance.ErrL3ProofMissing) {
-				userID := r.Header.Get(constants.HeaderUserID)
-				operatorID := r.Header.Get(constants.HeaderOperatorID)
-
-				g.storeSuspendedTransaction(hash, uapBytes, callParams.Name, callParams.Arguments, userID, operatorID)
-
-				approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
-				return CallToolResult{
-					Content: []TextContent{
-						{
-							Type: "text",
-							Text: fmt.Sprintf("Execution paused. Please visit %s to authorize via WebAuthn, then retry.", approvalURL),
-						},
-					},
-				}, nil
-			}
-			return nil, err
-		}
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			return nil, errors.New("streaming not supported")
-		}
-
-		chunk := CallToolResult{
-			Content: []TextContent{
-				{
-					Type: "text",
-					Text: receipt.ResultSummary,
-				},
-			},
-		}
-		if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
-			chunk.IsError = true
-		}
-
-		chunkBytes, err := json.Marshal(chunk)
-		if err != nil {
-			g.logger.Error("Failed to marshal SSE chunk", "error", err)
-			return nil, nil
-		}
-
-		fmt.Fprintf(w, "data: %s\n\n", chunkBytes)
-		flusher.Flush()
-
-		return nil, nil // SSE handler handles its own response
+	hash, uapBytes, err := g.processGatewayTransaction(r.Context(), processGatewayOptions{
+		actionType:     constants.ActionTypeMcpCall,
+		targetResource: callParams.Name,
+		payloadBytes:   payloadBytes,
 	})
+	if err != nil {
+		code, msg := g.mapGatewayError(err)
+		if code == 0 && msg == "" {
+			code = -32603
+			msg = err.Error()
+		}
+		g.responder.RPCError(w, req.ID, code, msg)
+		return
+	}
+
+	receipt, err := g.envProc.ProcessEnvelope(r.Context(), uapBytes)
+	if err != nil {
+		if errors.Is(err, governance.ErrL3ProofMissing) {
+			userID := r.Header.Get(constants.HeaderUserID)
+			operatorID := r.Header.Get(constants.HeaderOperatorID)
+
+			g.storeSuspendedTransaction(hash, uapBytes, callParams.Name, callParams.Arguments, userID, operatorID)
+
+			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
+			g.responder.RPCResponse(w, req.ID, CallToolResult{
+				Content: []TextContent{
+					{
+						Type: "text",
+						Text: fmt.Sprintf("Execution paused. Please visit %s to authorize via WebAuthn, then retry.", approvalURL),
+					},
+				},
+			})
+			return
+		}
+		code, msg := g.mapGatewayError(err)
+		if code == 0 && msg == "" {
+			code = -32603
+			msg = err.Error()
+		}
+		g.responder.RPCError(w, req.ID, code, msg)
+		return
+	}
+
+	// Set SSE headers before writing response
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		g.responder.RPCError(w, req.ID, -32603, "streaming not supported")
+		return
+	}
+
+	chunk := CallToolResult{
+		Content: []TextContent{
+			{
+				Type: "text",
+				Text: receipt.ResultSummary,
+			},
+		},
+	}
+	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+		chunk.IsError = true
+	}
+
+	chunkBytes, err := json.Marshal(chunk)
+	if err != nil {
+		g.logger.Error("Failed to marshal SSE chunk", "error", err)
+		return
+	}
+
+	fmt.Fprintf(w, "data: %s\n\n", chunkBytes)
+	flusher.Flush()
 }
 
 type processGatewayOptions struct {

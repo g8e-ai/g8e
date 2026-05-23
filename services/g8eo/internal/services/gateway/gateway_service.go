@@ -129,9 +129,10 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		sessionSvc: sessionSvc,
 		apiKeySvc:  apiKeySvc,
 		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
-			Logger:         logger,
-			Responder:      res,
-			SuspendedStore: db,
+			Logger:          logger,
+			Responder:       res,
+			SuspendedStore:  db,
+			MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 		}),
 		responder: res,
 	}
@@ -177,9 +178,10 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 		sessionSvc: sessionSvc,
 		apiKeySvc:  apiKeySvc,
 		mcpGateway: mcp.NewGatewayService(mcp.Dependencies{
-			Logger:         logger,
-			Responder:      res,
-			SuspendedStore: db,
+			Logger:          logger,
+			Responder:       res,
+			SuspendedStore:  db,
+			MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
 		}),
 		responder: res,
 	}

@@ -41,6 +41,10 @@ help:
 	@echo "  first-issues  Find good first issues in the codebase"
 	@echo "  clean         Remove build artifacts and runtime state"
 	@echo ""
+	@echo "Documentation:"
+	@echo "  docs-build    Build MkDocs documentation site"
+	@echo "  docs-serve    Serve MkDocs documentation locally (live reload)"
+	@echo ""
 	@echo "Doctrine Ingestion:"
 	@echo "  ingest-doctrines    Run all doctrine ingestion scripts"
 	@echo "  validate-doctrines  Validate JSON schema for all doctrine files"
@@ -259,3 +263,33 @@ vulncheck-g8eo:
 .PHONY: test-g8ee
 test-g8ee:
 	@./g8e test g8ee
+
+# =============================================================================
+# DOCUMENTATION
+# =============================================================================
+.PHONY: docs-build
+docs-build: docs-cli
+	@echo "Building MkDocs documentation..."
+	@if [ -f ".venv/bin/python" ]; then \
+		.venv/bin/python -m mkdocs build -f docs/mkdocs.yml; \
+		echo "Generating embeddings for RAG search..."; \
+		.venv/bin/python scripts/docs/generate_embeddings.py --site-dir site --output site/embeddings.json; \
+	else \
+		echo "Error: Python venv not found. Run setup first."; \
+		exit 1; \
+	fi
+
+.PHONY: docs-cli
+docs-cli:
+	@echo "Generating CLI reference documentation..."
+	@./scripts/docs/generate_cli_reference.sh
+
+.PHONY: docs-serve
+docs-serve:
+	@echo "Serving MkDocs documentation locally..."
+	@if [ -f ".venv/bin/python" ]; then \
+		.venv/bin/python -m mkdocs serve -f docs/mkdocs.yml -a 0.0.0.0:8000; \
+	else \
+		echo "Error: Python venv not found. Run setup first."; \
+		exit 1; \
+	fi

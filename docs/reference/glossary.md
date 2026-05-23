@@ -547,7 +547,7 @@ The core trust model of g8e. Every component treats every other component as a p
 - **The Operator (g8eo)** does not trust the user or the AI (full fail-closed admission gauntlet on every inbound mutation: envelope integrity, typed payload, L1 reflected forbidden patterns, hash binding, freshness, state-root match, L2 trusted signer, L3 WebAuthn).
 - **The Ensemble's internal pipeline** does not trust itself (the Byzantine cascade in `services/g8ee/app/services/ai/generator.py` runs Triage → Dash/Sage → Tribunal generation → voting → Actuator → Auditor before a command is even *eligible* for the protocol gauntlet).
 
-See `docs/position_paper.md` §2.1 and `docs/g8ee.md` "Governance & Safety - The Ensemble-Internal Byzantine Cascade".
+See `docs/concepts/position_paper.md` §2.1 and `docs/concepts/g8ee.md` "Governance & Safety - The Ensemble-Internal Byzantine Cascade".
 
 ---
 

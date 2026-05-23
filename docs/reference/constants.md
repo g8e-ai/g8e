@@ -6,7 +6,7 @@ The g8e constants system maintains a Single Source of Truth (SSOT) in Go at `ser
 
 ## Export Flow
 
-```
+```text
 Go SSOT (services/g8eo/internal/constants/*.go)
     ↓
 JSON Export (protocol/constants/*.json)

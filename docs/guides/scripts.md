@@ -113,7 +113,7 @@ Dispatched via `scripts/cmd/infra.sh`.
 
 ### Testing - `./g8e test`
 
-See [Tests](tests.md). Native toolchains via `scripts/testing/run_tests.sh`.
+See [Tests](./tests.md). Native toolchains via `scripts/testing/run_tests.sh`.
 
 | Command | Purpose |
 |---|---|
@@ -123,7 +123,7 @@ See [Tests](tests.md). Native toolchains via `scripts/testing/run_tests.sh`.
 
 ### Evals - `./g8e evals`
 
-See [Evals](evals.md).
+See [Evals](./evals.md).
 
 | Command | Purpose |
 |---|---|
@@ -133,7 +133,7 @@ See [Evals](evals.md).
 
 ### Demo - `./g8e demo`
 
-See [Demos](demos.md).
+See [Demos](./demos.md).
 
 | Command | Purpose |
 |---|---|
@@ -196,4 +196,4 @@ scripts/
 
 For detailed help on any subcommand: `./g8e <command> --help`.
 
-See also: [Operator](operator.md), [Governance Gateway (g8eg)](g8eg.md), [Tests](tests.md), [Evals](evals.md), [Demos](demos.md).
+See also: [Operator](../concepts/operator.md), [Governance Gateway (g8eg)](../concepts/g8eg.md), [Tests](./tests.md), [Evals](./evals.md), [Demos](./demos.md).

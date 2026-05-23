@@ -92,7 +92,7 @@ The envelope is the execution contract. It is serialized as canonical JSON (prot
 
 Its purpose is to make verification part of the transaction rather than something the network is trusted to have done. The binding that makes this work is the transaction hash: the envelope's identity *is* the hash of its own normalized contents.
 
-```
+```text
 id == transaction_hash == SHA-256(canonicalize(envelope_fields))
 ```
 

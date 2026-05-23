@@ -123,7 +123,7 @@ Static, deterministic checks enforced before any code executes.
 
 Doctrine definitions are stored in `protocol/constants/doctrine/` as canonical JSON files:
 
-```
+```text
 protocol/constants/doctrine/
   doctrine_registry.json      # Metadata: sources, versions, last_updated
   owasp_crs_doctrine.json    # OWASP CRS doctrines (RCE, LFI, SQLi, scanner)
@@ -250,7 +250,7 @@ The **Actuator** on the Remote Operator signs an executing-state `ActionReceipt`
 
 All cross-component messages are events with hierarchical, dot-separated, past-tense names:
 
-```
+```text
 g8e.v1.<domain>.<resource>[.<sub-resource>...].<action>
 ```
 
@@ -386,4 +386,4 @@ Agent performance is tracked via an EMA scalar `[0.0, 1.0]` in the `reputation_s
 | Audit storage | `@/home/bob/g8e/services/g8eo/internal/services/storage/audit_vault.go` |
 | Workload identity | `@/home/bob/g8e/protocol/workload_identity.go` |
 
-For the reference Remote Operator implementation see [Operator](operator.md). For the reference **g8e Agentic Ensemble** application see [g8e Agentic Ensemble](g8ee.md). For Hub/data-backplane behavior see [Local Operator (g8eg)](g8eg.md).
+For the reference Remote Operator implementation see [Operator](./operator.md). For the reference **g8e Agentic Ensemble** application see [g8e Agentic Ensemble](./g8ee.md). For Hub/data-backplane behavior see [Local Operator (g8eg)](./g8eg.md).
