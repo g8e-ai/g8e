@@ -403,7 +403,7 @@ func extractMTLSIdentity(r *http.Request) (string, string) {
 	spiffeID := cert.URIs[0].String()
 
 	// Extract operator_id from SPIFFE ID
-	// Format: spiffe://g8e.local/operator/<org_id>/<operator_id>/<session_id>
+	// Format: spiffe://g8e.local/operator/<org_id>/<operator_id>/<cli_session_id>
 	// or spiffe://g8e.local/app/<operator_id>
 	var operatorID string
 	if strings.HasPrefix(spiffeID, "spiffe://"+protocol.TrustDomain+"/operator/") {
@@ -423,7 +423,7 @@ func extractMTLSIdentity(r *http.Request) (string, string) {
 
 // verifyChannelACL enforces topic ACLs (Plan §5).
 // Subscribers can only subscribe to channels matching their mTLS workload identity.
-// Channel format: results:<operator_id>:<session_id> or heartbeat:<operator_id>
+// Channel format: results:<operator_id>:<cli_session_id> or heartbeat:<operator_id>
 func verifyChannelACL(channel, operatorID, identitySPIFFEID string) error {
 	if operatorID == "" {
 		// If no operator_id in cert, reject subscription

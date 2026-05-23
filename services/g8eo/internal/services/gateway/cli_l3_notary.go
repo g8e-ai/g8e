@@ -121,13 +121,13 @@ func (v *CLIL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID string
 
 	sessionBytes, err := json.Marshal(doc.ForWire())
 	if err != nil {
-		v.logger.Warn("Failed to marshal CLI session", "session_id", doc.ID, "error", err)
+		v.logger.Warn("Failed to marshal CLI session", "cli_session_id", doc.ID, "error", err)
 		return false, fmt.Errorf("failed to marshal CLI session: %w", err)
 	}
 
 	var session models.CLISession
 	if err := json.Unmarshal(sessionBytes, &session); err != nil {
-		v.logger.Warn("Failed to unmarshal CLI session", "session_id", doc.ID, "error", err)
+		v.logger.Warn("Failed to unmarshal CLI session", "cli_session_id", doc.ID, "error", err)
 		return false, fmt.Errorf("failed to unmarshal CLI session: %w", err)
 	}
 
