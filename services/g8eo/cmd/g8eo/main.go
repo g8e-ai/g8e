@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/certs"
+	clicmd "github.com/g8e-ai/g8e/services/g8eo/internal/cli/cmd"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/cmd"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
@@ -61,6 +62,25 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == constants.ApprovalTypeStreamStr {
 		cmd.RunStream(os.Args[2:])
 		return
+	}
+
+	// Check for CLI subcommands (platform, apps, auth, data, test, evals, security, setup, vars)
+	cliSubcommands := map[string]bool{
+		"platform": true,
+		"apps":     true,
+		"auth":     true,
+		"data":     true,
+		"test":     true,
+		"evals":    true,
+		"security": true,
+		"setup":    true,
+		"vars":     true,
+	}
+
+	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
+		// Delegate to CLI commands
+		clicmd.Execute()
+		os.Exit(0)
 	}
 
 	settings := config.LoadSettings()

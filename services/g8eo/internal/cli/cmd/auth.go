@@ -11,15 +11,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package cmd
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/g8e-ai/g8e/cmd/g8e/internal/auth"
-	"github.com/g8e-ai/g8e/cmd/g8e/internal/config"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/auth"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/config"
 	"github.com/spf13/cobra"
 )
 
@@ -53,7 +53,7 @@ func loginCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			if err := auth.EnsureOperatorRunning(cfg); err != nil {
+			if err := auth.CheckOperatorRunning(cfg); err != nil {
 				return err
 			}
 

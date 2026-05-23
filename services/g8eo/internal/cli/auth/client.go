@@ -30,7 +30,7 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/g8e-ai/g8e/cmd/g8e/internal/config"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/config"
 )
 
 type DeviceLinkRequest struct {
@@ -295,7 +295,7 @@ func SaveCertAndKey(certPEM, chainPEM string, key *ecdsa.PrivateKey, certFile, k
 	return nil
 }
 
-func EnsureOperatorRunning(cfg *config.Config) error {
+func CheckOperatorRunning(cfg *config.Config) error {
 	pidFile := filepath.Join(cfg.RuntimeDir, "pids", "operator.pid")
 	pidData, err := os.ReadFile(pidFile)
 	if err != nil {

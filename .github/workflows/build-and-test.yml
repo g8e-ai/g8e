@@ -122,6 +122,9 @@ jobs:
           go-version-file: services/g8eo/go.mod
           cache-dependency-path: services/g8eo/go.sum
 
+      - name: Build unified g8eo binary
+        run: make build-cli
+
       - name: Start Operator Gateway
         run: ./g8e platform start
 
@@ -219,6 +222,9 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.14'
+
+      - name: Build unified g8eo binary
+        run: make build-cli
 
       - name: Start Operator Gateway
         run: ./g8e platform start

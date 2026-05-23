@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package cmd
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func main() {
+func Execute() {
 	rootCmd := &cobra.Command{
 		Use:   "g8e",
 		Short: "g8e Platform Manager - CLI for the Governance Gateway and Governed Operator",
@@ -48,4 +48,8 @@ and optional application-layer adapters (g8ee).`,
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func main() {
+	Execute()
 }

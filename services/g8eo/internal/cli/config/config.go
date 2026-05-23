@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -26,6 +27,30 @@ const (
 	DefaultSecretsDir     = ".g8e/secrets"
 	DefaultCredentialsDir = "~/.g8e"
 )
+
+// expandPath expands tilde (~) to the user's home directory and expands environment variables
+func expandPath(path string) (string, error) {
+	if path == "" {
+		return path, nil
+	}
+
+	// Expand tilde to home directory
+	if strings.HasPrefix(path, "~/") || path == "~" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get home directory: %w", err)
+		}
+		if path == "~" {
+			return homeDir, nil
+		}
+		path = filepath.Join(homeDir, path[2:])
+	}
+
+	// Expand environment variables
+	path = os.ExpandEnv(path)
+
+	return path, nil
+}
 
 type PathsConfig struct {
 	G8EE struct {
@@ -78,15 +103,9 @@ func Load(projectRoot string) (*Config, error) {
 	pkiDir := filepath.Join(projectRoot, DefaultPKIDir)
 	secretsDir := filepath.Join(projectRoot, DefaultSecretsDir)
 
-	credentialsDir := DefaultCredentialsDir
-	if credentialsDir[0] == '~' {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get home directory: %w", err)
-		}
-		credentialsDir = filepath.Join(homeDir, credentialsDir[1:])
-	} else {
-		credentialsDir = os.ExpandEnv(credentialsDir)
+	credentialsDir, err := expandPath(DefaultCredentialsDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to expand credentials directory: %w", err)
 	}
 
 	pathsPath := filepath.Join(projectRoot, "protocol", "constants", "paths.json")

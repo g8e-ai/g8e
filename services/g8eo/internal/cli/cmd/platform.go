@@ -11,16 +11,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package cmd
 
 import (
 	"fmt"
 	"os"
-	"os/exec"
 
-	"github.com/g8e-ai/g8e/cmd/g8e/internal/api"
-	"github.com/g8e-ai/g8e/cmd/g8e/internal/config"
-	"github.com/g8e-ai/g8e/cmd/g8e/internal/platform"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/api"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/config"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/platform"
 	"github.com/spf13/cobra"
 )
 
@@ -238,10 +237,7 @@ func platformLogsCmd() *cobra.Command {
 				return nil
 			}
 
-			execCmd := exec.Command("tail", "-f", logPath)
-			execCmd.Stdout = os.Stdout
-			execCmd.Stderr = os.Stderr
-			return execCmd.Run()
+			return platform.TailLog(logPath)
 		},
 	}
 	return cmd

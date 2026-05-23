@@ -200,13 +200,13 @@ clean:
 .PHONY: ingest-doctrines
 ingest-doctrines:
 	@echo "Running doctrine ingestion scripts..."
-	@if [ -f "scripts/data/ingest_owasp_crs.py" ]; then \
+	@if [ -f "scripts/ingest/ingest_owasp_crs.py" ]; then \
 		echo "Ingesting OWASP CRS doctrines..."; \
-		python3 scripts/data/ingest_owasp_crs.py /tmp/coreruleset/rules 2>/dev/null || echo "OWASP CRS source not found, skipping"; \
+		python3 scripts/ingest/ingest_owasp_crs.py /tmp/coreruleset/rules 2>/dev/null || echo "OWASP CRS source not found, skipping"; \
 	fi
-	@if [ -f "scripts/data/ingest_gitleaks.py" ]; then \
+	@if [ -f "scripts/ingest/ingest_gitleaks.py" ]; then \
 		echo "Ingesting Gitleaks doctrines..."; \
-		python3 scripts/data/ingest_gitleaks.py /tmp/gitleaks.toml 2>/dev/null || echo "Gitleaks source not found, skipping"; \
+		python3 scripts/ingest/ingest_gitleaks.py /tmp/gitleaks.toml 2>/dev/null || echo "Gitleaks source not found, skipping"; \
 	fi
 	@echo "Doctrine ingestion complete."
 
@@ -328,9 +328,9 @@ _ci-apps-g8ee:
 # =============================================================================
 .PHONY: build-cli
 build-cli:
-	@echo "Building g8e CLI binary..."
-	@cd cmd/g8e && go build -o ../../g8e .
-	@echo "CLI binary built: ./g8e"
+	@echo "Building unified g8eo binary (includes CLI commands)..."
+	@cd services/g8eo && go build -o ../../g8e ./cmd/g8eo
+	@echo "Unified binary built: ./g8e"
 
 .PHONY: build-g8eo
 build-g8eo:

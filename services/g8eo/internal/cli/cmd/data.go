@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package cmd
 
 import (
 	"encoding/json"
@@ -19,8 +19,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/g8e-ai/g8e/cmd/g8e/internal/api"
-	"github.com/g8e-ai/g8e/cmd/g8e/internal/config"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/api"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/config"
 	"github.com/spf13/cobra"
 )
 
@@ -41,6 +41,35 @@ type DeviceLink struct {
 	Status  string `json:"status"`
 	Uses    int    `json:"uses"`
 	MaxUses int    `json:"max_uses"`
+}
+
+type QueryFilter struct {
+	Field string      `json:"field"`
+	Op    string      `json:"op"`
+	Value interface{} `json:"value"`
+}
+
+type QueryRequest struct {
+	Filters []QueryFilter `json:"filters"`
+}
+
+type DeviceLinkCreateRequest struct {
+	Email      string `json:"email"`
+	MaxUses    int    `json:"max_uses"`
+	TTLSeconds int    `json:"ttl_seconds"`
+}
+
+type DeviceLinkCreateResponse struct {
+	Token string `json:"token"`
+}
+
+type SettingsResponse struct {
+	Settings map[string]interface{} `json:"settings"`
+}
+
+type QueryRequestWithLimit struct {
+	Filters []QueryFilter `json:"filters"`
+	Limit   int           `json:"limit,omitempty"`
 }
 
 func dataCmd() *cobra.Command {
@@ -178,9 +207,9 @@ func dataDeviceLinksListCmd() *cobra.Command {
 				return fmt.Errorf("provide --user-id, --email, or ensure G8E_USER_ID is set")
 			}
 
-			query := map[string]interface{}{
-				"filters": []map[string]interface{}{
-					{"field": "user_id", "op": "==", "value": queryUserID},
+			query := QueryRequest{
+				Filters: []QueryFilter{
+					{Field: "user_id", Op: "==", Value: queryUserID},
 				},
 			}
 
@@ -233,10 +262,10 @@ func dataDeviceLinksCreateCmd() *cobra.Command {
 				return err
 			}
 
-			req := map[string]interface{}{
-				"email":       email,
-				"max_uses":    count,
-				"ttl_seconds": ttl,
+			req := DeviceLinkCreateRequest{
+				Email:      email,
+				MaxUses:    count,
+				TTLSeconds: ttl,
 			}
 
 			resp, err := client.Post("/api/device-links", req)
@@ -244,17 +273,16 @@ func dataDeviceLinksCreateCmd() *cobra.Command {
 				return err
 			}
 
-			var result map[string]interface{}
+			var result DeviceLinkCreateResponse
 			if err := json.Unmarshal(resp, &result); err != nil {
 				return fmt.Errorf("failed to parse response: %w", err)
 			}
 
-			token, ok := result["token"].(string)
-			if !ok || token == "" {
+			if result.Token == "" {
 				return fmt.Errorf("response missing token field")
 			}
 
-			cmd.Printf("Device-link token created: %s\n", token)
+			cmd.Printf("Device-link token created: %s\n", result.Token)
 			cmd.Printf("Email: %s\n", email)
 			cmd.Printf("Max uses: %d\n", count)
 			cmd.Printf("TTL: %d seconds\n", ttl)
@@ -338,20 +366,15 @@ func dataSettingsCmd() *cobra.Command {
 				return err
 			}
 
-			var settings map[string]interface{}
+			var settings SettingsResponse
 			if err := json.Unmarshal(resp, &settings); err != nil {
 				return fmt.Errorf("failed to parse response: %w", err)
 			}
 
 			cmd.Println("Platform Settings")
 			cmd.Println(strings.Repeat("=", 110))
-			settingsData, ok := settings["settings"].(map[string]interface{})
-			if !ok {
-				cmd.Println("No settings found")
-				return nil
-			}
 
-			for key, value := range settingsData {
+			for key, value := range settings.Settings {
 				cmd.Printf("  %s: %v\n", key, value)
 			}
 
@@ -385,8 +408,8 @@ func dataStoreCmd() *cobra.Command {
 
 			if documentID == "" {
 				// List documents in collection
-				query := map[string]interface{}{
-					"filters": []map[string]interface{}{},
+				query := QueryRequest{
+					Filters: []QueryFilter{},
 				}
 				resp, err := client.Post(fmt.Sprintf("/db/%s/_query", collection), query)
 				if err != nil {
@@ -442,14 +465,11 @@ func dataAuditCmd() *cobra.Command {
 				return fmt.Errorf("--operator-session-id or G8E_OPERATOR_SESSION_ID is required")
 			}
 
-			query := map[string]interface{}{
-				"filters": []map[string]interface{}{
-					{"field": "operator_session_id", "op": "==", "value": operatorSessionID},
+			query := QueryRequestWithLimit{
+				Filters: []QueryFilter{
+					{Field: "operator_session_id", Op: "==", Value: operatorSessionID},
 				},
-			}
-
-			if limit > 0 {
-				query["limit"] = limit
+				Limit: limit,
 			}
 
 			resp, err := client.Post("/db/audit_events/_query", query)

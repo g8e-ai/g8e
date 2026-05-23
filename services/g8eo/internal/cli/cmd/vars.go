@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package cmd
 
 import (
 	"github.com/spf13/cobra"
@@ -36,8 +36,8 @@ func varsCmd() *cobra.Command {
 
 func varsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List all g8e environment variables",
+		Use:     "list",
+		Short:   "List all g8e environment variables",
 		Aliases: []string{"ls"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.Println("Vars list - to be implemented")
