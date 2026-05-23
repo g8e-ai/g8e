@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 )
 
 // Sentinel is a zero-trust security system that:
@@ -64,6 +65,9 @@ type Sentinel struct {
 	tokenMap      map[string]string // {{UEI_1}} -> "sensitive value"
 	reverseMap    map[string]string // "sensitive value" -> {{UEI_1}}
 	tokenSequence int
+
+	// Persistent storage for token maps (optional, for data sovereignty)
+	localStore *storage.LocalStoreService
 }
 
 // ThreatSeverity represents the severity level of a detected threat
@@ -198,6 +202,8 @@ type FileEditAnalysisResult struct {
 	IsCriticalSystemFile bool `json:"is_critical_system_file"`
 }
 
+//go:generate mockery --name ThreatDetector --output ./mocks --dir .
+
 // ThreatDetector defines an interface for threat detection rules
 type ThreatDetector interface {
 	// Name returns the detector identifier
@@ -259,6 +265,10 @@ type SentinelConfig struct {
 
 	// DoctrineDir is the path to the doctrine directory for threat detection rules
 	DoctrineDir string
+
+	// RequirePersistence when true, fails closed if LocalStore is unavailable for token persistence
+	// This ensures data sovereignty guarantees are not silently degraded
+	RequirePersistence bool
 }
 
 // DefaultSentinelConfig returns sensible defaults for production use
@@ -271,6 +281,7 @@ func DefaultSentinelConfig() *SentinelConfig {
 		AllowedPatterns:     []string{},
 		CustomScrubPatterns: map[string]string{},
 		DoctrineDir:         filepath.Join(constants.Paths.Infra.ProtocolDir, "constants", "doctrine"),
+		RequirePersistence:  true,
 	}
 }
 
@@ -344,6 +355,11 @@ type ScrubbedResult struct {
 
 // NewSentinel creates a new Sentinel with default scrubbers and threat detectors
 func NewSentinel(config *SentinelConfig, logger *slog.Logger) *Sentinel {
+	return NewSentinelWithStorage(config, logger, nil)
+}
+
+// NewSentinelWithStorage creates a new Sentinel with persistent token storage
+func NewSentinelWithStorage(config *SentinelConfig, logger *slog.Logger, localStore *storage.LocalStoreService) *Sentinel {
 	if config == nil {
 		config = DefaultSentinelConfig()
 	}
@@ -353,12 +369,19 @@ func NewSentinel(config *SentinelConfig, logger *slog.Logger) *Sentinel {
 		logger:     logger,
 		tokenMap:   make(map[string]string),
 		reverseMap: make(map[string]string),
+		localStore: localStore,
 	}
 
 	s.initializeScrubbers()
 	s.initializeThreatDetectors()
 	s.initializeInputThreatDetectors()
 	s.LoadDoctrinesFromProtocol()
+
+	// Load persisted tokens if storage is available
+	if localStore != nil && localStore.IsEnabled() {
+		s.loadPersistedTokens()
+	}
+
 	return s
 }
 
@@ -1678,6 +1701,7 @@ func (s *Sentinel) categorizeWarning(line string) string {
 
 // RehydrateText replaces placeholders like {{UEI_N}} with their original values.
 // This is used right before dispatch to restore sensitive data that was hidden from the cloud.
+// Falls back to LocalStore if token is not in memory (for persistence across restarts).
 func (s *Sentinel) RehydrateText(input string) string {
 	if input == "" {
 		return input
@@ -1686,14 +1710,37 @@ func (s *Sentinel) RehydrateText(input string) string {
 	s.tokenMu.RLock()
 	defer s.tokenMu.RUnlock()
 
-	if len(s.tokenMap) == 0 {
+	if len(s.tokenMap) == 0 && (s.localStore == nil || !s.localStore.IsEnabled()) {
 		return input
 	}
 
 	result := input
-	// Replace in reverse order of sequence to handle nested tokens if any (unlikely but safe)
+	// First replace from in-memory cache
 	for token, value := range s.tokenMap {
 		result = strings.ReplaceAll(result, token, value)
+	}
+
+	// If LocalStore is available, check for any remaining tokens not in memory
+	if s.localStore != nil && s.localStore.IsEnabled() {
+		// Find all {{UEI_N}} patterns in the result
+		tokenPattern := regexp.MustCompile(`\{\{UEI_\d+\}\}`)
+		matches := tokenPattern.FindAllString(result, -1)
+
+		for _, token := range matches {
+			// Skip if already in memory (already replaced above)
+			if _, ok := s.tokenMap[token]; ok {
+				continue
+			}
+
+			// Try to load from LocalStore
+			key := fmt.Sprintf("sentinel_token_%s", token)
+			if value, found := s.localStore.KVGet(key); found {
+				// Add to in-memory cache for future use
+				s.tokenMap[token] = value
+				s.reverseMap[value] = token
+				result = strings.ReplaceAll(result, token, value)
+			}
+		}
 	}
 
 	return result
@@ -1738,8 +1785,15 @@ func (s *Sentinel) rehydrateValueRecursive(val interface{}) interface{} {
 }
 
 // GetTokenForValue registers a sensitive value and returns a unique token for it.
+// Fails closed if persistence is required but unavailable.
 func (s *Sentinel) GetTokenForValue(value string) string {
 	if value == "" {
+		return ""
+	}
+
+	// Fail-closed: if persistence is required but unavailable, reject the operation
+	if s.config.RequirePersistence && (s.localStore == nil || !s.localStore.IsEnabled()) {
+		s.logger.Error("Token persistence required but LocalStore unavailable - failing closed to prevent data loss")
 		return ""
 	}
 
@@ -1754,12 +1808,86 @@ func (s *Sentinel) GetTokenForValue(value string) string {
 	token := fmt.Sprintf("{{UEI_%d}}", s.tokenSequence)
 	s.tokenMap[token] = value
 	s.reverseMap[value] = token
+
+	// Persist to storage if available (24 hour TTL)
+	if s.localStore != nil && s.localStore.IsEnabled() {
+		const tokenTTLSeconds = 24 * 60 * 60
+		key := fmt.Sprintf("sentinel_token_%s", token)
+		if err := s.localStore.KVSet(key, value, tokenTTLSeconds); err != nil {
+			s.logger.Error("Failed to persist token to local store - failing closed", "token", token, "error", err)
+			// Rollback the in-memory token since persistence failed
+			delete(s.tokenMap, token)
+			delete(s.reverseMap, value)
+			s.tokenSequence--
+			return ""
+		}
+	}
+
 	return token
 }
 
 // IsEnabled returns whether Sentinel scrubbing is active
 func (s *Sentinel) IsEnabled() bool {
 	return s.config.Enabled
+}
+
+// loadPersistedTokens loads tokens from LocalStore on startup
+func (s *Sentinel) loadPersistedTokens() {
+	if s.localStore == nil || !s.localStore.IsEnabled() {
+		s.logger.Warn("LocalStore not available for token persistence")
+		return
+	}
+
+	tokens, err := s.localStore.KVScanPrefix("sentinel_token_")
+	if err != nil {
+		s.logger.Error("Failed to load persisted tokens from LocalStore", "error", err)
+		return
+	}
+
+	s.tokenMu.Lock()
+	defer s.tokenMu.Unlock()
+
+	loadedCount := 0
+	maxSequence := 0
+	for key, value := range tokens {
+		// Extract token from key format: sentinel_token_{{UEI_N}}
+		token := strings.TrimPrefix(key, "sentinel_token_")
+		if token == key {
+			s.logger.Warn("Invalid token key format", "key", key)
+			continue
+		}
+
+		// Parse sequence number from token: {{UEI_N}}
+		var seq int
+		_, err := fmt.Sscanf(token, "{{UEI_%d}}", &seq)
+		if err != nil {
+			s.logger.Warn("Failed to parse token sequence", "token", token, "error", err)
+			continue
+		}
+
+		if seq > maxSequence {
+			maxSequence = seq
+		}
+
+		s.tokenMap[token] = value
+		s.reverseMap[value] = token
+		loadedCount++
+	}
+
+	s.tokenSequence = maxSequence
+	s.logger.Info("Loaded persisted tokens from LocalStore", "count", loadedCount, "next_sequence", s.tokenSequence+1)
+}
+
+// ClearTokens clears all in-memory tokens (useful for testing or security events)
+func (s *Sentinel) ClearTokens() {
+	s.tokenMu.Lock()
+	defer s.tokenMu.Unlock()
+
+	s.tokenMap = make(map[string]string)
+	s.reverseMap = make(map[string]string)
+	s.tokenSequence = 0
+
+	s.logger.Info("Cleared all in-memory tokens")
 }
 
 // countLines counts non-empty lines in text

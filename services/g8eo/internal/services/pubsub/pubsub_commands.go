@@ -232,27 +232,8 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 	}
 
 	// Initialize TransactionVerifier for strict pre-dispatch verification
-	knownActionTypes := []constants.ActionType{
-		constants.ActionTypeExecuteBash,
-		constants.ActionTypeFileEdit,
-		constants.ActionTypeRestoreFile,
-		constants.ActionTypeShutdown,
-		constants.ActionTypeFsList,
-		constants.ActionTypeFsRead,
-		constants.ActionTypeFsGrep,
-		constants.ActionTypePortCheck,
-		constants.ActionTypeFetchLogs,
-		constants.ActionTypeFetchHistory,
-		constants.ActionTypeFetchFileHistory,
-		constants.ActionTypeFetchFileDiff,
-		constants.ActionTypeEvalAnswer,
-		constants.ActionTypeMcpCall,
-		constants.ActionTypeA2aCall,
-		constants.ActionTypeMcpResourceList,
-		constants.ActionTypeMcpResourceRead,
-		constants.ActionTypeMcpPromptList,
-		constants.ActionTypeMcpPromptGet,
-	}
+	// Use constants.AllActionTypes() as the single source of truth for valid action types
+	knownActionTypes := constants.AllActionTypes()
 	// Use Gateway.Posture for gateway mode, Config.Posture for outbound mode
 	posture := string(c.Config.Gateway.Posture)
 	if posture == "" {
@@ -892,9 +873,9 @@ func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, reje
 	}
 }
 func (m *PubSubCommandMessage) GetPayload() []byte {
-return []byte(m.Payload)
+	return []byte(m.Payload)
 }
 
 func (m *PubSubCommandMessage) SetPayload(p []byte) {
-m.Payload = p
+	m.Payload = p
 }

@@ -35,15 +35,21 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 )
 
+//go:generate mockery --name L3Notary --output ./mocks --dir .
+
 type L3Notary interface {
 	VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
 }
+
+//go:generate mockery --name ExecutionHandler --output ./mocks --dir .
 
 // ExecutionHandler is the interface for executing verified transactions.
 // This avoids import cycles between governance and pubsub packages.
 type ExecutionHandler interface {
 	ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error)
 }
+
+//go:generate mockery --name TransactionAuditStore --output ./mocks --dir .
 
 type TransactionAuditStore interface {
 	DocSet(collection, id string, data json.RawMessage) error
@@ -138,7 +144,7 @@ func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg 
 
 	// 3.5. Rehydrate payload if Sentinel is available
 	if w.Sentinel != nil && cmdMsg != nil {
-		if rehydratable, ok := cmdMsg.(interface{
+		if rehydratable, ok := cmdMsg.(interface {
 			GetPayload() []byte
 			SetPayload([]byte)
 		}); ok {

@@ -106,7 +106,8 @@ CREATE TABLE IF NOT EXISTS state_root (
 -- Nonces: used for transaction replay protection
 CREATE TABLE IF NOT EXISTS nonces (
     nonce TEXT PRIMARY KEY,
-    expires_at TEXT NOT NULL
+    expires_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'reserved'
 );
 CREATE INDEX IF NOT EXISTS idx_nonces_expires ON nonces(expires_at);
 

@@ -37,10 +37,10 @@ func TestNewGatewayService(t *testing.T) {
 		t.Parallel()
 		db, err := OpenGatewayDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, true)
 		require.NoError(t, err)
-		defer db.Close()
+		t.Cleanup(func() { db.Close() })
 
 		pubsub := NewPubSubBroker(logger)
-		defer pubsub.Close()
+		t.Cleanup(func() { pubsub.Close() })
 
 		cfg.Gateway.PKIDir = t.TempDir()
 		cfg.Gateway.SecretsDir = t.TempDir()
@@ -66,10 +66,10 @@ func TestGatewayService_StateManagement(t *testing.T) {
 
 	db, err := OpenGatewayDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, logger, true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	pubsub := NewPubSubBroker(logger)
-	defer pubsub.Close()
+	t.Cleanup(func() { pubsub.Close() })
 
 	cfg.Gateway.BootstrapPort = constants.Ports.OperatorBootstrapHttps
 
@@ -115,10 +115,10 @@ func TestNewGatewayServiceFromComponents(t *testing.T) {
 	secretsDir := t.TempDir()
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	pubsub := NewPubSubBroker(logger)
-	defer pubsub.Close()
+	t.Cleanup(func() { pubsub.Close() })
 
 	cfg.Gateway.PKIDir = pkiDir
 	cfg.Gateway.SecretsDir = secretsDir

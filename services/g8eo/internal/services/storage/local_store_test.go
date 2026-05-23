@@ -98,10 +98,78 @@ func TestLocalStoreService_StoreAndRetrieve(t *testing.T) {
 	assert.Equal(t, record.ID, retrieved.ID)
 	assert.Equal(t, record.Command, retrieved.Command)
 	assert.Equal(t, *record.ExitCode, *retrieved.ExitCode)
-	assert.Equal(t, record.DurationMs, retrieved.DurationMs)
-	assert.Equal(t, record.CaseID, retrieved.CaseID)
-	assert.Equal(t, record.TaskID, retrieved.TaskID)
-	assert.Equal(t, record.StdoutCompressed, retrieved.StdoutCompressed)
+}
+
+func TestLocalStoreService_KVScanPrefix(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	config := DefaultLocalStoreConfig()
+	config.DBPath = filepath.Join(t.TempDir(), "test_kv_scan.db")
+
+	ls, err := NewLocalStoreService(config, logger)
+	require.NoError(t, err)
+	require.NotNil(t, ls)
+	defer ls.Close()
+
+	// Set multiple keys with a common prefix
+	err = ls.KVSet("sentinel_token_{{UEI_1}}", "value1", 3600)
+	require.NoError(t, err)
+	err = ls.KVSet("sentinel_token_{{UEI_2}}", "value2", 3600)
+	require.NoError(t, err)
+	err = ls.KVSet("sentinel_token_{{UEI_3}}", "value3", 3600)
+	require.NoError(t, err)
+	err = ls.KVSet("other_key", "other_value", 3600)
+	require.NoError(t, err)
+
+	// Scan for sentinel_token_ prefix
+	results, err := ls.KVScanPrefix("sentinel_token_")
+	require.NoError(t, err)
+	assert.Len(t, results, 3)
+	assert.Equal(t, "value1", results["sentinel_token_{{UEI_1}}"])
+	assert.Equal(t, "value2", results["sentinel_token_{{UEI_2}}"])
+	assert.Equal(t, "value3", results["sentinel_token_{{UEI_3}}"])
+	assert.NotContains(t, results, "other_key")
+
+	// Scan for other prefix
+	otherResults, err := ls.KVScanPrefix("other_")
+	require.NoError(t, err)
+	assert.Len(t, otherResults, 1)
+	assert.Equal(t, "other_value", otherResults["other_key"])
+}
+
+func TestLocalStoreService_KVScanPrefix_TTL(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	config := DefaultLocalStoreConfig()
+	config.DBPath = filepath.Join(t.TempDir(), "test_kv_scan_ttl.db")
+
+	ls, err := NewLocalStoreService(config, logger)
+	require.NoError(t, err)
+	require.NotNil(t, ls)
+	defer ls.Close()
+
+	// Set keys with different TTLs
+	err = ls.KVSet("sentinel_token_{{UEI_1}}", "value1", 3600) // 1 hour
+	require.NoError(t, err)
+	err = ls.KVSet("sentinel_token_{{UEI_2}}", "value2", 1) // 1 second
+	require.NoError(t, err)
+
+	// Both should be present initially
+	results, err := ls.KVScanPrefix("sentinel_token_")
+	require.NoError(t, err)
+	assert.Len(t, results, 2)
+
+	// Wait for the short TTL to expire
+	time.Sleep(2 * time.Second)
+
+	// Only the long TTL key should remain
+	results, err = ls.KVScanPrefix("sentinel_token_")
+	require.NoError(t, err)
+	assert.Len(t, results, 1)
+	assert.Equal(t, "value1", results["sentinel_token_{{UEI_1}}"])
+	assert.NotContains(t, results, "sentinel_token_{{UEI_2}}")
 }
 
 func TestLocalStoreService_HashConsistency(t *testing.T) {

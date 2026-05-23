@@ -75,10 +75,13 @@ func (rs *SQLReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (b
 // ReserveNonce atomically reserves a nonce for early replay protection.
 // Returns true if the nonce was already reserved/used (replay detected).
 // If not used, it reserves the nonce and returns false.
+// Fail-closed: any SQLite error during cleanup or reservation returns an error.
 func (rs *SQLReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
-	// First, clean up expired nonces
+	// First, clean up expired nonces - fail-closed on cleanup errors
 	if err := rs.cleanupExpiredNonces(); err != nil {
-		rs.logger.Warn("Failed to cleanup expired nonces", string(constants.ConnectionStateError), err)
+		rs.logger.Error("Failed to cleanup expired nonces - replay protection unavailable",
+			string(constants.ConnectionStateError), err)
+		return false, fmt.Errorf("nonce cleanup failed: %w", err)
 	}
 
 	// Check if nonce exists in any state (reserved or used)
@@ -95,7 +98,9 @@ func (rs *SQLReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool,
 	}
 
 	if err != sql.ErrNoRows {
-		// Unexpected error
+		// Unexpected error - fail-closed
+		rs.logger.Error("Failed to check nonce - replay protection unavailable",
+			"nonce", nonce, string(constants.ConnectionStateError), err)
 		return false, fmt.Errorf("failed to check nonce: %w", err)
 	}
 
@@ -108,6 +113,8 @@ func (rs *SQLReplayStore) ReserveNonce(nonce string, expiresAt time.Time) (bool,
 		nonce, reservedAt, expiresAtStr,
 	)
 	if err != nil {
+		rs.logger.Error("Failed to reserve nonce - replay protection unavailable",
+			"nonce", nonce, string(constants.ConnectionStateError), err)
 		return false, fmt.Errorf("failed to reserve nonce: %w", err)
 	}
 

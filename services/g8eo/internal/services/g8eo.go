@@ -297,7 +297,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		AuditVault:         vs.auditVault,
 		Ledger:             vs.ledger,
 		HistoryHandler:     vs.historyHandler,
-		Sentinel:           sentinel.NewSentinel(ProductionSentinelConfig(), vs.logger),
+		Sentinel:           sentinel.NewSentinelWithStorage(ProductionSentinelConfig(), vs.logger, vs.localStore),
 		ReplayStore:        vs.replayStore,
 		StateRootProvider:  stateRootProvider,
 		TransactionAudit:   transactionAudit,

@@ -38,7 +38,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	secretsDir := t.TempDir()
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	userSvc := NewUserService(db, logger)
 
@@ -103,7 +103,7 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 	secretsDir := t.TempDir()
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	userSvc := NewUserService(db, logger)
 

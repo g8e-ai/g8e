@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
@@ -53,6 +54,13 @@ type GatewayDBService struct {
 	db         *sqliteutil.DB
 	logger     *slog.Logger
 	AuditVault *storage.AuditVaultService
+
+	// Shutdown tracking
+	mu      sync.Mutex
+	running bool
+	wg      sync.WaitGroup
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 // OpenGatewayDBService opens (or creates) the unified SQLite database.
@@ -75,10 +83,14 @@ func OpenGatewayDBService(dataDir string, secretsDir string, logger *slog.Logger
 		return nil, fmt.Errorf("failed to initialize audit vault: %w", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	svc := &GatewayDBService{
 		db:         db,
 		logger:     logger,
 		AuditVault: auditVault,
+		ctx:        ctx,
+		cancel:     cancel,
+		running:    true,
 	}
 
 	if testMode {
@@ -100,7 +112,8 @@ func OpenGatewayDBService(dataDir string, secretsDir string, logger *slog.Logger
 	}
 
 	// Start background maintenance
-	go svc.RunMaintenance(context.Background())
+	svc.wg.Add(1)
+	go svc.RunMaintenance(svc.ctx)
 
 	logger.Info("Gateway database initialized", "path", dbPath)
 	return svc, nil
@@ -313,6 +326,7 @@ func (s *GatewayDBService) ReleaseNonce(nonce string) error {
 
 // RunMaintenance periodically removes expired entries.
 func (s *GatewayDBService) RunMaintenance(ctx context.Context) {
+	defer s.wg.Done()
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -489,9 +503,41 @@ func (s *GatewayDBService) GetDB() *sqliteutil.DB {
 	return s.db
 }
 
-// Close closes the database connection.
+// Close closes the database connection and waits for background workers.
 func (s *GatewayDBService) Close() error {
-	return s.db.Close()
+	s.mu.Lock()
+	if !s.running {
+		s.mu.Unlock()
+		return nil
+	}
+	s.running = false
+	s.cancel()
+	s.mu.Unlock()
+
+	// Wait for background workers with a timeout
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// All workers finished cleanly
+	case <-time.After(30 * time.Second):
+		s.logger.Warn("GatewayDBService shutdown timeout, forcing close")
+	}
+
+	if err := s.db.Close(); err != nil {
+		s.logger.Error("Database close error", "error", err)
+		return err
+	}
+	return nil
+}
+
+// Wait blocks until all background workers have finished.
+func (s *GatewayDBService) Wait() {
+	s.wg.Wait()
 }
 
 // =============================================================================
@@ -630,6 +676,44 @@ func (s *GatewayDBService) DocDeleteNamespace(collection string) (int64, error) 
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+// GetField extracts a single field value from a document using dot notation.
+// This is used for JIT field resolution with governed access controls.
+func (s *GatewayDBService) GetField(collection, id, fieldPath string) (interface{}, error) {
+	var dataJSON string
+	err := s.db.QueryRow(
+		"SELECT data FROM documents WHERE collection = ? AND id = ?",
+		collection, id,
+	).Scan(&dataJSON)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("document not found: %s/%s", collection, id)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Use SQL json_extract for efficient field extraction
+	// This is safer than manual JSON parsing and leverages SQLite's JSON1 extension
+	var fieldValue string
+	query := "SELECT json_extract(data, ?) FROM documents WHERE collection = ? AND id = ?"
+
+	// Convert dot notation to JSON path (e.g., "metadata.tags" -> "$.metadata.tags")
+	jsonPath := "$." + fieldPath
+
+	err = s.db.QueryRow(query, jsonPath, collection, id).Scan(&fieldValue)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract field %s: %w", fieldPath, err)
+	}
+
+	// Parse the extracted value back into a Go type
+	var result interface{}
+	if err := json.Unmarshal([]byte(fieldValue), &result); err != nil {
+		// If it's a simple string, return it directly
+		return fieldValue, nil
+	}
+
+	return result, nil
 }
 
 // DocQuery returns documents matching field conditions.

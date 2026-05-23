@@ -104,6 +104,10 @@ type GatewayConfig struct {
 	WriteTimeout      time.Duration // Timeout for writing response (default: 30s)
 	IdleTimeout       time.Duration // Timeout for idle connections (default: 120s)
 	MaxHeaderBytes    int           // Maximum size of request headers in bytes (default: 1MB)
+
+	// Rate limiting
+	RateLimitRPS   float64 // Requests per second limit (default: 5)
+	RateLimitBurst int     // Burst size for rate limiter (default: 10)
 }
 
 // OpenClawConfig holds configuration for --openclaw mode.
@@ -378,6 +382,10 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			WriteTimeout:      30 * time.Second,
 			IdleTimeout:       120 * time.Second,
 			MaxHeaderBytes:    1 << 20, // 1MB
+
+			// Rate limiting defaults
+			RateLimitRPS:   5.0, // 5 requests per second
+			RateLimitBurst: 10,  // Burst of 10
 		},
 	}, nil
 }

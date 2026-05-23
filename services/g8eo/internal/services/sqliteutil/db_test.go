@@ -40,7 +40,7 @@ func TestOpenDB_CreatesFile(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	var result int
 	require.NoError(t, db.QueryRow("SELECT 1").Scan(&result))
@@ -55,7 +55,7 @@ func TestOpenDB_CreatesParentDirectories(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	var result int
 	require.NoError(t, db.QueryRow("SELECT 1").Scan(&result))
@@ -70,7 +70,7 @@ func TestOpenDB_WALModeEnabled(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	var journalMode string
 	require.NoError(t, db.QueryRow("PRAGMA journal_mode").Scan(&journalMode))
@@ -85,7 +85,7 @@ func TestOpenDB_ForeignKeysEnabled(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	var fkEnabled int
 	require.NoError(t, db.QueryRow("PRAGMA foreign_keys").Scan(&fkEnabled))
@@ -100,7 +100,7 @@ func TestOpenDB_SingleConnectionPool(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	stats := db.Stats()
 	assert.Equal(t, 20, stats.MaxOpenConnections)
@@ -115,7 +115,7 @@ func TestOpenDB_SetFilePermissions_False(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	var result int
 	require.NoError(t, db.QueryRow("SELECT 1").Scan(&result))
@@ -130,7 +130,7 @@ func TestRunIncrementalVacuum(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	err = db.RunIncrementalVacuum(100)
 	require.NoError(t, err)
@@ -144,7 +144,7 @@ func TestRunIncrementalVacuum_ZeroPages(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	err = db.RunIncrementalVacuum(0)
 	require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestGetPath(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	assert.Equal(t, path, db.GetPath())
 }
@@ -187,7 +187,7 @@ func TestGetDBSizeBytes(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	size, err := db.GetSizeBytes()
 	require.NoError(t, err)
@@ -202,7 +202,7 @@ func TestGetDBSizeBytes_GrowsWithData(t *testing.T) {
 
 	db, err := OpenDB(cfg, logger)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	sizeBefore, err := db.GetSizeBytes()
 	require.NoError(t, err)

@@ -72,6 +72,7 @@ Sentinel is an application-enabled security service that defends the host from a
 - **Post-Execution Data Sovereignty**: Scrubs PII, credentials, and connection strings from output before it leaves the host or reaches AI-accessible storage.
 - **Intent Validation**: Enforces an authoritative allowlist of high-level capabilities (e.g., `s3_read`, `ec2_management`) to prevent unmapped or shadow agentic requests.
 - **Vault Orchestration**: When `sentinel_mode=scrubbed`, the Operator bypasses the Raw Vault and only persists to the AI-accessible Scrubbed Vault.
+- **Token Persistence**: Sensitive scrubbing tokens are persisted to LocalStore across Operator restarts, ensuring consistent data sovereignty and preventing token loss. Sentinel fails closed when persistence is required but unavailable.
 
 ### Three local vaults (LFAA)
 

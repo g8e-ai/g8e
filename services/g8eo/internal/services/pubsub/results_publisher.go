@@ -19,6 +19,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+//go:generate mockery --name ResultsPublisher --output ./mocks --dir .
+
 // ResultsPublisher is the transport-agnostic interface for publishing results
 // from the g8eo Operator back to g8e-Compliant Agentic Ensemble (g8ee).
 // Implemented by PubSubResultsService (operator pub/sub via client proxy).

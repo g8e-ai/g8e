@@ -14,13 +14,16 @@
 package sentinel
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -199,7 +202,7 @@ func TestSentinel_ScrubText_PII(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.ScrubText(tt.input)
 			assert.Contains(t, result, tt.contains)
 		})
@@ -771,6 +774,112 @@ func TestSentinel_ScrubText_JWT(t *testing.T) {
 	assert.NotContains(t, result, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9")
 }
 
+func TestSentinel_TokenPersistence(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	tempDir := t.TempDir()
+
+	// Create LocalStore
+	storageConfig := &storage.LocalStoreConfig{
+		DBPath:        filepath.Join(tempDir, "test_tokens.db"),
+		Enabled:       true,
+		RetentionDays: 30,
+	}
+	localStore, err := storage.NewLocalStoreService(storageConfig, logger)
+	require.NoError(t, err)
+	require.NotNil(t, localStore)
+	defer localStore.Close()
+
+	// Create Sentinel with persistence
+	config := &SentinelConfig{
+		Enabled:            true,
+		StrictMode:         false,
+		RequirePersistence: true,
+	}
+	sentinel := NewSentinelWithStorage(config, logger, localStore)
+
+	// Test token creation and persistence
+	sensitiveValue := "my-secret-api-key-12345"
+	token := sentinel.GetTokenForValue(sensitiveValue)
+	assert.NotEmpty(t, token)
+	assert.Contains(t, token, "{{UEI_")
+
+	// Verify token is in memory
+	rehydrated := sentinel.RehydrateText(token)
+	assert.Equal(t, sensitiveValue, rehydrated)
+
+	// Verify token is persisted in LocalStore
+	key := fmt.Sprintf("sentinel_token_%s", token)
+	storedValue, found := localStore.KVGet(key)
+	assert.True(t, found)
+	assert.Equal(t, sensitiveValue, storedValue)
+
+	// Test loading persisted tokens on new Sentinel instance
+	sentinel2 := NewSentinelWithStorage(config, logger, localStore)
+	rehydrated2 := sentinel2.RehydrateText(token)
+	assert.Equal(t, sensitiveValue, rehydrated2, "Should rehydrate from persisted storage")
+}
+
+func TestSentinel_TokenPersistence_FailClosed(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	// Create Sentinel with persistence required but no LocalStore
+	config := &SentinelConfig{
+		Enabled:            true,
+		StrictMode:         false,
+		RequirePersistence: true,
+	}
+	sentinel := NewSentinel(config, logger)
+
+	// Should fail closed - return empty token
+	sensitiveValue := "my-secret-api-key-12345"
+	token := sentinel.GetTokenForValue(sensitiveValue)
+	assert.Empty(t, token, "Should return empty token when persistence required but unavailable")
+}
+
+func TestSentinel_TokenPersistence_TTL(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	tempDir := t.TempDir()
+
+	// Create LocalStore
+	storageConfig := &storage.LocalStoreConfig{
+		DBPath:        filepath.Join(tempDir, "test_ttl.db"),
+		Enabled:       true,
+		RetentionDays: 30,
+	}
+	localStore, err := storage.NewLocalStoreService(storageConfig, logger)
+	require.NoError(t, err)
+	require.NotNil(t, localStore)
+	defer localStore.Close()
+
+	// Create Sentinel with persistence
+	config := &SentinelConfig{
+		Enabled:            true,
+		StrictMode:         false,
+		RequirePersistence: true,
+	}
+	sentinel := NewSentinelWithStorage(config, logger, localStore)
+
+	// Create a token
+	sensitiveValue := "my-secret-api-key-12345"
+	token := sentinel.GetTokenForValue(sensitiveValue)
+	assert.NotEmpty(t, token)
+
+	// Manually set a very short TTL in LocalStore to test expiration
+	key := fmt.Sprintf("sentinel_token_%s", token)
+	err = localStore.KVSet(key, sensitiveValue, 1) // 1 second TTL
+	require.NoError(t, err)
+
+	// Wait for expiration
+	time.Sleep(2 * time.Second)
+
+	// Token should no longer be retrievable from storage
+	_, found := localStore.KVGet(key)
+	assert.False(t, found, "Token should expire after TTL")
+}
+
 func TestSentinel_ScrubText_ServiceTokens(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
@@ -866,7 +975,7 @@ func TestSentinel_ScrubText_IBAN(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.ScrubText("Bank account: " + tt.input)
 			assert.Contains(t, result, "[IBAN]")
 			assert.NotContains(t, result, tt.input)
@@ -963,7 +1072,7 @@ func TestSentinel_DetectThreats_ReverseShells(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			// Filter out signals from protocol doctrines to test only hardcoded detectors
 			var hardcodedSignals []ThreatSignal
@@ -1028,7 +1137,7 @@ func TestSentinel_DetectThreats_PrivilegeEscalation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals)
@@ -1095,7 +1204,7 @@ func TestSentinel_DetectThreats_CredentialAccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals)
@@ -1152,7 +1261,7 @@ func TestSentinel_DetectThreats_DataExfiltration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals)
@@ -1209,7 +1318,7 @@ func TestSentinel_DetectThreats_Cryptominer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals)
@@ -1270,7 +1379,7 @@ func TestSentinel_DetectThreats_Persistence(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals)
@@ -1340,7 +1449,7 @@ func TestSentinel_DetectThreats_DefenseEvasion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals, "should find threat in: %s", tt.input)
@@ -1383,7 +1492,7 @@ func TestSentinel_DetectThreats_Reconnaissance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				require.NotEmpty(t, signals)
@@ -1695,7 +1804,7 @@ func TestSentinel_DetectThreats_LateralMovement(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				found := false
@@ -1762,7 +1871,7 @@ func TestSentinel_DetectThreats_ResourceHijacking(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			signals := sentinel.detectThreats(tt.input)
 			if tt.shouldFind {
 				found := false
@@ -1840,7 +1949,7 @@ func TestSentinel_ScrubText_IPv6_Preserved(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.ScrubText(tt.input)
 			assert.Equal(t, tt.expected, result, "Input: %s", tt.input)
 		})
@@ -1937,7 +2046,7 @@ func TestSentinel_ScrubText_FilenamesAndHostnames_AllPreserved(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.ScrubText(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -2067,7 +2176,7 @@ func TestSentinel_CategorizeWarning(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-		t.Parallel()
+			t.Parallel()
 			result := sentinel.categorizeWarning(tt.input)
 			assert.Equal(t, tt.expected, result, "Input: %s", tt.input)
 		})
@@ -2920,7 +3029,7 @@ func TestSentinel_DoctrineToDetector(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.input, func(t *testing.T) {
-		t.Parallel()
+				t.Parallel()
 				doctrine := doctrineData{
 					ID:         "test",
 					Name:       "Test",
@@ -2952,7 +3061,7 @@ func TestSentinel_DoctrineToDetector(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.input, func(t *testing.T) {
-		t.Parallel()
+				t.Parallel()
 				doctrine := doctrineData{
 					ID:         "test",
 					Name:       "Test",

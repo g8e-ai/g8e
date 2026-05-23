@@ -15,6 +15,7 @@ package sentinel
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -77,9 +78,16 @@ func (s *Sentinel) AnalyzeMCPArguments(argumentsJSON string) *CommandAnalysisRes
 		return result
 	}
 
-	// Recursively analyze all string values in the arguments
+	// Recursively analyze all string values in the arguments with depth limit
+	const maxDepth = 50
 	var signals []ThreatSignal
-	s.analyzeValueRecursive(args, "", &signals)
+	if err := s.analyzeValueRecursive(args, "", &signals, 0, maxDepth); err != nil {
+		result.Safe = false
+		result.BlockReason = err.Error()
+		result.ThreatLevel = ThreatLevelHigh
+		result.RiskScore = 50
+		return result
+	}
 
 	result.ThreatSignals = signals
 	result.ThreatLevel = s.aggregateThreatLevel(signals)
@@ -100,8 +108,23 @@ func (s *Sentinel) AnalyzeMCPArguments(argumentsJSON string) *CommandAnalysisRes
 	return result
 }
 
+// MaxDepthExceededError is returned when JSON recursion exceeds the safety limit
+type MaxDepthExceededError struct {
+	MaxDepth int
+	Path     string
+}
+
+func (e *MaxDepthExceededError) Error() string {
+	return fmt.Sprintf("JSON recursion depth exceeded maximum limit of %d at path: %s", e.MaxDepth, e.Path)
+}
+
 // analyzeValueRecursive recursively traverses a value and detects threats in string fields.
-func (s *Sentinel) analyzeValueRecursive(value interface{}, path string, signals *[]ThreatSignal) {
+// Returns MaxDepthExceededError if the recursion depth exceeds maxDepth.
+func (s *Sentinel) analyzeValueRecursive(value interface{}, path string, signals *[]ThreatSignal, currentDepth int, maxDepth int) error {
+	if currentDepth > maxDepth {
+		return &MaxDepthExceededError{MaxDepth: maxDepth, Path: path}
+	}
+
 	switch v := value.(type) {
 	case string:
 		// Analyze string values for threat patterns
@@ -121,7 +144,9 @@ func (s *Sentinel) analyzeValueRecursive(value interface{}, path string, signals
 				newPath += "."
 			}
 			newPath += key
-			s.analyzeValueRecursive(val, newPath, signals)
+			if err := s.analyzeValueRecursive(val, newPath, signals, currentDepth+1, maxDepth); err != nil {
+				return err
+			}
 		}
 	case []interface{}:
 		// Recursively analyze array elements
@@ -129,13 +154,16 @@ func (s *Sentinel) analyzeValueRecursive(value interface{}, path string, signals
 			newPath := path
 			if newPath != "" {
 				newPath += "["
-				newPath += string(rune('0' + i))
+				newPath += fmt.Sprintf("%d", i)
 				newPath += "]"
 			}
-			s.analyzeValueRecursive(val, newPath, signals)
+			if err := s.analyzeValueRecursive(val, newPath, signals, currentDepth+1, maxDepth); err != nil {
+				return err
+			}
 		}
 		// Numbers, booleans, and null are ignored
 	}
+	return nil
 }
 
 // CriticalSystemPaths lists paths that should trigger elevated scrutiny

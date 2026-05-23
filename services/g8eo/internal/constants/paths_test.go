@@ -14,7 +14,6 @@
 package constants
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -22,27 +21,9 @@ import (
 )
 
 func TestProtocolDir_Resolution(t *testing.T) {
-	// Test with G8E_PROJECT_ROOT set
-	originalRoot := os.Getenv("G8E_PROJECT_ROOT")
-	originalProtocolDir := os.Getenv("G8E_PROTOCOL_DIR")
-	defer func() {
-		if originalRoot != "" {
-			os.Setenv("G8E_PROJECT_ROOT", originalRoot)
-		} else {
-			os.Unsetenv("G8E_PROJECT_ROOT")
-		}
-		if originalProtocolDir != "" {
-			os.Setenv("G8E_PROTOCOL_DIR", originalProtocolDir)
-		} else {
-			os.Unsetenv("G8E_PROTOCOL_DIR")
-		}
-		// Re-resolve paths to restore original state
-		resolvePaths()
-	}()
-
 	t.Run("with G8E_PROJECT_ROOT set", func(t *testing.T) {
-		os.Setenv("G8E_PROJECT_ROOT", "/test/root")
-		os.Unsetenv("G8E_PROTOCOL_DIR")
+		t.Setenv("G8E_PROJECT_ROOT", "/test/root")
+		t.Setenv("G8E_PROTOCOL_DIR", "")
 		resolvePaths()
 
 		expected := "/test/root/protocol"
@@ -52,7 +33,7 @@ func TestProtocolDir_Resolution(t *testing.T) {
 	})
 
 	t.Run("with G8E_PROTOCOL_DIR absolute", func(t *testing.T) {
-		os.Setenv("G8E_PROTOCOL_DIR", "/custom/protocol")
+		t.Setenv("G8E_PROTOCOL_DIR", "/custom/protocol")
 		resolvePaths()
 
 		assert.Equal(t, "/custom/protocol", Paths.Infra.ProtocolDir)
@@ -61,8 +42,8 @@ func TestProtocolDir_Resolution(t *testing.T) {
 	})
 
 	t.Run("with G8E_PROTOCOL_DIR relative", func(t *testing.T) {
-		os.Setenv("G8E_PROJECT_ROOT", "/test/root")
-		os.Setenv("G8E_PROTOCOL_DIR", "custom/protocol")
+		t.Setenv("G8E_PROJECT_ROOT", "/test/root")
+		t.Setenv("G8E_PROTOCOL_DIR", "custom/protocol")
 		resolvePaths()
 
 		assert.Equal(t, "/test/root/custom/protocol", Paths.Infra.ProtocolDir)
@@ -71,8 +52,8 @@ func TestProtocolDir_Resolution(t *testing.T) {
 	})
 
 	t.Run("G8E_PROTOCOL_DIR takes precedence over G8E_PROJECT_ROOT", func(t *testing.T) {
-		os.Setenv("G8E_PROJECT_ROOT", "/test/root")
-		os.Setenv("G8E_PROTOCOL_DIR", "/override/protocol")
+		t.Setenv("G8E_PROJECT_ROOT", "/test/root")
+		t.Setenv("G8E_PROTOCOL_DIR", "/override/protocol")
 		resolvePaths()
 
 		assert.Equal(t, "/override/protocol", Paths.Infra.ProtocolDir)
@@ -81,31 +62,13 @@ func TestProtocolDir_Resolution(t *testing.T) {
 
 func TestResolveProjectRoot(t *testing.T) {
 	t.Run("with G8E_PROJECT_ROOT set", func(t *testing.T) {
-		original := os.Getenv("G8E_PROJECT_ROOT")
-		defer func() {
-			if original != "" {
-				os.Setenv("G8E_PROJECT_ROOT", original)
-			} else {
-				os.Unsetenv("G8E_PROJECT_ROOT")
-			}
-		}()
-
-		os.Setenv("G8E_PROJECT_ROOT", "/custom/root")
+		t.Setenv("G8E_PROJECT_ROOT", "/custom/root")
 		result := resolveProjectRoot()
 		assert.Equal(t, "/custom/root", result)
 	})
 
 	t.Run("resolves to absolute path", func(t *testing.T) {
-		original := os.Getenv("G8E_PROJECT_ROOT")
-		defer func() {
-			if original != "" {
-				os.Setenv("G8E_PROJECT_ROOT", original)
-			} else {
-				os.Unsetenv("G8E_PROJECT_ROOT")
-			}
-		}()
-
-		os.Setenv("G8E_PROJECT_ROOT", ".")
+		t.Setenv("G8E_PROJECT_ROOT", ".")
 		result := resolveProjectRoot()
 		assert.True(t, filepath.IsAbs(result), "resolveProjectRoot should return absolute path")
 	})

@@ -62,6 +62,8 @@ var (
 	ErrTxInFlight              = errors.New("TX_IN_FLIGHT: transaction with same nonce already in-flight")
 )
 
+//go:generate mockery --name ReplayStore --output ./mocks --dir .
+
 // ReplayStore defines the interface for nonce replay protection.
 type ReplayStore interface {
 	// CheckAndSetNonce returns true if the nonce was already used (replay detected).
@@ -83,10 +85,14 @@ type ReplayStore interface {
 	ReleaseNonce(nonce string) error
 }
 
+//go:generate mockery --name StateRootProvider --output ./mocks --dir .
+
 // StateRootProvider defines the interface for obtaining the current state root.
 type StateRootProvider interface {
 	GetCurrentStateRoot() (string, error)
 }
+
+//go:generate mockery --name GovernancePosture --output ./mocks --dir .
 
 // GovernancePosture defines the interface for posture-aware governance checks.
 // Different postures (doctrine, consensus, notary) have different requirements
@@ -128,6 +134,7 @@ func (p *NotaryPosture) RequiresL2Signature() bool { return true }
 func (p *NotaryPosture) RequiresL3Proof() bool     { return true }
 
 // NewGovernancePosture creates a GovernancePosture from a string name.
+// Panics on invalid posture to fail-closed at startup rather than silently defaulting.
 func NewGovernancePosture(posture string) GovernancePosture {
 	switch posture {
 	case "doctrine":
@@ -137,8 +144,7 @@ func NewGovernancePosture(posture string) GovernancePosture {
 	case "notary":
 		return &NotaryPosture{}
 	default:
-		// Default to doctrine for unknown postures (fail-closed)
-		return &DoctrinePosture{}
+		panic(fmt.Sprintf("invalid governance posture: %s (must be one of: doctrine, consensus, notary)", posture))
 	}
 }
 
@@ -332,15 +338,20 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 	}
 
 	// 0. Early trackInFlight check to save expensive DB/cryptography operations.
+	// The critical section must extend through nonce reservation to prevent race conditions.
 	if err := tv.trackInFlight(envelope.Nonce); err != nil {
 		return nil, err
 	}
-	defer tv.releaseInFlight(envelope.Nonce)
 
 	// 1. Early nonce reservation for durable replay protection.
 	// This prevents replay attacks if the Operator crashes mid-execution.
 	// The nonce is reserved early and finalized after successful execution.
+	if tv.replayStore == nil {
+		tv.releaseInFlight(envelope.Nonce)
+		return nil, ErrReplayStoreMissing
+	}
 	if envelope.ExpiresAt == nil {
+		tv.releaseInFlight(envelope.Nonce)
 		return nil, ErrExpiresAtMissing
 	}
 	expiresAt := envelope.ExpiresAt.AsTime()
@@ -349,10 +360,12 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 			"nonce", envelope.Nonce,
 			"expires_at", expiresAt,
 			"now", time.Now().UTC())
+		tv.releaseInFlight(envelope.Nonce)
 		return nil, ErrTransactionExpired
 	}
 	if envelope.Nonce == "" {
 		tv.logger.Error("Transaction rejected: NONCE_MISSING")
+		tv.releaseInFlight(envelope.Nonce)
 		return nil, ErrNonceMissing
 	}
 	replayed, err := tv.replayStore.ReserveNonce(envelope.Nonce, expiresAt)
@@ -360,12 +373,17 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 		tv.logger.Error("Transaction rejected: REPLAY_CHECK_FAILED",
 			"nonce", envelope.Nonce,
 			string(constants.ConnectionStateError), err)
+		tv.releaseInFlight(envelope.Nonce)
 		return nil, fmt.Errorf("nonce reservation failed: %w", err)
 	}
 	if replayed {
 		tv.logger.Error("Transaction rejected: REPLAY_DETECTED", "nonce", envelope.Nonce)
+		tv.releaseInFlight(envelope.Nonce)
 		return nil, ErrTransactionReplay
 	}
+
+	// Nonce is now durably reserved in SQLite, safe to release in-flight lock
+	tv.releaseInFlight(envelope.Nonce)
 
 	// 2. Stateless Validation
 	decodedPayload, computedHash, err := tv.verifyStateless(envelope)
@@ -472,9 +490,12 @@ func (tv *TransactionVerifier) verifyStateless(envelope *uap.UAPEnvelope) (proto
 		return nil, "", ErrPayloadDecodeFailed
 	}
 
-	if violations := tv.validateL1Governance(decodedPayload); len(violations) > 0 {
-		tv.logger.Error("Doctrine (L1Doctrine) validation failed", "action_type", envelope.ActionType, "violations", violations)
-		return nil, "", fmt.Errorf("%w: %s", ErrL1ValidationFailed, strings.Join(violations, ", "))
+	// INVESTIGATION_CREATE has no typed payload (returns nil), skip L1 validation
+	if decodedPayload != nil {
+		if violations := tv.validateL1Governance(decodedPayload); len(violations) > 0 {
+			tv.logger.Error("Doctrine (L1Doctrine) validation failed", "action_type", envelope.ActionType, "violations", violations)
+			return nil, "", fmt.Errorf("%w: %s", ErrL1ValidationFailed, strings.Join(violations, ", "))
+		}
 	}
 
 	computedHash, err := tv.computeTransactionHash(envelope)
