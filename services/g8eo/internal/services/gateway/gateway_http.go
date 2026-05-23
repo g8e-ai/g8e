@@ -220,7 +220,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle("/api/auth/passkey/", h.auth.WebSessionAuth(authedMux, h.db))
 	mux.Handle("/api/approve/", h.auth.WebSessionAuth(authedMux, h.db))
 
-	return pathTraversalGuard(mux)
+	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
 
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

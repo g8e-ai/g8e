@@ -49,6 +49,7 @@ type GatewayService struct {
 	sessionSvc      *SessionService
 	apiKeySvc       *ApiKeyService
 	mcpGateway      *mcp.GatewayService
+	responder       *responder.Responder
 	server          *http.Server
 	bootstrapServer *http.Server
 	publicServer    *http.Server
@@ -128,6 +129,7 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		sessionSvc: sessionSvc,
 		apiKeySvc:  apiKeySvc,
 		mcpGateway: mcp.NewGatewayService(logger, responder, db),
+		responder:  responder,
 	}
 
 	ls.initHandlersAndServers()
@@ -169,6 +171,7 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 		sessionSvc: sessionSvc,
 		apiKeySvc:  apiKeySvc,
 		mcpGateway: mcp.NewGatewayService(logger, responder, db),
+		responder:  responder,
 	}
 
 	ls.initHandlersAndServers()
@@ -192,7 +195,7 @@ func (ls *GatewayService) initHandlersAndServers() {
 	ls.mcpGateway.SetA2ADependencies(cfg.Gateway.A2ADownstreamURL)
 	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Gateway.PublicPort)
 	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, sessionSvc, reg, passkey, userSvc, apiKeySvc, ls.mcpGateway, ls.IsReady, ls.IsGovernanceReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, sessionSvc, reg, passkey, userSvc, apiKeySvc, ls.responder, ls.mcpGateway, ls.IsReady, ls.IsGovernanceReady)
 
 	// Build a map of ports to identify port assignments.
 	// Surfaces with different TLS client-auth requirements MUST NOT share a
