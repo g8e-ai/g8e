@@ -232,9 +232,9 @@ case "$COMMAND" in
         ;;
     restart)
         _header "Restarting LLM Services"
-        # Since we are on the host, we can call docker compose if available, 
-        # but the standard way in this repo is via build.sh
-        bash "$REPO_ROOT/scripts/core/build.sh" restart g8ee
+        # Use the Go CLI to restart g8ee
+        bash "$REPO_ROOT/g8e" apps stop g8ee
+        bash "$REPO_ROOT/g8e" apps start g8ee
         exit 0
         ;;
 esac

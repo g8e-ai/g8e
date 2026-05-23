@@ -67,9 +67,9 @@ The setup offers three modes:
 
 ### Scripts & CLI
 
-The root `./g8e` script is a Bash-based dispatcher and the single entry point for all platform operations.
+The root `./g8e` is a compiled Go binary and the single entry point for all platform operations.
 
-- **Platform Management (`./g8e platform`)**: Orchestrates the mandatory Gateway lifecycle via `scripts/core/build.sh`.
+- **Platform Management (`./g8e platform`)**: Orchestrates the mandatory Gateway lifecycle via native Go process management.
 - **Application Layer (`./g8e apps`)**: Manages optional, opt-in adapters (like `g8ee`) that extend the platform's capabilities.
 - **Operator Operations (`./g8e operator`)**: Lifecycle management for `g8eo` (Governed Operator) binaries and remote fleet deployment.
 - **Infrastructure & Data (`./g8e data` / `./g8e security`)**: Unified interface for interacting with the Gateway state and security invariants.
@@ -100,7 +100,7 @@ g8e is split into the **Protocol (Gateway)**, the **Governance Gateway (g8eg)**,
 
 ### Host-native Startup Lifecycle
 
-The `./g8e platform start` command (invoked via `scripts/core/build.sh`) manages the sequence:
+The `./g8e platform start` command manages the sequence:
 1. **Gateway binary check/build** → Governance Gateway (`g8eg`) starts in Gateway mode (--doctrine, --consensus, or --notary).
 2. **Root of trust generation** (first boot only) - ECDSA P-384 CA hierarchy, intermediate CAs, and trust bundles in `.g8e/pki/`; `session_encryption_key`, `Actuator_signing_key` in `.g8e/secrets/`.
 3. **Optional service initialization** - The **agentic ensemble** (`g8ee`) starts under its venv with mTLS + URI SAN identity.

@@ -231,6 +231,12 @@ update-doctrines:
 # =============================================================================
 # SERVICE DISPATCH
 # =============================================================================
+.PHONY: build-cli
+build-cli:
+	@echo "Building g8e CLI binary..."
+	@cd cmd/g8e && go build -o ../../g8e .
+	@echo "CLI binary built: ./g8e"
+
 .PHONY: build-g8eo
 build-g8eo:
 	@$(MAKE) -C services/g8eo build
