@@ -25,9 +25,9 @@ TEST_DIR := tests
 # =============================================================================
 # TOOLS
 # =============================================================================
-PYTHON := $(shell if [ -f .venv/bin/python ]; then echo .venv/bin/python; else echo python3; fi)
-RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo .venv/bin/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
-PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo .venv/bin/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
+PYTHON := $(shell if [ -f ../../.venv/bin/python ]; then echo ../../.venv/bin/python; else echo python3; fi)
+RUFF := $(shell if [ -f ../../.venv/bin/ruff ]; then echo ../../.venv/bin/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
+PYRIGHT := $(shell if [ -f ../../.venv/bin/pyright ]; then echo ../../.venv/bin/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
 
 # =============================================================================
 # HELP

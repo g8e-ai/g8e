@@ -8,6 +8,10 @@ version = "0.2.6"
 description = "g8e-Compliant Agentic Ensemble (g8ee) - Reference AI reasoning system for g8e infrastructure operations"
 requires-python = ">=3.14"
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "config*", "reports*"]
+
 # ============================================================================
 # Pytest Configuration
 # ============================================================================

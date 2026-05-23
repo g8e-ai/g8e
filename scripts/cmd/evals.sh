@@ -18,7 +18,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 EVALS_PROJECT_DIR="$SCRIPT_DIR/evals"
 # The new harness reuses the g8ee venv so it can import the canonical
 # g8e LLM provider stack (app.llm.*) without duplicating provider deps.
-EVALS_VENV="$SCRIPT_DIR/services/g8ee/.venv"
+EVALS_VENV="$SCRIPT_DIR/.venv"
 
 _ensure_evals_venv() {
     if [[ ! -x "$EVALS_VENV/bin/python" ]]; then

@@ -7,7 +7,7 @@ name = "g8e-protocol"
 version = "0.3.0"
 description = "g8e Protocol Constants and Models"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
     "pydantic>=2.0.0",
 ]

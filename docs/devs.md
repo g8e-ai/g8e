@@ -16,13 +16,42 @@ Components run host-native. **Do not use Docker for primary component developmen
 
 ### Setup
 
+Run the interactive setup wizard:
+
+```bash
+./g8e setup
+```
+
+The setup offers three modes:
+
+1. **Quick Start (Gateway Mode)** - Minimal setup for BYO clients and MCP/A2A translators
+   - Checks Go 1.26+
+   - Generates protocol artifacts
+   - Builds g8eg and g8eo services
+
+2. **Quick Start (Full Mode)** - Complete setup including the g8e Agentic Ensemble
+   - Checks Go 1.26+ and Python 3.14+
+   - Generates protocol artifacts
+   - Sets up Python venv and installs g8ee dependencies
+   - Builds all services
+
+3. **Complete Developer Setup** - Automated full environment setup with verification
+   - Runs all dependency checks
+   - Installs Python 3.14 via pyenv if needed
+   - Generates protocol artifacts
+   - Sets up Python environment
+   - Builds all services
+   - Runs verification tests
+
+**Manual setup requirements:**
+
 - **Go 1.26+** (required, for `g8eg`/`g8eo`). Configure GOPATH in your shell profile (`~/.bashrc` or `~/.zshrc`):
   ```bash
   export GOPATH=$HOME/go
   export PATH=$GOPATH/bin:$PATH
   ```
   Go tools installed via `go install` (e.g., golangci-lint, govulncheck) are placed in `$GOPATH/bin`.
-- **Python 3.14+** (only when developing the optional **g8e Agentic Ensemble** (`g8ee`)).
+- **Python 3.14+** (only when developing the optional **g8e Agentic Ensemble** (`g8ee`)). The setup script will offer to install Python 3.14 via pyenv if your system version is insufficient.
 
 ### Common Commands
 
@@ -67,7 +96,7 @@ g8e is split into the **Protocol (Gateway)**, the **Governance Gateway (g8eg)**,
 | Component | Role | Runtime | Build |
 |---|---|---|---|
 | Governance Gateway (`g8eg`) / Governed Operator (`g8eo`) | Central PDP (`g8eg`) and host-side PEP (`g8eo`) | Host Go binary (compiled from single Go Gateway codebase to both `g8e.gateway` and `g8e.operator`) | Native Go via `Makefile` |
-| g8e Agentic Ensemble (`g8ee`) | Optional **g8e-compliant agentic ensemble** adapter: AI Backend & Workflow Orchestration | Python 3.14 venv | `pip install` into local `.venv` |
+| g8e Agentic Ensemble (`g8ee`) | Optional **g8e-compliant agentic ensemble** adapter: AI Backend & Workflow Orchestration | Python 3.14 venv | `pip install` into project root `.venv` |
 
 ### Host-native Startup Lifecycle
 

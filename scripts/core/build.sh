@@ -304,7 +304,7 @@ _start_g8ee() {
 
     _check_port_available "${G8E_G8EE_HTTPS_PORT}" "g8ee Ensemble API" || exit 1
 
-    local venv_dir="$PROJECT_ROOT/services/g8ee/.venv"
+    local venv_dir="$PROJECT_ROOT/.venv"
     if [ ! -d "$venv_dir" ]; then
         echo "  Creating g8ee virtualenv..."
         python3 -m venv "$venv_dir"
@@ -769,7 +769,7 @@ if [[ "$COMMAND" == "status" ]]; then
     [[ "$_VER" != v* ]] && _VER="v$_VER"
     
     printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    printf "  %-14s %-12s %-8s %-32s %s\n" "Component" "Status" "PID" "Endpoints" "Extra"
+    printf "  %-14s %-12s %-8s %-32s %s\n" "Component" "Status" "PID" "Endpoints" "Details"
     printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     printf "\n  \033[1m[Gateway]\033[0m\n"
     
@@ -777,18 +777,18 @@ if [[ "$COMMAND" == "status" ]]; then
         pid=$(cat "$G8E_OPERATOR_PID_FILE")
         
         # Check bootstrap status
-        bootstrapped="UNKNOWN"
+        users="UNKNOWN"
         trust_bundle="$G8E_PKI_DIR/trust/hub-bundle.pem"
         if [[ -f "$trust_bundle" ]]; then
             status_resp=$(curl -sS --cacert "$trust_bundle" "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT/api/auth/bootstrap/status" 2>/dev/null)
             if [[ $(echo "$status_resp" | python3 "$PROJECT_ROOT/scripts/core/json_query.py" - bootstrapped 2>/dev/null) == "true" ]]; then
-                bootstrapped="YES"
+                users="1+"
             else
-                bootstrapped="NO"
+                users="0"
             fi
         fi
         
-        printf "  %-14s \033[1;32m%-12s\033[0m %-8s %-32s %s\n" "operator" "RUNNING" "$pid" "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT (API)" "Bootstrapped: $bootstrapped"
+        printf "  %-14s \033[1;32m%-12s\033[0m %-8s %-32s %s\n" "operator" "RUNNING" "$pid" "https://localhost:$G8E_OPERATOR_PUBLIC_HTTPS_PORT (API)" "Users: $users"
         printf "  %-14s %-12s %-8s %-32s %s\n" "" "" "" "wss://localhost:$G8E_OPERATOR_PUBLIC_WSS_PORT (WSS)" ""
         printf "  %-14s %-12s %-8s %-32s %s\n" "" "" "" "http://localhost:$G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT (Bootstrap)" ""
     else
@@ -897,9 +897,9 @@ if [[ "$COMMAND" == "clean" ]]; then
     find "$PROJECT_ROOT" -type f -name "*.pyo" -delete 2>/dev/null || true
     find "$PROJECT_ROOT" -type d -name "*.pyc" -exec rm -rf {} + 2>/dev/null || true
     find "$PROJECT_ROOT" -type d -name "*.pyo" -exec rm -rf {} + 2>/dev/null || true
-    if [ -d "$PROJECT_ROOT/services/g8ee/.venv" ]; then
-        rm -rf "$PROJECT_ROOT/services/g8ee/.venv/__pycache__" 2>/dev/null || true
-        find "$PROJECT_ROOT/services/g8ee/.venv" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    if [ -d "$PROJECT_ROOT/.venv" ]; then
+        rm -rf "$PROJECT_ROOT/.venv/__pycache__" 2>/dev/null || true
+        find "$PROJECT_ROOT/.venv" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     fi
 
     echo "Done."
