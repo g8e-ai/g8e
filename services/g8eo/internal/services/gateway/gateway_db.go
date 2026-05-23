@@ -458,6 +458,11 @@ func (s *GatewayDBService) migratePlaintextServiceKeys(secretsDir string, sm *Se
 	return nil
 }
 
+// GetDB returns the underlying SQLite database connection.
+func (s *GatewayDBService) GetDB() *sqliteutil.DB {
+	return s.db
+}
+
 // Close closes the database connection.
 func (s *GatewayDBService) Close() error {
 	return s.db.Close()

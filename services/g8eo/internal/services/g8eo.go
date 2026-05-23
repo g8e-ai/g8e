@@ -46,6 +46,7 @@ type G8eoService struct {
 	pubSubResults  *pubsub.PubSubResultsService
 	localStore     *storage.LocalStoreService
 	rawVault       *storage.RawVaultService
+	gatewayDB      *gateway.GatewayDBService
 
 	pubSubClient pubsub.PubSubClient
 
@@ -144,7 +145,18 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize SecretManager for loading signing keys (Actuator and Tribunal)
 	secretsDir := filepath.Join(vs.config.WorkDir, ".g8e", "secrets")
-	vs.secretManager, err = gateway.NewSecretManager(vs.localStore.GetDB(), secretsDir, vs.logger)
+
+	// Initialize GatewayDBService for canonical state root calculation
+	// This ensures outbound mode uses the same state root schema as gateway mode
+	dataDir := filepath.Join(vs.config.WorkDir, ".g8e")
+	gatewayDB, err := gateway.OpenGatewayDBService(dataDir, secretsDir, vs.logger, false)
+	if err != nil {
+		return fmt.Errorf("failed to initialize gateway database (required for state root calculation): %w", err)
+	}
+	vs.gatewayDB = gatewayDB
+	vs.logger.Info("Gateway database initialized (canonical state root)")
+
+	vs.secretManager, err = gateway.NewSecretManager(vs.gatewayDB.GetDB(), secretsDir, vs.logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize secret manager: %w", err)
 	}
@@ -237,8 +249,8 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 
 	// Create governance dependencies for transaction verification
-	// Use real state root calculation from LocalStoreService for state binding
-	stateRootProvider := vs.localStore
+	// Use GatewayDBService for canonical state root calculation (same schema as gateway mode)
+	stateRootProvider := vs.gatewayDB
 	transactionAudit := &auditVaultTransactionStore{vault: vs.auditVault}
 	// L3Notary for outbound mode: CLI-based approval via suspended transactions
 	// Mutations requiring L3 are suspended and must be approved via CLI command
@@ -351,6 +363,12 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 	}
 
 	// Close vaults and stores
+	if vs.gatewayDB != nil {
+		if err := vs.gatewayDB.Close(); err != nil {
+			vs.logger.Error("Failed to close gateway database", string(constants.ConnectionStateError), err)
+		}
+	}
+
 	if vs.localStore != nil {
 		if err := vs.localStore.Close(); err != nil {
 			vs.logger.Error("Failed to close local store", string(constants.ConnectionStateError), err)

@@ -48,13 +48,12 @@ func TestPubSubAvailable(t *testing.T) {
 }
 
 // SubscribeToChannel subscribes to a operator pub/sub channel and returns a channel for receiving raw bytes from the Data field.
-// baseURL is accepted for API compatibility but ignored - subscriptions always go to the
-// operator pub/sub endpoint at GetTestOperatorDirectURL() using the TLS-aware dialer.
+// baseURL is the WebSocket URL to connect to (e.g., wss://localhost:port).
 // The subscription runs until the test ends (via t.Cleanup).
-func SubscribeToChannel(t *testing.T, _ string, channel string) <-chan []byte {
+func SubscribeToChannel(t *testing.T, baseURL string, channel string) <-chan []byte {
 	t.Helper()
 
-	wsURL := GetTestOperatorDirectURL() + "/ws/pubsub"
+	wsURL := baseURL + "/ws/pubsub"
 
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
@@ -114,13 +113,11 @@ func SubscribeToChannel(t *testing.T, _ string, channel string) <-chan []byte {
 }
 
 // PublishTestMessage publishes a message to a pub/sub channel via the client WebSocket gateway.
-// client is the single external entry point - operator is not directly accessible from outside
-// the docker network. baseURL is accepted for API compatibility but ignored; all publishes
-// go through GetTestOperatorDirectURL() (client:443) which proxies to operator internally.
-func PublishTestMessage(t *testing.T, _ string, channel string, message string) {
+// baseURL is the WebSocket URL to connect to (e.g., wss://localhost:port).
+func PublishTestMessage(t *testing.T, baseURL string, channel string, message string) {
 	t.Helper()
 
-	wsURL := GetTestOperatorDirectURL() + "/ws/pubsub"
+	wsURL := baseURL + "/ws/pubsub"
 
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {

@@ -446,6 +446,30 @@ _start_operator_gateway() {
         rm -f "$G8E_OPERATOR_PID_FILE"
         return 1
     fi
+
+    # Upload operator binary to blob store for remote deployment
+    local operator_bin="$PROJECT_ROOT/services/g8eo/build/linux-${host_arch}/g8e.operator"
+    if [[ -f "$operator_bin" ]]; then
+        echo "  Uploading operator binary to blob store..."
+        local max_attempts=5
+        local attempt=0
+        while (( attempt < max_attempts )); do
+            if curl -sf -X PUT \
+                -H "Content-Type: application/octet-stream" \
+                --data-binary @"$operator_bin" \
+                "http://localhost:${G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT}/blob/operator-binary/linux-${host_arch}" >/dev/null 2>&1; then
+                echo "  Operator binary uploaded successfully."
+                break
+            fi
+            (( attempt++ ))
+            if (( attempt < max_attempts )); then
+                sleep 1
+            fi
+        done
+        if (( attempt == max_attempts )); then
+            echo "  Warning: Failed to upload operator binary to blob store after ${max_attempts} attempts."
+        fi
+    fi
 }
 
 _stop_operator_gateway() {

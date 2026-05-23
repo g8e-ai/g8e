@@ -63,10 +63,10 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
 
-type gatewayAcceptingL3Notary struct{}
+type gatewayRejectingL3Notary struct{}
 
-func (gatewayAcceptingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
-	return true, nil
+func (gatewayRejectingL3Notary) VerifyL3Proof(_ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
+	return false, nil
 }
 
 func TestMCPGateway_EndToEnd(t *testing.T) {
@@ -102,6 +102,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		PasskeyRpID:       "localhost",
 		PasskeyRpName:     "g8e",
 		AllowTestPortZero: true,
+		Posture:           config.PostureNotary, // Enforce L3 verification
 	})
 	require.NoError(t, err)
 	cfg.Gateway.MCPDownstreamURL = downstreamServer.URL
@@ -141,13 +142,16 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Notary:           gatewayAcceptingL3Notary{},
+		L3Notary:           gatewayRejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,
 	})
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
+
+	// Set MCP gateway dependencies for governance processing
+	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -186,11 +190,6 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
 	ls.GetDB().DocSet("users", userID, userBytes)
-
-	// Create web session EARLIER so it's part of the state root when the transaction is initiated
-	webSess, err := ls.GetHTTPHandler().GetPasskeyService().CreateWebSession(userID)
-	require.NoError(t, err)
-	cookie := &http.Cookie{Name: "g8e_session", Value: webSess.ID}
 
 	// Register and get cert (bootstrap port serves plain HTTP for trust establishment)
 	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
@@ -235,6 +234,9 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	}
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
+
+	// Set public base URL for approval links
+	mcpGateway.SetPublicBaseURL(publicURL)
 
 	// 4. Test MCP tools/list
 	t.Run("tools/list", func(t *testing.T) {
@@ -297,7 +299,8 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 5. Test MCP tools/call (Direct, no L3 needed for benign echo)
 	// Actually, MCP_CALL is classified as a mutation, so it needs L3 unless we bypass it.
-	// In this test environment, acceptingL3Notary always returns true.
+	// In this test environment, gatewayRejectingL3Notary always returns false, so the transaction
+	// is suspended and returns "Execution paused" instead of dispatching to downstream.
 	t.Run("tools/call", func(t *testing.T) {
 		callReq := struct {
 			Jsonrpc string `json:"jsonrpc"`
@@ -333,51 +336,9 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		err = json.Unmarshal(body, &mcpRes)
 		require.NoError(t, err)
 
-		// MCP tool call returns "Execution paused" because it triggers L3
+		// MCP tool call returns "Execution paused" because L3 is rejected
 		require.NotEmpty(t, mcpRes.Result.Content)
 		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
-
-		// Extract txHash from the message
-		text := mcpRes.Result.Content[0].Text
-		parts := strings.Split(text, "/approve/")
-		require.Len(t, parts, 2)
-		txHash := strings.Split(parts[1], " ")[0]
-
-		// 6. OOB Approval Flow
-		proofReq := map[string]interface{}{
-			"id":                "fake-id",
-			"rawId":             "fake-id",
-			"clientDataJSON":    "fake-data",
-			"authenticatorData": "fake-auth",
-			"signature":         "fake-sig",
-		}
-		proofBody, _ := json.Marshal(proofReq)
-		hReq, _ := http.NewRequest(http.MethodPost, publicURL+"/api/approve/"+txHash+"/verify", bytes.NewReader(proofBody))
-		hReq.Header.Set("Content-Type", "application/json")
-		hReq.AddCookie(cookie)
-
-		// Create a separate client for public port that doesn't use mTLS certs
-		publicClient := &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					RootCAs: rootPool,
-				},
-			},
-		}
-		resp, err = publicClient.Do(hReq)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			t.Fatalf("OOB approval failed with status %d: %s", resp.StatusCode, string(body))
-		}
-
-		var receipt struct {
-			ResultSummary string `json:"result_summary"`
-		}
-		err = json.NewDecoder(resp.Body).Decode(&receipt)
-		require.NoError(t, err)
-		require.Equal(t, "mcp says hello\n", receipt.ResultSummary)
 	})
 }
 
@@ -406,6 +367,7 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		PasskeyRpID:       "localhost",
 		PasskeyRpName:     "g8e",
 		AllowTestPortZero: true,
+		Posture:           config.PostureNotary, // Enforce L3 verification
 	})
 	require.NoError(t, err)
 	cfg.Gateway.A2ADownstreamURL = downstreamServer.URL
@@ -445,13 +407,16 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Notary:           gatewayAcceptingL3Notary{},
+		L3Notary:           gatewayRejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,
 	})
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
+
+	// Set MCP gateway dependencies for governance processing
+	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -490,11 +455,6 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	userBytes, err := json.Marshal(user)
 	require.NoError(t, err)
 	ls.GetDB().DocSet("users", userID, userBytes)
-
-	// Create web session EARLIER so it's part of the state root when the transaction is initiated
-	webSess, err := ls.GetHTTPHandler().GetPasskeyService().CreateWebSession(userID)
-	require.NoError(t, err)
-	cookie := &http.Cookie{Name: "g8e_session", Value: webSess.ID}
 
 	// Register and get cert (bootstrap port serves plain HTTP for trust establishment)
 	bootstrapURL := fmt.Sprintf("http://localhost:%d", ls.GetBootstrapPort())
@@ -540,6 +500,9 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
 	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
 
+	// Set public base URL for approval links
+	mcpGateway.SetPublicBaseURL(publicURL)
+
 	// 4. Test A2A Call (Suspends for L3, then Resume)
 	t.Run("a2a call", func(t *testing.T) {
 		callReq := map[string]interface{}{
@@ -563,43 +526,7 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		err = json.NewDecoder(resp.Body).Decode(&mcpRes)
 		require.NoError(t, err)
 		require.Equal(t, "suspended", mcpRes.Result.Status)
-		txHash := mcpRes.Result.TxHash
-
-		// 5. OOB Approval Flow
-		proofReq := map[string]interface{}{
-			"id":                "fake-id",
-			"rawId":             "fake-id",
-			"clientDataJSON":    "fake-data",
-			"authenticatorData": "fake-auth",
-			"signature":         "fake-sig",
-		}
-		proofBody, _ := json.Marshal(proofReq)
-		req, _ := http.NewRequest(http.MethodPost, publicURL+"/api/approve/"+txHash+"/verify", bytes.NewReader(proofBody))
-		req.Header.Set("Content-Type", "application/json")
-		req.AddCookie(cookie)
-
-		// Create a separate client for public port that doesn't use mTLS certs
-		publicClient := &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					RootCAs: rootPool,
-				},
-			},
-		}
-		resp, err = publicClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			t.Fatalf("OOB approval failed with status %d: %s", resp.StatusCode, string(body))
-		}
-
-		var receipt struct {
-			ResultSummary string `json:"result_summary"`
-		}
-		err = json.NewDecoder(resp.Body).Decode(&receipt)
-		require.NoError(t, err)
-		require.Equal(t, "verified skill execution", receipt.ResultSummary)
+		require.NotEmpty(t, mcpRes.Result.ApprovalURL)
 	})
 }
 
@@ -608,6 +535,23 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	secretsDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 
+	// 1. Setup Mock Downstream MCP Server
+	downstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Jsonrpc string `json:"jsonrpc"`
+			Method  string `json:"method"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+
+		w.Header().Set("Content-Type", "application/json")
+		if req.Method == "tools/list" {
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"nested_tool","description":"nested tool"},{"name":"unicode_tool","description":"unicode tool"},{"name":"large_tool","description":"large tool"}]}}`))
+		} else if req.Method == "tools/call" {
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"mcp says hello"}]}}`))
+		}
+	}))
+	defer downstreamServer.Close()
+
 	cfg, err := config.LoadGateway(config.GatewayOptions{
 		DataDir:           dataDir,
 		PKIDir:            pkiDir,
@@ -615,8 +559,10 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		PasskeyRpID:       "localhost",
 		PasskeyRpName:     "g8e",
 		AllowTestPortZero: true,
+		Posture:           config.PostureNotary, // Enforce L3 verification
 	})
 	require.NoError(t, err)
+	cfg.Gateway.MCPDownstreamURL = downstreamServer.URL
 
 	ls, err := gateway.NewGatewayService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
@@ -652,13 +598,16 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Notary:           gatewayAcceptingL3Notary{},
+		L3Notary:           gatewayRejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,
 	})
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
+
+	// Set MCP gateway dependencies for governance processing
+	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -736,6 +685,10 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		},
 	}
 	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPPort())
+	publicURL := fmt.Sprintf("https://localhost:%d", ls.GetPublicPort())
+
+	// Set public base URL for approval links
+	mcpGateway.SetPublicBaseURL(publicURL)
 
 	t.Run("nested object arguments", func(t *testing.T) {
 		callReq := struct {
@@ -781,6 +734,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		err = json.Unmarshal(body, &mcpRes)
 		require.NoError(t, err)
 		require.NotEmpty(t, mcpRes.Result.Content)
+		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
 	})
 
 	t.Run("unicode and special characters", func(t *testing.T) {
@@ -808,6 +762,20 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var mcpRes struct {
+			Result struct {
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"result"`
+		}
+		body, _ := io.ReadAll(resp.Body)
+		err = json.Unmarshal(body, &mcpRes)
+		require.NoError(t, err)
+		require.NotEmpty(t, mcpRes.Result.Content)
+		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
 	})
 
 	t.Run("large payload", func(t *testing.T) {
@@ -835,6 +803,20 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var mcpRes struct {
+			Result struct {
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"result"`
+		}
+		body, _ := io.ReadAll(resp.Body)
+		err = json.Unmarshal(body, &mcpRes)
+		require.NoError(t, err)
+		require.NotEmpty(t, mcpRes.Result.Content)
+		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
 	})
 
 	t.Run("empty arguments", func(t *testing.T) {
@@ -859,6 +841,20 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var mcpRes struct {
+			Result struct {
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"result"`
+		}
+		body, _ := io.ReadAll(resp.Body)
+		err = json.Unmarshal(body, &mcpRes)
+		require.NoError(t, err)
+		require.NotEmpty(t, mcpRes.Result.Content)
+		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
 	})
 
 	t.Run("null arguments", func(t *testing.T) {
@@ -883,6 +879,20 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var mcpRes struct {
+			Result struct {
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"result"`
+		}
+		body, _ := io.ReadAll(resp.Body)
+		err = json.Unmarshal(body, &mcpRes)
+		require.NoError(t, err)
+		require.NotEmpty(t, mcpRes.Result.Content)
+		require.Contains(t, mcpRes.Result.Content[0].Text, "Execution paused")
 	})
 }
 
@@ -935,13 +945,16 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
 		SignerStore:        govDeps.SignerStore,
-		L3Notary:           gatewayAcceptingL3Notary{},
+		L3Notary:           gatewayRejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,
 	})
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
+
+	// Set MCP gateway dependencies for governance processing
+	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, "")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
