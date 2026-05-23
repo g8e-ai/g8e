@@ -101,6 +101,9 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux.HandleFunc("/api/auth/device-link/register", h.handleDeviceLinkRegister)
 	mux.HandleFunc("/api/auth/device-link/request", h.handleDeviceLinkRequest)
 
+	// Blob endpoint for operator binary download (device-link token auth)
+	mux.HandleFunc("/blob/", h.handleBlob)
+
 	// Trust Portal
 	mux.HandleFunc("/ca.crt", h.handlePKIRoot)
 	mux.HandleFunc("/trust", h.handleTrustScript)
@@ -1914,7 +1917,7 @@ func blobSegmentValid(s string) bool {
 	return true
 }
 
-const maxBlobBodySize = 15 * 1024 * 1024 // 15 MB hard cap at the transport layer
+const maxBlobBodySize = 50 * 1024 * 1024 // 50 MB hard cap at the transport layer (operator binary is ~25MB)
 
 func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/blob/")

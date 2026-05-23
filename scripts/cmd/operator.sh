@@ -102,7 +102,7 @@ case "$SUB" in
             -H "Authorization: Bearer ${G8E_OPERATOR_SESSION_ID}" \
             -H "${G8E_HEADER_CLI_SESSION_ID:-X-G8E-CLI-Session-ID}: ${G8E_CLI_SESSION_ID}" \
             --cacert "$trust_bundle" \
-            "${OPERATOR_HTTPS_URL}/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
+            "${OPERATOR_BOOTSTRAP_URL}/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
             | ssh "${_DEPLOY_TARGET}" "cat > ${_DEPLOY_DEST} && chmod +x ${_DEPLOY_DEST}"
         echo "  Done."
         if [[ -n "$_DEPLOY_ENDPOINT" ]]; then

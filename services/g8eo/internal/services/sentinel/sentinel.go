@@ -756,7 +756,7 @@ func (s *Sentinel) initializeThreatDetectors() {
 	s.threatDetectors = []ThreatDetector{
 		&RegexThreatDetector{
 			name:           "reverse_shell_nc",
-			pattern:        regexp.MustCompile(`(?i)nc\s+.*-e\s+(/bin/)?(sh|bash|zsh)`),
+			pattern:        regexp.MustCompile(`(?i)\bnc\s+.*?-e\s+(/bin/)?(sh|bash|zsh)`),
 			category:       ThreatCategoryReverseShell,
 			severity:       ThreatSeverityCritical,
 			confidence:     0.95,

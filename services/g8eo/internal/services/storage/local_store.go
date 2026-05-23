@@ -14,10 +14,7 @@
 package storage
 
 import (
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -129,90 +126,9 @@ func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger) (*Local
 }
 
 // GetDB returns the underlying SQLite database connection.
-// This allows other services (e.g., replay store, state root provider) to share the same database.
+// This allows other services (e.g., replay store) to share the same database.
 func (ls *LocalStoreService) GetDB() *sqliteutil.DB {
 	return ls.db
-}
-
-// GetCurrentStateRoot calculates and returns the current state merkle root.
-// This provides real state binding for transaction verification in outbound mode.
-func (ls *LocalStoreService) GetCurrentStateRoot() (string, error) {
-	type row struct {
-		Table  string        `json:"table"`
-		Values []interface{} `json:"values"`
-	}
-
-	rowsToHash := make([]row, 0)
-	now := sqliteutil.NowTimestamp()
-
-	// 1. Execution log (authoritative command history)
-	// Include only content fields, exclude metadata-only timestamps
-	execRows, err := ls.db.Query("SELECT id, command, exit_code, duration_ms, stdout_hash, stderr_hash, operator_id FROM execution_log ORDER BY id")
-	if err != nil {
-		return "", fmt.Errorf("failed to query execution_log for state root: %w", err)
-	}
-	for execRows.Next() {
-		var id, command, stdoutHash, stderrHash, operatorID string
-		var exitCode, durationMs int64
-		if err := execRows.Scan(&id, &command, &exitCode, &durationMs, &stdoutHash, &stderrHash, &operatorID); err != nil {
-			execRows.Close()
-			return "", fmt.Errorf("failed to scan execution_log row: %w", err)
-		}
-		rowsToHash = append(rowsToHash, row{"execution_log", []interface{}{id, command, exitCode, durationMs, stdoutHash, stderrHash, operatorID}})
-	}
-	if err := execRows.Err(); err != nil {
-		execRows.Close()
-		return "", fmt.Errorf("execution_log iteration error: %w", err)
-	}
-	execRows.Close()
-
-	// 2. File diff log (authoritative file mutation history)
-	diffRows, err := ls.db.Query("SELECT id, file_path, operation, ledger_hash_before, ledger_hash_after, diff_hash FROM file_diff_log ORDER BY id")
-	if err != nil {
-		return "", fmt.Errorf("failed to query file_diff_log for state root: %w", err)
-	}
-	for diffRows.Next() {
-		var id, filePath, operation, hashBefore, hashAfter, diffHash string
-		if err := diffRows.Scan(&id, &filePath, &operation, &hashBefore, &hashAfter, &diffHash); err != nil {
-			diffRows.Close()
-			return "", fmt.Errorf("failed to scan file_diff_log row: %w", err)
-		}
-		rowsToHash = append(rowsToHash, row{"file_diff_log", []interface{}{id, filePath, operation, hashBefore, hashAfter, diffHash}})
-	}
-	if err := diffRows.Err(); err != nil {
-		diffRows.Close()
-		return "", fmt.Errorf("file_diff_log iteration error: %w", err)
-	}
-	diffRows.Close()
-
-	// 3. KV store (authoritative key-value state)
-	// Filter for active entries only (not expired)
-	kvRows, err := ls.db.Query("SELECT key, value, COALESCE(expires_at, '') FROM kv WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", now)
-	if err != nil {
-		return "", fmt.Errorf("failed to query kv for state root: %w", err)
-	}
-	for kvRows.Next() {
-		var key, value, expiresAt string
-		if err := kvRows.Scan(&key, &value, &expiresAt); err != nil {
-			kvRows.Close()
-			return "", fmt.Errorf("failed to scan kv row: %w", err)
-		}
-		rowsToHash = append(rowsToHash, row{"kv", []interface{}{key, value, expiresAt}})
-	}
-	if err := kvRows.Err(); err != nil {
-		kvRows.Close()
-		return "", fmt.Errorf("kv iteration error: %w", err)
-	}
-	kvRows.Close()
-
-	// 4. Nonces are EXCLUDED (volatile replay protection metadata)
-
-	payload, err := json.Marshal(rowsToHash)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal state root payload: %w", err)
-	}
-	sum := sha256.Sum256(payload)
-	return hex.EncodeToString(sum[:]), nil
 }
 
 var localStoreMigrations = []sqliteutil.Migration{
