@@ -89,7 +89,7 @@ if [[ $# -eq 0 ]]; then _menu; exit 0; fi
 if [[ "$1" == "--help" || "$1" == "-h" ]]; then _help; exit 0; fi
 
 # Parse global authentication flags
-API_KEY=""; DEVICE_TOKEN=""; filtered_args=(); i=1
+API_KEY=""; DEVICE_TOKEN=""; COMPRESS_BUILD=""; filtered_args=(); i=1
 while [[ $i -le $# ]]; do
     arg="${!i}"
     case "$arg" in
@@ -97,6 +97,7 @@ while [[ $i -le $# ]]; do
         --device-token) [[ $i -lt $# ]] && { ((i++)); DEVICE_TOKEN="${!i}"; }; ((i++)) ;;
         --dev)          DEV_MODE=true; ((i++)) ;;
         --with-g8ee|-a) export G8E_WITH_G8EE=1; ((i++)) ;;
+        -c)             COMPRESS_BUILD=1; ((i++)) ;;
         -*)             filtered_args+=("$arg"); ((i++)) ;;
         *)              while [[ $i -le $# ]]; do filtered_args+=("${!i}"); ((i++)); done; break ;;
     esac
@@ -118,7 +119,7 @@ if [[ "$TOP" == "chat" ]]; then _require_authenticated; fi
 case "$TOP" in
     platform)   bash "$SCRIPT_DIR/scripts/cmd/platform.sh" "$SUB" "${@:3}" ;;
     apps)       exec bash "$SCRIPT_DIR/scripts/cmd/apps.sh" "$SUB" "${@:3}" ;;
-    operator)   exec bash "$SCRIPT_DIR/scripts/cmd/operator.sh" "$SUB" "${@:3}" ;;
+    operator)   [[ -n "$COMPRESS_BUILD" ]] && export COMPRESS_BUILD; exec bash "$SCRIPT_DIR/scripts/cmd/operator.sh" "$SUB" "${@:3}" ;;
     chat)       exec bash "$SCRIPT_DIR/scripts/cmd/chat.sh" "$SUB" "${@:3}" ;;
     test)       exec bash "$SCRIPT_DIR/scripts/cmd/tests.sh" "$SUB" "${@:3}" ;;
     evals)      exec bash "$SCRIPT_DIR/scripts/cmd/evals.sh" "$SUB" "${@:3}" ;;
