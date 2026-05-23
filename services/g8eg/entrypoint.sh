@@ -16,7 +16,28 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "${SCRIPT_DIR}/../../scripts/core/config.sh"
+G8E_PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+export G8E_PROJECT_ROOT
+
+# Set runtime defaults
+export G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$G8E_PROJECT_ROOT/.g8e}"
+export G8E_DATA_DIR="${G8E_DATA_DIR:-$G8E_RUNTIME_DIR/data}"
+export G8E_PKI_DIR="${G8E_PKI_DIR:-$G8E_RUNTIME_DIR/pki}"
+export G8E_SECRETS_DIR="${G8E_SECRETS_DIR:-$G8E_RUNTIME_DIR/secrets}"
+
+# Port defaults
+export G8E_OPERATOR_HTTPS_PORT="${G8E_OPERATOR_HTTPS_PORT:-8440}"
+export G8E_OPERATOR_PUBLIC_WSS_PORT="${G8E_OPERATOR_PUBLIC_WSS_PORT:-$G8E_OPERATOR_HTTPS_PORT}"
+export G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT="${G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT:-8441}"
+export G8E_OPERATOR_PUBLIC_HTTPS_PORT="${G8E_OPERATOR_PUBLIC_HTTPS_PORT:-8442}"
+
+# Load environment file if it exists
+G8E_ENV_FILE="$G8E_PROJECT_ROOT/.g8e/.env"
+if [[ -f "$G8E_ENV_FILE" ]]; then
+    set -a
+    source "$G8E_ENV_FILE"
+    set +a
+fi
 
 DATA_DIR="$G8E_DATA_DIR"
 PKI_DIR="$G8E_PKI_DIR"

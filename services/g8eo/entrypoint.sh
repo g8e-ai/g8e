@@ -16,9 +16,22 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "${SCRIPT_DIR}/../../scripts/core/path_utils.sh"
-G8E_PROJECT_ROOT="$(resolve_g8e_root)"
+G8E_PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 export G8E_PROJECT_ROOT
+
+# Set runtime defaults
+export G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$G8E_PROJECT_ROOT/.g8e}"
+export G8E_DATA_DIR="${G8E_DATA_DIR:-$G8E_RUNTIME_DIR/data}"
+export G8E_PKI_DIR="${G8E_PKI_DIR:-$G8E_RUNTIME_DIR/pki}"
+export G8E_SECRETS_DIR="${G8E_SECRETS_DIR:-$G8E_RUNTIME_DIR/secrets}"
+
+# Load environment file if it exists
+G8E_ENV_FILE="$G8E_PROJECT_ROOT/.g8e/.env"
+if [[ -f "$G8E_ENV_FILE" ]]; then
+    set -a
+    source "$G8E_ENV_FILE"
+    set +a
+fi
 
 OPERATOR_BIN="${G8E_PROJECT_ROOT}/services/g8eo/build/linux-amd64/g8e.operator"
 

@@ -2,11 +2,11 @@
 title: Scripts
 ---
 
-# g8e Scripts
+# g8e CLI
 
-Last Updated: 2026-05-18
+Last Updated: 2026-05-23
 
-The scripts layer is the primary operational interface for the g8e platform. It enforces a **host-native** execution model and manages the lifecycle of the mandatory Operator Gateway plus optional application-layer adapters.
+The unified `g8eo` binary is the primary operational interface for the g8e platform. It serves dual purposes: daemon mode (Governance Gateway/Operator) and CLI mode (platform management). The platform enforces a **host-native** execution model with **ZERO shell scripts** for platform operations.
 
 ---
 
@@ -17,15 +17,17 @@ g8e avoids container-orchestration complexity by running directly on the host. T
 1. **Gateway (mandatory)** - The `g8eo` binary in Gateway mode (--doctrine, --consensus, or --notary). Owns persistence, PKI, pub/sub, and governance enforcement.
 2. **Application Layer (optional)** - The reference **g8e Agentic Ensemble** (`g8ee`) that consume the public protocol. Run as managed host processes.
 
-### The `./g8e` CLI entry point
+### The Unified `g8eo` Binary
 
-The root `./g8e` script is a Bash-based dispatcher and the single entry point for all platform operations.
+The `g8eo` binary is a statically compiled Go binary that serves dual purposes:
 
-- **Global flags** - `--api-key` / `-k` (explicit API key), `--device-token` (device-link token), `--dev` (skip prod-readiness gates).
+- **Daemon mode**: Runs the Governance Gateway/Operator when invoked without subcommands
+- **CLI mode**: Manages platform lifecycle, auth, data, and tests when invoked with subcommands
+
 - **Host runtime state** - All runtime data lives at `./.g8e/`: `data/`, `pki/`, `secrets/`, `logs/`.
 - **Credentials** - Authenticated commands use `~/.g8e/credentials`.
 
-Running `./g8e` without arguments launches the Interactive Platform Manager. Direct command form: `./g8e <command> [subcommand] [options]`.
+Running `./g8e` (a symlink to the g8eo binary) without arguments launches the Interactive Platform Manager. Direct command form: `./g8e <command> [subcommand] [options]`.
 
 ---
 
@@ -93,9 +95,7 @@ Starts an interactive web session with the **g8e Agentic Ensemble**. Optional in
 
 ### Data & Security - `./g8e data` / `./g8e security`
 
-Dispatched via `scripts/cmd/infra.sh`.
-
-**`data`** - Python helpers for Gateway state:
+**`data`** - Native Go client for Gateway state over mTLS:
 
 - `users` - User and session management.
 - `operators` - Operator registration and slot management.
@@ -113,7 +113,7 @@ Dispatched via `scripts/cmd/infra.sh`.
 
 ### Testing - `./g8e test`
 
-See [Tests](./tests.md). Native toolchains via `scripts/testing/run_tests.sh`.
+See [Tests](./tests.md). Native toolchains via the unified Go CLI.
 
 | Command | Purpose |
 |---|---|
@@ -163,37 +163,34 @@ See [Demos](./demos.md).
 
 ---
 
-## Directory Structure
+## Zero Shell Scripts Policy
 
-```text
-scripts/
-├── cmd/           # Primary command implementations (Bash)
-│   ├── platform.sh   # Gateway lifecycle
-│   ├── apps.sh       # App-layer lifecycle
-│   ├── infra.sh      # Data/Security dispatcher
-│   ├── operator.sh   # Operator binary/deployment
-│   └── tests.sh      # Test execution bridge
-├── core/          # Internal orchestrators (deprecated - replaced by Go native)
-│   ├── build.sh      # Main process manager (deprecated)
-│   ├── manage-env.sh # Variable resolution
-│   └── path_utils.sh # PROJECT_ROOT resolution
-├── data/          # Gateway interaction (Python)
-├── security/      # Security logic
-├── testing/       # Test runners
-└── tools/         # Setup wizards (LLM, SSH, Search)
-```
+**CRITICAL**: The platform uses ZERO shell scripts for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary (`./g8e`).
+
+**Permissible Shell Scripts:**
+- Service entrypoints (`services/*/entrypoint.sh`) - minimal wrappers that set environment and exec the binary
+- Build-time toolchain scripts (`scripts/ingest/*.py`, `scripts/docs/*.sh`) - disconnected from runtime platform operations
+- Vendor scripts (third-party Go vendor scripts) - not g8e platform code
+
+**Deleted Scripts (2026-05-23):**
+- All `scripts/core/*` shell scripts (config.sh, path_utils.sh, json_query.py, logs.sh, manage-env.sh, setup.sh, local_setup.sh, stream_events.py)
+- All `scripts/cmd/*` shell scripts (common.sh, env_vars.sh, paths.sh, api_paths.sh, headers.sh)
+- All `scripts/tools/*` shell scripts (approve-transaction.sh, setup-llm.sh, setup-search.sh, setup-ssh.sh)
+- All `scripts/docs/*` shell scripts (generate_cli_reference.sh)
+- All `scripts/security/*` shell scripts (validate-platform-security.sh)
+- All `scripts/testing/*` shell scripts (run_tests.sh, test_test_help.sh)
+- `evals/tests/byo_client_parity.sh`
+- `demo/profiles/*`
 
 ---
 
 ## Technical Invariants
 
-1. **Path resolution** - Scripts resolve `G8E_PROJECT_ROOT` relative to their own location.
-   - Bash: `$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)`
-   - Python: `Path(__file__).parent.parent.parent.absolute()`
-2. **Service readiness** - The platform is not "ready" until the Hub `/healthz` passes. The Go CLI blocks until this state.
+1. **Zero Shell Scripts**: NO shell scripts are used for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary.
+2. **Service readiness** - The platform is not "ready" until the Gateway `/healthz` passes. The Go CLI blocks until this state.
 3. **Canonical wire format** - All client-facing interaction uses canonical JSON (protojson). Binary protobuf is reserved for internal storage.
-4. **Fail-closed execution** - Scripts never mask failures or proceed with missing trust material. Missing trust bundles or secrets exit with an actionable error pointing at the platform Gateway.
+4. **Fail-closed execution** - The CLI must never mask failures or proceed with missing trust material. Missing trust bundles or secrets exit with an actionable error pointing at the platform Gateway.
 
 For detailed help on any subcommand: `./g8e <command> --help`.
 
-See also: [Operator](../concepts/operator.md), [Governance Gateway (g8eg)](../concepts/g8eg.md), [Tests](./tests.md), [Evals](./evals.md), [Demos](./demos.md).
+See also: [Operator](../concepts/operator.md), [Governance Gateway (g8eg)](../concepts/g8eg.md), [Tests](./tests.md), [Evals](./evals.md).

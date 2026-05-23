@@ -37,9 +37,8 @@ before changing project files.
 
 > Note: To support sovereign, agnostic, and air-gapped deployments, `jq` is
 > completely eliminated as a host dependency. All JSON parsing and request
-> assembly are handled internally by a native, self-contained Python 3 utility
-> (`scripts/core/json_query.py`), allowing g8e to run on virtually any modern
-> Linux environment without extra system package requirements.
+> assembly are handled internally by the unified Go CLI, allowing g8e to run on
+> virtually any modern Linux environment without extra system package requirements.
 
 ## `make proto` fails before generating files
 

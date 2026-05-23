@@ -48,7 +48,7 @@ transaction — and the host verifies that transaction before it executes.
 ## Key properties
 
 - **Outbound-only by design.** The Operator opens an mTLS reverse tunnel to the Gateway and listens on nothing. No inbound ports, NAT and firewall traversal for free, and zero remote attack surface on the one component that holds execution authority.
-- **One ~4MB binary, zero standing dependencies.** The reference Operator is a single statically compiled Go binary. No runtime to patch, no interpreter to exploit, no package tree to audit. Air-gapped deployment is the normal case.
+- **One ~4MB binary, zero standing dependencies.** The reference Operator is a single statically compiled Go binary that serves dual purposes: daemon mode (Governance Gateway/Operator) and CLI mode (platform management). No runtime to patch, no interpreter to exploit, no package tree to audit. Air-gapped deployment is the normal case.
 - **Multi-model Byzantine consensus.** The consensus layer (Quorum) is provider-agnostic. Heterogeneous models — Anthropic, OpenAI, local — independently co-sign every mutation, so no single model's hallucination or poisoning gets through.
 - **Local-first audit with instant rollback.** Every decision, accepted or blocked, is written to a host-local vault *before* the side effect. A two-phase Git-backed commit architecture gives tamper-evident history and one-command rollback.
 - **Fail-closed, in order.** Doctrine → Quorum → Notary, enforced at the host boundary. Each layer has to pass before the next is even reached.
@@ -184,7 +184,7 @@ g8e is built to run entirely inside your perimeter. The Operator has no inbound 
 
 ## Documentation
 
-- **[Quickstart](docs/quickstart/)** — get started with g8e in minutes.
+- **[Quickstart](docs/quickstart/)** — get started with g8e in minutes using the unified CLI.
 - **[Position Paper](docs/concepts/position_paper.md)** — the full design rationale, threat model, and BFT analysis.
 - **[Protocol](docs/concepts/protocol.md)** — wire format, transaction hash, and the Doctrine / Quorum / Notary definitions.
 - **[Operator (g8eo)](docs/concepts/operator.md)** — execution boundary, gateway modes, and host storage.
