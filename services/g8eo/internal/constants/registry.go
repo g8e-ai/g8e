@@ -382,6 +382,9 @@ func Registry() Snapshot {
 			"OperatorContextChanged": {Value: "g8e.v1.operator.context.changed", GoConst: "EventOperatorContextChanged", PythonConst: "OPERATOR_CONTEXT_CHANGED"},
 			"OperatorDeviceRegistered": {Value: "g8e.v1.operator.device.registered", GoConst: "EventOperatorDeviceRegistered", PythonConst: "OPERATOR_DEVICE_REGISTERED"},
 			"OperatorEvalAnswerRequested": {Value: "g8e.v1.operator.eval.answer.requested", GoConst: "EventOperatorEvalAnswerRequested", PythonConst: "OPERATOR_EVAL_ANSWER_REQUESTED"},
+			"OperatorFieldReadAccessDenied": {Value: "g8e.v1.operator.field.read.access.denied", GoConst: "EventOperatorFieldReadAccessDenied", PythonConst: "OPERATOR_FIELD_READ_ACCESS_DENIED"},
+			"OperatorFieldReadAccessGranted": {Value: "g8e.v1.operator.field.read.access.granted", GoConst: "EventOperatorFieldReadAccessGranted", PythonConst: "OPERATOR_FIELD_READ_ACCESS_GRANTED"},
+			"OperatorFieldReadRequested": {Value: "g8e.v1.operator.field.read.requested", GoConst: "EventOperatorFieldReadRequested", PythonConst: "OPERATOR_FIELD_READ_REQUESTED"},
 			"OperatorFileDiffFetchCompleted": {Value: "g8e.v1.operator.file.diff.fetch.completed", GoConst: "EventOperatorFileDiffFetchCompleted", PythonConst: "OPERATOR_FILE_DIFF_FETCH_COMPLETED"},
 			"OperatorFileDiffFetchFailed": {Value: "g8e.v1.operator.file.diff.fetch.failed", GoConst: "EventOperatorFileDiffFetchFailed", PythonConst: "OPERATOR_FILE_DIFF_FETCH_FAILED"},
 			"OperatorFileDiffFetchReceived": {Value: "g8e.v1.operator.file.diff.fetch.received", GoConst: "EventOperatorFileDiffFetchReceived", PythonConst: "OPERATOR_FILE_DIFF_FETCH_RECEIVED"},
@@ -522,20 +525,6 @@ func Registry() Snapshot {
 			"SourceUserTerminal": {Value: "g8e.v1.source.user.terminal", GoConst: "EventSourceUserTerminal", PythonConst: "SOURCE_USER_TERMINAL"},
 		},
 		Status: StatusSnapshot{
-			TribunalOutcome: map[string]Entry{
-				"consensus": {Value: "consensus", GoConst: "TribunalOutcomeConsensus", PythonConst: "CONSENSUS"},
-				"consensus_failed": {Value: "consensus_failed", GoConst: "TribunalOutcomeConsensusFailed", PythonConst: "CONSENSUS_FAILED"},
-				"verification_failed": {Value: "verification_failed", GoConst: "TribunalOutcomeVerificationFailed", PythonConst: "VERIFICATION_FAILED"},
-				"verified": {Value: "verified", GoConst: "TribunalOutcomeVerified", PythonConst: "VERIFIED"},
-			},
-			UserRole: map[string]Entry{
-				"admin": {Value: "admin", GoConst: "UserRoleAdmin", PythonConst: "ADMIN"},
-				"user": {Value: "user", GoConst: "UserRoleUser", PythonConst: "USER"},
-			},
-			UserStatus: map[string]Entry{
-				"active": {Value: "active", GoConst: "UserStatusActive", PythonConst: "ACTIVE"},
-				"disabled": {Value: "disabled", GoConst: "UserStatusDisabled", PythonConst: "DISABLED"},
-			},
 			ApprovalErrorType: map[string]Entry{
 				"approval.exception": {Value: "approval.exception", GoConst: "ApprovalErrorTypeApprovalException", PythonConst: "APPROVAL_EXCEPTION"},
 				"approval.publish.failure": {Value: "approval.publish.failure", GoConst: "ApprovalErrorTypeApprovalPublishFailure", PythonConst: "APPROVAL_PUBLISH_FAILURE"},
@@ -561,6 +550,20 @@ func Registry() Snapshot {
 			OperatorStatus: map[string]Entry{
 				"available": {Value: "available", GoConst: "OperatorStatusAvailable", PythonConst: "AVAILABLE"},
 				"offline": {Value: "offline", GoConst: "OperatorStatusOffline", PythonConst: "OFFLINE"},
+			},
+			TribunalOutcome: map[string]Entry{
+				"consensus": {Value: "consensus", GoConst: "TribunalOutcomeConsensus", PythonConst: "CONSENSUS"},
+				"consensus_failed": {Value: "consensus_failed", GoConst: "TribunalOutcomeConsensusFailed", PythonConst: "CONSENSUS_FAILED"},
+				"verification_failed": {Value: "verification_failed", GoConst: "TribunalOutcomeVerificationFailed", PythonConst: "VERIFICATION_FAILED"},
+				"verified": {Value: "verified", GoConst: "TribunalOutcomeVerified", PythonConst: "VERIFIED"},
+			},
+			UserRole: map[string]Entry{
+				"admin": {Value: "admin", GoConst: "UserRoleAdmin", PythonConst: "ADMIN"},
+				"user": {Value: "user", GoConst: "UserRoleUser", PythonConst: "USER"},
+			},
+			UserStatus: map[string]Entry{
+				"active": {Value: "active", GoConst: "UserStatusActive", PythonConst: "ACTIVE"},
+				"disabled": {Value: "disabled", GoConst: "UserStatusDisabled", PythonConst: "DISABLED"},
 			},
 		},
 		Senders: map[string]Entry{
