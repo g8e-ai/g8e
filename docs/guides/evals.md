@@ -80,7 +80,7 @@ Inline verification runs during `bench`. To re-verify a saved report directory o
 The harness is fail-closed without canonical mTLS + session credentials:
 
 1. `./g8e platform start` - Operator + g8ee.
-2. `./g8e login` - mints client cert/key, captures session id, exports the env vars `scripts/cmd/evals.sh` re-exports for the bench:
+2. `./g8e login` - mints client cert/key, captures session id, exports the env vars the evals harness uses:
    - `G8E_OPERATOR_SESSION_ID`, `G8E_USER_ID`
    - `G8E_CLI_CERT`, `G8E_CLI_KEY`, `G8E_TRUST_BUNDLE`
    - `G8E_G8EE_URL`, `G8E_OPERATOR_URL`, `G8E_PKI_DIR`
@@ -126,7 +126,7 @@ SSE payloads are parsed via `g8e_evals.sut.wire.SSEWireEnvelope` (Pydantic), mir
 
 ## Auth Wiring Parity
 
-`evals/g8e_evals/transport.py::AuthContext` is the single source of truth for mTLS + `g8e_session` cookie + `X-G8E-*` context headers. It must stay in lockstep with `scripts/cmd/common.sh::_g8ee_curl` / `_append_g8e_context_headers`. The contract test `evals/tests/test_auth_wiring_parity.py` enforces shell↔Python parity.
+`evals/g8e_evals/transport.py::AuthContext` is the single source of truth for mTLS + `g8e_session` cookie + `X-G8E-*` context headers. The contract test `evals/tests/test_auth_wiring_parity.py` validates the Python implementation against the canonical auth contract.
 
 ---
 

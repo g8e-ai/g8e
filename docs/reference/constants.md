@@ -94,7 +94,6 @@ This command:
 1. Builds the `g8e.exporter` binary from `services/g8eo/cmd/exporter`
 2. Runs the exporter to generate JSON files in `protocol/constants/`
 3. Generates Python modules in `services/g8ee/app/constants/generated_*.py`
-4. Generates shell scripts in `scripts/cmd/` (env_vars.sh, paths.sh, headers.sh)
 
 ### Generate All Protocol Artifacts
 
@@ -144,12 +143,11 @@ The `trackedFiles` map in `check_registry.go` defines which files should be expo
 
 The registry check is enforced in CI via the `registry-check` job in `.github/workflows/build-and-test.yml`. This ensures that any new constant added to a tracked file is properly registered before merging.
 
-## Shell Script Generation
+## Generated Files
 
-The constants pipeline also generates shell scripts for CLI helpers:
+The constants pipeline generates the following artifacts:
 
-- `scripts/cmd/env_vars.sh` - Environment variable exports
-- `scripts/cmd/paths.sh` - Path resolution helpers
-- `scripts/cmd/headers.sh` - HTTP header constants
+- JSON files in `protocol/constants/` - Canonical constant definitions
+- Python modules in `services/g8ee/app/constants/generated_*.py` - Python constant bindings
 
-These scripts are sourced by CLI commands to ensure consistency across the platform.
+These generated files ensure consistency across the platform's Go and Python components.

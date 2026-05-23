@@ -16,9 +16,31 @@
 
 set -e
 
-# Derive project root using shared utility
+# Derive project root
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "${SCRIPT_DIR}/../../scripts/core/config.sh"
+G8E_PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+export G8E_PROJECT_ROOT
+
+# Set runtime defaults
+export G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$G8E_PROJECT_ROOT/.g8e}"
+export G8E_DATA_DIR="${G8E_DATA_DIR:-$G8E_RUNTIME_DIR/data}"
+export G8E_PKI_DIR="${G8E_PKI_DIR:-$G8E_RUNTIME_DIR/pki}"
+export G8E_SECRETS_DIR="${G8E_SECRETS_DIR:-$G8E_RUNTIME_DIR/secrets}"
+export G8E_PID_DIR="${G8E_PID_DIR:-$G8E_RUNTIME_DIR/pids}"
+export G8E_LOG_DIR="${G8E_LOG_DIR:-$G8E_RUNTIME_DIR/logs}"
+
+# Port defaults
+export G8E_OPERATOR_HTTPS_PORT="${G8E_OPERATOR_HTTPS_PORT:-8440}"
+export G8E_OPERATOR_PUBLIC_HTTPS_PORT="${G8E_OPERATOR_PUBLIC_HTTPS_PORT:-8442}"
+export G8E_G8EE_HTTPS_PORT="${G8E_G8EE_HTTPS_PORT:-8443}"
+
+# Load environment file if it exists
+G8E_ENV_FILE="$G8E_PROJECT_ROOT/.g8e/.env"
+if [[ -f "$G8E_ENV_FILE" ]]; then
+    set -a
+    source "$G8E_ENV_FILE"
+    set +a
+fi
 
 # Load security tokens into environment if files exist
 if [ -f "${G8E_SECRETS_DIR}/session_encryption_key" ]; then

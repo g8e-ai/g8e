@@ -65,20 +65,31 @@ The setup offers three modes:
 | `./g8e login` | Authenticate the local CLI. |
 | `./g8e test <component>` | Host-native tests (default: g8eo). |
 
-### Scripts & CLI
+### CLI
 
-The root `./g8e` is a compiled Go binary and the single entry point for all platform operations.
+The unified `g8eo` binary is the single entry point for all platform operations. It serves dual purposes:
+- **Daemon mode**: Runs the Governance Gateway/Operator when invoked without subcommands
+- **CLI mode**: Manages platform lifecycle, auth, data, and tests when invoked with subcommands
 
+**CLI Subcommands:**
 - **Platform Management (`./g8e platform`)**: Orchestrates the mandatory Gateway lifecycle via native Go process management.
 - **Application Layer (`./g8e apps`)**: Manages optional, opt-in adapters (like `g8ee`) that extend the platform's capabilities.
-- **Operator Operations (`./g8e operator`)**: Lifecycle management for `g8eo` (Governed Operator) binaries and remote fleet deployment.
-- **Infrastructure & Data (`./g8e data` / `./g8e security`)**: Unified interface for interacting with the Gateway state and security invariants.
+- **Auth & PKI (`./g8e auth`)**: Establishes identity, generates CSRs, and verifies certificate chains.
+- **Data & Admin (`./g8e data`)**: Administers the local substrate over mTLS (users, operators, device-links, settings).
+- **Test Orchestration (`./g8e test`)**: Orchestrates test execution suites.
+- **Evals (`./g8e evals`)**: Eval suite orchestrator.
+- **Security (`./g8e security`)**: Validation checks.
+- **Environment (`./g8e vars`)**: Environment variable management.
 
 **Technical Invariants:**
-1. **Path Resolution**: All scripts must resolve `G8E_PROJECT_ROOT` relative to their own location.
+1. **Zero Shell Scripts**: NO shell scripts are used for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary.
 2. **Service Readiness**: The platform is not "ready" until the Governance Gateway (`g8eg`) Gateway mode health check (`/healthz`) passes.
 3. **Canonical Wire Format**: All client-facing interaction (HTTP, PubSub, receipts) must use **canonical JSON (protojson)**. Binary Protobuf is reserved for internal storage.
-4. **Fail-Closed Execution**: Scripts must never mask failures or proceed with missing trust material.
+4. **Fail-Closed Execution**: The CLI must never mask failures or proceed with missing trust material.
+
+**Permissible Shell Scripts:**
+- Service entrypoints (`services/*/entrypoint.sh`) - minimal wrappers that set environment and exec the binary
+- Build-time toolchain scripts (`scripts/ingest/*.py`, `scripts/docs/*.sh`) - disconnected from runtime platform operations
 
 ## Architecture Philosophy
 
@@ -154,12 +165,14 @@ AI agents tend to wrap poorly understood code in new abstractions. This is stric
 - **Models**: All data structures must use Pydantic `G8eBaseModel` with `extra="forbid"`.
 - **Docstrings**: Use Google-style docstrings for non-trivial logic.
 
-### Bash Scripts
-- **Safety**: Every script must start with `set -euo pipefail`.
+### Service Entrypoints (Bash)
+Platform operations use ZERO shell scripts. The only permissible Bash files are minimal service entrypoint wrappers:
+- **Safety**: Every entrypoint must start with `set -euo pipefail`.
 - **Linting**: `shellcheck` is mandatory. Avoid `shellcheck disable` unless absolutely necessary for infrastructure constraints.
 - **Variables**: Use `local` for all variables inside functions. Use uppercase for exported environment variables and lowercase for local ones.
 - **Syntax**: Use `[[ ... ]]` for tests and `$( ... )` for command substitution. Avoid backticks.
-- **Path Resolution**: Scripts must be location-independent, resolving `G8E_PROJECT_ROOT` relative to `$(dirname "${BASH_SOURCE[0]}")`.
+- **Path Resolution**: Entrypoints must be location-independent, resolving paths relative to `$(dirname "${BASH_SOURCE[0]}")`.
+- **No Script Sourcing**: Entrypoints must NOT source other shell scripts. All environment setup must be inline.
 
 ## Application Boundary and State Management
 
@@ -323,7 +336,7 @@ See `docs/reference/constants.md` for complete documentation of the constants pi
 | Operator implementation | `services/g8eo/` |
 | g8e Agentic Ensemble implementation | `services/g8ee/` |
 | Evaluation harness | `evals/` |
-| CLI dispatcher | `g8e`, `scripts/` |
+| CLI | Unified `g8eo` binary (daemon + CLI modes) |
 
 ## Submitting a PR
 
