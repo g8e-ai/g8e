@@ -14,6 +14,7 @@
 
 set -e
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../core/_utils.sh"
 
 _TEST_COMPONENT="${1:-}"
 if [[ -z "$_TEST_COMPONENT" || "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" == "--help" ]]; then
@@ -48,19 +49,13 @@ EOF
     exit 0
 fi
 if [[ "$_TEST_COMPONENT" != "g8ee" && "$_TEST_COMPONENT" != "g8eo" && "$_TEST_COMPONENT" != "chaos" && "$_TEST_COMPONENT" != "ci" ]]; then
-    echo "[g8e] Unknown test component: '$_TEST_COMPONENT'" >&2
+    _error "Unknown test component: '$_TEST_COMPONENT'"
     echo "  Valid: g8ee, g8eo, chaos, ci" >&2
     exit 1
 fi
 
 _TEST_PASSTHROUGH=()
 _args=("${@:2}")
-_require_value() {
-    if [[ ${#_args[@]} -lt 2 || "${_args[1]}" == -* || "${_args[1]}" == "--" ]]; then
-        echo "[g8e] $1 requires a value" >&2
-        exit 1
-    fi
-}
 while [[ ${#_args[@]} -gt 0 ]]; do
     case "${_args[0]}" in
         -p|--llm-provider)

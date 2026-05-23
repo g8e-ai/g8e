@@ -14,6 +14,7 @@
 
 set -e
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../core/_utils.sh"
 
 SUB="${1:-}"
 
@@ -95,7 +96,7 @@ EOF
             esac
         done
         if [[ -z "$_DEPLOY_TARGET" ]]; then
-            echo "[g8e] operator deploy requires a target host" >&2
+            _error "operator deploy requires a target host"
             echo "  Usage: ./g8e operator deploy <user@host> [options]" >&2
             exit 1
         fi
@@ -103,7 +104,7 @@ EOF
         [[ "$(basename "${_DEPLOY_DEST}")" != "g8e.operator" ]] && _REMOTE_EXEC="${_DEPLOY_DEST%/}/g8e.operator"
         trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
         if [[ ! -f "$trust_bundle" ]]; then
-            echo "[g8e] Operator trust bundle not found at $trust_bundle - recreate runtime PKI with ./g8e platform clean && ./g8e platform start" >&2
+            _error "Operator trust bundle not found at $trust_bundle - recreate runtime PKI with ./g8e platform clean && ./g8e platform start"
             exit 1
         fi
         echo "Fetching linux/${_DEPLOY_ARCH} operator from host Operator blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
@@ -159,7 +160,5 @@ EOF
         _banner "operator ssh-config"
         exec bash "$SCRIPT_DIR/scripts/tools/setup-ssh.sh" ssh-config "${@:2}" ;;
     *)
-        echo "[g8e] unknown operator subcommand: '$SUB'" >&2
-        echo "  Valid: deploy, stream, ssh-config, reauth, build-all" >&2
-        exit 1 ;;
+        _unknown_subcommand "$SUB" "deploy, stream, ssh-config, reauth, build-all" ;;
 esac

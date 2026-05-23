@@ -14,6 +14,7 @@
 
 set -e
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../core/_utils.sh"
 
 SUB="${1:-}"
 _APP_ACTION="$SUB"
@@ -70,7 +71,5 @@ case "$_APP_ACTION" in
                 exec "$SCRIPT_DIR/.venv/bin/pip" install -r "$SCRIPT_DIR/services/g8ee/requirements.txt" ;;
         esac ;;
     *)
-        echo "[g8e] unknown apps subcommand: '$_APP_ACTION'" >&2
-        echo "  Valid: start, stop, restart, status, build" >&2
-        exit 1 ;;
+        _unknown_subcommand "$_APP_ACTION" "start, stop, restart, status, build" ;;
 esac

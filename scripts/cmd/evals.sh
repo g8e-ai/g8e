@@ -14,6 +14,7 @@
 
 set -e
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../core/_utils.sh"
 
 EVALS_PROJECT_DIR="$SCRIPT_DIR/evals"
 # The new harness reuses the g8ee venv so it can import the canonical
@@ -22,7 +23,7 @@ EVALS_VENV="$SCRIPT_DIR/.venv"
 
 _ensure_evals_venv() {
     if [[ ! -x "$EVALS_VENV/bin/python" ]]; then
-        echo "[evals] g8ee virtualenv missing at $EVALS_VENV - run './g8e platform start' or 'make -C services/g8ee venv' first" >&2
+        _error "g8ee virtualenv missing at $EVALS_VENV - run './g8e platform start' or 'make -C services/g8ee venv' first"
         exit 1
     fi
     if ! "$EVALS_VENV/bin/python" -c "import g8e_evals" >/dev/null 2>&1; then
@@ -152,7 +153,7 @@ EOF
                     REMAINING_ARGS=("${REMAINING_ARGS[@]}")
                     i=0; continue
                 else
-                    echo "[evals] -d flag requires a token value" >&2; exit 1
+                    _error "-d flag requires a token value"; exit 1
                 fi
             elif [[ "$arg" == "-n" ]]; then
                 if [[ $((i + 1)) -lt ${#REMAINING_ARGS[@]} ]]; then
@@ -161,7 +162,7 @@ EOF
                     REMAINING_ARGS=("${REMAINING_ARGS[@]}")
                     i=0; continue
                 else
-                    echo "[evals] -n flag requires a node count value" >&2; exit 1
+                    _error "-n flag requires a node count value"; exit 1
                 fi
             fi
             i=$((i + 1))
@@ -169,7 +170,7 @@ EOF
 
         if [[ -z "$_device_token" ]]; then
             if ! _load_credentials; then
-                echo "[evals] No cached credentials found. Run './g8e login' first, or provide -d <token> explicitly." >&2
+                _error "No cached credentials found. Run './g8e login' first, or provide -d <token> explicitly."
                 exit 1
             fi
             if ! _operator_running; then
@@ -178,13 +179,13 @@ EOF
             fi
             _dl_output=$(python3 "$SCRIPT_DIR/scripts/data/manage-device-links.py" create --user-id "$G8E_USER_ID" --name "evals-auto-deploy" --max-uses 100 --expires-in-hours 1 2>&1)
             if [[ $? -ne 0 ]]; then
-                echo "[evals] Failed to automatically create device link." >&2
+                _error "Failed to automatically create device link."
                 echo "$_dl_output" >&2
                 exit 1
             fi
             _device_token=$(echo "$_dl_output" | grep "Token:" | awk '{print $2}')
             if [[ -z "$_device_token" ]]; then
-                echo "[evals] Could not extract token from device-link output." >&2
+                _error "Could not extract token from device-link output."
                 echo "$_dl_output" >&2
                 exit 1
             fi
@@ -201,7 +202,5 @@ EOF
 
         exec make -C "$SCRIPT_DIR/demo" deploy "${_deploy_args[@]}"
         ;;
-    *) echo "[g8e] unknown evals subcommand: '$SUB'" >&2
-       echo "  Valid: bench, verify-receipts, list, deploy" >&2
-       exit 1 ;;
+    *) _unknown_subcommand "$SUB" "bench, verify-receipts, list, deploy" ;;
 esac

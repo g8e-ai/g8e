@@ -14,13 +14,14 @@
 
 set -e
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../core/_utils.sh"
 
 SUB="${1:-}"
 DEMO_DIR="$SCRIPT_DIR/demo"
 PROFILES_DIR="$DEMO_DIR/profiles"
 
 if [[ ! -d "$DEMO_DIR" ]]; then
-    echo "[g8e] demo directory not found: $DEMO_DIR" >&2
+    _error "demo directory not found: $DEMO_DIR"
     exit 1
 fi
 
@@ -32,7 +33,7 @@ if [[ "$SUB" == "profile" ]]; then
     case "$_PROF_CMD" in
         list)   exec make -C "$DEMO_DIR" list ;;
         switch) [[ -z "$_PROF_NAME" ]] && { echo "[g8e] usage: ./g8e demo profile switch <name>"; exit 1; }; exec make -C "$DEMO_DIR" switch P="$_PROF_NAME" ;;
-        *)      echo "[g8e] unknown demo profile subcommand: '$_PROF_CMD'" >&2; echo "  Valid: list, switch" >&2; exit 1 ;;
+        *)      _unknown_subcommand "$_PROF_CMD" "list, switch" ;;
     esac
 fi
 
@@ -49,7 +50,7 @@ while [[ $i -lt ${#demo_args[@]} ]]; do
             demo_args=("${demo_args[@]}")
             i=0; continue
         else
-            echo "[g8e] -d flag requires a token value" >&2; exit 1
+            _error "-d flag requires a token value"; exit 1
         fi
     fi
     i=$((i + 1))
@@ -64,7 +65,7 @@ while [[ $i -lt ${#demo_args[@]} ]]; do
             demo_args=("${demo_args[@]}")
             i=0; continue
         else
-            echo "[g8e] -n flag requires a node count value" >&2; exit 1
+            _error "-n flag requires a node count value"; exit 1
         fi
     fi
     i=$((i + 1))
@@ -112,7 +113,5 @@ EOF
     shell)
         _banner "demo shell"; exec make -C "$DEMO_DIR" shell "${demo_args[@]}" ;;
     *)
-        echo "[g8e] unknown demo subcommand: '$SUB'" >&2
-        echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, devices, broken, profile" >&2
-        exit 1 ;;
+        _unknown_subcommand "$SUB" "up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, devices, broken, profile" ;;
 esac
