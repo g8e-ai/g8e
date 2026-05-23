@@ -1221,12 +1221,17 @@ func TestHandleBootstrap(t *testing.T) {
 		h2.handleBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.JSONEq(t, `{"error":"only available over loopback"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"CSR auto-issue only available over loopback"}`, rr.Body.String())
 	})
 
 	t.Run("Success - Rotation for existing bootstrap user", func(t *testing.T) {
 		t.Parallel()
-		// Use the first handler which already has a bootstrap user
+		hRot, _ := setupTestHTTPHandler(t)
+		// Create a bootstrap user first
+		user, err := hRot.userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		require.NotNil(t, user)
+
 		csr := generateTestCSR(t)
 		cliCsr := generateTestCSR(t)
 		body := map[string]string{
@@ -1241,11 +1246,11 @@ func TestHandleBootstrap(t *testing.T) {
 		req.RemoteAddr = "127.0.0.1:12345"
 		rr := httptest.NewRecorder()
 
-		h.handleBootstrap(rr, req)
+		hRot.handleBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		var resp map[string]interface{}
-		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.True(t, resp["success"].(bool))
 		assert.NotEmpty(t, resp["operator_cert"])
