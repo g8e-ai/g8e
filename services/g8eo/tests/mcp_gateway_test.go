@@ -417,6 +417,7 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 
 	// Set MCP gateway dependencies for governance processing
 	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamServer.URL)
+	mcpGateway.SetA2ADependencies(downstreamServer.URL)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -516,17 +517,17 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var mcpRes struct {
-			Result struct {
-				Status      string `json:"status"`
-				TxHash      string `json:"tx_hash"`
-				ApprovalURL string `json:"approval_url"`
-			} `json:"result"`
+		var a2aRes struct {
+			ID          string `json:"id"`
+			Status      string `json:"status"`
+			TxHash      string `json:"tx_hash"`
+			ApprovalURL string `json:"approval_url"`
+			Message     string `json:"message"`
 		}
-		err = json.NewDecoder(resp.Body).Decode(&mcpRes)
+		err = json.NewDecoder(resp.Body).Decode(&a2aRes)
 		require.NoError(t, err)
-		require.Equal(t, "suspended", mcpRes.Result.Status)
-		require.NotEmpty(t, mcpRes.Result.ApprovalURL)
+		require.Equal(t, "suspended", a2aRes.Status)
+		require.NotEmpty(t, a2aRes.ApprovalURL)
 	})
 }
 
@@ -1062,7 +1063,19 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		resp, err := mtlsClient.Post(mtlsURL+"/api/mcp/v1/tools/call", "application/json", bytes.NewReader([]byte(reqBody)))
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		// JSON-RPC 2.0 spec: errors are returned with HTTP 200, error in JSON body
+		var jsonRPCResp struct {
+			Error struct {
+				Code    int    `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		body, _ := io.ReadAll(resp.Body)
+		err = json.Unmarshal(body, &jsonRPCResp)
+		require.NoError(t, err)
+		require.Equal(t, -32700, jsonRPCResp.Error.Code) // Parse error
+		require.Contains(t, jsonRPCResp.Error.Message, "parse error")
 	})
 
 	t.Run("missing tool name", func(t *testing.T) {
