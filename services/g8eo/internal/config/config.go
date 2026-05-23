@@ -46,6 +46,11 @@ type LoadOptions struct {
 	CloudMode     bool
 	CloudProvider string
 
+	// Governance posture for outbound mode (doctrine, consensus, or notary)
+	// Defaults to "notary" for outbound mode - L1/L2/L3 strictly enforced
+	// Outbound mode requires L3 (human) authorization before sending mutations
+	Posture GatewayPosture
+
 	// Local storage
 	LocalStorageEnabled bool
 
@@ -201,6 +206,10 @@ type Config struct {
 	TZ         string // TZ env var value (IANA timezone name)
 	IPService  string // G8E_IP_SERVICE - URL for public IP detection
 	IPResolver string // G8E_IP_RESOLVER - UDP target for local IP detection
+
+	// Governance posture for outbound mode (doctrine, consensus, or notary)
+	// Defaults to "notary" since L3Notary is nil and mutations must fail-closed
+	Posture GatewayPosture
 
 	// Gateway mode configuration
 	Gateway GatewayConfig
@@ -427,6 +436,12 @@ func Load(opts LoadOptions) (*Config, error) {
 		TZ:         opts.TZ,
 		IPService:  opts.IPService,
 		IPResolver: opts.IPResolver,
+
+		// Governance posture - default to notary for outbound mode (L1/L2/L3 strictly enforced)
+		Posture: opts.Posture,
+	}
+	if cfg.Posture == "" {
+		cfg.Posture = PostureNotary
 	}
 
 	// Default PKIDir to .g8e/pki if not explicitly set

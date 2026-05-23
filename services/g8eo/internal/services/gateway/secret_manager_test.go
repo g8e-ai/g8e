@@ -122,19 +122,19 @@ func TestSecretManager_InitAppSettings_CreatesValidActuatorKey(t *testing.T) {
 
 	require.NoError(t, sm.InitAppSettings())
 
-	seedHex := readSecretFromDB(t, db, "Actuator_signing_key")
+	seedHex := readSecretFromDB(t, db, "actuator_signing_key")
 	seed, err := hex.DecodeString(seedHex)
 	require.NoError(t, err)
 	require.Len(t, seed, ed25519.SeedSize)
 
-	seedFromFile, err := sm.keystore.DecryptSecret("Actuator_signing_key")
+	seedFromFile, err := sm.keystore.DecryptSecret("actuator_signing_key")
 	require.NoError(t, err)
 	assert.Equal(t, seedHex, seedFromFile)
 
 	priv, keyID, err := sm.GetActuatorKey()
 	require.NoError(t, err)
 	require.Len(t, priv, ed25519.PrivateKeySize)
-	assert.Equal(t, readSecretFromDB(t, db, "Actuator_key_id"), keyID)
+	assert.Equal(t, readSecretFromDB(t, db, "actuator_key_id"), keyID)
 	assert.Equal(t, hex.EncodeToString(priv.Public().(ed25519.PublicKey)), keyID)
 }
 
@@ -144,11 +144,11 @@ func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
 
-	updatePlatformSetting(t, db, "Actuator_signing_key", strings.Repeat("a", ed25519.PrivateKeySize*2))
+	updatePlatformSetting(t, db, "actuator_signing_key", strings.Repeat("a", ed25519.PrivateKeySize*2))
 
 	_, _, err := sm.GetActuatorKey()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Actuator_signing_key decoded to 64 bytes; expected 32")
+	assert.Contains(t, err.Error(), "actuator_signing_key decoded to 64 bytes; expected 32")
 }
 
 func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
@@ -157,11 +157,11 @@ func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
 
-	updatePlatformSetting(t, db, "Actuator_key_id", strings.Repeat("b", ed25519.PublicKeySize*2))
+	updatePlatformSetting(t, db, "actuator_key_id", strings.Repeat("b", ed25519.PublicKeySize*2))
 
 	_, _, err := sm.GetActuatorKey()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Actuator_key_id does not match Actuator_signing_key")
+	assert.Contains(t, err.Error(), "actuator_key_id does not match actuator_signing_key")
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {

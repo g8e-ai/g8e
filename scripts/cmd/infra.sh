@@ -360,4 +360,10 @@ case "$TOP" in
             *)
                 echo "[g8e] unknown mcp subcommand: '$SUB'" >&2; exit 1 ;;
         esac ;;
+
+    approve)
+        _banner "approve ${SUB}"
+        _ensure_operator
+        _require_authenticated
+        exec bash "$SCRIPT_DIR/scripts/tools/approve-transaction.sh" "$SUB" "${@:3}" ;;
 esac

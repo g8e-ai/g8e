@@ -114,6 +114,9 @@ type CommandServiceConfig struct {
 	ActuatorSigningKey ed25519.PrivateKey
 	ActuatorKeyID      string
 
+	// Tribunal configuration
+	TribunalSigningKey ed25519.PrivateKey
+
 	// MCP gateway for protocol translation egress
 	MCPGateway *mcp.GatewayService
 }
@@ -205,11 +208,11 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 }
 
 func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, serviceCtx context.Context) {
-	// Initialize Tribunal with Sentinel for MITRE checks
+	// Initialize Tribunal with Sentinel for MITRE checks and private key for L2 signing
 	rs.tribunal = &governance.Tribunal{
-		NodeID:   c.Config.OperatorID,
-		Sentinel: c.Sentinel,
-		// PrivateKey would be loaded from PKI directory in production
+		NodeID:     c.Config.OperatorID,
+		Sentinel:   c.Sentinel,
+		PrivateKey: c.TribunalSigningKey,
 	}
 
 	// Initialize Actuator with trusted nodes and audit vault
@@ -245,9 +248,13 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		constants.ActionTypeMcpPromptGet,
 		constants.ActionTypeInvestigationCreate,
 	}
+	// Use Gateway.Posture for gateway mode, Config.Posture for outbound mode
 	posture := string(c.Config.Gateway.Posture)
 	if posture == "" {
-		posture = "doctrine"
+		posture = string(c.Config.Posture)
+	}
+	if posture == "" {
+		posture = "notary" // Default to notary for outbound mode since L3Notary is nil
 	}
 	rs.transactionVerifier = governance.NewTransactionVerifier(
 		c.Logger,

@@ -34,9 +34,10 @@ import (
 
 var requiredBootstrapSecrets = []string{
 	"session_encryption_key",
-	"Actuator_signing_key",
-	"Actuator_key_id",
+	"actuator_signing_key",
+	"actuator_key_id",
 	"auditor_hmac_key",
+	"tribunal_signing_key",
 }
 
 // SecretManager handles generation and validation of platform security secrets.
@@ -147,6 +148,14 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 	ActuatorPriv := ed25519.NewKeyFromSeed(ActuatorSeedBytes)
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	ActuatorKeyID := hex.EncodeToString(ActuatorPub)
+
+	// Generate Tribunal signing key for L2 consensus
+	TribunalSeedBytes, err := m.generateSecureTokenBytes(ed25519.SeedSize)
+	if err != nil {
+		return err
+	}
+	TribunalSeed := hex.EncodeToString(TribunalSeedBytes)
+
 	sessionEncryptionKey, err := m.generateSecureToken(32)
 	if err != nil {
 		return err
@@ -158,14 +167,15 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 
 	secrets := map[string]string{
 		"session_encryption_key": sessionEncryptionKey,
-		"Actuator_signing_key":   ActuatorSeed, // Seed for ED25519
-		"Actuator_key_id":        ActuatorKeyID,
+		"actuator_signing_key":   ActuatorSeed, // Seed for ED25519
+		"actuator_key_id":        ActuatorKeyID,
 		"auditor_hmac_key":       auditorHMACKey,
+		"tribunal_signing_key":   TribunalSeed, // Seed for ED25519
 	}
 
 	platformSettings := models.SettingsDocument{}
 	platformSettings.Settings = map[string]interface{}{
-		"Actuator_key_id": secrets["Actuator_key_id"],
+		"actuator_key_id": secrets["actuator_key_id"],
 	}
 	platformSettings.CreatedAt = now
 	platformSettings.UpdatedAt = now
@@ -383,17 +393,17 @@ func (m *SecretManager) generateSecureTokenBytes(bytes int) ([]byte, error) {
 // GetActuatorKey retrieves the Actuator's ED25519 signing key and its KeyID.
 // The signing key is decrypted from the keystore; the KeyID is read from app_settings.
 func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
-	seedHex, err := m.keystore.DecryptSecret("Actuator_signing_key")
+	seedHex, err := m.keystore.DecryptSecret("actuator_signing_key")
 	if err != nil {
-		return nil, "", fmt.Errorf("decrypt Actuator_signing_key: %w", err)
+		return nil, "", fmt.Errorf("decrypt actuator_signing_key: %w", err)
 	}
 
 	seed, err := hex.DecodeString(seedHex)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to decode Actuator_signing_key: %w", err)
+		return nil, "", fmt.Errorf("failed to decode actuator_signing_key: %w", err)
 	}
 	if len(seed) != ed25519.SeedSize {
-		return nil, "", fmt.Errorf("Actuator_signing_key decoded to %d bytes; expected %d; delete and recreate runtime state", len(seed), ed25519.SeedSize)
+		return nil, "", fmt.Errorf("actuator_signing_key decoded to %d bytes; expected %d; delete and recreate runtime state", len(seed), ed25519.SeedSize)
 	}
 
 	priv := ed25519.NewKeyFromSeed(seed)
@@ -413,15 +423,15 @@ func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
 		return nil, "", fmt.Errorf("app_settings missing settings map; delete and recreate runtime state")
 	}
 
-	keyID, ok := settings.Settings["Actuator_key_id"].(string)
+	keyID, ok := settings.Settings["actuator_key_id"].(string)
 	if !ok || strings.TrimSpace(keyID) == "" {
-		return nil, "", fmt.Errorf("app_settings missing Actuator_key_id; delete and recreate runtime state")
+		return nil, "", fmt.Errorf("app_settings missing actuator_key_id; delete and recreate runtime state")
 	}
 	keyID = strings.TrimSpace(keyID)
 
 	expectedKeyID := hex.EncodeToString(priv.Public().(ed25519.PublicKey))
 	if keyID != expectedKeyID {
-		return nil, "", fmt.Errorf("Actuator_key_id does not match Actuator_signing_key; delete and recreate runtime state")
+		return nil, "", fmt.Errorf("actuator_key_id does not match actuator_signing_key; delete and recreate runtime state")
 	}
 
 	return priv, keyID, nil
@@ -461,9 +471,22 @@ func (m *SecretManager) StoreTribunalKey(seedHex string) error {
 	return m.keystore.EncryptSecret("tribunal_signing_key", seedHex)
 }
 
-// GetTribunalKey retrieves a Tribunal signing key from the keystore.
-func (m *SecretManager) GetTribunalKey() (string, error) {
-	return m.keystore.DecryptSecret("tribunal_signing_key")
+// GetTribunalKey retrieves the Tribunal's ED25519 signing key from the keystore.
+func (m *SecretManager) GetTribunalKey() (ed25519.PrivateKey, error) {
+	seedHex, err := m.keystore.DecryptSecret("tribunal_signing_key")
+	if err != nil {
+		return nil, fmt.Errorf("decrypt tribunal_signing_key: %w", err)
+	}
+
+	seed, err := hex.DecodeString(seedHex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode tribunal_signing_key: %w", err)
+	}
+	if len(seed) != ed25519.SeedSize {
+		return nil, fmt.Errorf("tribunal_signing_key decoded to %d bytes; expected %d; delete and recreate runtime state", len(seed), ed25519.SeedSize)
+	}
+
+	return ed25519.NewKeyFromSeed(seed), nil
 }
 
 // StoreNotaryKey stores an L3 Notary signing key in the keystore.

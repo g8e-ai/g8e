@@ -369,6 +369,7 @@ func main() {
 		TZ:                  settings.TZ,
 		IPService:           settings.IPService,
 		IPResolver:          settings.IPResolver,
+		Posture:             "", // Will default to PostureNotary in Load() since L3Notary is nil
 	})
 	if err != nil {
 		logger.Error("Failed to load configuration", constants.ConnectionStateErrorStr, err)
@@ -633,6 +634,12 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		os.Exit(constants.ExitConfigError)
 	}
 
+	TribunalPriv, err := sm.GetTribunalKey()
+	if err != nil {
+		logger.Error("Failed to load Tribunal signing key - L2 consensus will fail", constants.ConnectionStateErrorStr, err)
+		os.Exit(constants.ExitConfigError)
+	}
+
 	// Export Actuator public key for receipt verification by evals harness
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	if err := exportActuatorPublicKey(cfg.PKIDir, ActuatorPub, ActuatorKeyID, logger); err != nil {
@@ -666,6 +673,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		L3Notary:           govDeps.L3Notary,
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
+		TribunalSigningKey: TribunalPriv,
 		MCPGateway:         mcpSvc,
 	}
 

@@ -372,6 +372,11 @@ func (s *Sentinel) LoadDoctrinesFromProtocol() {
 		return
 	}
 
+	if !s.config.SentinelEnabled {
+		s.logger.Info("Protocol doctrine loading disabled - SentinelEnabled is false")
+		return
+	}
+
 	doctrineDir := s.config.DoctrineDir
 	if doctrineDir == "" {
 		doctrineDir = filepath.Join(constants.Paths.Infra.ProtocolDir, "constants", "doctrine")

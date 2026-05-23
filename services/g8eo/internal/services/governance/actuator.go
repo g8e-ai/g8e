@@ -96,22 +96,22 @@ func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg 
 
 	// 1. Prepare initial receipt
 	// Receipt is signed by the Actuator (Authorized Dispatch) identity.
-	implicitL2 := false
+	gatewaySigned := false
 	if vt.Envelope.Governance != nil {
-		implicitL2 = vt.Envelope.Governance.ImplicitL2Signature
+		gatewaySigned = vt.Envelope.Governance.GatewaySigned
 	}
 
 	receipt := &operatorv1.ActionReceipt{
-		TransactionId:       vt.Envelope.Id,
-		TransactionHash:     vt.Envelope.TransactionHash,
-		Status:              operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
-		ResultSummary:       "executing",
-		StateRootBefore:     stateBefore,
-		ExecutedAtUnixMs:    time.Now().UnixMilli(),
-		SignerKeyId:         w.KeyID,
-		ImplicitL2Signature: implicitL2,
-		L2Valid:             vt.L2Valid,
-		L3Valid:             vt.L3Valid,
+		TransactionId:    vt.Envelope.Id,
+		TransactionHash:  vt.Envelope.TransactionHash,
+		Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
+		ResultSummary:    "executing",
+		StateRootBefore:  stateBefore,
+		ExecutedAtUnixMs: time.Now().UnixMilli(),
+		SignerKeyId:      w.KeyID,
+		GatewaySigned:    gatewaySigned,
+		L2Valid:          vt.L2Valid,
+		L3Valid:          vt.L3Valid,
 	}
 
 	// 2. Sign the initial receipt (intent to execute)
@@ -178,21 +178,21 @@ func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg 
 // CanonicalizeActionReceipt produces a deterministic byte representation for signing/verification.
 // This function must be used by both signing and verification to ensure consistency.
 // Field order: transaction_id, transaction_hash, status, result_summary, state_root_before,
-// state_root_after, executed_at_unix_ms, signer_key_id, implicit_l2_signature, l2_valid, l3_valid.
+// state_root_after, executed_at_unix_ms, signer_key_id, gateway_signed, l2_valid, l3_valid.
 // All fields are included in the canonical form.
 func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 	payload, err := json.Marshal(map[string]interface{}{
-		"transaction_id":        r.TransactionId,
-		"transaction_hash":      r.TransactionHash,
-		"status":                int32(r.Status),
-		"result_summary":        r.ResultSummary,
-		"state_root_before":     r.StateRootBefore,
-		"state_root_after":      r.StateRootAfter,
-		"executed_at_unix_ms":   r.ExecutedAtUnixMs,
-		"signer_key_id":         r.SignerKeyId,
-		"implicit_l2_signature": r.ImplicitL2Signature,
-		"l2_valid":              r.L2Valid,
-		"l3_valid":              r.L3Valid,
+		"transaction_id":      r.TransactionId,
+		"transaction_hash":    r.TransactionHash,
+		"status":              int32(r.Status),
+		"result_summary":      r.ResultSummary,
+		"state_root_before":   r.StateRootBefore,
+		"state_root_after":    r.StateRootAfter,
+		"executed_at_unix_ms": r.ExecutedAtUnixMs,
+		"signer_key_id":       r.SignerKeyId,
+		"gateway_signed":      r.GatewaySigned,
+		"l2_valid":            r.L2Valid,
+		"l3_valid":            r.L3Valid,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal receipt for canonicalization: %w", err)
@@ -237,7 +237,7 @@ func (w *Actuator) LogReceipt(env *uap.UAPEnvelope, r *operatorv1.ActionReceipt)
 		ExecutedAt:        time.UnixMilli(r.ExecutedAtUnixMs),
 		SignerKeyID:       r.SignerKeyId,
 		Signature:         r.Signature,
-		ImplicitL2:        r.ImplicitL2Signature,
+		GatewaySigned:     r.GatewaySigned,
 		Timestamp:         time.Now().UTC(),
 	}
 
@@ -273,7 +273,7 @@ func (w *Actuator) logReceiptDocument(env *uap.UAPEnvelope, r *operatorv1.Action
 		ExecutedAt:        time.UnixMilli(r.ExecutedAtUnixMs),
 		SignerKeyID:       r.SignerKeyId,
 		Signature:         r.Signature,
-		ImplicitL2:        r.ImplicitL2Signature,
+		GatewaySigned:     r.GatewaySigned,
 		Timestamp:         time.Now().UTC(),
 	}
 
