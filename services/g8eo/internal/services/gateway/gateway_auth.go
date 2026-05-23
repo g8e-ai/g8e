@@ -266,7 +266,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		// without a peer cert means an internal misroute, not a client error.
 		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 			s.logger.Warn("mTLS required but no client certificate provided", "path", r.URL.Path)
-			s.jsonError(w, http.StatusUnauthorized, "mTLS client certificate required")
+			s.responder.Error(w, http.StatusUnauthorized, "mTLS client certificate required")
 			return
 		}
 
@@ -274,7 +274,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		if s.pki != nil {
 			if err := s.pki.VerifyCertificate(r.TLS.PeerCertificates[0]); err != nil {
 				s.logger.Warn("mTLS client certificate revoked or invalid", "path", r.URL.Path, string(constants.ConnectionStateError), err)
-				s.jsonError(w, http.StatusUnauthorized, "mTLS client certificate revoked or invalid")
+				s.responder.Error(w, http.StatusUnauthorized, "mTLS client certificate revoked or invalid")
 				return
 			}
 		}
@@ -312,7 +312,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 					}
 					if !match {
 						s.logger.Warn("mTLS URI SAN mismatch for operator session", "path", r.URL.Path, "operator_id", op.ID, "operator_session_id", operatorSessionID)
-						s.jsonError(w, http.StatusForbidden, "mTLS identity mismatch")
+						s.responder.Error(w, http.StatusForbidden, "mTLS identity mismatch")
 						return
 					}
 				}
@@ -324,7 +324,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 
 			// If it's a structured AuthError, return it properly
 			if ae, ok := err.(*AuthError); ok {
-				s.jsonError(w, ae.Status, ae.Message) // Note: jsonError wraps it in {"error": ...}
+				s.responder.Error(w, ae.Status, ae.Message) // Note: responder.Error wraps it in {"error": ...}
 				return
 			}
 		case cliSessionID != "":
@@ -339,12 +339,12 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				cliDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 				if err != nil {
 					s.logger.Error("failed to load CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
-					s.jsonError(w, http.StatusInternalServerError, "failed to load session")
+					s.responder.Error(w, http.StatusInternalServerError, "failed to load session")
 					return
 				}
 				if cliDoc == nil {
 					s.logger.Warn("CLI session not found", "cli_session_id", cliSessionID)
-					s.jsonError(w, http.StatusUnauthorized, "invalid CLI session")
+					s.responder.Error(w, http.StatusUnauthorized, "invalid CLI session")
 					return
 				}
 
@@ -352,14 +352,14 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				b, _ := json.Marshal(cliDoc.Data)
 				if err := json.Unmarshal(b, &cliSession); err != nil {
 					s.logger.Error("failed to parse CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
-					s.jsonError(w, http.StatusInternalServerError, "failed to parse session")
+					s.responder.Error(w, http.StatusInternalServerError, "failed to parse session")
 					return
 				}
 
 				// Check expiry
 				if !cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(time.Now()) {
 					s.logger.Warn("CLI session expired", "cli_session_id", cliSessionID)
-					s.jsonError(w, http.StatusUnauthorized, "CLI session expired")
+					s.responder.Error(w, http.StatusUnauthorized, "CLI session expired")
 					return
 				}
 
@@ -368,12 +368,12 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 					user, err := s.userSvc.GetByID(cliSession.UserID)
 					if err != nil {
 						s.logger.Error("failed to load user for CLI session", "user_id", cliSession.UserID, string(constants.ConnectionStateError), err)
-						s.jsonError(w, http.StatusInternalServerError, "identity validation failed")
+						s.responder.Error(w, http.StatusInternalServerError, "identity validation failed")
 						return
 					}
 					if user != nil && !user.IsActive() {
 						s.logger.Warn("CLI session identity disabled", "user_id", cliSession.UserID)
-						s.jsonError(w, http.StatusForbidden, "identity disabled")
+						s.responder.Error(w, http.StatusForbidden, "identity disabled")
 						return
 					}
 				}
@@ -389,7 +389,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				}
 				if !match {
 					s.logger.Warn("mTLS URI SAN mismatch for CLI session", "path", r.URL.Path, "cli_session_id", cliSessionID)
-					s.jsonError(w, http.StatusForbidden, "mTLS identity mismatch")
+					s.responder.Error(w, http.StatusForbidden, "mTLS identity mismatch")
 					return
 				}
 			}
@@ -423,7 +423,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		s.jsonError(w, http.StatusUnauthorized, "protocol authentication required")
+		s.responder.Error(w, http.StatusUnauthorized, "protocol authentication required")
 	})
 }
 
@@ -473,34 +473,30 @@ func (s *AuthService) WebSocketAuth(next http.Handler) http.Handler {
 	return s.Middleware(next)
 }
 
-func (s *AuthService) jsonError(w http.ResponseWriter, status int, msg string) {
-	s.responder.Error(w, status, msg)
-}
-
 // WebSessionAuth validates web session cookies and stamps context with user_id.
 // This is for browser-based authentication on the public gateway.
 func (s *AuthService) WebSessionAuth(next http.Handler, db *GatewayDBService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("g8e_session")
 		if err != nil || cookie == nil {
-			s.jsonError(w, http.StatusUnauthorized, "web session cookie required")
+			s.responder.Error(w, http.StatusUnauthorized, "web session cookie required")
 			return
 		}
 
 		sessionID := cookie.Value
 		if sessionID == "" {
-			s.jsonError(w, http.StatusUnauthorized, "invalid web session cookie")
+			s.responder.Error(w, http.StatusUnauthorized, "invalid web session cookie")
 			return
 		}
 
 		// Validate web session
 		doc, err := db.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), sessionID)
 		if err != nil {
-			s.jsonError(w, http.StatusUnauthorized, "web session validation failed")
+			s.responder.Error(w, http.StatusUnauthorized, "web session validation failed")
 			return
 		}
 		if doc == nil {
-			s.jsonError(w, http.StatusUnauthorized, "web session not found")
+			s.responder.Error(w, http.StatusUnauthorized, "web session not found")
 			return
 		}
 
@@ -508,16 +504,16 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *GatewayDBService) ht
 		var webSession models.WebSession
 		data, err := json.Marshal(doc.Data)
 		if err != nil {
-			s.jsonError(w, http.StatusUnauthorized, "web session parse failed")
+			s.responder.Error(w, http.StatusUnauthorized, "web session parse failed")
 			return
 		}
 		if err := json.Unmarshal(data, &webSession); err != nil {
-			s.jsonError(w, http.StatusUnauthorized, "web session parse failed")
+			s.responder.Error(w, http.StatusUnauthorized, "web session parse failed")
 			return
 		}
 
 		if time.Now().UnixMilli() > webSession.ExpiresAtUnixMs {
-			s.jsonError(w, http.StatusUnauthorized, "web session expired")
+			s.responder.Error(w, http.StatusUnauthorized, "web session expired")
 			return
 		}
 
@@ -525,11 +521,11 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *GatewayDBService) ht
 		if s.userSvc != nil {
 			user, err := s.userSvc.GetByID(webSession.UserID)
 			if err != nil {
-				s.jsonError(w, http.StatusUnauthorized, "user validation failed")
+				s.responder.Error(w, http.StatusUnauthorized, "user validation failed")
 				return
 			}
 			if user != nil && !user.IsActive() {
-				s.jsonError(w, http.StatusUnauthorized, "identity disabled")
+				s.responder.Error(w, http.StatusUnauthorized, "identity disabled")
 				return
 			}
 		}

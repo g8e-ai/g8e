@@ -30,6 +30,7 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	execution "github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
 )
@@ -59,6 +60,7 @@ type Actuator struct {
 	StateRootProvider StateRootProvider
 	Ctx               context.Context
 	ExecutionHandler  ExecutionHandler
+	Sentinel          *sentinel.Sentinel
 
 	// Actuator's own signing identity for ActionReceipts
 	SigningKey ed25519.PrivateKey
@@ -132,6 +134,24 @@ func (w *Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMsg 
 	if err := w.LogReceipt(vt.Envelope, receipt); err != nil {
 		w.Logger.Error("Fail-closed: Failed to log initial action receipt", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
 		return nil, fmt.Errorf("failed to log initial action receipt: %w", err)
+	}
+
+	// 3.5. Rehydrate payload if Sentinel is available
+	if w.Sentinel != nil && cmdMsg != nil {
+		if rehydratable, ok := cmdMsg.(interface{
+			GetPayload() []byte
+			SetPayload([]byte)
+		}); ok {
+			p := rehydratable.GetPayload()
+			if len(p) > 0 {
+				rehydrated, rehydrateErr := w.Sentinel.RehydratePayload(p)
+				if rehydrateErr == nil {
+					rehydratable.SetPayload(rehydrated)
+				} else {
+					w.Logger.Warn("Failed to rehydrate payload", string(constants.ConnectionStateError), rehydrateErr, "message_id", vt.Envelope.Id)
+				}
+			}
+		}
 	}
 
 	// 4. Execute through the handler

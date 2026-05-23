@@ -245,7 +245,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 			assert.Equal(t, http.StatusUnauthorized, rr.Code, "Path %s should be denied without token", path)
 
-			assert.Contains(t, rr.Body.String(), "mTLS client certificate required", "Path %s should require mTLS", path)
+			assert.JSONEq(t, `{"error":"mTLS client certificate required"}`, rr.Body.String(), "Path %s should require mTLS", path)
 		}
 	})
 
@@ -292,7 +292,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 
 		// Should require mTLS since token is invalid
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "mTLS client certificate required")
+		assert.JSONEq(t, `{"error":"mTLS client certificate required"}`, rr.Body.String())
 	})
 }
 
@@ -308,7 +308,7 @@ func TestHandleHealth(t *testing.T) {
 
 		h.handleHealth(rr, req)
 		assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
-		assert.Contains(t, rr.Body.String(), "app_settings not ready")
+		assert.JSONEq(t, `{"error":"app_settings not ready"}`, rr.Body.String())
 	})
 
 	t.Run("Returns 200 when app_settings exists", func(t *testing.T) {
@@ -464,7 +464,7 @@ func TestHandleDB(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleDB(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "invalid JSON body")
+		assert.JSONEq(t, `{"error":"invalid JSON body"}`, rr.Body.String())
 	})
 
 	t.Run("PATCH not found", func(t *testing.T) {
@@ -583,7 +583,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEPush(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "mTLS client certificate required")
+		assert.JSONEq(t, `{"error":"mTLS client certificate required"}`, rr.Body.String())
 	})
 
 	t.Run("push requires correct G8EE app identity", func(t *testing.T) {
@@ -601,7 +601,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEPush(rr, req)
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "unauthorized client identity")
+		assert.JSONEq(t, `{"error":"unauthorized client identity"}`, rr.Body.String())
 	})
 
 	seedCLISession := func(cliSessionID, operatorSessionID string) {
@@ -749,7 +749,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "cli session not found")
+		assert.JSONEq(t, `{"error":"cli session not found"}`, rr.Body.String())
 	})
 
 	t.Run("authorization: operator cannot access cli_session_id owned by different operator", func(t *testing.T) {
@@ -764,7 +764,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "operator session does not own this cli session")
+		assert.JSONEq(t, `{"error":"operator session does not own this cli session"}`, rr.Body.String())
 	})
 
 	t.Run("authorization: operator can access own cli_session_id", func(t *testing.T) {
@@ -790,7 +790,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "operator session does not own this web session")
+		assert.JSONEq(t, `{"error":"operator session does not own this web session"}`, rr.Body.String())
 	})
 
 	t.Run("authorization: operator cannot access user_id they don't belong to", func(t *testing.T) {
@@ -802,7 +802,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "invalid operator session")
+		assert.JSONEq(t, `{"error":"invalid operator session"}`, rr.Body.String())
 	})
 
 	t.Run("authorization: missing operator session id is rejected", func(t *testing.T) {
@@ -811,7 +811,7 @@ func TestInternalSSEBridge(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "missing operator session id")
+		assert.JSONEq(t, `{"error":"missing operator session id"}`, rr.Body.String())
 	})
 
 	t.Run("stream endpoint and Last-Event-ID", func(t *testing.T) {
@@ -1006,7 +1006,7 @@ func TestHandleBlob(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleBlob(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "Content-Type header required")
+		assert.JSONEq(t, `{"error":"Content-Type header required"}`, rr.Body.String())
 	})
 
 	t.Run("Invalid namespace", func(t *testing.T) {
@@ -1056,7 +1056,7 @@ func TestHandleBlob(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleBlob(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "body must not be empty")
+		assert.JSONEq(t, `{"error":"body must not be empty"}`, rr.Body.String())
 	})
 
 	t.Run("Blob PUT read error", func(t *testing.T) {
@@ -1221,7 +1221,7 @@ func TestHandleBootstrap(t *testing.T) {
 		h2.handleBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "only available over loopback")
+		assert.JSONEq(t, `{"error":"only available over loopback"}`, rr.Body.String())
 	})
 
 	t.Run("Success - Rotation for existing bootstrap user", func(t *testing.T) {
@@ -1277,7 +1277,7 @@ func TestHandleBootstrap(t *testing.T) {
 		h3.handleBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusConflict, rr.Code)
-		assert.Contains(t, rr.Body.String(), "is disabled, cannot rotate")
+		assert.JSONEq(t, `{"error":"bootstrap user is disabled, cannot rotate"}`, rr.Body.String())
 	})
 
 	t.Run("Failure - Rejects bootstrap if ANY other users exist", func(t *testing.T) {
@@ -1297,7 +1297,7 @@ func TestHandleBootstrap(t *testing.T) {
 		h4.handleBootstrap(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "bootstrap only available for initial setup")
+		assert.JSONEq(t, `{"error":"bootstrap only available for initial setup"}`, rr.Body.String())
 	})
 }
 
