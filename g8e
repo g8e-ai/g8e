@@ -43,45 +43,213 @@ G8E_CREDENTIALS_FILE="$G8E_CREDENTIALS_DIR/credentials"
 # Source common helpers for the wrapper itself
 source "$SCRIPT_DIR/scripts/cmd/common.sh"
 
+_gateway_menu() {
+    while true; do
+        clear
+        echo -e "\033[1;34m  __ _   ___   ___  \033[0m"; echo -e "\033[1;34m / _\` | ( _ ) / _ \\ \033[0m"; echo -e "\033[1;34m| (_| | / _ \\|  __/ \033[0m"; echo -e "\033[1;34m \\__, | \\___/ \\___| \033[0m"; echo -e "\033[1;34m  ___/              \033[0m"
+        echo ""; echo -e "\033[1;32m   Gateway (g8eg)\033[0m"; echo ""
+        echo "1) ./g8e platform status"
+        echo "2) ./g8e platform start"
+        echo "3) ./g8e platform stop"
+        echo "4) ./g8e platform restart"
+        echo "5) ./g8e platform logs"
+        echo "6) ./g8e platform settings"
+        echo "7) ./g8e platform reset"
+        echo "8) ./g8e platform clean"
+        echo ""
+        echo "b) Back to Main Menu"
+        echo "q) Exit"
+        echo ""; read -p "Choose an option: " choice; echo ""
+        case $choice in
+            1) ./g8e platform status ;;
+            2) ./g8e platform start ;;
+            3) ./g8e platform stop ;;
+            4) ./g8e platform restart ;;
+            5) ./g8e platform logs ;;
+            6) ./g8e platform settings ;;
+            7) ./g8e platform reset ;;
+            8) ./g8e platform clean ;;
+            b|B) return ;;
+            q|Q) exit 0 ;;
+            *) echo "Invalid option." ;;
+        esac
+        echo ""; read -p "Press Enter to continue..."
+    done
+}
+
+_operator_menu() {
+    while true; do
+        clear
+        echo -e "\033[1;34m  __ _   ___   ___  \033[0m"; echo -e "\033[1;34m / _\` | ( _ ) / _ \\ \033[0m"; echo -e "\033[1;34m| (_| | / _ \\|  __/ \033[0m"; echo -e "\033[1;34m \\__, | \\___/ \\___| \033[0m"; echo -e "\033[1;34m  ___/              \033[0m"
+        echo ""; echo -e "\033[1;32m   Operator (g8eo)\033[0m"; echo ""
+        echo "1) ./g8e operator init"
+        echo "2) ./g8e operator build"
+        echo "3) ./g8e operator build-all"
+        echo "4) ./g8e operator deploy"
+        echo "5) ./g8e operator stream"
+        echo "6) ./g8e operator reauth"
+        echo "7) ./g8e operator ssh-config"
+        echo ""
+        echo "b) Back to Main Menu"
+        echo "q) Exit"
+        echo ""; read -p "Choose an option: " choice; echo ""
+        case $choice in
+            1) ./g8e operator init ;;
+            2) ./g8e operator build ;;
+            3) ./g8e operator build-all ;;
+            4) ./g8e operator deploy --help ;;
+            5) ./g8e operator stream --help ;;
+            6) ./g8e operator reauth ;;
+            7) ./g8e operator ssh-config ;;
+            b|B) return ;;
+            q|Q) exit 0 ;;
+            *) echo "Invalid option." ;;
+        esac
+        echo ""; read -p "Press Enter to continue..."
+    done
+}
+
+_apps_menu() {
+    while true; do
+        clear
+        echo -e "\033[1;34m  __ _   ___   ___  \033[0m"; echo -e "\033[1;34m / _\` | ( _ ) / _ \\ \033[0m"; echo -e "\033[1;34m| (_| | / _ \\|  __/ \033[0m"; echo -e "\033[1;34m \\__, | \\___/ \\___| \033[0m"; echo -e "\033[1;34m  ___/              \033[0m"
+        echo ""; echo -e "\033[1;32m   Apps (g8ee)\033[0m"; echo ""
+        echo "1) ./g8e apps status"
+        echo "2) ./g8e apps start g8ee"
+        echo "3) ./g8e apps stop g8ee"
+        echo "4) ./g8e apps restart g8ee"
+        echo "5) ./g8e apps build g8ee"
+        echo "6) ./g8e chat"
+        echo ""
+        echo "b) Back to Main Menu"
+        echo "q) Exit"
+        echo ""; read -p "Choose an option: " choice; echo ""
+        case $choice in
+            1) ./g8e apps status ;;
+            2) ./g8e apps start g8ee ;;
+            3) ./g8e apps stop g8ee ;;
+            4) ./g8e apps restart g8ee ;;
+            5) ./g8e apps build g8ee ;;
+            6) ./g8e chat --help ;;
+            b|B) return ;;
+            q|Q) exit 0 ;;
+            *) echo "Invalid option." ;;
+        esac
+        echo ""; read -p "Press Enter to continue..."
+    done
+}
+
+_protocol_menu() {
+    while true; do
+        clear
+        echo -e "\033[1;34m  __ _   ___   ___  \033[0m"; echo -e "\033[1;34m / _\` | ( _ ) / _ \\ \033[0m"; echo -e "\033[1;34m| (_| | / _ \\|  __/ \033[0m"; echo -e "\033[1;34m \\__, | \\___/ \\___| \033[0m"; echo -e "\033[1;34m  ___/              \033[0m"
+        echo ""; echo -e "\033[1;32m   Protocol & Infrastructure\033[0m"; echo ""
+        echo "1) ./g8e login"
+        echo "2) ./g8e logout"
+        echo "3) ./g8e vars list"
+        echo "4) ./g8e security validate"
+        echo "5) ./g8e data users"
+        echo "6) ./g8e data operators"
+        echo "7) ./g8e data store"
+        echo "8) ./g8e data settings"
+        echo "9) ./g8e data device-links"
+        echo "10) ./g8e data audit"
+        echo "11) ./g8e llm setup"
+        echo "12) ./g8e mcp config"
+        echo "13) ./g8e search setup"
+        echo "14) ./g8e ssh setup"
+        echo "15) ./g8e aws setup"
+        echo ""
+        echo "b) Back to Main Menu"
+        echo "q) Exit"
+        echo ""; read -p "Choose an option: " choice; echo ""
+        case $choice in
+            1) if _credentials_exist; then echo "Current Session: $OPERATOR_ID"; read -p "Logout? [y/N]: " lout; [[ "$lout" == "y" ]] && ./g8e logout; else ./g8e login; fi ;;
+            2) ./g8e logout ;;
+            3) ./g8e vars list ;;
+            4) ./g8e security validate ;;
+            5) ./g8e data users --help ;;
+            6) ./g8e data operators --help ;;
+            7) ./g8e data store --help ;;
+            8) ./g8e data settings --help ;;
+            9) ./g8e data device-links --help ;;
+            10) ./g8e data audit --help ;;
+            11) ./g8e llm setup ;;
+            12) ./g8e mcp config ;;
+            13) ./g8e search setup ;;
+            14) ./g8e ssh setup ;;
+            15) ./g8e aws setup ;;
+            b|B) return ;;
+            q|Q) exit 0 ;;
+            *) echo "Invalid option." ;;
+        esac
+        echo ""; read -p "Press Enter to continue..."
+    done
+}
+
+_testing_menu() {
+    while true; do
+        clear
+        echo -e "\033[1;34m  __ _   ___   ___  \033[0m"; echo -e "\033[1;34m / _\` | ( _ ) / _ \\ \033[0m"; echo -e "\033[1;34m| (_| | / _ \\|  __/ \033[0m"; echo -e "\033[1;34m \\__, | \\___/ \\___| \033[0m"; echo -e "\033[1;34m  ___/              \033[0m"
+        echo ""; echo -e "\033[1;32m   Testing & Evaluation\033[0m"; echo ""
+        echo "1) ./g8e test g8eo"
+        echo "2) ./g8e test g8ee"
+        echo "3) ./g8e test ci"
+        echo "4) ./g8e test chaos"
+        echo "5) ./g8e demo deploy"
+        echo "6) ./g8e demo status"
+        echo "7) ./g8e demo down"
+        echo "8) ./g8e evals bench"
+        echo "9) ./g8e evals list"
+        echo "10) ./g8e evals verify-receipts"
+        echo ""
+        echo "b) Back to Main Menu"
+        echo "q) Exit"
+        echo ""; read -p "Choose an option: " choice; echo ""
+        case $choice in
+            1) ./g8e test g8eo ;;
+            2) ./g8e test g8ee ;;
+            3) ./g8e test ci ;;
+            4) ./g8e test chaos --help ;;
+            5) ./g8e demo deploy --help ;;
+            6) ./g8e demo status ;;
+            7) ./g8e demo down ;;
+            8) ./g8e evals bench --help ;;
+            9) ./g8e evals list ;;
+            10) ./g8e evals verify-receipts --help ;;
+            b|B) return ;;
+            q|Q) exit 0 ;;
+            *) echo "Invalid option." ;;
+        esac
+        echo ""; read -p "Press Enter to continue..."
+    done
+}
+
 _menu() {
     if [[ ! -t 0 ]]; then _help; exit 0; fi
     while true; do
         clear
         echo -e "\033[1;34m  __ _   ___   ___  \033[0m"; echo -e "\033[1;34m / _\` | ( _ ) / _ \\ \033[0m"; echo -e "\033[1;34m| (_| | / _ \\|  __/ \033[0m"; echo -e "\033[1;34m \\__, | \\___/ \\___| \033[0m"; echo -e "\033[1;34m  ___/              \033[0m"
         echo ""; echo -e "\033[1;32m   Interactive g8e Platform Manager\033[0m"; echo ""
-        echo "1) Platform Status"; echo "2) Start Platform"; echo "3) Stop Platform"; echo "4) View Logs"; echo "5) Run Tests"; echo "6) Demo Fleet"; echo "7) Evaluation Suite"; echo "8) Environment Variables (vars)"; echo "9) Login / Auth"; echo "10) Advanced (Data/Security/Setup)"; echo "0) Setup Environment"; echo "q) Exit"
-        echo ""; read -p "Choose an option [0-10, q]: " choice; echo ""
+        echo "1) Gateway (g8eg)"
+        echo "2) Operator (g8eo)"
+        echo "3) Apps (g8ee)"
+        echo "4) Protocol & Infrastructure"
+        echo "5) Testing & Evaluation"
+        echo ""
+        echo "0) Setup Environment"
+        echo "q) Exit"
+        echo ""; read -p "Choose an option: " choice; echo ""
         case $choice in
-            1) ./g8e platform status ;;
-            2) ./g8e platform start ;;
-            3) ./g8e platform stop ;;
-            4) ./g8e platform logs ;;
-            5)
-                echo "1) g8eo (Remote Operator)"; echo "2) g8ee (Python Ensemble)"
-                read -p "Select service [1-2]: " tcomp
-                case $tcomp in
-                    1) ./g8e test g8eo ;;
-                    2) ./g8e test g8ee ;;
-                esac ;;
-            6)
-                echo "1) Up"; echo "2) Status"; echo "3) Down"
-                read -p "Select demo action [1-3]: " dact
-                case $dact in 1) ./g8e demo up ;; 2) ./g8e demo status ;; 3) ./g8e demo down ;; esac ;;
-            7)
-                echo "1) Run benchmark"; echo "2) List evals"
-                read -p "Select eval action [1-2]: " eact
-                case $eact in 1) ./g8e evals bench ;; 2) ./g8e evals list ;; esac ;;
-            8) ./g8e vars list ;;
-            9) if _credentials_exist; then echo "Current Session: $OPERATOR_ID"; read -p "Logout? [y/N]: " lout; [[ "$lout" == "y" ]] && ./g8e logout; else ./g8e login; fi ;;
-            10)
-                echo "1) Security Status"; echo "2) LLM Setup"; echo "3) Search Setup"; echo "4) SSH Setup"
-                read -p "Select advanced option [1-4]: " adv
-                case $adv in 1) ./g8e security validate ;; 2) ./g8e llm show ;; 3) ./g8e search setup ;; 4) ./g8e ssh setup ;; esac ;;
+            1) _gateway_menu ;;
+            2) _operator_menu ;;
+            3) _apps_menu ;;
+            4) _protocol_menu ;;
+            5) _testing_menu ;;
             0) ./g8e setup ;;
             q|Q) exit 0 ;;
             *) echo "Invalid option." ;;
         esac
-        echo ""; read -p "Press Enter to continue..."
     done
 }
 
