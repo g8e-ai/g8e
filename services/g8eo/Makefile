@@ -274,7 +274,7 @@ lint:
 		echo "golangci-lint not found. Run 'make install-tools' to install it locally."; \
 		exit 1; \
 	fi
-	@$(GOLANGCI_LINT) run
+	@$(GOLANGCI_LINT) run --path-prefix=services/g8eo
 
 .PHONY: vulncheck
 vulncheck:
