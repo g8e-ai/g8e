@@ -52,3 +52,49 @@ const (
 	PubSubEventPMessage   = "pmessage"
 	PubSubEventSubscribed = "subscribed"
 )
+
+// Storage and governance channel prefixes (for pubsub-based data operations).
+const (
+	ChannelStorageDocument = "storage_document"
+	ChannelStorageKv       = "storage_kv"
+	ChannelStorageBlob     = "storage_blob"
+	ChannelGovernance      = "governance"
+	ChannelOperatorIntent  = "operator_intent"
+	ChannelOperatorDevice  = "operator_device"
+	ChannelSseEvent        = "sse_event"
+)
+
+// StorageDocumentChannel returns the document storage channel for an operator.
+func StorageDocumentChannel(operatorID, operatorSessionID string) string {
+	return fmt.Sprintf("%s:%s:%s", ChannelStorageDocument, operatorID, operatorSessionID)
+}
+
+// StorageKvChannel returns the KV storage channel for an operator.
+func StorageKvChannel(operatorID, operatorSessionID string) string {
+	return fmt.Sprintf("%s:%s:%s", ChannelStorageKv, operatorID, operatorSessionID)
+}
+
+// StorageBlobChannel returns the blob storage channel for an operator.
+func StorageBlobChannel(operatorID, operatorSessionID string) string {
+	return fmt.Sprintf("%s:%s:%s", ChannelStorageBlob, operatorID, operatorSessionID)
+}
+
+// GovernanceChannel returns the governance channel for envelope submission.
+func GovernanceChannel(operatorID, operatorSessionID string) string {
+	return fmt.Sprintf("%s:%s:%s", ChannelGovernance, operatorID, operatorSessionID)
+}
+
+// OperatorIntentChannel returns the intent management channel for an operator.
+func OperatorIntentChannel(operatorID, operatorSessionID string) string {
+	return fmt.Sprintf("%s:%s:%s", ChannelOperatorIntent, operatorID, operatorSessionID)
+}
+
+// OperatorDeviceChannel returns the device management channel for an operator.
+func OperatorDeviceChannel(operatorID, operatorSessionID string) string {
+	return fmt.Sprintf("%s:%s:%s", ChannelOperatorDevice, operatorID, operatorSessionID)
+}
+
+// SseEventChannel returns the SSE event push channel.
+func SseEventChannel(operatorID, operatorSessionID string) string {
+	return fmt.Sprintf("%s:%s:%s", ChannelSseEvent, operatorID, operatorSessionID)
+}

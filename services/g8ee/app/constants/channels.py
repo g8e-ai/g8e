@@ -25,6 +25,13 @@ class OperatorChannel(StrEnum):
     OPERATOR_HEARTBEATS = "operator_heartbeats"
     SSE_EVENTS = "sse_events"
     SYSTEM_EVENTS = "system_events"
+    STORAGE_DOCUMENT = "storage_document"
+    STORAGE_KV = "storage_kv"
+    STORAGE_BLOB = "storage_blob"
+    GOVERNANCE = "governance"
+    OPERATOR_INTENT = "operator_intent"
+    OPERATOR_DEVICE = "operator_device"
+    SSE_EVENT = "sse_event"
 
     @classmethod
     def cmd(cls, operator_id: str, operator_session_id: str) -> str:
@@ -37,6 +44,34 @@ class OperatorChannel(StrEnum):
     @classmethod
     def heartbeat(cls, operator_id: str, operator_session_id: str) -> str:
         return f"{cls.HEARTBEAT}:{operator_id}:{operator_session_id}"
+
+    @classmethod
+    def storage_document(cls, operator_id: str, operator_session_id: str) -> str:
+        return f"{cls.STORAGE_DOCUMENT}:{operator_id}:{operator_session_id}"
+
+    @classmethod
+    def storage_kv(cls, operator_id: str, operator_session_id: str) -> str:
+        return f"{cls.STORAGE_KV}:{operator_id}:{operator_session_id}"
+
+    @classmethod
+    def storage_blob(cls, operator_id: str, operator_session_id: str) -> str:
+        return f"{cls.STORAGE_BLOB}:{operator_id}:{operator_session_id}"
+
+    @classmethod
+    def governance(cls, operator_id: str, operator_session_id: str) -> str:
+        return f"{cls.GOVERNANCE}:{operator_id}:{operator_session_id}"
+
+    @classmethod
+    def operator_intent(cls, operator_id: str, operator_session_id: str) -> str:
+        return f"{cls.OPERATOR_INTENT}:{operator_id}:{operator_session_id}"
+
+    @classmethod
+    def operator_device(cls, operator_id: str, operator_session_id: str) -> str:
+        return f"{cls.OPERATOR_DEVICE}:{operator_id}:{operator_session_id}"
+
+    @classmethod
+    def sse_event(cls, operator_id: str, operator_session_id: str) -> str:
+        return f"{cls.SSE_EVENT}:{operator_id}:{operator_session_id}"
 
     @classmethod
     def parse(cls, channel: str) -> tuple[str, str, str]:

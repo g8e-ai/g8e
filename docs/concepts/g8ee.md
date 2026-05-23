@@ -8,7 +8,7 @@ parent: Components
 Last Updated: 2026-05-20
 Version: v0.4.0
 
-g8ee is the **g8e Agentic Ensemble** (the optional reference AI reasoning system) of the g8e platform. It is a **g8e-compliant agentic ensemble** and application-layer adapter built on top of the [g8e Protocol](protocol.md); the protocol Gateway (`g8eg` and `g8eo`) is the only mandatory component. g8ee demonstrates how a Tribunal-based, multi-provider LLM reasoning system can act as a **Layer 2 (Consensus) producer** that emits typed, signed `GovernanceEnvelope` (UAP) transactions to a Governance Gateway (`g8eg`) for validation/approval and subsequent execution by a Governed Operator (`g8eo`).
+g8ee is the **g8e Agentic Ensemble** (the optional reference AI reasoning system) of the g8e platform. It is a **g8e-compliant agentic ensemble** and application-layer adapter built on top of the [g8e Protocol](../concepts/protocol.md); the protocol Gateway (`g8eg` and `g8eo`) is the only mandatory component. g8ee demonstrates how a Tribunal-based, multi-provider LLM reasoning system can act as a **Layer 2 (Consensus) producer** that emits typed, signed `GovernanceEnvelope` (UAP) transactions to a Governance Gateway (`g8eg`) for validation/approval and subsequent execution by a Governed Operator (`g8eo`).
 
 If you are building a BYO client, you do not need g8ee - anything that produces protocol-conformant transactions is interchangeable with it. g8ee is shipped in-tree as the first reference consumer of that same public contract.
 

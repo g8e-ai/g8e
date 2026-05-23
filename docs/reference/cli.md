@@ -6,21 +6,31 @@ This document is auto-generated from the CLI help output. Do not edit manually.
 
 The `g8e` CLI is the primary interface for platform management.
 
-### Available Commands
+```
+g8e is a zero-trust execution substrate for agentic infrastructure.
+The CLI manages the Governance Gateway (g8eg), Governed Operator (g8eo),
+and optional application-layer adapters (g8ee).
 
-- `./g8e platform` - Gateway lifecycle management (start, stop, status, wipe, reset, clean)
-- `./g8e apps` - Application layer management (start, stop, status for g8ee and other adapters)
-- `./g8e operator` - Operator lifecycle and fleet deployment
-- `./g8e data` - Data and infrastructure operations
-- `./g8e security` - Security and PKI operations
-- `./g8e protocol` - Protocol and constants management
-- `./g8e testing` - Test execution and evaluation
-- `./g8e setup` - Interactive setup wizard
-- `./g8e login` - Authenticate the local CLI
-- `./g8e test` - Run tests (default: g8eo)
-- `./g8e evals` - Evaluation harness for AI benchmarks
+Usage:
+  g8e [command]
 
-For detailed command help, run `./g8e` and navigate the interactive menu.
+Available Commands:
+  apps        Manage optional application-layer adapters
+  auth        Authentication and session management
+  data        Administer the local substrate over mTLS
+  evals       Run evaluation benchmarks
+  help        Help about any command
+  platform    Manage the Governance Gateway (g8eg) lifecycle
+  security    Security validation checks
+  setup       Bootstrap platform dependencies and configuration
+  test        Run test suites
+  vars        Environment variable management
+
+Flags:
+  -h, --help   help for g8e
+
+Use "g8e [command] --help" for more information about a command.
+```
 
 ## g8eo Operator Binary
 

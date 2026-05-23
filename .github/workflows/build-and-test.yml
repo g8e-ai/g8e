@@ -191,12 +191,15 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Install MkDocs dependencies
+      - name: Install project dependencies
         run: |
-          pip install mkdocs>=1.6.0
+          pip install -e services/g8ee
+
+      - name: Build CLI reference
+        run: make docs-cli
 
       - name: Build documentation
-        run: mkdocs build -f docs/mkdocs.yml
+        run: make docs-build
 
   apps-g8ee:
     runs-on: ubuntu-latest

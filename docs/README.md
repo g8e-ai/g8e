@@ -32,7 +32,7 @@ Optional producers and consumers demonstrating the protocol in action.
 ## 4. Developer Resources
 Guides for setting up, testing, and contributing to the platform.
 
-- [**Developer Guidelines**](devs.md) - Environment setup, development workflows, and testing standards.
+- [**Developer Guidelines](devs.md)** - Environment setup, development workflows, and testing standards.
 - [**Developer Troubleshooting**](guides/troubleshooting.md) - Common setup failures and recovery checks.
 - [**CLI Reference**](reference/cli.md) - Help for the `./g8e` management tool.
 
