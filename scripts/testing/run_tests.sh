@@ -17,7 +17,7 @@
 # Runs Gateway tests by default and optional app tests only when requested.
 # Supports native Go toolchain for the Gateway plus virtualenvs/npm for app targets.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "${SCRIPT_DIR}/../core/path_utils.sh"

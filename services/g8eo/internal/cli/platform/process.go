@@ -14,10 +14,13 @@
 package platform
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"syscall"
@@ -32,6 +35,8 @@ const (
 	shutdownTimeout     = 10 * time.Second
 	healthCheckInterval = 500 * time.Millisecond
 	maxHealthChecks     = 20
+	defaultG8eeHost     = "0.0.0.0"
+	defaultG8eePort     = "8443"
 )
 
 type ProcessManager struct {
@@ -42,6 +47,8 @@ type ProcessManager struct {
 	dataDir     string
 	logDir      string
 	pidDir      string
+	g8eeHost    string
+	g8eePort    string
 }
 
 func NewProcessManager(projectRoot string) (*ProcessManager, error) {
@@ -60,6 +67,8 @@ func NewProcessManager(projectRoot string) (*ProcessManager, error) {
 		dataDir:     dataDir,
 		logDir:      logDir,
 		pidDir:      pidDir,
+		g8eeHost:    defaultG8eeHost,
+		g8eePort:    defaultG8eePort,
 	}, nil
 }
 
@@ -205,13 +214,13 @@ func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int)
 	}
 
 	if err := pm.checkPortAvailable(httpPort, "Operator HTTP API"); err != nil {
-		return err
+		return fmt.Errorf("failed to check Operator HTTP API port %d: %w", httpPort, err)
 	}
 	if err := pm.checkPortAvailable(bootstrapPort, "Operator Bootstrap"); err != nil {
-		return err
+		return fmt.Errorf("failed to check Operator Bootstrap port %d: %w", bootstrapPort, err)
 	}
 	if err := pm.checkPortAvailable(publicPort, "Operator Public API"); err != nil {
-		return err
+		return fmt.Errorf("failed to check Operator Public API port %d: %w", publicPort, err)
 	}
 
 	if err := pm.buildOperator(); err != nil {
@@ -331,6 +340,12 @@ func (pm *ProcessManager) getG8eeBinary() (string, error) {
 	if _, err := os.Stat(venvPython); os.IsNotExist(err) {
 		return "", fmt.Errorf("g8ee venv not found at %s", venvPython)
 	}
+
+	checkCmd := exec.Command(venvPython, "-c", "import uvicorn; print('ok')")
+	if err := checkCmd.Run(); err != nil {
+		return "", fmt.Errorf("uvicorn not installed in g8ee venv: %w", err)
+	}
+
 	return venvPython, nil
 }
 
@@ -351,7 +366,7 @@ func (pm *ProcessManager) StartG8ee() error {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
 
-	cmd := exec.Command(pythonBin, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8443")
+	cmd := exec.Command(pythonBin, "-m", "uvicorn", "app.main:app", "--host", pm.g8eeHost, "--port", pm.g8eePort)
 	cmd.Dir = g8eeDir
 	cmd.Stdout = logHandle
 	cmd.Stderr = logHandle
@@ -453,4 +468,54 @@ func (pm *ProcessManager) Clean() error {
 	}
 
 	return nil
+}
+
+// TailLog tails a log file using native Go file watching, replacing tail -f
+func TailLog(logPath string) error {
+	file, err := os.Open(logPath)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+	defer file.Close()
+
+	// Seek to end of file to start tailing
+	if _, err := file.Seek(0, io.SeekEnd); err != nil {
+		return fmt.Errorf("failed to seek to end of file: %w", err)
+	}
+
+	reader := bufio.NewReader(file)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Print existing content first
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("failed to seek to start of file: %w", err)
+	}
+	if _, err := io.Copy(os.Stdout, file); err != nil {
+		return fmt.Errorf("failed to print existing log content: %w", err)
+	}
+
+	// Seek back to end for tailing
+	if _, err := file.Seek(0, io.SeekEnd); err != nil {
+		return fmt.Errorf("failed to seek to end of file: %w", err)
+	}
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-sigChan:
+			return nil
+		case <-ticker.C:
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					continue
+				}
+				return fmt.Errorf("failed to read log line: %w", err)
+			}
+			fmt.Print(line)
+		}
+	}
 }

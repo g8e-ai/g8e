@@ -263,8 +263,8 @@ Each doctrine file follows this canonical schema:
 
 ### Ingestion Scripts
 
-- **OWASP CRS**: `scripts/data/ingest_owasp_crs.py` - Parses SecLanguage rules from OWASP Core Rule Set
-- **Gitleaks**: `scripts/data/ingest_gitleaks.py` - Parses TOML configuration from Gitleaks
+- **OWASP CRS**: `scripts/ingest/ingest_owasp_crs.py` - Parses SecLanguage rules from OWASP Core Rule Set
+- **Gitleaks**: `scripts/ingest/ingest_gitleaks.py` - Parses TOML configuration from Gitleaks
 
 ### Makefile Targets
 

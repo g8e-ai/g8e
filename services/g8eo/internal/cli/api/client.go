@@ -24,8 +24,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/g8e-ai/g8e/cmd/g8e/internal/auth"
-	"github.com/g8e-ai/g8e/cmd/g8e/internal/config"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/auth"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/config"
 )
 
 type Client struct {
@@ -117,6 +117,11 @@ func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error
 
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Validate response is valid JSON
+	if !json.Valid(respBody) {
+		return nil, fmt.Errorf("API returned invalid JSON response: %s", string(respBody))
 	}
 
 	return respBody, nil

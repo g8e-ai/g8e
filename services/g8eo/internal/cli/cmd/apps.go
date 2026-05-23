@@ -11,13 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package cmd
 
 import (
 	"fmt"
 
-	"github.com/g8e-ai/g8e/cmd/g8e/internal/config"
-	"github.com/g8e-ai/g8e/cmd/g8e/internal/platform"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/config"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/platform"
 	"github.com/spf13/cobra"
 )
 
