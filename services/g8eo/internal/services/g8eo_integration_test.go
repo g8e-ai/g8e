@@ -15,42 +15,15 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
-	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/execution"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// Mock governance dependencies for testing
-type mockReplayStore struct{}
-
-func (m *mockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
-	return false, nil // Never replay in tests
-}
-
-type mockStateRootProvider struct{}
-
-func (m *mockStateRootProvider) GetCurrentStateRoot() (string, error) {
-	return "test-state-root", nil
-}
-
-type mockTransactionAudit struct{}
-
-func (m *mockTransactionAudit) DocSet(collection, id string, data json.RawMessage) error {
-	return nil
-}
-
-type mockL3Notary struct{}
-
-func (m *mockL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
-	return true, nil // Always verify in tests
-}
 
 func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
 
@@ -104,10 +77,10 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 			Logger:            logger,
 			Execution:         execSvc,
 			FileEdit:          fileEditSvc,
-			ReplayStore:       &mockReplayStore{},
-			StateRootProvider: &mockStateRootProvider{},
-			TransactionAudit:  &mockTransactionAudit{},
-			L3Notary:          &mockL3Notary{},
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
 		})
 		require.NoError(t, err)
 		require.NotNil(t, cmdSvc)

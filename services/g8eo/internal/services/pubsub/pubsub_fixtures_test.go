@@ -14,44 +14,16 @@
 package pubsub
 
 import (
-	"encoding/json"
 	"log/slog"
 	"testing"
-	"time"
 
 	"crypto/ed25519"
 	"crypto/rand"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
-	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
-
-// Mock governance dependencies for testing
-type mockReplayStore struct{}
-
-func (m *mockReplayStore) CheckAndSetNonce(nonce string, expiresAt time.Time) (bool, error) {
-	return false, nil // Never replay in tests
-}
-
-type mockStateRootProvider struct{}
-
-func (m *mockStateRootProvider) GetCurrentStateRoot() (string, error) {
-	return "test-state-root", nil
-}
-
-type mockTransactionAudit struct{}
-
-func (m *mockTransactionAudit) DocSet(collection, id string, data json.RawMessage) error {
-	return nil
-}
-
-type mockL3Notary struct{}
-
-func (m *mockL3Notary) VerifyL3Proof(userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
-	return true, nil // Always verify in tests
-}
 
 type pubsubFixture struct {
 	Cfg        *config.Config
@@ -78,10 +50,10 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		Config:             cfg,
 		Logger:             logger,
 		PubSubClient:       db,
-		ReplayStore:        &mockReplayStore{},
-		StateRootProvider:  &mockStateRootProvider{},
-		TransactionAudit:   &mockTransactionAudit{},
-		L3Notary:           &mockL3Notary{},
+		ReplayStore:        &testutil.MockReplayStore{},
+		StateRootProvider:  testutil.NewMockStateRootProvider("test-state-root"),
+		TransactionAudit:   &testutil.MockTransactionAudit{},
+		L3Notary:           &testutil.MockL3Notary{},
 		SignerStore:        signerStore,
 		ActuatorSigningKey: priv,
 		ActuatorKeyID:      "Actuator-key",

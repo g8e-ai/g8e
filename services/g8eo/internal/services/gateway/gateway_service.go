@@ -26,6 +26,7 @@ import (
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/config"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/responder"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/governance"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/mcp"
 )
@@ -112,6 +113,7 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 	}
 
 	apiKeySvc := NewApiKeyService(db, logger)
+	responder := responder.New(logger)
 
 	ls := &GatewayService{
 		cfg:        cfg,
@@ -125,7 +127,7 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
 		apiKeySvc:  apiKeySvc,
-		mcpGateway: mcp.NewGatewayService(logger, db),
+		mcpGateway: mcp.NewGatewayService(logger, responder, db),
 	}
 
 	ls.initHandlersAndServers()
@@ -152,6 +154,7 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
 
 	apiKeySvc := NewApiKeyService(db, logger)
+	responder := responder.New(logger)
 
 	ls := &GatewayService{
 		cfg:        cfg,
@@ -165,7 +168,7 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 		userSvc:    userSvc,
 		sessionSvc: sessionSvc,
 		apiKeySvc:  apiKeySvc,
-		mcpGateway: mcp.NewGatewayService(logger, db),
+		mcpGateway: mcp.NewGatewayService(logger, responder, db),
 	}
 
 	ls.initHandlersAndServers()
@@ -238,6 +241,8 @@ func (ls *GatewayService) initHandlersAndServers() {
 		Handler:           ls.handler,
 		TLSConfig:         tlsConfig,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 
@@ -246,6 +251,8 @@ func (ls *GatewayService) initHandlersAndServers() {
 		Handler:           ls.handler.buildBootstrapRouter(),
 		TLSConfig:         nil, // Plain HTTP for bootstrap discovery
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 
@@ -254,6 +261,8 @@ func (ls *GatewayService) initHandlersAndServers() {
 		Handler:           ls.handler.buildPublicRouter(),
 		TLSConfig:         tlsConfigPlain,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 }
