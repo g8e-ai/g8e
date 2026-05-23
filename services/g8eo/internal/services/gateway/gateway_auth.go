@@ -227,7 +227,9 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		// It MUST be accessible without an internal token as it is the first step
 		// of the trust bootstrap.
 		if r.URL.Path == "/api/pki/sign-csr" ||
-			r.URL.Path == "/api/auth/device-link/register" {
+			r.URL.Path == "/api/auth/device-link/register" ||
+			r.URL.Path == "/api/auth/bootstrap" ||
+			r.URL.Path == "/api/auth/bootstrap/status" {
 			next.ServeHTTP(w, r)
 			return
 		}
