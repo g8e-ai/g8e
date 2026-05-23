@@ -54,6 +54,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 PROJECT_ROOT="$G8E_PROJECT_ROOT"
 
 DEV_MODE=false
+BUILD_UPLOAD=false
 
 MANAGED_SERVICES=(operator)
 OPTIONAL_APPS=(g8ee)
@@ -147,6 +148,10 @@ Commands:
   clean                           Nuke runtime processes and data.
   operator-build                  Build linux/amd64 operator binary natively
   operator-build-all              Build all operator architectures natively
+  operator-build-upload          Build and upload operator binary to gateway blob storage
+
+Options:
+  --build-upload                  Build, compress, and upload operator binary during gateway startup
 
 Examples:
   $(basename "$0") status                       Show host process status and versions
@@ -177,7 +182,11 @@ while [[ $# -gt 0 ]]; do
             OPTIONAL_COMPONENTS+=("g8ee")
             shift
             ;;
-        setup|up|down|restart|reset|clean|status|operator-build|operator-build-all)
+        --build-upload)
+            BUILD_UPLOAD=true
+            shift
+            ;;
+        setup|up|down|restart|reset|clean|status|operator-build|operator-build-all|operator-build-upload)
             COMMAND="$1"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
@@ -402,15 +411,27 @@ _start_operator_gateway() {
     local bin="$PROJECT_ROOT/services/g8eo/build/linux-${host_arch}/g8e.gateway"
 
     if command -v go >/dev/null 2>&1; then
-        echo "  Building Governance Gateway and Operator natively..."
-        (cd "$PROJECT_ROOT/services/g8eo" && make build-local) || {
-            if [ -f "$bin" ]; then
-                echo "  WARNING: Native build failed, but pre-built binary exists. Using pre-built..."
-            else
-                echo "  Error: Native build failed and no pre-built binary found." >&2
-                return 1
-            fi
-        }
+        if [[ "$BUILD_UPLOAD" == "true" ]]; then
+            echo "  Building Governance Gateway and Operator natively with compression..."
+            (cd "$PROJECT_ROOT/services/g8eo" && COMPRESS=1 make build-local) || {
+                if [ -f "$bin" ]; then
+                    echo "  WARNING: Native build failed, but pre-built binary exists. Using pre-built..."
+                else
+                    echo "  Error: Native build failed and no pre-built binary found." >&2
+                    return 1
+                fi
+            }
+        else
+            echo "  Building Governance Gateway and Operator natively..."
+            (cd "$PROJECT_ROOT/services/g8eo" && make build-local) || {
+                if [ -f "$bin" ]; then
+                    echo "  WARNING: Native build failed, but pre-built binary exists. Using pre-built..."
+                else
+                    echo "  Error: Native build failed and no pre-built binary found." >&2
+                    return 1
+                fi
+            }
+        fi
     else
         if [ -f "$bin" ]; then
             echo "  Go toolchain not found. Using pre-compiled binary for ${host_arch}..."
@@ -459,6 +480,10 @@ _start_operator_gateway() {
                 --data-binary @"$operator_bin" \
                 "http://localhost:${G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT}/blob/operator-binary/linux-${host_arch}" >/dev/null 2>&1; then
                 echo "  Operator binary uploaded successfully."
+                if [[ "$BUILD_UPLOAD" == "true" ]]; then
+                    echo "  Architecture: linux/${host_arch}"
+                    echo "  Size: $(ls -lh "$operator_bin" | awk '{print $5}')"
+                fi
                 break
             fi
             (( attempt++ ))
@@ -986,7 +1011,7 @@ fi
 
 if [[ "$COMMAND" == "operator-build" ]]; then
     echo "Building linux/amd64 operator binary natively..."
-    (cd "$PROJECT_ROOT/services/g8eo" && make build-local)
+    (cd "$PROJECT_ROOT/services/g8eo" && COMPRESS="${COMPRESS:-0}" make build-local)
     echo ""
     echo "Operator binary built."
     exit 0
@@ -996,8 +1021,58 @@ fi
 
 if [[ "$COMMAND" == "operator-build-all" ]]; then
     echo "Building all operator architectures natively..."
-    (cd "$PROJECT_ROOT/services/g8eo" && make build-local-all)
+    (cd "$PROJECT_ROOT/services/g8eo" && COMPRESS="${COMPRESS:-0}" make build-local-all)
     echo ""
     echo "All operator binaries built."
     exit 0
+fi
+
+# ─── operator-build-upload ──────────────────────────────────────────────────────
+
+if [[ "$COMMAND" == "operator-build-upload" ]]; then
+    local host_arch="amd64"
+    case "$(uname -m)" in
+        x86_64)         host_arch="amd64" ;;
+        aarch64|arm64)  host_arch="arm64" ;;
+        i386|i686)      host_arch="386" ;;
+    esac
+
+    echo "Building linux/${host_arch} operator binary natively..."
+    (cd "$PROJECT_ROOT/services/g8eo" && COMPRESS="${COMPRESS:-0}" make build-local)
+    echo ""
+
+    local operator_bin="$PROJECT_ROOT/services/g8eo/build/linux-${host_arch}/g8e.operator"
+    if [[ ! -f "$operator_bin" ]]; then
+        echo "Error: Operator binary not found at $operator_bin" >&2
+        exit 1
+    fi
+
+    # Check if gateway is running
+    if ! _operator_gateway_running; then
+        echo "Error: Governance Gateway is not running. Start it with: ./g8e platform start" >&2
+        exit 1
+    fi
+
+    echo "Uploading operator binary to gateway blob storage..."
+    local max_attempts=5
+    local attempt=0
+    while (( attempt < max_attempts )); do
+        if curl -sf -X PUT \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @"$operator_bin" \
+            "http://localhost:${G8E_REMOTE_OPERATOR_BOOTSTRAP_HTTPS_PORT}/blob/operator-binary/linux-${host_arch}" >/dev/null 2>&1; then
+            echo "Operator binary uploaded successfully to gateway blob storage."
+            echo "  Architecture: linux/${host_arch}"
+            echo "  Size: $(ls -lh "$operator_bin" | awk '{print $5}')"
+            exit 0
+        fi
+        (( attempt++ ))
+        if (( attempt < max_attempts )); then
+            echo "Upload attempt $attempt failed, retrying..."
+            sleep 1
+        fi
+    done
+
+    echo "Error: Failed to upload operator binary to blob storage after ${max_attempts} attempts." >&2
+    exit 1
 fi

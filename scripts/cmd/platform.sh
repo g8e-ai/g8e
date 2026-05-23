@@ -32,7 +32,15 @@ case "$SUB" in
     status|start|stop|restart|reset|clean|settings|logs)
         case "$SUB" in
             start)
-            bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up "${@:2}"
+            # Check for --build-upload flag
+            build_upload_flag=""
+            for arg in "${@:2}"; do
+                if [[ "$arg" == "--build-upload" ]]; then
+                    build_upload_flag="--build-upload"
+                    break
+                fi
+            done
+            bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") $build_upload_flag up "${@:2}"
             # Auto-load credentials after bootstrap if they exist
             if [[ -f "$G8E_CREDENTIALS_FILE" ]]; then
                 source "$G8E_CREDENTIALS_FILE"

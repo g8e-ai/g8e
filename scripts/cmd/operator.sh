@@ -35,7 +35,7 @@ case "$SUB" in
 
     init)
         _banner "operator init"
-        (cd "$SCRIPT_DIR/services/g8eo" && make build-local)
+        (cd "$SCRIPT_DIR/services/g8eo" && COMPRESS="${COMPRESS_BUILD:-0}" make build-local)
         echo ""
         echo "Binaries built on host:"
         echo "  - Operator Agent:   $SCRIPT_DIR/services/g8eo/build/linux-amd64/g8e.operator"
@@ -43,10 +43,13 @@ case "$SUB" in
         exit 0 ;;
     build)
         _banner "operator build"
-        exec bash "$SCRIPT_DIR/scripts/core/build.sh" operator-build ;;
+        COMPRESS="${COMPRESS_BUILD:-0}" exec bash "$SCRIPT_DIR/scripts/core/build.sh" operator-build ;;
     build-all)
         _banner "operator build-all"
-        exec bash "$SCRIPT_DIR/scripts/core/build.sh" operator-build-all ;;
+        COMPRESS="${COMPRESS_BUILD:-0}" exec bash "$SCRIPT_DIR/scripts/core/build.sh" operator-build-all ;;
+    build-upload)
+        _banner "operator build-upload"
+        COMPRESS="${COMPRESS_BUILD:-0}" exec bash "$SCRIPT_DIR/scripts/core/build.sh" operator-build-upload ;;
     deploy)
         _banner "operator deploy ${@:2}"
         _ensure_operator
