@@ -19,13 +19,19 @@ SUB="${1:-}"
 
 case "$SUB" in
     -h|--help|"")
-        help_file="$SCRIPT_DIR/docs/cli_help.md"
-        if [[ -f "$help_file" ]]; then
-            awk '/^### operator/,/^### test/' "$help_file" | head -n -1
-        else
-            echo "[g8e] Help file not found: $help_file" >&2
-            exit 1
-        fi
+        cat <<'EOF'
+### operator (Remote Operator lifecycle)
+The Operator is the sovereign host execution (Actuator), local git ledger, and MCP Server that runs on remote hosts.
+
+Subcommands:
+  init              Build local operator binary
+  build             Build amd64 operator for current host
+  build-all         Build binaries for all architectures
+  deploy <host>     SCP/SSH deployment and launch
+  stream <host...>  High-concurrency fleet-wide injection
+  reauth            Request fresh operator session for a specific user
+  ssh-config        Manage SSH identities for fleet operations
+EOF
         [[ -z "$SUB" ]] && exit 1 || exit 0
         ;;
     reauth)

@@ -21,10 +21,36 @@ SUB="${2:-}"
 
 case "$TOP" in
     vars)
+        case "$SUB" in
+            -h|--help|"")
+                cat <<'EOF'
+### vars (Environment variables)
+Environment variable management.
+
+Subcommands:
+  list, ls  List all g8e environment variables and their current values
+  set <key> <value>  Set a variable in .g8e/.env
+  get <key>  Display the value of a specific variable
+  unset <key>  Remove a variable from .g8e/.env
+EOF
+                [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
+        esac
         _banner "vars ${SUB} ${@:3}"
         exec bash "$SCRIPT_DIR/scripts/core/manage-env.sh" "$SUB" "${@:3}" ;;
 
     login)
+        case "$SUB" in
+            -h|--help|"")
+                cat <<'EOF'
+### identity (Authentication)
+Authentication and session management.
+
+Subcommands:
+  login [--email <email>] [--count <n>] [--ttl <seconds>]  Authenticate and save operator session to ~/.g8e/credentials
+  logout  Clear local operator session and credentials
+EOF
+                [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
+        esac
         _banner "login"
         _ensure_operator
 
@@ -189,12 +215,13 @@ case "$TOP" in
     ssh)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/cli_help.md"
-                if [[ -f "$help_file" ]]; then
-                    awk '/^### ssh/,/^### aws/' "$help_file" | head -n -1
-                else
-                    echo "[g8e] Help file not found: $help_file" >&2; exit 1
-                fi
+                cat <<'EOF'
+### ssh
+Manage host SSH key mounts.
+
+Subcommands:
+  setup  Configure SSH key mounting for operator fleet access
+EOF
                 [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
             setup)
                 _banner "ssh setup"; exec bash "$SCRIPT_DIR/scripts/tools/setup-ssh.sh" "${@:3}" ;;
@@ -205,12 +232,13 @@ case "$TOP" in
     aws)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/cli_help.md"
-                if [[ -f "$help_file" ]]; then
-                    awk '/^### aws/,/^### demo/' "$help_file" | head -n -1
-                else
-                    echo "[g8e] Help file not found: $help_file" >&2; exit 1
-                fi
+                cat <<'EOF'
+### aws
+Manage AWS credential mounts.
+
+Subcommands:
+  setup  Configure AWS credential mounting for operator fleet access
+EOF
                 [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
             setup)
                 _banner "aws setup"; exec bash "$SCRIPT_DIR/scripts/tools/setup-aws.sh" "${@:3}" ;;
@@ -221,12 +249,14 @@ case "$TOP" in
     search)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/cli_help.md"
-                if [[ -f "$help_file" ]]; then
-                    awk '/^### search/,/^### ssh/' "$help_file" | head -n -1
-                else
-                    echo "[g8e] Help file not found: $help_file" >&2; exit 1
-                fi
+                cat <<'EOF'
+### search
+Vertex AI Search configuration.
+
+Subcommands:
+  setup    Configure Vertex AI Search integration
+  disable  Disable Vertex AI Search integration
+EOF
                 [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
             setup)   _banner "search setup"; exec bash "$SCRIPT_DIR/scripts/tools/setup-search.sh" "${@:3}" ;;
             disable) _banner "search disable"; exec bash "$SCRIPT_DIR/scripts/tools/setup-search.sh" --disable "${@:3}" ;;
@@ -236,12 +266,17 @@ case "$TOP" in
     llm)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/cli_help.md"
-                if [[ -f "$help_file" ]]; then
-                    awk '/^### llm/,/^### mcp/' "$help_file" | head -n -1
-                else
-                    echo "[g8e] Help file not found: $help_file" >&2; exit 1
-                fi
+                cat <<'EOF'
+### llm
+LLM configuration.
+
+Subcommands:
+  setup    Interactive provider configuration
+  show     View current LLM variables
+  get      Display a specific LLM variable
+  set      Update an LLM variable
+  restart  Restart Ensemble to apply settings
+EOF
                 [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
             setup|show|get|set|restart)
                 exec bash "$SCRIPT_DIR/scripts/tools/setup-llm.sh" "$SUB" "${@:3}" ;;
@@ -252,12 +287,17 @@ case "$TOP" in
     security)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/cli_help.md"
-                if [[ -f "$help_file" ]]; then
-                    awk '/^### security/,/^### data/' "$help_file" | head -n -1
-                else
-                    echo "[g8e] Help file not found: $help_file" >&2; exit 1
-                fi
+                cat <<'EOF'
+### security
+Security validation.
+
+Subcommands:
+  validate              Check TLS integrity and volume permissions
+  passkeys              Manage FIDO2/WebAuthn credentials
+  mtls-test             Verify mTLS connectivity
+  scan-licenses         Scan third-party licenses
+  rotate-internal-token Rotate the internal auth token
+EOF
                 [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
             validate)
                 _banner "security validate"
@@ -279,12 +319,18 @@ case "$TOP" in
     data)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/cli_help.md"
-                if [[ -f "$help_file" ]]; then
-                    awk '/^### data/,/^### demo/' "$help_file" | head -n -1
-                else
-                    echo "[g8e] Help file not found: $help_file" >&2; exit 1
-                fi
+                cat <<'EOF'
+### data
+Data management.
+
+Subcommands:
+  users         Query or modify user documents
+  operators     Query or modify operator documents
+  store         Access the SQLite-based blob store
+  settings      Low-level platform configuration management
+  audit         View LFAA audit logs
+  device-links  Manage device link tokens
+EOF
                 [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
             users)
                 _banner "data users ${@:3}"; _ensure_operator
@@ -313,12 +359,16 @@ case "$TOP" in
     mcp)
         case "$SUB" in
             -h|--help|"")
-                help_file="$SCRIPT_DIR/docs/cli_help.md"
-                if [[ -f "$help_file" ]]; then
-                    awk '/^### mcp/,/^### llm/' "$help_file" | head -n -1
-                else
-                    echo "[g8e] Help file not found: $help_file" >&2; exit 1
-                fi
+                cat <<'EOF'
+### mcp
+Model Context Protocol - generates configs for and interacts with the Operator MCP translation gateway.
+
+Subcommands:
+  config  Generate an IDE-compatible mcpServers configuration block
+  status  Check the health of the MCP gateway
+  test    Run test tools/list and tools/call requests against the operator
+  serve   Start the MCP stdio gateway and proxy requests to the operator via mTLS
+EOF
                 [[ -z "$SUB" ]] && exit 1 || exit 0 ;;
             config)
                 _banner "mcp $SUB"
