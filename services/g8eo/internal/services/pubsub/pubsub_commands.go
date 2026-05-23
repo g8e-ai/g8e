@@ -226,6 +226,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		StateRootProvider: c.StateRootProvider,
 		Ctx:               serviceCtx,
 		ExecutionHandler:  rs, // PubSubCommandService implements ExecutionHandler
+		Sentinel:          c.Sentinel,
 		SigningKey:        c.ActuatorSigningKey,
 		KeyID:             c.ActuatorKeyID,
 	}
@@ -577,7 +578,7 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 		Timestamp:         envelope.Timestamp.AsTime(),
 	}
 
-	receipt, execErr := rs.Actuator.Execute(ctx, verified, cmdMsg)
+	receipt, execErr := rs.Actuator.Execute(ctx, verified, &cmdMsg)
 	return receipt, execErr
 }
 
@@ -630,7 +631,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 
 	// Execute through Actuator (execution boundary)
 	if rs.Actuator != nil {
-		receipt, err := rs.Actuator.Execute(rs.ctx, verified, cmdMsg)
+		receipt, err := rs.Actuator.Execute(rs.ctx, verified, &cmdMsg)
 		if err != nil {
 			rs.logger.Error("Actuator execution failed",
 				string(constants.ConnectionStateError), err,
@@ -666,12 +667,16 @@ func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, 
 	}
 
 	// Type assert to PubSubCommandMessage
-	pubsubMsg, ok := cmdMsg.(PubSubCommandMessage)
-	if !ok {
+	var pubsubMsg PubSubCommandMessage
+	switch v := cmdMsg.(type) {
+	case PubSubCommandMessage:
+		pubsubMsg = v
+	case *PubSubCommandMessage:
+		pubsubMsg = *v
+	default:
 		rs.logger.Error("Invalid cmdMsg type", "expected", "PubSubCommandMessage", "got", fmt.Sprintf("%T", cmdMsg))
 		return "", fmt.Errorf("invalid cmdMsg type: %T", cmdMsg)
 	}
-
 	rs.logger.Info("Executing verified transaction through Actuator", "event_type", eventType)
 
 	// Special case for EVAL_ANSWER which is synchronous and returns the answer as summary
@@ -885,4 +890,11 @@ func (rs *PubSubCommandService) logBlockedTransaction(env *uap.UAPEnvelope, reje
 	if err := rs.audit.auditVault.RecordActionReceipt(&record); err != nil {
 		rs.logger.Error("Failed to record blocked transaction in audit vault", string(constants.ConnectionStateError), err, "message_id", env.Id)
 	}
+}
+func (m *PubSubCommandMessage) GetPayload() []byte {
+return []byte(m.Payload)
+}
+
+func (m *PubSubCommandMessage) SetPayload(p []byte) {
+m.Payload = p
 }

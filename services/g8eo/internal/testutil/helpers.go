@@ -78,6 +78,9 @@ func NewTestConfig(t *testing.T) *config.Config {
 		MaxConcurrentTasks:      25,
 		MaxMemoryMB:             2048,
 		HeartbeatInterval:       30 * time.Second,
+		Gateway: config.GatewayConfig{
+			MaxPayloadBytes: 10 * 1024 * 1024,
+		},
 		WorkDir:                 workDir,
 		PKIDir:                  pkiDir,
 		SecretsDir:              secretsDir,

@@ -14,6 +14,7 @@
 package mcp
 
 import (
+	"fmt"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -151,13 +152,8 @@ func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
 
 			require.Equal(t, http.StatusOK, w.Code)
 
-			var resp JSONRPCResponse
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			require.NoError(t, err)
-
-			require.NotNil(t, resp.Error)
-			require.Equal(t, tc.expectedCode, resp.Error.Code)
-			require.Equal(t, tc.GatewayErr.Error(), resp.Error.Message)
+			expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"error":{"code":%d,"message":"%s"}}`, tc.expectedCode, tc.GatewayErr.Error())
+			require.JSONEq(t, expectedJSON, w.Body.String())
 		})
 	}
 }
@@ -185,25 +181,15 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var resp JSONRPCResponse
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	require.NoError(t, err)
-
-	require.Nil(t, resp.Error)
-	var result CallToolResult
-	err = json.Unmarshal(resp.Result, &result)
-	require.NoError(t, err)
-
-	require.Len(t, result.Content, 1)
-	require.Contains(t, result.Content[0].Text, "Execution paused")
-	require.Contains(t, result.Content[0].Text, "https://localhost:8442/approve/")
-
-	// Verify it was stored
 	require.Len(t, store.txs, 1)
-	for _, tx := range store.txs {
-		require.Equal(t, "test-tool", tx.ToolName)
-		require.Equal(t, `{"foo":"bar"}`, string(tx.ToolArguments))
-	}
+		var txHash string
+		for k, tx := range store.txs {
+			txHash = k
+			require.Equal(t, "test-tool", tx.ToolName)
+			require.Equal(t, `{"foo":"bar"}`, string(tx.ToolArguments))
+		}
+		expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Execution paused. Please visit https://localhost:8442/approve/%s to authorize via WebAuthn, then retry."}]}}`, txHash)
+		require.JSONEq(t, expectedJSON, w.Body.String())
 }
 
 func TestGatewayService_ResumeWithL3Proof(t *testing.T) {
@@ -270,17 +256,8 @@ func TestGatewayService_HandleResourcesRead(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var resp JSONRPCResponse
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	require.NoError(t, err)
-
-	require.Nil(t, resp.Error)
-	var result ReadResourceResult
-	err = json.Unmarshal(resp.Result, &result)
-	require.NoError(t, err)
-
-	require.Len(t, result.Contents, 1)
-	require.Equal(t, "resource content", result.Contents[0].Text)
+	expectedJSON := `{"jsonrpc":"2.0","id":1,"result":{"contents":[{"type":"text","text":"resource content"}]}}`
+		require.JSONEq(t, expectedJSON, w.Body.String())
 }
 
 func TestGatewayService_HandlePromptsGet(t *testing.T) {
@@ -309,18 +286,8 @@ func TestGatewayService_HandlePromptsGet(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var resp JSONRPCResponse
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	require.NoError(t, err)
-
-	require.Nil(t, resp.Error)
-	var result GetPromptResult
-	err = json.Unmarshal(resp.Result, &result)
-	require.NoError(t, err)
-
-	require.Equal(t, "prompt template", result.Description)
-	require.Len(t, result.Messages, 1)
-	require.Equal(t, "user", result.Messages[0].Role)
+	expectedJSON := `{"jsonrpc":"2.0","id":1,"result":{"description":"prompt template","messages":[{"role":"user","content":{"type":"text","text":"prompt template"}}]}}`
+		require.JSONEq(t, expectedJSON, w.Body.String())
 }
 
 func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
