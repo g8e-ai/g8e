@@ -233,7 +233,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 			LedgerMirrorEnabled: h.CapabilityFlags.LedgerMirrorEnabled,
 		},
 		SystemFingerprint: h.SystemFingerprint,
-		APIKey:            h.APIKey,
+		ApiKey:            h.APIKey,
 	}
 
 	if h.FingerprintDetails != nil {
