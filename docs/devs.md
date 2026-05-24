@@ -82,13 +82,13 @@ The unified `g8eo` binary is the single entry point for all platform operations.
 - **Environment (`./g8e vars`)**: Environment variable management.
 
 **Technical Invariants:**
-1. **Zero Shell Scripts**: NO shell scripts are used for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary.
+1. **Zero Shell Scripts**: NO shell scripts are used for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary. Constants are exported to JSON and Python via the Go exporter tool (`services/g8eo/cmd/exporter`), not shell scripts. Tests and code consume protocol constants directly from JSON files (`protocol/constants/*.json`), not by sourcing shell scripts.
 2. **Service Readiness**: The platform is not "ready" until the Governance Gateway (`g8eg`) Gateway mode health check (`/healthz`) passes.
 3. **Canonical Wire Format**: All client-facing interaction (HTTP, PubSub, receipts) must use **canonical JSON (protojson)**. Binary Protobuf is reserved for internal storage.
 4. **Fail-Closed Execution**: The CLI must never mask failures or proceed with missing trust material.
 
 **Permissible Shell Scripts:**
-- Vendor scripts (third-party Go vendor scripts) - not g8e platform code
+- Vendor scripts (third-party Go vendor scripts in `vendor/` and `tools/vendor/`) - not g8e platform code
 
 ## Architecture Philosophy
 

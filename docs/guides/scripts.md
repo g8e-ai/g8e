@@ -168,12 +168,7 @@ See [Demos](./demos.md).
 **CRITICAL**: The platform uses ZERO shell scripts for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary (`./g8e`).
 
 **Permissible Shell Scripts:**
-- Vendor scripts (third-party Go vendor scripts) - not g8e platform code
-
-**Deleted Scripts (2026-05-23):**
-- **Entire scripts/ directory deleted** - All shell scripts, Python scripts, and toolchain scripts removed
-- `evals/tests/byo_client_parity.sh`
-- `demo/profiles/*`
+- Vendor scripts (third-party Go vendor scripts in `vendor/` and `tools/vendor/`) - not g8e platform code
 
 ---
 
