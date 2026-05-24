@@ -368,7 +368,7 @@ OLLAMA_LLAMA_3_2_3B            = "llama3.2:3b"
 OLLAMA_QWEN3_5_2B              = "qwen3.5:2b"
 
 # llama.cpp models
-LLAMACPP_GEMMA4_E2B           = _STATUS["llm.models"]["llamacpp.gemma4.e2b"]["value"]
+LLAMACPP_GEMMA4_E2B           = "llamacpp.gemma4.e2b"
 
 
 # Provider default models

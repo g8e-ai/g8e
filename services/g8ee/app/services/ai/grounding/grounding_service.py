@@ -27,7 +27,7 @@ citation number normalisation) lives in WebSearchProvider.
 
 import logging
 
-from app.constants.settings import GroundingSource
+from app.constants.config import GroundingSource
 from app.llm.llm_types import SdkGroundingRawData
 from app.models.grounding import (
     GroundingChunk,

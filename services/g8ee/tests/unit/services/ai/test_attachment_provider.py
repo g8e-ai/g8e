@@ -22,7 +22,7 @@ import base64
 
 import pytest
 
-from app.constants.settings import AttachmentType
+from app.constants.config import AttachmentType
 from app.models.attachments import ProcessedAttachment
 from app.services.ai.grounding.attachment_provider import AttachmentGroundingProvider
 

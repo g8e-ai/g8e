@@ -236,7 +236,7 @@ class TestFormatAttachmentParts:
 
     def test_delegates_to_attachment_provider(self, builder):
         from app.models.attachments import ProcessedAttachment
-        from app.constants.settings import AttachmentType
+        from app.constants.config import AttachmentType
 
         atts = [
             ProcessedAttachment(

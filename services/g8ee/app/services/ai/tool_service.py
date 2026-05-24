@@ -38,7 +38,7 @@ from app.constants.status import (
     OperatorToolName,
 )
 from app.constants.prompts import AgentMode
-from app.constants.settings import FORBIDDEN_COMMAND_PATTERNS
+from app.constants.config import FORBIDDEN_COMMAND_PATTERNS
 from app.errors import ConfigurationError, ExternalServiceError, ValidationError
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext

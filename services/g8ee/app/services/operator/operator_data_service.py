@@ -21,7 +21,7 @@ from app.constants.collections import (
     DB_COLLECTION_OPERATORS,
     DB_COLLECTION_CLI_SESSIONS,
 )
-from app.constants.settings import (
+from app.constants.config import (
     MAX_COMMAND_RESULTS_HISTORY,
     MAX_HEARTBEAT_HISTORY,
 )

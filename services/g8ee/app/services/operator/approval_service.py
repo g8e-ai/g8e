@@ -42,7 +42,7 @@ from app.constants.intents import (
     CLOUD_INTENT_QUESTIONS,
     CloudIntent,
 )
-from app.constants.settings import (
+from app.constants.config import (
     ApprovalErrorType,
 )
 from app.models.internal_api import OperatorApprovalResponse

@@ -33,7 +33,7 @@ from app.constants.status import (
     ExecutionStatus,
     NetworkProtocol,
 )
-from app.constants.settings import (
+from app.constants.config import (
     OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS,
 )
 from app.errors import BusinessLogicError, ValidationError

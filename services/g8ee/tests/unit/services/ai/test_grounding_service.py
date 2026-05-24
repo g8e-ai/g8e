@@ -93,7 +93,7 @@ class TestExtractProviderGrounding:
 
     def test_source_is_provider_native(self, service):
         """Provider grounding always sets source=PROVIDER_NATIVE."""
-        from app.constants.settings import GroundingSource
+        from app.constants.config import GroundingSource
         raw = _make_raw(
             queries=["query"],
             chunks=[],
