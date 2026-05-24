@@ -54,30 +54,28 @@ func testG8eoCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			g8eoDir := filepath.Join(cfg.ProjectRoot, "services", "g8eo")
-			var makeArgs []string
+			var goArgs []string
+			goArgs = []string{"test", "./..."}
 
+			if run != "" {
+				goArgs = append(goArgs, "-run", run)
+			}
+			if race {
+				goArgs = append(goArgs, "-race")
+			}
+			if verbose {
+				goArgs = append(goArgs, "-v")
+			}
 			if coverage {
-				makeArgs = []string{"-C", g8eoDir, "test-coverage"}
-			} else {
-				makeArgs = []string{"-C", g8eoDir, "test"}
-
-				if run != "" {
-					makeArgs = append(makeArgs, "TESTFLAGS=-run="+run)
-				}
-				if race {
-					makeArgs = append(makeArgs, "TESTFLAGS=-race")
-				}
-				if verbose {
-					makeArgs = append(makeArgs, "TESTFLAGS=-v")
-				}
+				goArgs = append(goArgs, "-coverprofile=coverage.out", "-covermode=atomic")
 			}
 
-			cmd.Printf("Running g8eo tests in %s...\n", g8eoDir)
-			makeCmd := exec.Command("make", makeArgs...)
-			makeCmd.Stdout = os.Stdout
-			makeCmd.Stderr = os.Stderr
-			return makeCmd.Run()
+			cmd.Printf("Running g8eo tests...\n")
+			goCmd := exec.Command("go", goArgs...)
+			goCmd.Stdout = os.Stdout
+			goCmd.Stderr = os.Stderr
+			goCmd.Dir = cfg.ProjectRoot
+			return goCmd.Run()
 		},
 	}
 
@@ -100,13 +98,12 @@ func testCICmd() *cobra.Command {
 			}
 
 			cmd.Println("Running CI test suite...")
-
-			g8eoDir := filepath.Join(cfg.ProjectRoot, "services", "g8eo")
 			cmd.Println("\n=== Testing g8eo ===")
-			makeCmd := exec.Command("make", "-C", g8eoDir, "test")
-			makeCmd.Stdout = os.Stdout
-			makeCmd.Stderr = os.Stderr
-			if err := makeCmd.Run(); err != nil {
+			goCmd := exec.Command("go", "test", "-race", "-timeout", "180s", "./...")
+			goCmd.Stdout = os.Stdout
+			goCmd.Stderr = os.Stderr
+			goCmd.Dir = cfg.ProjectRoot
+			if err := goCmd.Run(); err != nil {
 				return fmt.Errorf("g8eo tests failed: %w", err)
 			}
 
@@ -118,6 +115,8 @@ func testCICmd() *cobra.Command {
 }
 
 func testChaosCmd() *cobra.Command {
+	var count int
+
 	cmd := &cobra.Command{
 		Use:   "chaos",
 		Short: "Run chaos engineering tests",
@@ -127,13 +126,20 @@ func testChaosCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			g8eoDir := filepath.Join(cfg.ProjectRoot, "services", "g8eo")
-			cmd.Println("Running chaos tests with sudo...")
-			makeCmd := exec.Command("make", "-C", g8eoDir, "test-sudo")
-			makeCmd.Stdout = os.Stdout
-			makeCmd.Stderr = os.Stderr
-			return makeCmd.Run()
+			cmd.Println("Running chaos tests...")
+			chaosPath := filepath.Join(cfg.ProjectRoot, "cmd", "chaos_tester")
+			goArgs := []string{"run", chaosPath}
+			if count > 0 {
+				goArgs = append(goArgs, "--count", fmt.Sprintf("%d", count))
+			}
+			goCmd := exec.Command("go", goArgs...)
+			goCmd.Stdout = os.Stdout
+			goCmd.Stderr = os.Stderr
+			goCmd.Dir = cfg.ProjectRoot
+			return goCmd.Run()
 		},
 	}
+
+	cmd.Flags().IntVar(&count, "count", 0, "Number of payloads to fire (default: 100)")
 	return cmd
 }

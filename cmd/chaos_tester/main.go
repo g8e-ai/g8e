@@ -767,7 +767,7 @@ func classifyRejection(err error) string {
 	}
 	msg := err.Error()
 	switch {
-	case contains(msg, "TX_L1_FAILED"):
+	case contains(msg, "TX_L1_FAILED") || contains(msg, "TX_DOCTRINE_L1_FAILED"):
 		return "L1_BLOCKED"
 	case contains(msg, "TX_HASH_MISMATCH") || contains(msg, "TX_HASH_MISSING"):
 		return "HASH_FAIL"
@@ -823,24 +823,25 @@ func printSummaryRow(category string, count int, expectedOutcome string, actual 
 func printDemoQueries(dbPath string) {
 	fmt.Printf("=== Demo Queries (run these via ./g8e) ===\n\n")
 
-	fmt.Printf("# 1. View Chaos Test Summary (category/outcome breakdown)\n")
-	fmt.Printf("./g8e data audit --db-path '%s' chaos-summary\n\n", dbPath)
+	fmt.Printf("# 1. View Chaos Test Summary\n")
+	fmt.Printf("./g8e data audit summary\n\n")
 
-	fmt.Printf("# 2. View Recent Chaos Events (last 10)\n")
-	fmt.Printf("./g8e data audit --db-path '%s' events --session chaos-session-001 --limit 10\n\n", dbPath)
+	fmt.Printf("# 2. View Audit Events (requires Operator running and mTLS auth)\n")
+	fmt.Printf("./g8e data audit list --operator-session-id chaos-session-001 --limit 10\n\n")
 
-	fmt.Printf("# 3. Inspect Git Ledger (audit trail)\n")
-	fmt.Printf("./g8e data audit --db-path '%s' ledger log\n\n", dbPath)
+	fmt.Printf("# 3. Query specific collection via Operator API\n")
+	fmt.Printf("./g8e data store --collection chaos_events\n\n")
 
-	fmt.Printf("# 4. Search Ledger for specific patterns\n")
-	fmt.Printf("./g8e data audit --db-path '%s' ledger grep --pattern \"FS_LIST\"\n\n", dbPath)
+	fmt.Printf("# 4. View all users\n")
+	fmt.Printf("./g8e data users\n\n")
 
-	fmt.Printf("# 5. Verify Ledger Integrity\n")
-	fmt.Printf("./g8e data audit --db-path '%s' ledger verify\n\n", dbPath)
+	fmt.Printf("# 5. View operators\n")
+	fmt.Printf("./g8e data operators\n\n")
 
-	fmt.Printf("# 6. View Specific Ledger Commit\n")
-	fmt.Printf("./g8e data audit --db-path '%s' ledger show --commit <hash>\n\n", dbPath)
+	fmt.Printf("# 6. View device-links\n")
+	fmt.Printf("./g8e data device-links list --user-id <user-id>\n\n")
 
-	fmt.Printf("# Note: You can also use raw sqlite3 if needed:\n")
-	fmt.Printf("# sqlite3 '%s'\n\n", dbPath)
+	fmt.Printf("# 7. Direct SQLite access for offline analysis\n")
+	fmt.Printf("# sqlite3 '%s'\n", dbPath)
+	fmt.Printf("#   SELECT category, outcome, COUNT(*) FROM chaos_events GROUP BY category, outcome;\n\n")
 }
