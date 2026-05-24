@@ -167,28 +167,7 @@ func (pm *ProcessManager) stopProcess(pid int, name string) error {
 }
 
 func (pm *ProcessManager) getOperatorBinary() (string, error) {
-	hostArch := "amd64"
-
-	var uname syscall.Utsname
-	if err := syscall.Uname(&uname); err == nil {
-		machine := ""
-		for _, b := range uname.Machine {
-			if b == 0 {
-				break
-			}
-			machine += string(byte(b))
-		}
-		switch machine {
-		case "x86_64":
-			hostArch = "amd64"
-		case "aarch64", "arm64":
-			hostArch = "arm64"
-		case "i386", "i686":
-			hostArch = "386"
-		}
-	}
-
-	binPath := filepath.Join(pm.projectRoot, "services", "g8eo", "build", fmt.Sprintf("linux-%s", hostArch), "g8e")
+	binPath := filepath.Join(pm.projectRoot, "bin", "g8e")
 	return binPath, nil
 }
 
@@ -231,6 +210,7 @@ func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int)
 
 	cmd := exec.Command(binPath,
 		"--doctrine",
+		"--working-dir", pm.projectRoot,
 		"--data-dir", pm.dataDir,
 		"--pki-dir", pm.pkiDir,
 		"--secrets-dir", pm.secretsDir,
