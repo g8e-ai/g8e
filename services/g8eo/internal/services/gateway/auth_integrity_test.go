@@ -15,6 +15,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/responder"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 )
 
@@ -126,4 +128,92 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 	assert.Equal(t, constants.UserStatusActive, user.Status)
 
 	t.Log("Auth integrity control test passed: active user is allowed")
+}
+
+// setupAuthService creates a test AuthService with minimal dependencies.
+func setupAuthService(t *testing.T) (*AuthService, *GatewayDBService) {
+	t.Helper()
+	logger := testutil.NewTestLogger()
+	dbDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	responderSvc := responder.New(logger)
+	auth := NewAuthService(db, nil, logger, nil, responderSvc, secretsDir)
+	return auth, db
+}
+
+// TestAuthIntegrity_AppRateLimitEnforced verifies that app policy rate limits
+// are actually enforced, not just logged as warnings.
+func TestAuthIntegrity_AppRateLimitEnforced(t *testing.T) {
+	t.Parallel()
+	auth, _ := setupAuthService(t)
+
+	// Create an app policy with a very low rate limit (2 RPS)
+	appID := "spiffe://g8e.local/app/test-app"
+	policy := &models.AppPolicy{
+		AppID:           appID,
+		RateLimitRPS:    2,
+		MaxPayloadBytes: 1024 * 1024,
+		CreatedAt:       time.Now().UTC(),
+		UpdatedAt:       time.Now().UTC(),
+	}
+
+	// Create a test request
+	req := httptest.NewRequest("GET", "/api/mcp/v1/tools/list", nil)
+	req.ContentLength = 100
+
+	// First request should pass
+	err := auth.enforceAppPolicy(req, policy, appID)
+	assert.NoError(t, err, "First request should pass rate limit")
+
+	// Second request should pass
+	err = auth.enforceAppPolicy(req, policy, appID)
+	assert.NoError(t, err, "Second request should pass rate limit")
+
+	// Third request should pass (burst allows 2x RPS = 4)
+	err = auth.enforceAppPolicy(req, policy, appID)
+	assert.NoError(t, err, "Third request should pass rate limit (burst)")
+
+	// Fourth request should pass (burst allows 2x RPS = 4)
+	err = auth.enforceAppPolicy(req, policy, appID)
+	assert.NoError(t, err, "Fourth request should pass rate limit (burst)")
+
+	// Fifth request should fail (exceeds burst)
+	err = auth.enforceAppPolicy(req, policy, appID)
+	assert.Error(t, err, "Fifth request should exceed rate limit")
+	assert.Contains(t, err.Error(), "rate limit exceeded")
+
+	t.Log("App rate limit enforcement test passed: rate limits are actually enforced")
+}
+
+// TestAuthIntegrity_AppRateLimitZeroConfigured verifies that when rate limit
+// is not configured (RPS = 0), no rate limiting is applied.
+func TestAuthIntegrity_AppRateLimitZeroConfigured(t *testing.T) {
+	t.Parallel()
+	auth, _ := setupAuthService(t)
+
+	// Create an app policy with no rate limit (0 RPS)
+	appID := "spiffe://g8e.local/app/test-app-nolimit"
+	policy := &models.AppPolicy{
+		AppID:           appID,
+		RateLimitRPS:    0,
+		MaxPayloadBytes: 1024 * 1024,
+		CreatedAt:       time.Now().UTC(),
+		UpdatedAt:       time.Now().UTC(),
+	}
+
+	// Create a test request
+	req := httptest.NewRequest("GET", "/api/mcp/v1/tools/list", nil)
+	req.ContentLength = 100
+
+	// Many requests should all pass when rate limit is not configured
+	for i := 0; i < 100; i++ {
+		err := auth.enforceAppPolicy(req, policy, appID)
+		assert.NoError(t, err, "Request %d should pass when rate limit is not configured", i)
+	}
+
+	t.Log("App rate limit zero test passed: no rate limiting when RPS = 0")
 }

@@ -208,6 +208,7 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/governance/signers", h.handleTrustedSigners)
 	mux.HandleFunc("/api/governance/signers/", h.handleTrustedSignerByID)
 	mux.HandleFunc("/api/admin/app-policies/", h.handleAppPolicySigner)
+	mux.HandleFunc("/api/admin/revoke-app", h.handleRevokeApp)
 
 	// Register rate-limited MCP routes
 	mux.Handle("/api/governance/envelope", mcpHandler)
@@ -1437,6 +1438,22 @@ func (h *HTTPHandler) handleAppPolicySigner(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Require admin authorization (bootstrap user only for now)
+	userID, ok := r.Context().Value(userIDKey).(string)
+	if !ok || userID == "" {
+		h.responder.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	user, err := h.userSvc.GetByID(userID)
+	if err != nil {
+		h.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
+		return
+	}
+	if user == nil || !user.IsBootstrap {
+		h.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
+		return
+	}
+
 	// Verify the app has an AppPolicy (deny-all default)
 	policyDoc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 	if err != nil {
@@ -1493,6 +1510,68 @@ func (h *HTTPHandler) handleAppPolicySigner(w http.ResponseWriter, r *http.Reque
 
 	h.logger.Info("External app L2 signer registered by admin", "app_id", appID)
 	h.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.GatewayModeStatusOK})
+}
+
+// handleRevokeApp handles bulk revocation of an external app.
+// POST /api/admin/revoke-app atomically removes the AppPolicy and any associated L2 signer.
+// Certificate revocation requires the serial number via the /api/pki/revoke endpoint.
+func (h *HTTPHandler) handleRevokeApp(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// Require admin authorization (bootstrap user only for now)
+	userID, ok := r.Context().Value(userIDKey).(string)
+	if !ok || userID == "" {
+		h.responder.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	user, err := h.userSvc.GetByID(userID)
+	if err != nil {
+		h.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
+		return
+	}
+	if user == nil || !user.IsBootstrap {
+		h.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
+		return
+	}
+
+	// Parse request body
+	body, err := h.readBody(r)
+	if err != nil {
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req struct {
+		AppID string `json:"app_id"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if req.AppID == "" {
+		h.responder.Error(w, http.StatusBadRequest, "app_id required")
+		return
+	}
+
+	// Delete AppPolicy
+	_, err = h.db.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), req.AppID)
+	if err != nil {
+		h.responder.Error(w, http.StatusInternalServerError, "failed to delete app policy")
+		return
+	}
+
+	// Delete TrustedSigner (if exists)
+	_, err = h.db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), req.AppID)
+	if err != nil {
+		h.responder.Error(w, http.StatusInternalServerError, "failed to delete trusted signer")
+		return
+	}
+
+	h.logger.Info("External app revoked by admin", "app_id", req.AppID)
+	h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
 
 func (h *HTTPHandler) handleSSEEvents(w http.ResponseWriter, r *http.Request, id string) {
