@@ -180,7 +180,18 @@ func main() {
 
 	// Customize usage
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: g8e.operator [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: g8e.operator [options]\n")
+		fmt.Fprintf(os.Stderr, "   or: g8e.operator <command> [command-options]\n\n")
+		fmt.Fprintf(os.Stderr, "Platform Commands:\n")
+		fmt.Fprintf(os.Stderr, "  platform    Platform lifecycle (start, stop, status, logs)\n")
+		fmt.Fprintf(os.Stderr, "  apps        Application lifecycle (start, stop, status, logs)\n")
+		fmt.Fprintf(os.Stderr, "  auth        Authentication (login, logout, device-link)\n")
+		fmt.Fprintf(os.Stderr, "  data        Data operations (export, import, query)\n")
+		fmt.Fprintf(os.Stderr, "  test        Run tests (g8eo, g8ee, integration)\n")
+		fmt.Fprintf(os.Stderr, "  evals       Run evaluation suites\n")
+		fmt.Fprintf(os.Stderr, "  security    Security operations (pki, certificates)\n")
+		fmt.Fprintf(os.Stderr, "  setup       Initial setup and configuration\n")
+		fmt.Fprintf(os.Stderr, "  vars        Environment variable management\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         API key (or set G8E_OPERATOR_API_KEY)\n")
 		fmt.Fprintf(os.Stderr, "  -D, --device-token <tok> Device link token for operator deployment\n")
