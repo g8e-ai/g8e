@@ -432,7 +432,7 @@ func localStorePrune(config *LocalStoreConfig) sqliteutil.PruneFunc {
 	return func(db *sqliteutil.DB, logger *slog.Logger) {
 		cutoff := sqliteutil.FormatTimestamp(time.Now().AddDate(0, 0, -config.RetentionDays))
 
-		result, err := db.Exec("DELETE FROM execution_log WHERE timestamp_utc < ?", cutoff)
+		result, err := db.ExecWithRetry("DELETE FROM execution_log WHERE timestamp_utc < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old records", string(constants.ConnectionStateError), err)
 			return
@@ -442,7 +442,7 @@ func localStorePrune(config *LocalStoreConfig) sqliteutil.PruneFunc {
 			logger.Info("Pruned old execution records", "rows_deleted", rowsDeleted)
 		}
 
-		diffResult, err := db.Exec("DELETE FROM file_diff_log WHERE timestamp_utc < ?", cutoff)
+		diffResult, err := db.ExecWithRetry("DELETE FROM file_diff_log WHERE timestamp_utc < ?", cutoff)
 		if err != nil {
 			logger.Error("Failed to prune old file diff records", string(constants.ConnectionStateError), err)
 		} else {
@@ -452,7 +452,7 @@ func localStorePrune(config *LocalStoreConfig) sqliteutil.PruneFunc {
 			}
 		}
 
-		_, err = db.Exec("DELETE FROM kv WHERE expires_at < ?", sqliteutil.FormatTimestamp(time.Now()))
+		_, err = db.ExecWithRetry("DELETE FROM kv WHERE expires_at < ?", sqliteutil.FormatTimestamp(time.Now()))
 		if err != nil {
 			logger.Error("Failed to prune expired kv records", string(constants.ConnectionStateError), err)
 		}
@@ -464,7 +464,7 @@ func localStorePrune(config *LocalStoreConfig) sqliteutil.PruneFunc {
 		maxSizeBytes := config.MaxDBSizeMB * 1024 * 1024
 
 		if err == nil && dbSizeBytes > maxSizeBytes {
-			_, err := db.Exec(`
+			_, err := db.ExecWithRetry(`
 				DELETE FROM execution_log
 				WHERE id IN (
 					SELECT id FROM execution_log
@@ -476,7 +476,7 @@ func localStorePrune(config *LocalStoreConfig) sqliteutil.PruneFunc {
 				logger.Error("Failed to prune execution_log for size limit", string(constants.ConnectionStateError), err)
 			}
 
-			_, err = db.Exec(`
+			_, err = db.ExecWithRetry(`
 				DELETE FROM file_diff_log
 				WHERE id IN (
 					SELECT id FROM file_diff_log

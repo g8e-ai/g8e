@@ -55,7 +55,7 @@ func (cl *CommitmentLedger) GetLatestCommitmentJSON() ([]byte, error) {
 	`
 
 	var attestationJSON string
-	err := cl.db.QueryRow(query).Scan(&attestationJSON)
+	err := cl.db.QueryRowWithRetry(query).Scan(&attestationJSON)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
