@@ -35,7 +35,7 @@ from app.constants import (
     AUTHORIZATION,
     ComponentName,
     ErrorCode,
-    CONTENT_TYPE as HTTP_CONTENT_TYPE_HEADER,
+    CONTENT_TYPE,
     OPERATOR_API_KEY,
 )
 from app.errors import NetworkError
@@ -87,7 +87,7 @@ class KVCacheClient:
 
     async def _get_http_session(self) -> aiohttp.ClientSession:
         """HTTP session for KV/REST requests."""
-        headers = {HTTP_CONTENT_TYPE_HEADER: "application/json"}
+        headers = {CONTENT_TYPE: "application/json"}
         # Priority: operator_session_id > operator_api_key
         if self._operator_session_id:
             headers[AUTHORIZATION] = f"Bearer {self._operator_session_id}"

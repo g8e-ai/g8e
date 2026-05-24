@@ -181,7 +181,7 @@ clean-constants:
 .PHONY: clean
 clean:
 	@echo "Cleaning up build artifacts and runtime state..."
-	@$(MAKE) -C services/g8eo clean
+	@$(MAKE) --no-print-directory -C services/g8eo clean
 	@$(MAKE) clean-constants
 	@rm -rf .g8e/
 	@rm -f ./g8e
@@ -318,25 +318,25 @@ build: build-g8eo
 
 .PHONY: build-g8eo
 build-g8eo:
-	@$(MAKE) -C services/g8eo build
+	@$(MAKE) --no-print-directory -C services/g8eo build
 	@ln -sf services/g8eo/build/linux-amd64/g8e ./g8e
 
 .PHONY: test-g8eo
 test-g8eo:
-	@$(MAKE) -C services/g8eo test
+	@$(MAKE) --no-print-directory -C services/g8eo test
 
 
 .PHONY: lint-g8eo
 lint-g8eo:
-	@$(MAKE) -C services/g8eo lint
+	@$(MAKE) --no-print-directory -C services/g8eo lint
 
 .PHONY: lint-g8ee
 lint-g8ee:
-	@$(MAKE) -C services/g8ee lint
+	@$(MAKE) --no-print-directory -C services/g8ee lint
 
 .PHONY: vulncheck-g8eo
 vulncheck-g8eo:
-	@$(MAKE) -C services/g8eo vulncheck
+	@$(MAKE) --no-print-directory -C services/g8eo vulncheck
 
 .PHONY: test-g8ee
 test-g8ee:

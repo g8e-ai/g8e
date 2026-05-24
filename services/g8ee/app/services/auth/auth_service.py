@@ -21,9 +21,9 @@ from fastapi import Request
 from app.constants import (
     AUTHORIZATION,
     CLI_SESSION_ID,
-    PROXY_ORGANIZATION_ID_HEADER,
-    PROXY_USER_EMAIL_HEADER,
-    PROXY_USER_ID_HEADER,
+    X_PROXY_ORGANIZATION_ID,
+    X_PROXY_USER_EMAIL,
+    X_PROXY_USER_ID,
     AuthMethod,
     ComponentName,
 )
@@ -56,9 +56,9 @@ class AuthService:
         settings: G8eeAppSettings,
     ) -> AuthenticatedUser:
         """Authenticate via proxy headers (browser) or Bearer operator session (CLI/mTLS)."""
-        proxy_user_id = request.headers.get(PROXY_USER_ID_HEADER)
-        proxy_user_email = request.headers.get(PROXY_USER_EMAIL_HEADER)
-        proxy_org_id = request.headers.get(PROXY_ORGANIZATION_ID_HEADER)
+        proxy_user_id = request.headers.get(X_PROXY_USER_ID)
+        proxy_user_email = request.headers.get(X_PROXY_USER_EMAIL)
+        proxy_org_id = request.headers.get(X_PROXY_ORGANIZATION_ID)
 
         user = None
 
