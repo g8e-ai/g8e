@@ -51,7 +51,7 @@ help:
 	@echo "  docs-serve    Serve MkDocs documentation locally (live reload)"
 	@echo ""
 	@echo "Services:"
-	@echo "  build-g8eo    Build the Operator service"
+	@echo "  build         Build the Operator service (g8e binary)"
 	@echo "  test-g8eo     Run Operator tests"
 	@echo "  lint-g8eo     Run Operator linters (golangci-lint)"
 	@echo "  lint-g8ee     Run Engine linters (ruff, pyright)"
@@ -182,9 +182,9 @@ clean-constants:
 clean:
 	@echo "Cleaning up build artifacts and runtime state..."
 	@$(MAKE) -C services/g8eo clean
-	@$(MAKE) -C services/g8eg clean
 	@$(MAKE) clean-constants
 	@rm -rf .g8e/
+	@rm -f ./g8e
 	@find . -name "*.pyc" -delete
 	@find . -name "__pycache__" -type d -exec rm -rf {} +
 	@echo "Clean complete."
@@ -313,22 +313,12 @@ _ci-apps-g8ee:
 # SERVICE DISPATCH
 # =============================================================================
 .PHONY: build
-build: build-g8eo build-cli
+build: build-g8eo
 	@echo "All builds complete."
-
-.PHONY: build-cli
-build-cli:
-	@echo "Building g8e binary (includes CLI commands)..."
-	@cd services/g8eo && go build -o ../../g8e ./cmd/g8eo
-	@echo "Unified binary built: ./g8e"
 
 .PHONY: build-g8eo
 build-g8eo:
 	@$(MAKE) -C services/g8eo build
-
-.PHONY: build-g8eg
-build-g8eg:
-	@$(MAKE) -C services/g8eg build
 	@cp services/g8eo/build/linux-amd64/g8e ./g8e
 
 .PHONY: test-g8eo

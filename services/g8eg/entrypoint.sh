@@ -43,12 +43,12 @@ DATA_DIR="$G8E_DATA_DIR"
 PKI_DIR="$G8E_PKI_DIR"
 SECRETS_DIR="$G8E_SECRETS_DIR"
 
-GATEWAY_BIN="${G8E_PROJECT_ROOT}/services/g8eo/build/linux-amd64/g8e.gateway"
+GATEWAY_BIN="${G8E_PROJECT_ROOT}/services/g8eo/build/linux-amd64/g8e"
 
 # Fallback to local build if binary not present (useful in dev/test)
 if [ ! -f "$GATEWAY_BIN" ]; then
     echo "Gateway binary not found, compiling locally..."
-    (cd "${G8E_PROJECT_ROOT}/services/g8eo" && make build-local)
+    (cd "${G8E_PROJECT_ROOT}/services/g8eo" && make build)
 fi
 
 # Ensure ports match values from paths.json constants

@@ -200,13 +200,8 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	return binPath, nil
 }
 
-func (pm *ProcessManager) buildOperator() error {
-	binPath, _ := pm.getOperatorBinary()
-	if _, err := os.Stat(binPath); err == nil {
-		return nil
-	}
-
-	cmd := exec.Command("make", "-C", filepath.Join(pm.projectRoot, "services", "g8eo"), "build-local")
+func (pm *ProcessManager) buildAll() error {
+	cmd := exec.Command("make", "-C", pm.projectRoot, "build")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -227,8 +222,8 @@ func (pm *ProcessManager) StartOperator(httpPort, bootstrapPort, publicPort int)
 		return fmt.Errorf("failed to check Operator Public API port %d: %w", publicPort, err)
 	}
 
-	if err := pm.buildOperator(); err != nil {
-		return fmt.Errorf("failed to build operator: %w", err)
+	if err := pm.buildAll(); err != nil {
+		return fmt.Errorf("failed to build: %w", err)
 	}
 
 	binPath, err := pm.getOperatorBinary()
