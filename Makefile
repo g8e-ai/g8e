@@ -50,15 +50,9 @@ help:
 	@echo "  docs-build    Build MkDocs documentation site"
 	@echo "  docs-serve    Serve MkDocs documentation locally (live reload)"
 	@echo ""
-	@echo "Doctrine Ingestion:"
-	@echo "  ingest-doctrines    Run all doctrine ingestion scripts"
-	@echo "  validate-doctrines  Validate JSON schema for all doctrine files"
-	@echo "  update-doctrines    Pull latest sources and re-ingest doctrines"
-	@echo ""
 	@echo "Services:"
 	@echo "  build-g8eo    Build the Operator service"
 	@echo "  test-g8eo     Run Operator tests"
-	@echo "  test-scripts  Run Data Ingestion and CLI helper tests"
 	@echo "  lint-g8eo     Run Operator linters (golangci-lint)"
 	@echo "  lint-g8ee     Run Engine linters (ruff, pyright)"
 	@echo "  vulncheck-g8eo Run Operator vulnerability check"
@@ -179,7 +173,6 @@ clean-constants:
 	@rm -rf protocol/constants/*.json
 	@rm -rf protocol/python/g8e_protocol/generated_*.py
 	@rm -rf services/g8ee/app/constants/generated_*.py
-	@rm -rf scripts/cmd/env_vars.sh scripts/cmd/paths.sh scripts/cmd/headers.sh
 	@rm -rf ./bin/g8e.exporter
 	@echo "Constants clean complete."
 
@@ -199,16 +192,7 @@ clean:
 # =============================================================================
 .PHONY: ingest-doctrines
 ingest-doctrines:
-	@echo "Running doctrine ingestion scripts..."
-	@if [ -f "scripts/ingest/ingest_owasp_crs.py" ]; then \
-		echo "Ingesting OWASP CRS doctrines..."; \
-		python3 scripts/ingest/ingest_owasp_crs.py /tmp/coreruleset/rules 2>/dev/null || echo "OWASP CRS source not found, skipping"; \
-	fi
-	@if [ -f "scripts/ingest/ingest_gitleaks.py" ]; then \
-		echo "Ingesting Gitleaks doctrines..."; \
-		python3 scripts/ingest/ingest_gitleaks.py /tmp/gitleaks.toml 2>/dev/null || echo "Gitleaks source not found, skipping"; \
-	fi
-	@echo "Doctrine ingestion complete."
+	@echo "Doctrine ingestion scripts removed. Use manual ingestion if needed."
 
 .PHONY: validate-doctrines
 validate-doctrines:
@@ -344,10 +328,6 @@ build-g8eg:
 test-g8eo:
 	@$(MAKE) -C services/g8eo test
 
-.PHONY: test-scripts
-test-scripts:
-	@echo "Running scripts/data tests..."
-	@pytest scripts/data/tests -v
 
 .PHONY: lint-g8eo
 lint-g8eo:
@@ -369,21 +349,14 @@ test-g8ee:
 # DOCUMENTATION
 # =============================================================================
 .PHONY: docs-build
-docs-build: docs-cli
+docs-build: constants
 	@echo "Building MkDocs documentation..."
 	@if [ -f ".venv/bin/python" ]; then \
 		.venv/bin/python -m mkdocs build -f docs/mkdocs.yml; \
-		echo "Generating embeddings for RAG search..."; \
-		.venv/bin/python scripts/docs/generate_embeddings.py --site-dir site --output site/embeddings.json; \
 	else \
 		echo "Error: Python venv not found. Run setup first."; \
 		exit 1; \
 	fi
-
-.PHONY: docs-cli
-docs-cli:
-	@echo "Generating CLI reference documentation..."
-	@./scripts/docs/generate_cli_reference.sh
 
 .PHONY: docs-serve
 docs-serve:

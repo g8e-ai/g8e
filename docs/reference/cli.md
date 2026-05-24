@@ -82,4 +82,3 @@ OpenClaw Node Host Mode:
   --openclaw-node-id <id> Node ID advertised to the Gateway (default: hostname)
   --openclaw-name <name>  Display name shown in OpenClaw UI (default: node ID)
 ```
-

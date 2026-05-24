@@ -169,16 +169,10 @@ See [Demos](./demos.md).
 
 **Permissible Shell Scripts:**
 - Service entrypoints (`services/*/entrypoint.sh`) - minimal wrappers that set environment and exec the binary
-- Build-time toolchain scripts (`scripts/ingest/*.py`, `scripts/docs/*.sh`) - disconnected from runtime platform operations
 - Vendor scripts (third-party Go vendor scripts) - not g8e platform code
 
 **Deleted Scripts (2026-05-23):**
-- All `scripts/core/*` shell scripts (config.sh, path_utils.sh, json_query.py, logs.sh, manage-env.sh, setup.sh, local_setup.sh, stream_events.py)
-- All `scripts/cmd/*` shell scripts (common.sh, env_vars.sh, paths.sh, api_paths.sh, headers.sh)
-- All `scripts/tools/*` shell scripts (approve-transaction.sh, setup-llm.sh, setup-search.sh, setup-ssh.sh)
-- All `scripts/docs/*` shell scripts (generate_cli_reference.sh)
-- All `scripts/security/*` shell scripts (validate-platform-security.sh)
-- All `scripts/testing/*` shell scripts (run_tests.sh, test_test_help.sh)
+- **Entire scripts/ directory deleted** - All shell scripts, Python scripts, and toolchain scripts removed
 - `evals/tests/byo_client_parity.sh`
 - `demo/profiles/*`
 

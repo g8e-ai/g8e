@@ -17,7 +17,6 @@ g8e/
 │   ├── g8ee/                    # OPTIONAL - g8e-Compliant Agentic Ensemble
 │   └── g8eg/                    # OPTIONAL - Governance Gateway (PDP)
 │
-├── scripts/                     # CLI, build, and lifecycle scripts
 ├── evals/                       # Evaluation framework and gold sets
 └── docs/                        # Architecture and user documentation
 ```

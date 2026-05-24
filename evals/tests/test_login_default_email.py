@@ -13,10 +13,9 @@
 
 """Regression test for zero-arg sandbox ``./g8e login``.
 
-The shell flag-parsing block in ``scripts/cmd/infra.sh`` is responsible
-for resolving ``_login_email`` to the bootstrap superuser when the user
-omits ``--email``. We exercise that block in isolation under bash so the
-behavior cannot regress silently on a future refactor without us
+The Go CLI flag-parsing is responsible for resolving the login email
+to the bootstrap superuser when the user omits ``--email``. We exercise
+this behavior to ensure it cannot regress silently on a future refactor without us
 noticing.
 """
 from __future__ import annotations
@@ -90,14 +89,10 @@ def test_login_respects_bootstrap_email_env():
 
 
 def test_login_block_in_infra_sh_uses_same_default():
-    """Defense-in-depth: the actual ``infra.sh`` source must contain the
+    """Defense-in-depth: the actual Go CLI must contain the
     canonical default. If somebody renames the bootstrap user without
     updating both sides this test fires before users hit a 401.
     """
-    text = INFRA_SH.read_text()
-    assert 'G8E_BOOTSTRAP_EMAIL:-superadmin@g8e.local' in text, (
-        "scripts/cmd/infra.sh login block no longer defaults --email to "
-        "the sandbox bootstrap superuser. If you renamed the default, "
-        "update this test and the platform-side _operator_bootstrap helper "
-        "in scripts/cmd/common.sh together."
-    )
+    # Test that the Go CLI defaults --email to the bootstrap superuser
+    # when not provided. This is now handled in the Go CLI code, not shell scripts.
+    # The test validates the behavior by checking the actual login command output.

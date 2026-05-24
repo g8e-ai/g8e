@@ -473,7 +473,7 @@ func TestHandleDB(t *testing.T) {
 
 	t.Run("DELETE not found", func(t *testing.T) {
 		t.Parallel()
-		req := httptest.NewRequest(http.MethodDelete, "/db/settings/nonexistent", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/db/users/nonexistent", nil)
 		rr := httptest.NewRecorder()
 		h.handleDB(rr, req)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
@@ -956,11 +956,20 @@ func TestHandleBlob(t *testing.T) {
 
 	t.Run("Metadata", func(t *testing.T) {
 		t.Parallel()
-		reqMeta := httptest.NewRequest(http.MethodGet, "/blob/ns1/b1/meta", nil)
+		// Create a blob first
+		content := []byte("blob-data")
+		reqPut := httptest.NewRequest(http.MethodPut, "/blob/ns2/b2", bytes.NewReader(content))
+		reqPut.Header.Set("Content-Type", "text/plain")
+		rrPut := httptest.NewRecorder()
+		h.handleBlob(rrPut, reqPut)
+		assert.Equal(t, http.StatusOK, rrPut.Code)
+
+		// Then get metadata
+		reqMeta := httptest.NewRequest(http.MethodGet, "/blob/ns2/b2/meta", nil)
 		rrMeta := httptest.NewRecorder()
 		h.handleBlob(rrMeta, reqMeta)
 		assert.Equal(t, http.StatusOK, rrMeta.Code)
-		assert.Contains(t, rrMeta.Body.String(), `"id":"b1"`)
+		assert.Contains(t, rrMeta.Body.String(), `"id":"b2"`)
 	})
 
 	t.Run("Too Large", func(t *testing.T) {
@@ -1280,11 +1289,9 @@ func TestHandleBootstrap(t *testing.T) {
 }
 
 func TestHandleBootstrapStatus(t *testing.T) {
-	t.Parallel()
-	h, _ := setupTestHTTPHandler(t)
-
 	t.Run("Initially not bootstrapped", func(t *testing.T) {
 		t.Parallel()
+		h, _ := setupTestHTTPHandler(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
 		rr := httptest.NewRecorder()
 		h.handleBootstrapStatus(rr, req)
@@ -1298,6 +1305,7 @@ func TestHandleBootstrapStatus(t *testing.T) {
 
 	t.Run("Bootstrapped after creating a user", func(t *testing.T) {
 		t.Parallel()
+		h, _ := setupTestHTTPHandler(t)
 		_, err := h.userSvc.CreateUser()
 		require.NoError(t, err)
 

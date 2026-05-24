@@ -89,7 +89,7 @@ The unified `g8eo` binary is the single entry point for all platform operations.
 
 **Permissible Shell Scripts:**
 - Service entrypoints (`services/*/entrypoint.sh`) - minimal wrappers that set environment and exec the binary
-- Build-time toolchain scripts (`scripts/ingest/*.py`, `scripts/docs/*.sh`) - disconnected from runtime platform operations
+- Vendor scripts (third-party Go vendor scripts) - not g8e platform code
 
 ## Architecture Philosophy
 
@@ -274,18 +274,11 @@ Each doctrine file follows this canonical schema:
 }
 ```
 
-### Ingestion Scripts
-
-- **OWASP CRS**: `scripts/ingest/ingest_owasp_crs.py` - Parses SecLanguage rules from OWASP Core Rule Set
-- **Gitleaks**: `scripts/ingest/ingest_gitleaks.py` - Parses TOML configuration from Gitleaks
-
 ### Makefile Targets
 
 | Target | Purpose |
 |---|---|
-| `make ingest-doctrines` | Run all doctrine ingestion scripts |
 | `make validate-doctrines` | Validate JSON schema for all doctrine files |
-| `make update-doctrines` | Pull latest sources and re-ingest doctrines |
 
 ### Adding New Doctrines
 
