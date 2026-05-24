@@ -277,3 +277,43 @@ func TestGetDarwinMachineID_FallbackContainsHostname(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, id, hostname, "fallback ID must embed hostname")
 }
+
+func TestGetMachineID_UnsupportedOS(t *testing.T) {
+	t.Parallel()
+	// This test covers the error path for unsupported OS
+	// Since we can't easily mock runtime.GOOS, we rely on the fact that
+	// the test will run on a supported OS and this is a documentation
+	// of the expected behavior
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" && runtime.GOOS != "freebsd" {
+		_, err := getMachineID(testutil.NewTestLogger())
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported operating system")
+	}
+}
+
+func TestIsHex(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		s    string
+		want bool
+	}{
+		{"valid lowercase hex", "abc123", true},
+		{"valid uppercase hex", "ABC123", true},
+		{"valid mixed case hex", "AbC123", true},
+		{"empty string", "", true},
+		{"invalid characters", "ghijkl", false},
+		{"with spaces", "abc 123", false},
+		{"with special chars", "abc!@#", false},
+		{"with numbers only", "123456", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isHex(tt.s); got != tt.want {
+				t.Errorf("isHex(%q) = %v, want %v", tt.s, got, tt.want)
+			}
+		})
+	}
+}

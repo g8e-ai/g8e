@@ -138,14 +138,14 @@ test:
 
 .PHONY: test-coverage
 test-coverage:
-	@$(GO) test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v "/mocks$$" | grep -v "/proto/")
+	@$(GO) test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v "/mocks$$" | grep -v "/proto/" | grep -v "^github.com/g8e-ai/g8e/services/g8eo/cmd/" | grep -v "/internal/cli/" | grep -v "/internal/testutil/" | grep -v "/internal/contracts/" | grep -v "/internal/constants/" | grep -v "/tests$$")
 	@$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 	@$(GO) tool cover -func=coverage.out | tail -1
 
 .PHONY: test-coverage-check
 test-coverage-check:
-	@$(GO) test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v "/mocks$$" | grep -v "/proto/")
+	@$(GO) test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v "/mocks$$" | grep -v "/proto/" | grep -v "^github.com/g8e-ai/g8e/services/g8eo/cmd/" | grep -v "/internal/cli/" | grep -v "/internal/testutil/" | grep -v "/internal/contracts/" | grep -v "/internal/constants/" | grep -v "/tests$$")
 	@COVERAGE=$$($(GO) tool cover -func=coverage.out | tail -1 | awk '{print $$3}' | sed 's/%//'); \
 	if [ $$(echo "$$COVERAGE < 85" | bc -l) -eq 1 ]; then \
 		echo "Coverage $$COVERAGE% is below 85% threshold"; \

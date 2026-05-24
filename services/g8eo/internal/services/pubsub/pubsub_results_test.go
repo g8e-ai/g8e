@@ -56,6 +56,187 @@ func TestNewPubSubResultsService(t *testing.T) {
 	})
 }
 
+func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
+	t.Parallel()
+	t.Run("successful heartbeat publish", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		require.NoError(t, err)
+
+		heartbeat := &pb.HeartbeatResult{
+			OperatorId:        cfg.OperatorID,
+			OperatorSessionId: cfg.OperatorSessionId,
+			Status:            "healthy",
+			Timestamp:         models.NowTimestamp(),
+		}
+
+		err = svc.PublishHeartbeat(context.Background(), heartbeat)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, "HEARTBEAT_RESULT", env.EventType)
+	})
+}
+
+func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
+	t.Parallel()
+	t.Run("successful cancellation publish", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		require.NoError(t, err)
+
+		result := &pb.CommandResult{
+			ExecutionId: "req-123",
+			Status:      pb.ExecutionStatus_EXECUTION_STATUS_CANCELLED,
+			Stdout:      "cancelled",
+			ReturnCode:  130,
+		}
+
+		originalMsg := PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.Command.CancelRequested,
+			CaseID:            "case-456",
+			OperatorSessionID: "web-session-123",
+		}
+
+		err = svc.PublishCancellationResult(context.Background(), result, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, string(constants.Event.Operator.Command.Cancelled), env.EventType)
+	})
+}
+
+func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
+	t.Parallel()
+	t.Run("successful fs list publish", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		require.NoError(t, err)
+
+		result := &pb.FsListResult{
+			ExecutionId: "req-123",
+			Status:      pb.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			Entries:     []*pb.FsEntry{{Name: "test.txt", Size: 100}},
+		}
+
+		originalMsg := PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.FsList.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "web-session-123",
+		}
+
+		err = svc.PublishFsListResult(context.Background(), result, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, string(constants.Event.Operator.FsList.Completed), env.EventType)
+	})
+
+	t.Run("publishes failed status on error", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		require.NoError(t, err)
+
+		result := &pb.FsListResult{
+			ExecutionId:  "req-123",
+			Status:       pb.ExecutionStatus_EXECUTION_STATUS_FAILED,
+			ErrorMessage: "permission denied",
+		}
+
+		originalMsg := PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.FsList.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "web-session-123",
+		}
+
+		err = svc.PublishFsListResult(context.Background(), result, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, string(constants.Event.Operator.FsList.Failed), env.EventType)
+	})
+}
+
+func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
+	t.Parallel()
+	t.Run("successful fs grep publish", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		require.NoError(t, err)
+
+		result := &pb.FsGrepResult{
+			ExecutionId: "req-123",
+			Status:      pb.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			Matches:     []*pb.FsGrepMatch{{Path: "/tmp/test.txt", LineNumber: 1, Content: "match"}},
+		}
+
+		originalMsg := PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.FsGrep.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "web-session-123",
+		}
+
+		err = svc.PublishFsGrepResult(context.Background(), result, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, string(constants.Event.Operator.FsGrep.Completed), env.EventType)
+	})
+
+	t.Run("publishes failed status on error", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		require.NoError(t, err)
+
+		result := &pb.FsGrepResult{
+			ExecutionId:  "req-123",
+			Status:       pb.ExecutionStatus_EXECUTION_STATUS_FAILED,
+			ErrorMessage: "pattern error",
+		}
+
+		originalMsg := PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.FsGrep.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "web-session-123",
+		}
+
+		err = svc.PublishFsGrepResult(context.Background(), result, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, string(constants.Event.Operator.FsGrep.Failed), env.EventType)
+	})
+}
+
 func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 	t.Parallel()
 	t.Run("successful publish", func(t *testing.T) {
@@ -101,6 +282,66 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "req-123", payload.ExecutionId)
 	})
+
+	t.Run("publishes failed status on error", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		require.NoError(t, err)
+
+		result := &pb.CommandResult{
+			ExecutionId: "req-123",
+			Status:      pb.ExecutionStatus_EXECUTION_STATUS_FAILED,
+			Stderr:      "error occurred",
+			ReturnCode:  1,
+		}
+
+		originalMsg := PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.Command.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "web-session-123",
+		}
+
+		err = svc.PublishExecutionResult(context.Background(), result, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, string(constants.Event.Operator.Command.Failed), env.EventType)
+	})
+
+	t.Run("publishes timeout status on timeout", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		require.NoError(t, err)
+
+		result := &pb.CommandResult{
+			ExecutionId: "req-123",
+			Status:      pb.ExecutionStatus_EXECUTION_STATUS_TIMEOUT,
+			Stderr:      "timeout",
+			ReturnCode:  124,
+		}
+
+		originalMsg := PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.Command.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "web-session-123",
+		}
+
+		err = svc.PublishExecutionResult(context.Background(), result, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, string(constants.Event.Operator.Command.Failed), env.EventType)
+	})
 }
 
 func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
@@ -134,11 +375,8 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
 		assert.Equal(t, string(constants.Event.Operator.FileEdit.Completed), env.EventType)
 	})
-}
 
-func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
-	t.Parallel()
-	t.Run("successful heartbeat publish", func(t *testing.T) {
+	t.Run("publishes failed status on error", func(t *testing.T) {
 		t.Parallel()
 		db := NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
@@ -146,18 +384,26 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		heartbeat := &pb.HeartbeatResult{
-			OperatorId:        cfg.OperatorID,
-			OperatorSessionId: cfg.OperatorSessionId,
-			Status:            "healthy",
-			Timestamp:         models.NowTimestamp(),
+		result := &pb.FileEditResult{
+			ExecutionId:  "req-123",
+			Operation:    "write",
+			FilePath:     "/tmp/test.txt",
+			Status:       pb.ExecutionStatus_EXECUTION_STATUS_FAILED,
+			ErrorMessage: "permission denied",
 		}
 
-		err = svc.PublishHeartbeat(context.Background(), heartbeat)
+		originalMsg := PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.FileEdit.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "web-session-123",
+		}
+
+		err = svc.PublishFileEditResult(context.Background(), result, originalMsg)
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublishedUniversal(t, db)
 		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
-		assert.Equal(t, "HEARTBEAT_RESULT", env.EventType)
+		assert.Equal(t, string(constants.Event.Operator.FileEdit.Failed), env.EventType)
 	})
 }

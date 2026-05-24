@@ -386,7 +386,6 @@ func TestExecutionService_Stop(t *testing.T) {
 	})
 
 	t.Run("stop with active executions", func(t *testing.T) {
-		t.Parallel()
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "stop-test-1",
 			Command:        "sleep",
@@ -395,10 +394,10 @@ func TestExecutionService_Stop(t *testing.T) {
 		}
 
 		// Start execution in background
-		execDone := make(chan struct{})
+		execDone := make(chan error, 1)
 		go func() {
-			defer close(execDone)
-			svc.ExecuteCommand(context.Background(), req)
+			_, err := svc.ExecuteCommand(context.Background(), req)
+			execDone <- err
 		}()
 
 		// Wait for execution to start and be tracked
@@ -407,7 +406,7 @@ func TestExecutionService_Stop(t *testing.T) {
 			return len(active) == 1
 		}, 5*time.Second, 50*time.Millisecond)
 
-		// Stop the service
+		// Stop the service - this should cancel the execution
 		svc.Stop()
 
 		// Verify map is cleared
@@ -416,7 +415,7 @@ func TestExecutionService_Stop(t *testing.T) {
 		// Verify execution completed (cancelled)
 		select {
 		case <-execDone:
-			// Success
+			// Success - execution completed
 		case <-time.After(5 * time.Second):
 			t.Fatal("Execution did not complete after stop")
 		}
