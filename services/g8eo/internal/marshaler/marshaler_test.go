@@ -62,7 +62,7 @@ func TestEnvVar(t *testing.T) {
 
 func TestOperatorStatus(t *testing.T) {
 	// Test that the function compiles and returns a string
-	result := OperatorStatus(constants.Status.OperatorStatus.Active)
+	result := OperatorStatus(constants.OperatorStatusActive)
 	if result == "" {
 		t.Error("OperatorStatus() returned empty string")
 	}
@@ -70,7 +70,7 @@ func TestOperatorStatus(t *testing.T) {
 
 func TestOperatorType(t *testing.T) {
 	// Test that the function compiles and returns a string
-	result := OperatorType(constants.Status.OperatorType.System)
+	result := OperatorType(constants.OperatorTypeSystem)
 	if result == "" {
 		t.Error("OperatorType() returned empty string")
 	}
@@ -78,7 +78,7 @@ func TestOperatorType(t *testing.T) {
 
 func TestExecutionStatus(t *testing.T) {
 	// Test that the function compiles and returns a string
-	result := ExecutionStatus(constants.Status.ExecutionStatus.Pending)
+	result := ExecutionStatus(constants.ExecutionStatusPending)
 	if result == "" {
 		t.Error("ExecutionStatus() returned empty string")
 	}

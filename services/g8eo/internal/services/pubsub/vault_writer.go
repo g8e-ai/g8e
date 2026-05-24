@@ -74,7 +74,7 @@ type executionWriteParams struct {
 // Raw vault write is skipped when vaultMode == scrubbed.
 // Scrubbed vault always receives sentinel-processed output.
 func (vw *VaultWriter) WriteExecution(p executionWriteParams) {
-	if vw.rawVault != nil && vw.rawVault.IsEnabled() && p.vaultMode != constants.Status.VaultMode.Scrubbed {
+	if vw.rawVault != nil && vw.rawVault.IsEnabled() && p.vaultMode != constants.VaultModeScrubbed {
 		rawRecord := &storage.RawExecutionRecord{
 			ID:               p.id,
 			TimestampUTC:     time.Now().UTC(),
@@ -100,7 +100,7 @@ func (vw *VaultWriter) WriteExecution(p executionWriteParams) {
 				"stdout_size", p.stdoutSize,
 				"stderr_size", p.stderrSize)
 		}
-	} else if p.vaultMode == constants.Status.VaultMode.Scrubbed {
+	} else if p.vaultMode == constants.VaultModeScrubbed {
 		vw.logger.Info("Raw vault storage skipped (sentinel_mode=scrubbed)", "execution_id", p.id)
 	}
 

@@ -357,7 +357,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	}
 
 	return &Config{
-		ComponentName: constants.Status.ComponentName.G8EOGateway,
+		ComponentName: constants.ComponentNameG8EOGateway,
 		PKIDir:        pkiDir,     // Also set top-level for services that use Config.PKIDir
 		SecretsDir:    secretsDir, // Also set top-level for services that use Config.SecretsDir
 		Gateway: GatewayConfig{
@@ -440,7 +440,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		ProjectID:     "g8e",
 
 		// Fixed defaults
-		ComponentName:      constants.Status.ComponentName.G8EO,
+		ComponentName:      constants.ComponentNameG8EO,
 		MaxConcurrentTasks: 25,
 		MaxMemoryMB:        2048,
 		HeartbeatInterval:  heartbeatIntervalOrDefault(opts.HeartbeatInterval),

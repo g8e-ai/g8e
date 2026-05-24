@@ -1469,28 +1469,28 @@ func (s *Sentinel) extractKey(line string) string {
 func (s *Sentinel) determineStatus(exitCode int) constants.SentinelStatus {
 	switch exitCode {
 	case 0:
-		return constants.Status.SentinelStatus.Success
+		return constants.SentinelStatusSuccess
 	case 1:
-		return constants.Status.SentinelStatus.Failure
+		return constants.SentinelStatusFailure
 	case 2:
-		return constants.Status.SentinelStatus.Misuse
+		return constants.SentinelStatusMisuse
 	case 126:
-		return constants.Status.SentinelStatus.NotExecutable
+		return constants.SentinelStatusNotExecutable
 	case 127:
-		return constants.Status.SentinelStatus.NotFound
+		return constants.SentinelStatusNotFound
 	case 128:
-		return constants.Status.SentinelStatus.InvalidExit
+		return constants.SentinelStatusInvalidExit
 	case 130:
-		return constants.Status.SentinelStatus.Interrupted
+		return constants.SentinelStatusInterrupted
 	case 137:
-		return constants.Status.SentinelStatus.Killed
+		return constants.SentinelStatusKilled
 	case 143:
-		return constants.Status.SentinelStatus.Terminated
+		return constants.SentinelStatusTerminated
 	default:
 		if exitCode > 128 {
 			return constants.SentinelStatus(fmt.Sprintf("signal_%d", exitCode-128))
 		}
-		return constants.Status.SentinelStatus.Error
+		return constants.SentinelStatusError
 	}
 }
 
@@ -1507,7 +1507,7 @@ func (s *Sentinel) categorizeError(stderr string, exitCode int) string {
 	case strings.Contains(stderrLower, "permission denied"):
 		return "permission_denied"
 	case strings.Contains(stderrLower, "not found") || strings.Contains(stderrLower, "no such file"):
-		return string(constants.Status.SentinelStatus.NotFound)
+		return string(constants.SentinelStatusNotFound)
 	case strings.Contains(stderrLower, "timeout") || strings.Contains(stderrLower, "timed out"):
 		return "timeout"
 	case strings.Contains(stderrLower, "connection refused"):
@@ -1688,8 +1688,8 @@ func (s *Sentinel) categorizeWarning(line string) string {
 		return "memory_warning"
 	case strings.Contains(lower, "disk"):
 		return "disk_warning"
-	case strings.Contains(lower, string(constants.Status.ToolDisplayCategory.Network)):
-		return string(constants.Status.ToolDisplayCategory.Network)
+	case strings.Contains(lower, string(constants.ToolDisplayCategoryNetwork)):
+		return string(constants.ToolDisplayCategoryNetwork)
 	case strings.Contains(lower, "certificate") || strings.Contains(lower, "ssl") || strings.Contains(lower, "tls"):
 		return "certificate_warning"
 	case strings.Contains(lower, "version"):

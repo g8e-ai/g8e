@@ -452,8 +452,8 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.responder.JSON(w, http.StatusOK, models.HealthResponse{
-		Status:          constants.Status.GatewayMode.StatusOK,
-		Mode:            constants.Status.GatewayMode.Mode,
+		Status:          constants.GatewayModeStatusOK,
+		Mode:            constants.GatewayModeMode,
 		Version:         h.cfg.Version,
 		GovernanceReady: h.isGovernanceReady != nil && h.isGovernanceReady(),
 		StateMerkleRoot: root,
@@ -588,7 +588,7 @@ func (h *HTTPHandler) handlePKIRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+	h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
 
 func (h *HTTPHandler) handlePKIRevocationBundle(w http.ResponseWriter, r *http.Request) {
@@ -717,7 +717,7 @@ func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 			h.responder.Error(w, http.StatusInternalServerError, err2.Error())
 			return
 		}
-		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 	default:
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
@@ -770,7 +770,7 @@ func (h *HTTPHandler) handleDeviceLinkByToken(w http.ResponseWriter, r *http.Req
 		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+	h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
 
 func (h *HTTPHandler) handleOperators(w http.ResponseWriter, r *http.Request) {
@@ -1131,7 +1131,7 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodPatch:
 		if !isDirectDBMutationAllowed(collection) {
@@ -1176,7 +1176,7 @@ func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 			h.responder.Error(w, http.StatusNotFound, "document not found")
 			return
 		}
-		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	default:
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1314,7 +1314,7 @@ func (h *HTTPHandler) handleTrustedSigners(w http.ResponseWriter, r *http.Reques
 			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		h.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	default:
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1353,7 +1353,7 @@ func (h *HTTPHandler) handleTrustedSignerByID(w http.ResponseWriter, r *http.Req
 			h.responder.Error(w, http.StatusNotFound, "signer not found")
 			return
 		}
-		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	default:
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1428,7 +1428,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	cert := r.TLS.PeerCertificates[0]
 	isG8EE := false
 	for _, uri := range cert.URIs {
-		if wid.MatchesApp(uri.String(), marshaler.Status(constants.Status.ComponentName.G8EE)) {
+		if wid.MatchesApp(uri.String(), marshaler.Status(constants.ComponentNameG8EE)) {
 			isG8EE = true
 			break
 		}
@@ -1815,7 +1815,7 @@ func (h *HTTPHandler) handleKV(w http.ResponseWriter, r *http.Request) {
 			h.responder.Error(w, http.StatusNotFound, "key not found")
 			return
 		}
-		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 		return
 	}
 
@@ -1845,14 +1845,14 @@ func (h *HTTPHandler) handleKV(w http.ResponseWriter, r *http.Request) {
 			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodDelete:
 		if err := h.db.KVDelete(key); err != nil {
 			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	default:
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -2063,7 +2063,7 @@ func (h *HTTPHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+		h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodGet:
 		data, contentType, ok := h.db.BlobGet(namespace, blobID)
@@ -3019,7 +3019,7 @@ func (h *HTTPHandler) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.Status.GatewayMode.StatusOK})
+	h.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
 
 // handleBootstrap creates the first user in the system and optionally issues a CLI mTLS cert.
@@ -3157,11 +3157,11 @@ func (h *HTTPHandler) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 			ID:                operatorID,
 			UserID:            user.ID,
 			OrganizationID:    orgID,
-			Component:         constants.Status.ComponentName.G8EO,
+			Component:         constants.ComponentNameG8EO,
 			Name:              "bootstrap-operator",
-			Status:            constants.Status.OperatorStatus.Active,
+			Status:            constants.OperatorStatusActive,
 			OperatorSessionID: sessionID,
-			OperatorType:      constants.Status.OperatorType.System,
+			OperatorType:      constants.OperatorTypeSystem,
 			SystemFingerprint: req.SystemFingerprint,
 			Claimed:           true,
 			ClaimedAt:         &now,

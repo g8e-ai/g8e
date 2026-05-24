@@ -183,7 +183,7 @@ func (o *OperatorDocumentGo) MarshalJSON() ([]byte, error) {
 
 	// Apply defaults for enum fields
 	if defaulted.OperatorType == "" {
-		defaulted.OperatorType = constants.Status.OperatorType.System
+		defaulted.OperatorType = constants.OperatorTypeSystem
 	}
 	// CloudSubtype defaults to empty string (no default subtype)
 

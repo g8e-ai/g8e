@@ -185,7 +185,7 @@ func NewExecutionService(cfg *config.Config, logger *slog.Logger) *ExecutionServ
 // cloudCLICommands lists commands that require --cloud flag to execute
 var cloudCLICommands = map[string]bool{
 	// Cloud provider CLIs
-	marshaler.Status(constants.Status.CloudSubtype.AWS): true,
+	marshaler.Status(constants.CloudSubtypeAWS): true,
 	"gcloud": true,
 	"az":     true,
 	"gsutil": true,
@@ -739,7 +739,7 @@ func (es *ExecutionService) collectSystemInfo() *models.ExecutionSystemInfo {
 		"num_cpu", info.NumCPU,
 		"current_user", info.CurrentUser)
 
-	if constants.Platform(runtime.GOOS) == constants.Status.Platform.Linux {
+	if constants.Platform(runtime.GOOS) == constants.PlatformLinux {
 		es.logger.Info("Linux detected - collecting extended system metrics")
 
 		if loadavg, err := getLoadAverage(); err == nil {

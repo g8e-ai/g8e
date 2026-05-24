@@ -444,13 +444,13 @@ func (s *RegistrationService) TerminateOperator(operatorID, userID, reason strin
 		return fmt.Errorf("operator does not belong to user")
 	}
 
-	if op.Status == constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated)) {
+	if op.Status == constants.OperatorStatus(marshaler.OperatorStatus(constants.OperatorStatusTerminated)) {
 		return nil // Already terminated
 	}
 
 	// Update operator to terminated status
 	update := map[string]interface{}{
-		"status":     constants.Status.OperatorStatus.Terminated,
+		"status":     constants.OperatorStatusTerminated,
 		"updated_at": time.Now().UTC(),
 	}
 	if reason != "" {
@@ -639,7 +639,7 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 	if operator == nil {
 		filters = []models.DocFilter{
 			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", linkData.UserID))},
-			{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.Status.OperatorStatus.Offline))},
+			{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.OperatorStatusOffline))},
 		}
 		docs, err = s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 		if err == nil && len(docs) > 0 {
@@ -752,7 +752,7 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 
 	// Update operator document
 	update := map[string]interface{}{
-		"status":              constants.Status.OperatorStatus.Active,
+		"status":              constants.OperatorStatusActive,
 		"operator_session_id": operatorSessionID,
 		"system_fingerprint":  sanitizedFingerprint,
 		string(constants.HistoryEventTypeClaimed): true,
@@ -891,12 +891,12 @@ func (s *RegistrationService) createSlot(userID, orgID string) (*models.Operator
 		ID:             id,
 		UserID:         userID,
 		OrganizationID: orgID,
-		Component:      constants.ComponentName(marshaler.Status(constants.Status.ComponentName.G8EO)),
+		Component:      constants.ComponentName(marshaler.Status(constants.ComponentNameG8EO)),
 		Name:           fmt.Sprintf("operator-%d", slotNumber),
-		Status:         constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Offline)),
+		Status:         constants.OperatorStatus(marshaler.OperatorStatus(constants.OperatorStatusOffline)),
 		SlotNumber:     slotNumber,
 		IsSlot:         true,
-		OperatorType:   constants.Status.OperatorType.System,
+		OperatorType:   constants.OperatorTypeSystem,
 		CreatedAt:      time.Now().UTC(),
 		UpdatedAt:      time.Now().UTC(),
 	}
@@ -995,7 +995,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				OperatorIDs:        []string{opID},
 				BoundAt:            time.Now().UTC(),
 				LastUpdatedAt:      time.Now().UTC(),
-				Status:             constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Active)),
+				Status:             constants.OperatorStatus(marshaler.OperatorStatus(constants.OperatorStatusActive)),
 			}
 			body, _ := json.Marshal(newDoc)
 			_ = s.db.DocSet(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
@@ -1015,7 +1015,7 @@ func (s *RegistrationService) BindOperators(req models.BindOperatorsRequest) (*m
 				bDoc.OperatorIDs = append(bDoc.OperatorIDs, opID)
 				bDoc.OperatorSessionIDs = append(bDoc.OperatorSessionIDs, op.OperatorSessionID)
 				bDoc.LastUpdatedAt = time.Now().UTC()
-				bDoc.Status = constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Active))
+				bDoc.Status = constants.OperatorStatus(marshaler.OperatorStatus(constants.OperatorStatusActive))
 				body, _ := json.Marshal(bDoc)
 				_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)
 			}
@@ -1121,7 +1121,7 @@ func (s *RegistrationService) UnbindOperators(req models.UnbindOperatorsRequest)
 			bDoc.OperatorSessionIDs = newSessIDs
 			bDoc.LastUpdatedAt = time.Now().UTC()
 			if len(newOpIDs) == 0 {
-				bDoc.Status = constants.OperatorStatus(marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated))
+				bDoc.Status = constants.OperatorStatus(marshaler.OperatorStatus(constants.OperatorStatusTerminated))
 			}
 			body, _ := json.Marshal(bDoc)
 			_, _ = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionBoundSessions), docID, body)

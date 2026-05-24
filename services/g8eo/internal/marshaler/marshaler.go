@@ -26,8 +26,8 @@
 //	// Instead of: string(constants.EnvVar.LogLevel)
 //	envKey := marshaler.EnvVar(constants.EnvVar.LogLevel)
 //
-//	// Instead of: string(constants.Status.OperatorStatus.Active)
-//	status := marshaler.Status(constants.Status.OperatorStatus.Active)
+//	// Instead of: string(constants.OperatorStatusActive)
+//	status := marshaler.Status(constants.OperatorStatusActive)
 package marshaler
 
 import (

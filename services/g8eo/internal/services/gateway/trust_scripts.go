@@ -136,7 +136,7 @@ echo Restart your browser and navigate to https://%HOST%{{.PublicPortSuffix}}/
 echo.
 pause
 `
-	res, err := executeTemplate(string(constants.Status.Platform.Windows), tmpl, map[string]interface{}{
+	res, err := executeTemplate(string(constants.PlatformWindows), tmpl, map[string]interface{}{
 		"Host":             host,
 		"URL":              url,
 		"Port":             port,

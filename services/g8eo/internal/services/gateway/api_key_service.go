@@ -60,7 +60,7 @@ func (s *ApiKeyService) IssueDownloadKey(userID, orgID string) (string, error) {
 		"id":              docID,
 		"user_id":         userID,
 		"organization_id": orgID,
-		"status":          marshaler.OperatorStatus(constants.Status.OperatorStatus.Active),
+		"status":          marshaler.OperatorStatus(constants.OperatorStatusActive),
 		"created_at":      now,
 		"last_used_at":    0,
 	}
@@ -108,7 +108,7 @@ func (s *ApiKeyService) ValidateKey(rawKey string) (*models.Document, error) {
 		_ = json.Unmarshal(statusVal, &status)
 	}
 
-	if status == marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated) {
+	if status == marshaler.OperatorStatus(constants.OperatorStatusTerminated) {
 		return nil, fmt.Errorf("key is terminated")
 	}
 

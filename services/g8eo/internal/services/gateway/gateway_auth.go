@@ -112,10 +112,10 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	// [PIVOT] Reject terminated identities (Plan §4.6)
 	// We allow OFFLINE and STALE statuses to authenticate (to support bootstrap
 	// and recovery), but TERMINATED is a hard-gate rejection.
-	if op.Status == constants.Status.OperatorStatus.Terminated {
+	if op.Status == constants.OperatorStatusTerminated {
 		return nil, &AuthError{
 			Message: "operator identity disabled",
-			Reason:  marshaler.OperatorStatus(constants.Status.OperatorStatus.Terminated),
+			Reason:  marshaler.OperatorStatus(constants.OperatorStatusTerminated),
 			Status:  http.StatusForbidden,
 		}
 	}
@@ -407,7 +407,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				wid := protocol.NewWorkloadIdentity()
 				cert := r.TLS.PeerCertificates[0]
 				for _, uri := range cert.URIs {
-					if wid.MatchesApp(uri.String(), marshaler.Status(constants.Status.ComponentName.G8EE)) {
+					if wid.MatchesApp(uri.String(), marshaler.Status(constants.ComponentNameG8EE)) {
 						next.ServeHTTP(w, r)
 						return
 					}

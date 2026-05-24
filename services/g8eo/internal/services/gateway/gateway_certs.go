@@ -816,7 +816,7 @@ func (pki *PKIAuthority) generateIntermediateCA(keyPath, certPath string, parent
 }
 
 func (pki *PKIAuthority) ensureAppCerts() error {
-	apps := []string{marshaler.Status(constants.Status.ComponentName.G8EE)}
+	apps := []string{marshaler.Status(constants.ComponentNameG8EE)}
 	for _, app := range apps {
 		certPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".crt")
 		keyPath := filepath.Join(pki.pkiDir, "issued", "apps", app+".key")
@@ -913,7 +913,7 @@ func (pki *PKIAuthority) generateServiceCert(extraIPs []net.IP) error {
 		return err
 	}
 
-	dnsNames := []string{"localhost", "g8e.local", string(constants.SessionTypeOperator), marshaler.Status(constants.Status.ComponentName.G8EE)}
+	dnsNames := []string{"localhost", "g8e.local", string(constants.SessionTypeOperator), marshaler.Status(constants.ComponentNameG8EE)}
 	ipAddresses := append([]net.IP{net.ParseIP("127.0.0.1")}, extraIPs...)
 
 	// Add URI SAN for workload identity
