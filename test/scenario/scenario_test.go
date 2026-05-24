@@ -107,8 +107,24 @@ func TestScenarios(t *testing.T) {
 func generateTestSigners() map[string]ed25519.PublicKey {
 	signers := make(map[string]ed25519.PublicKey)
 
-	// Generate 3 test tribunal signers
-	for i := 1; i <= 3; i++ {
+	// Use the specific private key from generate_fixtures.go to ensure signature verification works
+	// PRIVATE_KEY_HEX: 52cf6e064db72446e85d898ad4c55c0b57d02dd52869a88d6139ab75ec7e8f5328adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747
+	// KEY_ID: 28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747
+	privKeyHex := "52cf6e064db72446e85d898ad4c55c0b57d02dd52869a88d6139ab75ec7e8f5328adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747"
+	privKeyBytes, err := hex.DecodeString(privKeyHex)
+	if err != nil {
+		panicf("failed to decode private key hex: %v", err)
+	}
+	if len(privKeyBytes) != ed25519.PrivateKeySize {
+		panicf("invalid private key size: got %d, want %d", len(privKeyBytes), ed25519.PrivateKeySize)
+	}
+	privKey := ed25519.PrivateKey(privKeyBytes)
+	pubKey := privKey.Public().(ed25519.PublicKey)
+	keyID := hex.EncodeToString(pubKey)
+	signers[keyID] = pubKey
+
+	// Add 2 more signers for consensus testing
+	for i := 2; i <= 3; i++ {
 		pub, _, err := ed25519.GenerateKey(nil)
 		if err != nil {
 			panicf("failed to generate test signer %d: %v", i, err)

@@ -1,0 +1,10 @@
+{
+  "transactionId": "be4c863b0e2713908aa599a346802067ea4126b7746525227e834857e90b5b6e",
+  "transactionHash": "be4c863b0e2713908aa599a346802067ea4126b7746525227e834857e90b5b6e",
+  "status": "EXECUTION_STATUS_COMPLETED",
+  "resultSummary": "mock execution succeeded",
+  "stateRootBefore": "abc123def456",
+  "stateRootAfter": "abc123def456",
+  "l2Valid": true,
+  "l3Valid": true
+}

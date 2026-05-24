@@ -28,9 +28,9 @@ var fixturesFS embed.FS
 type Mode string
 
 const (
-	ModeDoctrine   Mode = "doctrine"
-	ModeConsensus  Mode = "consensus"
-	ModeNotary     Mode = "notary"
+	ModeDoctrine  Mode = "doctrine"
+	ModeConsensus Mode = "consensus"
+	ModeNotary    Mode = "notary"
 )
 
 func (m Mode) String() string {
@@ -47,10 +47,10 @@ const (
 
 // Outcome describes the expected result for a scenario in a given mode.
 type Outcome struct {
-	Verdict       Verdict `json:"verdict"`
-	RejectReason  string  `json:"reject_reason,omitempty"`
-	L2Valid       bool    `json:"l2_valid"`
-	L3Valid       bool    `json:"l3_valid"`
+	Verdict      Verdict `json:"verdict"`
+	RejectReason string  `json:"reject_reason,omitempty"`
+	L2Valid      bool    `json:"l2_valid"`
+	L3Valid      bool    `json:"l3_valid"`
 }
 
 // Evidence describes which governance proofs are present in the envelope.
@@ -66,32 +66,43 @@ type RawIntent []byte
 
 // Scenario is a pure data structure describing a test case.
 type Scenario struct {
-	Name      string            `json:"name"`
-	Vertical  string            `json:"vertical"`
-	Narrative string            `json:"narrative"`
-	Intent    RawIntent         `json:"intent"`
-	Evidence  Evidence          `json:"evidence"`
-	Expect    map[Mode]Outcome  `json:"expect"`
+	Name      string           `json:"name"`
+	Vertical  string           `json:"vertical"`
+	Narrative string           `json:"narrative"`
+	Intent    json.RawMessage  `json:"intent"`
+	Evidence  Evidence         `json:"evidence"`
+	Expect    map[Mode]Outcome `json:"expect"`
 }
 
 // LoadFixtures loads all scenario fixtures from the embedded filesystem.
 func LoadFixtures() ([]Scenario, error) {
 	var scenarios []Scenario
 
-	entries, err := fixturesFS.ReadDir("fixtures")
+	return loadFixturesRecursive("fixtures", scenarios)
+}
+
+func loadFixturesRecursive(dir string, scenarios []Scenario) ([]Scenario, error) {
+	entries, err := fixturesFS.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read fixtures directory: %w", err)
+		return nil, fmt.Errorf("failed to read fixtures directory %s: %w", dir, err)
 	}
 
 	for _, entry := range entries {
+		path := filepath.Join(dir, entry.Name())
+
 		if entry.IsDir() {
+			var err error
+			scenarios, err = loadFixturesRecursive(path, scenarios)
+			if err != nil {
+				return nil, err
+			}
 			continue
 		}
+
 		if !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
 
-		path := filepath.Join("fixtures", entry.Name())
 		data, err := fixturesFS.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read fixture %s: %w", path, err)

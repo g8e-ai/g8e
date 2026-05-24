@@ -107,6 +107,15 @@ func testCICmd() *cobra.Command {
 				return fmt.Errorf("g8eo tests failed: %w", err)
 			}
 
+			cmd.Println("\n=== Testing scenario integration ===")
+			scenarioCmd := exec.Command("go", "test", "-tags=integration", "-v", "-run", "TestScenarios", "./test/scenario/...")
+			scenarioCmd.Stdout = os.Stdout
+			scenarioCmd.Stderr = os.Stderr
+			scenarioCmd.Dir = cfg.ProjectRoot
+			if err := scenarioCmd.Run(); err != nil {
+				return fmt.Errorf("scenario tests failed: %w", err)
+			}
+
 			cmd.Println("\nCI test suite passed")
 			return nil
 		},
