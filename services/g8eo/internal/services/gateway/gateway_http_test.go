@@ -328,7 +328,7 @@ func TestHandleHealth(t *testing.T) {
 		var resp models.HealthResponse
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.Equal(t, constants.Status.GatewayMode.StatusOK, resp.Status)
+		assert.Equal(t, constants.GatewayModeStatusOK, resp.Status)
 	})
 }
 
@@ -343,7 +343,7 @@ func TestHandleRotateAPIKeyDoesNotReturnSecret(t *testing.T) {
 		ID:             operatorID,
 		UserID:         userID,
 		OperatorAPIKey: oldKey,
-		Status:         constants.Status.OperatorStatus.Offline,
+		Status:         constants.OperatorStatusOffline,
 	}
 	require.NoError(t, h.db.DocSet("operators", operatorID, mustDocJSON(t, op)))
 
@@ -677,7 +677,7 @@ func TestInternalSSEBridge(t *testing.T) {
 			"id":                  "op-u2",
 			"user_id":             "u-2",
 			"operator_session_id": "op-session-u2",
-			"status":              constants.Status.OperatorStatus.Active,
+			"status":              constants.OperatorStatusActive,
 		}
 		opBytes, _ := json.Marshal(opDoc)
 		h.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-u2", opBytes)

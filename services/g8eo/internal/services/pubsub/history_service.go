@@ -65,14 +65,14 @@ func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg PubSub
 
 	vaultMode := constants.VaultMode(protoFetch.SentinelMode)
 	if vaultMode == "" {
-		vaultMode = constants.Status.VaultMode.Raw
+		vaultMode = constants.VaultModeRaw
 	}
 
 	hs.logger.Info("Fetch logs requested (Dual-Vault, via Protobuf)",
 		"execution_id", executionID,
 		"sentinel_mode", vaultMode)
 
-	if vaultMode == constants.Status.VaultMode.Scrubbed {
+	if vaultMode == constants.VaultModeScrubbed {
 		hs.handleFetchFromScrubbedVault(ctx, msg, executionID)
 	} else {
 		hs.handleFetchFromRawVault(ctx, msg, executionID)
@@ -137,7 +137,7 @@ func (hs *HistoryService) publishFetchLogsResultFromRaw(ctx context.Context, msg
 			StdoutSize:   int32(record.StdoutSize), //nolint:gosec // bounded by storage limits
 			StderrSize:   int32(record.StderrSize), //nolint:gosec // bounded by storage limits
 			Timestamp:    record.TimestampUTC.Format(time.RFC3339Nano),
-			SentinelMode: marshaler.Status(constants.Status.VaultMode.Raw),
+			SentinelMode: marshaler.Status(constants.VaultModeRaw),
 		})
 	hs.logger.Info("Fetch logs result transmitted (Raw Vault)",
 		"execution_id", record.ID,
@@ -157,7 +157,7 @@ func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSub
 			StdoutSize:   int32(record.StdoutSize), //nolint:gosec // bounded by storage limits
 			StderrSize:   int32(record.StderrSize), //nolint:gosec // bounded by storage limits
 			Timestamp:    record.TimestampUTC.Format(time.RFC3339Nano),
-			SentinelMode: marshaler.Status(constants.Status.VaultMode.Scrubbed),
+			SentinelMode: marshaler.Status(constants.VaultModeScrubbed),
 		})
 	hs.logger.Info("Fetch logs result transmitted",
 		"execution_id", record.ID,

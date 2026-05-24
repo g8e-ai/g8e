@@ -45,7 +45,7 @@ func TestLoad_Defaults(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
-	assert.Equal(t, constants.Status.ComponentName.G8EO, cfg.ComponentName)
+	assert.Equal(t, constants.ComponentNameG8EO, cfg.ComponentName)
 	assert.Equal(t, "g8e", cfg.ProjectID)
 	assert.Equal(t, 25, cfg.MaxConcurrentTasks)
 	// Outbound mode defaults to notary posture since L3Notary is nil
@@ -192,7 +192,7 @@ func TestLoadGateway_Defaults(t *testing.T) {
 	assert.Equal(t, 0, cfg.Gateway.HTTPPort)
 	assert.Equal(t, filepath.Join(wantWorkDir, ".g8e", "data"), cfg.Gateway.DataDir)
 	assert.True(t, filepath.IsAbs(cfg.Gateway.DataDir))
-	assert.Equal(t, constants.Status.ComponentName.G8EOGateway, cfg.ComponentName)
+	assert.Equal(t, constants.ComponentNameG8EOGateway, cfg.ComponentName)
 }
 
 func TestLoadGateway_ExplicitValues(t *testing.T) {

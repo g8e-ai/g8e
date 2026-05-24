@@ -323,7 +323,7 @@ func (s *OpenClawNodeService) handshake(ctx context.Context, conn *websocket.Con
 			},
 			Role:     "node",
 			Scopes:   []string{},
-			Caps:     []string{marshaler.OperatorType(constants.Status.OperatorType.System)},
+			Caps:     []string{marshaler.OperatorType(constants.OperatorTypeSystem)},
 			Commands: []string{"system.run", "system.which"},
 			PathEnv:  s.pathEnv,
 			Auth:     auth,

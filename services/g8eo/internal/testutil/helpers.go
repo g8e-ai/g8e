@@ -69,7 +69,7 @@ func NewTestConfig(t *testing.T) *config.Config {
 
 	return &config.Config{
 		ProjectID:               "test-project",
-		ComponentName:           constants.Status.ComponentName.G8EO,
+		ComponentName:           constants.ComponentNameG8EO,
 		Version:                 "test",
 		APIKey:                  "test-api-key",
 		OperatorID:              operatorID,

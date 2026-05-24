@@ -138,7 +138,7 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg PubSubComm
 		OperatorSessionID: as.config.OperatorSessionId,
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
-		ContentText:       marshaler.Status(constants.Status.AiSource.TerminalDirect),
+		ContentText:       marshaler.Status(constants.AISourceTerminalDirect),
 		CommandRaw:        protoCmd.Command,
 	}
 
@@ -174,7 +174,7 @@ func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg PubS
 		OperatorSessionID:   as.config.OperatorSessionId,
 		Timestamp:           time.Now().UTC(),
 		Type:                constants.Event.Operator.Audit.Command,
-		ContentText:         marshaler.Status(constants.Status.AiSource.TerminalDirect),
+		ContentText:         marshaler.Status(constants.AISourceTerminalDirect),
 		CommandRaw:          protoResult.Command,
 		CommandExitCode:     system.IntPtr(int(protoResult.ExitCode)),
 		CommandStdout:       protoResult.Output,

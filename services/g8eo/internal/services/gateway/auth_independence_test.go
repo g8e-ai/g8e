@@ -55,7 +55,7 @@ func TestAuthStatusIndependence(t *testing.T) {
 			ID:                opID,
 			UserID:            userID,
 			OperatorSessionID: sessionID,
-			Status:            constants.Status.OperatorStatus.Offline,
+			Status:            constants.OperatorStatusOffline,
 			CreatedAt:         time.Now().UTC(),
 		}
 		opBytes, _ := json.Marshal(op)
@@ -76,7 +76,7 @@ func TestAuthStatusIndependence(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, validatedOp)
 		assert.Equal(t, opID, validatedOp.ID)
-		assert.Equal(t, constants.Status.OperatorStatus.Offline, validatedOp.Status)
+		assert.Equal(t, constants.OperatorStatusOffline, validatedOp.Status)
 	})
 
 	t.Run("ValidateOperatorSession fails if session is expired", func(t *testing.T) {
@@ -91,7 +91,7 @@ func TestAuthStatusIndependence(t *testing.T) {
 			ID:                opID,
 			UserID:            userID,
 			OperatorSessionID: sessionID,
-			Status:            constants.Status.OperatorStatus.Active,
+			Status:            constants.OperatorStatusActive,
 			CreatedAt:         time.Now().UTC().Add(-48 * time.Hour), // 48h > 24h TTL
 		}
 		opBytes, _ := json.Marshal(op)
@@ -127,7 +127,7 @@ func TestAuthStatusIndependence(t *testing.T) {
 			ID:                opID,
 			UserID:            userID,
 			OperatorSessionID: sessionID,
-			Status:            constants.Status.OperatorStatus.Terminated,
+			Status:            constants.OperatorStatusTerminated,
 			CreatedAt:         time.Now().UTC(),
 		}
 		opBytes, _ := json.Marshal(op)
@@ -142,7 +142,7 @@ func TestAuthStatusIndependence(t *testing.T) {
 		ae, ok := err.(*AuthError)
 		require.True(t, ok)
 		assert.Equal(t, "operator identity disabled", ae.Message)
-		assert.Equal(t, marshaler.Status(constants.Status.OperatorStatus.Terminated), ae.Reason)
+		assert.Equal(t, marshaler.Status(constants.OperatorStatusTerminated), ae.Reason)
 	})
 }
 
@@ -168,7 +168,7 @@ func TestApiKeyStatusIndependence(t *testing.T) {
 			"id":              docID,
 			"user_id":         userID,
 			"organization_id": "org-1",
-			"status":          constants.Status.OperatorStatus.Stale,
+			"status":          constants.OperatorStatusStale,
 			"created_at":      time.Now().UnixMilli(),
 		}
 		keyBytes, _ := json.Marshal(keyDoc)
@@ -192,7 +192,7 @@ func TestApiKeyStatusIndependence(t *testing.T) {
 			"id":              docID,
 			"user_id":         userID,
 			"organization_id": "org-1",
-			"status":          constants.Status.OperatorStatus.Terminated,
+			"status":          constants.OperatorStatusTerminated,
 			"created_at":      time.Now().UnixMilli(),
 		}
 		keyBytes, _ := json.Marshal(keyDoc)

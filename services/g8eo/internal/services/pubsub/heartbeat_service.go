@@ -69,7 +69,7 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 
 	heartbeat := &models.Heartbeat{
 		EventType:         constants.Event.Operator.Heartbeat,
-		SourceComponent:   constants.Status.ComponentName.G8EO,
+		SourceComponent:   constants.ComponentNameG8EO,
 		OperatorID:        hs.config.OperatorID,
 		OperatorSessionID: hs.config.OperatorSessionId,
 		CaseID:            "",
@@ -93,7 +93,7 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 		},
 		VersionInfo: models.HeartbeatVersionInfo{
 			OperatorVersion: hs.config.Version,
-			Status:          constants.Status.VersionStability.Stable,
+			Status:          constants.VersionStabilityStable,
 		},
 		UptimeInfo: models.HeartbeatUptimeInfo{
 			Uptime:        system.GetUptime(),

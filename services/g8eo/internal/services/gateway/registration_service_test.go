@@ -110,7 +110,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 		assert.Equal(t, userID, docFieldString(t, doc, "user_id"))
-		assert.Equal(t, string(constants.Status.OperatorStatus.Active), docFieldString(t, doc, "status"))
+		assert.Equal(t, string(constants.OperatorStatusActive), docFieldString(t, doc, "status"))
 	})
 
 	t.Run("Success - Single-operator link", func(t *testing.T) {
@@ -121,8 +121,8 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 			UserID:         userID,
 			OrganizationID: orgID,
 			Component:      "g8eo",
-			Status:         constants.Status.OperatorStatus.Offline,
-			OperatorType:   constants.Status.OperatorType.System,
+			Status:         constants.OperatorStatusOffline,
+			OperatorType:   constants.OperatorTypeSystem,
 			CreatedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
 		}
@@ -158,7 +158,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 
 		// Verify status update
 		doc, _ := db.DocGet("operators", opID)
-		assert.Equal(t, string(constants.Status.OperatorStatus.Active), docFieldString(t, doc, "status"))
+		assert.Equal(t, string(constants.OperatorStatusActive), docFieldString(t, doc, "status"))
 	})
 
 	t.Run("Failure - Link not found", func(t *testing.T) {
@@ -522,7 +522,7 @@ func TestRegistrationService_CreateDeviceLinkRejectsWrongOperatorOwner(t *testin
 		ID:        "op-1",
 		UserID:    "other-user",
 		Component: "g8eo",
-		Status:    constants.Status.OperatorStatus.Offline,
+		Status:    constants.OperatorStatusOffline,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -576,7 +576,7 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 		ID:             opID,
 		UserID:         userID,
 		OperatorAPIKey: oldKey,
-		Status:         constants.Status.OperatorStatus.Offline,
+		Status:         constants.OperatorStatusOffline,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
@@ -631,7 +631,7 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 			UserID:     userID,
 			IsSlot:     true,
 			SlotNumber: i,
-			Status:     constants.Status.OperatorStatus.Offline,
+			Status:     constants.OperatorStatusOffline,
 		}
 		opBytes, _ := json.Marshal(op)
 		db.DocSet("operators", id, opBytes)
@@ -677,7 +677,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		ID:             opID,
 		UserID:         userID,
 		OperatorAPIKey: "g8e_old_key",
-		Status:         constants.Status.OperatorStatus.Active,
+		Status:         constants.OperatorStatusActive,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
@@ -691,7 +691,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		// Verify status updated
 		doc, err := db.DocGet("operators", opID)
 		require.NoError(t, err)
-		assert.Equal(t, string(constants.Status.OperatorStatus.Terminated), docFieldString(t, doc, "status"))
+		assert.Equal(t, string(constants.OperatorStatusTerminated), docFieldString(t, doc, "status"))
 		assert.Equal(t, "test termination", docFieldString(t, doc, "termination_reason"))
 	})
 
@@ -705,12 +705,12 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		require.NoError(t, err)
 
 		doc, _ := db.DocGet("operators", opID)
-		assert.Equal(t, string(constants.Status.OperatorStatus.Terminated), docFieldString(t, doc, "status"))
+		assert.Equal(t, string(constants.OperatorStatusTerminated), docFieldString(t, doc, "status"))
 	})
 
 	t.Run("Failure - Wrong user", func(t *testing.T) {
 		// Reset operator to active for this test
-		update := map[string]interface{}{"status": constants.Status.OperatorStatus.Active}
+		update := map[string]interface{}{"status": constants.OperatorStatusActive}
 		updateBytes, _ := json.Marshal(update)
 		db.DocUpdate("operators", opID, updateBytes)
 
@@ -762,7 +762,7 @@ func TestRegistrationService_Binding(t *testing.T) {
 		ID:                opID,
 		UserID:            userID,
 		OperatorSessionID: opSessID,
-		Status:            constants.Status.OperatorStatus.Active,
+		Status:            constants.OperatorStatusActive,
 	}
 	opBytes, _ := json.Marshal(op)
 	require.NoError(t, db.DocSet("operators", opID, opBytes))

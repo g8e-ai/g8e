@@ -53,13 +53,13 @@ import (
 
 // Version information (set via ldflags during build)
 var (
-	version  string = string(constants.Status.VersionStability.Dev)
+	version  string = string(constants.VersionStabilityDev)
 	buildID  string = string(constants.SystemHealthUnknown)
 	platform string = string(constants.SystemHealthUnknown)
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == constants.ApprovalTypeStreamStr {
+	if len(os.Args) > 1 && os.Args[1] == string(constants.ApprovalTypeStream) {
 		cmd.RunStream(os.Args[2:])
 		return
 	}
@@ -147,7 +147,7 @@ func main() {
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
 	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory operator was launched from)")
-	flag.BoolVar(&cloudMode, constants.OperatorTypeCloudStr, true, "Cloud mode")
+	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
 	flag.BoolVar(&localStorage, "local-storage", true, "Enable local storage (stores data in current directory)")
 	flag.StringVar(&logLevel, "log", "info", "Log level")
@@ -304,7 +304,7 @@ func main() {
 			trustURL := fmt.Sprintf("http://%s:%d/.well-known/g8e/pki/hub-bundle.pem", endpointURL, constants.Ports.OperatorBootstrapHttps)
 			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
 			if err := certs.FetchAndSetCA(context.Background(), trustURL); err != nil {
-				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, constants.ConnectionStateErrorStr, err)
+				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, string(constants.ConnectionStateError), err)
 				fmt.Fprintf(os.Stderr, "Failed to fetch trust bundle from Operator: %v\n", err)
 				fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e platform start\n")
 				os.Exit(constants.ExitConfigError)
@@ -326,7 +326,7 @@ func main() {
 		logger.Info("Device link token provided, authenticating...")
 		deviceResult, err := auth.AuthenticateWithDeviceToken(deviceToken, operatorEndpoint, logger, settings.User)
 		if err != nil {
-			logger.Error("Device link authentication failed", constants.ConnectionStateErrorStr, err)
+			logger.Error("Device link authentication failed", string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "Device authentication failed: %v\n", err)
 			os.Exit(constants.ExitAuthFailure)
 		}
@@ -392,7 +392,7 @@ func main() {
 		Posture:             "", // Will default to PostureNotary in Load() since L3Notary is nil
 	})
 	if err != nil {
-		logger.Error("Failed to load configuration", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to load configuration", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -403,11 +403,11 @@ func main() {
 		logger.Info("Applying remaining bootstrap config from device-link registration")
 		bootstrapService, err := auth.NewBootstrapService(cfg, logger)
 		if err != nil {
-			logger.Error("Failed to create bootstrap service", constants.ConnectionStateErrorStr, err)
+			logger.Error("Failed to create bootstrap service", string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitConfigError)
 		}
 		if err := bootstrapService.ApplyBootstrapConfig(deviceAuthResult.Config); err != nil {
-			logger.Error("Failed to apply bootstrap config", constants.ConnectionStateErrorStr, err)
+			logger.Error("Failed to apply bootstrap config", string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitCodeFromError(err))
 		}
 		logger.Info("Bootstrap config applied successfully")
@@ -425,7 +425,7 @@ func main() {
 
 	g8eoService, err := services.NewG8eoService(cfg, logger)
 	if err != nil {
-		logger.Error("Failed to create Operator service", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to create Operator service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))
 	}
 
@@ -437,7 +437,7 @@ func main() {
 
 	go func() {
 		if err := g8eoService.Start(ctx); err != nil {
-			logger.Error("Failed to start g8e Operator", constants.ConnectionStateErrorStr, err)
+			logger.Error("Failed to start g8e Operator", string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitCodeFromError(err))
 		}
 	}()
@@ -449,7 +449,7 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
 
 	if err := g8eoService.Stop(shutdownCtx); err != nil {
-		logger.Error("Graceful shutdown failed", constants.ConnectionStateErrorStr, err)
+		logger.Error("Graceful shutdown failed", string(constants.ConnectionStateError), err)
 	}
 	shutdownCancel()
 
@@ -513,7 +513,7 @@ func parseLogLevel(level string) (slog.Level, error) {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "info":
 		return slog.LevelInfo, nil
-	case constants.ConnectionStateErrorStr:
+	case string(constants.ConnectionStateError):
 		return slog.LevelError, nil
 	case "debug":
 		return slog.LevelDebug, nil
@@ -616,14 +616,14 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		AllowTestPortZero: false,
 	})
 	if err != nil {
-		logger.Error("Failed to load gateway configuration", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to load gateway configuration", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 	cfg.Version = version
 
 	svc, err := gateway.NewGatewayService(cfg, logger)
 	if err != nil {
-		logger.Error("Failed to create gateway service", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to create gateway service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))
 	}
 
@@ -644,26 +644,26 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 	govDeps := svc.GetGovernanceDeps()
 	sm, err := svc.GetSecretManager()
 	if err != nil {
-		logger.Error("Failed to get secret manager", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to get secret manager", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 
 	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
 	if err != nil {
-		logger.Error("Failed to load Actuator signing key - mutations will fail", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to load Actuator signing key - mutations will fail", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 
 	TribunalPriv, err := sm.GetTribunalKey()
 	if err != nil {
-		logger.Error("Failed to load Tribunal signing key - L2 consensus will fail", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to load Tribunal signing key - L2 consensus will fail", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 
 	// Export Actuator public key for receipt verification by evals harness
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	if err := exportActuatorPublicKey(cfg.PKIDir, ActuatorPub, ActuatorKeyID, logger); err != nil {
-		logger.Error("Failed to export Actuator public key", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to export Actuator public key", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -699,7 +699,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 
 	cmdSvc, err := pubsub.NewPubSubCommandService(psConfig)
 	if err != nil {
-		logger.Error("Failed to initialize in-process command service", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to initialize in-process command service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))
 	}
 
@@ -717,7 +717,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 
 	go func() {
 		if err := svc.Start(ctx); err != nil {
-			logger.Error("Gateway service failed", constants.ConnectionStateErrorStr, err)
+			logger.Error("Gateway service failed", string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitCodeFromError(err))
 		}
 	}()
@@ -732,7 +732,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		}
 		logger.Info("Gateway service ready, starting in-process command service")
 		if err := cmdSvc.Start(ctx); err != nil {
-			logger.Error("In-process command service failed to start", constants.ConnectionStateErrorStr, err)
+			logger.Error("In-process command service failed to start", string(constants.ConnectionStateError), err)
 		}
 	}()
 
@@ -751,12 +751,12 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 			cmdSvc.Actuator.Wait()
 		}
 		if err := cmdSvc.Stop(); err != nil {
-			logger.Error("Command service stop error", constants.ConnectionStateErrorStr, err)
+			logger.Error("Command service stop error", string(constants.ConnectionStateError), err)
 		}
 	}
 
 	if err := svc.Stop(shutdownCtx); err != nil {
-		logger.Error("Gateway shutdown error", constants.ConnectionStateErrorStr, err)
+		logger.Error("Gateway shutdown error", string(constants.ConnectionStateError), err)
 	}
 	logger.Info("Gateway mode stopped")
 }
@@ -818,7 +818,7 @@ func handleRekeyVault(vault *vault.Vault, oldAPIKey, newAPIKey string, logger *s
 	logger.Info("Re-keying vault")
 
 	if err := vault.Rekey(oldAPIKey, newAPIKey); err != nil {
-		logger.Error("Failed to rekey vault", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to rekey vault", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitGeneralError)
 	}
 
@@ -844,7 +844,7 @@ func handleVerifyVault(vault *vault.Vault, apiKey string, logger *slog.Logger) {
 	logger.Info("Verifying vault integrity")
 
 	if err := vault.VerifyIntegrity(apiKey); err != nil {
-		logger.Error("Vault verification failed", constants.ConnectionStateErrorStr, err)
+		logger.Error("Vault verification failed", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitGeneralError)
 	}
 
@@ -896,7 +896,7 @@ func runOpenClawMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 
 	go func() {
 		if err := svc.Start(ctx); err != nil {
-			logger.Error("OpenClaw node service failed", constants.ConnectionStateErrorStr, err)
+			logger.Error("OpenClaw node service failed", string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitCodeFromError(err))
 		}
 	}()
@@ -928,7 +928,7 @@ func handleResetVault(vault *vault.Vault, logger *slog.Logger) {
 	}
 
 	if err := vault.Reset(true); err != nil {
-		logger.Error("Failed to reset vault", constants.ConnectionStateErrorStr, err)
+		logger.Error("Failed to reset vault", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitGeneralError)
 	}
 

@@ -131,7 +131,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 
 	vaultMode := constants.VaultMode(protoCmd.SentinelMode)
 	if vaultMode == "" {
-		vaultMode = constants.Status.VaultMode.Raw
+		vaultMode = constants.VaultModeRaw
 	}
 
 	cs.logger.Info("Command execution requested",
