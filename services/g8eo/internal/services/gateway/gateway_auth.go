@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/protocol"
@@ -28,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/responder"
+	"golang.org/x/time/rate"
 )
 
 // contextKey is a custom type for context keys to avoid collisions.
@@ -63,6 +65,10 @@ type AuthService struct {
 	userSvc    *UserService
 	responder  *responder.Responder
 	secretsDir string
+
+	// Rate limiting state for app policies
+	muLimiters sync.Mutex
+	limiters   map[string]*rate.Limiter
 }
 
 // NewAuthService creates a new AuthService.
@@ -74,6 +80,7 @@ func NewAuthService(db *GatewayDBService, pki *PKIAuthority, logger *slog.Logger
 		userSvc:    userSvc,
 		responder:  responder,
 		secretsDir: secretsDir,
+		limiters:   make(map[string]*rate.Limiter),
 	}
 }
 
@@ -469,13 +476,30 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 	})
 }
 
+// getOrCreateLimiter returns a rate limiter for the given app ID, creating one if needed.
+func (s *AuthService) getOrCreateLimiter(appID string, rps int) *rate.Limiter {
+	s.muLimiters.Lock()
+	defer s.muLimiters.Unlock()
+
+	limiter, exists := s.limiters[appID]
+	if !exists {
+		// Create a new limiter with the configured RPS and a burst of 2x RPS
+		limiter = rate.NewLimiter(rate.Limit(rps), rps*2)
+		s.limiters[appID] = limiter
+	}
+	return limiter
+}
+
 // enforceAppPolicy validates that the request complies with the app's policy.
 // It checks collection access, event types, intents, and rate limits.
 func (s *AuthService) enforceAppPolicy(r *http.Request, policy *models.AppPolicy, appID string) error {
 	// Check rate limit (if configured)
 	if policy.RateLimitRPS > 0 {
-		// Rate limiting is not yet enforced. Policy configuration is validated but not applied.
-		s.logger.Warn("Rate limiting configured but not yet enforced", "app_id", appID, "rate_limit_rps", policy.RateLimitRPS)
+		limiter := s.getOrCreateLimiter(appID, policy.RateLimitRPS)
+		if !limiter.Allow() {
+			s.logger.Warn("App rate limit exceeded", "app_id", appID, "rate_limit_rps", policy.RateLimitRPS, "path", r.URL.Path)
+			return fmt.Errorf("rate limit exceeded (%d RPS)", policy.RateLimitRPS)
+		}
 	}
 
 	// Check payload size (if configured)

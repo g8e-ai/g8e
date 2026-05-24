@@ -15,6 +15,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -309,12 +310,38 @@ func TestHandleAppPolicySigner(t *testing.T) {
 	gateway, _ := setupTestGatewayService(t)
 	db := gateway.db
 	handler := gateway.handler
+	userSvc := gateway.userSvc
 
-	t.Run("reject signer registration without AppPolicy", func(t *testing.T) {
-		appID := "test-no-policy"
-		pubKeyHex := "a" + strings.Repeat("0", 63) // 64 hex chars = 32 bytes
+	// Create a bootstrap user for admin authorization
+	bootstrapUser, err := userSvc.CreateBootstrapUser()
+	require.NoError(t, err)
+	require.NotNil(t, bootstrapUser)
+	t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionUsers), bootstrapUser.ID) })
 
-		// Create request
+	// Create a non-bootstrap user for testing unauthorized access
+	regularUser, err := userSvc.CreateUser()
+	require.NoError(t, err)
+	require.NotNil(t, regularUser)
+	t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionUsers), regularUser.ID) })
+
+	t.Run("reject signer registration without admin authorization", func(t *testing.T) {
+		appID := "test-no-auth"
+		pubKeyHex := "a" + strings.Repeat("0", 63)
+
+		// Create AppPolicy
+		policy := models.AppPolicy{
+			AppID:              appID,
+			AllowedCollections: []string{"test_collection"},
+			AllowedIntents:     []string{"read"},
+			CreatedAt:          time.Now().UTC(),
+			UpdatedAt:          time.Now().UTC(),
+		}
+		policyBytes, _ := json.Marshal(policy)
+		err := db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), appID) })
+
+		// Create request with regular user context (non-bootstrap)
 		reqBody := map[string]string{"public_key_hex": pubKeyHex}
 		bodyBytes, _ := json.Marshal(reqBody)
 		req := &http.Request{
@@ -322,6 +349,63 @@ func TestHandleAppPolicySigner(t *testing.T) {
 			URL:    &url.URL{Path: "/api/admin/app-policies/" + appID + "/signer"},
 			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
 		}
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, regularUser.ID))
+
+		w := httptest.NewRecorder()
+		handler.handleAppPolicySigner(w, req)
+
+		// Verify 403 Forbidden due to non-bootstrap user
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.Contains(t, w.Body.String(), "admin-only")
+	})
+
+	t.Run("reject signer registration without user context", func(t *testing.T) {
+		appID := "test-no-context"
+		pubKeyHex := "a" + strings.Repeat("0", 63)
+
+		// Create AppPolicy
+		policy := models.AppPolicy{
+			AppID:              appID,
+			AllowedCollections: []string{"test_collection"},
+			AllowedIntents:     []string{"read"},
+			CreatedAt:          time.Now().UTC(),
+			UpdatedAt:          time.Now().UTC(),
+		}
+		policyBytes, _ := json.Marshal(policy)
+		err := db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), appID) })
+
+		// Create request without user context
+		reqBody := map[string]string{"public_key_hex": pubKeyHex}
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := &http.Request{
+			Method: http.MethodPost,
+			URL:    &url.URL{Path: "/api/admin/app-policies/" + appID + "/signer"},
+			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
+		}
+
+		w := httptest.NewRecorder()
+		handler.handleAppPolicySigner(w, req)
+
+		// Verify 401 Unauthorized
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Contains(t, w.Body.String(), "unauthorized")
+	})
+
+	t.Run("reject signer registration without AppPolicy", func(t *testing.T) {
+		appID := "test-no-policy"
+		pubKeyHex := "a" + strings.Repeat("0", 63) // 64 hex chars = 32 bytes
+
+		// Create request with bootstrap user context
+		reqBody := map[string]string{"public_key_hex": pubKeyHex}
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := &http.Request{
+			Method: http.MethodPost,
+			URL:    &url.URL{Path: "/api/admin/app-policies/" + appID + "/signer"},
+			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
+		}
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
 
 		// Create response recorder
 		w := httptest.NewRecorder()
@@ -360,6 +444,7 @@ func TestHandleAppPolicySigner(t *testing.T) {
 			URL:    &url.URL{Path: "/api/admin/app-policies/" + appID + "/signer"},
 			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
 		}
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
 
 		w := httptest.NewRecorder()
 		handler.handleAppPolicySigner(w, req)
@@ -394,6 +479,7 @@ func TestHandleAppPolicySigner(t *testing.T) {
 			URL:    &url.URL{Path: "/api/admin/app-policies/" + appID + "/signer"},
 			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
 		}
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
 
 		w := httptest.NewRecorder()
 		handler.handleAppPolicySigner(w, req)
@@ -442,6 +528,7 @@ func TestHandleAppPolicySigner(t *testing.T) {
 			URL:    &url.URL{Path: "/api/admin/app-policies/" + appID + "/signer"},
 			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
 		}
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
 
 		w := httptest.NewRecorder()
 		handler.handleAppPolicySigner(w, req)
@@ -462,5 +549,263 @@ func TestHandleAppPolicySigner(t *testing.T) {
 		assert.True(t, signer.Enabled)
 
 		t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID) })
+	})
+}
+
+func TestHandleRevokeApp(t *testing.T) {
+	// Not running in parallel because setupTestGatewayService resets global keystore state
+	gateway, _ := setupTestGatewayService(t)
+	db := gateway.db
+	handler := gateway.handler
+	userSvc := gateway.userSvc
+
+	// Create a bootstrap user for admin authorization
+	bootstrapUser, err := userSvc.CreateBootstrapUser()
+	require.NoError(t, err)
+	require.NotNil(t, bootstrapUser)
+	t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionUsers), bootstrapUser.ID) })
+
+	// Create a non-bootstrap user for testing unauthorized access
+	regularUser, err := userSvc.CreateUser()
+	require.NoError(t, err)
+	require.NotNil(t, regularUser)
+	t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionUsers), regularUser.ID) })
+
+	t.Run("reject app revocation without admin authorization", func(t *testing.T) {
+		appID := "test-no-auth"
+
+		// Create AppPolicy
+		policy := models.AppPolicy{
+			AppID:              appID,
+			AllowedCollections: []string{"test_collection"},
+			AllowedIntents:     []string{"read"},
+			CreatedAt:          time.Now().UTC(),
+			UpdatedAt:          time.Now().UTC(),
+		}
+		policyBytes, _ := json.Marshal(policy)
+		err := db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), appID) })
+
+		// Create request with regular user context (non-bootstrap)
+		reqBody := map[string]string{"app_id": appID}
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := &http.Request{
+			Method: http.MethodPost,
+			URL:    &url.URL{Path: "/api/admin/revoke-app"},
+			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
+		}
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, regularUser.ID))
+
+		w := httptest.NewRecorder()
+		handler.handleRevokeApp(w, req)
+
+		// Verify 403 Forbidden due to non-bootstrap user
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.Contains(t, w.Body.String(), "admin-only")
+	})
+
+	t.Run("reject app revocation without user context", func(t *testing.T) {
+		appID := "test-no-context"
+
+		// Create AppPolicy
+		policy := models.AppPolicy{
+			AppID:              appID,
+			AllowedCollections: []string{"test_collection"},
+			AllowedIntents:     []string{"read"},
+			CreatedAt:          time.Now().UTC(),
+			UpdatedAt:          time.Now().UTC(),
+		}
+		policyBytes, _ := json.Marshal(policy)
+		err := db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), appID) })
+
+		// Create request without user context
+		reqBody := map[string]string{"app_id": appID}
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := &http.Request{
+			Method: http.MethodPost,
+			URL:    &url.URL{Path: "/api/admin/revoke-app"},
+			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
+		}
+
+		w := httptest.NewRecorder()
+		handler.handleRevokeApp(w, req)
+
+		// Verify 401 Unauthorized
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Contains(t, w.Body.String(), "unauthorized")
+	})
+
+	t.Run("reject app revocation with missing app_id", func(t *testing.T) {
+		// Create request with bootstrap user context but missing app_id
+		reqBody := map[string]string{}
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := &http.Request{
+			Method: http.MethodPost,
+			URL:    &url.URL{Path: "/api/admin/revoke-app"},
+			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
+		}
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
+
+		w := httptest.NewRecorder()
+		handler.handleRevokeApp(w, req)
+
+		// Verify 400 Bad Request
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "app_id required")
+	})
+
+	t.Run("successfully revoke app with policy only", func(t *testing.T) {
+		appID := "test-revoke-policy-only"
+
+		// Create AppPolicy
+		policy := models.AppPolicy{
+			AppID:              appID,
+			AllowedCollections: []string{"test_collection"},
+			AllowedIntents:     []string{"read"},
+			CreatedAt:          time.Now().UTC(),
+			UpdatedAt:          time.Now().UTC(),
+		}
+		policyBytes, _ := json.Marshal(policy)
+		err := db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes)
+		require.NoError(t, err)
+
+		// Verify policy exists
+		policyDoc, err := db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+		require.NoError(t, err)
+		require.NotNil(t, policyDoc)
+
+		// Create request with bootstrap user context
+		reqBody := map[string]string{"app_id": appID}
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := &http.Request{
+			Method: http.MethodPost,
+			URL:    &url.URL{Path: "/api/admin/revoke-app"},
+			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
+		}
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
+
+		w := httptest.NewRecorder()
+		handler.handleRevokeApp(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		// Verify policy was deleted
+		policyDoc, err = db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+		require.NoError(t, err)
+		assert.Nil(t, policyDoc)
+	})
+
+	t.Run("successfully revoke app with policy and signer", func(t *testing.T) {
+		appID := "test-revoke-with-signer"
+
+		// Create AppPolicy
+		policy := models.AppPolicy{
+			AppID:              appID,
+			AllowedCollections: []string{"test_collection"},
+			AllowedIntents:     []string{"read"},
+			CreatedAt:          time.Now().UTC(),
+			UpdatedAt:          time.Now().UTC(),
+		}
+		policyBytes, _ := json.Marshal(policy)
+		err := db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes)
+		require.NoError(t, err)
+
+		// Create TrustedSigner
+		signer := models.TrustedSigner{
+			ID:        appID,
+			PublicKey: strings.Repeat("a", 64),
+			AddedAt:   time.Now().UTC(),
+			Enabled:   true,
+		}
+		signerBytes, _ := json.Marshal(signer)
+		err = db.DocSet(marshaler.CollectionName(constants.CollectionTrustedSigners), appID, signerBytes)
+		require.NoError(t, err)
+
+		// Verify both exist
+		policyDoc, err := db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+		require.NoError(t, err)
+		require.NotNil(t, policyDoc)
+
+		signerDoc, err := db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
+		require.NoError(t, err)
+		require.NotNil(t, signerDoc)
+
+		// Create request with bootstrap user context
+		reqBody := map[string]string{"app_id": appID}
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := &http.Request{
+			Method: http.MethodPost,
+			URL:    &url.URL{Path: "/api/admin/revoke-app"},
+			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
+		}
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
+
+		w := httptest.NewRecorder()
+		handler.handleRevokeApp(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		// Verify both were deleted
+		policyDoc, err = db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+		require.NoError(t, err)
+		assert.Nil(t, policyDoc)
+
+		signerDoc, err = db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
+		require.NoError(t, err)
+		assert.Nil(t, signerDoc)
+	})
+
+	t.Run("successfully revoke app with SPIFFE ID containing colons", func(t *testing.T) {
+		appID := "spiffe://g8e.local/app/test-mcp-client"
+
+		// Create AppPolicy
+		policy := models.AppPolicy{
+			AppID:              appID,
+			AllowedCollections: []string{"test_collection"},
+			AllowedIntents:     []string{"read"},
+			CreatedAt:          time.Now().UTC(),
+			UpdatedAt:          time.Now().UTC(),
+		}
+		policyBytes, _ := json.Marshal(policy)
+		err := db.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes)
+		require.NoError(t, err)
+
+		// Create TrustedSigner
+		signer := models.TrustedSigner{
+			ID:        appID,
+			PublicKey: strings.Repeat("b", 64),
+			AddedAt:   time.Now().UTC(),
+			Enabled:   true,
+		}
+		signerBytes, _ := json.Marshal(signer)
+		err = db.DocSet(marshaler.CollectionName(constants.CollectionTrustedSigners), appID, signerBytes)
+		require.NoError(t, err)
+
+		// Create request with bootstrap user context
+		reqBody := map[string]string{"app_id": appID}
+		bodyBytes, _ := json.Marshal(reqBody)
+		req := &http.Request{
+			Method: http.MethodPost,
+			URL:    &url.URL{Path: "/api/admin/revoke-app"},
+			Body:   io.NopCloser(bytes.NewReader(bodyBytes)),
+		}
+		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
+
+		w := httptest.NewRecorder()
+		handler.handleRevokeApp(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		// Verify both were deleted with full SPIFFE ID
+		policyDoc, err := db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+		require.NoError(t, err)
+		assert.Nil(t, policyDoc)
+
+		signerDoc, err := db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
+		require.NoError(t, err)
+		assert.Nil(t, signerDoc)
 	})
 }
