@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/interfaces"
 )
 
 // Sentinel is a zero-trust security system that:
@@ -66,7 +67,7 @@ type Sentinel struct {
 	tokenSequence int
 
 	// Persistent storage for token maps (optional, for data sovereignty)
-	tokenStore TokenStore
+	tokenStore interfaces.TokenStore
 }
 
 // ThreatSeverity represents the severity level of a detected threat
@@ -357,17 +358,8 @@ func NewSentinel(config *SentinelConfig, logger *slog.Logger) *Sentinel {
 	return NewSentinelWithStorage(config, logger, nil)
 }
 
-// TokenStore defines the interface for token persistence used by Sentinel.
-// This interface is defined in the storage package to avoid import cycles.
-type TokenStore interface {
-	IsEnabled() bool
-	KVSet(key, value string, ttlSeconds int) error
-	KVGet(key string) (string, bool)
-	KVScanPrefix(prefix string) (map[string]string, error)
-}
-
 // NewSentinelWithStorage creates a new Sentinel with persistent token storage
-func NewSentinelWithStorage(config *SentinelConfig, logger *slog.Logger, tokenStore TokenStore) *Sentinel {
+func NewSentinelWithStorage(config *SentinelConfig, logger *slog.Logger, tokenStore interfaces.TokenStore) *Sentinel {
 	if config == nil {
 		config = DefaultSentinelConfig()
 	}
