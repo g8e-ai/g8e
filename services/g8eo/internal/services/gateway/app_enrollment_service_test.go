@@ -325,7 +325,7 @@ func TestHandleAppPolicySigner(t *testing.T) {
 	t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionUsers), regularUser.ID) })
 
 	t.Run("reject signer registration without admin authorization", func(t *testing.T) {
-		appID := "test-no-auth"
+		appID := "spiffe://g8e.local/app/test-no-auth"
 		pubKeyHex := "a" + strings.Repeat("0", 63)
 
 		// Create AppPolicy
@@ -360,7 +360,7 @@ func TestHandleAppPolicySigner(t *testing.T) {
 	})
 
 	t.Run("reject signer registration without user context", func(t *testing.T) {
-		appID := "test-no-context"
+		appID := "spiffe://g8e.local/app/test-no-context"
 		pubKeyHex := "a" + strings.Repeat("0", 63)
 
 		// Create AppPolicy
@@ -394,7 +394,7 @@ func TestHandleAppPolicySigner(t *testing.T) {
 	})
 
 	t.Run("reject signer registration without AppPolicy", func(t *testing.T) {
-		appID := "test-no-policy"
+		appID := "spiffe://g8e.local/app/test-no-policy"
 		pubKeyHex := "a" + strings.Repeat("0", 63) // 64 hex chars = 32 bytes
 
 		// Create request with bootstrap user context
@@ -419,7 +419,7 @@ func TestHandleAppPolicySigner(t *testing.T) {
 	})
 
 	t.Run("reject signer registration with invalid public key size", func(t *testing.T) {
-		appID := "test-invalid-key"
+		appID := "spiffe://g8e.local/app/test-invalid-key"
 
 		// Create AppPolicy first
 		policy := models.AppPolicy{
@@ -454,7 +454,7 @@ func TestHandleAppPolicySigner(t *testing.T) {
 	})
 
 	t.Run("successfully register signer with valid AppPolicy", func(t *testing.T) {
-		appID := "test-valid-signer"
+		appID := "spiffe://g8e.local/app/test-valid-signer"
 
 		// Create AppPolicy
 		policy := models.AppPolicy{
@@ -572,7 +572,7 @@ func TestHandleRevokeApp(t *testing.T) {
 	t.Cleanup(func() { db.DocDelete(marshaler.CollectionName(constants.CollectionUsers), regularUser.ID) })
 
 	t.Run("reject app revocation without admin authorization", func(t *testing.T) {
-		appID := "test-no-auth"
+		appID := "spiffe://g8e.local/app/test-no-auth"
 
 		// Create AppPolicy
 		policy := models.AppPolicy{
@@ -606,7 +606,7 @@ func TestHandleRevokeApp(t *testing.T) {
 	})
 
 	t.Run("reject app revocation without user context", func(t *testing.T) {
-		appID := "test-no-context"
+		appID := "spiffe://g8e.local/app/test-no-context"
 
 		// Create AppPolicy
 		policy := models.AppPolicy{
@@ -658,7 +658,7 @@ func TestHandleRevokeApp(t *testing.T) {
 	})
 
 	t.Run("successfully revoke app with policy only", func(t *testing.T) {
-		appID := "test-revoke-policy-only"
+		appID := "spiffe://g8e.local/app/test-revoke-policy-only"
 
 		// Create AppPolicy
 		policy := models.AppPolicy{
@@ -699,7 +699,7 @@ func TestHandleRevokeApp(t *testing.T) {
 	})
 
 	t.Run("successfully revoke app with policy and signer", func(t *testing.T) {
-		appID := "test-revoke-with-signer"
+		appID := "spiffe://g8e.local/app/test-revoke-with-signer"
 
 		// Create AppPolicy
 		policy := models.AppPolicy{
