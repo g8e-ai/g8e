@@ -304,7 +304,7 @@
     },
     "vault_mode": {
       "raw": {
-        "_go_const": "VaultModeRaw",
+        "_go_const": "SentinelModeRaw",
         "_python_const": "RAW",
         "value": "raw"
       },

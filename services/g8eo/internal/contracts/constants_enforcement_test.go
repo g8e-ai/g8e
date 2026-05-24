@@ -392,10 +392,10 @@ func TestExtractConstantsFromVault(t *testing.T) {
 	t.Logf("Extracted %d constants from status_generated.go", len(constants))
 
 	_, hasRaw := constants["raw"]
-	assert.True(t, hasRaw, "should contain raw (VaultMode.Raw)")
+	assert.True(t, hasRaw, "should contain raw (SentinelModeRaw)")
 
 	_, hasScrubbed := constants["scrubbed"]
-	assert.True(t, hasScrubbed, "should contain scrubbed (VaultMode.Scrubbed)")
+	assert.True(t, hasScrubbed, "should contain scrubbed (VaultModeScrubbed)")
 }
 
 func TestExtractConstantsFromModels(t *testing.T) {

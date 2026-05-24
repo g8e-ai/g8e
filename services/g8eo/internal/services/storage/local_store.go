@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/interfaces"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/vault"
 )
@@ -89,17 +90,8 @@ type TextScrubber interface {
 	ScrubText(input string) string
 }
 
-// TokenStore defines the interface for token persistence used by Sentinel.
-// This breaks the import cycle between storage and sentinel packages.
-type TokenStore interface {
-	IsEnabled() bool
-	KVSet(key, value string, ttlSeconds int) error
-	KVGet(key string) (string, bool)
-	KVScanPrefix(prefix string) (map[string]string, error)
-}
-
-// Ensure LocalStoreService implements TokenStore interface.
-var _ TokenStore = (*LocalStoreService)(nil)
+// Ensure LocalStoreService implements interfaces.TokenStore interface.
+var _ interfaces.TokenStore = (*LocalStoreService)(nil)
 
 // LocalStoreService provides local SQLite storage for command execution results.
 // This is the consolidated execution vault - all data encrypted at rest when configured.
