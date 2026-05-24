@@ -168,7 +168,6 @@ See [Demos](./demos.md).
 **CRITICAL**: The platform uses ZERO shell scripts for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary (`./g8e`).
 
 **Permissible Shell Scripts:**
-- Service entrypoints (`services/*/entrypoint.sh`) - minimal wrappers that set environment and exec the binary
 - Vendor scripts (third-party Go vendor scripts) - not g8e platform code
 
 **Deleted Scripts (2026-05-23):**

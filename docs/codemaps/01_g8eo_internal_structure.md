@@ -54,8 +54,7 @@ services/g8eo/
 │
 ├── tools/                       # Build tools and vendored dependencies
 ├── Makefile                     # Build targets
-├── go.mod                       # Go module definition
-└── entrypoint.sh                # Container entry point
+└── go.mod                       # Go module definition
 ```
 
 ## Core Service Layer Breakdown
