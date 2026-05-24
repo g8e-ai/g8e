@@ -155,6 +155,30 @@ Every component distrusts every other. Execution authority is never ambient.
 
 ---
 
+## Potential uses
+
+The outbound-only Operator architecture enables governed execution on hosts that are otherwise unreachable, untrusted, or sensitive. Each use case is a variation on the same pattern: a signed envelope reaches a sovereign host through an outbound tunnel, clears the verification gauntlet locally, and produces a tamper-evident receipt.
+
+- **Distributed fleet operations.** Deploy Operators across heterogeneous infrastructure — on-prem servers, locked VPCs, remote edge devices, home NAS. All hosts dial out to a single Gateway. A single signed command fans out to every Operator; no VPN, bastion, inbound ports, or per-host credential management required.
+
+- **Incident response on firewalled hosts.** When a production host is behind a corporate firewall that blocks SSH, an AI proposes a fix, the Tribunal validates consensus, you authorize via WebAuthn from a mobile device, and the Operator executes locally. Raw logs remain on-host; only a scrubbed receipt returns. Human-present remediation into unreachable infrastructure with hardware-bound authentication and forensic locality.
+
+- **Data-sovereign analysis.** Point an AI at a directory containing PHI, financial data, or proprietary source. The Operator runs analysis on-host, Sentinel scrubs the output, and the model receives only a safe projection. Raw data and model execution never touch. The Operator enforces the data boundary; the AI reasons through a keyhole rather than over the dataset.
+
+- **Queued execution for offline hosts.** Submit a governed envelope at the Gateway with an expiry and expected state root. When the Operator next connects, it retrieves the pending job, re-verifies freshness and that local state has not drifted, then executes — or fails closed if reality has changed. Task machines that are not currently online; the host refuses execution if state has moved.
+
+- **Two-phase commit across environments.** AI builds a change against a dev Operator; you approve once. The exact same transaction hash promotes to staging, then production. Each host independently verifies against its own Merkle root. Git-backed audit vault provides per-host instant rollback. Signed intent travels; trust is re-earned locally at each hop rather than inherited from the pipeline.
+
+- **Distributed quorum enforcement.** Require receipts from Operators on two different hosts — production and disaster recovery, or two administrators' laptops — before a mutation executes. The Gateway releases execution only after both sign. Distributed human/host consensus enforced by protocol, not by process.
+
+- **State-locked execution.** Envelopes carry expiry and expected state root, enabling "approve now, execute only if state unchanged" semantics. AI stages a migration; if anything drifts before authorization, the transaction fails at the boundary. Useful for scheduled or delegated changes where approval occurs without immediate visibility.
+
+- **Ephemeral governance in CI.** Spin up the Operator inside a CI runner, govern exactly what the job may mutate, then terminate. Zero standing dependencies enables governance for throwaway compute that otherwise lacks durable identity for policy attachment.
+
+- **Customer-hosted deployment for regulated industries.** Ship the binary to an enterprise customer. Their data, their host, their audit vault. Your platform orchestrates but is structurally incapable of viewing raw data or mutating without local Operator consent. Sovereignty is architectural, not contractual.
+
+---
+
 ## Reference implementation
 
 g8e ships a full reference stack, but the protocol is the only mandatory part — any conforming producer can emit a valid envelope.
