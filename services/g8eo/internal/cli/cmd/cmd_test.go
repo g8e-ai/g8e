@@ -15,7 +15,6 @@ package cmd
 
 import (
 	"bytes"
-	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -39,11 +38,9 @@ func TestCommandRegistration(t *testing.T) {
 		expectedCommands := []string{
 			"setup",
 			"platform",
-			"apps",
 			"auth",
 			"data",
 			"test",
-			"evals",
 			"security",
 			"vars",
 		}
@@ -60,10 +57,6 @@ func TestCommandRegistration(t *testing.T) {
 					cmd := platformCmd()
 					assert.NotNil(t, cmd)
 					assert.Equal(t, "platform", cmd.Use)
-				case "apps":
-					cmd := appsCmd()
-					assert.NotNil(t, cmd)
-					assert.Equal(t, "apps", cmd.Use)
 				case "auth":
 					cmd := authCmd()
 					assert.NotNil(t, cmd)
@@ -76,10 +69,6 @@ func TestCommandRegistration(t *testing.T) {
 					cmd := testCmd()
 					assert.NotNil(t, cmd)
 					assert.Equal(t, "test", cmd.Use)
-				case "evals":
-					cmd := evalsCmd()
-					assert.NotNil(t, cmd)
-					assert.Equal(t, "evals", cmd.Use)
 				case "security":
 					cmd := securityCmd()
 					assert.NotNil(t, cmd)
@@ -119,26 +108,6 @@ func TestPlatformCommandSubcommands(t *testing.T) {
 				}
 			}
 			assert.True(t, found, "platform command should have %s subcommand", subcmd)
-		}
-	})
-}
-
-func TestAppsCommandSubcommands(t *testing.T) {
-	t.Run("apps command has expected subcommands", func(t *testing.T) {
-		cmd := appsCmd()
-		require.NotNil(t, cmd)
-
-		expectedSubcommands := []string{"start", "stop"}
-
-		for _, subcmd := range expectedSubcommands {
-			found := false
-			for _, c := range cmd.Commands() {
-				if c.Name() == subcmd {
-					found = true
-					break
-				}
-			}
-			assert.True(t, found, "apps command should have %s subcommand", subcmd)
 		}
 	})
 }
@@ -190,32 +159,12 @@ func TestDataCommandSubcommands(t *testing.T) {
 	})
 }
 
-func TestEvalsCommandSubcommands(t *testing.T) {
-	t.Run("evals command has expected subcommands", func(t *testing.T) {
-		cmd := evalsCmd()
-		require.NotNil(t, cmd)
-
-		expectedSubcommands := []string{"bench", "list", "verify-receipts"}
-
-		for _, subcmd := range expectedSubcommands {
-			found := false
-			for _, c := range cmd.Commands() {
-				if c.Name() == subcmd {
-					found = true
-					break
-				}
-			}
-			assert.True(t, found, "evals command should have %s subcommand", subcmd)
-		}
-	})
-}
-
 func TestTestCommandSubcommands(t *testing.T) {
 	t.Run("test command has expected subcommands", func(t *testing.T) {
 		cmd := testCmd()
 		require.NotNil(t, cmd)
 
-		expectedSubcommands := []string{"g8eo", "g8ee", "ci", "chaos"}
+		expectedSubcommands := []string{"g8eo", "ci", "chaos"}
 
 		for _, subcmd := range expectedSubcommands {
 			found := false
@@ -278,11 +227,9 @@ func TestCommandHelpText(t *testing.T) {
 		}{
 			{"setup", setupCmd()},
 			{"platform", platformCmd()},
-			{"apps", appsCmd()},
 			{"auth", authCmd()},
 			{"data", dataCmd()},
 			{"test", testCmd()},
-			{"evals", evalsCmd()},
 			{"security", securityCmd()},
 			{"vars", varsCmd()},
 		}
@@ -297,14 +244,6 @@ func TestCommandHelpText(t *testing.T) {
 }
 
 func TestCommandFlagValidation(t *testing.T) {
-	t.Run("platform start has apps flag", func(t *testing.T) {
-		cmd := platformStartCmd()
-		require.NotNil(t, cmd)
-
-		flag := cmd.Flags().Lookup("apps")
-		assert.NotNil(t, flag, "platform start should have --apps flag")
-	})
-
 	t.Run("platform reset has force flags", func(t *testing.T) {
 		cmd := platformResetCmd()
 		require.NotNil(t, cmd)
@@ -359,25 +298,6 @@ func TestCommandFlagValidation(t *testing.T) {
 		assert.NotNil(t, coverageFlag, "test g8eo should have --coverage flag")
 	})
 
-	t.Run("evals bench has required flags", func(t *testing.T) {
-		cmd := evalsBenchCmd()
-		require.NotNil(t, cmd)
-
-		suiteFlag := cmd.Flags().Lookup("suite")
-		modelFlag := cmd.Flags().Lookup("model")
-		providerFlag := cmd.Flags().Lookup("provider")
-		operatorSessionIDFlag := cmd.Flags().Lookup("operator-session-id")
-		goldSetFlag := cmd.Flags().Lookup("gold-set")
-		limitFlag := cmd.Flags().Lookup("limit")
-
-		assert.NotNil(t, suiteFlag, "evals bench should have --suite flag")
-		assert.NotNil(t, modelFlag, "evals bench should have --model flag")
-		assert.NotNil(t, providerFlag, "evals bench should have --provider flag")
-		assert.NotNil(t, operatorSessionIDFlag, "evals bench should have --operator-session-id flag")
-		assert.NotNil(t, goldSetFlag, "evals bench should have --gold-set flag")
-		assert.NotNil(t, limitFlag, "evals bench should have --limit flag")
-	})
-
 	t.Run("security validate has directory flags", func(t *testing.T) {
 		cmd := securityValidateCmd()
 		require.NotNil(t, cmd)
@@ -391,17 +311,6 @@ func TestCommandFlagValidation(t *testing.T) {
 }
 
 func TestCommandArgumentValidation(t *testing.T) {
-	t.Run("apps stop requires exact args", func(t *testing.T) {
-		cmd := appsStopCmd()
-		require.NotNil(t, cmd)
-		// Args validation is tested by running the command with wrong number of args
-	})
-
-	t.Run("evals verify-receipts requires exact args", func(t *testing.T) {
-		cmd := evalsVerifyReceiptsCmd()
-		require.NotNil(t, cmd)
-	})
-
 	t.Run("vars set requires exact args", func(t *testing.T) {
 		cmd := varsSetCmd()
 		require.NotNil(t, cmd)
@@ -414,11 +323,6 @@ func TestCommandArgumentValidation(t *testing.T) {
 
 	t.Run("vars unset requires exact args", func(t *testing.T) {
 		cmd := varsUnsetCmd()
-		require.NotNil(t, cmd)
-	})
-
-	t.Run("apps start allows max 1 arg", func(t *testing.T) {
-		cmd := appsStartCmd()
 		require.NotNil(t, cmd)
 	})
 }
@@ -500,29 +404,4 @@ func TestPlaceholderCommands(t *testing.T) {
 }
 
 func TestCommandErrorHandling(t *testing.T) {
-	t.Run("invalid app name returns error", func(t *testing.T) {
-		cmd := appsStartCmd()
-		require.NotNil(t, cmd)
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		err := cmd.RunE(cmd, []string{"invalid-app"})
-		require.Error(t, err)
-		assert.Contains(t, strings.ToLower(err.Error()), "unsupported app")
-	})
-
-	t.Run("invalid app name for stop returns error", func(t *testing.T) {
-		cmd := appsStopCmd()
-		require.NotNil(t, cmd)
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		err := cmd.RunE(cmd, []string{"invalid-app"})
-		require.Error(t, err)
-		assert.Contains(t, strings.ToLower(err.Error()), "unsupported app")
-	})
 }

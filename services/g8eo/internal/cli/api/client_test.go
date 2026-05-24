@@ -118,12 +118,6 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	require.NoError(t, os.MkdirAll(constantsDir, 0755))
 
 	pathsJSON := `{
-		"g8ee": {
-			"app_dir": "/tmp/g8ee/app",
-			"cert_name": "g8ee",
-			"config_dir": "/tmp/g8ee/config",
-			"tests_dir": "/tmp/g8ee/tests"
-		},
 		"host": "localhost",
 		"infra": {
 			"app_cert_dir": "/tmp/app/certs",
@@ -138,7 +132,6 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 			"ssh_config_path": "/tmp/ssh/config"
 		},
 		"ports": {
-			"g8ee_https": 8443,
 			"openclaw_gateway": 9000,
 			"operator_bootstrap_https": 9001,
 			"operator_https": 9002,

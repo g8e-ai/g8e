@@ -437,7 +437,7 @@ exit 0
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-		t.Parallel()
+				t.Parallel()
 				req := &models.ExecutionRequestPayload{
 					ExecutionID:    fmt.Sprintf("exitcode-exec-%d", tc.exitCode),
 					CaseID:         "test-case-exitcode",

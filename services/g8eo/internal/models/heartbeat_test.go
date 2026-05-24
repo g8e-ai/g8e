@@ -159,10 +159,10 @@ func TestHeartbeatUserDetails(t *testing.T) {
 func TestHeartbeatDiskDetails(t *testing.T) {
 	t.Run("creates valid disk details", func(t *testing.T) {
 		details := &HeartbeatDiskDetails{
-			TotalGB:  250.0,
-			UsedGB:   100.0,
-			FreeGB:   150.0,
-			Percent:  40.0,
+			TotalGB: 250.0,
+			UsedGB:  100.0,
+			FreeGB:  150.0,
+			Percent: 40.0,
 		}
 
 		assert.Equal(t, 250.0, details.TotalGB)
@@ -271,7 +271,7 @@ func TestHeartbeat(t *testing.T) {
 				Architecture: "amd64",
 			},
 			SystemFingerprint: "fp-123",
-			APIKey:           "api-key-123",
+			APIKey:            "api-key-123",
 		}
 
 		assert.Equal(t, constants.Event.Operator.Heartbeat, heartbeat.EventType)

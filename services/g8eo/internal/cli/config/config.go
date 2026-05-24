@@ -53,12 +53,6 @@ func expandPath(path string) (string, error) {
 }
 
 type PathsConfig struct {
-	G8EE struct {
-		AppDir    string `json:"app_dir"`
-		CertName  string `json:"cert_name"`
-		ConfigDir string `json:"config_dir"`
-		TestsDir  string `json:"tests_dir"`
-	} `json:"g8ee"`
 	Host  string `json:"host"`
 	Infra struct {
 		AppCertDir           string `json:"app_cert_dir"`
@@ -73,7 +67,6 @@ type PathsConfig struct {
 		SSHConfigPath        string `json:"ssh_config_path"`
 	} `json:"infra"`
 	Ports struct {
-		G8EEHTTPS              int `json:"g8ee_https"`
 		OpenclawGateway        int `json:"openclaw_gateway"`
 		OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 		OperatorHTTPS          int `json:"operator_https"`

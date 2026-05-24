@@ -45,8 +45,6 @@ func platformCmd() *cobra.Command {
 }
 
 func platformStartCmd() *cobra.Command {
-	var withG8ee bool
-
 	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Start the Governance Gateway",
@@ -87,8 +85,6 @@ func platformStartCmd() *cobra.Command {
 			return nil
 		},
 	}
-
-	cmd.Flags().BoolVarP(&withG8ee, "apps", "a", false, "Start optional g8ee ensemble")
 
 	return cmd
 }
@@ -167,8 +163,6 @@ func platformStatusCmd() *cobra.Command {
 }
 
 func platformRestartCmd() *cobra.Command {
-	var withG8ee bool
-
 	cmd := &cobra.Command{
 		Use:   "restart",
 		Short: "Restart the Governance Gateway",
@@ -208,8 +202,6 @@ func platformRestartCmd() *cobra.Command {
 			return nil
 		},
 	}
-
-	cmd.Flags().BoolVarP(&withG8ee, "apps", "a", false, "Restart optional g8ee ensemble")
 
 	return cmd
 }

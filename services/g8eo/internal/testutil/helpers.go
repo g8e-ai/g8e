@@ -68,16 +68,16 @@ func NewTestConfig(t *testing.T) *config.Config {
 	}
 
 	return &config.Config{
-		ProjectID:               "test-project",
-		ComponentName:           constants.ComponentNameG8EO,
-		Version:                 "test",
-		APIKey:                  "test-api-key",
-		OperatorID:              operatorID,
-		OperatorSessionId:       operatorSessionID,
-		PubSubURL:               GetTestOperatorDirectURL(),
-		MaxConcurrentTasks:      25,
-		MaxMemoryMB:             2048,
-		HeartbeatInterval:       30 * time.Second,
+		ProjectID:          "test-project",
+		ComponentName:      constants.ComponentNameG8EO,
+		Version:            "test",
+		APIKey:             "test-api-key",
+		OperatorID:         operatorID,
+		OperatorSessionId:  operatorSessionID,
+		PubSubURL:          GetTestOperatorDirectURL(),
+		MaxConcurrentTasks: 25,
+		MaxMemoryMB:        2048,
+		HeartbeatInterval:  30 * time.Second,
 		Gateway: config.GatewayConfig{
 			MaxPayloadBytes: 10 * 1024 * 1024,
 		},
