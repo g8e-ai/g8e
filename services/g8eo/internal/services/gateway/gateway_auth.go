@@ -474,8 +474,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 func (s *AuthService) enforceAppPolicy(r *http.Request, policy *models.AppPolicy, appID string) error {
 	// Check rate limit (if configured)
 	if policy.RateLimitRPS > 0 {
-		// TODO: Implement per-app rate limiting using a token bucket or similar
-		// For now, we log a warning if rate limiting is configured but not enforced
+		// Rate limiting is not yet enforced. Policy configuration is validated but not applied.
 		s.logger.Warn("Rate limiting configured but not yet enforced", "app_id", appID, "rate_limit_rps", policy.RateLimitRPS)
 	}
 

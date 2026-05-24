@@ -23,8 +23,9 @@ import (
 	"github.com/g8e-ai/g8e/protocol"
 )
 
-// AppEnrollmentService handles external app enrollment with automatic L2 signer provisioning.
-// This enables third-party applications to authenticate via mTLS and participate in Consensus Mode.
+// AppEnrollmentService handles external app enrollment.
+// Enrollment is identity-only by default: apps receive mTLS certificates but no L2 consensus power.
+// L2 signers must be explicitly registered by an admin via POST /api/admin/app-policies/{app_id}/signer.
 type AppEnrollmentService struct {
 	db     *GatewayDBService
 	pki    *PKIAuthority
@@ -56,12 +57,12 @@ type AppEnrollResponse struct {
 	TrustBundle string `json:"trust_bundle"`
 	AppID       string `json:"app_id"`
 	ExpiresAt   string `json:"expires_at"`
-	L2SignerID  string `json:"l2_signer_id"` // The key ID for L2 signatures
 	Error       string `json:"error,omitempty"`
 }
 
-// EnrollApp handles external app enrollment with automatic L2 signer provisioning.
-// This implements Option A from the plan: auto-provision L2 signer on enrollment.
+// EnrollApp handles external app enrollment.
+// Returns an mTLS identity certificate only (identity-only enrollment).
+// L2 consensus power requires explicit admin registration via POST /api/admin/app-policies/{app_id}/signer.
 func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollResponse, error) {
 	// Validate request
 	if req.CSR == "" {
