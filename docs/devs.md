@@ -88,7 +88,6 @@ The unified `g8eo` binary is the single entry point for all platform operations.
 4. **Fail-Closed Execution**: The CLI must never mask failures or proceed with missing trust material.
 
 **Permissible Shell Scripts:**
-- Service entrypoints (`services/*/entrypoint.sh`) - minimal wrappers that set environment and exec the binary
 - Vendor scripts (third-party Go vendor scripts) - not g8e platform code
 
 ## Architecture Philosophy
@@ -164,15 +163,6 @@ AI agents tend to wrap poorly understood code in new abstractions. This is stric
 - **Async Discipline**: Never perform blocking I/O inside an `async def` function. Use `anyio` or `asyncio` equivalents.
 - **Models**: All data structures must use Pydantic `G8eBaseModel` with `extra="forbid"`.
 - **Docstrings**: Use Google-style docstrings for non-trivial logic.
-
-### Service Entrypoints (Bash)
-Platform operations use ZERO shell scripts. The only permissible Bash files are minimal service entrypoint wrappers:
-- **Safety**: Every entrypoint must start with `set -euo pipefail`.
-- **Linting**: `shellcheck` is mandatory. Avoid `shellcheck disable` unless absolutely necessary for infrastructure constraints.
-- **Variables**: Use `local` for all variables inside functions. Use uppercase for exported environment variables and lowercase for local ones.
-- **Syntax**: Use `[[ ... ]]` for tests and `$( ... )` for command substitution. Avoid backticks.
-- **Path Resolution**: Entrypoints must be location-independent, resolving paths relative to `$(dirname "${BASH_SOURCE[0]}")`.
-- **No Script Sourcing**: Entrypoints must NOT source other shell scripts. All environment setup must be inline.
 
 ## Application Boundary and State Management
 

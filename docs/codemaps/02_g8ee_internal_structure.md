@@ -129,8 +129,7 @@ services/g8ee/
 ├── .venv/                        # Python virtual environment
 ├── pyproject.toml               # Python project configuration
 ├── requirements.txt             # Python dependencies
-├── Makefile                     # Build targets
-└── entrypoint.sh                # Container entry point
+└── Makefile                     # Build targets
 ```
 
 ## Agent Hierarchy
@@ -332,14 +331,6 @@ g8ee implements a multi-agent hierarchy with specialized roles:
   2. Initialize dependencies
   3. Connect to Operator
   4. Start HTTP server
-
-### Container Entry Point
-- **Path**: `entrypoint.sh`
-- **Purpose**: Container startup orchestration
-- **Steps**:
-  1. Activate virtual environment
-  2. Run migrations (if any)
-  3. Start FastAPI application
 
 ## Critical Data Paths
 

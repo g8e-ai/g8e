@@ -201,7 +201,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 }
 
 func (pm *ProcessManager) buildAll() error {
-	cmd := exec.Command("make", "-C", pm.projectRoot, "build")
+	cmd := exec.Command("make", "--no-print-directory", "-C", pm.projectRoot, "build")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
