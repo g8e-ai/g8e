@@ -86,11 +86,6 @@ target/
 buf
 g8e.operator
 g8e.gateway
-services/g8eo/g8eo
-services/g8eo/chaos_tester
-services/g8eo/*.test
-services/g8eo/bin/
-services/g8eo/build/
 
 # --- Go Gateway ---
 go.work

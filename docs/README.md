@@ -24,10 +24,10 @@ The reference Go implementation compiles from a single codebase into two role-sp
 - [**Governance Gateway (g8eg)**](concepts/g8eg.md) (`g8e.gateway`) - The central PDP / BFT-governed Policy Decision Point running in Gateway mode (--doctrine, --consensus, or --notary).
 - [**Governed Operator (g8eo)**](concepts/operator.md) (`g8e.operator`) - The host-side PEP / sovereign execution agent and MCP Server.
 
-## 3. Reference Applications
+## 3. g8e-Compatible Applications
 Optional producers and consumers demonstrating the protocol in action.
 
-- [**g8e Agentic Ensemble**](concepts/g8ee.md) - Reference **g8e-compliant agentic ensemble** and Tribunal orchestration.
+- [**g8e-Compatible Applications**](concepts/g8e-compatible-apps.md) - How to build conforming producers and consumers of the protocol.
 
 ## 4. Developer Resources
 Guides for setting up, testing, and contributing to the platform.

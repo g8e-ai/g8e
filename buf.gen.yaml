@@ -2,9 +2,14 @@ version: v2
 plugins:
   # Go generation
   - local: protoc-gen-go
-    out: .
+    out: protocol/proto
     opt:
-      - module=github.com/g8e-ai/g8e
+      - paths=source_relative
+  # gRPC Go generation
+  - local: protoc-gen-go-grpc
+    out: protocol/proto
+    opt:
+      - paths=source_relative
   # Markdown documentation generation
   - local: protoc-gen-doc
     out: docs/reference/api

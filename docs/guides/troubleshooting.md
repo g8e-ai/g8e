@@ -19,7 +19,7 @@ Use a POSIX shell such as Linux, macOS Terminal, WSL, or Git Bash. The root
 At minimum, install the tools for the component you are touching:
 
 - Go for `g8eo` and protocol work.
-- Python for the optional **g8e Agentic Ensemble** (`g8ee`) and evals.
+- Python for optional g8e-compatible agentic ensembles and evals.
 - Docker only for demo fleet workflows.
 
 ## `./g8e` fails with missing `curl`
@@ -111,7 +111,7 @@ tail -n 80 .g8e/logs/operator-listen.log
 
 Common causes:
 
-- One of the local ports from `services/g8eo/internal/constants/paths.go` is already in use (the startup script performs an automatic preflight check and reports conflicting PIDs).
+- One of the local ports from `internal/constants/paths.go` is already in use (the startup script performs an automatic preflight check and reports conflicting PIDs).
 - The Go toolchain is missing or below the version expected by the current Developer Guidelines.
 - Runtime PKI or secrets were created by an older incompatible checkout.
 
@@ -125,9 +125,9 @@ Stop the managed process before retrying:
 Use `./g8e platform reset` or `./g8e platform clean` only for disposable local
 state. They intentionally remove runtime data under `.g8e/`.
 
-## **g8e Agentic Ensemble** (`g8ee`) virtualenv is missing
+## g8e-compatible agentic ensemble virtualenv is missing
 
-The **agentic ensemble** is optional. Ensemble and eval commands expect the local
+The agentic ensemble is optional. Ensemble and eval commands expect the local
 virtualenv under `.venv` at the project root.
 
 To maximize developer ergonomics, **both the platform start script and the test runner will automatically bootstrap this virtualenv for you** if it is not found.
@@ -135,10 +135,10 @@ To maximize developer ergonomics, **both the platform start script and the test 
 You can also manually build it or start the platform with optional apps pre-enabled:
 
 ```bash
-./g8e platform start --g8ee
+./g8e platform start --with-apps
 ```
 
-If you only need the Operator, skip the **agentic ensemble** (`g8ee`) and run:
+If you only need the Operator, skip the agentic ensemble and run:
 
 ```bash
 ./g8e test g8eo
@@ -154,7 +154,7 @@ them.
 ./g8e platform start
 ./g8e test g8eo
 
-./g8e platform start --g8ee
+./g8e platform start --with-apps
 ./g8e test g8ee
 ```
 

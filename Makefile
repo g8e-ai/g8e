@@ -63,9 +63,9 @@ generate: proto constants
 .PHONY: constants
 constants:
 	@echo "Generating Go constants from JSON source..."
-	@cd services/g8eo/internal/constants && go run generate_registry.go
+	@cd internal/constants && go run generate_registry.go
 	@echo "Exporting constants to JSON and Python via Go exporter..."
-	@cd services/g8eo/cmd/exporter && go run main.go -root $(PWD)
+	@cd cmd/exporter && go run main.go -root $(PWD)
 	@echo "Constants generation complete."
 
 .PHONY: proto
@@ -125,18 +125,19 @@ first-issues:
 .PHONY: clean-constants
 clean-constants:
 	@echo "Cleaning generated constants..."
-	@rm -rf services/g8eo/internal/constants/headers_generated.go
-	@rm -rf services/g8eo/internal/constants/status_generated.go
-	@rm -rf services/g8eo/internal/constants/registry.go
+	@rm -rf internal/constants/headers_generated.go
+	@rm -rf internal/constants/status_generated.go
+	@rm -rf internal/constants/registry.go
 	@echo "Constants clean complete."
 
 .PHONY: clean
 clean:
 	@echo "Cleaning up build artifacts and runtime state..."
-	@$(MAKE) --no-print-directory -C services/g8eo clean
 	@$(MAKE) clean-constants
 	@rm -rf .g8e/
 	@rm -f ./g8e
+	@rm -rf bin/
+	@rm -rf build/
 	@echo "Clean complete."
 
 # =============================================================================
@@ -201,13 +202,12 @@ _ci-verify-proto:
 	fi
 	@$(MAKE) lint-no-bare-session-id
 	@$(MAKE) validate-doctrines
-	@cd services/g8eo/internal/constants && go run check_registry.go
+	@cd internal/constants && go run check_registry.go
 
 .PHONY: _ci-lint-g8eo
 _ci-lint-g8eo:
 	@echo "=== lint-g8eo ==="
 	@$(MAKE) lint-g8eo
-	@cd protocol && golangci-lint run
 
 .PHONY: _ci-vulncheck-g8eo
 _ci-vulncheck-g8eo:
@@ -218,8 +218,8 @@ _ci-vulncheck-g8eo:
 _ci-test-g8eo:
 	@echo "=== test-g8eo ==="
 	@./g8e platform start
-	@cd services/g8eo && go test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic ./...
-	@COVERAGE=$$(cd services/g8eo && go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "/mocks/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	@go test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic ./...
+	@COVERAGE=$$(go tool cover -func=coverage.out | grep -v "internal/protocol/proto" | grep -v "/mocks/" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
 	if [ $$(echo "$$COVERAGE < 85" | bc -l) -eq 1 ]; then \
 		echo "Coverage $$COVERAGE% is below 85% threshold"; \
 		exit 1; \
@@ -247,21 +247,23 @@ build: build-g8eo
 
 .PHONY: build-g8eo
 build-g8eo:
-	@$(MAKE) --no-print-directory -C services/g8eo build
-	@ln -sf services/g8eo/build/linux-amd64/g8e ./g8e
+	@echo "Building g8e operator..."
+	@mkdir -p bin
+	@go build -o bin/g8e ./cmd/g8eo
+	@ln -sf bin/g8e ./g8e
+	@echo "Build complete."
 
 .PHONY: test-g8eo
 test-g8eo:
-	@$(MAKE) --no-print-directory -C services/g8eo test
-
+	@go test -race -timeout 180s ./...
 
 .PHONY: lint-g8eo
 lint-g8eo:
-	@$(MAKE) --no-print-directory -C services/g8eo lint
+	@golangci-lint run
 
 .PHONY: vulncheck-g8eo
 vulncheck-g8eo:
-	@$(MAKE) --no-print-directory -C services/g8eo vulncheck
+	@govulncheck ./...
 
 # =============================================================================
 # DOCUMENTATION

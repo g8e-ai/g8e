@@ -8,7 +8,7 @@ This document defines the technical standards, architectural invariants, and con
 2. **3-layer governance bedrock.** Doctrine (L1Doctrine) hard gates (forbidden patterns) via protobuf reflection; Quorum (L2Consensus) multi-agent Tribunal consensus with reputation staking; Notary (L3Notary) human-in-the-loop with hardware-bound WebAuthn proofs (auto-approval for benign diagnostics only after Doctrine (L1Doctrine)+Quorum (L2Consensus) pass).
 3. **Data sovereignty.** Raw command output and file contents stay on the Operator host, encrypted, and never persist platform-side. Platform state is host-native under `.g8e/`.
 4. **Security by structure.** All changes adhere to the Security Review Checklist. The Operator is the only execution boundary.
-5. **BYO Frontend.** The platform is UI-less by design. The **CLI (`./g8e`) is the default out-of-the-box UI**. The Operator provides a minimal bootstrap web interface, but primary interaction is via the CLI, BYO clients, or the optional **g8e Agentic Ensemble** (`g8ee`).
+5. **BYO Frontend.** The platform is UI-less by design. The **CLI (`./g8e`) is the default out-of-the-box UI**. The Operator provides a minimal bootstrap web interface, but primary interaction is via the CLI, BYO clients, or optional g8e-compatible agentic ensembles.
 
 ## Development Lifecycle
 
@@ -29,10 +29,10 @@ The setup offers three modes:
    - Generates protocol artifacts
    - Builds g8eg and g8eo services
 
-2. **Quick Start (Full Mode)** - Complete setup including the g8e Agentic Ensemble
+2. **Quick Start (Full Mode)** - Complete setup including optional agentic ensembles
    - Checks Go 1.26+ and Python 3.14+
    - Generates protocol artifacts
-   - Sets up Python venv and installs g8ee dependencies
+   - Sets up Python venv and installs agentic ensemble dependencies
    - Builds all services
 
 3. **Complete Developer Setup** - Automated full environment setup with verification
@@ -51,7 +51,7 @@ The setup offers three modes:
   export PATH=$GOPATH/bin:$PATH
   ```
   Go tools installed via `go install` (e.g., golangci-lint, govulncheck) are placed in `$GOPATH/bin`.
-- **Python 3.14+** (only when developing the optional **g8e Agentic Ensemble** (`g8ee`)). The setup script will offer to install Python 3.14 via pyenv if your system version is insufficient.
+- **Python 3.14+** (only when developing optional g8e-compatible agentic ensembles). The setup script will offer to install Python 3.14 via pyenv if your system version is insufficient.
 
 ### Common Commands
 
@@ -59,8 +59,8 @@ The setup offers three modes:
 |---|---|
 | `./g8e` | Interactive Platform Manager. |
 | `./g8e platform start` | Start the Governance Gateway (`g8eg`) only. |
-| `./g8e platform start --g8ee` | Gateway plus optional bundled adapters. |
-| `./g8e apps start [g8ee|all]` | Start optional application-layer adapters. |
+| `./g8e platform start --with-apps` | Gateway plus optional bundled adapters. |
+| `./g8e apps start <app-name>` | Start optional application-layer adapters. |
 | `./g8e platform status` | Gateway health first, optional app status separately. |
 | `./g8e login` | Authenticate the local CLI. |
 | `./g8e test <component>` | Host-native tests (default: g8eo). |
@@ -82,7 +82,7 @@ The unified `g8eo` binary is the single entry point for all platform operations.
 - **Environment (`./g8e vars`)**: Environment variable management.
 
 **Technical Invariants:**
-1. **Zero Shell Scripts**: NO shell scripts are used for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary. Constants are exported to JSON and Python via the Go exporter tool (`services/g8eo/cmd/exporter`), not shell scripts. Tests and code consume protocol constants directly from JSON files (`protocol/constants/*.json`), not by sourcing shell scripts.
+1. **Zero Shell Scripts**: NO shell scripts are used for platform operations. All platform lifecycle, configuration, and administrative duties are handled by the unified Go binary. Constants are exported to JSON and Python via the Go exporter tool (`cmd/exporter`), not shell scripts. Tests and code consume protocol constants directly from JSON files (`protocol/constants/*.json`), not by sourcing shell scripts.
 2. **Service Readiness**: The platform is not "ready" until the Governance Gateway (`g8eg`) Gateway mode health check (`/healthz`) passes.
 3. **Canonical Wire Format**: All client-facing interaction (HTTP, PubSub, receipts) must use **canonical JSON (protojson)**. Binary Protobuf is reserved for internal storage.
 4. **Fail-Closed Execution**: The CLI must never mask failures or proceed with missing trust material.
@@ -288,13 +288,13 @@ g8e defines unique threat doctrines for agentic execution in `mcp_vectors_doctri
 
 ## Working with Constants
 
-g8e maintains a Single Source of Truth (SSOT) for cross-component constants in Go at `services/g8eo/internal/constants/`. Constants are exported to JSON and Python via a generation pipeline.
+g8e maintains a Single Source of Truth (SSOT) for cross-component constants in Go at `internal/constants/`. Constants are exported to JSON and Python via a generation pipeline.
 
 ### Adding New Constants
 
-1. Add the constant to the appropriate Go file in `services/g8eo/internal/constants/`
+1. Add the constant to the appropriate Go file in `internal/constants/`
 2. Run `make constants` to regenerate JSON and Python exports
-3. Run `cd services/g8eo && go run ./internal/constants/check_registry.go` to verify registration
+3. Run `go run ./internal/constants/check_registry.go` to verify registration
 4. Commit both the Go source and generated files
 
 ### Regeneration Commands
@@ -314,12 +314,12 @@ See `docs/reference/constants.md` for complete documentation of the constants pi
 | Concern | Location |
 |---|---|
 | Protobuf schemas | `protocol/proto/` |
-| Constants registries | `services/g8eo/internal/constants/` |
+| Constants registries | `internal/constants/` |
 | Constants documentation | `docs/reference/constants.md` |
-| Operator implementation | `services/g8eo/` |
+| Operator implementation | Root-level (cmd/, internal/, pkg/) |
 | g8e Agentic Ensemble implementation | `services/g8ee/` |
 | Evaluation harness | `evals/` |
-| CLI | Unified `g8eo` binary (daemon + CLI modes) |
+| CLI | Unified `g8e` binary (daemon + CLI modes) |
 
 ## Submitting a PR
 

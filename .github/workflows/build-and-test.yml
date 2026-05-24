@@ -20,8 +20,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: services/g8eo/go.mod
-          cache-dependency-path: services/g8eo/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Set up Buf
         uses: bufbuild/buf-setup-action@v1
@@ -64,7 +64,6 @@ jobs:
 
       - name: Check constants registry
         run: go run ./internal/constants/check_registry.go
-        working-directory: services/g8eo
 
   lint-g8eo:
     runs-on: ubuntu-latest
@@ -75,8 +74,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: services/g8eo/go.mod
-          cache-dependency-path: services/g8eo/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Install tools
         run: |
@@ -84,12 +83,10 @@ jobs:
           go install gotest.tools/gotestsum@latest
 
       - name: Run golangci-lint (g8eo)
-        run: golangci-lint run --path-prefix=services/g8eo
-        working-directory: services/g8eo
+        run: golangci-lint run
 
       - name: Run golangci-lint (protocol)
-        run: golangci-lint run
-        working-directory: protocol
+        run: golangci-lint run ./protocol/...
 
   vulncheck-g8eo:
     runs-on: ubuntu-latest
@@ -100,14 +97,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: services/g8eo/go.mod
-          cache-dependency-path: services/g8eo/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Run govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
-        working-directory: services/g8eo
 
   test-g8eo:
     runs-on: ubuntu-latest
@@ -119,8 +115,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: services/g8eo/go.mod
-          cache-dependency-path: services/g8eo/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Build unified g8eo binary
         run: make build-cli
@@ -130,12 +126,10 @@ jobs:
 
       - name: Test Operator Gateway
         run: |
-          cd services/g8eo
           GOMAXPROCS=4 gotestsum --format testname -- -race -p 4 -timeout 180s ./...
 
       - name: Check coverage
         run: |
-          cd services/g8eo
           GOMAXPROCS=4 go test -race -p 4 -timeout 180s -coverprofile=coverage.out -covermode=atomic ./...
           COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
           if [ $(echo "$COVERAGE < 85" | bc -l) -eq 1 ]; then
@@ -162,12 +156,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: services/g8eo/go.mod
-          cache-dependency-path: services/g8eo/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Run Constants Lint
         run: go test -v -run TestNoRawStringLiteralsWhereConstantsExist ./internal/contracts
-        working-directory: services/g8eo
         env:
           G8E_STRICT_CONSTANTS_LINT: "1"
 

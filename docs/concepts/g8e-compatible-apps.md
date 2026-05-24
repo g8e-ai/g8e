@@ -12,7 +12,7 @@ The architecture of a g8e application varies based on how it satisfies the L2 co
 A minimal application constructs the mutation intent and builds a valid `GovernanceEnvelope`. This requires formatting the typed payload, generating a deterministic transaction hash, and appending a nonce, expiry, and fetched state root. The application submits the envelope and consumes the signed receipt. Minimal applications do not produce L2 consensus evidence natively. They rely on the Operator's protocol-agnostic MCP/A2A translation layer or a trusted upstream producer to fulfill the L2 requirement.
 
 ### Maximal Applications
-A maximal application performs the identical intent formulation and envelope construction, while additionally producing its own L2 consensus evidence. It executes an internal consensus mechanism and signs the envelope directly. The native `g8ee` ensemble represents the reference implementation of a maximal application, utilizing its internal Tribunal component to generate the required consensus signatures.
+A maximal application performs the identical intent formulation and envelope construction, while additionally producing its own L2 consensus evidence. It executes an internal consensus mechanism and signs the envelope directly. A g8e-compatible agentic ensemble with an internal Tribunal component represents the reference implementation of a maximal application, generating the required consensus signatures.
 
 ## Structural Invariants
 

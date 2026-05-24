@@ -36,7 +36,7 @@ g8e/
   - `workload_identity.go` - Go workload identity implementation
 - **Invariant**: All services MUST consume protocol definitions from this layer. No local schema duplication.
 
-### Governed Operator (`services/g8eo/`)
+### Governed Operator (g8eo)
 - **Purpose**: Single binary that operates in multiple modes based on command-line flags
 - **Language**: Go
 - **Entry Point**: `cmd/g8eo/main.go` → `g8e` binary
@@ -114,11 +114,11 @@ g8e/
 
 ## Build Artifacts
 
-- `g8e` - Static Go binary from `services/g8eo/` (single binary for all modes)
-- Protocol constants exported to JSON and Python via `services/g8eo/cmd/exporter`
+- `g8e` - Static Go binary (single binary for all modes)
+- Protocol constants exported to JSON and Python via `cmd/exporter`
 
 ## Entry Points
 
-- CLI: `./g8e` (shell script in repo root, symlink to `services/g8eo/build/linux-amd64/g8e`)
-- Binary: `services/g8eo/build/linux-amd64/g8e`
-- Main source: `services/g8eo/cmd/g8eo/main.go`
+- CLI: `./g8e` (shell script in repo root, symlink to `bin/g8e`)
+- Binary: `bin/g8e`
+- Main source: `cmd/g8eo/main.go`

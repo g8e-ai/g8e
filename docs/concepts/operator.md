@@ -159,7 +159,7 @@ The Actuator's Ed25519 signing key lives in `.g8e/secrets/Actuator_signing_key`;
 
 ### Exit codes
 
-Defined in `@/home/bob/g8e/services/g8eo/internal/constants/exit_codes.go`. Stable codes let supervisors react precisely:
+Defined in `internal/constants/exit_codes.go`. Stable codes let supervisors react precisely:
 
 | Code | Meaning |
 |---|---|
@@ -179,7 +179,7 @@ For `./g8e` lifecycle commands (`platform start`, `apps`, `operator deploy`, `op
 
 ## Air-Gap Operation
 
-The Operator is fully self-contained. There are no runtime internet dependencies; no telemetry leaves the host. All trust material, persistence, and secrets are local. Local LLM inference is supported through `g8ee`'s `LlamaCppProvider` for fully offline reasoning. PKI, CA hierarchy, and trust bundles are generated and rotated locally; the Hub forbids outbound dialing in Gateway mode.
+The Operator is fully self-contained. There are no runtime internet dependencies; no telemetry leaves the host. All trust material, persistence, and secrets are local. Local LLM inference is supported through g8e-compatible agentic ensembles for fully offline reasoning. PKI, CA hierarchy, and trust bundles are generated and rotated locally; the Hub forbids outbound dialing in Gateway mode.
 
 ---
 
@@ -187,12 +187,12 @@ The Operator is fully self-contained. There are no runtime internet dependencies
 
 | Concern | Authoritative file |
 |---|---|
-| Verification gates | `@/home/bob/g8e/services/g8eo/internal/services/governance/transaction_verifier.go` |
-| Actuator / receipts | `@/home/bob/g8e/services/g8eo/internal/services/governance/warden.go` |
-| Sentinel | `@/home/bob/g8e/services/g8eo/internal/services/sentinel/sentinel.go` |
-| Audit vault | `@/home/bob/g8e/services/g8eo/internal/services/storage/audit_vault.go` |
-| Ledger (git) | `@/home/bob/g8e/services/g8eo/internal/services/storage/ledger.go` |
-| Listen mode entry | `@/home/bob/g8e/services/g8eo/cmd/g8eo/main.go` |
-| PKI / CertStore | `@/home/bob/g8e/services/g8eo/internal/services/listen/listen_certs.go` |
+| Verification gates | `internal/services/governance/transaction_verifier.go` |
+| Actuator / receipts | `internal/services/governance/warden.go` |
+| Sentinel | `internal/services/sentinel/sentinel.go` |
+| Audit vault | `internal/services/storage/audit_vault.go` |
+| Ledger (git) | `internal/services/storage/ledger.go` |
+| Listen mode entry | `cmd/g8eo/main.go` |
+| PKI / CertStore | `internal/services/listen/listen_certs.go` |
 
-See also: [Protocol](./protocol.md), [Governance Gateway (g8eg)](./g8eg.md), [g8e Agentic Ensemble](./g8ee.md).
+See also: [Protocol](./protocol.md), [Governance Gateway (g8eg)](./g8eg.md), [g8e-Compatible Applications](./g8e-compatible-apps.md).

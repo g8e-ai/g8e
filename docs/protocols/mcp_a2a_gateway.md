@@ -294,21 +294,21 @@ The Gateway implements a circuit breaker for downstream MCP/A2A servers:
 
 | Concern | File |
 |---|---|
-| Gateway entry | `services/g8eo/cmd/g8eo/main.go` (runGatewayMode) |
-| Gateway service | `services/g8eo/internal/services/gateway/gateway_service.go` |
-| HTTP routing | `services/g8eo/internal/services/gateway/gateway_http.go` |
-| MCP/A2A translation | `services/g8eo/internal/services/mcp/gateway.go` |
-| MCP models | `services/g8eo/internal/services/mcp/models.go` |
-| Field path registry | `services/g8eo/internal/services/mcp/field_parser.go` |
-| Envelope construction | `services/g8eo/internal/services/mcp/gateway.go` (processGatewayTransaction) |
-| Transaction verification | `services/g8eo/internal/services/governance/transaction_verifier.go` |
-| Envelope processor | `services/g8eo/internal/services/governance/processor.go` |
-| Pub/Sub command service | `services/g8eo/internal/services/pubsub/pubsub_commands.go` |
-| Session management | `services/g8eo/internal/services/gateway/session_service.go` |
-| Passkey L3 brokerage | `services/g8eo/internal/services/gateway/passkey_service.go` |
-| CLI L3 verification | `services/g8eo/internal/services/gateway/cli_l3_notary.go` |
-| Composite L3 verifier | `services/g8eo/internal/services/gateway/composite_l3_verifier.go` |
-| Suspended transactions | `services/g8eo/internal/services/gateway/gateway_db.go` |
+| Gateway entry | `cmd/g8eo/main.go` (runGatewayMode) |
+| Gateway service | `internal/services/gateway/gateway_service.go` |
+| HTTP routing | `internal/services/gateway/gateway_http.go` |
+| MCP/A2A translation | `internal/services/mcp/gateway.go` |
+| MCP models | `internal/services/mcp/models.go` |
+| Field path registry | `internal/services/mcp/field_parser.go` |
+| Envelope construction | `internal/services/mcp/gateway.go` (processGatewayTransaction) |
+| Transaction verification | `internal/services/governance/transaction_verifier.go` |
+| Envelope processor | `internal/services/governance/processor.go` |
+| Pub/Sub command service | `internal/services/pubsub/pubsub_commands.go` |
+| Session management | `internal/services/gateway/session_service.go` |
+| Passkey L3 brokerage | `internal/services/gateway/passkey_service.go` |
+| CLI L3 verification | `internal/services/gateway/cli_l3_notary.go` |
+| Composite L3 verifier | `internal/services/gateway/composite_l3_verifier.go` |
+| Suspended transactions | `internal/services/gateway/gateway_db.go` |
 
 ---
 
