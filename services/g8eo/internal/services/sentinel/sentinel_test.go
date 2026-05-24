@@ -2035,7 +2035,7 @@ func TestSentinel_ScrubText_FilenamesAndHostnames_AllPreserved(t *testing.T) {
 		{"filename me.txt preserved", "can you read me.txt", "can you read me.txt"},
 		{"relative path preserved", "can you read ./me.txt", "can you read ./me.txt"},
 		{"parent relative path preserved", "check ../config.json", "check ../config.json"},
-		{"deep relative path preserved", "run ./scripts/test.py", "run ./scripts/test.py"},
+		{"deep relative path preserved", "run ./tools/test.py", "run ./tools/test.py"},
 		{"config.json preserved", "check config.json for errors", "check config.json for errors"},
 		{"hostname preserved", "connect to example.com", "connect to example.com"},
 		{"subdomain hostname preserved", "api.example.com is down", "api.example.com is down"},

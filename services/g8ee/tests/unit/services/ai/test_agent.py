@@ -29,7 +29,7 @@ Tests:
 - _stream_with_tool_loop COMPLETE emission with token usage
 
 Run with:
-    ./scripts/testing/run_tests.sh g8ee -- tests/unit/services/ai/test_agent.py
+    ./g8e test g8ee -- tests/unit/services/ai/test_agent.py
 """
 
 from unittest.mock import MagicMock, patch

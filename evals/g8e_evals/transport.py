@@ -21,9 +21,7 @@ running g8e platform (g8ee Ensemble + Operator) over mTLS:
   - ``g8e_session`` cookie + ``X-G8E-*`` context headers
   - URL resolution for the g8ee Ensemble and Operator listen mode
 
-It exists to converge with the shell-side helpers in
-``scripts/cmd/common.sh`` (``_build_protocol_curl_args``,
-``_append_g8e_auth_headers``, ``_g8ee_curl``). A new required header
+It exists to converge with the Go CLI auth helpers. A new required header
 on either side will trip the parity contract test in
 ``evals/tests/test_auth_wiring_parity.py`` so the bench and
 ``./g8e chat send`` cannot silently diverge.
@@ -59,8 +57,7 @@ class AuthenticationError(Exception):
     """Raised when the canonical evals transport cannot resolve auth prerequisites."""
 
 
-# The session cookie name g8eo's auth middleware accepts. Mirrors
-# scripts/cmd/common.sh::_append_g8e_auth_headers.
+# The session cookie name g8eo's auth middleware accepts.
 SESSION_COOKIE_NAME = "g8e_session"
 
 # X-G8E-Source-Component value the shell helpers send.
@@ -71,9 +68,7 @@ SOURCE_COMPONENT_CLIENT = "client"
 class AuthContext:
     """Resolved transport + auth context for talking to g8ee + Operator.
 
-    Built once per bench run from the environment exported by
-    ``scripts/cmd/evals.sh`` (which itself sources the canonical
-    ``scripts/cmd/common.sh`` credential helpers).
+    Built once per bench run from the environment exported by the Go CLI.
     """
 
     g8ee_url: str
@@ -179,7 +174,7 @@ class AuthContext:
     def auth_headers(self) -> dict[str, str]:
         """Return the minimal header set required for Gateway (g8eo) auth.
 
-        Mirrors ``scripts/cmd/common.sh::_operator_curl``.
+        Mirrors the Go CLI auth headers.
         """
         headers: dict[str, str] = {
             HTTP_CONTENT_TYPE_HEADER: "application/json",

@@ -70,7 +70,7 @@ halve). GDD §14.10 suggests this as the start point."""
 
 BOOTSTRAP_SCALAR: float = 0.5
 """Neutral starting scalar for any agent that has no prior `reputation_state`
-row. Mirrors the value seeded by ``scripts/data/seed-reputation-state.py``."""
+row."""
 
 TRIBUNAL_HONEST_FOUR: tuple[str, ...] = (
     str(TribunalMember.AXIOM),

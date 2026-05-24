@@ -236,9 +236,6 @@ func isCloudCLICommand(command string, args []string) (bool, string) {
 
 // ExecuteCommand executes a command with security controls and resource limits
 func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.ExecutionRequestPayload) (*models.ExecutionResultsPayload, error) {
-	es.wg.Add(1)
-	defer es.wg.Done()
-
 	es.logger.Info("Executing command",
 		"execution_id", request.ExecutionID,
 		"case_id", request.CaseID,
@@ -282,7 +279,6 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	// Acquire semaphore for concurrency control
 	select {
 	case es.semaphore <- struct{}{}:
-		defer func() { <-es.semaphore }()
 	case <-ctx.Done():
 		return nil, fmt.Errorf("execution cancelled while waiting for available slot")
 	}
@@ -312,11 +308,17 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	es.activeExecutions[request.ExecutionID] = execCtx
 	es.executionsMutex.Unlock()
 
-	// Cleanup function
+	// Add to wait group after tracking is established
+	es.wg.Add(1)
+
+	// Unified cleanup function: ensures map cleanup, semaphore release, and wg.Done happen atomically
+	// This prevents race conditions where the map might not be cleared even after wg.Wait() completes
 	defer func() {
 		es.executionsMutex.Lock()
 		delete(es.activeExecutions, request.ExecutionID)
 		es.executionsMutex.Unlock()
+		<-es.semaphore
+		es.wg.Done()
 	}()
 
 	// Create timeout context - use exactly what was requested

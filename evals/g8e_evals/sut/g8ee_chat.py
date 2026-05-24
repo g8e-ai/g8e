@@ -131,8 +131,7 @@ class G8eeChatSUT:
         self.on_event = on_event
         self.idle_timeout_s = idle_timeout_s
         # Canonical transport/auth wiring - single source of truth shared
-        # with the shell-side helpers in scripts/cmd/common.sh. See
-        # evals/tests/test_auth_wiring_parity.py for the contract test.
+        # with the Go CLI. See evals/tests/test_auth_wiring_parity.py for the contract test.
         self.env = AuthContext.from_env(
             operator_session_id=config.operator_session_id,
             operator_url=config.operator_url,

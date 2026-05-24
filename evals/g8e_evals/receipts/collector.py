@@ -27,9 +27,8 @@ class ReceiptCollector:
 
     The Operator audit routes require client-cert auth + the standard g8e
     context headers; using the shared :class:`AuthContext` keeps this in
-    lockstep with ``scripts/cmd/common.sh::_operator_curl`` so a new
-    required header on either side trips the parity contract test rather
-    than silently 401'ing the bench.
+    lockstep with the Go CLI so a new required header on either side trips
+    the parity contract test rather than silently 401'ing the bench.
     """
 
     def __init__(

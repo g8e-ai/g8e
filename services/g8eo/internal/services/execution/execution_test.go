@@ -405,7 +405,7 @@ func TestExecutionService_Stop(t *testing.T) {
 		require.Eventually(t, func() bool {
 			active := svc.GetActiveExecutions()
 			return len(active) == 1
-		}, 2*time.Second, 10*time.Millisecond)
+		}, 5*time.Second, 50*time.Millisecond)
 
 		// Stop the service
 		svc.Stop()

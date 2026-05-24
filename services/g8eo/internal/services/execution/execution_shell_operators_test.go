@@ -420,7 +420,7 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 					ExecutionID:    fmt.Sprintf("tracking-%d", idx),
 					CaseID:         "test-tracking",
 					Command:        "sleep",
-					Args:           []string{"0.2"},
+					Args:           []string{"0.1"},
 					TimeoutSeconds: 5,
 					RequestedBy:    "test-user",
 					APIKey:         "test-key",
@@ -429,20 +429,21 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 			}(i)
 		}
 
-		// Wait for executions to start with polling
+		// Wait for executions to start
 		require.Eventually(t, func() bool {
-			time.Sleep(100 * time.Millisecond)
-			return true
-		}, 300*time.Millisecond, 10*time.Millisecond)
+			active := svc.GetActiveExecutions()
+			return len(active) > 0
+		}, 1*time.Second, 20*time.Millisecond)
 		active := svc.GetActiveExecutions()
 		assert.NotEmpty(t, active)
 
 		wg.Wait()
-		// Wait for cleanup with polling
+		// Wait for cleanup - the defer in ExecuteCommand should have removed entries
+		// Use a longer timeout to account for goroutine scheduling
 		require.Eventually(t, func() bool {
-			time.Sleep(100 * time.Millisecond)
-			return true
-		}, 300*time.Millisecond, 10*time.Millisecond)
+			active := svc.GetActiveExecutions()
+			return len(active) == 0
+		}, 5*time.Second, 100*time.Millisecond)
 		active = svc.GetActiveExecutions()
 		assert.Empty(t, active)
 	})

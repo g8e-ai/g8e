@@ -522,7 +522,8 @@ func TestA2AGateway_EndToEnd(t *testing.T) {
 		}
 		err = json.NewDecoder(resp.Body).Decode(&a2aRes)
 		require.NoError(t, err)
-		require.Equal(t, "suspended", a2aRes.Status)
+		// The L3 notary rejects, so the transaction should be suspended
+		require.Equal(t, "suspended", a2aRes.Status, "expected suspended status, got: %s", a2aRes.Status)
 		require.NotEmpty(t, a2aRes.ApprovalURL)
 	})
 }

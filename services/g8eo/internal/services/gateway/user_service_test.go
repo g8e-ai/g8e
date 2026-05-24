@@ -26,18 +26,16 @@ import (
 )
 
 func TestUserService_CreateBootstrapUser(t *testing.T) {
-	t.Parallel()
-	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-
-	userSvc := NewUserService(db, logger)
-
 	t.Run("Success - creates bootstrap user", func(t *testing.T) {
 		t.Parallel()
+		logger := testutil.NewTestLogger()
+		dbDir := t.TempDir()
+		secretsDir := t.TempDir()
+		db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.Close() })
+
+		userSvc := NewUserService(db, logger)
 		user, err := userSvc.CreateBootstrapUser()
 		require.NoError(t, err)
 		require.NotNil(t, user)
@@ -47,8 +45,19 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 
 	t.Run("Success - second bootstrap user fails", func(t *testing.T) {
 		t.Parallel()
-		// First bootstrap user already exists from previous test
-		_, err := userSvc.CreateBootstrapUser()
+		logger := testutil.NewTestLogger()
+		dbDir := t.TempDir()
+		secretsDir := t.TempDir()
+		db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.Close() })
+
+		userSvc := NewUserService(db, logger)
+		// Create first bootstrap user
+		_, err = userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		// Second bootstrap user should fail
+		_, err = userSvc.CreateBootstrapUser()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "bootstrap user already exists")
 	})

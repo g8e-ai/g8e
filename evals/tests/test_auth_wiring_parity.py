@@ -11,12 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Contract test: evals Python transport must match shell-side auth wiring.
+"""Contract test: evals Python transport must match CLI-side auth wiring.
 
-The evals harness (``g8e_evals.transport.AuthContext``) and the shell
-helpers in ``scripts/cmd/common.sh`` (``_build_protocol_curl_args`` +
-``_append_g8e_auth_headers``) encode the *same* recipe for reaching
-the running platform:
+The evals harness (``g8e_evals.transport.AuthContext``) and the Go CLI
+encode the *same* recipe for reaching the running platform:
 
   - mTLS trust bundle (--cacert)
   - mTLS client cert + key (--cert / --key)
@@ -237,12 +235,11 @@ def test_auth_wiring_matches_shell_helpers(fake_pki):
     assert py["cookies"].get(SESSION_COOKIE_NAME) == env["G8E_OPERATOR_SESSION_ID"]
 
     # Header parity - the canary. Any new required header added to
-    # _append_g8e_auth_headers but not AuthContext.auth_headers
+    # CLI auth headers but not AuthContext.auth_headers
     # (or vice versa) lights this up.
     assert shell["headers"] == py["headers"], (
-        "Auth header drift between scripts/cmd/common.sh and "
-        "evals/g8e_evals/transport.py.\n"
-        f"  shell only: {set(shell['headers']) - set(py['headers'])}\n"
+        "Auth header drift between Go CLI and evals/g8e_evals/transport.py.\n"
+        f"  CLI only: {set(shell['headers']) - set(py['headers'])}\n"
         f"  python only: {set(py['headers']) - set(shell['headers'])}"
     )
 
