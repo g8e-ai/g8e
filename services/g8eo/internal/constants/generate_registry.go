@@ -30,6 +30,7 @@ type JSONEntry struct {
 	Value       interface{} `json:"value"`
 	GoConst     string      `json:"_go_const"`
 	PythonConst string      `json:"_python_const"`
+	Mutation    bool        `json:"_mutation"`
 }
 
 // NestedStatusEntry represents the nested structure of status.json
@@ -609,6 +610,24 @@ func generateStatusConstants(status map[string]map[string]JSONEntry) string {
 		sb.WriteString("\t}\n")
 		sb.WriteString("\n")
 		sb.WriteString("\treturn nil\n")
+		sb.WriteString("}\n\n")
+
+		sb.WriteString("// IsMutation returns true if the action type modifies system state.\n")
+		sb.WriteString("// This is a strongly-typed intrinsic property of the action definition.\n")
+		sb.WriteString("// Mutation classification is defined in protocol/constants/status.json via the _mutation field.\n")
+		sb.WriteString("// Actions marked as mutations require L3 Notary (human-presence) verification.\n")
+		sb.WriteString("func IsMutation(actionType ActionType) bool {\n")
+		sb.WriteString("\tswitch actionType {\n")
+		for _, key := range keys {
+			entry := actionTypes[key]
+			if entry.GoConst != "" && entry.Mutation {
+				sb.WriteString(fmt.Sprintf("\tcase %s:\n", entry.GoConst))
+				sb.WriteString("\t\treturn true\n")
+			}
+		}
+		sb.WriteString("\tdefault:\n")
+		sb.WriteString("\t\treturn false\n")
+		sb.WriteString("\t}\n")
 		sb.WriteString("}\n\n")
 
 		sb.WriteString("// init validates action type SSOT at package load time.\n")

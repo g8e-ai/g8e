@@ -97,7 +97,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 	}
 
 	// Verify the envelope
-	verified, err := verifier.VerifyEnvelope(envelope)
+	verified, err := verifier.VerifyEnvelope(context.Background(), envelope)
 	if err != nil {
 		t.Fatalf("VerifyEnvelope failed: %v", err)
 	}

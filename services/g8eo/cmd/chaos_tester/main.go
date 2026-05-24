@@ -625,7 +625,7 @@ func fireOne(
 	cnt *counters,
 	batchWriter *batchEventWriter,
 ) {
-	_, verErr := verifier.VerifyEnvelope(env)
+	_, verErr := verifier.VerifyEnvelope(context.Background(), env)
 	if verErr != nil {
 		reason := classifyRejection(verErr)
 		logger.Info("envelope rejected",

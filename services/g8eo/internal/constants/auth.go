@@ -40,3 +40,12 @@ const (
 	LeafTypeHub      = "hub"
 	LeafTypeCLI      = "cli"
 )
+
+// ContextKey is a custom type for context keys to avoid collisions.
+type ContextKey string
+
+const (
+ContextKeyUserID    ContextKey = "user_id"
+ContextKeyAppID     ContextKey = "app_id"
+ContextKeyAppPolicy ContextKey = "app_policy"
+)
