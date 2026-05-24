@@ -204,31 +204,31 @@ func (db *DB) QueryWithRetry(query string, args ...interface{}) (*sql.Rows, erro
 }
 
 // QueryRowWithRetry executes a query that returns a single row with automatic retry on SQLITE_BUSY.
-// Returns the row and an error (nil on success).
-func (db *DB) QueryRowWithRetry(query string, args ...interface{}) (*sql.Row, error) {
+// Returns the row, which will yield the error on .Scan() or .Err() if all retries fail.
+func (db *DB) QueryRowWithRetry(query string, args ...interface{}) *sql.Row {
 	maxRetries := 10
-	var lastErr error
+	var lastRow *sql.Row
 
 	for i := 0; i < maxRetries; i++ {
 		row := db.QueryRow(query, args...)
 		err := row.Err()
 		if err == nil {
-			return row, nil
+			return row
 		}
 
-		lastErr = err
+		lastRow = row
 		if isBusyError(err) {
 			db.logger.Debug("Database busy, retrying query row", "attempt", i+1, "max_retries", maxRetries)
 			time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
 			continue
 		}
 
-		// Non-busy error, return the row with the error
-		return row, err
+		// Non-busy error, return the row
+		return row
 	}
 
 	// All retries exhausted
-	return nil, fmt.Errorf("query row failed after %d retries: %w", maxRetries, lastErr)
+	return lastRow
 }
 
 // isBusyError checks if an error is a SQLITE_BUSY error.
@@ -253,4 +253,52 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// ExecInTxWithRetry executes a function within a transaction with automatic retry on SQLITE_BUSY.
+// The function receives the transaction and should return an error if the transaction should be rolled back.
+// If the function returns nil, the transaction is committed.
+// This handles SQLITE_BUSY errors at both the Begin() and Commit() stages.
+func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
+	maxRetries := 10
+	var lastErr error
+
+	for i := 0; i < maxRetries; i++ {
+		tx, err := db.Begin()
+		if err != nil {
+			if isBusyError(err) {
+				db.logger.Debug("Database busy, retrying transaction begin", "attempt", i+1, "max_retries", maxRetries)
+				time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
+				lastErr = err
+				continue
+			}
+			return fmt.Errorf("failed to begin transaction: %w", err)
+		}
+
+		err = fn(tx)
+		if err != nil {
+			_ = tx.Rollback()
+			if isBusyError(err) {
+				db.logger.Debug("Database busy during transaction, retrying", "attempt", i+1, "max_retries", maxRetries)
+				time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
+				lastErr = err
+				continue
+			}
+			return err
+		}
+
+		if err := tx.Commit(); err != nil {
+			if isBusyError(err) {
+				db.logger.Debug("Database busy during commit, retrying", "attempt", i+1, "max_retries", maxRetries)
+				time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
+				lastErr = err
+				continue
+			}
+			return fmt.Errorf("failed to commit transaction: %w", err)
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("transaction failed after %d retries: %w", maxRetries, lastErr)
 }

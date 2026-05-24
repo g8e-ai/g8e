@@ -264,7 +264,7 @@ func (ls *LocalStoreService) StoreExecution(record *ExecutionRecord) error {
 		stderr_size = excluded.stderr_size
 	`
 
-	_, err := ls.db.Exec(query,
+	_, err := ls.db.ExecWithRetry(query,
 		record.ID,
 		sqliteutil.FormatTimestamp(record.TimestampUTC),
 		record.Command,
@@ -309,7 +309,7 @@ func (ls *LocalStoreService) GetExecution(executionID string) (*ExecutionRecord,
 	FROM execution_log WHERE id = ?
 	`
 
-	row := ls.db.QueryRow(query, executionID)
+	row := ls.db.QueryRowWithRetry(query, executionID)
 
 	var record ExecutionRecord
 	var stdoutCompressed, stderrCompressed []byte
@@ -510,7 +510,7 @@ func (ls *LocalStoreService) KVSet(key, value string, ttlSeconds int) error {
 		value = excluded.value,
 		expires_at = excluded.expires_at
 	`
-	_, err := ls.db.Exec(query, key, valueToStore, expiresAt)
+	_, err := ls.db.ExecWithRetry(query, key, valueToStore, expiresAt)
 	return err
 }
 
@@ -527,7 +527,7 @@ func (ls *LocalStoreService) KVGet(key string) (string, bool) {
 	`
 	now := sqliteutil.FormatTimestamp(time.Now())
 	var value string
-	err := ls.db.QueryRow(query, key, now).Scan(&value)
+	err := ls.db.QueryRowWithRetry(query, key, now).Scan(&value)
 	if err != nil {
 		return "", false
 	}
@@ -555,7 +555,7 @@ func (ls *LocalStoreService) KVScanPrefix(prefix string) (map[string]string, err
 	WHERE key LIKE ? AND (expires_at IS NULL OR expires_at > ?)
 	`
 	now := sqliteutil.FormatTimestamp(time.Now())
-	rows, err := ls.db.Query(query, prefix+"%", now)
+	rows, err := ls.db.QueryWithRetry(query, prefix+"%", now)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan keys: %w", err)
 	}
@@ -585,7 +585,7 @@ func (ls *LocalStoreService) KVDelete(key string) error {
 	ls.wg.Add(1)
 	defer ls.wg.Done()
 
-	_, err := ls.db.Exec("DELETE FROM kv WHERE key = ?", key)
+	_, err := ls.db.ExecWithRetry("DELETE FROM kv WHERE key = ?", key)
 	return err
 }
 
@@ -622,7 +622,7 @@ func (ls *LocalStoreService) StoreFileDiff(record *FileDiffRecord) error {
 		diff_size = excluded.diff_size
 	`
 
-	_, err := ls.db.Exec(query,
+	_, err := ls.db.ExecWithRetry(query,
 		record.ID,
 		sqliteutil.FormatTimestamp(record.TimestampUTC),
 		record.FilePath,
@@ -665,7 +665,7 @@ func (ls *LocalStoreService) GetFileDiff(diffID string) (*FileDiffRecord, error)
 	FROM file_diff_log WHERE id = ?
 	`
 
-	row := ls.db.QueryRow(query, diffID)
+	row := ls.db.QueryRowWithRetry(query, diffID)
 
 	var record FileDiffRecord
 	var diffCompressed []byte
@@ -753,7 +753,7 @@ func (ls *LocalStoreService) GetFileDiffsBySession(operatorSessionID string, lim
 	LIMIT ?
 	`
 
-	rows, err := ls.db.Query(query, operatorSessionID, limit)
+	rows, err := ls.db.QueryWithRetry(query, operatorSessionID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query file diffs: %w", err)
 	}
@@ -842,7 +842,7 @@ func (ls *LocalStoreService) StoreSuspendedTransaction(tx *SuspendedTransaction)
 		envelope = excluded.envelope,
 		expires_at = excluded.expires_at
 	`
-	_, err := ls.db.Exec(
+	_, err := ls.db.ExecWithRetry(
 		query,
 		tx.TransactionHash,
 		string(tx.Envelope),
@@ -866,7 +866,7 @@ func (ls *LocalStoreService) GetSuspendedTransaction(txHash string) (*SuspendedT
 		return nil, false
 	}
 	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID sql.NullString
-	err := ls.db.QueryRow(
+	err := ls.db.QueryRowWithRetry(
 		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
 		txHash, sqliteutil.NowTimestamp(),
 	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID)
@@ -909,12 +909,12 @@ func (ls *LocalStoreService) ListSuspendedTransactions(userID string) ([]*Suspen
 	var err error
 
 	if userID != "" {
-		rows, err = ls.db.Query(
+		rows, err = ls.db.QueryWithRetry(
 			"SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC",
 			userID, sqliteutil.NowTimestamp(),
 		)
 	} else {
-		rows, err = ls.db.Query(
+		rows, err = ls.db.QueryWithRetry(
 			"SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC",
 			sqliteutil.NowTimestamp(),
 		)
@@ -965,7 +965,7 @@ func (ls *LocalStoreService) DeleteSuspendedTransaction(txHash string) error {
 	if ls == nil || ls.db == nil {
 		return fmt.Errorf("local store not initialized")
 	}
-	_, err := ls.db.Exec("DELETE FROM suspended_transactions WHERE transaction_hash = ?", txHash)
+	_, err := ls.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE transaction_hash = ?", txHash)
 	if err != nil {
 		return fmt.Errorf("failed to delete suspended transaction: %w", err)
 	}
@@ -978,7 +978,7 @@ func (ls *LocalStoreService) CleanupExpiredSuspendedTransactions() (int64, error
 	if ls == nil || ls.db == nil {
 		return 0, nil
 	}
-	result, err := ls.db.Exec("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
+	result, err := ls.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
 	if err != nil {
 		return 0, fmt.Errorf("failed to cleanup expired suspended transactions: %w", err)
 	}

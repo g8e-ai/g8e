@@ -120,7 +120,7 @@ func OpenGatewayDBService(dataDir string, secretsDir string, logger *slog.Logger
 }
 
 func (s *GatewayDBService) initTestSchema(secretsDir string) error {
-	_, err := s.db.Exec(gatewaySchema)
+	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func (s *GatewayDBService) initTestSchema(secretsDir string) error {
 
 func (s *GatewayDBService) initStateRoot() error {
 	var count int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM state_root").Scan(&count)
+	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM state_root").Scan(&count)
 	if err != nil {
 		return err
 	}
@@ -158,7 +158,7 @@ func (s *GatewayDBService) initStateRoot() error {
 		if err != nil {
 			return err
 		}
-		_, err = s.db.Exec(
+		_, err = s.db.ExecWithRetry(
 			"INSERT INTO state_root (id, root, updated_at) VALUES (1, ?, ?)",
 			root,
 			sqliteutil.FormatTimestamp(time.Now().UTC()),
@@ -174,7 +174,7 @@ func (s *GatewayDBService) GetCurrentStateRoot() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = s.db.Exec(
+	_, err = s.db.ExecWithRetry(
 		`INSERT INTO state_root (id, root, updated_at)
 		 VALUES (1, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET root = excluded.root, updated_at = excluded.updated_at`,
@@ -198,7 +198,7 @@ func (s *GatewayDBService) calculateStateRoot() (string, error) {
 	// 1. Documents (Authoritative)
 	// Exclude metadata-only timestamps (created_at, updated_at) to ensure
 	// the state root only changes when the content actually changes.
-	docRows, err := s.db.Query("SELECT collection, id, data FROM documents ORDER BY collection, id")
+	docRows, err := s.db.QueryWithRetry("SELECT collection, id, data FROM documents ORDER BY collection, id")
 	if err != nil {
 		return "", err
 	}
@@ -221,7 +221,7 @@ func (s *GatewayDBService) calculateStateRoot() (string, error) {
 	// 2. KV Store (Authoritative)
 	// Filter for active entries only. Exclude created_at.
 	// expires_at IS included because it affects the active state of the entry.
-	kvRows, err := s.db.Query("SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", now)
+	kvRows, err := s.db.QueryWithRetry("SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", now)
 	if err != nil {
 		return "", err
 	}
@@ -242,7 +242,7 @@ func (s *GatewayDBService) calculateStateRoot() (string, error) {
 	// 3. Blobs (Authoritative)
 	// Filter for active entries only. Exclude created_at.
 	// data is included (as hex for JSON determinism).
-	blobRows, err := s.db.Query("SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", now)
+	blobRows, err := s.db.QueryWithRetry("SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", now)
 	if err != nil {
 		return "", err
 	}
@@ -284,7 +284,7 @@ func (s *GatewayDBService) CheckAndSetNonce(nonce string, expiresAt time.Time) (
 func (s *GatewayDBService) ReserveNonce(nonce string, expiresAt time.Time) (bool, error) {
 	// 1. Check if exists
 	var existing string
-	err := s.db.QueryRow("SELECT nonce FROM nonces WHERE nonce = ?", nonce).Scan(&existing)
+	err := s.db.QueryRowWithRetry("SELECT nonce FROM nonces WHERE nonce = ?", nonce).Scan(&existing)
 	if err == nil {
 		return true, nil // Replay detected
 	}
@@ -294,7 +294,7 @@ func (s *GatewayDBService) ReserveNonce(nonce string, expiresAt time.Time) (bool
 
 	// 2. Not used, insert as reserved
 	expStr := sqliteutil.FormatTimestamp(expiresAt)
-	_, err = s.db.Exec("INSERT INTO nonces (nonce, expires_at, status) VALUES (?, ?, 'reserved')", nonce, expStr)
+	_, err = s.db.ExecWithRetry("INSERT INTO nonces (nonce, expires_at, status) VALUES (?, ?, 'reserved')", nonce, expStr)
 	if err != nil {
 		// Concurrent insert might fail with constraint violation - that's a replay
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -308,7 +308,7 @@ func (s *GatewayDBService) ReserveNonce(nonce string, expiresAt time.Time) (bool
 
 // FinalizeNonce marks a reserved nonce as fully consumed.
 func (s *GatewayDBService) FinalizeNonce(nonce string) error {
-	_, err := s.db.Exec("UPDATE nonces SET status = 'used' WHERE nonce = ? AND status = 'reserved'", nonce)
+	_, err := s.db.ExecWithRetry("UPDATE nonces SET status = 'used' WHERE nonce = ? AND status = 'reserved'", nonce)
 	if err != nil {
 		return fmt.Errorf("failed to finalize nonce: %w", err)
 	}
@@ -317,7 +317,7 @@ func (s *GatewayDBService) FinalizeNonce(nonce string) error {
 
 // ReleaseNonce removes a reservation for a failed transaction.
 func (s *GatewayDBService) ReleaseNonce(nonce string) error {
-	_, err := s.db.Exec("DELETE FROM nonces WHERE nonce = ? AND status = 'reserved'", nonce)
+	_, err := s.db.ExecWithRetry("DELETE FROM nonces WHERE nonce = ? AND status = 'reserved'", nonce)
 	if err != nil {
 		return fmt.Errorf("failed to release nonce: %w", err)
 	}
@@ -337,19 +337,19 @@ func (s *GatewayDBService) RunMaintenance(ctx context.Context) {
 		case <-ticker.C:
 			now := sqliteutil.NowTimestamp()
 			// KV store
-			_, _ = s.db.Exec("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+			_, _ = s.db.ExecWithRetry("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 			// Blobs
-			_, _ = s.db.Exec("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+			_, _ = s.db.ExecWithRetry("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 			// Nonces
-			_, _ = s.db.Exec("DELETE FROM nonces WHERE expires_at < ?", now)
+			_, _ = s.db.ExecWithRetry("DELETE FROM nonces WHERE expires_at < ?", now)
 			// Suspended transactions
-			_, _ = s.db.Exec("DELETE FROM suspended_transactions WHERE expires_at < ?", now)
+			_, _ = s.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", now)
 		}
 	}
 }
 
 func (s *GatewayDBService) initSchema(secretsDir string) error {
-	_, err := s.db.Exec(gatewaySchema)
+	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return err
 	}
@@ -381,7 +381,7 @@ func (s *GatewayDBService) runDataMigrations() error {
 	// This is a one-time migration that removes the old plaintext secret fields
 	// from the app_settings document, since secrets are now stored in the keystore.
 	var count int
-	err := s.db.QueryRow(
+	err := s.db.QueryRowWithRetry(
 		"SELECT COUNT(*) FROM documents WHERE collection = 'settings' AND id = 'app_settings'",
 	).Scan(&count)
 	if err != nil {
@@ -394,7 +394,7 @@ func (s *GatewayDBService) runDataMigrations() error {
 
 	// Check if migration already applied by checking for the old secret fields
 	var hasSecrets int
-	err = s.db.QueryRow(
+	err = s.db.QueryRowWithRetry(
 		"SELECT COUNT(*) FROM documents WHERE collection = 'settings' AND id = 'app_settings' AND (json_extract(data, '$.settings.session_encryption_key') IS NOT NULL OR json_extract(data, '$.settings.actuator_signing_key') IS NOT NULL OR json_extract(data, '$.settings.auditor_hmac_key') IS NOT NULL)",
 	).Scan(&hasSecrets)
 	if err != nil {
@@ -406,7 +406,7 @@ func (s *GatewayDBService) runDataMigrations() error {
 	}
 
 	// Apply the migration
-	_, err = s.db.Exec(
+	_, err = s.db.ExecWithRetry(
 		`UPDATE documents
 		 SET data = json_remove(
 			 json_remove(
@@ -549,7 +549,7 @@ func (s *GatewayDBService) Wait() {
 func (s *GatewayDBService) DocGet(collection, id string) (*models.Document, error) {
 	var dataJSON string
 	var createdAtStr, updatedAtStr string
-	err := s.db.QueryRow(
+	err := s.db.QueryRowWithRetry(
 		"SELECT data, created_at, updated_at FROM documents WHERE collection = ? AND id = ?",
 		collection, id,
 	).Scan(&dataJSON, &createdAtStr, &updatedAtStr)
@@ -584,7 +584,7 @@ func (s *GatewayDBService) DocCreate(collection, id string, data json.RawMessage
 	now := time.Now().UTC()
 	nowStr := sqliteutil.FormatTimestamp(now)
 
-	_, err = s.db.Exec(
+	_, err = s.db.ExecWithRetry(
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)`,
 		collection, id, string(dataJSON), nowStr, nowStr,
@@ -618,7 +618,7 @@ func (s *GatewayDBService) DocSet(collection, id string, data json.RawMessage) e
 	now := time.Now().UTC()
 	nowStr := sqliteutil.FormatTimestamp(now)
 
-	_, err = s.db.Exec(
+	_, err = s.db.ExecWithRetry(
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(collection, id) DO UPDATE SET
@@ -634,7 +634,7 @@ func (s *GatewayDBService) DocSet(collection, id string, data json.RawMessage) e
 func (s *GatewayDBService) DocUpdate(collection, id string, fields json.RawMessage) (*models.Document, error) {
 	var existingJSON string
 	var createdAtStr, updatedAtStr string
-	err := s.db.QueryRow(
+	err := s.db.QueryRowWithRetry(
 		"SELECT data, created_at, updated_at FROM documents WHERE collection = ? AND id = ?",
 		collection, id,
 	).Scan(&existingJSON, &createdAtStr, &updatedAtStr)
@@ -674,7 +674,7 @@ func (s *GatewayDBService) DocUpdate(collection, id string, fields json.RawMessa
 	now := time.Now().UTC()
 	nowStr := sqliteutil.FormatTimestamp(now)
 
-	_, err = s.db.Exec(
+	_, err = s.db.ExecWithRetry(
 		"UPDATE documents SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
 		string(dataJSON), nowStr, collection, id,
 	)
@@ -687,7 +687,7 @@ func (s *GatewayDBService) DocUpdate(collection, id string, fields json.RawMessa
 
 // DocDelete removes a document. Returns (true, nil) if deleted, (false, nil) if not found.
 func (s *GatewayDBService) DocDelete(collection, id string) (bool, error) {
-	result, err := s.db.Exec(
+	result, err := s.db.ExecWithRetry(
 		"DELETE FROM documents WHERE collection = ? AND id = ?",
 		collection, id,
 	)
@@ -704,7 +704,7 @@ func (s *GatewayDBService) DocDelete(collection, id string) (bool, error) {
 // DocDeleteNamespace removes all documents in a collection.
 // Returns the count of deleted documents.
 func (s *GatewayDBService) DocDeleteNamespace(collection string) (int64, error) {
-	result, err := s.db.Exec("DELETE FROM documents WHERE collection = ?", collection)
+	result, err := s.db.ExecWithRetry("DELETE FROM documents WHERE collection = ?", collection)
 	if err != nil {
 		return 0, err
 	}
@@ -715,7 +715,7 @@ func (s *GatewayDBService) DocDeleteNamespace(collection string) (int64, error) 
 // This is used for JIT field resolution with governed access controls.
 func (s *GatewayDBService) GetField(collection, id, fieldPath string) (interface{}, error) {
 	var dataJSON string
-	err := s.db.QueryRow(
+	err := s.db.QueryRowWithRetry(
 		"SELECT data FROM documents WHERE collection = ? AND id = ?",
 		collection, id,
 	).Scan(&dataJSON)
@@ -734,7 +734,7 @@ func (s *GatewayDBService) GetField(collection, id, fieldPath string) (interface
 	// Convert dot notation to JSON path (e.g., "metadata.tags" -> "$.metadata.tags")
 	jsonPath := "$." + fieldPath
 
-	err = s.db.QueryRow(query, jsonPath, collection, id).Scan(&fieldValue)
+	err = s.db.QueryRowWithRetry(query, jsonPath, collection, id).Scan(&fieldValue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract field %s: %w", fieldPath, err)
 	}
@@ -828,7 +828,7 @@ func (s *GatewayDBService) DocQuery(collection string, filters []models.DocFilte
 		args = append(args, limit)
 	}
 
-	rows, err := s.db.Query(query.String(), args...)
+	rows, err := s.db.QueryWithRetry(query.String(), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -987,7 +987,7 @@ func (s *GatewayDBService) KVGet(key string) (string, bool) {
 	// for a separate lazy-delete goroutine (which risked deadlocks).
 	// Expired entries are cleaned up by RunTTLCleanup instead.
 	var value string
-	err := s.db.QueryRow(
+	err := s.db.QueryRowWithRetry(
 		"SELECT value FROM kv_store WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)",
 		key, sqliteutil.NowTimestamp(),
 	).Scan(&value)
@@ -1006,7 +1006,7 @@ func (s *GatewayDBService) KVSet(key, value string, ttlSeconds int) error {
 		expiresAt = &exp
 	}
 
-	_, err := s.db.Exec(
+	_, err := s.db.ExecWithRetry(
 		`INSERT INTO kv_store (key, value, created_at, expires_at)
 		 VALUES (?, ?, ?, ?)
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at`,
@@ -1017,13 +1017,13 @@ func (s *GatewayDBService) KVSet(key, value string, ttlSeconds int) error {
 
 // KVDelete removes a key.
 func (s *GatewayDBService) KVDelete(key string) error {
-	_, err := s.db.Exec("DELETE FROM kv_store WHERE key = ?", key)
+	_, err := s.db.ExecWithRetry("DELETE FROM kv_store WHERE key = ?", key)
 	return err
 }
 
 // KVDeletePattern removes all keys matching a glob pattern (uses SQL GLOB).
 func (s *GatewayDBService) KVDeletePattern(pattern string) (int64, error) {
-	result, err := s.db.Exec("DELETE FROM kv_store WHERE key GLOB ?", pattern)
+	result, err := s.db.ExecWithRetry("DELETE FROM kv_store WHERE key GLOB ?", pattern)
 	if err != nil {
 		return 0, err
 	}
@@ -1032,7 +1032,7 @@ func (s *GatewayDBService) KVDeletePattern(pattern string) (int64, error) {
 
 // KVKeys returns all keys matching a glob pattern.
 func (s *GatewayDBService) KVKeys(pattern string) ([]string, error) {
-	rows, err := s.db.Query(
+	rows, err := s.db.QueryWithRetry(
 		"SELECT key FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?)",
 		pattern, sqliteutil.NowTimestamp(),
 	)
@@ -1060,7 +1060,7 @@ func (s *GatewayDBService) KVScan(pattern string, cursor, count int) (int, []str
 		count = 100
 	}
 	// Fetch count+1 to detect whether a next page exists
-	rows, err := s.db.Query(
+	rows, err := s.db.QueryWithRetry(
 		"SELECT key FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?) ORDER BY key LIMIT ? OFFSET ?",
 		pattern, sqliteutil.NowTimestamp(), count+1, cursor,
 	)
@@ -1096,7 +1096,7 @@ func (s *GatewayDBService) KVExists(key string) bool {
 // KVTTL returns the remaining TTL in seconds for a key. -1 if no expiry, -2 if not found.
 func (s *GatewayDBService) KVTTL(key string) int {
 	var expiresAt sql.NullString
-	err := s.db.QueryRow(
+	err := s.db.QueryRowWithRetry(
 		"SELECT expires_at FROM kv_store WHERE key = ?", key,
 	).Scan(&expiresAt)
 	if err != nil {
@@ -1119,7 +1119,7 @@ func (s *GatewayDBService) KVTTL(key string) int {
 // KVExpire sets a TTL on an existing key. Returns false if key not found.
 func (s *GatewayDBService) KVExpire(key string, ttlSeconds int) bool {
 	exp := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
-	result, err := s.db.Exec(
+	result, err := s.db.ExecWithRetry(
 		"UPDATE kv_store SET expires_at = ? WHERE key = ?", exp, key,
 	)
 	if err != nil {
@@ -1170,7 +1170,7 @@ func (s *GatewayDBService) SSEEventsAppend(route SSERoute, eventType, payload st
 		return err
 	}
 	now := sqliteutil.NowTimestamp()
-	_, err := s.db.Exec(
+	_, err := s.db.ExecWithRetry(
 		"INSERT INTO sse_events (web_session_id, cli_session_id, user_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
 		nullIfEmpty(route.WebSessionID), nullIfEmpty(route.CLISessionID), nullIfEmpty(route.UserID), eventType, payload, now,
 	)
@@ -1188,7 +1188,7 @@ func nullIfEmpty(s string) interface{} {
 
 // SSEEventsWipe deletes all rows from the sse_events table. Returns the number of rows deleted.
 func (s *GatewayDBService) SSEEventsWipe() (int64, error) {
-	result, err := s.db.Exec("DELETE FROM sse_events")
+	result, err := s.db.ExecWithRetry("DELETE FROM sse_events")
 	if err != nil {
 		return 0, err
 	}
@@ -1198,7 +1198,7 @@ func (s *GatewayDBService) SSEEventsWipe() (int64, error) {
 // SSEEventsCount returns the total number of rows in the sse_events table.
 func (s *GatewayDBService) SSEEventsCount() (int64, error) {
 	var count int64
-	err := s.db.QueryRow("SELECT COUNT(*) FROM sse_events").Scan(&count)
+	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM sse_events").Scan(&count)
 	return count, err
 }
 
@@ -1222,17 +1222,17 @@ func (s *GatewayDBService) SSEEventsListSince(route SSERoute, sinceID int64, lim
 	)
 	switch {
 	case route.WebSessionID != "":
-		rows, err = s.db.Query(
+		rows, err = s.db.QueryWithRetry(
 			"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE web_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
 			route.WebSessionID, sinceID, limit,
 		)
 	case route.CLISessionID != "":
-		rows, err = s.db.Query(
+		rows, err = s.db.QueryWithRetry(
 			"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE cli_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
 			route.CLISessionID, sinceID, limit,
 		)
 	default:
-		rows, err = s.db.Query(
+		rows, err = s.db.QueryWithRetry(
 			"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
 			route.UserID, sinceID, limit,
 		)
@@ -1251,7 +1251,7 @@ func (s *GatewayDBService) SSEEventsListAllSince(sinceID int64, limit int) ([]mo
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	rows, err := s.db.Query(
+	rows, err := s.db.QueryWithRetry(
 		"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
 		sinceID, limit,
 	)
@@ -1289,8 +1289,8 @@ func (s *GatewayDBService) RunTTLCleanup(ctx context.Context) {
 			return
 		case <-ticker.C:
 			now := sqliteutil.NowTimestamp()
-			_, _ = s.db.Exec("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
-			_, _ = s.db.Exec("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+			_, _ = s.db.ExecWithRetry("DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?", now)
+			_, _ = s.db.ExecWithRetry("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 		}
 	}
 }
@@ -1322,7 +1322,7 @@ func (s *GatewayDBService) BlobPut(namespace, id string, data []byte, contentTyp
 		expiresAt = &exp
 	}
 
-	_, err := s.db.Exec(
+	_, err := s.db.ExecWithRetry(
 		`INSERT INTO blobs (namespace, id, size, content_type, data, created_at, expires_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(namespace, id) DO UPDATE SET
@@ -1340,7 +1340,7 @@ func (s *GatewayDBService) BlobPut(namespace, id string, data []byte, contentTyp
 func (s *GatewayDBService) BlobGet(namespace, id string) ([]byte, string, bool) {
 	var data []byte
 	var contentType string
-	err := s.db.QueryRow(
+	err := s.db.QueryRowWithRetry(
 		"SELECT data, content_type FROM blobs WHERE namespace = ? AND id = ? AND (expires_at IS NULL OR expires_at > ?)",
 		namespace, id, sqliteutil.NowTimestamp(),
 	).Scan(&data, &contentType)
@@ -1355,7 +1355,7 @@ func (s *GatewayDBService) BlobGet(namespace, id string) ([]byte, string, bool) 
 func (s *GatewayDBService) BlobMeta(namespace, id string) (*BlobRecord, bool) {
 	var rec BlobRecord
 	var createdAtStr string
-	err := s.db.QueryRow(
+	err := s.db.QueryRowWithRetry(
 		"SELECT id, namespace, size, content_type, created_at FROM blobs WHERE namespace = ? AND id = ? AND (expires_at IS NULL OR expires_at > ?)",
 		namespace, id, sqliteutil.NowTimestamp(),
 	).Scan(&rec.ID, &rec.Namespace, &rec.Size, &rec.ContentType, &createdAtStr)
@@ -1372,7 +1372,7 @@ func (s *GatewayDBService) BlobMeta(namespace, id string) (*BlobRecord, bool) {
 
 // BlobDelete removes a single blob. Returns (true, nil) if deleted, (false, nil) if not found.
 func (s *GatewayDBService) BlobDelete(namespace, id string) (bool, error) {
-	result, err := s.db.Exec(
+	result, err := s.db.ExecWithRetry(
 		"DELETE FROM blobs WHERE namespace = ? AND id = ?",
 		namespace, id,
 	)
@@ -1389,7 +1389,7 @@ func (s *GatewayDBService) BlobDelete(namespace, id string) (bool, error) {
 // BlobDeleteNamespace removes all blobs under a namespace.
 // Returns the count of deleted blobs.
 func (s *GatewayDBService) BlobDeleteNamespace(namespace string) (int64, error) {
-	result, err := s.db.Exec("DELETE FROM blobs WHERE namespace = ?", namespace)
+	result, err := s.db.ExecWithRetry("DELETE FROM blobs WHERE namespace = ?", namespace)
 	if err != nil {
 		return 0, err
 	}
@@ -1410,7 +1410,7 @@ func (s *GatewayDBService) StoreSuspendedTransaction(tx *models.SuspendedTransac
 		toolArgsStr = string(tx.ToolArguments)
 	}
 
-	_, err := s.db.Exec(
+	_, err := s.db.ExecWithRetry(
 		`INSERT INTO suspended_transactions 
 		 (transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -1426,7 +1426,7 @@ func (s *GatewayDBService) StoreSuspendedTransaction(tx *models.SuspendedTransac
 // Returns (nil, false) if not found or expired.
 func (s *GatewayDBService) GetSuspendedTransaction(txHash string) (*models.SuspendedTransaction, bool) {
 	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID string
-	err := s.db.QueryRow(
+	err := s.db.QueryRowWithRetry(
 		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
 		txHash, sqliteutil.NowTimestamp(),
 	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID)
@@ -1467,12 +1467,12 @@ func (s *GatewayDBService) ListSuspendedTransactions(userID string) ([]*models.S
 	var err error
 
 	if userID != "" {
-		rows, err = s.db.Query(
+		rows, err = s.db.QueryWithRetry(
 			"SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC",
 			userID, sqliteutil.NowTimestamp(),
 		)
 	} else {
-		rows, err = s.db.Query(
+		rows, err = s.db.QueryWithRetry(
 			"SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC",
 			sqliteutil.NowTimestamp(),
 		)
@@ -1521,14 +1521,14 @@ func (s *GatewayDBService) ListSuspendedTransactions(userID string) ([]*models.S
 
 // DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
 func (s *GatewayDBService) DeleteSuspendedTransaction(txHash string) error {
-	_, err := s.db.Exec("DELETE FROM suspended_transactions WHERE transaction_hash = ?", txHash)
+	_, err := s.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE transaction_hash = ?", txHash)
 	return err
 }
 
 // CleanupExpiredSuspendedTransactions removes expired suspended transactions.
 // Returns the count of deleted transactions.
 func (s *GatewayDBService) CleanupExpiredSuspendedTransactions() (int64, error) {
-	result, err := s.db.Exec("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
+	result, err := s.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
 	if err != nil {
 		return 0, err
 	}

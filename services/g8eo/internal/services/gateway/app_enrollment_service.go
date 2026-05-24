@@ -14,21 +14,13 @@
 package gateway
 
 import (
-	"crypto/ed25519"
-	"crypto/rand"
 	"crypto/x509"
-	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/protocol"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 )
 
 // AppEnrollmentService handles external app enrollment with automatic L2 signer provisioning.
@@ -116,56 +108,11 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 		return &AppEnrollResponse{Success: false, Error: "CSR signature check failed"}, nil
 	}
 
-	// Generate Ed25519 key pair for L2 signing (Option A: auto-provision)
-	// Note: ed25519.GenerateKey returns (PublicKey, PrivateKey, error)
-	l2Pub, l2Priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		s.logger.Error("Failed to generate L2 signing key", "app_name", sanitizedName, "error", err)
-		return &AppEnrollResponse{Success: false, Error: "failed to generate L2 signing key"}, nil
-	}
-
-	// Add public key to TrustedSigner collection using atomic creation
-	trustedSigner := models.TrustedSigner{
-		ID:        appID,
-		PublicKey: hex.EncodeToString(l2Pub),
-		AddedAt:   time.Now().UTC(),
-		Enabled:   true,
-	}
-	signerBytes, err := json.Marshal(trustedSigner)
-	if err != nil {
-		return &AppEnrollResponse{Success: false, Error: "failed to marshal signer data"}, nil
-	}
-	if err := s.db.DocCreate(marshaler.CollectionName(constants.CollectionTrustedSigners), appID, signerBytes); err != nil {
-		if strings.Contains(err.Error(), "already exists") {
-			return &AppEnrollResponse{Success: false, Error: "app_name already registered"}, nil
-		}
-		s.logger.Error("Failed to store L2 signer", "app_id", appID, "error", err)
-		return &AppEnrollResponse{Success: false, Error: "failed to register L2 signer"}, nil
-	}
-
-	// Store L2 private key in SecretManager
-	// The app ID is used as the service name for key storage
-	if s.pki.secretManager == nil {
-		// Rollback: delete signer
-		_, _ = s.db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
-		return &AppEnrollResponse{Success: false, Error: "secret manager not available"}, nil
-	}
-	l2PrivDER := l2Priv.Seed()
-	if err := s.pki.secretManager.StoreServicePrivateKey(appID, l2PrivDER); err != nil {
-		s.logger.Error("Failed to store L2 private key", "app_id", appID, "error", err)
-		// Rollback: delete signer
-		_, _ = s.db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
-		return &AppEnrollResponse{Success: false, Error: fmt.Sprintf("failed to store L2 signing key: %v", err)}, nil
-	}
-
 	// Sign the CSR with the operator intermediate CA
 	// Use appID as the operatorID parameter for AppSPIFFEID generation
 	certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, "app", req.OrganizationID, appID, "", "")
 	if err != nil {
 		s.logger.Error("Failed to sign app CSR", "app_id", appID, "error", err)
-		// Rollback: delete signer and private key
-		_, _ = s.db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
-		_ = s.pki.secretManager.DeleteServicePrivateKey(appID)
 		return &AppEnrollResponse{Success: false, Error: "failed to sign certificate"}, nil
 	}
 
@@ -180,24 +127,17 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 	// Calculate expiry time from certificate
 	certBlock, _ := pem.Decode([]byte(certPEM))
 	if certBlock == nil {
-		// Rollback on error
-		_, _ = s.db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
-		_ = s.pki.secretManager.DeleteServicePrivateKey(appID)
 		return &AppEnrollResponse{Success: false, Error: "failed to parse issued certificate"}, nil
 	}
 	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
 	if err != nil {
-		// Rollback on error
-		_, _ = s.db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
-		_ = s.pki.secretManager.DeleteServicePrivateKey(appID)
 		return &AppEnrollResponse{Success: false, Error: "failed to parse issued certificate"}, nil
 	}
 
-	s.logger.Info("[APP_ENROLLMENT] External app enrolled",
+	s.logger.Info("[APP_ENROLLMENT] External app enrolled (identity only)",
 		"app_id", appID,
 		"app_name", sanitizedName,
-		"app_type", req.AppType,
-		"l2_signer_id", appID)
+		"app_type", req.AppType)
 
 	return &AppEnrollResponse{
 		Success:     true,
@@ -206,7 +146,8 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 		TrustBundle: string(trustBundle),
 		AppID:       appID,
 		ExpiresAt:   parsedCert.NotAfter.UTC().Format(time.RFC3339),
-		L2SignerID:  appID,
+		// L2SignerID is deliberately omitted as enrollment is identity-only by default.
+		// App policies and signers must be explicitly configured by an admin.
 	}, nil
 }
 

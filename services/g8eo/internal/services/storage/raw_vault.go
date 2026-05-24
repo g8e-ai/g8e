@@ -253,7 +253,7 @@ func (rv *RawVaultService) StoreRawExecution(record *RawExecutionRecord) error {
 			stderr_size = excluded.stderr_size
 	`
 
-	_, err := rv.db.Exec(query,
+	_, err := rv.db.ExecWithRetry(query,
 		record.ID,
 		sqliteutil.FormatTimestamp(record.TimestampUTC),
 		record.Command,
@@ -471,7 +471,7 @@ func (rv *RawVaultService) StoreRawFileDiff(record *RawFileDiffRecord) error {
 			diff_size = excluded.diff_size
 	`
 
-	_, err := rv.db.Exec(query,
+	_, err := rv.db.ExecWithRetry(query,
 		record.ID,
 		sqliteutil.FormatTimestamp(record.TimestampUTC),
 		record.FilePath,

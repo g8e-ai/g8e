@@ -14,6 +14,7 @@
 package sqliteutil
 
 import (
+	"database/sql"
 	"fmt"
 )
 
@@ -39,7 +40,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 // RunMigrations applies any unapplied migrations in order.
 // It creates the schema_version tracking table if it doesn't exist,
 // then applies each migration whose version is greater than the current max.
-// Each migration is run in its own implicit transaction.
+// Each migration is run in its own implicit transaction with SQLITE_BUSY retry.
 func (db *DB) RunMigrations(migrations []Migration) error {
 	// Ensure the schema_version table exists
 	if _, err := db.Exec(schemaVersionDDL); err != nil {
@@ -63,28 +64,24 @@ func (db *DB) RunMigrations(migrations []Migration) error {
 			"description", m.Description)
 
 		// Each migration and its version recording must be atomic
-		tx, err := db.Begin()
+		err := db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+			if _, err := tx.Exec(m.SQL); err != nil {
+				return fmt.Errorf("migration %d (%s) failed: %w", m.Version, m.Description, err)
+			}
+
+			// Record the migration
+			_, err := tx.Exec(
+				"INSERT INTO schema_version (version, description, applied_at) VALUES (?, ?, ?)",
+				m.Version, m.Description, NowTimestamp(),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to record migration %d: %w", m.Version, err)
+			}
+
+			return nil
+		})
 		if err != nil {
-			return fmt.Errorf("failed to start transaction for migration %d: %w", m.Version, err)
-		}
-
-		if _, err := tx.Exec(m.SQL); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("migration %d (%s) failed: %w", m.Version, m.Description, err)
-		}
-
-		// Record the migration
-		_, err = tx.Exec(
-			"INSERT INTO schema_version (version, description, applied_at) VALUES (?, ?, ?)",
-			m.Version, m.Description, NowTimestamp(),
-		)
-		if err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("failed to record migration %d: %w", m.Version, err)
-		}
-
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("failed to commit transaction for migration %d: %w", m.Version, err)
+			return err
 		}
 
 		db.logger.Info("Schema migration applied",
