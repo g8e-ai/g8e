@@ -206,6 +206,9 @@ func (ls *GatewayService) initHandlersAndServers() error {
 	userSvc := ls.userSvc
 	apiKeySvc := ls.apiKeySvc
 
+	// Initialize AppEnrollmentService for external app enrollment
+	appEnrollment := NewAppEnrollmentService(db, pki, logger)
+
 	ls.mcpGateway.SetA2ADependencies(cfg.Gateway.A2ADownstreamURL)
 	publicBaseURL := fmt.Sprintf("https://localhost:%d", cfg.Gateway.PublicPort)
 	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
@@ -223,6 +226,7 @@ func (ls *GatewayService) initHandlersAndServers() error {
 		APIKey:            apiKeySvc,
 		Responder:         ls.responder,
 		MCPGateway:        ls.mcpGateway,
+		AppEnrollment:     appEnrollment,
 		IsReady:           ls.IsReady,
 		IsGovernanceReady: ls.IsGovernanceReady,
 	})

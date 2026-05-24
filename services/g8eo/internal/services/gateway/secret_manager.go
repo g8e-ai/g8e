@@ -523,6 +523,13 @@ func (m *SecretManager) GetServicePrivateKey(name string) ([]byte, error) {
 	return hex.DecodeString(plaintext)
 }
 
+// DeleteServicePrivateKey deletes a service or app certificate private key from the keystore.
+// name should be the service/app identifier (e.g., "operator-gateway", "g8ee").
+func (m *SecretManager) DeleteServicePrivateKey(name string) error {
+	keystoreName := fmt.Sprintf("service_%s_key", name)
+	return m.keystore.DeleteSecret(keystoreName)
+}
+
 // StoreAPIKey stores an API key for external service integration in the keystore.
 // service identifies the external service (e.g., "openai", "anthropic").
 func (m *SecretManager) StoreAPIKey(service string, apiKey string) error {

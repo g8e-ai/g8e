@@ -62,6 +62,7 @@ type HTTPHandlerDependencies struct {
 	APIKey            *ApiKeyService
 	Responder         *responder.Responder
 	MCPGateway        *mcp.GatewayService
+	AppEnrollment     *AppEnrollmentService
 	IsReady           func() bool
 	IsGovernanceReady func() bool
 }
@@ -86,6 +87,7 @@ type HTTPHandler struct {
 	apiKey            *ApiKeyService
 	responder         *responder.Responder
 	mcp               *mcp.GatewayService
+	appEnrollment     *AppEnrollmentService
 	isReady           func() bool
 	isGovernanceReady func() bool
 	// envProc is the synchronous fail-closed Gateway mutation gate. It is
@@ -114,6 +116,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) *HTTPHandler {
 		apiKey:            deps.APIKey,
 		responder:         deps.Responder,
 		mcp:               deps.MCPGateway,
+		appEnrollment:     deps.AppEnrollment,
 		isReady:           deps.IsReady,
 		isGovernanceReady: deps.IsGovernanceReady,
 		limiters:          make(map[string]*rate.Limiter),
@@ -226,6 +229,7 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	// PKI management routes (require mTLS)
 	mux.HandleFunc("/api/pki/sign-csr", h.handlePKISignCSR)
+	mux.HandleFunc("/api/pki/app-enroll", h.handleAppEnroll)
 	mux.HandleFunc("/api/pki/revoke", h.handlePKIRevoke)
 	mux.HandleFunc("/api/pki/revocation-bundle", h.handlePKIRevocationBundle)
 
@@ -607,6 +611,56 @@ func (h *HTTPHandler) handlePKIRevocationBundle(w http.ResponseWriter, r *http.R
 		"bundle_json": bundleJSON,
 		"signature":   signature,
 	})
+}
+
+func (h *HTTPHandler) handleAppEnroll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	if h.appEnrollment == nil {
+		h.responder.Error(w, http.StatusServiceUnavailable, "app enrollment service not available")
+		return
+	}
+
+	// Require API key authentication for app enrollment (Option A from plan)
+	apiKey := r.Header.Get(constants.HeaderAPIKey)
+	if apiKey == "" {
+		h.responder.Error(w, http.StatusUnauthorized, "missing API key")
+		return
+	}
+
+	_, err := h.apiKey.ValidateKey(apiKey)
+	if err != nil {
+		h.responder.Error(w, http.StatusUnauthorized, "invalid API key")
+		return
+	}
+
+	body, err := h.readBody(r)
+	if err != nil {
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req AppEnrollRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	resp, err := h.appEnrollment.EnrollApp(req)
+	if err != nil {
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if !resp.Success {
+		h.responder.Error(w, http.StatusBadRequest, resp.Error)
+		return
+	}
+
+	h.responder.JSON(w, http.StatusCreated, resp)
 }
 
 func (h *HTTPHandler) handleDeviceLinkRequest(w http.ResponseWriter, r *http.Request) {
