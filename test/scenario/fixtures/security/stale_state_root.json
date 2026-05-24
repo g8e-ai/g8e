@@ -1,0 +1,32 @@
+{
+  "name": "stale_state_root",
+  "vertical": "security",
+  "narrative": "Envelope with stale state root should be rejected",
+  "intent": {},
+  "evidence": {
+    "l2_signature_present": true,
+    "l2_key_id": "tribunal_1",
+    "l3_proof_present": false,
+    "signer_id": "tribunal_1"
+  },
+  "expect": {
+    "doctrine": {
+      "verdict": "reject",
+      "reject_reason": "TX_STATE_MISMATCH",
+      "l2_valid": true,
+      "l3_valid": false
+    },
+    "consensus": {
+      "verdict": "reject",
+      "reject_reason": "TX_STATE_MISMATCH",
+      "l2_valid": true,
+      "l3_valid": false
+    },
+    "notary": {
+      "verdict": "reject",
+      "reject_reason": "TX_STATE_MISMATCH",
+      "l2_valid": true,
+      "l3_valid": false
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "forge_signature",
+  "vertical": "security",
+  "narrative": "Envelope with forged L2 signature should be rejected",
+  "intent": {},
+  "evidence": {
+    "l2_signature_present": true,
+    "l2_key_id": "tribunal_1",
+    "l3_proof_present": false,
+    "signer_id": "tribunal_1"
+  },
+  "expect": {
+    "doctrine": {
+      "verdict": "reject",
+      "reject_reason": "TX_QUORUM_L2_SIG_INVALID",
+      "l2_valid": false,
+      "l3_valid": false
+    },
+    "consensus": {
+      "verdict": "reject",
+      "reject_reason": "TX_QUORUM_L2_SIG_INVALID",
+      "l2_valid": false,
+      "l3_valid": false
+    },
+    "notary": {
+      "verdict": "reject",
+      "reject_reason": "TX_QUORUM_L2_SIG_INVALID",
+      "l2_valid": false,
+      "l3_valid": false
+    }
+  }
+}
