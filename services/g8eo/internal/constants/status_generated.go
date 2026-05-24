@@ -19,325 +19,24 @@ import "fmt"
 // Source: protocol/constants/status.json
 // To regenerate: go run ./internal/constants/generate_registry.go
 
-// EscalationRisk is a typed string for escalation_risk.
-type EscalationRisk string
+// RiskLevel is a typed string for risk_level.
+type RiskLevel string
 
 const (
-	EscalationRiskMedium EscalationRisk = "medium"
-	EscalationRiskCritical EscalationRisk = "critical"
-	EscalationRiskHigh EscalationRisk = "high"
-	EscalationRiskLow EscalationRisk = "low"
+	RiskLevelHigh RiskLevel = "HIGH"
+	RiskLevelLow RiskLevel = "LOW"
+	RiskLevelMedium RiskLevel = "MEDIUM"
 )
 
-// SlashTier is a typed int for slash_tier.
-type SlashTier int
+// StreamStatus is a typed string for stream_status.
+type StreamStatus string
 
 const (
-	SlashTier1 SlashTier = 1
-	SlashTier2 SlashTier = 2
-	SlashTier3 SlashTier = 3
-)
-
-// Environment is a typed string for environment.
-type Environment string
-
-const (
-	EnvironmentProduction Environment = "production"
-	EnvironmentDev Environment = "dev"
-	EnvironmentTest Environment = "test"
-)
-
-// AuditEventType is a typed string for audit_event_type.
-type AuditEventType string
-
-const (
-	AuditEventTypeFileModified AuditEventType = "file.modified"
-	AuditEventTypePermissionRevoked AuditEventType = "permission.revoked"
-	AuditEventTypeConfigChanged AuditEventType = "config.changed"
-	AuditEventTypeG8eBound AuditEventType = "g8e.bound"
-	AuditEventTypeCommandExecuted AuditEventType = "command.executed"
-	AuditEventTypeCommandApproved AuditEventType = "command.approved"
-	AuditEventTypeCommandDenied AuditEventType = "command.denied"
-	AuditEventTypeCommandStarted AuditEventType = "command.started"
-	AuditEventTypeEscalationRequested AuditEventType = "escalation.requested"
-	AuditEventTypeEscalationApproved AuditEventType = "escalation.approved"
-	AuditEventTypeMessage AuditEventType = "message"
-	AuditEventTypePermissionGranted AuditEventType = "permission.granted"
-	AuditEventTypeFileCreated AuditEventType = "file.created"
-	AuditEventTypeFileDeleted AuditEventType = "file.deleted"
-	AuditEventTypeSessionStarted AuditEventType = "session.started"
-)
-
-// ActionType is a typed string for action_type.
-type ActionType string
-
-const (
-	ActionTypeFetchLogs ActionType = "FETCH_LOGS"
-	ActionTypeRestoreFile ActionType = "RESTORE_FILE"
-	ActionTypeExecuteBash ActionType = "EXECUTE_BASH"
-	ActionTypeFsRead ActionType = "FS_READ"
-	ActionTypeGrantIntent ActionType = "GRANT_INTENT"
-	ActionTypeA2aCall ActionType = "A2A_CALL"
-	ActionTypeMcpResourceList ActionType = "MCP_RESOURCE_LIST"
-	ActionTypeMcpPromptGet ActionType = "MCP_PROMPT_GET"
-	ActionTypeFileEdit ActionType = "FILE_EDIT"
-	ActionTypeFetchFileDiff ActionType = "FETCH_FILE_DIFF"
-	ActionTypeHeartbeat ActionType = "HEARTBEAT"
-	ActionTypeEvalAnswer ActionType = "EVAL_ANSWER"
-	ActionTypeMcpCall ActionType = "MCP_CALL"
-	ActionTypeMcpResourceRead ActionType = "MCP_RESOURCE_READ"
-	ActionTypeMcpPromptList ActionType = "MCP_PROMPT_LIST"
-	ActionTypeInvestigationCreate ActionType = "INVESTIGATION_CREATE"
-	ActionTypeFsGrep ActionType = "FS_GREP"
-	ActionTypeFetchHistory ActionType = "FETCH_HISTORY"
-	ActionTypeFetchFileHistory ActionType = "FETCH_FILE_HISTORY"
-	ActionTypeShutdown ActionType = "SHUTDOWN"
-	ActionTypeRevokeIntent ActionType = "REVOKE_INTENT"
-	ActionTypeFsList ActionType = "FS_LIST"
-	ActionTypePortCheck ActionType = "PORT_CHECK"
-)
-
-// ConnectionState is a typed string for connection_state.
-type ConnectionState string
-
-const (
-	ConnectionStateReconnecting ConnectionState = "reconnecting"
-	ConnectionStateClosed ConnectionState = "closed"
-	ConnectionStateError ConnectionState = "error"
-	ConnectionStateDisconnected ConnectionState = "disconnected"
-	ConnectionStateConnecting ConnectionState = "connecting"
-	ConnectionStateConnected ConnectionState = "connected"
-)
-
-// TribunalOutcome is a typed string for tribunal_outcome.
-type TribunalOutcome string
-
-const (
-	TribunalOutcomeConsensus TribunalOutcome = "consensus"
-	TribunalOutcomeConsensusFailed TribunalOutcome = "consensus_failed"
-	TribunalOutcomeVerificationFailed TribunalOutcome = "verification_failed"
-	TribunalOutcomeVerified TribunalOutcome = "verified"
-)
-
-// SessionSuspiciousReason is a typed string for session_suspicious_reason.
-type SessionSuspiciousReason string
-
-const (
-	SessionSuspiciousReasonExcessiveIPChanges SessionSuspiciousReason = "excessive_ip_changes"
-)
-
-// ComponentStatus is a typed string for component_status.
-type ComponentStatus string
-
-const (
-	ComponentStatusMaintenance ComponentStatus = "maintenance"
-	ComponentStatusActive ComponentStatus = "active"
-	ComponentStatusError ComponentStatus = "error"
-	ComponentStatusInactive ComponentStatus = "inactive"
-)
-
-// AuthProvider is a typed string for auth_provider.
-type AuthProvider string
-
-const (
-	AuthProviderLocal AuthProvider = "local"
-	AuthProviderPasskey AuthProvider = "passkey"
-)
-
-// TribunalAuditMode is a typed string for tribunal_audit_mode.
-type TribunalAuditMode string
-
-const (
-	TribunalAuditModeMajority TribunalAuditMode = "majority"
-	TribunalAuditModeTied TribunalAuditMode = "tied"
-	TribunalAuditModeUnanimous TribunalAuditMode = "unanimous"
-)
-
-// CitationLayout is a typed int for citation_layout.
-type CitationLayout int
-
-const (
-	CitationLayoutHoverCardViewportMarginPx CitationLayout = 8
-	CitationLayoutHeadingSegmentMaxLength CitationLayout = 60
-	CitationLayoutSentenceLookaheadChars CitationLayout = 120
-	CitationLayoutParagraphLookaheadChars CitationLayout = 200
-	CitationLayoutHoverCardWidthPx CitationLayout = 360
-	CitationLayoutFaviconSizePx CitationLayout = 16
-)
-
-// RiskThreshold is a typed string for risk_threshold.
-type RiskThreshold string
-
-const (
-	RiskThresholdHigh RiskThreshold = "high"
-	RiskThresholdLow RiskThreshold = "low"
-	RiskThresholdMedium RiskThreshold = "medium"
-)
-
-// HeartbeatType is a typed string for heartbeat_type.
-type HeartbeatType string
-
-const (
-	HeartbeatTypeBootstrap HeartbeatType = "bootstrap"
-	HeartbeatTypeRequested HeartbeatType = "requested"
-	HeartbeatTypeAutomatic HeartbeatType = "automatic"
-)
-
-// CommandCategory is a typed string for command_category.
-type CommandCategory string
-
-const (
-	CommandCategoryCSVWhitelist CommandCategory = "csv_whitelist"
-	CommandCategoryNetworkDiagnostics CommandCategory = "network_diagnostics"
-	CommandCategorySystemDiagnostics CommandCategory = "system_diagnostics"
-)
-
-// ApprovalErrorType is a typed string for approval_error_type.
-type ApprovalErrorType string
-
-const (
-	ApprovalErrorTypeApprovalPublishFailure ApprovalErrorType = "approval.publish.failure"
-	ApprovalErrorTypeApprovalTimeout ApprovalErrorType = "approval.timeout"
-	ApprovalErrorTypeIntentApprovalException ApprovalErrorType = "intent.approval.exception"
-	ApprovalErrorTypeInvalidIntent ApprovalErrorType = "invalid.intent"
-	ApprovalErrorTypeApprovalException ApprovalErrorType = "approval.exception"
-)
-
-// HealthStatus is a typed string for health_status.
-type HealthStatus string
-
-const (
-	HealthStatusHealthy HealthStatus = "healthy"
-	HealthStatusUnhealthy HealthStatus = "unhealthy"
-)
-
-// ToolCallStatus is a typed string for tool_call_status.
-type ToolCallStatus string
-
-const (
-	ToolCallStatusStarted ToolCallStatus = "started"
-	ToolCallStatusCompleted ToolCallStatus = "completed"
-)
-
-// VaultMode is a typed string for vault_mode.
-type VaultMode string
-
-const (
-	SentinelModeRaw VaultMode = "raw"
-	VaultModeScrubbed VaultMode = "scrubbed"
-)
-
-// DeviceLinkSuccess is a typed string for device_link_success.
-type DeviceLinkSuccess string
-
-const (
-	DeviceLinkSuccessRevoked DeviceLinkSuccess = "Device link revoked successfully"
-	DeviceLinkSuccessDeleted DeviceLinkSuccess = "Device link deleted successfully"
-	DeviceLinkSuccessListed DeviceLinkSuccess = "Device links listed successfully"
-	DeviceLinkSuccessCreated DeviceLinkSuccess = "Device link created successfully"
-)
-
-// ActionStatus is a typed string for action_status.
-type ActionStatus string
-
-const (
-	ActionStatusCompleted ActionStatus = "completed"
-	ActionStatusFailed ActionStatus = "failed"
-	ActionStatusTimeout ActionStatus = "timeout"
-	ActionStatusUserCancelled ActionStatus = "user.cancelled"
-	ActionStatusCancelled ActionStatus = "cancelled"
-)
-
-// OperatorHistoryEventType is a typed string for operator_history_event_type.
-type OperatorHistoryEventType string
-
-const (
-	HistoryEventTypeSlotConsumed OperatorHistoryEventType = "slot.consumed"
-	HistoryEventTypeCreatedFromRefresh OperatorHistoryEventType = "created.from.refresh"
-	HistoryEventTypeTerminatedForRefresh OperatorHistoryEventType = "terminated.for.refresh"
-	HistoryEventTypeReset OperatorHistoryEventType = "reset"
-	HistoryEventTypeTerminated OperatorHistoryEventType = "terminated"
-	HistoryEventTypeStopped OperatorHistoryEventType = "stopped"
-	HistoryEventTypeShutdownRequested OperatorHistoryEventType = "shutdown.requested"
-	HistoryEventTypeRegistered OperatorHistoryEventType = "registered"
-	HistoryEventTypeSlotCreated OperatorHistoryEventType = "slot.created"
-	HistoryEventTypeBound OperatorHistoryEventType = "bound"
-	HistoryEventTypeHeartbeatReceived OperatorHistoryEventType = "heartbeat.received"
-	HistoryEventTypeStatusChanged OperatorHistoryEventType = "status.changed"
-	HistoryEventTypeDeactivated OperatorHistoryEventType = "deactivated"
-	HistoryEventTypeClaimed OperatorHistoryEventType = "claimed"
-	HistoryEventTypeSlotReleased OperatorHistoryEventType = "slot.released"
-	HistoryEventTypeAuthenticated OperatorHistoryEventType = "authenticated"
-	HistoryEventTypeCreated OperatorHistoryEventType = "created"
-	HistoryEventTypeUnbound OperatorHistoryEventType = "unbound"
-	HistoryEventTypeAPIKeyRefreshed OperatorHistoryEventType = "api.key.refreshed"
-	HistoryEventTypeReconnected OperatorHistoryEventType = "reconnected"
-)
-
-// SessionEventType is a typed string for session_event_type.
-type SessionEventType string
-
-const (
-	SessionEventTypeSessionSuspiciousActivity SessionEventType = "session.suspicious_activity"
-	SessionEventTypeG8eBound SessionEventType = "g8e.bound"
-	SessionEventTypeG8eUnbound SessionEventType = "g8e.unbound"
-	SessionEventTypeSessionCreated SessionEventType = "session.created"
-	SessionEventTypeSessionEnded SessionEventType = "session.ended"
-	SessionEventTypeSessionRegenerated SessionEventType = "session.regenerated"
-	SessionEventTypeSessionTimeoutAbsolute SessionEventType = "session.timeout.absolute"
-	SessionEventTypeSessionTimeoutIdle SessionEventType = "session.timeout.idle"
-)
-
-// ThinkingActionType is a typed string for thinking_action_type.
-type ThinkingActionType string
-
-const (
-	ThinkingActionTypeUpdate ThinkingActionType = "update"
-	ThinkingActionTypeEnd ThinkingActionType = "end"
-	ThinkingActionTypeStart ThinkingActionType = "start"
-)
-
-// ToolCallDefaults is a typed string for tool_call_defaults.
-type ToolCallDefaults string
-
-const (
-	ToolCallDefaultsLabel ToolCallDefaults = "Processing"
-	ToolCallDefaultsIcon ToolCallDefaults = "sync"
-	ToolCallDefaultsCategory ToolCallDefaults = "general"
-)
-
-// AiSource is a typed string for ai_source.
-type AiSource string
-
-const (
-	AISourceToolCall AiSource = "ai.tool.call"
-	AISourceTerminalAnchored AiSource = "ai.terminal.anchored"
-	AISourceTerminalDirect AiSource = "ai.terminal.direct"
-)
-
-// LlmModels is a typed string for llm_models.
-type LlmModels string
-
-const (
-	LLMModelsOpenaiGpt54 LlmModels = "gpt-5.4"
-	LLMModelsOpenaiGpt54Pro LlmModels = "gpt-5.4-pro"
-	LLMModelsOpenaiGpt54Mini LlmModels = "gpt-5.4-mini"
-	LLMModelsOpenaiGpt54Nano LlmModels = "gpt-5.4-nano"
-	LLMModelsOllamaQwen35122b LlmModels = "qwen3.5:122b"
-	LLMModelsOllamaNemotron330b LlmModels = "nemotron-3-nano:30b"
-	LLMModelsOllamaQwen352b LlmModels = "qwen3.5:2b"
-	LLMModelsGemini3Flash LlmModels = "gemini-3-flash-preview"
-	LLMModelsAnthropicClaude46Sonnet LlmModels = "claude-sonnet-4-6"
-	LLMModelsOllamaGemma4E4b LlmModels = "gemma4:e4b"
-	LLMModelsLlamacppGemma4E2b LlmModels = "google_gemma-4-E2B-it-Q4_K_M.gguf"
-	LLMModelsGemini31Pro LlmModels = "gemini-3.1-pro-preview"
-	LLMModelsOllamaGemma426b LlmModels = "gemma4:26b"
-	LLMModelsOllamaGemma4E2b LlmModels = "gemma4:e2b"
-	LLMModelsAnthropicClaude46Opus LlmModels = "claude-opus-4-6"
-	LLMModelsAnthropicClaude45Haiku LlmModels = "claude-haiku-4-5"
-	LLMModelsOllamaGlm51 LlmModels = "glm-5.1:cloud"
-	LLMModelsOllamaLlama323b LlmModels = "llama3.2:3b"
-	LLMModelsGemini31FlashLite LlmModels = "gemini-3.1-flash-lite"
+	StreamStatusExited StreamStatus = "exited"
+	StreamStatusCompleted StreamStatus = "completed"
+	StreamStatusSummary StreamStatus = "summary"
+	StreamStatusCancelled StreamStatus = "cancelled"
+	StreamStatusFailed StreamStatus = "failed"
 )
 
 // InfrastructureStatus is a typed string for infrastructure_status.
@@ -351,121 +50,156 @@ const (
 	InfrastructureStatusCritical InfrastructureStatus = "critical"
 )
 
-// AiTaskId is a typed string for ai_task_id.
-type AiTaskId string
+// HeartbeatType is a typed string for heartbeat_type.
+type HeartbeatType string
 
 const (
-	AITaskIDIntentRevoke AiTaskId = "ai.intent.revoke"
-	AITaskIDFetchLogs AiTaskId = "ai.fetch.logs"
-	AITaskIDFetchFileHistory AiTaskId = "ai.fetch.file.history"
-	AITaskIDRestoreFile AiTaskId = "ai.restore.file"
-	AITaskIDRecursiveGrep AiTaskId = "ai.recursive_grep"
-	AITaskIDIntentGrant AiTaskId = "ai.intent.grant"
-	AITaskIDCommand AiTaskId = "ai.command"
-	AITaskIDFetchFileDiff AiTaskId = "ai.fetch.file.diff"
-	AITaskIDChat AiTaskId = "ai.chat"
-	AITaskIDAgentContinue AiTaskId = "ai.agent.continue"
-	AITaskIDFileEdit AiTaskId = "ai.file.edit"
-	AITaskIDFsList AiTaskId = "ai.fs.list"
-	AITaskIDPortCheck AiTaskId = "ai.port.check"
-	AITaskIDFetchHistory AiTaskId = "ai.fetch.history"
-	AITaskIDDirectCommand AiTaskId = "ai.direct.command"
-	AITaskIDFsRead AiTaskId = "ai.fs.read"
+	HeartbeatTypeAutomatic HeartbeatType = "automatic"
+	HeartbeatTypeBootstrap HeartbeatType = "bootstrap"
+	HeartbeatTypeRequested HeartbeatType = "requested"
 )
 
-// Platform is a typed string for platform.
-type Platform string
+// CommandStatus is a typed string for command_status.
+type CommandStatus string
 
 const (
-	PlatformLinux Platform = "linux"
-	PlatformWindows Platform = "windows"
-	PlatformDarwin Platform = "darwin"
+	CommandStatusCancelled CommandStatus = "cancelled"
+	CommandStatusPending CommandStatus = "pending"
+	CommandStatusExecuting CommandStatus = "executing"
+	CommandStatusOutput CommandStatus = "output"
+	CommandStatusCompleted CommandStatus = "completed"
+	CommandStatusFailed CommandStatus = "failed"
+	CommandStatusTimeout CommandStatus = "timeout"
+)
+
+// ConnectionState is a typed string for connection_state.
+type ConnectionState string
+
+const (
+	ConnectionStateConnected ConnectionState = "connected"
+	ConnectionStateReconnecting ConnectionState = "reconnecting"
+	ConnectionStateClosed ConnectionState = "closed"
+	ConnectionStateError ConnectionState = "error"
+	ConnectionStateDisconnected ConnectionState = "disconnected"
+	ConnectionStateConnecting ConnectionState = "connecting"
+)
+
+// CommandCategory is a typed string for command_category.
+type CommandCategory string
+
+const (
+	CommandCategoryCSVWhitelist CommandCategory = "csv_whitelist"
+	CommandCategoryNetworkDiagnostics CommandCategory = "network_diagnostics"
+	CommandCategorySystemDiagnostics CommandCategory = "system_diagnostics"
+)
+
+// AttachmentType is a typed string for attachment_type.
+type AttachmentType string
+
+const (
+	AttachmentTypeImage AttachmentType = "image"
+	AttachmentTypeOther AttachmentType = "other"
+	AttachmentTypePdf AttachmentType = "pdf"
+	AttachmentTypeText AttachmentType = "text"
+)
+
+// ThinkingActionType is a typed string for thinking_action_type.
+type ThinkingActionType string
+
+const (
+	ThinkingActionTypeStart ThinkingActionType = "start"
+	ThinkingActionTypeUpdate ThinkingActionType = "update"
+	ThinkingActionTypeEnd ThinkingActionType = "end"
+)
+
+// ApprovalErrorType is a typed string for approval_error_type.
+type ApprovalErrorType string
+
+const (
+	ApprovalErrorTypeApprovalException ApprovalErrorType = "approval.exception"
+	ApprovalErrorTypeApprovalPublishFailure ApprovalErrorType = "approval.publish.failure"
+	ApprovalErrorTypeApprovalTimeout ApprovalErrorType = "approval.timeout"
+	ApprovalErrorTypeIntentApprovalException ApprovalErrorType = "intent.approval.exception"
+	ApprovalErrorTypeInvalidIntent ApprovalErrorType = "invalid.intent"
 )
 
 // AuthMethod is a typed string for auth_method.
 type AuthMethod string
 
 const (
-	AuthMethodKvPubSub AuthMethod = "kv_pubsub"
 	AuthMethodSession AuthMethod = "session"
+	AuthMethodKvPubSub AuthMethod = "kv_pubsub"
 )
 
-// AuditEventSource is a typed string for audit_event_source.
-type AuditEventSource string
+// HealthStatus is a typed string for health_status.
+type HealthStatus string
 
 const (
-	AuditEventSourceConversation AuditEventSource = "conversation"
+	HealthStatusHealthy HealthStatus = "healthy"
+	HealthStatusUnhealthy HealthStatus = "unhealthy"
 )
 
-// Priority is a typed int for priority.
-type Priority int
+// CommandErrorType is a typed string for command_error_type.
+type CommandErrorType string
 
 const (
-	PriorityLow Priority = 1
-	PriorityMedium Priority = 2
-	PriorityHigh Priority = 3
-	PriorityCritical Priority = 4
+	CommandErrorTypeG8eResolutionError CommandErrorType = "g8e.resolution.error"
+	CommandErrorTypeCloudOperatorRequired CommandErrorType = "cloud.operator.required"
+	CommandErrorTypeExecutionFailed CommandErrorType = "execution.failed"
+	CommandErrorTypeFsListFailed CommandErrorType = "fs.list.failed"
+	CommandErrorTypeRestoreFileFailed CommandErrorType = "restore.file.failed"
+	CommandErrorTypeFetchLogsFailed CommandErrorType = "fetch.logs.failed"
+	CommandErrorTypeUserDenied CommandErrorType = "user.denied"
+	CommandErrorTypeFsReadFailed CommandErrorType = "fs.read.failed"
+	CommandErrorTypeFetchFileHistoryFailed CommandErrorType = "fetch.file.history.failed"
+	CommandErrorTypeExecutionError CommandErrorType = "execution.error"
+	CommandErrorTypeFetchFileDiffFailed CommandErrorType = "fetch.file.diff.failed"
+	CommandErrorTypeApprovalTimeout CommandErrorType = "approval.timeout"
+	CommandErrorTypePermissionError CommandErrorType = "permission.error"
+	CommandErrorTypeMissingOperatorID CommandErrorType = "missing.operator.id"
+	CommandErrorTypePartialIAMUpdateFailed CommandErrorType = "partial.iam.update.failed"
+	CommandErrorTypeBindingViolation CommandErrorType = "binding.violation"
+	CommandErrorTypeNoOperatorsAvailable CommandErrorType = "no.operators.available"
+	CommandErrorTypeCommandTimeout CommandErrorType = "command.timeout"
+	CommandErrorTypeUserCancelled CommandErrorType = "user.cancelled"
+	CommandErrorTypeInvalidIntent CommandErrorType = "invalid.intent"
+	CommandErrorTypeFetchHistoryFailed CommandErrorType = "fetch.history.failed"
+	CommandErrorTypeBlacklistViolation CommandErrorType = "blacklist.violation"
+	CommandErrorTypeWhitelistViolation CommandErrorType = "whitelist.violation"
+	CommandErrorTypeUserFeedback CommandErrorType = "user.feedback"
+	CommandErrorTypePermissionDenied CommandErrorType = "permission.denied"
+	CommandErrorTypeCommandExecutionFailed CommandErrorType = "command.execution.failed"
+	CommandErrorTypeOperationTimeout CommandErrorType = "operation.timeout"
+	CommandErrorTypePubSubSubscriptionNotReady CommandErrorType = "pubsub.subscription.not.ready"
+	CommandErrorTypeUnknownTool CommandErrorType = "unknown.tool"
+	CommandErrorTypeRiskAnalysisBlocked CommandErrorType = "risk.analysis.blocked"
+	CommandErrorTypeApprovalDenied CommandErrorType = "approval.denied"
+	CommandErrorTypePartialIAMDetachFailed CommandErrorType = "partial.iam.detach.failed"
+	CommandErrorTypePortCheckFailed CommandErrorType = "port.check.failed"
+	CommandErrorTypeConfigurationError CommandErrorType = "configuration.error"
+	CommandErrorTypeValidationError CommandErrorType = "validation.error"
+	CommandErrorTypeSecurityError CommandErrorType = "security.error"
+	CommandErrorTypeSecurityViolation CommandErrorType = "security.violation"
+	CommandErrorTypeAgentConflict CommandErrorType = "agent.conflict"
 )
 
-// TaskStatus is a typed string for task_status.
-type TaskStatus string
+// HistoryActor is a typed string for history_actor.
+type HistoryActor string
 
 const (
-	TaskStatusCancelled TaskStatus = "cancelled"
-	TaskStatusCompleted TaskStatus = "completed"
-	TaskStatusInProgress TaskStatus = "executing"
-	TaskStatusFailed TaskStatus = "failed"
-	TaskStatusPending TaskStatus = "pending"
+	HistoryActorNone HistoryActor = ""
+	HistoryActorUser HistoryActor = "user"
+	HistoryActorG8EO HistoryActor = "g8eo"
+	HistoryActorSystem HistoryActor = "system"
 )
 
-// AuthAuditResult is a typed string for auth_audit_result.
-type AuthAuditResult string
+// SessionType is a typed string for session_type.
+type SessionType string
 
 const (
-	AuthAuditResultSuccess AuthAuditResult = "success"
-	AuthAuditResultFailure AuthAuditResult = "failure"
-	AuthAuditResultInvalidAPIKey AuthAuditResult = "invalid_api_key"
-)
-
-// TribunalAuditorReason is a typed string for tribunal_auditor_reason.
-type TribunalAuditorReason string
-
-const (
-	TribunalAuditorReasonRevised TribunalAuditorReason = "revised"
-)
-
-// WorkflowType is a typed string for workflow_type.
-type WorkflowType string
-
-const (
-	WorkflowTypeG8eBound WorkflowType = "g8e.bound"
-	WorkflowTypeG8eCloudBound WorkflowType = "g8e.cloud.bound"
-	WorkflowTypeG8eNotBound WorkflowType = "g8e.not.bound"
-)
-
-// SentinelStatus is a typed string for sentinel_status.
-type SentinelStatus string
-
-const (
-	SentinelStatusError SentinelStatus = "error"
-	SentinelStatusNotExecutable SentinelStatus = "not_executable"
-	SentinelStatusTerminated SentinelStatus = "terminated"
-	SentinelStatusFailure SentinelStatus = "failure"
-	SentinelStatusInterrupted SentinelStatus = "interrupted"
-	SentinelStatusKilled SentinelStatus = "killed"
-	SentinelStatusMisuse SentinelStatus = "misuse"
-	SentinelStatusNotFound SentinelStatus = "not_found"
-	SentinelStatusSuccess SentinelStatus = "success"
-	SentinelStatusInvalidExit SentinelStatus = "invalid_exit"
-)
-
-// SessionKeyPrefix is a typed string for session_key_prefix.
-type SessionKeyPrefix string
-
-const (
-	SessionKeyPrefixWeb SessionKeyPrefix = "web_session"
-	SessionKeyPrefixOperator SessionKeyPrefix = "operator_session"
-	SessionKeyPrefixCLI SessionKeyPrefix = "cli_session"
+	SessionTypeCLI SessionType = "cli"
+	SessionTypeWeb SessionType = "web"
+	SessionTypeOperator SessionType = "operator"
 )
 
 // ApprovalType is a typed string for approval_type.
@@ -479,65 +213,12 @@ const (
 	ApprovalTypeAgentContinue ApprovalType = "agent.continue"
 )
 
-// ConversationStatus is a typed string for conversation_status.
-type ConversationStatus string
+// ToolCallStatus is a typed string for tool_call_status.
+type ToolCallStatus string
 
 const (
-	ConversationStatusActive ConversationStatus = "active"
-	ConversationStatusInactive ConversationStatus = "inactive"
-	ConversationStatusCompleted ConversationStatus = "completed"
-)
-
-// G8eAvailability is a typed string for g8e_availability.
-type G8eAvailability string
-
-const (
-	G8eAvailabilityOffline G8eAvailability = "OFFLINE"
-	G8eAvailabilityOnline G8eAvailability = "ONLINE"
-)
-
-// CommandErrorType is a typed string for command_error_type.
-type CommandErrorType string
-
-const (
-	CommandErrorTypePermissionDenied CommandErrorType = "permission.denied"
-	CommandErrorTypeRestoreFileFailed CommandErrorType = "restore.file.failed"
-	CommandErrorTypeFetchHistoryFailed CommandErrorType = "fetch.history.failed"
-	CommandErrorTypeOperationTimeout CommandErrorType = "operation.timeout"
-	CommandErrorTypeUserFeedback CommandErrorType = "user.feedback"
-	CommandErrorTypeBindingViolation CommandErrorType = "binding.violation"
-	CommandErrorTypeNoOperatorsAvailable CommandErrorType = "no.operators.available"
-	CommandErrorTypeCloudOperatorRequired CommandErrorType = "cloud.operator.required"
-	CommandErrorTypeExecutionFailed CommandErrorType = "execution.failed"
-	CommandErrorTypeFetchLogsFailed CommandErrorType = "fetch.logs.failed"
-	CommandErrorTypeFetchFileHistoryFailed CommandErrorType = "fetch.file.history.failed"
-	CommandErrorTypeApprovalDenied CommandErrorType = "approval.denied"
-	CommandErrorTypePermissionError CommandErrorType = "permission.error"
-	CommandErrorTypeSecurityViolation CommandErrorType = "security.violation"
-	CommandErrorTypeUserDenied CommandErrorType = "user.denied"
-	CommandErrorTypeFsListFailed CommandErrorType = "fs.list.failed"
-	CommandErrorTypeConfigurationError CommandErrorType = "configuration.error"
-	CommandErrorTypeAgentConflict CommandErrorType = "agent.conflict"
-	CommandErrorTypeValidationError CommandErrorType = "validation.error"
-	CommandErrorTypeCommandTimeout CommandErrorType = "command.timeout"
-	CommandErrorTypePubSubSubscriptionNotReady CommandErrorType = "pubsub.subscription.not.ready"
-	CommandErrorTypeFsReadFailed CommandErrorType = "fs.read.failed"
-	CommandErrorTypeMissingOperatorID CommandErrorType = "missing.operator.id"
-	CommandErrorTypeApprovalTimeout CommandErrorType = "approval.timeout"
-	CommandErrorTypeInvalidIntent CommandErrorType = "invalid.intent"
-	CommandErrorTypeSecurityError CommandErrorType = "security.error"
-	CommandErrorTypeUserCancelled CommandErrorType = "user.cancelled"
-	CommandErrorTypeRiskAnalysisBlocked CommandErrorType = "risk.analysis.blocked"
-	CommandErrorTypeG8eResolutionError CommandErrorType = "g8e.resolution.error"
-	CommandErrorTypeBlacklistViolation CommandErrorType = "blacklist.violation"
-	CommandErrorTypeExecutionError CommandErrorType = "execution.error"
-	CommandErrorTypeUnknownTool CommandErrorType = "unknown.tool"
-	CommandErrorTypePartialIAMDetachFailed CommandErrorType = "partial.iam.detach.failed"
-	CommandErrorTypeFetchFileDiffFailed CommandErrorType = "fetch.file.diff.failed"
-	CommandErrorTypePortCheckFailed CommandErrorType = "port.check.failed"
-	CommandErrorTypeWhitelistViolation CommandErrorType = "whitelist.violation"
-	CommandErrorTypeCommandExecutionFailed CommandErrorType = "command.execution.failed"
-	CommandErrorTypePartialIAMUpdateFailed CommandErrorType = "partial.iam.update.failed"
+	ToolCallStatusStarted ToolCallStatus = "started"
+	ToolCallStatusCompleted ToolCallStatus = "completed"
 )
 
 // ToolDisplayCategory is a typed string for tool_display_category.
@@ -551,18 +232,13 @@ const (
 	ToolDisplayCategoryGeneral ToolDisplayCategory = "general"
 )
 
-// CaseStatus is a typed string for case_status.
-type CaseStatus string
+// TribunalAuditStatus is a typed string for tribunal_audit_status.
+type TribunalAuditStatus string
 
 const (
-	CaseStatusInProgress CaseStatus = "InProgress"
-	CaseStatusNew CaseStatus = "New"
-	CaseStatusResolved CaseStatus = "Resolved"
-	CaseStatusTriage CaseStatus = "Triage"
-	CaseStatusWaitingForCustomer CaseStatus = "WaitingForCustomer"
-	CaseStatusClosed CaseStatus = "Closed"
-	CaseStatusEscalated CaseStatus = "Escalated"
-	CaseStatusHumanReview CaseStatus = "HumanReview"
+	TribunalAuditStatusSwap TribunalAuditStatus = "swap"
+	TribunalAuditStatusOk TribunalAuditStatus = "ok"
+	TribunalAuditStatusRevised TribunalAuditStatus = "revised"
 )
 
 // GatewayMode is a typed string for gateway_mode.
@@ -573,26 +249,14 @@ const (
 	GatewayModeStatusOK GatewayMode = "ok"
 )
 
-// HistoryActor is a typed string for history_actor.
-type HistoryActor string
+// DeviceLinkSuccess is a typed string for device_link_success.
+type DeviceLinkSuccess string
 
 const (
-	HistoryActorNone HistoryActor = ""
-	HistoryActorUser HistoryActor = "user"
-	HistoryActorG8EO HistoryActor = "g8eo"
-	HistoryActorSystem HistoryActor = "system"
-)
-
-// G8eActionType is a typed string for g8e_action_type.
-type G8eActionType string
-
-const (
-	G8eActionTypeCommandExecution G8eActionType = "operator.command.execution"
-	G8eActionTypeCommandExecuted G8eActionType = "operator.command.executed"
-	G8eActionTypeFileRead G8eActionType = "operator.file.read"
-	G8eActionTypeFileEdit G8eActionType = "operator.file.edit"
-	G8eActionTypeFileList G8eActionType = "operator.file.list"
-	G8eActionTypePortCheck G8eActionType = "g8e.port.check"
+	DeviceLinkSuccessRevoked DeviceLinkSuccess = "Device link revoked successfully"
+	DeviceLinkSuccessDeleted DeviceLinkSuccess = "Device link deleted successfully"
+	DeviceLinkSuccessListed DeviceLinkSuccess = "Device links listed successfully"
+	DeviceLinkSuccessCreated DeviceLinkSuccess = "Device link created successfully"
 )
 
 // Severity is a typed int for severity.
@@ -605,92 +269,222 @@ const (
 	SeverityCritical Severity = 4
 )
 
-// DownloadAuditEventType is a typed string for download_audit_event_type.
-type DownloadAuditEventType string
+// TribunalAuditorReason is a typed string for tribunal_auditor_reason.
+type TribunalAuditorReason string
 
 const (
-	DownloadAuditEventTypeDownloadTokenFailed DownloadAuditEventType = "download_token_failed"
-	DownloadAuditEventTypeDownloadTokenSuccess DownloadAuditEventType = "download_token_success"
+	TribunalAuditorReasonRevised TribunalAuditorReason = "revised"
 )
 
-// OperatorType is a typed string for operator_type.
-type OperatorType string
+// VaultMode is a typed string for vault_mode.
+type VaultMode string
 
 const (
-	OperatorTypeCloud OperatorType = "cloud"
-	OperatorTypeSystem OperatorType = "system"
+	SentinelModeRaw VaultMode = "raw"
+	VaultModeScrubbed VaultMode = "scrubbed"
 )
 
-// RiskLevel is a typed string for risk_level.
-type RiskLevel string
+// CloudSubtype is a typed string for cloud_subtype.
+type CloudSubtype string
 
 const (
-	RiskLevelLow RiskLevel = "LOW"
-	RiskLevelMedium RiskLevel = "MEDIUM"
-	RiskLevelHigh RiskLevel = "HIGH"
+	CloudSubtypeAWS CloudSubtype = "aws"
+	CloudSubtypeAzure CloudSubtype = "azure"
+	CloudSubtypeGCP CloudSubtype = "gcp"
 )
 
-// OperatorToolName is a typed string for operator_tool_name.
-type OperatorToolName string
+// AiTaskId is a typed string for ai_task_id.
+type AiTaskId string
 
 const (
-	G8eToolNameRunCommands OperatorToolName = "run_commands_with_operator"
-	G8eToolNameFileCreate OperatorToolName = "file_create_on_operator"
-	G8eToolNameFileWrite OperatorToolName = "file_write_on_operator"
-	G8eToolNameRestoreFile OperatorToolName = "restore_file"
-	G8eToolNameFetchFileDiff OperatorToolName = "fetch_file_diff"
-	G8eToolNameStreamOperator OperatorToolName = "stream_operator_to_ssh_fleet"
-	G8eToolNameFileRead OperatorToolName = "file_read_on_operator"
-	G8eToolNameGrantIntent OperatorToolName = "grant_intent_permission"
-	G8eToolNameFetchExecutionOutput OperatorToolName = "fetch_execution_output"
-	G8eToolNameListSSHInventory OperatorToolName = "list_ssh_inventory"
-	G8eToolNameRecursiveGrep OperatorToolName = "recursive_grep_search"
-	G8eToolNameCheckPort OperatorToolName = "check_port_status"
-	G8eToolNameListFiles OperatorToolName = "list_files_and_directories_with_detailed_metadata"
-	G8eToolNameRevokeIntent OperatorToolName = "revoke_intent_permission"
-	G8eToolNameFetchSessionHistory OperatorToolName = "fetch_session_history"
-	G8eToolNameFetchFileHistory OperatorToolName = "fetch_file_history"
-	G8eToolNameG8eWebSearch OperatorToolName = "g8e_web_search"
-	G8eToolNameQueryInvestigationContext OperatorToolName = "query_investigation_context"
-	G8eToolNameGetCommandConstraints OperatorToolName = "get_command_constraints"
-	G8eToolNameFileUpdate OperatorToolName = "file_update_on_operator"
-	G8eToolNameReadFileContent OperatorToolName = "read_file_content"
+	AITaskIDFsList AiTaskId = "ai.fs.list"
+	AITaskIDFsRead AiTaskId = "ai.fs.read"
+	AITaskIDRestoreFile AiTaskId = "ai.restore.file"
+	AITaskIDRecursiveGrep AiTaskId = "ai.recursive_grep"
+	AITaskIDChat AiTaskId = "ai.chat"
+	AITaskIDAgentContinue AiTaskId = "ai.agent.continue"
+	AITaskIDFileEdit AiTaskId = "ai.file.edit"
+	AITaskIDFetchFileHistory AiTaskId = "ai.fetch.file.history"
+	AITaskIDIntentGrant AiTaskId = "ai.intent.grant"
+	AITaskIDPortCheck AiTaskId = "ai.port.check"
+	AITaskIDIntentRevoke AiTaskId = "ai.intent.revoke"
+	AITaskIDDirectCommand AiTaskId = "ai.direct.command"
+	AITaskIDFetchLogs AiTaskId = "ai.fetch.logs"
+	AITaskIDFetchHistory AiTaskId = "ai.fetch.history"
+	AITaskIDFetchFileDiff AiTaskId = "ai.fetch.file.diff"
+	AITaskIDCommand AiTaskId = "ai.command"
 )
 
-// ApiKeyStatus is a typed string for api_key_status.
-type ApiKeyStatus string
+// SessionKeyPrefix is a typed string for session_key_prefix.
+type SessionKeyPrefix string
 
 const (
-	APIKeyStatusExpired ApiKeyStatus = "expired"
-	APIKeyStatusRevoked ApiKeyStatus = "revoked"
-	APIKeyStatusSuspended ApiKeyStatus = "suspended"
-	APIKeyStatusActive ApiKeyStatus = "active"
+	SessionKeyPrefixWeb SessionKeyPrefix = "web_session"
+	SessionKeyPrefixOperator SessionKeyPrefix = "operator_session"
+	SessionKeyPrefixCLI SessionKeyPrefix = "cli_session"
 )
 
-// CommandStatus is a typed string for command_status.
-type CommandStatus string
+// SlashTier is a typed int for slash_tier.
+type SlashTier int
 
 const (
-	CommandStatusPending CommandStatus = "pending"
-	CommandStatusExecuting CommandStatus = "executing"
-	CommandStatusOutput CommandStatus = "output"
-	CommandStatusCompleted CommandStatus = "completed"
-	CommandStatusFailed CommandStatus = "failed"
-	CommandStatusTimeout CommandStatus = "timeout"
-	CommandStatusCancelled CommandStatus = "cancelled"
+	SlashTier1 SlashTier = 1
+	SlashTier2 SlashTier = 2
+	SlashTier3 SlashTier = 3
+)
+
+// SessionSuspiciousReason is a typed string for session_suspicious_reason.
+type SessionSuspiciousReason string
+
+const (
+	SessionSuspiciousReasonExcessiveIPChanges SessionSuspiciousReason = "excessive_ip_changes"
+)
+
+// UserStatus is a typed string for user_status.
+type UserStatus string
+
+const (
+	UserStatusActive UserStatus = "active"
+	UserStatusDisabled UserStatus = "disabled"
+)
+
+// AiSource is a typed string for ai_source.
+type AiSource string
+
+const (
+	AISourceToolCall AiSource = "ai.tool.call"
+	AISourceTerminalAnchored AiSource = "ai.terminal.anchored"
+	AISourceTerminalDirect AiSource = "ai.terminal.direct"
 )
 
 // SessionEndReason is a typed string for session_end_reason.
 type SessionEndReason string
 
 const (
-	SessionEndReasonUserDeleted SessionEndReason = "user_deleted"
-	SessionEndReasonTimeoutAbsolute SessionEndReason = "timeout_absolute"
-	SessionEndReasonTimeoutIdle SessionEndReason = "timeout_idle"
 	SessionEndReasonUserLogout SessionEndReason = "user_logout"
 	SessionEndReasonIntegrityFailure SessionEndReason = "integrity_failure"
 	SessionEndReasonSessionRegeneration SessionEndReason = "session_regeneration"
 	SessionEndReasonInvalidateAll SessionEndReason = "invalidate_all"
+	SessionEndReasonUserDeleted SessionEndReason = "user_deleted"
+	SessionEndReasonTimeoutAbsolute SessionEndReason = "timeout_absolute"
+	SessionEndReasonTimeoutIdle SessionEndReason = "timeout_idle"
+)
+
+// ApiKeyStatus is a typed string for api_key_status.
+type ApiKeyStatus string
+
+const (
+	APIKeyStatusActive ApiKeyStatus = "active"
+	APIKeyStatusExpired ApiKeyStatus = "expired"
+	APIKeyStatusRevoked ApiKeyStatus = "revoked"
+	APIKeyStatusSuspended ApiKeyStatus = "suspended"
+)
+
+// ComponentName is a typed string for component_name.
+type ComponentName string
+
+const (
+	ComponentNameG8EO ComponentName = "g8eo"
+	ComponentNameG8EOGateway ComponentName = "g8eo-gateway"
+	ComponentNameClient ComponentName = "client"
+	ComponentNameG8EE ComponentName = "g8ee"
+)
+
+// Platform is a typed string for platform.
+type Platform string
+
+const (
+	PlatformLinux Platform = "linux"
+	PlatformWindows Platform = "windows"
+	PlatformDarwin Platform = "darwin"
+)
+
+// WorkflowType is a typed string for workflow_type.
+type WorkflowType string
+
+const (
+	WorkflowTypeG8eBound WorkflowType = "g8e.bound"
+	WorkflowTypeG8eCloudBound WorkflowType = "g8e.cloud.bound"
+	WorkflowTypeG8eNotBound WorkflowType = "g8e.not.bound"
+)
+
+// NetworkProtocol is a typed string for network_protocol.
+type NetworkProtocol string
+
+const (
+	NetworkProtocolTCP NetworkProtocol = "tcp"
+	NetworkProtocolUDP NetworkProtocol = "udp"
+)
+
+// ComponentStatus is a typed string for component_status.
+type ComponentStatus string
+
+const (
+	ComponentStatusInactive ComponentStatus = "inactive"
+	ComponentStatusMaintenance ComponentStatus = "maintenance"
+	ComponentStatusActive ComponentStatus = "active"
+	ComponentStatusError ComponentStatus = "error"
+)
+
+// FileOperation is a typed string for file_operation.
+type FileOperation string
+
+const (
+	FileOperationReplace FileOperation = "replace"
+	FileOperationInsert FileOperation = "insert"
+	FileOperationDelete FileOperation = "delete"
+	FileOperationPatch FileOperation = "patch"
+	FileOperationRead FileOperation = "read"
+	FileOperationCreate FileOperation = "create"
+	FileOperationWrite FileOperation = "write"
+	FileOperationUpdate FileOperation = "update"
+)
+
+// LoginAuditEventType is a typed string for login_audit_event_type.
+type LoginAuditEventType string
+
+const (
+	LoginAuditEventTypeLoginSuccess LoginAuditEventType = "login_success"
+	LoginAuditEventTypeLoginFailed LoginAuditEventType = "login_failed"
+	LoginAuditEventTypeLoginAnomaly LoginAuditEventType = "login_anomaly"
+	LoginAuditEventTypeAccountLocked LoginAuditEventType = "account_locked"
+	LoginAuditEventTypeAccountUnlocked LoginAuditEventType = "account_unlocked"
+)
+
+// OperatorHistoryEventType is a typed string for operator_history_event_type.
+type OperatorHistoryEventType string
+
+const (
+	HistoryEventTypeCreated OperatorHistoryEventType = "created"
+	HistoryEventTypeSlotConsumed OperatorHistoryEventType = "slot.consumed"
+	HistoryEventTypeSlotReleased OperatorHistoryEventType = "slot.released"
+	HistoryEventTypeUnbound OperatorHistoryEventType = "unbound"
+	HistoryEventTypeHeartbeatReceived OperatorHistoryEventType = "heartbeat.received"
+	HistoryEventTypeAuthenticated OperatorHistoryEventType = "authenticated"
+	HistoryEventTypeRegistered OperatorHistoryEventType = "registered"
+	HistoryEventTypeSlotCreated OperatorHistoryEventType = "slot.created"
+	HistoryEventTypeBound OperatorHistoryEventType = "bound"
+	HistoryEventTypeReset OperatorHistoryEventType = "reset"
+	HistoryEventTypeTerminated OperatorHistoryEventType = "terminated"
+	HistoryEventTypeDeactivated OperatorHistoryEventType = "deactivated"
+	HistoryEventTypeStopped OperatorHistoryEventType = "stopped"
+	HistoryEventTypeShutdownRequested OperatorHistoryEventType = "shutdown.requested"
+	HistoryEventTypeAPIKeyRefreshed OperatorHistoryEventType = "api.key.refreshed"
+	HistoryEventTypeTerminatedForRefresh OperatorHistoryEventType = "terminated.for.refresh"
+	HistoryEventTypeStatusChanged OperatorHistoryEventType = "status.changed"
+	HistoryEventTypeCreatedFromRefresh OperatorHistoryEventType = "created.from.refresh"
+	HistoryEventTypeClaimed OperatorHistoryEventType = "claimed"
+	HistoryEventTypeReconnected OperatorHistoryEventType = "reconnected"
+)
+
+// UserRole is a typed string for user_role.
+type UserRole string
+
+const (
+	UserRoleAdmin UserRole = "admin"
+	UserRoleOperator UserRole = "operator"
+	UserRoleSuperadmin UserRole = "superadmin"
+	UserRoleUser UserRole = "user"
 )
 
 // ScrubberPriority is a typed int for scrubber_priority.
@@ -703,58 +497,64 @@ const (
 	ScrubberPriorityGenericPII ScrubberPriority = 40
 )
 
-// TribunalAuditStatus is a typed string for tribunal_audit_status.
-type TribunalAuditStatus string
+// AuditEventSource is a typed string for audit_event_source.
+type AuditEventSource string
 
 const (
-	TribunalAuditStatusOk TribunalAuditStatus = "ok"
-	TribunalAuditStatusRevised TribunalAuditStatus = "revised"
-	TribunalAuditStatusSwap TribunalAuditStatus = "swap"
-)
-
-// ExecutionStatus is a typed string for execution_status.
-type ExecutionStatus string
-
-const (
-	ExecutionStatusCancelRequested ExecutionStatus = "cancel_requested"
-	ExecutionStatusCancelled ExecutionStatus = "cancelled"
-	ExecutionStatusCompleted ExecutionStatus = "completed"
-	ExecutionStatusDenied ExecutionStatus = "denied"
-	ExecutionStatusExecuting ExecutionStatus = "executing"
-	ExecutionStatusFeedback ExecutionStatus = "feedback"
-	ExecutionStatusTimeout ExecutionStatus = "timeout"
-	ExecutionStatusFailed ExecutionStatus = "failed"
-	ExecutionStatusPending ExecutionStatus = "pending"
-)
-
-// LoginAuditEventType is a typed string for login_audit_event_type.
-type LoginAuditEventType string
-
-const (
-	LoginAuditEventTypeAccountUnlocked LoginAuditEventType = "account_unlocked"
-	LoginAuditEventTypeLoginSuccess LoginAuditEventType = "login_success"
-	LoginAuditEventTypeLoginFailed LoginAuditEventType = "login_failed"
-	LoginAuditEventTypeLoginAnomaly LoginAuditEventType = "login_anomaly"
-	LoginAuditEventTypeAccountLocked LoginAuditEventType = "account_locked"
-)
-
-// SessionType is a typed string for session_type.
-type SessionType string
-
-const (
-	SessionTypeOperator SessionType = "operator"
-	SessionTypeCLI SessionType = "cli"
-	SessionTypeWeb SessionType = "web"
+	AuditEventSourceConversation AuditEventSource = "conversation"
 )
 
 // TribunalFallbackReason is a typed string for tribunal_fallback_reason.
 type TribunalFallbackReason string
 
 const (
-	TribunalFallbackReasonProviderUnavailable TribunalFallbackReason = "provider_unavailable"
 	TribunalFallbackReasonAllPassesFailed TribunalFallbackReason = "all_passes_failed"
 	TribunalFallbackReasonNoVoteWinner TribunalFallbackReason = "no_vote_winner"
 	TribunalFallbackReasonDisabled TribunalFallbackReason = "disabled"
+	TribunalFallbackReasonProviderUnavailable TribunalFallbackReason = "provider_unavailable"
+)
+
+// Priority is a typed int for priority.
+type Priority int
+
+const (
+	PriorityLow Priority = 1
+	PriorityMedium Priority = 2
+	PriorityHigh Priority = 3
+	PriorityCritical Priority = 4
+)
+
+// LlmModels is a typed string for llm_models.
+type LlmModels string
+
+const (
+	LLMModelsOpenaiGpt54Mini LlmModels = "gpt-5.4-mini"
+	LLMModelsOpenaiGpt54Nano LlmModels = "gpt-5.4-nano"
+	LLMModelsOllamaGemma426b LlmModels = "gemma4:26b"
+	LLMModelsOllamaGemma4E2b LlmModels = "gemma4:e2b"
+	LLMModelsOllamaNemotron330b LlmModels = "nemotron-3-nano:30b"
+	LLMModelsOllamaLlama323b LlmModels = "llama3.2:3b"
+	LLMModelsLlamacppGemma4E2b LlmModels = "google_gemma-4-E2B-it-Q4_K_M.gguf"
+	LLMModelsGemini31Pro LlmModels = "gemini-3.1-pro-preview"
+	LLMModelsAnthropicClaude45Haiku LlmModels = "claude-haiku-4-5"
+	LLMModelsOllamaQwen352b LlmModels = "qwen3.5:2b"
+	LLMModelsGemini31FlashLite LlmModels = "gemini-3.1-flash-lite"
+	LLMModelsOpenaiGpt54 LlmModels = "gpt-5.4"
+	LLMModelsOpenaiGpt54Pro LlmModels = "gpt-5.4-pro"
+	LLMModelsAnthropicClaude46Opus LlmModels = "claude-opus-4-6"
+	LLMModelsAnthropicClaude46Sonnet LlmModels = "claude-sonnet-4-6"
+	LLMModelsOllamaQwen35122b LlmModels = "qwen3.5:122b"
+	LLMModelsOllamaGemma4E4b LlmModels = "gemma4:e4b"
+	LLMModelsGemini3Flash LlmModels = "gemini-3-flash-preview"
+	LLMModelsOllamaGlm51 LlmModels = "glm-5.1:cloud"
+)
+
+// DownloadAuditEventType is a typed string for download_audit_event_type.
+type DownloadAuditEventType string
+
+const (
+	DownloadAuditEventTypeDownloadTokenSuccess DownloadAuditEventType = "download_token_success"
+	DownloadAuditEventTypeDownloadTokenFailed DownloadAuditEventType = "download_token_failed"
 )
 
 // AuthAuditEventType is a typed string for auth_audit_event_type.
@@ -765,110 +565,46 @@ const (
 	AuthAuditEventTypeAuthFailed AuthAuditEventType = "auth_failed"
 )
 
+// ActionStatus is a typed string for action_status.
+type ActionStatus string
+
+const (
+	ActionStatusTimeout ActionStatus = "timeout"
+	ActionStatusUserCancelled ActionStatus = "user.cancelled"
+	ActionStatusCancelled ActionStatus = "cancelled"
+	ActionStatusCompleted ActionStatus = "completed"
+	ActionStatusFailed ActionStatus = "failed"
+)
+
+// G8eAvailability is a typed string for g8e_availability.
+type G8eAvailability string
+
+const (
+	G8eAvailabilityOnline G8eAvailability = "ONLINE"
+	G8eAvailabilityOffline G8eAvailability = "OFFLINE"
+)
+
+// ConversationStatus is a typed string for conversation_status.
+type ConversationStatus string
+
+const (
+	ConversationStatusActive ConversationStatus = "active"
+	ConversationStatusInactive ConversationStatus = "inactive"
+	ConversationStatusCompleted ConversationStatus = "completed"
+)
+
 // OperatorStatus is a typed string for operator_status.
 type OperatorStatus string
 
 const (
-	OperatorStatusAvailable OperatorStatus = "available"
-	OperatorStatusBound OperatorStatus = "bound"
-	OperatorStatusOffline OperatorStatus = "offline"
-	OperatorStatusStale OperatorStatus = "stale"
 	OperatorStatusStopped OperatorStatus = "stopped"
 	OperatorStatusTerminated OperatorStatus = "terminated"
 	OperatorStatusUnavailable OperatorStatus = "unavailable"
 	OperatorStatusActive OperatorStatus = "active"
-)
-
-// AttachmentType is a typed string for attachment_type.
-type AttachmentType string
-
-const (
-	AttachmentTypeOther AttachmentType = "other"
-	AttachmentTypePdf AttachmentType = "pdf"
-	AttachmentTypeText AttachmentType = "text"
-	AttachmentTypeImage AttachmentType = "image"
-)
-
-// SystemHealth is a typed string for system_health.
-type SystemHealth string
-
-const (
-	SystemHealthUnhealthy SystemHealth = "unhealthy"
-	SystemHealthUnknown SystemHealth = "unknown"
-	SystemHealthHealthy SystemHealth = "healthy"
-	SystemHealthDegraded SystemHealth = "degraded"
-)
-
-// VersionStability is a typed string for version_stability.
-type VersionStability string
-
-const (
-	VersionStabilityStable VersionStability = "stable"
-	VersionStabilityBeta VersionStability = "beta"
-	VersionStabilityDev VersionStability = "dev"
-)
-
-// ComponentName is a typed string for component_name.
-type ComponentName string
-
-const (
-	ComponentNameClient ComponentName = "client"
-	ComponentNameG8EE ComponentName = "g8ee"
-	ComponentNameG8EO ComponentName = "g8eo"
-	ComponentNameG8EOGateway ComponentName = "g8eo-gateway"
-)
-
-// ToolScope is a typed string for tool_scope.
-type ToolScope string
-
-const (
-	ToolScopeUniversal ToolScope = "universal"
-	ToolScopeOperatorGated ToolScope = "operator_gated"
-)
-
-// UserRole is a typed string for user_role.
-type UserRole string
-
-const (
-	UserRoleUser UserRole = "user"
-	UserRoleAdmin UserRole = "admin"
-	UserRoleOperator UserRole = "operator"
-	UserRoleSuperadmin UserRole = "superadmin"
-)
-
-// InvestigationStatus is a typed string for investigation_status.
-type InvestigationStatus string
-
-const (
-	InvestigationStatusClosed InvestigationStatus = "Closed"
-	InvestigationStatusEscalated InvestigationStatus = "Escalated"
-	InvestigationStatusOpen InvestigationStatus = "Open"
-	InvestigationStatusResolved InvestigationStatus = "Resolved"
-)
-
-// FileOperation is a typed string for file_operation.
-type FileOperation string
-
-const (
-	FileOperationCreate FileOperation = "create"
-	FileOperationWrite FileOperation = "write"
-	FileOperationUpdate FileOperation = "update"
-	FileOperationReplace FileOperation = "replace"
-	FileOperationInsert FileOperation = "insert"
-	FileOperationDelete FileOperation = "delete"
-	FileOperationPatch FileOperation = "patch"
-	FileOperationRead FileOperation = "read"
-)
-
-// StreamStatus is a typed string for stream_status.
-type StreamStatus string
-
-const (
-	StreamStatusCancelled StreamStatus = "cancelled"
-	StreamStatusFailed StreamStatus = "failed"
-	StreamStatusExited StreamStatus = "exited"
-	StreamStatusCompleted StreamStatus = "completed"
-	StreamStatusSummary StreamStatus = "summary"
+	OperatorStatusAvailable OperatorStatus = "available"
+	OperatorStatusBound OperatorStatus = "bound"
+	OperatorStatusOffline OperatorStatus = "offline"
+	OperatorStatusStale OperatorStatus = "stale"
 )
 
 // DeviceLinkStatus is a typed string for device_link_status.
@@ -883,40 +619,304 @@ const (
 	DeviceLinkStatusRevoked DeviceLinkStatus = "revoked"
 )
 
-// CloudSubtype is a typed string for cloud_subtype.
-type CloudSubtype string
+// ToolCallDefaults is a typed string for tool_call_defaults.
+type ToolCallDefaults string
 
 const (
-	CloudSubtypeAWS CloudSubtype = "aws"
-	CloudSubtypeAzure CloudSubtype = "azure"
-	CloudSubtypeGCP CloudSubtype = "gcp"
+	ToolCallDefaultsLabel ToolCallDefaults = "Processing"
+	ToolCallDefaultsIcon ToolCallDefaults = "sync"
+	ToolCallDefaultsCategory ToolCallDefaults = "general"
 )
 
-// NetworkProtocol is a typed string for network_protocol.
-type NetworkProtocol string
+// Environment is a typed string for environment.
+type Environment string
 
 const (
-	NetworkProtocolTCP NetworkProtocol = "tcp"
-	NetworkProtocolUDP NetworkProtocol = "udp"
+	EnvironmentProduction Environment = "production"
+	EnvironmentDev Environment = "dev"
+	EnvironmentTest Environment = "test"
 )
 
-// UserStatus is a typed string for user_status.
-type UserStatus string
+// CaseStatus is a typed string for case_status.
+type CaseStatus string
 
 const (
-	UserStatusActive UserStatus = "active"
-	UserStatusDisabled UserStatus = "disabled"
+	CaseStatusWaitingForCustomer CaseStatus = "WaitingForCustomer"
+	CaseStatusClosed CaseStatus = "Closed"
+	CaseStatusEscalated CaseStatus = "Escalated"
+	CaseStatusHumanReview CaseStatus = "HumanReview"
+	CaseStatusInProgress CaseStatus = "InProgress"
+	CaseStatusNew CaseStatus = "New"
+	CaseStatusResolved CaseStatus = "Resolved"
+	CaseStatusTriage CaseStatus = "Triage"
+)
+
+// AuthProvider is a typed string for auth_provider.
+type AuthProvider string
+
+const (
+	AuthProviderLocal AuthProvider = "local"
+	AuthProviderPasskey AuthProvider = "passkey"
+)
+
+// TribunalAuditMode is a typed string for tribunal_audit_mode.
+type TribunalAuditMode string
+
+const (
+	TribunalAuditModeUnanimous TribunalAuditMode = "unanimous"
+	TribunalAuditModeMajority TribunalAuditMode = "majority"
+	TribunalAuditModeTied TribunalAuditMode = "tied"
+)
+
+// EscalationRisk is a typed string for escalation_risk.
+type EscalationRisk string
+
+const (
+	EscalationRiskLow EscalationRisk = "low"
+	EscalationRiskMedium EscalationRisk = "medium"
+	EscalationRiskCritical EscalationRisk = "critical"
+	EscalationRiskHigh EscalationRisk = "high"
 )
 
 // AuditSseEventType is a typed string for audit_sse_event_type.
 type AuditSseEventType string
 
 const (
+	AuditSseEventTypeError AuditSseEventType = "audit.error"
 	AuditSseEventTypeConnected AuditSseEventType = "audit.connected"
 	AuditSseEventTypeMetadata AuditSseEventType = "audit.metadata"
 	AuditSseEventTypeEvent AuditSseEventType = "audit.event"
 	AuditSseEventTypeComplete AuditSseEventType = "audit.complete"
-	AuditSseEventTypeError AuditSseEventType = "audit.error"
+)
+
+// ExecutionStatus is a typed string for execution_status.
+type ExecutionStatus string
+
+const (
+	ExecutionStatusPending ExecutionStatus = "pending"
+	ExecutionStatusCompleted ExecutionStatus = "completed"
+	ExecutionStatusFailed ExecutionStatus = "failed"
+	ExecutionStatusTimeout ExecutionStatus = "timeout"
+	ExecutionStatusCancelRequested ExecutionStatus = "cancel_requested"
+	ExecutionStatusCancelled ExecutionStatus = "cancelled"
+	ExecutionStatusDenied ExecutionStatus = "denied"
+	ExecutionStatusExecuting ExecutionStatus = "executing"
+	ExecutionStatusFeedback ExecutionStatus = "feedback"
+)
+
+// SystemHealth is a typed string for system_health.
+type SystemHealth string
+
+const (
+	SystemHealthHealthy SystemHealth = "healthy"
+	SystemHealthDegraded SystemHealth = "degraded"
+	SystemHealthUnhealthy SystemHealth = "unhealthy"
+	SystemHealthUnknown SystemHealth = "unknown"
+)
+
+// ToolScope is a typed string for tool_scope.
+type ToolScope string
+
+const (
+	ToolScopeUniversal ToolScope = "universal"
+	ToolScopeOperatorGated ToolScope = "operator_gated"
+)
+
+// VersionStability is a typed string for version_stability.
+type VersionStability string
+
+const (
+	VersionStabilityBeta VersionStability = "beta"
+	VersionStabilityDev VersionStability = "dev"
+	VersionStabilityStable VersionStability = "stable"
+)
+
+// OperatorToolName is a typed string for operator_tool_name.
+type OperatorToolName string
+
+const (
+	G8eToolNameReadFileContent OperatorToolName = "read_file_content"
+	G8eToolNameGrantIntent OperatorToolName = "grant_intent_permission"
+	G8eToolNameQueryInvestigationContext OperatorToolName = "query_investigation_context"
+	G8eToolNameFileUpdate OperatorToolName = "file_update_on_operator"
+	G8eToolNameCheckPort OperatorToolName = "check_port_status"
+	G8eToolNameFetchSessionHistory OperatorToolName = "fetch_session_history"
+	G8eToolNameRestoreFile OperatorToolName = "restore_file"
+	G8eToolNameG8eWebSearch OperatorToolName = "g8e_web_search"
+	G8eToolNameGetCommandConstraints OperatorToolName = "get_command_constraints"
+	G8eToolNameListSSHInventory OperatorToolName = "list_ssh_inventory"
+	G8eToolNameFileCreate OperatorToolName = "file_create_on_operator"
+	G8eToolNameFileWrite OperatorToolName = "file_write_on_operator"
+	G8eToolNameRevokeIntent OperatorToolName = "revoke_intent_permission"
+	G8eToolNameFetchFileHistory OperatorToolName = "fetch_file_history"
+	G8eToolNameFetchFileDiff OperatorToolName = "fetch_file_diff"
+	G8eToolNameRunCommands OperatorToolName = "run_commands_with_operator"
+	G8eToolNameFileRead OperatorToolName = "file_read_on_operator"
+	G8eToolNameListFiles OperatorToolName = "list_files_and_directories_with_detailed_metadata"
+	G8eToolNameFetchExecutionOutput OperatorToolName = "fetch_execution_output"
+	G8eToolNameRecursiveGrep OperatorToolName = "recursive_grep_search"
+	G8eToolNameStreamOperator OperatorToolName = "stream_operator_to_ssh_fleet"
+)
+
+// InvestigationStatus is a typed string for investigation_status.
+type InvestigationStatus string
+
+const (
+	InvestigationStatusClosed InvestigationStatus = "Closed"
+	InvestigationStatusEscalated InvestigationStatus = "Escalated"
+	InvestigationStatusOpen InvestigationStatus = "Open"
+	InvestigationStatusResolved InvestigationStatus = "Resolved"
+)
+
+// G8eActionType is a typed string for g8e_action_type.
+type G8eActionType string
+
+const (
+	G8eActionTypeFileEdit G8eActionType = "operator.file.edit"
+	G8eActionTypeFileList G8eActionType = "operator.file.list"
+	G8eActionTypePortCheck G8eActionType = "g8e.port.check"
+	G8eActionTypeCommandExecution G8eActionType = "operator.command.execution"
+	G8eActionTypeCommandExecuted G8eActionType = "operator.command.executed"
+	G8eActionTypeFileRead G8eActionType = "operator.file.read"
+)
+
+// ActionType is a typed string for action_type.
+type ActionType string
+
+const (
+	ActionTypeRevokeIntent ActionType = "REVOKE_INTENT"
+	ActionTypeMcpCall ActionType = "MCP_CALL"
+	ActionTypeMcpResourceList ActionType = "MCP_RESOURCE_LIST"
+	ActionTypeMcpResourceRead ActionType = "MCP_RESOURCE_READ"
+	ActionTypeFsRead ActionType = "FS_READ"
+	ActionTypeFetchFileHistory ActionType = "FETCH_FILE_HISTORY"
+	ActionTypeRestoreFile ActionType = "RESTORE_FILE"
+	ActionTypeShutdown ActionType = "SHUTDOWN"
+	ActionTypeEvalAnswer ActionType = "EVAL_ANSWER"
+	ActionTypeMcpPromptList ActionType = "MCP_PROMPT_LIST"
+	ActionTypeInvestigationCreate ActionType = "INVESTIGATION_CREATE"
+	ActionTypeFsList ActionType = "FS_LIST"
+	ActionTypeFetchHistory ActionType = "FETCH_HISTORY"
+	ActionTypeGrantIntent ActionType = "GRANT_INTENT"
+	ActionTypeFileEdit ActionType = "FILE_EDIT"
+	ActionTypePortCheck ActionType = "PORT_CHECK"
+	ActionTypeFetchLogs ActionType = "FETCH_LOGS"
+	ActionTypeA2aCall ActionType = "A2A_CALL"
+	ActionTypeMcpPromptGet ActionType = "MCP_PROMPT_GET"
+	ActionTypeExecuteBash ActionType = "EXECUTE_BASH"
+	ActionTypeFsGrep ActionType = "FS_GREP"
+	ActionTypeFetchFileDiff ActionType = "FETCH_FILE_DIFF"
+	ActionTypeHeartbeat ActionType = "HEARTBEAT"
+)
+
+// TaskStatus is a typed string for task_status.
+type TaskStatus string
+
+const (
+	TaskStatusPending TaskStatus = "pending"
+	TaskStatusCancelled TaskStatus = "cancelled"
+	TaskStatusCompleted TaskStatus = "completed"
+	TaskStatusInProgress TaskStatus = "executing"
+	TaskStatusFailed TaskStatus = "failed"
+)
+
+// AuthAuditResult is a typed string for auth_audit_result.
+type AuthAuditResult string
+
+const (
+	AuthAuditResultFailure AuthAuditResult = "failure"
+	AuthAuditResultInvalidAPIKey AuthAuditResult = "invalid_api_key"
+	AuthAuditResultSuccess AuthAuditResult = "success"
+)
+
+// SessionEventType is a typed string for session_event_type.
+type SessionEventType string
+
+const (
+	SessionEventTypeSessionCreated SessionEventType = "session.created"
+	SessionEventTypeSessionEnded SessionEventType = "session.ended"
+	SessionEventTypeSessionRegenerated SessionEventType = "session.regenerated"
+	SessionEventTypeSessionTimeoutAbsolute SessionEventType = "session.timeout.absolute"
+	SessionEventTypeSessionTimeoutIdle SessionEventType = "session.timeout.idle"
+	SessionEventTypeSessionSuspiciousActivity SessionEventType = "session.suspicious_activity"
+	SessionEventTypeG8eBound SessionEventType = "g8e.bound"
+	SessionEventTypeG8eUnbound SessionEventType = "g8e.unbound"
+)
+
+// TribunalOutcome is a typed string for tribunal_outcome.
+type TribunalOutcome string
+
+const (
+	TribunalOutcomeVerified TribunalOutcome = "verified"
+	TribunalOutcomeConsensus TribunalOutcome = "consensus"
+	TribunalOutcomeConsensusFailed TribunalOutcome = "consensus_failed"
+	TribunalOutcomeVerificationFailed TribunalOutcome = "verification_failed"
+)
+
+// SentinelStatus is a typed string for sentinel_status.
+type SentinelStatus string
+
+const (
+	SentinelStatusInterrupted SentinelStatus = "interrupted"
+	SentinelStatusKilled SentinelStatus = "killed"
+	SentinelStatusFailure SentinelStatus = "failure"
+	SentinelStatusMisuse SentinelStatus = "misuse"
+	SentinelStatusNotExecutable SentinelStatus = "not_executable"
+	SentinelStatusNotFound SentinelStatus = "not_found"
+	SentinelStatusSuccess SentinelStatus = "success"
+	SentinelStatusTerminated SentinelStatus = "terminated"
+	SentinelStatusInvalidExit SentinelStatus = "invalid_exit"
+	SentinelStatusError SentinelStatus = "error"
+)
+
+// CitationLayout is a typed int for citation_layout.
+type CitationLayout int
+
+const (
+	CitationLayoutSentenceLookaheadChars CitationLayout = 120
+	CitationLayoutParagraphLookaheadChars CitationLayout = 200
+	CitationLayoutHoverCardWidthPx CitationLayout = 360
+	CitationLayoutFaviconSizePx CitationLayout = 16
+	CitationLayoutHoverCardViewportMarginPx CitationLayout = 8
+	CitationLayoutHeadingSegmentMaxLength CitationLayout = 60
+)
+
+// AuditEventType is a typed string for audit_event_type.
+type AuditEventType string
+
+const (
+	AuditEventTypeEscalationRequested AuditEventType = "escalation.requested"
+	AuditEventTypeEscalationApproved AuditEventType = "escalation.approved"
+	AuditEventTypeConfigChanged AuditEventType = "config.changed"
+	AuditEventTypeFileDeleted AuditEventType = "file.deleted"
+	AuditEventTypeSessionStarted AuditEventType = "session.started"
+	AuditEventTypeCommandApproved AuditEventType = "command.approved"
+	AuditEventTypeCommandDenied AuditEventType = "command.denied"
+	AuditEventTypeCommandStarted AuditEventType = "command.started"
+	AuditEventTypeFileCreated AuditEventType = "file.created"
+	AuditEventTypeG8eBound AuditEventType = "g8e.bound"
+	AuditEventTypeCommandExecuted AuditEventType = "command.executed"
+	AuditEventTypeFileModified AuditEventType = "file.modified"
+	AuditEventTypePermissionGranted AuditEventType = "permission.granted"
+	AuditEventTypePermissionRevoked AuditEventType = "permission.revoked"
+	AuditEventTypeMessage AuditEventType = "message"
+)
+
+// OperatorType is a typed string for operator_type.
+type OperatorType string
+
+const (
+	OperatorTypeCloud OperatorType = "cloud"
+	OperatorTypeSystem OperatorType = "system"
+)
+
+// RiskThreshold is a typed string for risk_threshold.
+type RiskThreshold string
+
+const (
+	RiskThresholdLow RiskThreshold = "low"
+	RiskThresholdMedium RiskThreshold = "medium"
+	RiskThresholdHigh RiskThreshold = "high"
 )
 
 // AllActionTypes returns the complete list of defined action types.

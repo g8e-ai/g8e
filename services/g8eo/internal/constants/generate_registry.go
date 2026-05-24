@@ -227,16 +227,8 @@ func generateRegistry(data JSONFile) string {
 	sb.WriteString("}\n")
 	sb.WriteString("\n")
 	sb.WriteString("// StatusSnapshot represents the nested structure for status values.\n")
-	sb.WriteString("type StatusSnapshot struct {\n")
-	sb.WriteString("\tAttachmentType    map[string]Entry `json:\"attachment.type\"`\n")
-	sb.WriteString("\tUserRole          map[string]Entry `json:\"user_role\"`\n")
-	sb.WriteString("\tUserStatus        map[string]Entry `json:\"user_status\"`\n")
-	sb.WriteString("\tOperatorStatus    map[string]Entry `json:\"operator_status\"`\n")
-	sb.WriteString("\tExecutionStatus   map[string]Entry `json:\"execution_status\"`\n")
-	sb.WriteString("\tTribunalOutcome   map[string]Entry `json:\"tribunal.outcome\"`\n")
-	sb.WriteString("\tApprovalErrorType map[string]Entry `json:\"approval.error.type\"`\n")
-	sb.WriteString("\tLlmModels         map[string]Entry `json:\"llm.models\"`\n")
-	sb.WriteString("}\n")
+	sb.WriteString("// This is a dynamic map to support all status categories without hardcoding.\n")
+	sb.WriteString("type StatusSnapshot map[string]map[string]Entry\n")
 	sb.WriteString("\n")
 	sb.WriteString("// Snapshot is the complete constants registry snapshot.\n")
 	sb.WriteString("type Snapshot struct {\n")
@@ -367,26 +359,11 @@ func generateRegistry(data JSONFile) string {
 		sb.WriteString("\t\t},\n")
 	}
 
-	// Status (nested structure)
+	// Status (nested structure - dynamic map)
 	if data.Status != nil {
 		sb.WriteString("\t\tStatus: StatusSnapshot{\n")
-		// Map nested status categories to Go struct field names
-		categoryMapping := map[string]string{
-			"attachment.type":     "AttachmentType",
-			"user_role":           "UserRole",
-			"user_status":         "UserStatus",
-			"operator_status":     "OperatorStatus",
-			"execution_status":    "ExecutionStatus",
-			"tribunal.outcome":    "TribunalOutcome",
-			"approval.error.type": "ApprovalErrorType",
-			"llm.models":          "LlmModels",
-		}
 		for category, entries := range data.Status {
-			fieldName, ok := categoryMapping[category]
-			if !ok {
-				continue
-			}
-			sb.WriteString(fmt.Sprintf("\t\t\t%s: map[string]Entry{\n", fieldName))
+			sb.WriteString(fmt.Sprintf("\t\t\t\"%s\": map[string]Entry{\n", category))
 			keys := sortedKeys(entries)
 			for _, key := range keys {
 				entry := entries[key]

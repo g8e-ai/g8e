@@ -31,7 +31,7 @@ from app.constants import (
     OperatorToolName,
 )
 from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
-from app.constants.settings import (
+from app.constants.config import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,

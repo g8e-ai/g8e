@@ -111,7 +111,7 @@ def _llm_settings_from_env():
 
     # Fallback to defaults if not provided but provider is set
     if not primary:
-        from app.constants.settings import (
+        from app.constants.config import (
             ANTHROPIC_DEFAULT_MODEL,
             GEMINI_DEFAULT_MODEL,
             LLAMACPP_DEFAULT_MODEL,

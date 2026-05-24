@@ -68,8 +68,8 @@ generate: proto constants
 constants:
 	@echo "Generating Go constants from JSON source..."
 	@cd services/g8eo/internal/constants && go run generate_registry.go
-	@echo "Generating Python constants from JSON source..."
-	@cd services/g8ee/app/constants && python generate_constants.py
+	@echo "Exporting constants to JSON and Python via Go exporter..."
+	@cd services/g8eo/cmd/exporter && go run main.go -root ../..
 	@echo "Constants generation complete."
 
 .PHONY: proto
@@ -175,8 +175,7 @@ clean-constants:
 	@rm -rf services/g8eo/internal/constants/headers_generated.go
 	@rm -rf services/g8eo/internal/constants/status_generated.go
 	@rm -rf services/g8eo/internal/constants/registry.go
-	@rm -rf services/g8ee/app/constants/headers_generated.py
-	@rm -rf services/g8ee/app/constants/status_generated.py
+	@rm -rf services/g8ee/app/constants/generated_*.py
 	@echo "Constants clean complete."
 
 .PHONY: clean

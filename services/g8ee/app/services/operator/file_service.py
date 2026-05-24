@@ -36,7 +36,7 @@ from app.constants.status import (
 from app.constants.generated_events import (
     EventType,
 )
-from app.constants.settings import (
+from app.constants.config import (
     ApprovalErrorType,
 )
 from app.models.command_request_payloads import (

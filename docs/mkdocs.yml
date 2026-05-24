@@ -80,6 +80,10 @@ nav:
       - Governance Gateway: concepts/g8eg.md
       - Agentic Ensemble: concepts/g8ee.md
       - g8e-Compatible Apps: concepts/g8e-compatible-apps.md
+  - Protocols:
+      - MCP/A2A Gateway: protocols/mcp_gateway.md
+      - MCP Client (Satellite Operator): protocols/mcp_client.md
+      - A2A Protocol: protocols/a2a.md
   - Guides:
       - Quickstart: quickstart/index.md
       - Air Gap: guides/air_gap.md
@@ -93,7 +97,6 @@ nav:
       - CLI: reference/cli.md
       - Constants: reference/constants.md
       - Glossary: reference/glossary.md
-      - MCP: reference/mcp.md
   - Developer:
       - Developer Guidelines: devs.md
       - Codemaps:
@@ -103,5 +106,6 @@ nav:
           - Protocol Layer: codemaps/03_protocol_layer.md
           - Data Flow Lifecycle: codemaps/04_data_flow_lifecycle.md
   - External:
-      - A2A Protocol: external/a2a.json
+      - A2A Protocol (JSON Schema): external/a2a.json
+      - A2A Protocol (Proto): external/a2a.proto
       - Ollama API: external/ollam_api.md

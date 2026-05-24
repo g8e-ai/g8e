@@ -508,7 +508,7 @@ class TestSearchWebSSEEvents:
         assert tool_call_event.payload.display_detail == "nginx upstream timeout"
 
     async def test_citations_chunk_fires_citations_ready_event(self):
-        from app.constants.settings import GroundingSource
+        from app.constants.config import GroundingSource
         from app.models.grounding import GroundingChunk, GroundingMetadata
         grounding = GroundingMetadata(
             grounding_used=True,

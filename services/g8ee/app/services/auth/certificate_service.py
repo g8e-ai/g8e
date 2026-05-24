@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from app.constants.paths import PATHS
-from app.constants.settings import (
+from app.constants.config import (
     CLIENT_CERT_VALIDITY_DAYS,
     CRL_ISSUER
 )

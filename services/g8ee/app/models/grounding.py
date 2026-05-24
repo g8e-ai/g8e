@@ -14,7 +14,7 @@
 
 from pydantic import Field
 
-from app.constants.settings import GroundingSource
+from app.constants.config import GroundingSource
 
 from .base import G8eBaseModel
 

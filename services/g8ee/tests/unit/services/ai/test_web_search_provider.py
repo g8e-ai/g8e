@@ -499,7 +499,7 @@ class TestBuildG8eWebSearchGrounding:
         assert gm.grounding_used is True
 
     def test_source_is_web_search(self, provider):
-        from app.constants.settings import GroundingSource
+        from app.constants.config import GroundingSource
         from app.models.tool_results import SearchWebResult, WebSearchResultItem
         result = SearchWebResult(
             success=True,

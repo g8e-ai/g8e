@@ -20,7 +20,7 @@ from app.constants.collections import (
     PLATFORM_SETTINGS_DOC,
     USER_SETTINGS_DOC_PREFIX,
 )
-from app.constants.settings import LLMProvider
+from app.constants.config import LLMProvider
 from app.models.settings import (
     G8eeAppSettings,
     G8eeUserSettings,

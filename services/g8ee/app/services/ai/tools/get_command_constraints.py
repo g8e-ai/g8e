@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
 from app.constants.prompts import PromptFile
-from app.constants.settings import DEFAULT_OS_NAME
+from app.constants.config import DEFAULT_OS_NAME
 from app.constants.status import OperatorToolName
 from app.llm.prompts import load_prompt
 from app.models.http_context import G8eHttpContext
