@@ -33,12 +33,12 @@ if [[ -f "$G8E_ENV_FILE" ]]; then
     set +a
 fi
 
-OPERATOR_BIN="${G8E_PROJECT_ROOT}/services/g8eo/build/linux-amd64/g8e.operator"
+OPERATOR_BIN="${G8E_PROJECT_ROOT}/services/g8eo/build/linux-amd64/g8e"
 
 # Fallback to local build if binary not present (useful in dev/test)
 if [ ! -f "$OPERATOR_BIN" ]; then
     echo "Operator binary not found, compiling locally..."
-    (cd "${G8E_PROJECT_ROOT}/services/g8eo" && make build-local)
+    (cd "${G8E_PROJECT_ROOT}/services/g8eo" && make build)
 fi
 
 echo "Starting g8eo Operator Agent..."
