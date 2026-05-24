@@ -689,6 +689,8 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, bootstrapPort, publ
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
+		SignerStore:        govDeps.SignerStore,
+		AppPolicyStore:     govDeps.AppPolicyStore,
 		L3Notary:           govDeps.L3Notary,
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,

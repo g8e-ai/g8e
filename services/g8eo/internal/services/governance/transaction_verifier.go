@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/services/sentinel"
@@ -152,6 +153,27 @@ func NewGovernancePosture(posture string) GovernancePosture {
 // SignerStore defines the interface for loading trusted L2Consensus signers.
 type SignerStore interface {
 	GetTrustedSigner(keyID string) (ed25519.PublicKey, error)
+}
+
+// AppPolicyStore defines the interface for loading AppPolicies for external apps.
+type AppPolicyStore interface {
+	GetAppPolicy(appID string) (*models.AppPolicy, error)
+}
+
+// SimpleAppPolicyStore implements AppPolicyStore using a static map.
+type SimpleAppPolicyStore struct {
+	Policies map[string]*models.AppPolicy
+}
+
+func (s *SimpleAppPolicyStore) GetAppPolicy(appID string) (*models.AppPolicy, error) {
+	if s.Policies == nil {
+		return nil, nil
+	}
+	policy, ok := s.Policies[appID]
+	if !ok {
+		return nil, nil
+	}
+	return policy, nil
 }
 
 // SimpleSignerStore implements SignerStore using a static map.
@@ -292,6 +314,7 @@ type TransactionVerifier struct {
 	replayStore       ReplayStore
 	stateRootProvider StateRootProvider
 	signerStore       SignerStore
+	appPolicyStore    AppPolicyStore
 	l3Notary          L3Notary
 	sentinel          *sentinel.Sentinel // L1 threat detection for MCP arguments
 	knownActionTypes  map[constants.ActionType]struct{}
@@ -306,6 +329,7 @@ func NewTransactionVerifier(
 	replayStore ReplayStore,
 	stateRootProvider StateRootProvider,
 	signerStore SignerStore,
+	appPolicyStore AppPolicyStore,
 	l3Notary L3Notary,
 	sentinel *sentinel.Sentinel,
 	knownActionTypes []constants.ActionType,
@@ -321,6 +345,7 @@ func NewTransactionVerifier(
 		replayStore:       replayStore,
 		stateRootProvider: stateRootProvider,
 		signerStore:       signerStore,
+		appPolicyStore:    appPolicyStore,
 		l3Notary:          l3Notary,
 		sentinel:          sentinel,
 		knownActionTypes:  knownActions,
@@ -616,6 +641,27 @@ func (tv *TransactionVerifier) verifyL3Posture(ctx context.Context, envelope *ua
 
 	if !tv.posture.RequiresL3Proof() {
 		return true, nil
+	}
+
+	// Check if this is an external app transaction that can bypass L3 via policy
+	if envelope.Governance != nil && envelope.Governance.L2 != nil && envelope.Governance.L2.KeyId != "" {
+		if tv.appPolicyStore != nil {
+			appID := envelope.Governance.L2.KeyId
+			policy, err := tv.appPolicyStore.GetAppPolicy(appID)
+			if err != nil {
+				tv.logger.Warn("Failed to retrieve app policy for L3 bypass check", "app_id", appID, string(constants.ConnectionStateError), err)
+				// Fail-closed: if policy lookup fails, require standard L3
+			} else if policy != nil {
+				// Check if this action type is in AutoApproveIntents
+				actionStr := string(actionType)
+				for _, autoApproveIntent := range policy.AutoApproveIntents {
+					if autoApproveIntent == actionStr {
+						tv.logger.Info("L3 bypassed via app policy", "app_id", appID, "action_type", actionStr)
+						return true, nil
+					}
+				}
+			}
+		}
 	}
 
 	if envelope.Governance == nil || envelope.Governance.L3 == nil || envelope.Governance.L3.Proof == nil {

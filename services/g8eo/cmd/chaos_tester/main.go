@@ -457,6 +457,7 @@ func main() {
 		replayStore,
 		stateRootProvider,
 		&governance.SimpleSignerStore{Signers: trustedSigners},
+		nil, // AppPolicyStore not used in chaos tester
 		l3Notary,
 		nil, // Sentinel not used in chaos tester
 		knownActionTypes,
