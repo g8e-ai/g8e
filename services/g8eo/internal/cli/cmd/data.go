@@ -188,6 +188,15 @@ func dataDeviceLinksListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List device-link tokens",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			queryUserID := userID
+			if queryUserID == "" && email == "" {
+				queryUserID = os.Getenv("G8E_USER_ID")
+			}
+
+			if queryUserID == "" {
+				return fmt.Errorf("not authenticated: provide --user-id, --email, or ensure G8E_USER_ID is set")
+			}
+
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -196,15 +205,6 @@ func dataDeviceLinksListCmd() *cobra.Command {
 			client, err := api.NewClient(cfg)
 			if err != nil {
 				return err
-			}
-
-			queryUserID := userID
-			if queryUserID == "" && email == "" {
-				queryUserID = os.Getenv("G8E_USER_ID")
-			}
-
-			if queryUserID == "" {
-				return fmt.Errorf("provide --user-id, --email, or ensure G8E_USER_ID is set")
 			}
 
 			query := QueryRequest{
@@ -392,6 +392,10 @@ func dataStoreCmd() *cobra.Command {
 		Use:   "store",
 		Short: "Manage document storage",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if collection == "" {
+				return fmt.Errorf("not authenticated: --collection is required")
+			}
+
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -400,10 +404,6 @@ func dataStoreCmd() *cobra.Command {
 			client, err := api.NewClient(cfg)
 			if err != nil {
 				return err
-			}
-
-			if collection == "" {
-				return fmt.Errorf("--collection is required")
 			}
 
 			if documentID == "" {
@@ -447,6 +447,14 @@ func dataAuditCmd() *cobra.Command {
 		Use:   "audit",
 		Short: "Query audit vault",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if operatorSessionID == "" {
+				operatorSessionID = os.Getenv("G8E_OPERATOR_SESSION_ID")
+			}
+
+			if operatorSessionID == "" {
+				return fmt.Errorf("not authenticated: --operator-session-id or G8E_OPERATOR_SESSION_ID is required")
+			}
+
 			cfg, err := config.Load("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -455,14 +463,6 @@ func dataAuditCmd() *cobra.Command {
 			client, err := api.NewClient(cfg)
 			if err != nil {
 				return err
-			}
-
-			if operatorSessionID == "" {
-				operatorSessionID = os.Getenv("G8E_OPERATOR_SESSION_ID")
-			}
-
-			if operatorSessionID == "" {
-				return fmt.Errorf("--operator-session-id or G8E_OPERATOR_SESSION_ID is required")
 			}
 
 			query := QueryRequestWithLimit{
