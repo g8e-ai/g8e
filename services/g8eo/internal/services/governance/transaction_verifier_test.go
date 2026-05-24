@@ -448,8 +448,8 @@ func TestTransactionVerifier_AppPolicyStore_L3Bypass_ReadOnly(t *testing.T) {
 	// Create an AppPolicyStore that auto-approves read-only actions
 	appPolicyStore := &SimpleAppPolicyStore{
 		Policies: map[string]*models.AppPolicy{
-			"test-app-id": {
-				AppID: "test-app-id",
+			"spiffe://g8e.local/app/test-app-id": {
+				AppID: "spiffe://g8e.local/app/test-app-id",
 				AutoApproveIntents: []string{
 					string(constants.ActionTypeFsRead),
 					string(constants.ActionTypeFsList),
@@ -482,7 +482,7 @@ func TestTransactionVerifier_AppPolicyStore_L3Bypass_ReadOnly(t *testing.T) {
 		t.Run(string(actionType), func(t *testing.T) {
 			t.Parallel()
 			payload := typedPayload(t, actionType)
-			env := signedEnvelopeWithAppID(t, actionType, payload, privKey, "test-app-id")
+			env := signedEnvelopeWithAppID(t, actionType, payload, privKey, "spiffe://g8e.local/app/test-app-id")
 
 			// Read-only actions should bypass L3 even without L3 proof
 			verified, err := verifier.VerifyEnvelope(context.Background(), env)
@@ -507,8 +507,8 @@ func TestTransactionVerifier_AppPolicyStore_L3Required_Mutation(t *testing.T) {
 	// Create an AppPolicyStore that only auto-approves read-only actions
 	appPolicyStore := &SimpleAppPolicyStore{
 		Policies: map[string]*models.AppPolicy{
-			"test-app-id": {
-				AppID: "test-app-id",
+			"spiffe://g8e.local/app/test-app-id": {
+				AppID: "spiffe://g8e.local/app/test-app-id",
 				AutoApproveIntents: []string{
 					string(constants.ActionTypeFsRead),
 				},
@@ -523,7 +523,7 @@ func TestTransactionVerifier_AppPolicyStore_L3Required_Mutation(t *testing.T) {
 	// Test a mutating action not in AutoApproveIntents
 	actionType := constants.ActionTypeExecuteBash
 	payload := typedPayload(t, actionType)
-	env := signedEnvelopeWithAppID(t, actionType, payload, privKey, "test-app-id")
+	env := signedEnvelopeWithAppID(t, actionType, payload, privKey, "spiffe://g8e.local/app/test-app-id")
 
 	// Mutating action should require L3 proof
 	_, err := verifier.VerifyEnvelope(context.Background(), env)
@@ -552,7 +552,7 @@ func TestTransactionVerifier_AppPolicyStore_NoPolicy_Fallback(t *testing.T) {
 	// Test a mutating action that would normally require L3
 	actionType := constants.ActionTypeExecuteBash
 	payload := typedPayload(t, actionType)
-	env := signedEnvelopeWithAppID(t, actionType, payload, privKey, "test-app-id")
+	env := signedEnvelopeWithAppID(t, actionType, payload, privKey, "spiffe://g8e.local/app/test-app-id")
 
 	// Should require L3 when no policy exists
 	_, err := verifier.VerifyEnvelope(context.Background(), env)
@@ -575,7 +575,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		slog.New(slog.NewTextHandler(os.Stdout, nil)),
 		replayStore,
 		stateRootProvider,
-		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-app-id": pubKey}},
+		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"spiffe://g8e.local/app/test-app-id": pubKey}},
 		appPolicyStore,
 		l3Notary,
 		nil,
