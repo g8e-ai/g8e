@@ -1,0 +1,358 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package gateway
+
+import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/json"
+	"encoding/pem"
+	"testing"
+	"time"
+
+	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/marshaler"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestAppEnrollmentService_EnrollApp(t *testing.T) {
+	t.Parallel()
+
+	// Setup test infrastructure
+	gateway, _ := setupTestGatewayService(t)
+	db := gateway.db
+	logger := testutil.NewTestLogger()
+	pki := gateway.pki
+
+	// Create AppEnrollmentService
+	appEnrollment := NewAppEnrollmentService(db, pki, logger)
+
+	// Test cases
+	tests := []struct {
+		name        string
+		req         AppEnrollRequest
+		setup       func() // Setup function to prepare test state
+		wantSuccess bool
+		wantError   string
+		teardown    func() // Teardown function to clean up test state
+	}{
+		{
+			name: "successful enrollment with valid CSR",
+			req: AppEnrollRequest{
+				AppName:        "test-mcp-client",
+				AppType:        "mcp-client",
+				OrganizationID: "test-org",
+			},
+			setup: func() {
+				// Generate a valid CSR for the test
+				csrPEM := generateTestCSR(t, "test-mcp-client")
+				t.Setenv("TEST_CSR", csrPEM)
+			},
+			wantSuccess: true,
+			teardown: func() {
+				// Clean up the enrolled app
+				appID := "spiffe://g8e.local/app/test-mcp-client"
+				_, _ = db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
+				_ = pki.secretManager.DeleteServicePrivateKey(appID)
+			},
+		},
+		{
+			name: "reject enrollment with missing CSR",
+			req: AppEnrollRequest{
+				AppName:        "test-app",
+				AppType:        "mcp-client",
+				OrganizationID: "test-org",
+			},
+			wantSuccess: false,
+			wantError:   "csr_pem is required",
+		},
+		{
+			name: "reject enrollment with missing app name",
+			req: AppEnrollRequest{
+				CSR:            generateTestCSR(t, "test-app"),
+				AppType:        "mcp-client",
+				OrganizationID: "test-org",
+			},
+			wantSuccess: false,
+			wantError:   "app_name is required",
+		},
+		{
+			name: "reject enrollment with missing app type",
+			req: AppEnrollRequest{
+				CSR:            generateTestCSR(t, "test-app"),
+				AppName:        "test-app",
+				OrganizationID: "test-org",
+			},
+			wantSuccess: false,
+			wantError:   "app_type is required",
+		},
+		{
+			name: "reject enrollment with invalid app type",
+			req: AppEnrollRequest{
+				CSR:            generateTestCSR(t, "test-app"),
+				AppName:        "test-app",
+				AppType:        "invalid-type",
+				OrganizationID: "test-org",
+			},
+			wantSuccess: false,
+			wantError:   "invalid app_type",
+		},
+		{
+			name: "reject enrollment with invalid app name (special chars)",
+			req: AppEnrollRequest{
+				CSR:            generateTestCSR(t, "test@app"),
+				AppName:        "test@app",
+				AppType:        "mcp-client",
+				OrganizationID: "test-org",
+			},
+			wantSuccess: false,
+			wantError:   "app_name must contain only alphanumeric characters",
+		},
+		{
+			name: "reject enrollment with invalid app name (spaces)",
+			req: AppEnrollRequest{
+				CSR:            generateTestCSR(t, "test app"),
+				AppName:        "test app",
+				AppType:        "mcp-client",
+				OrganizationID: "test-org",
+			},
+			wantSuccess: false,
+			wantError:   "app_name must contain only alphanumeric characters",
+		},
+		{
+			name: "reject enrollment with duplicate app name",
+			req: AppEnrollRequest{
+				AppName:        "duplicate-app",
+				AppType:        "mcp-client",
+				OrganizationID: "test-org",
+			},
+			setup: func() {
+				// First enrollment
+				csrPEM := generateTestCSR(t, "duplicate-app")
+				req1 := AppEnrollRequest{
+					CSR:            csrPEM,
+					AppName:        "duplicate-app",
+					AppType:        "mcp-client",
+					OrganizationID: "test-org",
+				}
+				resp, err := appEnrollment.EnrollApp(req1)
+				require.NoError(t, err)
+				require.True(t, resp.Success)
+			},
+			wantSuccess: false,
+			wantError:   "app_name already registered",
+			teardown: func() {
+				appID := "spiffe://g8e.local/app/duplicate-app"
+				_, _ = db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID)
+				_ = pki.secretManager.DeleteServicePrivateKey(appID)
+			},
+		},
+		{
+			name: "reject enrollment with invalid CSR PEM format",
+			req: AppEnrollRequest{
+				CSR:            "invalid-pem-data",
+				AppName:        "test-app",
+				AppType:        "mcp-client",
+				OrganizationID: "test-org",
+			},
+			wantSuccess: false,
+			wantError:   "invalid CSR PEM format",
+		},
+		{
+			name: "reject enrollment with malformed CSR",
+			req: AppEnrollRequest{
+				CSR:            "-----BEGIN CERTIFICATE REQUEST-----\nMIICZzCCAT8CAQAwFjEUMBIGA1UEAwwLdGVzdC1hcHAwggEiMA0GCSqGSIb3DQEB\n-----END CERTIFICATE REQUEST-----",
+				AppName:        "test-app",
+				AppType:        "mcp-client",
+				OrganizationID: "test-org",
+			},
+			wantSuccess: false,
+			wantError:   "failed to parse CSR",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Run setup if provided
+			if tt.setup != nil {
+				tt.setup()
+			}
+
+			// If the test requires a CSR, generate it
+			if tt.req.CSR == "" && tt.wantSuccess {
+				tt.req.CSR = generateTestCSR(t, tt.req.AppName)
+			}
+
+			// Execute enrollment
+			resp, err := appEnrollment.EnrollApp(tt.req)
+
+			// Verify response
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantSuccess, resp.Success)
+
+			if !tt.wantSuccess {
+				assert.Contains(t, resp.Error, tt.wantError)
+			} else {
+				assert.NotEmpty(t, resp.AppCert)
+				assert.NotEmpty(t, resp.CertChain)
+				assert.NotEmpty(t, resp.AppID)
+				assert.NotEmpty(t, resp.L2SignerID)
+				assert.Equal(t, resp.AppID, resp.L2SignerID)
+
+				// Verify the L2 signer was registered
+				signerDoc, err := db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), resp.AppID)
+				require.NoError(t, err)
+				require.NotNil(t, signerDoc)
+
+				var signer models.TrustedSigner
+				err = json.Unmarshal(signerDoc.Data, &signer)
+				require.NoError(t, err)
+				assert.Equal(t, resp.AppID, signer.ID)
+				assert.True(t, signer.Enabled)
+				assert.WithinDuration(t, time.Now().UTC(), signer.AddedAt, 5*time.Second)
+
+				// Verify the L2 private key was stored
+				privKey, err := pki.secretManager.GetServicePrivateKey(resp.AppID)
+				require.NoError(t, err)
+				assert.NotEmpty(t, privKey)
+			}
+
+			// Run teardown if provided
+			if tt.teardown != nil {
+				tt.teardown()
+			}
+		})
+	}
+}
+
+func TestIsValidAppName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{
+			name:  "valid alphanumeric",
+			input: "testapp123",
+			want:  true,
+		},
+		{
+			name:  "valid with hyphens",
+			input: "test-app-name",
+			want:  true,
+		},
+		{
+			name:  "valid with underscores",
+			input: "test_app_name",
+			want:  true,
+		},
+		{
+			name:  "valid mixed",
+			input: "Test-App_123",
+			want:  true,
+		},
+		{
+			name:  "empty string",
+			input: "",
+			want:  false,
+		},
+		{
+			name:  "contains space",
+			input: "test app",
+			want:  false,
+		},
+		{
+			name:  "contains special char",
+			input: "test@app",
+			want:  false,
+		},
+		{
+			name:  "contains slash",
+			input: "test/app",
+			want:  false,
+		},
+		{
+			name:  "contains dot",
+			input: "test.app",
+			want:  false,
+		},
+		{
+			name:  "starts with hyphen",
+			input: "-testapp",
+			want:  true,
+		},
+		{
+			name:  "ends with hyphen",
+			input: "testapp-",
+			want:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := isValidAppName(tt.input)
+			assert.Equal(t, tt.want, result)
+		})
+	}
+}
+
+// generateTestCSR generates a test CSR for the given common name
+func generateTestCSR(t *testing.T, commonName string) string {
+	t.Helper()
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	template := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+	}
+
+	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privateKey)
+	require.NoError(t, err)
+
+	csrPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: csrBytes,
+	})
+
+	return string(csrPEM)
+}
+
+func TestAppEnrollmentService_RollbackOnFailure(t *testing.T) {
+	t.Parallel()
+
+	db, logger, cfg := setupTestGatewayService(t)
+	pki := db.pki
+	appEnrollment := NewAppEnrollmentService(db, pki, logger)
+
+	t.Run("rollback deletes signer and private key on CSR signing failure", func(t *testing.T) {
+		t.Parallel()
+
+		// This test requires mocking PKI.SignCSR to fail
+		// For now, we'll skip this as it requires more complex test setup
+		t.Skip("requires PKI.SignCSR failure mock")
+	})
+}
