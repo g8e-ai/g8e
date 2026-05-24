@@ -32,9 +32,13 @@ func TestAuthStatusIndependence(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
+	// Use WAL mode to avoid SQLITE_BUSY errors in parallel tests
 	db, err := OpenGatewayDBService(dbDir, secretsDir, logger, true)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
+	// Enable WAL mode to reduce SQLITE_BUSY contention
+	_, err = db.db.Exec("PRAGMA journal_mode=WAL")
+	require.NoError(t, err)
 
 	pkiDir := t.TempDir()
 	sm, _ := NewSecretManager(db.db, t.TempDir(), logger)

@@ -14,6 +14,7 @@
 package gateway
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -206,6 +207,7 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/operators/target", h.handleSetTargetContext)
 	mux.HandleFunc("/api/governance/signers", h.handleTrustedSigners)
 	mux.HandleFunc("/api/governance/signers/", h.handleTrustedSignerByID)
+	mux.HandleFunc("/api/admin/app-policies/", h.handleAppPolicySigner)
 
 	// Register rate-limited MCP routes
 	mux.Handle("/api/governance/envelope", mcpHandler)
@@ -1412,6 +1414,86 @@ func (h *HTTPHandler) handleTrustedSignerByID(w http.ResponseWriter, r *http.Req
 	default:
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+// handleAppPolicySigner handles admin-only L2 signer registration for external apps.
+// POST /api/admin/app-policies/{app_id}/signer allows an admin to register a self-attested
+// L2 signer for an external app, enabling it to participate in consensus mode.
+func (h *HTTPHandler) handleAppPolicySigner(w http.ResponseWriter, r *http.Request) {
+	// Extract app_id from path: /api/admin/app-policies/{app_id}/signer
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) < 6 {
+		h.responder.Error(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+	appID := pathParts[5]
+	if appID == "" {
+		h.responder.Error(w, http.StatusBadRequest, "app_id required")
+		return
+	}
+
+	// Only POST is allowed
+	if r.Method != http.MethodPost {
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// Verify the app has an AppPolicy (deny-all default)
+	policyDoc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+	if err != nil {
+		h.responder.Error(w, http.StatusInternalServerError, "failed to check app policy")
+		return
+	}
+	if policyDoc == nil {
+		h.responder.Error(w, http.StatusForbidden, "app policy not found (deny-all default)")
+		return
+	}
+
+	// Parse request body
+	body, err := h.readBody(r)
+	if err != nil {
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req struct {
+		PublicKey string `json:"public_key_hex"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if req.PublicKey == "" {
+		h.responder.Error(w, http.StatusBadRequest, "public_key_hex required")
+		return
+	}
+
+	// Validate public key format
+	pubKeyBytes, err := hex.DecodeString(req.PublicKey)
+	if err != nil {
+		h.responder.Error(w, http.StatusBadRequest, "invalid hex public key")
+		return
+	}
+	if len(pubKeyBytes) != ed25519.PublicKeySize {
+		h.responder.Error(w, http.StatusBadRequest, "invalid public key size")
+		return
+	}
+
+	// Register the trusted signer with the app_id as the key_id
+	signer := models.TrustedSigner{
+		ID:        appID,
+		PublicKey: req.PublicKey,
+		AddedAt:   time.Now().UTC(),
+		Enabled:   true,
+	}
+
+	if err := h.db.AddTrustedSigner(signer); err != nil {
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.logger.Info("External app L2 signer registered by admin", "app_id", appID)
+	h.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
 
 func (h *HTTPHandler) handleSSEEvents(w http.ResponseWriter, r *http.Request, id string) {
