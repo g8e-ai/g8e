@@ -44,6 +44,7 @@ func testG8eoCmd() *cobra.Command {
 	var race bool
 	var verbose bool
 	var run string
+	var coverage bool
 
 	cmd := &cobra.Command{
 		Use:   "g8eo",
@@ -55,16 +56,22 @@ func testG8eoCmd() *cobra.Command {
 			}
 
 			g8eoDir := filepath.Join(cfg.ProjectRoot, "services", "g8eo")
-			makeArgs := []string{"-C", g8eoDir, "test"}
+			var makeArgs []string
 
-			if run != "" {
-				makeArgs = append(makeArgs, "TESTFLAGS=-run="+run)
-			}
-			if race {
-				makeArgs = append(makeArgs, "TESTFLAGS=-race")
-			}
-			if verbose {
-				makeArgs = append(makeArgs, "TESTFLAGS=-v")
+			if coverage {
+				makeArgs = []string{"-C", g8eoDir, "test-coverage"}
+			} else {
+				makeArgs = []string{"-C", g8eoDir, "test"}
+
+				if run != "" {
+					makeArgs = append(makeArgs, "TESTFLAGS=-run="+run)
+				}
+				if race {
+					makeArgs = append(makeArgs, "TESTFLAGS=-race")
+				}
+				if verbose {
+					makeArgs = append(makeArgs, "TESTFLAGS=-v")
+				}
 			}
 
 			cmd.Printf("Running g8eo tests in %s...\n", g8eoDir)
@@ -78,6 +85,7 @@ func testG8eoCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&race, "race", true, "Enable race detector")
 	cmd.Flags().BoolVar(&verbose, "v", false, "Verbose output")
 	cmd.Flags().StringVar(&run, "run", "", "Run specific test (regex)")
+	cmd.Flags().BoolVar(&coverage, "coverage", false, "Generate coverage report")
 
 	return cmd
 }
