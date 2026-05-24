@@ -86,12 +86,6 @@ from app.constants.generated_headers import (
     OPERATOR_API_KEY,
     TASK_ID,
 )
-
-# Header constant aliases for backward compatibility
-HTTP_AUTHORIZATION_HEADER = AUTHORIZATION
-HTTP_BEARER_PREFIX = "Bearer "
-HTTP_API_KEY_HEADER = API_KEY
-OPERATOR_API_KEY_HEADER = OPERATOR_API_KEY
 from app.constants.intents import (
     CLOUD_INTENT_DEPENDENCIES,
     CLOUD_INTENT_QUESTIONS,

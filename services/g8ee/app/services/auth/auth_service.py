@@ -19,9 +19,8 @@ from typing import TYPE_CHECKING
 from fastapi import Request
 
 from app.constants import (
+    AUTHORIZATION,
     CLI_SESSION_ID,
-    HTTP_AUTHORIZATION_HEADER,
-    HTTP_BEARER_PREFIX,
     PROXY_ORGANIZATION_ID_HEADER,
     PROXY_USER_EMAIL_HEADER,
     PROXY_USER_ID_HEADER,
@@ -80,9 +79,9 @@ class AuthService:
                 auth_method=AuthMethod.PROXY,
             )
         else:
-            auth_header = request.headers.get(HTTP_AUTHORIZATION_HEADER, "")
-            if auth_header.startswith(HTTP_BEARER_PREFIX):
-                bearer_token = auth_header[len(HTTP_BEARER_PREFIX) :]
+            auth_header = request.headers.get(AUTHORIZATION, "")
+            if auth_header.startswith("Bearer "):
+                bearer_token = auth_header[len("Bearer ") :]
                 session = await self._operator_session_service.validate_operator_session(bearer_token)
                 if session and session.user_id:
                     # Prefer cli_session_id from body-embedded context if available

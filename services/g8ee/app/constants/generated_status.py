@@ -311,7 +311,7 @@ class FileOperation(StrEnum):
     UPDATE = "update"
     WRITE = "write"
 
-class G8EActionType(StrEnum):
+class G8eActionType(StrEnum):
     """Generated from protocol/constants/status.json - g8e_action_type"""
     COMMAND_EXECUTED = "operator.command.executed"
     COMMAND_EXECUTION = "operator.command.execution"
@@ -320,7 +320,7 @@ class G8EActionType(StrEnum):
     FILE_READ = "operator.file.read"
     PORT_CHECK = "g8e.port.check"
 
-class G8EAvailability(StrEnum):
+class G8eAvailability(StrEnum):
     """Generated from protocol/constants/status.json - g8e_availability"""
     OFFLINE = "OFFLINE"
     ONLINE = "ONLINE"
@@ -363,7 +363,7 @@ class InvestigationStatus(StrEnum):
     OPEN = "Open"
     RESOLVED = "Resolved"
 
-class LLMModels(StrEnum):
+class LLMs(StrEnum):
     """Generated from protocol/constants/status.json - llm_models"""
     ANTHROPIC_CLAUDE_4_5_HAIKU = "claude-haiku-4-5"
     ANTHROPIC_CLAUDE_4_6_OPUS = "claude-opus-4-6"

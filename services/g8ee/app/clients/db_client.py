@@ -34,7 +34,7 @@ import aiohttp
 
 from app.models.settings import GatewaySettings, TLSConfig
 from app.services.infra.settings_service import SettingsService
-from app.constants import BatchWriteOpType, OPERATOR_API_KEY_HEADER, HTTP_AUTHORIZATION_HEADER, HTTP_BEARER_PREFIX
+from app.constants import BatchWriteOpType, OPERATOR_API_KEY, AUTHORIZATION
 from app.errors import (
     DatabaseError,
     ErrorCode,
@@ -96,9 +96,9 @@ class DBClient:
         headers = {}
         # Priority: operator_session_id > operator_api_key
         if self._operator_session_id:
-            headers[HTTP_AUTHORIZATION_HEADER] = f"{HTTP_BEARER_PREFIX}{self._operator_session_id}"
+            headers[AUTHORIZATION] = f"Bearer {self._operator_session_id}"
         elif self._operator_api_key:
-            headers[OPERATOR_API_KEY_HEADER] = self._operator_api_key
+            headers[OPERATOR_API_KEY] = self._operator_api_key
 
         if not hasattr(self, "_session") or self._session is None:
             self._session = create_component_http_session(
