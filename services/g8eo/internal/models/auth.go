@@ -425,6 +425,7 @@ type AppPolicy struct {
 	AllowedCollections []string  `json:"allowed_collections"`
 	AllowedEventTypes  []string  `json:"allowed_event_types"`
 	AllowedIntents     []string  `json:"allowed_intents"`
+	AutoApproveIntents []string  `json:"auto_approve_intents"`
 	RateLimitRPS       int       `json:"rate_limit_rps"`
 	MaxPayloadBytes    int64     `json:"max_payload_bytes"`
 	RequireL3Approval  bool      `json:"require_l3_approval"`
