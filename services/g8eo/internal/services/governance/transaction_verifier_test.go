@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/services/g8eo/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
 	"github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/operatorv1"
 	"github.com/g8e-ai/g8e/services/g8eo/pkg/uap"
@@ -45,6 +46,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
+		nil, // AppPolicyStore not used in tests
 		l3Notary,
 		nil,                        // Sentinel not used in tests
 		constants.AllActionTypes(), // Use SSOT for action types
@@ -436,4 +438,159 @@ func TestTransactionVerifier_AllActionTypesFromSSOT(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestTransactionVerifier_AppPolicyStore_L3Bypass_ReadOnly verifies that read-only
+// intents approved by AppPolicyStore bypass L3 human presence verification.
+func TestTransactionVerifier_AppPolicyStore_L3Bypass_ReadOnly(t *testing.T) {
+	t.Parallel()
+
+	// Create an AppPolicyStore that auto-approves read-only actions
+	appPolicyStore := &SimpleAppPolicyStore{
+		Policies: map[string]*models.AppPolicy{
+			"test-app-id": {
+				AppID: "test-app-id",
+				AutoApproveIntents: []string{
+					string(constants.ActionTypeFsRead),
+					string(constants.ActionTypeFsList),
+					string(constants.ActionTypeFsGrep),
+					string(constants.ActionTypePortCheck),
+					string(constants.ActionTypeFetchLogs),
+					string(constants.ActionTypeFetchHistory),
+					string(constants.ActionTypeFetchFileHistory),
+					string(constants.ActionTypeFetchFileDiff),
+				},
+			},
+		},
+	}
+
+	verifier, privKey := createVerifierWithAppPolicyStore(t, appPolicyStore, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), nil)
+
+	// Test each read-only action type
+	readOnlyActions := []constants.ActionType{
+		constants.ActionTypeFsRead,
+		constants.ActionTypeFsList,
+		constants.ActionTypeFsGrep,
+		constants.ActionTypePortCheck,
+		constants.ActionTypeFetchLogs,
+		constants.ActionTypeFetchHistory,
+		constants.ActionTypeFetchFileHistory,
+		constants.ActionTypeFetchFileDiff,
+	}
+
+	for _, actionType := range readOnlyActions {
+		t.Run(string(actionType), func(t *testing.T) {
+			t.Parallel()
+			payload := typedPayload(t, actionType)
+			env := signedEnvelopeWithAppID(t, actionType, payload, privKey, "test-app-id")
+
+			// Read-only actions should bypass L3 even without L3 proof
+			verified, err := verifier.VerifyEnvelope(context.Background(), env)
+			if err != nil {
+				t.Fatalf("read-only action %s should bypass L3 via app policy, got error: %v", actionType, err)
+			}
+			if verified == nil {
+				t.Fatalf("verified transaction is nil for read-only action %s", actionType)
+			}
+			if !verified.L3Valid {
+				t.Errorf("expected L3Valid=true for read-only action %s with app policy bypass", actionType)
+			}
+		})
+	}
+}
+
+// TestTransactionVerifier_AppPolicyStore_L3Required_Mutation verifies that mutating
+// intents NOT in AutoApproveIntents require L3 human presence verification.
+func TestTransactionVerifier_AppPolicyStore_L3Required_Mutation(t *testing.T) {
+	t.Parallel()
+
+	// Create an AppPolicyStore that only auto-approves read-only actions
+	appPolicyStore := &SimpleAppPolicyStore{
+		Policies: map[string]*models.AppPolicy{
+			"test-app-id": {
+				AppID: "test-app-id",
+				AutoApproveIntents: []string{
+					string(constants.ActionTypeFsRead),
+				},
+			},
+		},
+	}
+
+	// Provide a mock L3 notary that rejects all proofs
+	l3Notary := testutil.NewConfigurableMockL3Notary(false)
+	verifier, privKey := createVerifierWithAppPolicyStore(t, appPolicyStore, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), l3Notary)
+
+	// Test a mutating action not in AutoApproveIntents
+	actionType := constants.ActionTypeExecuteBash
+	payload := typedPayload(t, actionType)
+	env := signedEnvelopeWithAppID(t, actionType, payload, privKey, "test-app-id")
+
+	// Mutating action should require L3 proof
+	_, err := verifier.VerifyEnvelope(context.Background(), env)
+	if err == nil {
+		t.Fatalf("mutating action %s should require L3 proof when not in AutoApproveIntents", actionType)
+	}
+	if !errors.Is(err, ErrL3ProofMissing) && !errors.Is(err, ErrL3ProofInvalid) {
+		t.Fatalf("expected L3 proof error for mutating action, got: %v", err)
+	}
+}
+
+// TestTransactionVerifier_AppPolicyStore_NoPolicy_Fallback verifies that when
+// no policy is found for an app, the system falls back to requiring standard L3.
+func TestTransactionVerifier_AppPolicyStore_NoPolicy_Fallback(t *testing.T) {
+	t.Parallel()
+
+	// Create an AppPolicyStore with no policy for the app
+	appPolicyStore := &SimpleAppPolicyStore{
+		Policies: map[string]*models.AppPolicy{},
+	}
+
+	// Provide a mock L3 notary that rejects all proofs
+	l3Notary := testutil.NewConfigurableMockL3Notary(false)
+	verifier, privKey := createVerifierWithAppPolicyStore(t, appPolicyStore, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), l3Notary)
+
+	// Test a mutating action that would normally require L3
+	actionType := constants.ActionTypeExecuteBash
+	payload := typedPayload(t, actionType)
+	env := signedEnvelopeWithAppID(t, actionType, payload, privKey, "test-app-id")
+
+	// Should require L3 when no policy exists
+	_, err := verifier.VerifyEnvelope(context.Background(), env)
+	if err == nil {
+		t.Fatalf("action should require L3 when no app policy exists")
+	}
+	if !errors.Is(err, ErrL3ProofMissing) && !errors.Is(err, ErrL3ProofInvalid) {
+		t.Fatalf("expected L3 proof error when no policy exists, got: %v", err)
+	}
+}
+
+// createVerifierWithAppPolicyStore creates a TransactionVerifier with a custom AppPolicyStore.
+func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStore, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary) (*TransactionVerifier, ed25519.PrivateKey) {
+	t.Helper()
+	pubKey, privKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate signer: %v", err)
+	}
+	return NewTransactionVerifier(
+		slog.New(slog.NewTextHandler(os.Stdout, nil)),
+		replayStore,
+		stateRootProvider,
+		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-app-id": pubKey}},
+		appPolicyStore,
+		l3Notary,
+		nil,
+		constants.AllActionTypes(),
+		"notary",
+	), privKey
+}
+
+// signedEnvelopeWithAppID creates a signed envelope with a specific L2 KeyId.
+func signedEnvelopeWithAppID(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey, appID string) *uap.UAPEnvelope {
+	t.Helper()
+	env := signedEnvelope(t, actionType, payload, privKey)
+	if env.Governance != nil && env.Governance.L2 != nil {
+		env.Governance.L2.KeyId = appID
+	}
+	rehash(t, env)
+	return env
 }

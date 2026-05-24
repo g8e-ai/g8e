@@ -940,6 +940,30 @@ func (s *GatewayDBService) HasTrustedSigners() (bool, error) {
 	return len(docs) > 0, nil
 }
 
+// GetAppPolicy retrieves an AppPolicy by app_id from the database.
+// Implements governance.AppPolicyStore.
+func (s *GatewayDBService) GetAppPolicy(appID string) (*models.AppPolicy, error) {
+	doc, err := s.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get app policy %s: %w", appID, err)
+	}
+	if doc == nil {
+		return nil, nil
+	}
+
+	data, err := json.Marshal(doc.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	var policy models.AppPolicy
+	if err := json.Unmarshal(data, &policy); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal app policy: %w", err)
+	}
+
+	return &policy, nil
+}
+
 func scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr string) (*models.Document, error) {
 	createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
 	if err != nil {

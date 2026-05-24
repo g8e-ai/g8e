@@ -46,6 +46,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		testutil.NewStatefulMockReplayStore(),
 		testutil.NewMockStateRootProvider("test-state-root-v1"),
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key-id": pubKey}},
+		nil, // AppPolicyStore not used in tests
 		nil, // L3 verifier not needed for EVAL_ANSWER (non-mutation)
 		nil, // Sentinel not used in tests
 		[]constants.ActionType{constants.ActionTypeEvalAnswer},

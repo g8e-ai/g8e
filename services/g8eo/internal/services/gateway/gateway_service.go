@@ -395,6 +395,7 @@ type GovernanceDeps struct {
 	TransactionAudit  governance.TransactionAuditStore
 	L3Notary          governance.L3Notary
 	SignerStore       governance.SignerStore
+	AppPolicyStore    governance.AppPolicyStore
 }
 
 // GetGovernanceDeps returns the governance dependencies for transaction verification.
@@ -411,6 +412,7 @@ func (ls *GatewayService) GetGovernanceDeps() *GovernanceDeps {
 		TransactionAudit:  ls.db,
 		L3Notary:          compositeL3,
 		SignerStore:       ls.db,
+		AppPolicyStore:    ls.db,
 	}
 }
 

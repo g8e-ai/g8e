@@ -108,6 +108,7 @@ type CommandServiceConfig struct {
 	StateRootProvider governance.StateRootProvider
 	TransactionAudit  governance.TransactionAuditStore
 	SignerStore       governance.SignerStore
+	AppPolicyStore    governance.AppPolicyStore
 
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey
@@ -244,6 +245,7 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, 
 		c.ReplayStore,
 		c.StateRootProvider,
 		rs.signerStore,
+		c.AppPolicyStore,
 		c.L3Notary,
 		c.Sentinel,
 		knownActionTypes,
@@ -531,7 +533,7 @@ func (rs *PubSubCommandService) ProcessEnvelope(ctx context.Context, payload []b
 	if rs.transactionVerifier == nil {
 		return nil, errors.New("transaction verifier not configured")
 	}
-	verified, err := rs.transactionVerifier.VerifyEnvelope(envelope)
+	verified, err := rs.transactionVerifier.VerifyEnvelope(ctx, envelope)
 	if err != nil {
 		rs.logBlockedTransaction(envelope, err)
 		return nil, err
