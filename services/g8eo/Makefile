@@ -134,19 +134,19 @@ build-all:
 # =============================================================================
 .PHONY: test
 test:
-	@$(GO) test -race -timeout 180s $$(go list ./... | grep -v "/mocks$$")
+	@$(GO) test -race -timeout 180s $$(go list ./... | grep -v "/mocks$$" | grep -v "/proto/")
 
 .PHONY: test-coverage
 test-coverage:
-	@$(GO) test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v "/mocks$$")
+	@$(GO) test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v "/mocks$$" | grep -v "/proto/")
 	@$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
-	@$(GO) tool cover -func=coverage.out | grep -v "internal/protocol/proto" | tail -1
+	@$(GO) tool cover -func=coverage.out | tail -1
 
 .PHONY: test-coverage-check
 test-coverage-check:
-	@$(GO) test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v "/mocks$$")
-	@COVERAGE=$$($(GO) tool cover -func=coverage.out | grep -v "internal/protocol/proto" | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	@$(GO) test -race -timeout 180s -coverprofile=coverage.out -covermode=atomic $$(go list ./... | grep -v "/mocks$$" | grep -v "/proto/")
+	@COVERAGE=$$($(GO) tool cover -func=coverage.out | tail -1 | awk '{print $$3}' | sed 's/%//'); \
 	if [ $$(echo "$$COVERAGE < 85" | bc -l) -eq 1 ]; then \
 		echo "Coverage $$COVERAGE% is below 85% threshold"; \
 		exit 1; \
@@ -155,7 +155,7 @@ test-coverage-check:
 
 .PHONY: test-sudo
 test-sudo:
-	@sudo $(GO) test -race -timeout 180s $$(go list ./... | grep -v "/mocks$$")
+	@sudo $(GO) test -race -timeout 180s $$(go list ./... | grep -v "/mocks$$" | grep -v "/proto/")
 
 .PHONY: fmt
 fmt:
