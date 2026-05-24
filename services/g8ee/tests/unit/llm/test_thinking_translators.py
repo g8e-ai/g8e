@@ -46,7 +46,7 @@ from app.models.model_configs import (
     OLLAMA_QWEN3_5_122B_CONFIG,
     OPENAI_DEFAULT_CONFIG,
     OPENAI_GPT_5_4_MINI_CONFIG,
-    LLMModelConfig,
+    LLModelConfig,
     clamp_thinking_level,
 )
 
@@ -65,7 +65,7 @@ class TestClampThinkingLevel:
         """A model with no declared thinking levels always maps to OFF,
         regardless of desired level - the caller asked for something the
         model cannot provide."""
-        cfg = LLMModelConfig(name="no-thinking", supported_thinking_levels=[])
+        cfg = LLModelConfig(name="no-thinking", supported_thinking_levels=[])
         for desired in ThinkingLevel:
             assert clamp_thinking_level(desired, cfg) is ThinkingLevel.OFF
 
@@ -76,7 +76,7 @@ class TestClampThinkingLevel:
     def test_off_desired_on_always_on_model_returns_lowest(self):
         """An always-on model (no OFF in supported list) must still return a
         valid non-OFF level when the caller asks for OFF."""
-        always_on = LLMModelConfig(
+        always_on = LLModelConfig(
             name="always-on",
             supported_thinking_levels=[ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
         )
@@ -285,7 +285,7 @@ class TestTranslateForOllama:
         Ollama model forever. The contract now is: every Ollama model
         registers its dialect explicitly; unregistered configs blow up.
         """
-        cfg = LLMModelConfig(
+        cfg = LLModelConfig(
             name="weird",
             supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
             thinking_dialect=None,

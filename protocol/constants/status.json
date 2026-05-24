@@ -1287,97 +1287,97 @@
     },
     "llm_models": {
       "claude-haiku-4-5": {
-        "_go_const": "LLMModelsAnthropicClaude45Haiku",
+        "_go_const": "LLMsAnthropicClaude45Haiku",
         "_python_const": "ANTHROPIC_CLAUDE_4_5_HAIKU",
         "value": "claude-haiku-4-5"
       },
       "claude-opus-4-6": {
-        "_go_const": "LLMModelsAnthropicClaude46Opus",
+        "_go_const": "LLMsAnthropicClaude46Opus",
         "_python_const": "ANTHROPIC_CLAUDE_4_6_OPUS",
         "value": "claude-opus-4-6"
       },
       "claude-sonnet-4-6": {
-        "_go_const": "LLMModelsAnthropicClaude46Sonnet",
+        "_go_const": "LLMsAnthropicClaude46Sonnet",
         "_python_const": "ANTHROPIC_CLAUDE_4_6_SONNET",
         "value": "claude-sonnet-4-6"
       },
       "gemini-3-flash-preview": {
-        "_go_const": "LLMModelsGemini3Flash",
+        "_go_const": "LLMsGemini3Flash",
         "_python_const": "GEMINI_3_FLASH",
         "value": "gemini-3-flash-preview"
       },
       "gemini-3.1-flash-lite": {
-        "_go_const": "LLMModelsGemini31FlashLite",
+        "_go_const": "LLMsGemini31FlashLite",
         "_python_const": "GEMINI_3_1_FLASH_LITE",
         "value": "gemini-3.1-flash-lite"
       },
       "gemini-3.1-pro-preview": {
-        "_go_const": "LLMModelsGemini31Pro",
+        "_go_const": "LLMsGemini31Pro",
         "_python_const": "GEMINI_3_1_PRO",
         "value": "gemini-3.1-pro-preview"
       },
       "gemma4:26b": {
-        "_go_const": "LLMModelsOllamaGemma426b",
+        "_go_const": "LLMsOllamaGemma426b",
         "_python_const": "OLLAMA_GEMMA4_26B",
         "value": "gemma4:26b"
       },
       "gemma4:e2b": {
-        "_go_const": "LLMModelsOllamaGemma4E2b",
+        "_go_const": "LLMsOllamaGemma4E2b",
         "_python_const": "OLLAMA_GEMMA4_E2B",
         "value": "gemma4:e2b"
       },
       "gemma4:e4b": {
-        "_go_const": "LLMModelsOllamaGemma4E4b",
+        "_go_const": "LLMsOllamaGemma4E4b",
         "_python_const": "OLLAMA_GEMMA4_E4B",
         "value": "gemma4:e4b"
       },
       "glm-5.1:cloud": {
-        "_go_const": "LLMModelsOllamaGlm51",
+        "_go_const": "LLMsOllamaGlm51",
         "_python_const": "OLLAMA_GLM_5_1",
         "value": "glm-5.1:cloud"
       },
       "google_gemma-4-E2B-it-Q4_K_M.gguf": {
-        "_go_const": "LLMModelsLlamacppGemma4E2b",
+        "_go_const": "LLMsLlamacppGemma4E2b",
         "_python_const": "LLAMACPP_GEMMA4_E2B",
         "value": "google_gemma-4-E2B-it-Q4_K_M.gguf"
       },
       "gpt-5.4": {
-        "_go_const": "LLMModelsOpenaiGpt54",
+        "_go_const": "LLMsOpenaiGpt54",
         "_python_const": "OPENAI_GPT_5_4",
         "value": "gpt-5.4"
       },
       "gpt-5.4-mini": {
-        "_go_const": "LLMModelsOpenaiGpt54Mini",
+        "_go_const": "LLMsOpenaiGpt54Mini",
         "_python_const": "OPENAI_GPT_5_4_MINI",
         "value": "gpt-5.4-mini"
       },
       "gpt-5.4-nano": {
-        "_go_const": "LLMModelsOpenaiGpt54Nano",
+        "_go_const": "LLMsOpenaiGpt54Nano",
         "_python_const": "OPENAI_GPT_5_4_NANO",
         "value": "gpt-5.4-nano"
       },
       "gpt-5.4-pro": {
-        "_go_const": "LLMModelsOpenaiGpt54Pro",
+        "_go_const": "LLMsOpenaiGpt54Pro",
         "_python_const": "OPENAI_GPT_5_4_PRO",
         "value": "gpt-5.4-pro"
       },
       "llama3.2:3b": {
-        "_go_const": "LLMModelsOllamaLlama323b",
+        "_go_const": "LLMsOllamaLlama323b",
         "_python_const": "OLLAMA_LLAMA_3_2_3B",
         "value": "llama3.2:3b"
       },
       "nemotron-3-nano:30b": {
-        "_go_const": "LLMModelsOllamaNemotron330b",
+        "_go_const": "LLMsOllamaNemotron330b",
         "_python_const": "OLLAMA_NEMOTRON_3_30B",
         "value": "nemotron-3-nano:30b"
       },
       "qwen3.5:122b": {
-        "_go_const": "LLMModelsOllamaQwen35122b",
+        "_go_const": "LLMsOllamaQwen35122b",
         "_python_const": "OLLAMA_QWEN3_5_122B",
         "value": "qwen3.5:122b"
       },
       "qwen3.5:2b": {
-        "_go_const": "LLMModelsOllamaQwen352b",
+        "_go_const": "LLMsOllamaQwen352b",
         "_python_const": "OLLAMA_QWEN3_5_2B",
         "value": "qwen3.5:2b"
       }

@@ -22,7 +22,7 @@ from app.constants import (
     TribunalAuditStatus,
 )
 from app.constants.generated_events import EventType
-from app.constants.status import CommandErrorType
+from app.constants.generated_status import CommandErrorType
 from app.llm.provider import LLMProvider
 from app.errors import OllamaEmptyResponseError
 from app.models.agent import OperatorContext

@@ -36,13 +36,13 @@ class ActionType(StrEnum):
     REVOKE_INTENT = "REVOKE_INTENT"
     SHUTDOWN = "SHUTDOWN"
 
-class AiSource(StrEnum):
+class AISource(StrEnum):
     """Generated from protocol/constants/status.json - ai_source"""
     TERMINAL_ANCHORED = "ai.terminal.anchored"
     TERMINAL_DIRECT = "ai.terminal.direct"
     TOOL_CALL = "ai.tool.call"
 
-class AiTaskId(StrEnum):
+class AITaskId(StrEnum):
     """Generated from protocol/constants/status.json - ai_task_id"""
     AGENT_CONTINUE = "ai.agent.continue"
     CHAT = "ai.chat"
@@ -61,7 +61,7 @@ class AiTaskId(StrEnum):
     RECURSIVE_GREP = "ai.recursive_grep"
     RESTORE_FILE = "ai.restore.file"
 
-class ApiKeyStatus(StrEnum):
+class APIKeyStatus(StrEnum):
     """Generated from protocol/constants/status.json - api_key_status"""
     ACTIVE = "active"
     EXPIRED = "expired"
@@ -311,7 +311,7 @@ class FileOperation(StrEnum):
     UPDATE = "update"
     WRITE = "write"
 
-class G8eActionType(StrEnum):
+class G8EActionType(StrEnum):
     """Generated from protocol/constants/status.json - g8e_action_type"""
     COMMAND_EXECUTED = "operator.command.executed"
     COMMAND_EXECUTION = "operator.command.execution"
@@ -320,7 +320,7 @@ class G8eActionType(StrEnum):
     FILE_READ = "operator.file.read"
     PORT_CHECK = "g8e.port.check"
 
-class G8eAvailability(StrEnum):
+class G8EAvailability(StrEnum):
     """Generated from protocol/constants/status.json - g8e_availability"""
     OFFLINE = "OFFLINE"
     ONLINE = "ONLINE"
@@ -363,7 +363,7 @@ class InvestigationStatus(StrEnum):
     OPEN = "Open"
     RESOLVED = "Resolved"
 
-class LlmModels(StrEnum):
+class LLMModels(StrEnum):
     """Generated from protocol/constants/status.json - llm_models"""
     ANTHROPIC_CLAUDE_4_5_HAIKU = "claude-haiku-4-5"
     ANTHROPIC_CLAUDE_4_6_OPUS = "claude-opus-4-6"

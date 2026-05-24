@@ -32,22 +32,22 @@ const (
 	apiKeyLength = 32
 )
 
-// ApiKeyService handles the issuance and validation of download API keys.
-type ApiKeyService struct {
+// APIKeyService handles the issuance and validation of download API keys.
+type APIKeyService struct {
 	db     *GatewayDBService
 	logger *slog.Logger
 }
 
-// NewApiKeyService creates a new ApiKeyService.
-func NewApiKeyService(db *GatewayDBService, logger *slog.Logger) *ApiKeyService {
-	return &ApiKeyService{
+// NewAPIKeyService creates a new APIKeyService.
+func NewAPIKeyService(db *GatewayDBService, logger *slog.Logger) *APIKeyService {
+	return &APIKeyService{
 		db:     db,
 		logger: logger,
 	}
 }
 
 // IssueDownloadKey generates and stores a new download API key for a user.
-func (s *ApiKeyService) IssueDownloadKey(userID, orgID string) (string, error) {
+func (s *APIKeyService) IssueDownloadKey(userID, orgID string) (string, error) {
 	rawKey, err := s.generateRawKey()
 	if err != nil {
 		return "", err
@@ -86,7 +86,7 @@ func (s *ApiKeyService) IssueDownloadKey(userID, orgID string) (string, error) {
 }
 
 // ValidateKey checks if a raw API key is valid.
-func (s *ApiKeyService) ValidateKey(rawKey string) (*models.Document, error) {
+func (s *APIKeyService) ValidateKey(rawKey string) (*models.Document, error) {
 	if !strings.HasPrefix(rawKey, apiKeyPrefix) {
 		return nil, fmt.Errorf("invalid key format")
 	}
@@ -123,13 +123,13 @@ func (s *ApiKeyService) ValidateKey(rawKey string) (*models.Document, error) {
 }
 
 // RevokeKey revokes an API key.
-func (s *ApiKeyService) RevokeKey(rawKey string) error {
+func (s *APIKeyService) RevokeKey(rawKey string) error {
 	docID := s.makeDocID(rawKey)
 	_, err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionAPIKeys), docID)
 	return err
 }
 
-func (s *ApiKeyService) generateRawKey() (string, error) {
+func (s *APIKeyService) generateRawKey() (string, error) {
 	b := make([]byte, apiKeyLength)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -137,7 +137,7 @@ func (s *ApiKeyService) generateRawKey() (string, error) {
 	return apiKeyPrefix + hex.EncodeToString(b), nil
 }
 
-func (s *ApiKeyService) makeDocID(rawKey string) string {
+func (s *APIKeyService) makeDocID(rawKey string) string {
 	// Use the first 16 chars of the hex part as doc ID to avoid storing full key in index
 	return rawKey[:20]
 }

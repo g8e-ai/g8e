@@ -26,7 +26,7 @@ import logging
 import asyncio
 from typing import TYPE_CHECKING
 
-from app.constants.status import CommandErrorType, ComponentName
+from app.constants.generated_status import CommandErrorType, ComponentName
 from app.models.operators import StreamApprovalRequest
 from app.models.tool_results import CommandExecutionResult
 from app.models.http_context import G8eHttpContext
@@ -64,7 +64,7 @@ class OperatorStreamExecutor:
         # 1. Mint dlk_ token
         try:
             # Authority: client owns device link token lifecycle.
-            # Using high-level client method which uses canonical InternalApiPaths.CLIENT_CREATE_OPERATOR_LINK.
+            # Using high-level client method which uses canonical InternalAPIPaths.CLIENT_CREATE_OPERATOR_LINK.
             link_response = await self._internal_http_client.generate_operator_link(
                 user_id=g8e_context.user_id,
                 operator_id="", # Multi-host stream isn't bound to one operator yet

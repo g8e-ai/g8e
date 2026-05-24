@@ -30,7 +30,7 @@ var EnvVar = struct {
 	G8EEPIDFile                EnvVarKey
 	G8EELogFile                EnvVarKey
 	LogMaxBackups              EnvVarKey
-	LLMMaxTokens               EnvVarKey
+	LLMaxTokens                EnvVarKey
 	LLMCommandGenEnabled       EnvVarKey
 	LLMCommandGenAuditor       EnvVarKey
 	LLMCommandGenPasses        EnvVarKey
@@ -104,7 +104,7 @@ var EnvVar = struct {
 	TestLLMLiteModel           EnvVarKey
 	TestLLMAssistantAPIKey     EnvVarKey
 	TestLLMLiteAPIKey          EnvVarKey
-	TestLLMMaxTokens           EnvVarKey
+	TestLLMaxTokens            EnvVarKey
 	AuditorHMACKey             EnvVarKey
 	TestLLMPrimaryProvider     EnvVarKey
 	TestLLMPrimaryAPIKey       EnvVarKey
@@ -125,7 +125,7 @@ var EnvVar = struct {
 	G8EEPIDFile:                "G8E_G8EE_PID_FILE",
 	G8EELogFile:                "G8E_G8EE_LOG_FILE",
 	LogMaxBackups:              "G8E_LOG_MAX_BACKUPS",
-	LLMMaxTokens:               "G8E_LLM_MAX_TOKENS",
+	LLMaxTokens:                "G8E_LLM_MAX_TOKENS",
 	LLMCommandGenEnabled:       "G8E_LLM_COMMAND_GEN_ENABLED",
 	LLMCommandGenAuditor:       "G8E_LLM_COMMAND_GEN_AUDITOR",
 	LLMCommandGenPasses:        "G8E_LLM_COMMAND_GEN_PASSES",
@@ -199,7 +199,7 @@ var EnvVar = struct {
 	TestLLMLiteModel:           "G8E_TEST_LLM_LITE_MODEL",
 	TestLLMAssistantAPIKey:     "G8E_TEST_LLM_ASSISTANT_API_KEY",
 	TestLLMLiteAPIKey:          "G8E_TEST_LLM_LITE_API_KEY",
-	TestLLMMaxTokens:           "G8E_TEST_LLM_MAX_TOKENS",
+	TestLLMaxTokens:            "G8E_TEST_LLM_MAX_TOKENS",
 	AuditorHMACKey:             "G8E_AUDITOR_HMAC_KEY",
 	TestLLMPrimaryProvider:     "G8E_TEST_LLM_PRIMARY_PROVIDER",
 	TestLLMPrimaryAPIKey:       "G8E_TEST_LLM_PRIMARY_API_KEY",

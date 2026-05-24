@@ -18,7 +18,7 @@ import logging
 from pydantic import BaseModel, ConfigDict
 
 from app.constants import FORBIDDEN_COMMAND_PATTERNS, DEFAULT_OS_NAME
-from app.constants.status import Platform, CommandErrorType
+from app.constants.generated_status import Platform, CommandErrorType
 from app.models.agent import OperatorContext
 from app.utils.validators import get_blacklist_validator, get_whitelist_validator
 from app.utils.whitelist_validator import CommandWhitelistValidator

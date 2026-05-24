@@ -20,7 +20,7 @@ over pub/sub. Pure fire-and-forget publish - no approval, no pending store.
 import logging
 
 from app.constants.generated_events import EventType
-from app.constants.status import ComponentName, AITaskId
+from app.constants.generated_status import ComponentName, AITaskId
 from app.models.command_request_payloads import DirectCommandAuditRequestPayload
 from app.models.pubsub_messages import G8eMessage
 from app.models.http_context import G8eHttpContext

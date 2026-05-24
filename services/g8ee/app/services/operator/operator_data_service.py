@@ -28,11 +28,11 @@ from app.constants.config import (
 from app.constants.generated_events import (
     EventType,
 )
-from app.constants.status import (
+from app.constants.generated_status import (
     OperatorHistoryEventType,
     OperatorStatus,
 )
-from app.constants.status import ComponentName
+from app.constants.generated_status import ComponentName
 from app.errors import ExternalServiceError, ValidationError
 from app.models.investigations import ConversationHistoryMessage, ConversationMessageMetadata
 from app.models.sessions import CliSessionDocument

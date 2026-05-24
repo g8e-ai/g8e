@@ -33,7 +33,7 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
-from app.constants.status import SlashTier
+from app.constants.generated_status import SlashTier
 
 __all__ = [
     "GENESIS_PREV_ROOT",

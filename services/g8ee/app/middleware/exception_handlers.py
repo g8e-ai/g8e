@@ -17,7 +17,6 @@ from fastapi.responses import JSONResponse
 
 from app.errors import G8eError
 from app.models.errors import ErrorBody, ErrorResponse
-from app.constants import G8eHeaders
 
 logger = logging.getLogger(__name__)
 

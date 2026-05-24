@@ -20,7 +20,7 @@ from app.constants import (
     DEFAULT_HTTP_CLIENT_TIMEOUT,
     DEFAULT_MAX_RETRIES,
     ComponentName,
-    InternalApiPaths,
+    InternalAPIPaths,
 )
 from app.errors import NetworkError
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
@@ -143,7 +143,7 @@ class InternalHttpClient:
         self._ensure_mtls()
         try:
             response = await self._http.post(
-                InternalApiPaths.CLIENT_SSE_PUSH,
+                InternalAPIPaths.CLIENT_SSE_PUSH,
                 json_data=wire_model,
             )
         except Exception as e:
@@ -205,7 +205,7 @@ class InternalHttpClient:
             )
 
             response = await self._http.post(
-                InternalApiPaths.CLIENT_GRANT_INTENT.format(operator_id=operator_id),
+                InternalAPIPaths.CLIENT_GRANT_INTENT.format(operator_id=operator_id),
                 json_data=request_payload,
                 context=None,  # Context now in request body
             )
@@ -260,7 +260,7 @@ class InternalHttpClient:
             )
 
             response = await self._http.post(
-                InternalApiPaths.CLIENT_REVOKE_INTENT.format(operator_id=operator_id),
+                InternalAPIPaths.CLIENT_REVOKE_INTENT.format(operator_id=operator_id),
                 json_data=request_payload,
                 context=None,  # Context now in request body
             )
@@ -319,7 +319,7 @@ class InternalHttpClient:
             )
 
             response = await self._http.post(
-                InternalApiPaths.CLIENT_CREATE_OPERATOR_LINK,
+                InternalAPIPaths.CLIENT_CREATE_OPERATOR_LINK,
                 json_data=request_payload,
                 context=None,  # Context now in request body
             )

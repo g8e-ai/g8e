@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 from typing import TypeVar
 from app.constants.paths import PATHS
-from app.constants.models import ApiPathsConstants
+from app.constants.models import APIPathsConstants
 
 _PROTOCOL_DIR = PATHS["infra"]["protocol_constants_dir"]
 
@@ -36,10 +36,10 @@ def _load[T](filename: str, model_cls: type[T]) -> T:
     except (json.JSONDecodeError, Exception) as e:
         raise RuntimeError(f"Failed to load/validate protocol constants file {path}: {e}") from e
 
-_API_PATHS_DATA = _load("api_paths.json", ApiPathsConstants)
+_API_PATHS_DATA = _load("api_paths.json", APIPathsConstants)
 API_PATHS = _API_PATHS_DATA.model_dump()
 
-class _InternalApiPathsMeta(type):
+class _InternalAPIPathsMeta(type):
     def __getattr__(cls, name: str) -> str:
         # Priority 1: Explicit FULL_ prefix
         if name.startswith("FULL_"):
@@ -71,7 +71,7 @@ class _InternalApiPathsMeta(type):
 
         raise AttributeError(f"'{cls.__name__}' object has no attribute '{name}'")
 
-class InternalApiPaths(metaclass=_InternalApiPathsMeta):
+class InternalAPIPaths(metaclass=_InternalAPIPathsMeta):
     """Internal API paths shared across g8ee and client."""
     PREFIX: str = _API_PATHS_DATA.internal_prefix
 
@@ -82,24 +82,24 @@ class InternalApiPaths(metaclass=_InternalApiPathsMeta):
 
 
 def validate_api_paths_sync() -> None:
-    """Validate that all keys in api_paths.json are accessible via InternalApiPaths."""
+    """Validate that all keys in api_paths.json are accessible via InternalAPIPaths."""
     errors = []
 
     for key in _API_PATHS_DATA.g8ee:
         attr_name = f"G8EE_{key.upper()}"
         try:
-            getattr(InternalApiPaths, attr_name)
+            getattr(InternalAPIPaths, attr_name)
         except AttributeError:
             errors.append(f"g8ee key '{key}' not accessible as '{attr_name}'")
 
     for key in _API_PATHS_DATA.client:
         attr_name = f"CLIENT_{key.upper()}"
         try:
-            getattr(InternalApiPaths, attr_name)
+            getattr(InternalAPIPaths, attr_name)
         except AttributeError:
             errors.append(f"client key '{key}' not accessible as '{attr_name}'")
 
     if errors:
         raise RuntimeError(
-            "api_paths.json and InternalApiPaths are out of sync:\n" + "\n".join(errors)
+            "api_paths.json and InternalAPIPaths are out of sync:\n" + "\n".join(errors)
         )

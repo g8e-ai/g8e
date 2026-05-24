@@ -24,7 +24,7 @@ from app.models.state import G8eeAppState
 from app.services.service_factory import AllServices
 from app.constants import (
     ComponentName,
-    InternalApiPaths,
+    InternalAPIPaths,
     PROXY_USER_ID_HEADER,
 )
 from app.errors import (
@@ -63,7 +63,7 @@ from .services.operator.operator_lifecycle_service import OperatorLifecycleServi
 from .services.operator.operator_session_service import OperatorSessionService
 from .services.operator.operator_auth_service import OperatorAuthService
 from .services.operator.session_auth_listener import SessionAuthListener
-from .services.auth.api_key_service import ApiKeyService
+from .services.auth.api_key_service import APIKeyService
 from .services.auth.auth_service import AuthService
 from .services.auth.certificate_service import CertificateService
 from .services.infra.settings_service import SettingsService
@@ -323,7 +323,7 @@ async def get_g8ee_auth_service(request: Request) -> AuthService:
     return service
 
 
-async def get_g8ee_api_key_service(request: Request) -> ApiKeyService:
+async def get_g8ee_api_key_service(request: Request) -> APIKeyService:
     state = cast(G8eeAppState, request.app.state)
     service = state.services.api_key_service
     if not service:
@@ -443,13 +443,13 @@ async def require_authenticated_context(
     """
     # Check if this is an exempt path (e.g. operator auth relay)
     is_exempt = request.url.path in [
-        InternalApiPaths.G8EE_OPERATORS_AUTHENTICATE,
-        InternalApiPaths.G8EE_OPERATORS_DEVICE_LINK_REGISTER,
-        InternalApiPaths.G8EE_OPERATORS_VALIDATE_SESSION,
-        InternalApiPaths.G8EE_OPERATORS_REFRESH_SESSION,
-        InternalApiPaths.G8EE_OPERATORS_GATEWAY_SESSION_AUTH,
-        InternalApiPaths.G8EE_AUTH_GENERATE_KEY,
-        InternalApiPaths.G8EE_AUTH_REVOKE_CERT,
+        InternalAPIPaths.G8EE_OPERATORS_AUTHENTICATE,
+        InternalAPIPaths.G8EE_OPERATORS_DEVICE_LINK_REGISTER,
+        InternalAPIPaths.G8EE_OPERATORS_VALIDATE_SESSION,
+        InternalAPIPaths.G8EE_OPERATORS_REFRESH_SESSION,
+        InternalAPIPaths.G8EE_OPERATORS_GATEWAY_SESSION_AUTH,
+        InternalAPIPaths.G8EE_AUTH_GENERATE_KEY,
+        InternalAPIPaths.G8EE_AUTH_REVOKE_CERT,
     ]
 
     return await auth_service.get_validated_context(request, user, is_exempt_path=is_exempt)

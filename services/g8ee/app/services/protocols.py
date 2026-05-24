@@ -24,7 +24,7 @@ from app.constants import (
     FileOperation,
     OperatorStatus,
 )
-from app.constants.status import OperatorHistoryEventType, OperatorType
+from app.constants.generated_status import OperatorHistoryEventType, OperatorType
 from app.models.base import G8eBaseModel
 from app.models.cache import (
     BatchWriteOperation,

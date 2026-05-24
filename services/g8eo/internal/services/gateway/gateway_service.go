@@ -47,7 +47,7 @@ type GatewayService struct {
 	passkey         *PasskeyService
 	userSvc         *UserService
 	sessionSvc      *SessionService
-	apiKeySvc       *ApiKeyService
+	apiKeySvc       *APIKeyService
 	mcpGateway      *mcp.GatewayService
 	responder       *responder.Responder
 	server          *http.Server
@@ -114,7 +114,7 @@ func NewGatewayService(cfg *config.Config, logger *slog.Logger) (*GatewayService
 		return nil, fmt.Errorf("failed to initialize passkey service: %w", err)
 	}
 
-	apiKeySvc := NewApiKeyService(db, logger)
+	apiKeySvc := NewAPIKeyService(db, logger)
 
 	ls := &GatewayService{
 		cfg:        cfg,
@@ -163,7 +163,7 @@ func newGatewayServiceFromComponents(cfg *config.Config, logger *slog.Logger, db
 	// Passkey service initialization is optional; ignore errors for test configuration
 	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
 
-	apiKeySvc := NewApiKeyService(db, logger)
+	apiKeySvc := NewAPIKeyService(db, logger)
 
 	ls := &GatewayService{
 		cfg:        cfg,

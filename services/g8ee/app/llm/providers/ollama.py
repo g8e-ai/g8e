@@ -234,7 +234,7 @@ class OllamaProvider(LLMProvider):
         """Assemble chat() kwargs for primary calls.
 
         Thinking support varies by model family; translate_for_ollama consults
-        LLMModelConfig.thinking_dialect to decide whether to send the ``think``
+        LLModelConfig.thinking_dialect to decide whether to send the ``think``
         kwarg at all, and if so whether to set it True or False based on the
         requested ThinkingLevel. Models with dialect=NONE never see ``think``.
         """

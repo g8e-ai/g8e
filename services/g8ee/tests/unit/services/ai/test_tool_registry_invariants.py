@@ -24,7 +24,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.constants.status import OperatorToolName
+from app.constants.generated_status import OperatorToolName
 from app.errors import ConfigurationError
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
 from app.services.ai.tool_registry import (

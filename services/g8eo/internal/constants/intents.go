@@ -60,7 +60,7 @@ const (
 	IntentKmsCrypto                CloudIntent = "kms_crypto"
 	IntentIamDiscovery             CloudIntent = "iam_discovery"
 	IntentAcmDiscovery             CloudIntent = "acm_discovery"
-	IntentApigatewayDiscovery      CloudIntent = "apigateway_discovery"
+	IntentAPIgatewayDiscovery      CloudIntent = "apigateway_discovery"
 	IntentStepfunctionsDiscovery   CloudIntent = "stepfunctions_discovery"
 	IntentStepfunctionsExecution   CloudIntent = "stepfunctions_execution"
 	IntentAthenaDiscovery          CloudIntent = "athena_discovery"

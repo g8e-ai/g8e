@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from fastapi import Request
 
 from app.constants import (
+    CLI_SESSION_ID,
     HTTP_AUTHORIZATION_HEADER,
     HTTP_BEARER_PREFIX,
     PROXY_ORGANIZATION_ID_HEADER,
@@ -26,7 +27,6 @@ from app.constants import (
     PROXY_USER_ID_HEADER,
     AuthMethod,
     ComponentName,
-    G8eHeaders,
 )
 from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser
@@ -92,7 +92,7 @@ class AuthService:
                         cli_session_id = g8e_context.cli_session_id
 
                     if not cli_session_id:
-                        cli_session_id = request.headers.get(G8eHeaders.CLI_SESSION_ID)
+                        cli_session_id = request.headers.get(CLI_SESSION_ID)
 
                     logger.debug(
                         "[AuthService] Authenticated via operator session Bearer token",

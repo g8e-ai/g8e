@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 import app.llm.llm_types as types
 from app.constants.prompts import PromptFile
-from app.constants.status import CommandErrorType, OperatorToolName
+from app.constants.generated_status import CommandErrorType, OperatorToolName
 from app.llm.llm_types import schema_from_model
 from app.llm.prompts import load_prompt
 from app.models.http_context import G8eHttpContext

@@ -718,7 +718,7 @@ class TestWsDisconnectHandler:
         assert service.is_ready is True
 
 
-class TestG8eoHeartbeatPayloadApiKey:
+class TestG8eoHeartbeatPayloadAPIKey:
     """G8eoHeartbeatPayload - api_key field acceptance and default."""
 
     def test_api_key_field_accepted(self):

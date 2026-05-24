@@ -316,14 +316,6 @@ async def _load_settings_from_operator(timeout: float = 5.0, is_online: bool = T
 
 
 def pytest_configure(config):
-    try:
-        from app.constants.generated_paths import PortConstants
-    except Exception as e:
-        pytest.exit(
-            f"constants out of date; run 'make constants'. Error: {e}",
-            returncode=2
-        )
-
     from app.llm.factory import set_llm_settings, set_search_settings, set_settings
     from app.models.settings import GatewaySettings
 

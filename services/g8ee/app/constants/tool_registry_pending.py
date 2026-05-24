@@ -23,7 +23,7 @@ an entry requires adding the full implementation. See
 ``docs/architecture/ai_agents.md`` for tool restoration guidance.
 """
 
-from app.constants.status import OperatorToolName
+from app.constants.generated_status import OperatorToolName
 
 PENDING_RESTORATION: frozenset[str] = frozenset({
     OperatorToolName.READ_FILE_CONTENT.value,

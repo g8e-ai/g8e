@@ -55,7 +55,7 @@ import sys
 import os
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "services" / "g8ee"))
-from app.constants.api_paths import InternalApiPaths
+from app.constants.api_paths import InternalAPIPaths
 COMMON_SH = REPO_ROOT / "scripts" / "cmd" / "common.sh"
 API_PATHS_SH = REPO_ROOT / "scripts" / "cmd" / "api_paths.sh"
 
@@ -263,8 +263,8 @@ def test_api_path_parity_g8ee_chat(fake_pki):
     # 1. Shell resolution
     shell_path = _shell_path_resolve("chat", env)
     
-    # 2. Python resolution (InternalApiPaths)
-    py_path = InternalApiPaths.G8EE_CHAT
+    # 2. Python resolution (InternalAPIPaths)
+    py_path = InternalAPIPaths.G8EE_CHAT
     
     # 3. Protocol constants direct resolution
     proto_path = API_PATHS["g8ee_full"]["chat"]
@@ -282,7 +282,7 @@ def test_api_path_parity_client_sse_stream(fake_pki):
     script = f'source "{API_PATHS_SH}"; printf "%s" "$G8E_API_CLIENT_SSE_STREAM_FULL"'
     shell_path = subprocess.run(["bash", "-c", script], capture_output=True, text=True).stdout.strip()
     
-    py_path = InternalApiPaths.CLIENT_SSE_STREAM
+    py_path = InternalAPIPaths.CLIENT_SSE_STREAM
     proto_path = API_PATHS["client_full"]["sse_stream"]
     
     assert shell_path == "/api/internal/sse/stream"

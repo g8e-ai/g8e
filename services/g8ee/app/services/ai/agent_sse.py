@@ -28,7 +28,7 @@ from app.constants import (
     StreamChunkFromModelType,
     ThinkingActionType,
 )
-from app.constants.status import OperatorToolName
+from app.constants.generated_status import OperatorToolName
 from app.services.ai.tool_registry import AI_UNIVERSAL_TOOLS
 from app.models.agent import (
     AgentInputs,

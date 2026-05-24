@@ -25,233 +25,233 @@
       "_python_const": "AI_AGENT_CONTINUE_APPROVAL_REQUESTED",
       "value": "g8e.v1.ai.agent.continue.approval.requested"
     },
-    "AiLlmChatFilterEvent": {
-      "_go_const": "EventAiLlmChatFilterEvent",
+    "AiLLMChatFilterEvent": {
+      "_go_const": "EventAiLLMChatFilterEvent",
       "_python_const": "AI_LLM_CHAT_FILTER_EVENT",
       "value": "g8e.v1.ai.llm.chat.filter.event"
     },
-    "AiLlmChatIterationCitationsReceived": {
-      "_go_const": "EventAiLlmChatIterationCitationsReceived",
+    "AiLLMChatIterationCitationsReceived": {
+      "_go_const": "EventAiLLMChatIterationCitationsReceived",
       "_python_const": "AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED",
       "value": "g8e.v1.ai.llm.chat.iteration.citations.received"
     },
-    "AiLlmChatIterationCompleted": {
-      "_go_const": "EventAiLlmChatIterationCompleted",
+    "AiLLMChatIterationCompleted": {
+      "_go_const": "EventAiLLMChatIterationCompleted",
       "_python_const": "AI_LLM_CHAT_ITERATION_COMPLETED",
       "value": "g8e.v1.ai.llm.chat.iteration.completed"
     },
-    "AiLlmChatIterationFailed": {
-      "_go_const": "EventAiLlmChatIterationFailed",
+    "AiLLMChatIterationFailed": {
+      "_go_const": "EventAiLLMChatIterationFailed",
       "_python_const": "AI_LLM_CHAT_ITERATION_FAILED",
       "value": "g8e.v1.ai.llm.chat.iteration.failed"
     },
-    "AiLlmChatIterationRetry": {
-      "_go_const": "EventAiLlmChatIterationRetry",
+    "AiLLMChatIterationRetry": {
+      "_go_const": "EventAiLLMChatIterationRetry",
       "_python_const": "AI_LLM_CHAT_ITERATION_RETRY",
       "value": "g8e.v1.ai.llm.chat.iteration.retry"
     },
-    "AiLlmChatIterationStarted": {
-      "_go_const": "EventAiLlmChatIterationStarted",
+    "AiLLMChatIterationStarted": {
+      "_go_const": "EventAiLLMChatIterationStarted",
       "_python_const": "AI_LLM_CHAT_ITERATION_STARTED",
       "value": "g8e.v1.ai.llm.chat.iteration.started"
     },
-    "AiLlmChatIterationStopped": {
-      "_go_const": "EventAiLlmChatIterationStopped",
+    "AiLLMChatIterationStopped": {
+      "_go_const": "EventAiLLMChatIterationStopped",
       "_python_const": "AI_LLM_CHAT_ITERATION_STOPPED",
       "value": "g8e.v1.ai.llm.chat.iteration.stopped"
     },
-    "AiLlmChatIterationStreamCompleted": {
-      "_go_const": "EventAiLlmChatIterationStreamCompleted",
+    "AiLLMChatIterationStreamCompleted": {
+      "_go_const": "EventAiLLMChatIterationStreamCompleted",
       "_python_const": "AI_LLM_CHAT_ITERATION_STREAM_COMPLETED",
       "value": "g8e.v1.ai.llm.chat.iteration.stream.completed"
     },
-    "AiLlmChatIterationStreamDeltaReceived": {
-      "_go_const": "EventAiLlmChatIterationStreamDeltaReceived",
+    "AiLLMChatIterationStreamDeltaReceived": {
+      "_go_const": "EventAiLLMChatIterationStreamDeltaReceived",
       "_python_const": "AI_LLM_CHAT_ITERATION_STREAM_DELTA_RECEIVED",
       "value": "g8e.v1.ai.llm.chat.iteration.stream.delta.received"
     },
-    "AiLlmChatIterationStreamFailed": {
-      "_go_const": "EventAiLlmChatIterationStreamFailed",
+    "AiLLMChatIterationStreamFailed": {
+      "_go_const": "EventAiLLMChatIterationStreamFailed",
       "_python_const": "AI_LLM_CHAT_ITERATION_STREAM_FAILED",
       "value": "g8e.v1.ai.llm.chat.iteration.stream.failed"
     },
-    "AiLlmChatIterationStreamStarted": {
-      "_go_const": "EventAiLlmChatIterationStreamStarted",
+    "AiLLMChatIterationStreamStarted": {
+      "_go_const": "EventAiLLMChatIterationStreamStarted",
       "_python_const": "AI_LLM_CHAT_ITERATION_STREAM_STARTED",
       "value": "g8e.v1.ai.llm.chat.iteration.stream.started"
     },
-    "AiLlmChatIterationTextChunkReceived": {
-      "_go_const": "EventAiLlmChatIterationTextChunkReceived",
+    "AiLLMChatIterationTextChunkReceived": {
+      "_go_const": "EventAiLLMChatIterationTextChunkReceived",
       "_python_const": "AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED",
       "value": "g8e.v1.ai.llm.chat.iteration.text.chunk.received"
     },
-    "AiLlmChatIterationTextCompleted": {
-      "_go_const": "EventAiLlmChatIterationTextCompleted",
+    "AiLLMChatIterationTextCompleted": {
+      "_go_const": "EventAiLLMChatIterationTextCompleted",
       "_python_const": "AI_LLM_CHAT_ITERATION_TEXT_COMPLETED",
       "value": "g8e.v1.ai.llm.chat.iteration.text.completed"
     },
-    "AiLlmChatIterationTextReceived": {
-      "_go_const": "EventAiLlmChatIterationTextReceived",
+    "AiLLMChatIterationTextReceived": {
+      "_go_const": "EventAiLLMChatIterationTextReceived",
       "_python_const": "AI_LLM_CHAT_ITERATION_TEXT_RECEIVED",
       "value": "g8e.v1.ai.llm.chat.iteration.text.received"
     },
-    "AiLlmChatIterationTextTruncated": {
-      "_go_const": "EventAiLlmChatIterationTextTruncated",
+    "AiLLMChatIterationTextTruncated": {
+      "_go_const": "EventAiLLMChatIterationTextTruncated",
       "_python_const": "AI_LLM_CHAT_ITERATION_TEXT_TRUNCATED",
       "value": "g8e.v1.ai.llm.chat.iteration.text.truncated"
     },
-    "AiLlmChatIterationThinkingEnd": {
-      "_go_const": "EventAiLlmChatIterationThinkingEnd",
+    "AiLLMChatIterationThinkingEnd": {
+      "_go_const": "EventAiLLMChatIterationThinkingEnd",
       "_python_const": "AI_LLM_CHAT_ITERATION_THINKING_END",
       "value": "g8e.v1.ai.llm.chat.iteration.thinking.end"
     },
-    "AiLlmChatIterationThinkingStarted": {
-      "_go_const": "EventAiLlmChatIterationThinkingStarted",
+    "AiLLMChatIterationThinkingStarted": {
+      "_go_const": "EventAiLLMChatIterationThinkingStarted",
       "_python_const": "AI_LLM_CHAT_ITERATION_THINKING_STARTED",
       "value": "g8e.v1.ai.llm.chat.iteration.thinking.started"
     },
-    "AiLlmChatIterationThinkingUpdate": {
-      "_go_const": "EventAiLlmChatIterationThinkingUpdate",
+    "AiLLMChatIterationThinkingUpdate": {
+      "_go_const": "EventAiLLMChatIterationThinkingUpdate",
       "_python_const": "AI_LLM_CHAT_ITERATION_THINKING_UPDATE",
       "value": "g8e.v1.ai.llm.chat.iteration.thinking.update"
     },
-    "AiLlmChatMessageDeadLettered": {
-      "_go_const": "EventAiLlmChatMessageDeadLettered",
+    "AiLLMChatMessageDeadLettered": {
+      "_go_const": "EventAiLLMChatMessageDeadLettered",
       "_python_const": "AI_LLM_CHAT_MESSAGE_DEAD_LETTERED",
       "value": "g8e.v1.ai.llm.chat.message.dead.lettered"
     },
-    "AiLlmChatMessageProcessingFailed": {
-      "_go_const": "EventAiLlmChatMessageProcessingFailed",
+    "AiLLMChatMessageProcessingFailed": {
+      "_go_const": "EventAiLLMChatMessageProcessingFailed",
       "_python_const": "AI_LLM_CHAT_MESSAGE_PROCESSING_FAILED",
       "value": "g8e.v1.ai.llm.chat.message.processing.failed"
     },
-    "AiLlmChatMessageReplayed": {
-      "_go_const": "EventAiLlmChatMessageReplayed",
+    "AiLLMChatMessageReplayed": {
+      "_go_const": "EventAiLLMChatMessageReplayed",
       "_python_const": "AI_LLM_CHAT_MESSAGE_REPLAYED",
       "value": "g8e.v1.ai.llm.chat.message.replayed"
     },
-    "AiLlmChatMessageSent": {
-      "_go_const": "EventAiLlmChatMessageSent",
+    "AiLLMChatMessageSent": {
+      "_go_const": "EventAiLLMChatMessageSent",
       "_python_const": "AI_LLM_CHAT_MESSAGE_SENT",
       "value": "g8e.v1.ai.llm.chat.message.sent"
     },
-    "AiLlmChatStopHide": {
-      "_go_const": "EventAiLlmChatStopHide",
+    "AiLLMChatStopHide": {
+      "_go_const": "EventAiLLMChatStopHide",
       "_python_const": "AI_LLM_CHAT_STOP_HIDE",
       "value": "g8e.v1.ai.llm.chat.stop.hide"
     },
-    "AiLlmChatStopShow": {
-      "_go_const": "EventAiLlmChatStopShow",
+    "AiLLMChatStopShow": {
+      "_go_const": "EventAiLLMChatStopShow",
       "_python_const": "AI_LLM_CHAT_STOP_SHOW",
       "value": "g8e.v1.ai.llm.chat.stop.show"
     },
-    "AiLlmChatSubmitted": {
-      "_go_const": "EventAiLlmChatSubmitted",
+    "AiLLMChatSubmitted": {
+      "_go_const": "EventAiLLMChatSubmitted",
       "_python_const": "AI_LLM_CHAT_SUBMITTED",
       "value": "g8e.v1.ai.llm.chat.submitted"
     },
-    "AiLlmConfigFailed": {
-      "_go_const": "EventAiLlmConfigFailed",
+    "AiLLMConfigFailed": {
+      "_go_const": "EventAiLLMConfigFailed",
       "_python_const": "AI_LLM_CONFIG_FAILED",
       "value": "g8e.v1.ai.llm.config.failed"
     },
-    "AiLlmConfigReceived": {
-      "_go_const": "EventAiLlmConfigReceived",
+    "AiLLMConfigReceived": {
+      "_go_const": "EventAiLLMConfigReceived",
       "_python_const": "AI_LLM_CONFIG_RECEIVED",
       "value": "g8e.v1.ai.llm.config.received"
     },
-    "AiLlmConfigRequested": {
-      "_go_const": "EventAiLlmConfigRequested",
+    "AiLLMConfigRequested": {
+      "_go_const": "EventAiLLMConfigRequested",
       "_python_const": "AI_LLM_CONFIG_REQUESTED",
       "value": "g8e.v1.ai.llm.config.requested"
     },
-    "AiLlmLifecycleCompleted": {
-      "_go_const": "EventAiLlmLifecycleCompleted",
+    "AiLLMLifecycleCompleted": {
+      "_go_const": "EventAiLLMLifecycleCompleted",
       "_python_const": "AI_LLM_LIFECYCLE_COMPLETED",
       "value": "g8e.v1.ai.llm.lifecycle.completed"
     },
-    "AiLlmLifecycleErrorOccurred": {
-      "_go_const": "EventAiLlmLifecycleErrorOccurred",
+    "AiLLMLifecycleErrorOccurred": {
+      "_go_const": "EventAiLLMLifecycleErrorOccurred",
       "_python_const": "AI_LLM_LIFECYCLE_ERROR_OCCURRED",
       "value": "g8e.v1.ai.llm.lifecycle.error.occurred"
     },
-    "AiLlmLifecycleFailed": {
-      "_go_const": "EventAiLlmLifecycleFailed",
+    "AiLLMLifecycleFailed": {
+      "_go_const": "EventAiLLMLifecycleFailed",
       "_python_const": "AI_LLM_LIFECYCLE_FAILED",
       "value": "g8e.v1.ai.llm.lifecycle.failed"
     },
-    "AiLlmLifecycleRequested": {
-      "_go_const": "EventAiLlmLifecycleRequested",
+    "AiLLMLifecycleRequested": {
+      "_go_const": "EventAiLLMLifecycleRequested",
       "_python_const": "AI_LLM_LIFECYCLE_REQUESTED",
       "value": "g8e.v1.ai.llm.lifecycle.requested"
     },
-    "AiLlmLifecycleStarted": {
-      "_go_const": "EventAiLlmLifecycleStarted",
+    "AiLLMLifecycleStarted": {
+      "_go_const": "EventAiLLMLifecycleStarted",
       "_python_const": "AI_LLM_LIFECYCLE_STARTED",
       "value": "g8e.v1.ai.llm.lifecycle.started"
     },
-    "AiLlmLifecycleStopped": {
-      "_go_const": "EventAiLlmLifecycleStopped",
+    "AiLLMLifecycleStopped": {
+      "_go_const": "EventAiLLMLifecycleStopped",
       "_python_const": "AI_LLM_LIFECYCLE_STOPPED",
       "value": "g8e.v1.ai.llm.lifecycle.stopped"
     },
-    "AiLlmToolG8eCommandConstraintsCompleted": {
-      "_go_const": "EventAiLlmToolG8eCommandConstraintsCompleted",
+    "AiLLMToolG8eCommandConstraintsCompleted": {
+      "_go_const": "EventAiLLMToolG8eCommandConstraintsCompleted",
       "_python_const": "AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED",
       "value": "g8e.v1.ai.llm.tool.g8e.command.constraints.completed"
     },
-    "AiLlmToolG8eCommandConstraintsFailed": {
-      "_go_const": "EventAiLlmToolG8eCommandConstraintsFailed",
+    "AiLLMToolG8eCommandConstraintsFailed": {
+      "_go_const": "EventAiLLMToolG8eCommandConstraintsFailed",
       "_python_const": "AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_FAILED",
       "value": "g8e.v1.ai.llm.tool.g8e.command.constraints.failed"
     },
-    "AiLlmToolG8eCommandConstraintsReceived": {
-      "_go_const": "EventAiLlmToolG8eCommandConstraintsReceived",
+    "AiLLMToolG8eCommandConstraintsReceived": {
+      "_go_const": "EventAiLLMToolG8eCommandConstraintsReceived",
       "_python_const": "AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_RECEIVED",
       "value": "g8e.v1.ai.llm.tool.g8e.command.constraints.received"
     },
-    "AiLlmToolG8eCommandConstraintsRequested": {
-      "_go_const": "EventAiLlmToolG8eCommandConstraintsRequested",
+    "AiLLMToolG8eCommandConstraintsRequested": {
+      "_go_const": "EventAiLLMToolG8eCommandConstraintsRequested",
       "_python_const": "AI_LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED",
       "value": "g8e.v1.ai.llm.tool.g8e.command.constraints.requested"
     },
-    "AiLlmToolG8eInvestigationQueryCompleted": {
-      "_go_const": "EventAiLlmToolG8eInvestigationQueryCompleted",
+    "AiLLMToolG8eInvestigationQueryCompleted": {
+      "_go_const": "EventAiLLMToolG8eInvestigationQueryCompleted",
       "_python_const": "AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED",
       "value": "g8e.v1.ai.llm.tool.g8e.investigation.query.completed"
     },
-    "AiLlmToolG8eInvestigationQueryFailed": {
-      "_go_const": "EventAiLlmToolG8eInvestigationQueryFailed",
+    "AiLLMToolG8eInvestigationQueryFailed": {
+      "_go_const": "EventAiLLMToolG8eInvestigationQueryFailed",
       "_python_const": "AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_FAILED",
       "value": "g8e.v1.ai.llm.tool.g8e.investigation.query.failed"
     },
-    "AiLlmToolG8eInvestigationQueryReceived": {
-      "_go_const": "EventAiLlmToolG8eInvestigationQueryReceived",
+    "AiLLMToolG8eInvestigationQueryReceived": {
+      "_go_const": "EventAiLLMToolG8eInvestigationQueryReceived",
       "_python_const": "AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_RECEIVED",
       "value": "g8e.v1.ai.llm.tool.g8e.investigation.query.received"
     },
-    "AiLlmToolG8eInvestigationQueryRequested": {
-      "_go_const": "EventAiLlmToolG8eInvestigationQueryRequested",
+    "AiLLMToolG8eInvestigationQueryRequested": {
+      "_go_const": "EventAiLLMToolG8eInvestigationQueryRequested",
       "_python_const": "AI_LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED",
       "value": "g8e.v1.ai.llm.tool.g8e.investigation.query.requested"
     },
-    "AiLlmToolG8eWebSearchCompleted": {
-      "_go_const": "EventAiLlmToolG8eWebSearchCompleted",
+    "AiLLMToolG8eWebSearchCompleted": {
+      "_go_const": "EventAiLLMToolG8eWebSearchCompleted",
       "_python_const": "AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED",
       "value": "g8e.v1.ai.llm.tool.g8e.web.search.completed"
     },
-    "AiLlmToolG8eWebSearchFailed": {
-      "_go_const": "EventAiLlmToolG8eWebSearchFailed",
+    "AiLLMToolG8eWebSearchFailed": {
+      "_go_const": "EventAiLLMToolG8eWebSearchFailed",
       "_python_const": "AI_LLM_TOOL_G8E_WEB_SEARCH_FAILED",
       "value": "g8e.v1.ai.llm.tool.g8e.web.search.failed"
     },
-    "AiLlmToolG8eWebSearchReceived": {
-      "_go_const": "EventAiLlmToolG8eWebSearchReceived",
+    "AiLLMToolG8eWebSearchReceived": {
+      "_go_const": "EventAiLLMToolG8eWebSearchReceived",
       "_python_const": "AI_LLM_TOOL_G8E_WEB_SEARCH_RECEIVED",
       "value": "g8e.v1.ai.llm.tool.g8e.web.search.received"
     },
-    "AiLlmToolG8eWebSearchRequested": {
-      "_go_const": "EventAiLlmToolG8eWebSearchRequested",
+    "AiLLMToolG8eWebSearchRequested": {
+      "_go_const": "EventAiLLMToolG8eWebSearchRequested",
       "_python_const": "AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED",
       "value": "g8e.v1.ai.llm.tool.g8e.web.search.requested"
     },
@@ -625,8 +625,8 @@
       "_python_const": "OPERATOR_A2A_CALL_REQUESTED",
       "value": "g8e.v1.operator.a2a.call.requested"
     },
-    "OperatorApiKeyRefreshed": {
-      "_go_const": "EventOperatorApiKeyRefreshed",
+    "OperatorAPIKeyRefreshed": {
+      "_go_const": "EventOperatorAPIKeyRefreshed",
       "_python_const": "OPERATOR_API_KEY_REFRESHED",
       "value": "g8e.v1.operator.api.key.refreshed"
     },

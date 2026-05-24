@@ -70,7 +70,7 @@ from app.constants import (
 from app.models.base import G8eBaseModel
 
 
-class LLMModelConfig(G8eBaseModel):
+class LLModelConfig(G8eBaseModel):
     """Configuration for an LLM model including capability constraints.
 
     Frozen. Use ``MODEL_REGISTRY.override(name, **updates)`` to install a
@@ -113,7 +113,7 @@ class LLMModelConfig(G8eBaseModel):
 
 # -----------------------------------------------------------------------------
 # Default per-level token budgets for Anthropic extended thinking.
-# Models may override via LLMModelConfig.thinking_budgets.
+# Models may override via LLModelConfig.thinking_budgets.
 # -----------------------------------------------------------------------------
 ANTHROPIC_DEFAULT_THINKING_BUDGETS: dict[ThinkingLevel, int] = {
     ThinkingLevel.MINIMAL: 1_024,
@@ -127,7 +127,7 @@ ANTHROPIC_DEFAULT_THINKING_BUDGETS: dict[ThinkingLevel, int] = {
 # Gemini models
 # =============================================================================
 
-GEMINI_3_1_PRO_CONFIG = LLMModelConfig(
+GEMINI_3_1_PRO_CONFIG = LLModelConfig(
     name=GEMINI_3_1_PRO,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_tools=True,
@@ -137,7 +137,7 @@ GEMINI_3_1_PRO_CONFIG = LLMModelConfig(
     max_output_tokens=64_000,
 )
 
-GEMINI_3_1_PRO_CUSTOM_TOOLS_CONFIG = LLMModelConfig(
+GEMINI_3_1_PRO_CUSTOM_TOOLS_CONFIG = LLModelConfig(
     name=GEMINI_3_1_PRO_CUSTOM_TOOLS,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_tools=True,
@@ -147,7 +147,7 @@ GEMINI_3_1_PRO_CUSTOM_TOOLS_CONFIG = LLMModelConfig(
     max_output_tokens=64_000,
 )
 
-GEMINI_3_1_FLASH_LITE_CONFIG = LLMModelConfig(
+GEMINI_3_1_FLASH_LITE_CONFIG = LLModelConfig(
     name=GEMINI_3_1_FLASH_LITE,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_tools=True,
@@ -157,7 +157,7 @@ GEMINI_3_1_FLASH_LITE_CONFIG = LLMModelConfig(
     max_output_tokens=64_000,
 )
 
-GEMINI_3_FLASH_CONFIG = LLMModelConfig(
+GEMINI_3_FLASH_CONFIG = LLModelConfig(
     name=GEMINI_3_FLASH,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_tools=True,
@@ -176,7 +176,7 @@ GEMINI_3_FLASH_CONFIG = LLMModelConfig(
 #   - Llama: no reasoning support; supported_thinking_levels=[].
 # =============================================================================
 
-OLLAMA_QWEN3_5_122B_CONFIG = LLMModelConfig(
+OLLAMA_QWEN3_5_122B_CONFIG = LLModelConfig(
     name=OLLAMA_QWEN3_5_122B,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
@@ -189,7 +189,7 @@ OLLAMA_QWEN3_5_122B_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-OLLAMA_GLM_5_1_CONFIG = LLMModelConfig(
+OLLAMA_GLM_5_1_CONFIG = LLModelConfig(
     name=OLLAMA_GLM_5_1,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
@@ -202,7 +202,7 @@ OLLAMA_GLM_5_1_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-OLLAMA_GEMMA4_26B_CONFIG = LLMModelConfig(
+OLLAMA_GEMMA4_26B_CONFIG = LLModelConfig(
     name=OLLAMA_GEMMA4_26B,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
@@ -214,7 +214,7 @@ OLLAMA_GEMMA4_26B_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-OLLAMA_GEMMA4_E4B_CONFIG = LLMModelConfig(
+OLLAMA_GEMMA4_E4B_CONFIG = LLModelConfig(
     name=OLLAMA_GEMMA4_E4B,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
@@ -226,7 +226,7 @@ OLLAMA_GEMMA4_E4B_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-OLLAMA_GEMMA4_E2B_CONFIG = LLMModelConfig(
+OLLAMA_GEMMA4_E2B_CONFIG = LLModelConfig(
     name=OLLAMA_GEMMA4_E2B,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
@@ -238,7 +238,7 @@ OLLAMA_GEMMA4_E2B_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-OLLAMA_GEMMA4_E2B_G8EA_CONFIG = LLMModelConfig(
+OLLAMA_GEMMA4_E2B_G8EA_CONFIG = LLModelConfig(
     name=OLLAMA_GEMMA4_E2B_G8EA,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
@@ -250,7 +250,7 @@ OLLAMA_GEMMA4_E2B_G8EA_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-OLLAMA_NEMOTRON_3_30B_CONFIG = LLMModelConfig(
+OLLAMA_NEMOTRON_3_30B_CONFIG = LLModelConfig(
     name=OLLAMA_NEMOTRON_3_30B,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
@@ -262,7 +262,7 @@ OLLAMA_NEMOTRON_3_30B_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-OLLAMA_LLAMA_3_2_3B_CONFIG = LLMModelConfig(
+OLLAMA_LLAMA_3_2_3B_CONFIG = LLModelConfig(
     name=OLLAMA_LLAMA_3_2_3B,
     supported_thinking_levels=[],
     thinking_dialect=ThinkingDialect.NONE,
@@ -274,7 +274,7 @@ OLLAMA_LLAMA_3_2_3B_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-OLLAMA_QWEN3_5_2B_CONFIG = LLMModelConfig(
+OLLAMA_QWEN3_5_2B_CONFIG = LLModelConfig(
     name=OLLAMA_QWEN3_5_2B,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
@@ -295,7 +295,7 @@ OLLAMA_QWEN3_5_2B_CONFIG = LLMModelConfig(
 # when the model benefits from non-default values.
 # =============================================================================
 
-ANTHROPIC_CLAUDE_OPUS_4_6_CONFIG = LLMModelConfig(
+ANTHROPIC_CLAUDE_OPUS_4_6_CONFIG = LLModelConfig(
     name=ANTHROPIC_CLAUDE_OPUS_4_6,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     thinking_budgets={
@@ -314,7 +314,7 @@ ANTHROPIC_CLAUDE_OPUS_4_6_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-ANTHROPIC_CLAUDE_SONNET_4_6_CONFIG = LLMModelConfig(
+ANTHROPIC_CLAUDE_SONNET_4_6_CONFIG = LLModelConfig(
     name=ANTHROPIC_CLAUDE_SONNET_4_6,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_tools=True,
@@ -325,7 +325,7 @@ ANTHROPIC_CLAUDE_SONNET_4_6_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG = LLMModelConfig(
+ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG = LLModelConfig(
     name=ANTHROPIC_CLAUDE_HAIKU_4_5,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.MINIMAL, ThinkingLevel.LOW],
     supports_tools=True,
@@ -336,7 +336,7 @@ ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-ANTHROPIC_DEFAULT_CONFIG = LLMModelConfig(
+ANTHROPIC_DEFAULT_CONFIG = LLModelConfig(
     name=ANTHROPIC_DEFAULT_MODEL,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_tools=True,
@@ -356,7 +356,7 @@ ANTHROPIC_DEFAULT_CONFIG = LLMModelConfig(
 # explicitly on any new model that does.
 # =============================================================================
 
-OPENAI_GPT_5_4_MINI_CONFIG = LLMModelConfig(
+OPENAI_GPT_5_4_MINI_CONFIG = LLModelConfig(
     name=OPENAI_GPT_5_4_MINI,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.MINIMAL, ThinkingLevel.LOW],
     supports_tools=True,
@@ -368,7 +368,7 @@ OPENAI_GPT_5_4_MINI_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-OPENAI_DEFAULT_CONFIG = LLMModelConfig(
+OPENAI_DEFAULT_CONFIG = LLModelConfig(
     name=OPENAI_DEFAULT_MODEL,
     supported_thinking_levels=[],
     supports_tools=True,
@@ -385,7 +385,7 @@ OPENAI_DEFAULT_CONFIG = LLMModelConfig(
 # Ollama default fallback (unknown model name)
 # =============================================================================
 
-OLLAMA_DEFAULT_CONFIG = LLMModelConfig(
+OLLAMA_DEFAULT_CONFIG = LLModelConfig(
     name=OLLAMA_DEFAULT_MODEL,
     supported_thinking_levels=[],
     thinking_dialect=ThinkingDialect.NONE,
@@ -402,12 +402,12 @@ OLLAMA_DEFAULT_CONFIG = LLMModelConfig(
 # Thinking-level helpers
 # =============================================================================
 
-def _intensity_levels(config: LLMModelConfig) -> list[ThinkingLevel]:
+def _intensity_levels(config: LLModelConfig) -> list[ThinkingLevel]:
     """Return supported levels excluding OFF, in registry-declared order."""
     return [lvl for lvl in config.supported_thinking_levels if lvl is not ThinkingLevel.OFF]
 
 
-def _lowest_thinking_level(config: LLMModelConfig) -> ThinkingLevel | None:
+def _lowest_thinking_level(config: LLModelConfig) -> ThinkingLevel | None:
     levels = _intensity_levels(config)
     if not levels:
         return None
@@ -417,7 +417,7 @@ def _lowest_thinking_level(config: LLMModelConfig) -> ThinkingLevel | None:
     return None
 
 
-def _highest_thinking_level(config: LLMModelConfig) -> ThinkingLevel | None:
+def _highest_thinking_level(config: LLModelConfig) -> ThinkingLevel | None:
     levels = _intensity_levels(config)
     if not levels:
         return None
@@ -427,7 +427,7 @@ def _highest_thinking_level(config: LLMModelConfig) -> ThinkingLevel | None:
     return None
 
 
-def clamp_thinking_level(desired: ThinkingLevel, config: LLMModelConfig) -> ThinkingLevel:
+def clamp_thinking_level(desired: ThinkingLevel, config: LLModelConfig) -> ThinkingLevel:
     """Clamp a desired ThinkingLevel to what the given model supports.
 
     Rules:
@@ -465,12 +465,12 @@ def clamp_thinking_level(desired: ThinkingLevel, config: LLMModelConfig) -> Thin
 
 
 # Module-level singleton returned for unknown model names. Using a shared
-# constant (instead of fabricating a fresh LLMModelConfig per call) guarantees
+# constant (instead of fabricating a fresh LLModelConfig per call) guarantees
 # stable identity across callers and prevents accidental per-call mutation
 # leaking between tests. Its name is a sentinel ("unknown") rather than the
 # requested model name because the config is meant to be opaque - callers that
 # need the real model string must resolve it from their own context.
-UNKNOWN_MODEL_CONFIG = LLMModelConfig(
+UNKNOWN_MODEL_CONFIG = LLModelConfig(
     name="unknown",
     supported_thinking_levels=[],
     supports_tools=True,
@@ -479,12 +479,12 @@ UNKNOWN_MODEL_CONFIG = LLMModelConfig(
     # Declare NONE explicitly so the sentinel is a legal argument to
     # translate_for_ollama() for unknown Ollama model names. The loud-failure
     # contract in translate_for_ollama() still catches any *registered*
-    # LLMModelConfig that forgot its dialect (see _OLLAMA_CONFIGS validation).
+    # LLModelConfig that forgot its dialect (see _OLLAMA_CONFIGS validation).
     thinking_dialect=ThinkingDialect.NONE,
 )
 
 
-class LLMModelRegistry(G8eBaseModel):
+class LLModelRegistry(G8eBaseModel):
     """Registry of all known LLM model configurations.
 
     Registered configs are immutable. Tests and capability probes that
@@ -493,10 +493,10 @@ class LLMModelRegistry(G8eBaseModel):
     instead of mutating the registered instance.
     """
 
-    configs: list[LLMModelConfig] = Field(default_factory=list)
-    _overrides: dict[str, LLMModelConfig] = PrivateAttr(default_factory=dict)
+    configs: list[LLModelConfig] = Field(default_factory=list)
+    _overrides: dict[str, LLModelConfig] = PrivateAttr(default_factory=dict)
 
-    def get(self, model_name: str | None) -> LLMModelConfig:
+    def get(self, model_name: str | None) -> LLModelConfig:
         """Return the config for a model, or the shared UNKNOWN_MODEL_CONFIG.
 
         Scoped overrides (installed via ``override()``) take precedence over
@@ -517,7 +517,7 @@ class LLMModelRegistry(G8eBaseModel):
         return UNKNOWN_MODEL_CONFIG
 
     @contextmanager
-    def override(self, model_name: str, **updates: Any) -> Iterator[LLMModelConfig]:
+    def override(self, model_name: str, **updates: Any) -> Iterator[LLModelConfig]:
         """Install a scoped override on a registered model config.
 
         Builds a modified copy of the registered config via ``model_copy``
@@ -571,7 +571,7 @@ class LLMModelRegistry(G8eBaseModel):
 # native ``think`` kwarg. Silently defaulting a missing dialect hides the fact
 # that a new model has no reasoning configured, so we fail loudly at import
 # time if any entry in this tuple forgot the field.
-_OLLAMA_CONFIGS: tuple[LLMModelConfig, ...] = (
+_OLLAMA_CONFIGS: tuple[LLModelConfig, ...] = (
     OLLAMA_QWEN3_5_122B_CONFIG,
     OLLAMA_GLM_5_1_CONFIG,
     OLLAMA_GEMMA4_26B_CONFIG,
@@ -593,7 +593,7 @@ for _cfg in _OLLAMA_CONFIGS:
         )
 
 
-MODEL_REGISTRY = LLMModelRegistry(configs=[
+MODEL_REGISTRY = LLModelRegistry(configs=[
     ANTHROPIC_CLAUDE_OPUS_4_6_CONFIG,
     ANTHROPIC_CLAUDE_SONNET_4_6_CONFIG,
     ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG,
@@ -617,7 +617,7 @@ MODEL_REGISTRY = LLMModelRegistry(configs=[
 ])
 
 
-def get_model_config(model_name: str | None) -> LLMModelConfig:
+def get_model_config(model_name: str | None) -> LLModelConfig:
     """Get the configuration for a model by name."""
     return MODEL_REGISTRY.get(model_name)
 
@@ -632,7 +632,7 @@ def get_highest_thinking_level(model_name: str | None) -> ThinkingLevel | None:
     return _highest_thinking_level(MODEL_REGISTRY.get(model_name))
 
 
-def thinking_level_for_config(config: LLMModelConfig) -> ThinkingLevel | None:
+def thinking_level_for_config(config: LLModelConfig) -> ThinkingLevel | None:
     """Get the highest supported thinking level directly from a model config."""
     return _highest_thinking_level(config)
 

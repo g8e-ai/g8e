@@ -35,7 +35,7 @@ class DocumentIdsConstants(G8eBaseModel):
     """Canonical document IDs."""
     document_ids: dict[str, ProtocolConstantValue]
 
-class ApiPathsConstants(G8eBaseModel):
+class APIPathsConstants(G8eBaseModel):
     """Internal API paths for g8ee and client."""
     internal_prefix: str
     operator_prefix: str

@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from app.constants import ThinkingDialect, ThinkingLevel
 from app.models.model_configs import (
     ANTHROPIC_DEFAULT_THINKING_BUDGETS,
-    LLMModelConfig,
+    LLModelConfig,
     clamp_thinking_level,
 )
 
@@ -59,7 +59,7 @@ class GeminiThinkingTranslation:
 
 def translate_for_gemini(
     level: ThinkingLevel,
-    config: LLMModelConfig,
+    config: LLModelConfig,
     include_thoughts: bool,
 ) -> GeminiThinkingTranslation:
     clamped = clamp_thinking_level(level, config)
@@ -98,7 +98,7 @@ class AnthropicThinkingTranslation:
 
 def translate_for_anthropic(
     level: ThinkingLevel,
-    config: LLMModelConfig,
+    config: LLModelConfig,
 ) -> AnthropicThinkingTranslation:
     clamped = clamp_thinking_level(level, config)
     if clamped is ThinkingLevel.OFF:
@@ -138,7 +138,7 @@ class OpenAIThinkingTranslation:
 
 def translate_for_openai(
     level: ThinkingLevel,
-    config: LLMModelConfig,
+    config: LLModelConfig,
 ) -> OpenAIThinkingTranslation:
     clamped = clamp_thinking_level(level, config)
     if clamped is ThinkingLevel.OFF:
@@ -168,7 +168,7 @@ class OllamaThinkingTranslation:
 
 def translate_for_ollama(
     level: ThinkingLevel,
-    config: LLMModelConfig,
+    config: LLModelConfig,
 ) -> OllamaThinkingTranslation:
     clamped = clamp_thinking_level(level, config)
     # Every Ollama model MUST declare its dialect at registration time (see

@@ -48,7 +48,7 @@ from app.constants import (
     InvestigationStatus,
     OperatorType,
 )
-from app.constants.status import OperatorToolName
+from app.constants.generated_status import OperatorToolName
 from app.errors import ExternalServiceError, ValidationError
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import G8eeUserSettings

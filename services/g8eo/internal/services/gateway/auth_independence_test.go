@@ -146,7 +146,7 @@ func TestAuthStatusIndependence(t *testing.T) {
 	})
 }
 
-func TestApiKeyStatusIndependence(t *testing.T) {
+func TestAPIKeyStatusIndependence(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
@@ -155,7 +155,7 @@ func TestApiKeyStatusIndependence(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	apiKeySvc := NewApiKeyService(db, logger)
+	apiKeySvc := NewAPIKeyService(db, logger)
 
 	t.Run("ValidateKey succeeds even if status is STALE", func(t *testing.T) {
 		t.Parallel()

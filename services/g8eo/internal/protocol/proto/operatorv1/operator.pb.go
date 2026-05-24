@@ -20,12 +20,13 @@
 package operatorv1
 
 import (
-	_ "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	_ "github.com/g8e-ai/g8e/services/g8eo/internal/protocol/proto/commonv1"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -2859,8 +2860,8 @@ type OperatorDocument struct {
 	Status             string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
 	OperatorSessionId  string                 `protobuf:"bytes,7,opt,name=operator_session_id,json=operatorSessionId,proto3" json:"operator_session_id,omitempty"`
 	BoundWebSessionId  string                 `protobuf:"bytes,8,opt,name=bound_web_session_id,json=boundWebSessionId,proto3" json:"bound_web_session_id,omitempty"`
-	ApiKey             string                 `protobuf:"bytes,9,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
-	OperatorApiKey     string                 `protobuf:"bytes,10,opt,name=operator_api_key,json=operatorApiKey,proto3" json:"operator_api_key,omitempty"`
+	APIKey             string                 `protobuf:"bytes,9,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	OperatorAPIKey     string                 `protobuf:"bytes,10,opt,name=operator_api_key,json=operatorAPIKey,proto3" json:"operator_api_key,omitempty"`
 	OperatorCert       string                 `protobuf:"bytes,11,opt,name=operator_cert,json=operatorCert,proto3" json:"operator_cert,omitempty"`
 	OperatorCertSerial string                 `protobuf:"bytes,12,opt,name=operator_cert_serial,json=operatorCertSerial,proto3" json:"operator_cert_serial,omitempty"`
 	SlotNumber         int32                  `protobuf:"varint,13,opt,name=slot_number,json=slotNumber,proto3" json:"slot_number,omitempty"`
@@ -2961,16 +2962,16 @@ func (x *OperatorDocument) GetBoundWebSessionId() string {
 	return ""
 }
 
-func (x *OperatorDocument) GetApiKey() string {
+func (x *OperatorDocument) GetAPIKey() string {
 	if x != nil {
-		return x.ApiKey
+		return x.APIKey
 	}
 	return ""
 }
 
-func (x *OperatorDocument) GetOperatorApiKey() string {
+func (x *OperatorDocument) GetOperatorAPIKey() string {
 	if x != nil {
-		return x.OperatorApiKey
+		return x.OperatorAPIKey
 	}
 	return ""
 }
@@ -6043,7 +6044,7 @@ type HeartbeatResult struct {
 	CapabilityFlags    *CapabilityFlags       `protobuf:"bytes,19,opt,name=capability_flags,json=capabilityFlags,proto3" json:"capability_flags,omitempty"`
 	FingerprintDetails *FingerprintDetails    `protobuf:"bytes,20,opt,name=fingerprint_details,json=fingerprintDetails,proto3" json:"fingerprint_details,omitempty"`
 	SystemFingerprint  string                 `protobuf:"bytes,21,opt,name=system_fingerprint,json=systemFingerprint,proto3" json:"system_fingerprint,omitempty"`
-	ApiKey             string                 `protobuf:"bytes,22,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	APIKey             string                 `protobuf:"bytes,22,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -6225,9 +6226,9 @@ func (x *HeartbeatResult) GetSystemFingerprint() string {
 	return ""
 }
 
-func (x *HeartbeatResult) GetApiKey() string {
+func (x *HeartbeatResult) GetAPIKey() string {
 	if x != nil {
-		return x.ApiKey
+		return x.APIKey
 	}
 	return ""
 }
@@ -8662,7 +8663,7 @@ const file_operator_proto_rawDesc = "" +
 	"\x14bound_web_session_id\x18\b \x01(\tR\x11boundWebSessionId\x12\x17\n" +
 	"\aapi_key\x18\t \x01(\tR\x06apiKey\x12(\n" +
 	"\x10operator_api_key\x18\n" +
-	" \x01(\tR\x0eoperatorApiKey\x12#\n" +
+	" \x01(\tR\x0eoperatorAPIKey\x12#\n" +
 	"\roperator_cert\x18\v \x01(\tR\foperatorCert\x120\n" +
 	"\x14operator_cert_serial\x18\f \x01(\tR\x12operatorCertSerial\x12\x1f\n" +
 	"\vslot_number\x18\r \x01(\x05R\n" +

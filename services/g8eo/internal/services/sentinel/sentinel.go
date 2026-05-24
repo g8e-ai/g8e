@@ -2125,7 +2125,7 @@ func (s *Sentinel) ValidateIntent(intent constants.CloudIntent) bool {
 		constants.IntentKmsCrypto,
 		constants.IntentIamDiscovery,
 		constants.IntentAcmDiscovery,
-		constants.IntentApigatewayDiscovery,
+		constants.IntentAPIgatewayDiscovery,
 		constants.IntentStepfunctionsDiscovery,
 		constants.IntentStepfunctionsExecution,
 		constants.IntentAthenaDiscovery,

@@ -59,7 +59,7 @@ class ThinkingLevel(StrEnum):
     OFF is a first-class value meaning "thinking is disabled for this call".
     Use OFF rather than None so the schema and intent agree.
 
-    Membership of a level in LLMModelConfig.supported_thinking_levels is the
+    Membership of a level in LLModelConfig.supported_thinking_levels is the
     single source of truth for what a model accepts. An empty list means the
     model has no notion of thinking at all.
     """

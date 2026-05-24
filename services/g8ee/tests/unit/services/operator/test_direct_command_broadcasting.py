@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.constants.generated_events import EventType
-from app.constants.status import AITaskId, ExecutionStatus
+from app.constants.generated_status import AITaskId, ExecutionStatus
 from app.models.http_context import RequestContext
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import (

@@ -5,8 +5,8 @@
       "_python_const": "ACM_DISCOVERY",
       "value": "acm_discovery"
     },
-    "ApigatewayDiscovery": {
-      "_go_const": "IntentApigatewayDiscovery",
+    "APIgatewayDiscovery": {
+      "_go_const": "IntentAPIgatewayDiscovery",
       "_python_const": "APIGATEWAY_DISCOVERY",
       "value": "apigateway_discovery"
     },

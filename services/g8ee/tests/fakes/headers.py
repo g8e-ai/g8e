@@ -19,8 +19,8 @@ with predictable test values.  Use it wherever tests need to simulate an
 inbound request that carries g8e context headers.
 """
 
-from app.constants import G8eHeaders
+from app.constants import EXECUTION_ID
 
 TEST_G8E_HEADERS: dict[str, str] = {
-    G8eHeaders.EXECUTION_ID.lower(): "exec-test-001",
+    EXECUTION_ID.lower(): "exec-test-001",
 }
