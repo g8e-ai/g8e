@@ -17,7 +17,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"sync"
 	"time"
@@ -114,7 +116,8 @@ type OperatorGate struct {
 
 // NewOperatorGate creates an OperatorGate for the given mode with injectable dependencies.
 func NewOperatorGate(mode Mode, clock Clock, stateRoot string, trustedSigners map[string]ed25519.PublicKey) (*OperatorGate, error) {
-	logger := slog.New(slog.NewTextHandler(nil, nil))
+	// Create a discard logger for testing to avoid nil pointer issues
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	replayStore := NewInMemoryReplayStore()
 	stateRootProvider := &governance.SimpleStateRootProvider{Root: stateRoot}
@@ -128,7 +131,11 @@ func NewOperatorGate(mode Mode, clock Clock, stateRoot string, trustedSigners ma
 	execHandler := &mockExecutionHandler{}
 
 	// Create sentinel for L1 validation
-	sentinelInstance := sentinel.NewSentinel(nil, logger)
+	sentinelConfig := &sentinel.SentinelConfig{
+		Enabled:         false,
+		SentinelEnabled: false,
+	}
+	sentinelInstance := sentinel.NewSentinel(sentinelConfig, logger)
 
 	// Generate signing key for the actuator
 	actuatorPub, actuatorPriv, err := ed25519.GenerateKey(nil)
@@ -172,7 +179,7 @@ func NewOperatorGate(mode Mode, clock Clock, stateRoot string, trustedSigners ma
 }
 
 // Submit sends a raw intent through the real admission path and returns the result.
-func (g *OperatorGate) Submit(ctx context.Context, intent RawIntent) Result {
+func (g *OperatorGate) Submit(ctx context.Context, intent json.RawMessage) Result {
 	// Decode the UAP envelope using protojson
 	var envelope commonv1.GovernanceEnvelope
 	if err := protojson.Unmarshal(intent, &envelope); err != nil {

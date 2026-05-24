@@ -2,29 +2,49 @@
   "name": "tampered_receipt",
   "vertical": "security",
   "narrative": "Envelope with tampered receipt signature should be rejected",
-  "intent": {},
+  "intent": {
+    "id": "3ab829ff268a191aa19ef37fc923a7a47ef45cdf583e72bc901c80a213d0701b",
+    "timestamp": "2026-05-24T23:55:00.628303786Z",
+    "expiresAt": "2026-05-25T00:55:00.628304134Z",
+    "sourceComponent": "COMPONENT_CLIENT",
+    "operatorId": "operator-1",
+    "operatorSessionId": "operator-session-1",
+    "payload": "CgZscyAtbGESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
+    "actionType": "EXECUTE_BASH",
+    "targetResource": "localhost",
+    "stateMerkleRoot": "abc123def456",
+    "nonce": "nonce-tampered-123",
+    "transactionHash": "3ab829ff268a191aa19ef37fc923a7a47ef45cdf583e72bc901c80a213d0701b",
+    "protocolVersion": "1.0",
+    "governance": {
+      "l2": {
+        "tribunalSignature": "b9ae21ab109056dd4599ce07c26bce15943f7b2ab481dcc33522df13e3960bfe874ffde30ebfa12a1aaae8f861bd6cb7574037d324dbd22392525c6c413e7701",
+        "keyId": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747"
+      }
+    }
+  },
   "evidence": {
     "l2_signature_present": true,
-    "l2_key_id": "tribunal_1",
+    "l2_key_id": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747",
     "l3_proof_present": false,
-    "signer_id": "tribunal_1"
+    "signer_id": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747"
   },
   "expect": {
     "doctrine": {
       "verdict": "reject",
-      "reject_reason": "TX_HASH_MISMATCH",
+      "reject_reason": "TX_NOTARY_L3_PROOF_MISSING",
       "l2_valid": true,
       "l3_valid": false
     },
     "consensus": {
-      "verdict": "reject",
-      "reject_reason": "TX_HASH_MISMATCH",
+      "verdict": "accept",
+      "reject_reason": "",
       "l2_valid": true,
-      "l3_valid": false
+      "l3_valid": true
     },
     "notary": {
       "verdict": "reject",
-      "reject_reason": "TX_HASH_MISMATCH",
+      "reject_reason": "TX_NOTARY_L3_PROOF_MISSING",
       "l2_valid": true,
       "l3_valid": false
     }

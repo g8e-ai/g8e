@@ -14,9 +14,12 @@
 package scenario
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // Report prints a detailed trace of the scenario execution under -v.
@@ -96,15 +99,58 @@ func AssertL2L3(t *testing.T, result Result, expected Outcome) {
 }
 
 // GoldenDiff compares the receipt against the golden file.
-// Use -update flag to refresh golden files.
+// Set G8E_UPDATE_GOLDEN=1 environment variable to refresh golden files.
+// Only compares deterministic fields (excludes timestamp, signer key, signature).
 func GoldenDiff(t *testing.T, s Scenario, mode Mode, receipt *operatorv1.ActionReceipt) {
 	if receipt == nil {
 		return
 	}
 
-	// TODO: Implement golden file diffing
-	// This will serialize the receipt to JSON and compare against test/scenario/golden/{scenario}_{mode}.json
-	t.Logf("Golden diff not yet implemented for %s/%s", s.Name, mode)
+	// Create a deterministic receipt for comparison
+	deterministicReceipt := &operatorv1.ActionReceipt{
+		TransactionId:   receipt.TransactionId,
+		TransactionHash: receipt.TransactionHash,
+		Status:          receipt.Status,
+		ResultSummary:   receipt.ResultSummary,
+		StateRootBefore: receipt.StateRootBefore,
+		StateRootAfter:  receipt.StateRootAfter,
+		L2Valid:         receipt.L2Valid,
+		L3Valid:         receipt.L3Valid,
+		// Exclude: ExecutedAtUnixMs, SignerKeyId, Signature, GatewaySigned
+	}
+
+	// Serialize deterministic receipt to JSON for comparison
+	marshaler := &protojson.MarshalOptions{Indent: "  "}
+	receiptJSON, err := marshaler.Marshal(deterministicReceipt)
+	if err != nil {
+		t.Fatalf("failed to marshal receipt to JSON: %v", err)
+	}
+
+	// Golden file path
+	goldenPath := filepath.Join("golden", s.Name+"_"+mode.String()+".golden.json")
+
+	// Check for G8E_UPDATE_GOLDEN environment variable
+	update := os.Getenv("G8E_UPDATE_GOLDEN") == "1"
+
+	if update {
+		// Write the golden file
+		if err := os.WriteFile(goldenPath, receiptJSON, 0644); err != nil {
+			t.Fatalf("failed to write golden file %s: %v", goldenPath, err)
+		}
+		t.Logf("Updated golden file: %s", goldenPath)
+		return
+	}
+
+	// Read the golden file
+	goldenJSON, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("failed to read golden file %s: %v (run with G8E_UPDATE_GOLDEN=1 to create)", goldenPath, err)
+	}
+
+	// Compare
+	if string(receiptJSON) != string(goldenJSON) {
+		t.Errorf("Golden mismatch for %s/%s\nGot:\n%s\n\nWant:\n%s", s.Name, mode, receiptJSON, goldenJSON)
+	}
 }
 
 func containsSubstring(s, substr string) bool {

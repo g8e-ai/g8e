@@ -2,12 +2,32 @@
   "name": "forge_signature",
   "vertical": "security",
   "narrative": "Envelope with forged L2 signature should be rejected",
-  "intent": {},
+  "intent": {
+    "id": "b109900b1b4e1128bc5a52f959d7db062a49922ac8a8ab12b8b9b80ffbf409b5",
+    "timestamp": "2026-05-24T23:55:00.628303786Z",
+    "expiresAt": "2026-05-25T00:55:00.628304134Z",
+    "sourceComponent": "COMPONENT_CLIENT",
+    "operatorId": "operator-1",
+    "operatorSessionId": "operator-session-1",
+    "payload": "CgZscyAtbGESCGV4ZWMtMTIzGgx0ZXN0IGNvbW1hbmQiBnN0cmljdCge",
+    "actionType": "EXECUTE_BASH",
+    "targetResource": "localhost",
+    "stateMerkleRoot": "abc123def456",
+    "nonce": "nonce-forged-123",
+    "transactionHash": "b109900b1b4e1128bc5a52f959d7db062a49922ac8a8ab12b8b9b80ffbf409b5",
+    "protocolVersion": "1.0",
+    "governance": {
+      "l2": {
+        "tribunalSignature": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        "keyId": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747"
+      }
+    }
+  },
   "evidence": {
     "l2_signature_present": true,
-    "l2_key_id": "tribunal_1",
+    "l2_key_id": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747",
     "l3_proof_present": false,
-    "signer_id": "tribunal_1"
+    "signer_id": "28adeaa3fb446f9e081a093af6b3c137bac52742af5b4bd0fe9e5eac8a7b5747"
   },
   "expect": {
     "doctrine": {
