@@ -306,8 +306,21 @@ func platformResetCmd() *cobra.Command {
 				return err
 			}
 
-			cmd.Println("Reset complete. Services stopped and data wiped.")
-			cmd.Println("Run 'g8e platform start' to restart with fresh data.")
+			cmd.Println("Reset complete. Data wiped.")
+			cmd.Println("Restarting services...")
+
+			if err := pm.StartOperator(
+				cfg.OperatorHTTPSPort(),
+				cfg.OperatorBootstrapHTTPSPort(),
+				cfg.Paths.Ports.OperatorPublicHTTPS,
+			); err != nil {
+				return fmt.Errorf("failed to restart services: %w", err)
+			}
+
+			cmd.Println("Services restarted successfully")
+			cmd.Printf("HTTP API: https://localhost:%d\n", cfg.OperatorHTTPSPort())
+			cmd.Printf("Bootstrap: https://localhost:%d\n", cfg.OperatorBootstrapHTTPSPort())
+			cmd.Printf("Public API: https://localhost:%d\n", cfg.Paths.Ports.OperatorPublicHTTPS)
 			return nil
 		},
 	}

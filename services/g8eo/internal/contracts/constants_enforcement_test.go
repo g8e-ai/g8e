@@ -384,12 +384,12 @@ func TestExtractConstantsFromEvents(t *testing.T) {
 }
 
 func TestExtractConstantsFromVault(t *testing.T) {
-	fullPath := filepath.Join(g8eoRoot, "internal/constants/status.go")
-	constants, err := extractConstantsFromFile(fullPath, "status.go")
+	fullPath := filepath.Join(g8eoRoot, "internal/constants/status_generated.go")
+	constants, err := extractConstantsFromFile(fullPath, "status_generated.go")
 	require.NoError(t, err)
-	require.NotEmpty(t, constants, "should extract constants from status.go")
+	require.NotEmpty(t, constants, "should extract constants from status_generated.go")
 
-	t.Logf("Extracted %d constants from status.go", len(constants))
+	t.Logf("Extracted %d constants from status_generated.go", len(constants))
 
 	_, hasRaw := constants["raw"]
 	assert.True(t, hasRaw, "should contain raw (VaultMode.Raw)")

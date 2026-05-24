@@ -25,6 +25,7 @@ package contracts
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -246,11 +247,11 @@ type protocolEventsJSON struct {
 // ---------------------------------------------------------------------------
 
 type protocolLeaf struct {
-	Value       string `json:"value"`
-	GoConst     string `json:"_go_const"`
-	PythonConst string `json:"_python_const"`
-	GoName      string `json:"_go_name"`
-	PythonName  string `json:"_python_name"`
+	Value       interface{} `json:"value"`
+	GoConst     string      `json:"_go_const"`
+	PythonConst string      `json:"_python_const"`
+	GoName      string      `json:"_go_name"`
+	PythonName  string      `json:"_python_name"`
 }
 
 type protocolOperatorStatusValues struct {
@@ -516,23 +517,23 @@ func TestProtocolEventsMatchGoConstants(t *testing.T) {
 	events := ev.Events
 
 	t.Run("operator.heartbeat", func(t *testing.T) {
-		assert.Equal(t, events["OperatorHeartbeatSent"].Value, string(constants.EventOperatorHeartbeatSent))
+		assert.Equal(t, fmt.Sprintf("%v", events["OperatorHeartbeatSent"].Value), string(constants.EventOperatorHeartbeatSent))
 	})
 
 	t.Run("operator.command", func(t *testing.T) {
-		assert.Equal(t, events["OperatorCommandRequested"].Value, string(constants.EventOperatorCommandRequested))
-		assert.Equal(t, events["OperatorCommandCompleted"].Value, string(constants.EventOperatorCommandCompleted))
-		assert.Equal(t, events["OperatorCommandFailed"].Value, string(constants.EventOperatorCommandFailed))
+		assert.Equal(t, fmt.Sprintf("%v", events["OperatorCommandRequested"].Value), string(constants.EventOperatorCommandRequested))
+		assert.Equal(t, fmt.Sprintf("%v", events["OperatorCommandCompleted"].Value), string(constants.EventOperatorCommandCompleted))
+		assert.Equal(t, fmt.Sprintf("%v", events["OperatorCommandFailed"].Value), string(constants.EventOperatorCommandFailed))
 	})
 
 	t.Run("operator.file.edit", func(t *testing.T) {
-		assert.Equal(t, events["OperatorFileEditRequested"].Value, string(constants.EventOperatorFileEditRequested))
-		assert.Equal(t, events["OperatorFileEditCompleted"].Value, string(constants.EventOperatorFileEditCompleted))
+		assert.Equal(t, fmt.Sprintf("%v", events["OperatorFileEditRequested"].Value), string(constants.EventOperatorFileEditRequested))
+		assert.Equal(t, fmt.Sprintf("%v", events["OperatorFileEditCompleted"].Value), string(constants.EventOperatorFileEditCompleted))
 	})
 
 	t.Run("operator.lifecycle", func(t *testing.T) {
-		assert.Equal(t, events["OperatorBound"].Value, string(constants.EventOperatorBound))
-		assert.Equal(t, events["OperatorUnbound"].Value, string(constants.EventOperatorUnbound))
+		assert.Equal(t, fmt.Sprintf("%v", events["OperatorBound"].Value), string(constants.EventOperatorBound))
+		assert.Equal(t, fmt.Sprintf("%v", events["OperatorUnbound"].Value), string(constants.EventOperatorUnbound))
 	})
 }
 
@@ -544,15 +545,15 @@ func TestProtocolStatusMatchesGoConstants(t *testing.T) {
 	st := loadStatusJSON(t)
 
 	t.Run("operator.status", func(t *testing.T) {
-		assert.Equal(t, st.Status["operator_status"]["available"].Value, string(constants.OperatorStatusAvailable))
-		assert.Equal(t, st.Status["operator_status"]["offline"].Value, string(constants.OperatorStatusOffline))
+		assert.Equal(t, fmt.Sprintf("%v", st.Status["operator_status"]["available"].Value), string(constants.OperatorStatusAvailable))
+		assert.Equal(t, fmt.Sprintf("%v", st.Status["operator_status"]["offline"].Value), string(constants.OperatorStatusOffline))
 	})
 
 	t.Run("execution.status", func(t *testing.T) {
-		assert.Equal(t, st.Status["execution_status"]["pending"].Value, string(constants.ExecutionStatusPending))
-		assert.Equal(t, st.Status["execution_status"]["executing"].Value, string(constants.ExecutionStatusExecuting))
-		assert.Equal(t, st.Status["execution_status"]["completed"].Value, string(constants.ExecutionStatusCompleted))
-		assert.Equal(t, st.Status["execution_status"]["failed"].Value, string(constants.ExecutionStatusFailed))
+		assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["pending"].Value), string(constants.ExecutionStatusPending))
+		assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["executing"].Value), string(constants.ExecutionStatusExecuting))
+		assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["completed"].Value), string(constants.ExecutionStatusCompleted))
+		assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["failed"].Value), string(constants.ExecutionStatusFailed))
 	})
 }
 
@@ -590,15 +591,15 @@ func TestProtocolHeadersMatchGoConstants(t *testing.T) {
 	h := loadHeadersJSON(t)
 
 	t.Run("standard http headers", func(t *testing.T) {
-		assert.Equal(t, h.Headers["Authorization"].Value, string(constants.HeaderAuthorization))
-		assert.Equal(t, h.Headers["UserAgent"].Value, string(constants.HeaderUserAgent))
-		assert.Equal(t, h.Headers["ContentType"].Value, string(constants.HeaderContentType))
-		assert.Equal(t, h.Headers["ContentDisposition"].Value, string(constants.HeaderContentDisposition))
-		assert.Equal(t, h.Headers["ContentLength"].Value, string(constants.HeaderContentLength))
-		assert.Equal(t, h.Headers["XForwardedProto"].Value, string(constants.HeaderXForwardedProto))
-		assert.Equal(t, h.Headers["XForwardedHost"].Value, string(constants.HeaderXForwardedHost))
-		assert.Equal(t, h.Headers["XRequestTimestamp"].Value, string(constants.HeaderXRequestTimestamp))
-		assert.Equal(t, h.Headers["DeviceToken"].Value, string(constants.HeaderDeviceToken))
+		assert.Equal(t, fmt.Sprintf("%v", h.Headers["Authorization"].Value), string(constants.HeaderAuthorization))
+		assert.Equal(t, fmt.Sprintf("%v", h.Headers["UserAgent"].Value), string(constants.HeaderUserAgent))
+		assert.Equal(t, fmt.Sprintf("%v", h.Headers["ContentType"].Value), string(constants.HeaderContentType))
+		assert.Equal(t, fmt.Sprintf("%v", h.Headers["ContentDisposition"].Value), string(constants.HeaderContentDisposition))
+		assert.Equal(t, fmt.Sprintf("%v", h.Headers["ContentLength"].Value), string(constants.HeaderContentLength))
+		assert.Equal(t, fmt.Sprintf("%v", h.Headers["XForwardedProto"].Value), string(constants.HeaderXForwardedProto))
+		assert.Equal(t, fmt.Sprintf("%v", h.Headers["XForwardedHost"].Value), string(constants.HeaderXForwardedHost))
+		assert.Equal(t, fmt.Sprintf("%v", h.Headers["XRequestTimestamp"].Value), string(constants.HeaderXRequestTimestamp))
+		assert.Equal(t, fmt.Sprintf("%v", h.Headers["DeviceToken"].Value), string(constants.HeaderDeviceToken))
 	})
 }
 
@@ -610,16 +611,16 @@ func TestProtocolPubSubWireMatchesGoConstants(t *testing.T) {
 	ch := loadChannelsJSON(t)
 
 	t.Run("wire.actions", func(t *testing.T) {
-		assert.Equal(t, ch.Channels["Subscribe"].Value, string(constants.PubSubActionSubscribe))
-		assert.Equal(t, ch.Channels["PSubscribe"].Value, string(constants.PubSubActionPSubscribe))
-		assert.Equal(t, ch.Channels["Unsubscribe"].Value, string(constants.PubSubActionUnsubscribe))
-		assert.Equal(t, ch.Channels["Publish"].Value, string(constants.PubSubActionPublish))
+		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["Subscribe"].Value), string(constants.PubSubActionSubscribe))
+		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["PSubscribe"].Value), string(constants.PubSubActionPSubscribe))
+		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["Unsubscribe"].Value), string(constants.PubSubActionUnsubscribe))
+		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["Publish"].Value), string(constants.PubSubActionPublish))
 	})
 
 	t.Run("wire.event_types", func(t *testing.T) {
-		assert.Equal(t, ch.Channels["Message"].Value, string(constants.PubSubEventMessage))
-		assert.Equal(t, ch.Channels["PMessage"].Value, string(constants.PubSubEventPMessage))
-		assert.Equal(t, ch.Channels["Subscribed"].Value, string(constants.PubSubEventSubscribed))
+		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["Message"].Value), string(constants.PubSubEventMessage))
+		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["PMessage"].Value), string(constants.PubSubEventPMessage))
+		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["Subscribed"].Value), string(constants.PubSubEventSubscribed))
 	})
 }
 
@@ -630,10 +631,10 @@ func TestProtocolPubSubWireMatchesGoConstants(t *testing.T) {
 func TestProtocolExecutionStatusMatchesGoConstants(t *testing.T) {
 	st := loadStatusJSON(t)
 
-	assert.Equal(t, st.Status["execution_status"]["pending"].Value, string(constants.ExecutionStatusPending))
-	assert.Equal(t, st.Status["execution_status"]["executing"].Value, string(constants.ExecutionStatusExecuting))
-	assert.Equal(t, st.Status["execution_status"]["completed"].Value, string(constants.ExecutionStatusCompleted))
-	assert.Equal(t, st.Status["execution_status"]["failed"].Value, string(constants.ExecutionStatusFailed))
+	assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["pending"].Value), string(constants.ExecutionStatusPending))
+	assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["executing"].Value), string(constants.ExecutionStatusExecuting))
+	assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["completed"].Value), string(constants.ExecutionStatusCompleted))
+	assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["failed"].Value), string(constants.ExecutionStatusFailed))
 }
 
 // =============================================================================

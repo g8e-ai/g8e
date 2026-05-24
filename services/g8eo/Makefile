@@ -91,33 +91,32 @@ help:
 # =============================================================================
 .PHONY: build
 build:
-	@echo "Building Operator & Gateway (linux/amd64)..."
+	@echo "Building g8e binary (linux/amd64)..."
 	@mkdir -p build/linux-amd64
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 		-trimpath \
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
-		-o build/linux-amd64/g8e.operator ./cmd/g8eo
-	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-		-trimpath \
-		-buildvcs=false \
-		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
-		-o build/linux-amd64/g8e.gateway ./cmd/g8eo
-	@echo 'Built: build/linux-amd64/g8e.operator'
-	@echo 'Built: build/linux-amd64/g8e.gateway'
+		-o build/linux-amd64/g8e ./cmd/g8eo
+	@cp build/linux-amd64/g8e build/linux-amd64/g8e.operator
+	@cp build/linux-amd64/g8e build/linux-amd64/g8e.gateway
+	@echo 'Built: build/linux-amd64/g8e'
+	@echo 'Copied to: build/linux-amd64/g8e.operator'
+	@echo 'Copied to: build/linux-amd64/g8e.gateway'
 	@if [ "$(COMPRESS)" = "1" ] && command -v upx >/dev/null 2>&1; then \
 		echo "Compressing binaries with upx..."; \
+		upx --best --lzma build/linux-amd64/g8e || exit 1; \
 		upx --best --lzma build/linux-amd64/g8e.operator || exit 1; \
 		upx --best --lzma build/linux-amd64/g8e.gateway || exit 1; \
 	elif [ "$(COMPRESS)" = "1" ]; then \
 		echo "Warning: COMPRESS=1 set but upx not found, skipping compression."; \
 	fi
-	@SIZE=$$(ls -lh build/linux-amd64/g8e.operator | awk '{print $$5}') && \
+	@SIZE=$$(ls -lh build/linux-amd64/g8e | awk '{print $$5}') && \
 		echo "  Size: $$SIZE"
 
 .PHONY: build-all
 build-all:
-	@echo "Building Operator & Gateway (all architectures)..."
+	@echo "Building g8e binary (all architectures)..."
 	@for arch in amd64 arm64 386; do \
 		echo "Building linux/$$arch..."; \
 		mkdir -p $(BUILD_DIR)/linux-$$arch && \
@@ -125,21 +124,19 @@ build-all:
 			-trimpath \
 			-buildvcs=false \
 			-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$$arch'" \
-			-o $(BUILD_DIR)/linux-$$arch/g8e.operator ./cmd/g8eo || exit 1; \
-		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build \
-			-trimpath \
-			-buildvcs=false \
-			-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$$arch'" \
-			-o $(BUILD_DIR)/linux-$$arch/g8e.gateway ./cmd/g8eo || exit 1; \
-		SIZE=$$(ls -lh $(BUILD_DIR)/linux-$$arch/g8e.operator | awk '{print $$5}'); \
+			-o $(BUILD_DIR)/linux-$$arch/g8e ./cmd/g8eo || exit 1; \
+		cp $(BUILD_DIR)/linux-$$arch/g8e $(BUILD_DIR)/linux-$$arch/g8e.operator; \
+		cp $(BUILD_DIR)/linux-$$arch/g8e $(BUILD_DIR)/linux-$$arch/g8e.gateway; \
+		SIZE=$$(ls -lh $(BUILD_DIR)/linux-$$arch/g8e | awk '{print $$5}'); \
 		echo "  linux/$$arch: $$SIZE (uncompressed)"; \
 	done
 	@if [ "$(COMPRESS)" = "1" ] && command -v upx >/dev/null 2>&1; then \
 		echo "Compressing binaries with upx..."; \
 		for arch in amd64 arm64 386; do \
+			upx --best --lzma $(BUILD_DIR)/linux-$$arch/g8e || exit 1; \
 			upx --best --lzma $(BUILD_DIR)/linux-$$arch/g8e.operator || exit 1; \
 			upx --best --lzma $(BUILD_DIR)/linux-$$arch/g8e.gateway || exit 1; \
-			SIZE=$$(ls -lh $(BUILD_DIR)/linux-$$arch/g8e.operator | awk '{print $$5}'); \
+			SIZE=$$(ls -lh $(BUILD_DIR)/linux-$$arch/g8e | awk '{print $$5}'); \
 			echo "  linux/$$arch: $$SIZE (compressed)"; \
 		done; \
 	elif [ "$(COMPRESS)" = "1" ]; then \
@@ -158,22 +155,21 @@ build-local: _build-local-binary
 
 .PHONY: _build-local-binary
 _build-local-binary:
-	@echo "Building Operator & Gateway for local testing (linux/amd64)..."
+	@echo "Building g8e binary for local testing (linux/amd64)..."
 	@mkdir -p build/linux-amd64
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build \
 		-trimpath \
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
-		-o build/linux-amd64/$(BINARY_NAME) ./cmd/g8eo
-	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build \
-		-trimpath \
-		-buildvcs=false \
-		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
-		-o build/linux-amd64/g8e.gateway ./cmd/g8eo
-	@echo "Built: build/linux-amd64/$(BINARY_NAME)"
-	@echo "Built: build/linux-amd64/g8e.gateway"
+		-o build/linux-amd64/g8e ./cmd/g8eo
+	@cp build/linux-amd64/g8e build/linux-amd64/$(BINARY_NAME)
+	@cp build/linux-amd64/g8e build/linux-amd64/g8e.gateway
+	@echo "Built: build/linux-amd64/g8e"
+	@echo "Copied to: build/linux-amd64/$(BINARY_NAME)"
+	@echo "Copied to: build/linux-amd64/g8e.gateway"
 	@if [ "$(COMPRESS)" = "1" ] && command -v upx >/dev/null 2>&1; then \
 		echo "Compressing binaries with upx..."; \
+		upx --best --lzma build/linux-amd64/g8e || exit 1; \
 		upx --best --lzma build/linux-amd64/$(BINARY_NAME) || exit 1; \
 		upx --best --lzma build/linux-amd64/g8e.gateway || exit 1; \
 	elif [ "$(COMPRESS)" = "1" ]; then \
@@ -218,14 +214,12 @@ _build-release:
 		-trimpath \
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$(ARCH)'" \
-		-o build/linux-$(ARCH)/$(BINARY_NAME) ./cmd/g8eo
-	@CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH) $(GO) build \
-		-trimpath \
-		-buildvcs=false \
-		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/$(ARCH)'" \
-		-o build/linux-$(ARCH)/g8e.gateway ./cmd/g8eo
+		-o build/linux-$(ARCH)/g8e ./cmd/g8eo
+	@cp build/linux-$(ARCH)/g8e build/linux-$(ARCH)/$(BINARY_NAME)
+	@cp build/linux-$(ARCH)/g8e build/linux-$(ARCH)/g8e.gateway
 	@if [ "$(COMPRESS)" = "1" ] && command -v upx >/dev/null 2>&1; then \
 		echo "Compressing binaries with upx..."; \
+		upx --best --lzma build/linux-$(ARCH)/g8e || exit 1; \
 		upx --best --lzma build/linux-$(ARCH)/$(BINARY_NAME) || exit 1; \
 		upx --best --lzma build/linux-$(ARCH)/g8e.gateway || exit 1; \
 	elif [ "$(COMPRESS)" = "1" ]; then \
