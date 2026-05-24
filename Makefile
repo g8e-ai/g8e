@@ -238,14 +238,6 @@ _ci-docs:
 	@echo "=== docs-build ==="
 	@$(MAKE) docs-build
 
-.PHONY: _ci-apps-g8ee
-_ci-apps-g8ee:
-	@echo "=== apps-g8ee ==="
-	@./g8e platform start
-	@./g8e apps start g8ee
-	@./g8e test g8ee -p gemini -k "$$G8E_LLM_PRIMARY_API_KEY" -m gemini-3.1-pro-preview-customtools -a gemini-3-flash-preview -l gemini-3.1-flash-lite -j auto -- tests
-	@./g8e platform stop
-
 # =============================================================================
 # SERVICE DISPATCH
 # =============================================================================
