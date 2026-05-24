@@ -88,8 +88,7 @@ func platformStartCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&withG8ee, "with-g8ee", false, "Start optional g8ee ensemble")
-	cmd.Flags().BoolVar(&withG8ee, "a", false, "Start optional g8ee ensemble (shorthand)")
+	cmd.Flags().BoolVarP(&withG8ee, "apps", "a", false, "Start optional g8ee ensemble")
 
 	return cmd
 }
@@ -210,8 +209,7 @@ func platformRestartCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&withG8ee, "with-g8ee", false, "Restart optional g8ee ensemble")
-	cmd.Flags().BoolVar(&withG8ee, "a", false, "Restart optional g8ee ensemble (shorthand)")
+	cmd.Flags().BoolVarP(&withG8ee, "apps", "a", false, "Restart optional g8ee ensemble")
 
 	return cmd
 }
