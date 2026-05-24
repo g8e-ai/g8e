@@ -50,7 +50,6 @@ type CommandService struct {
 	vaultWriter    *VaultWriter
 	auditVault     *storage.AuditVaultService
 	localStore     *storage.LocalStoreService
-	rawVault       *storage.RawVaultService
 	ledger         *storage.LedgerService
 	historyHandler *storage.HistoryHandler
 }
@@ -74,14 +73,6 @@ func (cs *CommandService) SetLocalStoreService(ls *storage.LocalStoreService) {
 	cs.localStore = ls
 	if cs.vaultWriter != nil {
 		cs.vaultWriter.localStore = ls
-	}
-}
-
-// SetRawVaultService sets the raw vault for the CommandService.
-func (cs *CommandService) SetRawVaultService(rv *storage.RawVaultService) {
-	cs.rawVault = rv
-	if cs.vaultWriter != nil {
-		cs.vaultWriter.rawVault = rv
 	}
 }
 

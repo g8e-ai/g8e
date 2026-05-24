@@ -24,14 +24,15 @@ import (
 	storage "github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 )
 
-// VaultWriter owns dual-vault persistence for command executions and file diffs.
-// Raw vault receives unscrubbed data; scrubbed vault receives sentinel-processed data.
+// VaultWriter owns consolidated vault persistence for command executions and file diffs.
+// All data is encrypted at rest in the consolidated execution vault.
+// Customer read path: decrypt → return full data
+// AI read path: decrypt → Sentinel scrub → return redacted data
 // Both writes are best-effort - failures are logged but never propagate to callers.
 type VaultWriter struct {
 	config     *config.Config
 	logger     *slog.Logger
 	sentinel   *sentinel.Sentinel
-	rawVault   *storage.RawVaultService
 	localStore *storage.LocalStoreService
 }
 
@@ -41,14 +42,12 @@ func NewVaultWriter(
 	cfg *config.Config,
 	logger *slog.Logger,
 	s *sentinel.Sentinel,
-	rawVault *storage.RawVaultService,
 	localStore *storage.LocalStoreService,
 ) *VaultWriter {
 	return &VaultWriter{
 		config:     cfg,
 		logger:     logger,
 		sentinel:   s,
-		rawVault:   rawVault,
 		localStore: localStore,
 	}
 }
@@ -70,12 +69,11 @@ type executionWriteParams struct {
 	vaultMode       constants.VaultMode
 }
 
-// WriteExecution persists a command execution result to the dual vault.
-// Raw vault write is skipped when vaultMode == scrubbed.
-// Scrubbed vault always receives sentinel-processed output.
+// WriteExecution persists a command execution result to the consolidated vault.
+// All data is encrypted at rest. Sentinel scrubbing is applied for AI access.
 func (vw *VaultWriter) WriteExecution(p executionWriteParams) {
-	if vw.rawVault != nil && vw.rawVault.IsEnabled() && p.vaultMode != constants.VaultModeScrubbed {
-		rawRecord := &storage.RawExecutionRecord{
+	if vw.localStore != nil && vw.localStore.IsEnabled() {
+		execRecord := &storage.ExecutionRecord{
 			ID:               p.id,
 			TimestampUTC:     time.Now().UTC(),
 			Command:          p.command,
@@ -83,43 +81,6 @@ func (vw *VaultWriter) WriteExecution(p executionWriteParams) {
 			DurationMs:       p.durationMs,
 			StdoutCompressed: []byte(p.stdout),
 			StderrCompressed: []byte(p.stderr),
-			StdoutHash:       vw.rawVault.HashString(p.stdout),
-			StderrHash:       vw.rawVault.HashString(p.stderr),
-			StdoutSize:       p.stdoutSize,
-			StderrSize:       p.stderrSize,
-			CaseID:           p.caseID,
-			TaskID:           p.taskID,
-			InvestigationID:  p.investigationID,
-			OperatorID:       vw.config.OperatorID,
-		}
-		if err := vw.rawVault.StoreRawExecution(rawRecord); err != nil {
-			vw.logger.Warn("Failed to store raw execution in raw vault", string(constants.ConnectionStateError), err)
-		} else {
-			vw.logger.Info("Raw execution stored in raw vault (customer data)",
-				"execution_id", p.id,
-				"stdout_size", p.stdoutSize,
-				"stderr_size", p.stderrSize)
-		}
-	} else if p.vaultMode == constants.VaultModeScrubbed {
-		vw.logger.Info("Raw vault storage skipped (sentinel_mode=scrubbed)", "execution_id", p.id)
-	}
-
-	if vw.localStore != nil && vw.localStore.IsEnabled() {
-		scrubbedStdout := p.stdout
-		scrubbedStderr := p.stderr
-		if vw.sentinel != nil && vw.sentinel.IsEnabled() {
-			scrubbedStdout = vw.sentinel.ScrubText(p.stdout)
-			scrubbedStderr = vw.sentinel.ScrubText(p.stderr)
-		}
-
-		execRecord := &storage.ExecutionRecord{
-			ID:               p.id,
-			TimestampUTC:     time.Now().UTC(),
-			Command:          p.command,
-			ExitCode:         p.exitCode,
-			DurationMs:       p.durationMs,
-			StdoutCompressed: []byte(scrubbedStdout),
-			StderrCompressed: []byte(scrubbedStderr),
 			StdoutSize:       p.stdoutSize,
 			StderrSize:       p.stderrSize,
 			CaseID:           p.caseID,
@@ -128,12 +89,12 @@ func (vw *VaultWriter) WriteExecution(p executionWriteParams) {
 			OperatorID:       vw.config.OperatorID,
 		}
 		if err := vw.localStore.StoreExecution(execRecord); err != nil {
-			vw.logger.Warn("Failed to store scrubbed execution in scrubbed vault", string(constants.ConnectionStateError), err)
+			vw.logger.Warn("Failed to store execution in consolidated vault", string(constants.ConnectionStateError), err)
 		} else {
-			vw.logger.Info("Scrubbed execution stored in scrubbed vault (AI-accessible)",
+			vw.logger.Info("Execution stored in consolidated vault (encrypted at rest)",
 				"execution_id", p.id,
 				"stdout_size", p.stdoutSize,
-				"scrubbed_stdout_size", len(scrubbedStdout))
+				"stderr_size", p.stderrSize)
 		}
 	}
 }
@@ -152,10 +113,11 @@ type fileDiffWriteParams struct {
 	operatorSessionID string
 }
 
-// WriteFileDiff persists a file diff to the dual vault.
+// WriteFileDiff persists a file diff to the consolidated vault.
+// All data is encrypted at rest. Sentinel scrubbing is applied for AI access.
 func (vw *VaultWriter) WriteFileDiff(p fileDiffWriteParams) {
-	if vw.rawVault != nil && vw.rawVault.IsEnabled() {
-		rawRecord := &storage.RawFileDiffRecord{
+	if vw.localStore != nil && vw.localStore.IsEnabled() {
+		diffRecord := &storage.FileDiffRecord{
 			ID:                p.diffID,
 			TimestampUTC:      p.timestamp,
 			FilePath:          p.filePath,
@@ -164,50 +126,18 @@ func (vw *VaultWriter) WriteFileDiff(p fileDiffWriteParams) {
 			LedgerHashAfter:   p.ledgerHashAfter,
 			DiffStat:          p.diffStat,
 			DiffCompressed:    []byte(p.diffContent),
-			DiffHash:          vw.rawVault.HashString(p.diffContent),
 			DiffSize:          len(p.diffContent),
 			OperatorSessionID: p.operatorSessionID,
 			CaseID:            p.caseID,
 			OperatorID:        vw.config.OperatorID,
 		}
-		if err := vw.rawVault.StoreRawFileDiff(rawRecord); err != nil {
-			vw.logger.Warn("Failed to store raw file diff in raw vault", string(constants.ConnectionStateError), err)
+		if err := vw.localStore.StoreFileDiff(diffRecord); err != nil {
+			vw.logger.Warn("Failed to store file diff in consolidated vault", string(constants.ConnectionStateError), err)
 		} else {
-			vw.logger.Info("Raw file diff stored in raw vault (customer data)",
+			vw.logger.Info("File diff stored in consolidated vault (encrypted at rest)",
 				"diff_id", p.diffID,
 				"file_path", p.filePath,
 				"diff_size", len(p.diffContent))
-		}
-	}
-
-	if vw.localStore != nil && vw.localStore.IsEnabled() {
-		scrubbedDiff := p.diffContent
-		if vw.sentinel != nil && vw.sentinel.IsEnabled() {
-			scrubbedDiff = vw.sentinel.ScrubText(p.diffContent)
-		}
-
-		scrubbedRecord := &storage.FileDiffRecord{
-			ID:                p.diffID,
-			TimestampUTC:      p.timestamp,
-			FilePath:          p.filePath,
-			Operation:         p.operation,
-			LedgerHashBefore:  p.ledgerHashBefore,
-			LedgerHashAfter:   p.ledgerHashAfter,
-			DiffStat:          p.diffStat,
-			DiffCompressed:    []byte(scrubbedDiff),
-			DiffSize:          len(p.diffContent),
-			OperatorSessionID: p.operatorSessionID,
-			CaseID:            p.caseID,
-			OperatorID:        vw.config.OperatorID,
-		}
-		if err := vw.localStore.StoreFileDiff(scrubbedRecord); err != nil {
-			vw.logger.Warn("Failed to store scrubbed file diff in scrubbed vault", string(constants.ConnectionStateError), err)
-		} else {
-			vw.logger.Info("Scrubbed file diff stored in scrubbed vault (AI-accessible)",
-				"diff_id", p.diffID,
-				"file_path", p.filePath,
-				"raw_size", len(p.diffContent),
-				"scrubbed_size", len(scrubbedDiff))
 		}
 	}
 }
