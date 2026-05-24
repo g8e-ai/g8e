@@ -198,68 +198,50 @@ func (s *GatewayDBService) calculateStateRoot() (string, error) {
 	// 1. Documents (Authoritative)
 	// Exclude metadata-only timestamps (created_at, updated_at) to ensure
 	// the state root only changes when the content actually changes.
-	docRows, err := s.db.QueryWithRetry("SELECT collection, id, data FROM documents ORDER BY collection, id")
+	docRows, err := sqliteutil.MaterializeRows(s.db, "SELECT collection, id, data FROM documents ORDER BY collection, id", nil, func(r *sql.Rows) (row, error) {
+		var collection, id, data string
+		if err := r.Scan(&collection, &id, &data); err != nil {
+			return row{}, err
+		}
+		return row{"documents", []interface{}{collection, id, data}}, nil
+	})
 	if err != nil {
 		return "", err
 	}
-	for docRows.Next() {
-		var collection, id, data string
-		if err := docRows.Scan(&collection, &id, &data); err != nil {
-			docRows.Close()
-			return "", err
-		}
-		rowsToHash = append(rowsToHash, row{"documents", []interface{}{collection, id, data}})
-	}
-	if err := docRows.Err(); err != nil {
-		docRows.Close()
-		return "", err
-	}
-	docRows.Close()
+	rowsToHash = append(rowsToHash, docRows...)
 
 	now := sqliteutil.NowTimestamp()
 
 	// 2. KV Store (Authoritative)
 	// Filter for active entries only. Exclude created_at.
 	// expires_at IS included because it affects the active state of the entry.
-	kvRows, err := s.db.QueryWithRetry("SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", now)
+	kvRows, err := sqliteutil.MaterializeRows(s.db, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", []interface{}{now}, func(r *sql.Rows) (row, error) {
+		var key, value, expiresAt string
+		if err := r.Scan(&key, &value, &expiresAt); err != nil {
+			return row{}, err
+		}
+		return row{"kv_store", []interface{}{key, value, expiresAt}}, nil
+	})
 	if err != nil {
 		return "", err
 	}
-	for kvRows.Next() {
-		var key, value, expiresAt string
-		if err := kvRows.Scan(&key, &value, &expiresAt); err != nil {
-			kvRows.Close()
-			return "", err
-		}
-		rowsToHash = append(rowsToHash, row{"kv_store", []interface{}{key, value, expiresAt}})
-	}
-	if err := kvRows.Err(); err != nil {
-		kvRows.Close()
-		return "", err
-	}
-	kvRows.Close()
+	rowsToHash = append(rowsToHash, kvRows...)
 
 	// 3. Blobs (Authoritative)
 	// Filter for active entries only. Exclude created_at.
 	// data is included (as hex for JSON determinism).
-	blobRows, err := s.db.QueryWithRetry("SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", now)
+	blobRows, err := sqliteutil.MaterializeRows(s.db, "SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) (row, error) {
+		var namespace, id, contentType, dataHex, expiresAt string
+		var size int64
+		if err := r.Scan(&namespace, &id, &size, &contentType, &dataHex, &expiresAt); err != nil {
+			return row{}, err
+		}
+		return row{"blobs", []interface{}{namespace, id, size, contentType, dataHex, expiresAt}}, nil
+	})
 	if err != nil {
 		return "", err
 	}
-	for blobRows.Next() {
-		var namespace, id, contentType, dataHex, expiresAt string
-		var size int64
-		if err := blobRows.Scan(&namespace, &id, &size, &contentType, &dataHex, &expiresAt); err != nil {
-			blobRows.Close()
-			return "", err
-		}
-		rowsToHash = append(rowsToHash, row{"blobs", []interface{}{namespace, id, size, contentType, dataHex, expiresAt}})
-	}
-	if err := blobRows.Err(); err != nil {
-		blobRows.Close()
-		return "", err
-	}
-	blobRows.Close()
+	rowsToHash = append(rowsToHash, blobRows...)
 
 	// 4. Nonces and SSE events are EXCLUDED (volatile/metadata)
 
@@ -828,25 +810,33 @@ func (s *GatewayDBService) DocQuery(collection string, filters []models.DocFilte
 		args = append(args, limit)
 	}
 
-	rows, err := s.db.QueryWithRetry(query.String(), args...)
+	type docRow struct {
+		docID        string
+		dataJSON     string
+		createdAtStr string
+		updatedAtStr string
+	}
+
+	rows, err := sqliteutil.MaterializeRows(s.db, query.String(), args, func(r *sql.Rows) (docRow, error) {
+		var row docRow
+		if err := r.Scan(&row.docID, &row.dataJSON, &row.createdAtStr, &row.updatedAtStr); err != nil {
+			return docRow{}, err
+		}
+		return row, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var results []*models.Document
-	for rows.Next() {
-		var docID, dataJSON, createdAtStr, updatedAtStr string
-		if err := rows.Scan(&docID, &dataJSON, &createdAtStr, &updatedAtStr); err != nil {
-			return nil, err
-		}
-		doc, err := scanDocument(collection, docID, dataJSON, createdAtStr, updatedAtStr)
+	results := make([]*models.Document, 0, len(rows))
+	for _, row := range rows {
+		doc, err := scanDocument(collection, row.docID, row.dataJSON, row.createdAtStr, row.updatedAtStr)
 		if err != nil {
 			return nil, err
 		}
 		results = append(results, doc)
 	}
-	return results, rows.Err()
+	return results, nil
 }
 
 // scanDocument parses a raw SQLite row into a typed Document.
@@ -1032,24 +1022,20 @@ func (s *GatewayDBService) KVDeletePattern(pattern string) (int64, error) {
 
 // KVKeys returns all keys matching a glob pattern.
 func (s *GatewayDBService) KVKeys(pattern string) ([]string, error) {
-	rows, err := s.db.QueryWithRetry(
+	keys, err := sqliteutil.MaterializeRows(s.db,
 		"SELECT key FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?)",
-		pattern, sqliteutil.NowTimestamp(),
-	)
+		[]interface{}{pattern, sqliteutil.NowTimestamp()},
+		func(r *sql.Rows) (string, error) {
+			var k string
+			if err := r.Scan(&k); err != nil {
+				return "", err
+			}
+			return k, nil
+		})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var keys []string
-	for rows.Next() {
-		var k string
-		if err := rows.Scan(&k); err != nil {
-			return nil, err
-		}
-		keys = append(keys, k)
-	}
-	return keys, rows.Err()
+	return keys, nil
 }
 
 // KVScan returns keys matching a glob pattern using cursor-based pagination.
@@ -1060,24 +1046,17 @@ func (s *GatewayDBService) KVScan(pattern string, cursor, count int) (int, []str
 		count = 100
 	}
 	// Fetch count+1 to detect whether a next page exists
-	rows, err := s.db.QueryWithRetry(
+	keys, err := sqliteutil.MaterializeRows(s.db,
 		"SELECT key FROM kv_store WHERE key GLOB ? AND (expires_at IS NULL OR expires_at > ?) ORDER BY key LIMIT ? OFFSET ?",
-		pattern, sqliteutil.NowTimestamp(), count+1, cursor,
-	)
+		[]interface{}{pattern, sqliteutil.NowTimestamp(), count + 1, cursor},
+		func(r *sql.Rows) (string, error) {
+			var k string
+			if err := r.Scan(&k); err != nil {
+				return "", err
+			}
+			return k, nil
+		})
 	if err != nil {
-		return 0, nil, err
-	}
-	defer rows.Close()
-
-	var keys []string
-	for rows.Next() {
-		var k string
-		if err := rows.Scan(&k); err != nil {
-			return 0, nil, err
-		}
-		keys = append(keys, k)
-	}
-	if err := rows.Err(); err != nil {
 		return 0, nil, err
 	}
 
@@ -1216,32 +1195,31 @@ func (s *GatewayDBService) SSEEventsListSince(route SSERoute, sinceID int64, lim
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	var (
-		rows *sql.Rows
-		err  error
-	)
+	var query string
+	var args []interface{}
 	switch {
 	case route.WebSessionID != "":
-		rows, err = s.db.QueryWithRetry(
-			"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE web_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
-			route.WebSessionID, sinceID, limit,
-		)
+		query = "SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE web_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?"
+		args = []interface{}{route.WebSessionID, sinceID, limit}
 	case route.CLISessionID != "":
-		rows, err = s.db.QueryWithRetry(
-			"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE cli_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
-			route.CLISessionID, sinceID, limit,
-		)
+		query = "SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE cli_session_id = ? AND id > ? ORDER BY id ASC LIMIT ?"
+		args = []interface{}{route.CLISessionID, sinceID, limit}
 	default:
-		rows, err = s.db.QueryWithRetry(
-			"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
-			route.UserID, sinceID, limit,
-		)
+		query = "SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT ?"
+		args = []interface{}{route.UserID, sinceID, limit}
 	}
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return scanSSEEventRows(rows)
+
+	return sqliteutil.MaterializeRows(s.db, query, args, func(r *sql.Rows) (models.SSEEventRow, error) {
+		var row models.SSEEventRow
+		var web, cli, user sql.NullString
+		if err := r.Scan(&row.ID, &web, &cli, &user, &row.EventType, &row.Payload, &row.CreatedAt); err != nil {
+			return models.SSEEventRow{}, err
+		}
+		row.WebSessionID = web.String
+		row.CLISessionID = cli.String
+		row.UserID = user.String
+		return row, nil
+	})
 }
 
 // SSEEventsListAllSince is an admin/debug helper that returns events across
@@ -1251,31 +1229,20 @@ func (s *GatewayDBService) SSEEventsListAllSince(sinceID int64, limit int) ([]mo
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	rows, err := s.db.QueryWithRetry(
+	return sqliteutil.MaterializeRows(s.db,
 		"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
-		sinceID, limit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return scanSSEEventRows(rows)
-}
-
-func scanSSEEventRows(rows *sql.Rows) ([]models.SSEEventRow, error) {
-	out := make([]models.SSEEventRow, 0)
-	for rows.Next() {
-		var r models.SSEEventRow
-		var web, cli, user sql.NullString
-		if err := rows.Scan(&r.ID, &web, &cli, &user, &r.EventType, &r.Payload, &r.CreatedAt); err != nil {
-			return nil, err
-		}
-		r.WebSessionID = web.String
-		r.CLISessionID = cli.String
-		r.UserID = user.String
-		out = append(out, r)
-	}
-	return out, rows.Err()
+		[]interface{}{sinceID, limit},
+		func(r *sql.Rows) (models.SSEEventRow, error) {
+			var row models.SSEEventRow
+			var web, cli, user sql.NullString
+			if err := r.Scan(&row.ID, &web, &cli, &user, &row.EventType, &row.Payload, &row.CreatedAt); err != nil {
+				return models.SSEEventRow{}, err
+			}
+			row.WebSessionID = web.String
+			row.CLISessionID = cli.String
+			row.UserID = user.String
+			return row, nil
+		})
 }
 
 // RunTTLCleanup periodically removes expired KV entries and expired blobs.
@@ -1463,56 +1430,64 @@ func (s *GatewayDBService) GetSuspendedTransaction(txHash string) (*models.Suspe
 // ListSuspendedTransactions retrieves all non-expired suspended transactions.
 // Optionally filters by user_id if provided.
 func (s *GatewayDBService) ListSuspendedTransactions(userID string) ([]*models.SuspendedTransaction, error) {
-	var rows *sql.Rows
-	var err error
+	var query string
+	var args []interface{}
 
 	if userID != "" {
-		rows, err = s.db.QueryWithRetry(
-			"SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC",
-			userID, sqliteutil.NowTimestamp(),
-		)
+		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC"
+		args = []interface{}{userID, sqliteutil.NowTimestamp()}
 	} else {
-		rows, err = s.db.QueryWithRetry(
-			"SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC",
-			sqliteutil.NowTimestamp(),
-		)
+		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC"
+		args = []interface{}{sqliteutil.NowTimestamp()}
 	}
 
+	type suspendedTxRow struct {
+		txHash       string
+		envelopeStr  string
+		createdAtStr string
+		expiresAtStr string
+		toolName     string
+		toolArgsStr  string
+		userID       string
+		operatorID   string
+	}
+
+	rows, err := sqliteutil.MaterializeRows(s.db, query, args, func(r *sql.Rows) (suspendedTxRow, error) {
+		var row suspendedTxRow
+		if err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID); err != nil {
+			return suspendedTxRow{}, err
+		}
+		return row, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var transactions []*models.SuspendedTransaction
-	for rows.Next() {
-		var txHash, envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID string
-		if err := rows.Scan(&txHash, &envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID); err != nil {
-			continue
-		}
-
-		createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
+	transactions := make([]*models.SuspendedTransaction, 0, len(rows))
+	for _, row := range rows {
+		createdAt, err := sqliteutil.ParseTimestamp(row.createdAtStr)
 		if err != nil {
 			continue
 		}
-		expiresAt, err := sqliteutil.ParseTimestamp(expiresAtStr)
+		expiresAt, err := sqliteutil.ParseTimestamp(row.expiresAtStr)
 		if err != nil {
 			continue
 		}
 
 		var toolArgs json.RawMessage
-		if toolArgsStr != "" {
-			toolArgs = json.RawMessage(toolArgsStr)
+		if row.toolArgsStr != "" {
+			toolArgs = json.RawMessage(row.toolArgsStr)
 		}
 
 		transactions = append(transactions, &models.SuspendedTransaction{
-			TransactionHash: txHash,
-			Envelope:        json.RawMessage(envelopeStr),
+			TransactionHash: row.txHash,
+			Envelope:        json.RawMessage(row.envelopeStr),
 			CreatedAt:       createdAt,
 			ExpiresAt:       expiresAt,
-			ToolName:        toolName,
+			ToolName:        row.toolName,
 			ToolArguments:   toolArgs,
-			UserID:          userID,
-			OperatorID:      operatorID,
+			UserID:          row.userID,
+			OperatorID:      row.operatorID,
 		})
 	}
 
