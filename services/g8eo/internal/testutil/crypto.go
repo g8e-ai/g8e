@@ -14,12 +14,16 @@
 package testutil
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -46,4 +50,67 @@ func GenerateTestCSR(t *testing.T, commonName string) string {
 	})
 
 	return string(csrPEM)
+}
+
+// GenerateTestCertificate generates a minimal valid test certificate and returns
+// the certificate PEM and private key PEM.
+func GenerateTestCertificate(t *testing.T, commonName string) (certPEM string, keyPEM string) {
+	t.Helper()
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:  x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageClientAuth,
+			x509.ExtKeyUsageServerAuth,
+		},
+		BasicConstraintsValid: true,
+	}
+
+	certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	require.NoError(t, err)
+
+	certPEM = string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certBytes,
+	}))
+
+	keyBytes, err := x509.MarshalECPrivateKey(privateKey)
+	require.NoError(t, err)
+
+	keyPEM = string(pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: keyBytes,
+	}))
+
+	return certPEM, keyPEM
+}
+
+// GenerateTestECPrivateKey generates a minimal valid EC private key PEM.
+func GenerateTestECPrivateKey(t *testing.T) string {
+	t.Helper()
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	keyBytes, err := x509.MarshalECPrivateKey(privateKey)
+	require.NoError(t, err)
+
+	keyPEM := string(pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: keyBytes,
+	}))
+
+	return keyPEM
 }

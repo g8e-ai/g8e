@@ -617,22 +617,22 @@ func TestRebuildTransportWithOperatorCert(t *testing.T) {
 
 	t.Run("mismatched cert and key", func(t *testing.T) {
 		t.Parallel()
-		certPEM := "-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJAKHJgZ5Z2r7DMA0GCSqGSIb3DQEBCwUAMBExDzANBgNVBAMMBnRl\nc3RjYTAeFw0yNDAxMDEwMDAwMDBaFw0yNTAxMDEwMDAwMDBaMBExDzANBgNVBAMM\nBnRlc3RjYTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAu1sC2/vC1v5qXq2F\n5r9Y8q3X4v5X6Y7Z8a9b0c1d2e3f4g5h6i7j8k9l0m1n2o3p4q5r6s7t8u9v0w1x\n2y3z4CAwEAATANBgkqhkiG9w0BAQsFAAOBgQBRo5k5X2L8Y3Z4a5b6c7d8e9f0g1\nh2i3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1b2c3d4e5f6g7h8i9j0k1l2m3\n-----END CERTIFICATE-----"
-		keyPEM := "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIKZJrK2h5r9Y8q3X4v5X6Y7Z8a9b0c1d2e3f4g5h6i7j8k9l0m1n2o3\n-----END EC PRIVATE KEY-----"
+		certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
+		keyPEM := testutil.GenerateTestECPrivateKey(t)
 		err := svc.rebuildTransportWithOperatorCert(certPEM, keyPEM)
 		assert.Error(t, err)
 	})
 
 	t.Run("only cert provided", func(t *testing.T) {
 		t.Parallel()
-		certPEM := "-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJAKHJgZ5Z2r7DMA0GCSqGSIb3DQEBCwUAMBExDzANBgNVBAMMBnRl\nc3RjYTAeFw0yNDAxMDEwMDAwMDBaFw0yNTAxMDEwMDAwMDBaMBExDzANBgNVBAMM\nBnRlc3RjYTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAu1sC2/vC1v5qXq2F\n5r9Y8q3X4v5X6Y7Z8a9b0c1d2e3f4g5h6i7j8k9l0m1n2o3p4q5r6s7t8u9v0w1x\n2y3z4CAwEAATANBgkqhkiG9w0BAQsFAAOBgQBRo5k5X2L8Y3Z4a5b6c7d8e9f0g1\nh2i3j4k5l6m7n8o9p0q1r2s3t4u5v6w7x8y9z0a1b2c3d4e5f6g7h8i9j0k1l2m3\n-----END CERTIFICATE-----"
+		certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
 		err := svc.rebuildTransportWithOperatorCert(certPEM, "")
 		assert.Error(t, err)
 	})
 
 	t.Run("only key provided", func(t *testing.T) {
 		t.Parallel()
-		keyPEM := "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIKZJrK2h5r9Y8q3X4v5X6Y7Z8a9b0c1d2e3f4g5h6i7j8k9l0m1n2o3\n-----END EC PRIVATE KEY-----"
+		keyPEM := testutil.GenerateTestECPrivateKey(t)
 		err := svc.rebuildTransportWithOperatorCert("", keyPEM)
 		assert.Error(t, err)
 	})

@@ -45,30 +45,33 @@ class PathsDict(TypedDict):
     ports: dict[str, int]
 
 
-# The bridge to protocol paths.
-# In container, this is always /app/protocol/constants/paths.json
-# On host, respect G8E_PROTOCOL_DIR environment variable
-_PROTOCOL_DIR: str = os.environ.get(EnvVar.PROTOCOL_DIR) or ""
-if not _PROTOCOL_DIR:
-    # If not provided, try to resolve from project root
-    try:
-        _PROTOCOL_DIR = str(resolve_project_root() / "protocol")
-    except Exception:
-        _PROTOCOL_DIR = "/app/protocol"
+def _get_protocol_dir() -> str:
+    """Resolve protocol directory dynamically from environment or project root."""
+    protocol_dir = os.environ.get(EnvVar.PROTOCOL_DIR) or ""
+    if not protocol_dir:
+        # If not provided, try to resolve from project root
+        try:
+            protocol_dir = str(resolve_project_root() / "protocol")
+        except Exception:
+            protocol_dir = "/app/protocol"
+    return protocol_dir
 
-_CONTAINER_PROTOCOL_CONSTANTS_DIR = _PROTOCOL_DIR + "/constants"
-_PATH_FILE = _CONTAINER_PROTOCOL_CONSTANTS_DIR + "/paths.json"
+def _get_path_file() -> str:
+    """Resolve paths.json file location dynamically."""
+    protocol_dir = _get_protocol_dir()
+    return protocol_dir + "/constants/paths.json"
 
 def _resolve_host_path(raw_path: str | None, default: Path) -> Path:
     path = Path(raw_path) if raw_path else default
     if not path.is_absolute():
-        path = Path(_PROTOCOL_DIR).parent / path
+        path = Path(_get_protocol_dir()).parent / path
     return path.expanduser().resolve()
 
 def _host_runtime_paths() -> tuple[Path, Path]:
+    protocol_dir = _get_protocol_dir()
     runtime_dir = _resolve_host_path(
         os.environ.get(EnvVar.RUNTIME_DIR),
-        Path(_PROTOCOL_DIR).parent / ".g8e",
+        Path(protocol_dir).parent / ".g8e",
     )
     pki_dir = _resolve_host_path(
         os.environ.get(EnvVar.PKI_DIR),
@@ -81,14 +84,17 @@ def _host_runtime_paths() -> tuple[Path, Path]:
     return pki_dir, secrets_dir
 
 def _load_paths() -> PathsDict:
+    protocol_dir = _get_protocol_dir()
+    path_file = _get_path_file()
+    
     try:
-        with Path(_PATH_FILE).open() as f:
+        with Path(path_file).open() as f:
             paths = json.load(f)
     except FileNotFoundError:
         # Emergency fallbacks for when protocol volume isn't ready
         # On host, default to .g8e/pki (Operator listen mode PKI directory)
         # In container, default to /pki for backwards compatibility
-        if _PROTOCOL_DIR != "/app/protocol":
+        if protocol_dir != "/app/protocol":
             pki_path, secrets_path = _host_runtime_paths()
             default_pki_dir = str(pki_path)
             default_secrets_dir = str(secrets_path)
@@ -104,9 +110,9 @@ def _load_paths() -> PathsDict:
                 "pki_dir": os.environ.get(EnvVar.PKI_DIR, default_pki_dir),
                 "secrets_dir": os.environ.get(EnvVar.SECRETS_DIR, default_secrets_dir),
                 "docs_dir": PathConstants.PATH_DOCS_DIR,
-                "protocol_dir": _PROTOCOL_DIR,
-                "protocol_constants_dir": _PROTOCOL_DIR + "/constants",
-                "protocol_models_dir": _PROTOCOL_DIR + "/models",
+                "protocol_dir": protocol_dir,
+                "protocol_constants_dir": protocol_dir + "/constants",
+                "protocol_models_dir": protocol_dir + "/models",
                 "ssh_config_path": PathConstants.PATH_SSH_CONFIG_PATH,
             },
             "ports": {
@@ -120,14 +126,14 @@ def _load_paths() -> PathsDict:
             }
         }
     except Exception as e:
-        raise RuntimeError(f"Failed to load paths from {_PATH_FILE}: {e}") from e
+        raise RuntimeError(f"Failed to load paths from {path_file}: {e}") from e
 
     # Override container paths with G8E_PROTOCOL_DIR when running on host
     # This allows evals and other host-based commands to use host paths
-    if "infra" in paths and _PROTOCOL_DIR != "/app/protocol":
-        paths["infra"]["protocol_dir"] = _PROTOCOL_DIR
-        paths["infra"]["protocol_constants_dir"] = _PROTOCOL_DIR + "/constants"
-        paths["infra"]["protocol_models_dir"] = _PROTOCOL_DIR + "/models"
+    if "infra" in paths and protocol_dir != "/app/protocol":
+        paths["infra"]["protocol_dir"] = protocol_dir
+        paths["infra"]["protocol_constants_dir"] = protocol_dir + "/constants"
+        paths["infra"]["protocol_models_dir"] = protocol_dir + "/models"
         # Override PKI/secrets paths to use host runtime directory when running on host
         pki_path, secrets_path = _host_runtime_paths()
         paths["infra"]["pki_dir"] = str(pki_path)
@@ -144,7 +150,53 @@ def _load_paths() -> PathsDict:
     except Exception as e:
         raise RuntimeError(f"Failed to validate paths: {e}") from e
 
-PATHS: PathsDict = _load_paths()
+# Cache for loaded paths to avoid repeated file I/O
+_paths_cache: PathsDict | None = None
+
+def get_paths() -> PathsDict:
+    """Get paths, loading from file system on first call and caching thereafter.
+    
+    This function resolves environment variables and file system state dynamically
+    on each call, making it test-friendly. Tests can monkeypatch environment variables
+    and call reload_paths() to force re-resolution.
+    """
+    global _paths_cache
+    if _paths_cache is None:
+        _paths_cache = _load_paths()
+    return _paths_cache
+
+def reload_paths() -> None:
+    """Clear the paths cache to force re-resolution on next get_paths() call.
+    
+    This is primarily for tests that need to monkeypatch environment variables
+    and verify path resolution changes.
+    """
+    global _paths_cache
+    _paths_cache = None
+
+# Backwards compatibility: expose PATHS as a property that calls get_paths()
+# This maintains existing code while enabling dynamic resolution
+class _PathsProxy:
+    """Proxy object that provides dict-like access to dynamically resolved paths."""
+    def __getitem__(self, key):
+        return get_paths()[key]
+    
+    def get(self, key, default=None):
+        return get_paths().get(key, default)
+    
+    def __contains__(self, key):
+        return key in get_paths()
+    
+    def keys(self):
+        return get_paths().keys()
+    
+    def values(self):
+        return get_paths().values()
+    
+    def items(self):
+        return get_paths().items()
+
+PATHS = _PathsProxy()
 
 def get_app_cert_paths(app_name: str | None = None) -> tuple[str, str]:
     if app_name is None:

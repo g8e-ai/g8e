@@ -190,7 +190,7 @@ async def all_services(cache_aside_service, test_settings):
 
     import os
     from app.clients.db_client import DBClient
-    from app.constants.paths import PATHS
+    from app.constants.paths import get_paths
     from app.llm.factory import get_search_settings
     from app.models.settings import TLSConfig
     from app.services.ai.grounding.web_search_provider import WebSearchProvider
@@ -198,7 +198,8 @@ async def all_services(cache_aside_service, test_settings):
     from app.services.service_factory import ServiceFactory
 
     # Check if CA certificate exists
-    ca_cert_path = PATHS["infra"]["ca_cert_path"]
+    paths = get_paths()
+    ca_cert_path = paths["infra"]["ca_cert_path"]
     if not os.path.exists(ca_cert_path):
         pytest.skip(f"CA certificate not found at {ca_cert_path}")
 

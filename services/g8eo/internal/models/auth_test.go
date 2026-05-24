@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -188,8 +189,8 @@ func TestDeviceLinkClaim(t *testing.T) {
 func TestOperatorRegistrationRequest(t *testing.T) {
 	t.Run("creates valid registration request", func(t *testing.T) {
 		req := &OperatorRegistrationRequest{
-			CSR:               "-----BEGIN CERTIFICATE REQUEST-----",
-			CLICSR:            "-----BEGIN CERTIFICATE REQUEST-----",
+			CSR:               testutil.GenerateTestCSR(t, "test-operator"),
+			CLICSR:            testutil.GenerateTestCSR(t, "test-cli"),
 			SystemFingerprint: "fp-123",
 			Hostname:          "test-host",
 			OS:                "linux",
@@ -206,16 +207,17 @@ func TestOperatorRegistrationRequest(t *testing.T) {
 func TestOperatorRegistrationResponse(t *testing.T) {
 	t.Run("creates successful registration response", func(t *testing.T) {
 		now := time.Now().UTC()
+		certPEM, _ := testutil.GenerateTestCertificate(t, "test-operator")
 		resp := &OperatorRegistrationResponse{
 			Success:           true,
 			OperatorSessionID: "session-123",
 			CLISessionID:      "cli-session-123",
 			OperatorID:        "operator-123",
-			OperatorCert:      "-----BEGIN CERTIFICATE-----",
-			OperatorCertChain: "-----BEGIN CERTIFICATE-----",
-			CLICert:           "-----BEGIN CERTIFICATE-----",
-			CLICertChain:      "-----BEGIN CERTIFICATE-----",
-			HubTrustBundle:    "-----BEGIN CERTIFICATE-----",
+			OperatorCert:      certPEM,
+			OperatorCertChain: certPEM,
+			CLICert:           certPEM,
+			CLICertChain:      certPEM,
+			HubTrustBundle:    certPEM,
 			OperatorSessionSummary: &SessionSummary{
 				OperatorSessionID: "session-123",
 				ExpiresAt:         now.Add(24 * time.Hour),
@@ -257,6 +259,7 @@ func TestOperatorDocumentGo(t *testing.T) {
 	t.Run("creates valid operator document", func(t *testing.T) {
 		now := time.Now().UTC()
 		startedAt := now.Add(-1 * time.Hour)
+		certPEM, _ := testutil.GenerateTestCertificate(t, "test-operator")
 
 		doc := &OperatorDocumentGo{
 			ID:                "operator-123",
@@ -267,7 +270,7 @@ func TestOperatorDocumentGo(t *testing.T) {
 			Status:            constants.OperatorStatusActive,
 			OperatorSessionID: "session-123",
 			APIKey:            "api-key-123",
-			OperatorCert:      "-----BEGIN CERTIFICATE-----",
+			OperatorCert:      certPEM,
 			SlotNumber:        0,
 			IsSlot:            true,
 			Claimed:           true,

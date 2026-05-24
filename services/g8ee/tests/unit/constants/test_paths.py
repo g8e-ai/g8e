@@ -47,9 +47,9 @@ def _configure_protocol_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
             }
         )
     )
-    monkeypatch.setattr(paths_module, "_PROTOCOL_DIR", str(protocol_dir))
-    monkeypatch.setattr(paths_module, "_CONTAINER_PROTOCOL_CONSTANTS_DIR", str(constants_dir))
-    monkeypatch.setattr(paths_module, "_PATH_FILE", str(path_file))
+    monkeypatch.setenv("G8E_PROTOCOL_DIR", str(protocol_dir))
+    # Clear the paths cache to force re-resolution with new environment
+    paths_module.reload_paths()
     return protocol_dir
 
 
@@ -58,6 +58,8 @@ def test_load_paths_prefers_explicit_host_pki_dir(monkeypatch: pytest.MonkeyPatc
     pki_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e" / "pki"
     monkeypatch.setenv("G8E_PKI_DIR", str(pki_dir))
     monkeypatch.delenv("G8E_RUNTIME_DIR", raising=False)
+    # Clear cache to pick up new PKI_DIR
+    paths_module.reload_paths()
 
     paths = load_paths()
 
@@ -72,6 +74,8 @@ def test_load_paths_uses_host_runtime_dir_when_pki_dir_unset(monkeypatch: pytest
     runtime_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e"
     monkeypatch.delenv("G8E_PKI_DIR", raising=False)
     monkeypatch.setenv("G8E_RUNTIME_DIR", str(runtime_dir))
+    # Clear cache to pick up new RUNTIME_DIR
+    paths_module.reload_paths()
 
     paths = load_paths()
 
