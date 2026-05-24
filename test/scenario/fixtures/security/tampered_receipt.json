@@ -1,0 +1,32 @@
+{
+  "name": "tampered_receipt",
+  "vertical": "security",
+  "narrative": "Envelope with tampered receipt signature should be rejected",
+  "intent": {},
+  "evidence": {
+    "l2_signature_present": true,
+    "l2_key_id": "tribunal_1",
+    "l3_proof_present": false,
+    "signer_id": "tribunal_1"
+  },
+  "expect": {
+    "doctrine": {
+      "verdict": "reject",
+      "reject_reason": "TX_HASH_MISMATCH",
+      "l2_valid": true,
+      "l3_valid": false
+    },
+    "consensus": {
+      "verdict": "reject",
+      "reject_reason": "TX_HASH_MISMATCH",
+      "l2_valid": true,
+      "l3_valid": false
+    },
+    "notary": {
+      "verdict": "reject",
+      "reject_reason": "TX_HASH_MISMATCH",
+      "l2_valid": true,
+      "l3_valid": false
+    }
+  }
+}

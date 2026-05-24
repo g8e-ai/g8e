@@ -363,9 +363,9 @@ func TestGetOperatorBinary(t *testing.T) {
 		t.Errorf("getOperatorBinary failed: %v", err)
 	}
 
-	expectedDir := filepath.Join(pm.projectRoot, "services", "g8eo", "build")
-	if !filepath.HasPrefix(binPath, expectedDir) {
-		t.Errorf("expected binary path to start with %s, got %s", expectedDir, binPath)
+	expectedPath := filepath.Join(pm.projectRoot, "bin", "g8e")
+	if binPath != expectedPath {
+		t.Errorf("expected binary path %s, got %s", expectedPath, binPath)
 	}
 
 	// Verify the path ends with "g8e"
@@ -722,15 +722,15 @@ func TestGetOperatorBinaryPath(t *testing.T) {
 	}
 
 	// Verify the path structure
-	expectedPrefix := filepath.Join(pm.projectRoot, "services", "g8eo", "build")
-	if !filepath.HasPrefix(binPath, expectedPrefix) {
-		t.Errorf("binary path should start with %s, got %s", expectedPrefix, binPath)
+	expectedPath := filepath.Join(pm.projectRoot, "bin", "g8e")
+	if binPath != expectedPath {
+		t.Errorf("binary path should be %s, got %s", expectedPath, binPath)
 	}
 
-	// Verify it includes the architecture subdirectory
+	// Verify the parent directory is "bin"
 	parentDir := filepath.Dir(binPath)
-	if filepath.Base(parentDir) != "linux-amd64" && filepath.Base(parentDir) != "linux-arm64" {
-		t.Errorf("expected architecture directory in path, got %s", parentDir)
+	if filepath.Base(parentDir) != "bin" {
+		t.Errorf("expected parent directory to be 'bin', got %s", parentDir)
 	}
 }
 

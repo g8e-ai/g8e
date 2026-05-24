@@ -378,19 +378,19 @@ func TestDataAuditCmd(t *testing.T) {
 	})
 
 	t.Run("audit has operator-session-id flag", func(t *testing.T) {
-		cmd := dataAuditCmd()
+		cmd := dataAuditListCmd()
 		flag := cmd.Flags().Lookup("operator-session-id")
 		assert.NotNil(t, flag)
 	})
 
 	t.Run("audit has limit flag", func(t *testing.T) {
-		cmd := dataAuditCmd()
+		cmd := dataAuditListCmd()
 		flag := cmd.Flags().Lookup("limit")
 		assert.NotNil(t, flag)
 	})
 
 	t.Run("audit fails with invalid project root", func(t *testing.T) {
-		cmd := dataAuditCmd()
+		cmd := dataAuditListCmd()
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -409,7 +409,7 @@ func TestDataAuditCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupDataTestConfig(t, tmpDir)
 
-		cmd := dataAuditCmd()
+		cmd := dataAuditListCmd()
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -440,7 +440,7 @@ func TestDataCommandFlags(t *testing.T) {
 	})
 
 	t.Run("audit limit flag has default", func(t *testing.T) {
-		cmd := dataAuditCmd()
+		cmd := dataAuditListCmd()
 		limitFlag := cmd.Flags().Lookup("limit")
 		assert.NotNil(t, limitFlag)
 		assert.Equal(t, "100", limitFlag.DefValue)
