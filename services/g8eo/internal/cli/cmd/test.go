@@ -27,12 +27,11 @@ func testCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test",
 		Short: "Run test suites",
-		Long:  `Orchestrate test execution for g8eo (Gateway) and g8ee (Ensemble).`,
+		Long:  `Orchestrate test execution for g8eo (Gateway).`,
 	}
 
 	cmd.AddCommand(
 		testG8eoCmd(),
-		testG8eeCmd(),
 		testCICmd(),
 		testChaosCmd(),
 	)
@@ -90,53 +89,10 @@ func testG8eoCmd() *cobra.Command {
 	return cmd
 }
 
-func testG8eeCmd() *cobra.Command {
-	var verbose bool
-	var run string
-
-	cmd := &cobra.Command{
-		Use:   "g8ee",
-		Short: "Run Ensemble (g8ee) tests",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			venvPython := filepath.Join(cfg.ProjectRoot, ".venv", "bin", "python")
-			if _, err := os.Stat(venvPython); os.IsNotExist(err) {
-				return fmt.Errorf("g8ee venv not found at %s - run setup first", venvPython)
-			}
-
-			g8eeDir := filepath.Join(cfg.ProjectRoot, "services", "g8ee")
-			pytestArgs := []string{venvPython, "-m", "pytest", g8eeDir}
-
-			if run != "" {
-				pytestArgs = append(pytestArgs, "-k", run)
-			}
-			if verbose {
-				pytestArgs = append(pytestArgs, "-v")
-			}
-
-			cmd.Printf("Running g8ee tests in %s...\n", g8eeDir)
-			pytestCmd := exec.Command(pytestArgs[0], pytestArgs[1:]...)
-			pytestCmd.Stdout = os.Stdout
-			pytestCmd.Stderr = os.Stderr
-			pytestCmd.Dir = cfg.ProjectRoot
-			return pytestCmd.Run()
-		},
-	}
-
-	cmd.Flags().BoolVar(&verbose, "v", false, "Verbose output")
-	cmd.Flags().StringVar(&run, "run", "", "Run specific test (regex)")
-
-	return cmd
-}
-
 func testCICmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ci",
-		Short: "Run CI test suite (g8eo + g8ee)",
+		Short: "Run CI test suite (g8eo)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
@@ -152,21 +108,6 @@ func testCICmd() *cobra.Command {
 			makeCmd.Stderr = os.Stderr
 			if err := makeCmd.Run(); err != nil {
 				return fmt.Errorf("g8eo tests failed: %w", err)
-			}
-
-			venvPython := filepath.Join(cfg.ProjectRoot, ".venv", "bin", "python")
-			if _, err := os.Stat(venvPython); err == nil {
-				cmd.Println("\n=== Testing g8ee ===")
-				g8eeDir := filepath.Join(cfg.ProjectRoot, "services", "g8ee")
-				pytestCmd := exec.Command(venvPython, "-m", "pytest", g8eeDir)
-				pytestCmd.Stdout = os.Stdout
-				pytestCmd.Stderr = os.Stderr
-				pytestCmd.Dir = cfg.ProjectRoot
-				if err := pytestCmd.Run(); err != nil {
-					return fmt.Errorf("g8ee tests failed: %w", err)
-				}
-			} else {
-				cmd.Println("\nSkipping g8ee tests (venv not found)")
 			}
 
 			cmd.Println("\nCI test suite passed")

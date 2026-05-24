@@ -90,7 +90,7 @@ func TestExpandPath(t *testing.T) {
 func TestLoad(t *testing.T) {
 	t.Run("loads config from valid project root", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		// Create protocol/constants directory structure
 		protocolDir := filepath.Join(tempDir, "protocol", "constants")
 		err := os.MkdirAll(protocolDir, 0755)
@@ -141,7 +141,7 @@ func TestLoad(t *testing.T) {
 
 	t.Run("uses current directory when project root is empty", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		// Create protocol/constants directory structure
 		protocolDir := filepath.Join(tempDir, "protocol", "constants")
 		err := os.MkdirAll(protocolDir, 0755)
@@ -195,7 +195,7 @@ func TestLoad(t *testing.T) {
 
 	t.Run("returns error when paths.json does not exist", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		// Create protocol/constants directory but no paths.json
 		protocolDir := filepath.Join(tempDir, "protocol", "constants")
 		err := os.MkdirAll(protocolDir, 0755)
@@ -209,7 +209,7 @@ func TestLoad(t *testing.T) {
 
 	t.Run("returns error when paths.json is invalid JSON", func(t *testing.T) {
 		tempDir := t.TempDir()
-		
+
 		// Create protocol/constants directory structure
 		protocolDir := filepath.Join(tempDir, "protocol", "constants")
 		err := os.MkdirAll(protocolDir, 0755)
@@ -373,7 +373,6 @@ func TestConfig_OperatorHTTPSPort(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					G8EEHTTPS              int `json:"g8ee_https"`
 					OpenclawGateway        int `json:"openclaw_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -394,7 +393,6 @@ func TestConfig_OperatorBootstrapHTTPSPort(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					G8EEHTTPS              int `json:"g8ee_https"`
 					OpenclawGateway        int `json:"openclaw_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -415,7 +413,6 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					G8EEHTTPS              int `json:"g8ee_https"`
 					OpenclawGateway        int `json:"openclaw_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -436,7 +433,6 @@ func TestConfig_OperatorBootstrapURL(t *testing.T) {
 		config := &Config{
 			Paths: &PathsConfig{
 				Ports: struct {
-					G8EEHTTPS              int `json:"g8ee_https"`
 					OpenclawGateway        int `json:"openclaw_gateway"`
 					OperatorBootstrapHTTPS int `json:"operator_bootstrap_https"`
 					OperatorHTTPS          int `json:"operator_https"`
@@ -473,7 +469,7 @@ func TestDefaultConstants(t *testing.T) {
 func TestLoadIntegration(t *testing.T) {
 	// This is an integration test that uses the actual project structure
 	// It verifies that Load works with the real paths.json file
-	
+
 	t.Run("loads real project config", func(t *testing.T) {
 		// This test assumes it's run from the project root
 		// Skip if not in the expected environment
@@ -487,11 +483,11 @@ func TestLoadIntegration(t *testing.T) {
 		assert.NotNil(t, config)
 		assert.Equal(t, projectRoot, config.ProjectRoot)
 		assert.NotNil(t, config.Paths)
-		
+
 		// Verify port values match paths.json
 		assert.Equal(t, 8440, config.OperatorHTTPSPort())
 		assert.Equal(t, 8441, config.OperatorBootstrapHTTPSPort())
-		
+
 		// Verify URLs are formatted correctly
 		assert.True(t, strings.HasPrefix(config.OperatorHTTPURL(), "https://localhost:"))
 		assert.True(t, strings.HasPrefix(config.OperatorBootstrapURL(), "https://localhost:"))

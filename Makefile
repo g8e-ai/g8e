@@ -33,16 +33,14 @@ help:
 	@echo "CI/CD (Local):"
 	@echo "  ci            Run full CI pipeline locally (mirrors GitHub Actions)"
 	@echo "  ci-substrate  Run substrate-only CI (g8eo, protocol, proto, docs)"
-	@echo "  ci-apps       Run app-layer CI (g8ee tests, requires LLM creds)"
 	@echo ""
 	@echo "Development:"
 	@echo "  generate      Generate all protocol artifacts (proto + constants + docs)"
-	@echo "  proto         Generate all Protobuf code (Go and Python)"
+	@echo "  proto         Generate all Protobuf code (Go)"
 	@echo "  constants     Generate all constants and sync documentation ports"
 	@echo "  clean-constants  Remove generated constants files"
 	@echo "  buf-install   Install Buf CLI locally if not found"
 	@echo "  lint-no-bare-session-id  Check for bare session_id regression"
-	@echo "  lint-no-hand-authored-events  Check for hand-authored events.py regression"
 	@echo "  first-issues  Find good first issues in the codebase"
 	@echo "  clean         Remove build artifacts and runtime state"
 	@echo ""
@@ -54,9 +52,7 @@ help:
 	@echo "  build         Build the Operator service (g8e binary)"
 	@echo "  test-g8eo     Run Operator tests"
 	@echo "  lint-g8eo     Run Operator linters (golangci-lint)"
-	@echo "  lint-g8ee     Run Engine linters (ruff, pyright)"
 	@echo "  vulncheck-g8eo Run Operator vulnerability check"
-	@echo "  test-g8ee     Run Engine tests"
 
 # =============================================================================
 # PROTOBUF GENERATION
@@ -77,28 +73,9 @@ proto: buf-install
 	@if command -v buf &> /dev/null || [ -f "./buf" ]; then \
 		echo "Generating Go Protobuf code with Buf..."; \
 		$(BUF) generate protocol/proto; \
-		if [ -f ".venv/bin/python" ]; then \
-			echo "Generating Python Protobuf code locally..."; \
-			.venv/bin/python -m grpc_tools.protoc -Iprotocol/proto --python_out=services/g8ee/app/proto protocol/proto/*.proto; \
-		fi \
-	elif [ -d "services/g8ee/app/proto" ] && [ -f "services/g8ee/app/proto/common_pb2.py" ]; then \
-		echo "Buf not found and system is offline/air-gapped. Utilizing pre-generated protocol files."; \
 	else \
-		echo "Error: Buf not found and no pre-generated protocol files found. Network access required for initial setup." >&2; \
+		echo "Error: Buf not found. Network access required for initial setup." >&2; \
 		exit 1; \
-	fi
-	@echo "Post-processing Python code..."
-	@touch services/g8ee/app/proto/__init__.py
-	@# Also generate for the evals harness
-	@mkdir -p evals/g8e_evals/proto
-	@cp services/g8ee/app/proto/*_pb2*.py evals/g8e_evals/proto/
-	@touch evals/g8e_evals/proto/__init__.py
-	@if [ "$$(uname -s)" = "Darwin" ]; then \
-		find services/g8ee/app/proto -name "*_pb2*.py" -exec sed -i '' 's/^import \(.*_pb2\)/from . import \1/' {} +; \
-		find evals/g8e_evals/proto -name "*_pb2*.py" -exec sed -i '' 's/^import \(.*_pb2\)/from . import \1/' {} +; \
-	else \
-		find services/g8ee/app/proto -name "*_pb2*.py" -exec sed -i 's/^import \(.*_pb2\)/from . import \1/' {} +; \
-		find evals/g8e_evals/proto -name "*_pb2*.py" -exec sed -i 's/^import \(.*_pb2\)/from . import \1/' {} +; \
 	fi
 	@echo "Protobuf generation complete."
 
@@ -106,22 +83,6 @@ proto: buf-install
 proto-force: buf-install
 	@echo "Force generating Protobuf code..."
 	@$(BUF) generate protocol/proto
-	@if [ -f ".venv/bin/python" ]; then \
-		.venv/bin/python -m grpc_tools.protoc -Iprotocol/proto --python_out=services/g8ee/app/proto protocol/proto/*.proto; \
-	fi
-	@echo "Post-processing Python code..."
-	@touch services/g8ee/app/proto/__init__.py
-	@# Also generate for the evals harness
-	@mkdir -p evals/g8e_evals/proto
-	@cp services/g8ee/app/proto/*_pb2*.py evals/g8e_evals/proto/
-	@touch evals/g8e_evals/proto/__init__.py
-	@if [ "$$(uname -s)" = "Darwin" ]; then \
-		find services/g8ee/app/proto -name "*_pb2*.py" -exec sed -i '' 's/^import \(.*_pb2\)/from . import \1/' {} +; \
-		find evals/g8e_evals/proto -name "*_pb2*.py" -exec sed -i '' 's/^import \(.*_pb2\)/from . import \1/' {} +; \
-	else \
-		find services/g8ee/app/proto -name "*_pb2*.py" -exec sed -i 's/^import \(.*_pb2\)/from . import \1/' {} +; \
-		find evals/g8e_evals/proto -name "*_pb2*.py" -exec sed -i 's/^import \(.*_pb2\)/from . import \1/' {} +; \
-	fi
 	@echo "Protobuf generation complete."
 
 .PHONY: buf-install
@@ -144,29 +105,21 @@ buf-install:
 lint-no-bare-session-id:
 	@echo "Checking for bare session_id regression..."
 	@if grep -rE "\bsession_id\b" . \
-		--exclude-dir={.git,vendor,node_modules,.g8e,.ruff_cache,.venv,dist,build,__pycache__,.local.dev,.github} \
-		--exclude={*.pb.go,*_pb2.py,*_pb2_grpc.py,*.pyc,Makefile,*.json} \
+		--exclude-dir={.git,vendor,node_modules,.g8e,.local.dev,.github} \
+		--exclude={*.pb.go,Makefile,*.json} \
 		-I; then \
 		echo "Error: Bare 'session_id' found. Use 'operator_session_id', 'cli_session_id', or 'web_session_id' instead."; \
 		exit 1; \
 	fi
 	@echo "No bare session_id found."
 
-.PHONY: lint-no-hand-authored-events
-lint-no-hand-authored-events:
-	@echo "Checking for hand-authored events.py regression..."
-	@if [ -f "services/g8ee/app/constants/events.py" ]; then \
-		echo "Error: Hand-authored 'services/g8ee/app/constants/events.py' found. Use 'generated_events.py' instead."; \
-		exit 1; \
-	fi
-	@echo "No hand-authored events.py found."
 
 .PHONY: first-issues
 first-issues:
 	@echo "Searching for good first issues (TODO comments)..."
 	@grep -rni 'TODO' . \
-		--exclude-dir={.git,vendor,node_modules,.g8e,.ruff_cache,.venv,dist,build,__pycache__,.local.dev,.github} \
-		--exclude={*.pb.go,*_pb2.py,*_pb2_grpc.py,*.pyc,Makefile} \
+		--exclude-dir={.git,vendor,node_modules,.g8e,.local.dev,.github} \
+		--exclude={*.pb.go,Makefile} \
 		-I || echo "No TODOs found."
 
 .PHONY: clean-constants
@@ -175,7 +128,6 @@ clean-constants:
 	@rm -rf services/g8eo/internal/constants/headers_generated.go
 	@rm -rf services/g8eo/internal/constants/status_generated.go
 	@rm -rf services/g8eo/internal/constants/registry.go
-	@rm -rf services/g8ee/app/constants/generated_*.py
 	@echo "Constants clean complete."
 
 .PHONY: clean
@@ -185,8 +137,6 @@ clean:
 	@$(MAKE) clean-constants
 	@rm -rf .g8e/
 	@rm -f ./g8e
-	@find . -name "*.pyc" -delete
-	@find . -name "__pycache__" -type d -exec rm -rf {} +
 	@echo "Clean complete."
 
 # =============================================================================
@@ -224,37 +174,25 @@ update-doctrines:
 # =============================================================================
 .PHONY: ci
 ci: ci-substrate
-	@echo "Running full CI pipeline (substrate + apps)..."
-	@echo "Note: apps-g8ee requires G8E_LLM_PRIMARY_API_KEY environment variable"
-	@if [ -n "$$G8E_LLM_PRIMARY_API_KEY" ]; then \
-		$(MAKE) ci-apps; \
-	else \
-		echo "Skipping apps-g8ee (G8E_LLM_PRIMARY_API_KEY not set)"; \
-		echo "Set it with: export G8E_LLM_PRIMARY_API_KEY=your_key"; \
-	fi
 	@echo "CI complete."
 
 .PHONY: ci-substrate
 ci-substrate: _ci-verify-proto _ci-lint-g8eo _ci-vulncheck-g8eo _ci-test-g8eo _ci-docs
 	@echo "Substrate CI complete."
 
-.PHONY: ci-apps
-ci-apps: _ci-apps-g8ee
-	@echo "Apps CI complete."
-
 .PHONY: _ci-verify-proto
 _ci-verify-proto:
 	@echo "=== verify-proto ==="
 	@$(MAKE) proto
 	@$(MAKE) constants
-	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.go$$|^\s*M.*\.py$$|^\s*M.*\.sh$$" || true); \
+	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.go$$|^\s*M.*\.sh$$" || true); \
 	if [ -n "$$CHANGES" ]; then \
 		echo "Error: Generated constant files are out of sync with protocol/constants/*.json"; \
 		echo "$$CHANGES"; \
 		git diff; \
 		exit 1; \
 	fi
-	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$$|^\s*M.*_pb2.*\.py$$|^\s*M.*\.proto$$" || true); \
+	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$$|^\s*M.*\.proto$$" || true); \
 	if [ -n "$$CHANGES" ]; then \
 		echo "Error: Generated proto files are out of sync with protocol/proto/*.proto"; \
 		echo "$$CHANGES"; \
@@ -262,7 +200,6 @@ _ci-verify-proto:
 		exit 1; \
 	fi
 	@$(MAKE) lint-no-bare-session-id
-	@$(MAKE) lint-no-hand-authored-events
 	@$(MAKE) validate-doctrines
 	@cd services/g8eo/internal/constants && go run check_registry.go
 
@@ -330,17 +267,9 @@ test-g8eo:
 lint-g8eo:
 	@$(MAKE) --no-print-directory -C services/g8eo lint
 
-.PHONY: lint-g8ee
-lint-g8ee:
-	@$(MAKE) --no-print-directory -C services/g8ee lint
-
 .PHONY: vulncheck-g8eo
 vulncheck-g8eo:
 	@$(MAKE) --no-print-directory -C services/g8eo vulncheck
-
-.PHONY: test-g8ee
-test-g8ee:
-	@./g8e test g8ee
 
 # =============================================================================
 # DOCUMENTATION
@@ -348,19 +277,9 @@ test-g8ee:
 .PHONY: docs-build
 docs-build: constants
 	@echo "Building MkDocs documentation..."
-	@if [ -f ".venv/bin/python" ]; then \
-		.venv/bin/python -m mkdocs build -f docs/mkdocs.yml; \
-	else \
-		echo "Error: Python venv not found. Run setup first."; \
-		exit 1; \
-	fi
+	@echo "Error: MkDocs build requires Python. Use Dockerized MkDocs action in CI."
 
 .PHONY: docs-serve
 docs-serve:
 	@echo "Serving MkDocs documentation locally..."
-	@if [ -f ".venv/bin/python" ]; then \
-		.venv/bin/python -m mkdocs serve -f docs/mkdocs.yml -a 0.0.0.0:8000; \
-	else \
-		echo "Error: Python venv not found. Run setup first."; \
-		exit 1; \
-	fi
+	@echo "Error: MkDocs serve requires Python. Use Dockerized MkDocs action in CI."

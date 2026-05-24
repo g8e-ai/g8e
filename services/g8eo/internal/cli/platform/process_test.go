@@ -43,13 +43,6 @@ func TestNewProcessManager(t *testing.T) {
 		t.Errorf("expected pkiDir %s, got %s", expectedPKIDir, pm.pkiDir)
 	}
 
-	if pm.g8eeHost != defaultG8eeHost {
-		t.Errorf("expected g8eeHost %s, got %s", defaultG8eeHost, pm.g8eeHost)
-	}
-
-	if pm.g8eePort != defaultG8eePort {
-		t.Errorf("expected g8eePort %s, got %s", defaultG8eePort, pm.g8eePort)
-	}
 }
 
 func TestEnsureDirectories(t *testing.T) {
@@ -311,46 +304,6 @@ func TestOperatorStatus(t *testing.T) {
 	}
 }
 
-func TestG8eeStatus(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
-	if err != nil {
-		t.Fatalf("NewProcessManager failed: %v", err)
-	}
-
-	if err := pm.ensureDirectories(); err != nil {
-		t.Fatalf("ensureDirectories failed: %v", err)
-	}
-
-	// Test no PID file
-	running, pid, err := pm.G8eeStatus()
-	if err != nil {
-		t.Errorf("G8eeStatus failed: %v", err)
-	}
-	if running {
-		t.Error("expected running=false when no PID file exists")
-	}
-	if pid != 0 {
-		t.Errorf("expected pid=0 when no PID file exists, got %d", pid)
-	}
-
-	// Test with PID file for current process
-	if err := pm.writePID(g8eePIDFile, os.Getpid()); err != nil {
-		t.Fatalf("writePID failed: %v", err)
-	}
-
-	running, pid, err = pm.G8eeStatus()
-	if err != nil {
-		t.Errorf("G8eeStatus failed: %v", err)
-	}
-	if !running {
-		t.Error("expected running=true for current process")
-	}
-	if pid != os.Getpid() {
-		t.Errorf("expected pid=%d, got %d", os.Getpid(), pid)
-	}
-}
-
 func TestStopOperator(t *testing.T) {
 	tmpDir := t.TempDir()
 	pm, err := NewProcessManager(tmpDir)
@@ -378,38 +331,6 @@ func TestStopOperator(t *testing.T) {
 
 	// Verify PID file was deleted
 	pidFile := filepath.Join(pm.pidDir, operatorPIDFile)
-	if _, err := os.Stat(pidFile); !os.IsNotExist(err) {
-		t.Error("PID file should be deleted after stop")
-	}
-}
-
-func TestStopG8ee(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
-	if err != nil {
-		t.Fatalf("NewProcessManager failed: %v", err)
-	}
-
-	if err := pm.ensureDirectories(); err != nil {
-		t.Fatalf("ensureDirectories failed: %v", err)
-	}
-
-	// Test stopping when no PID file exists
-	if err := pm.StopG8ee(); err != nil {
-		t.Errorf("StopG8ee should not error when no PID file exists: %v", err)
-	}
-
-	// Test stopping non-existent process
-	if err := pm.writePID(g8eePIDFile, 999999); err != nil {
-		t.Fatalf("writePID failed: %v", err)
-	}
-
-	if err := pm.StopG8ee(); err != nil {
-		t.Errorf("StopG8ee failed: %v", err)
-	}
-
-	// Verify PID file was deleted
-	pidFile := filepath.Join(pm.pidDir, g8eePIDFile)
 	if _, err := os.Stat(pidFile); !os.IsNotExist(err) {
 		t.Error("PID file should be deleted after stop")
 	}
@@ -453,32 +374,6 @@ func TestGetOperatorBinary(t *testing.T) {
 	}
 }
 
-func TestGetG8eeBinary(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
-	if err != nil {
-		t.Fatalf("NewProcessManager failed: %v", err)
-	}
-
-	// Test when venv does not exist
-	_, err = pm.getG8eeBinary()
-	if err == nil {
-		t.Error("expected error when venv does not exist")
-	}
-
-	// Create a fake venv structure
-	venvDir := filepath.Join(pm.projectRoot, ".venv", "bin")
-	if err := os.MkdirAll(venvDir, 0755); err != nil {
-		t.Fatalf("failed to create venv directory: %v", err)
-	}
-
-	// Test when uvicorn is not installed
-	_, err = pm.getG8eeBinary()
-	if err == nil {
-		t.Error("expected error when uvicorn is not installed")
-	}
-}
-
 func TestReset(t *testing.T) {
 	tmpDir := t.TempDir()
 	pm, err := NewProcessManager(tmpDir)
@@ -502,16 +397,6 @@ func TestReset(t *testing.T) {
 		t.Fatalf("failed to create secret file: %v", err)
 	}
 
-	// Create g8ee data directory
-	g8eeDataDir := filepath.Join(pm.projectRoot, "services", "g8ee", "data")
-	if err := os.MkdirAll(g8eeDataDir, 0700); err != nil {
-		t.Fatalf("failed to create g8ee data directory: %v", err)
-	}
-	g8eeTestFile := filepath.Join(g8eeDataDir, "test.txt")
-	if err := os.WriteFile(g8eeTestFile, []byte("g8ee"), 0600); err != nil {
-		t.Fatalf("failed to create g8ee test file: %v", err)
-	}
-
 	// Run reset
 	if err := pm.Reset(); err != nil {
 		t.Fatalf("Reset failed: %v", err)
@@ -525,11 +410,6 @@ func TestReset(t *testing.T) {
 	// Verify secretsDir was wiped
 	if _, err := os.Stat(secretFile); !os.IsNotExist(err) {
 		t.Error("secretsDir should be wiped")
-	}
-
-	// Verify g8ee data was wiped
-	if _, err := os.Stat(g8eeTestFile); !os.IsNotExist(err) {
-		t.Error("g8ee data directory should be wiped")
 	}
 
 	// Verify directories were recreated
@@ -558,16 +438,6 @@ func TestClean(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	// Create Python cache
-	pycacheDir := filepath.Join(pm.projectRoot, "subdir", "__pycache__")
-	if err := os.MkdirAll(pycacheDir, 0755); err != nil {
-		t.Fatalf("failed to create pycache directory: %v", err)
-	}
-	pycFile := filepath.Join(pycacheDir, "test.pyc")
-	if err := os.WriteFile(pycFile, []byte("pyc"), 0600); err != nil {
-		t.Fatalf("failed to create pyc file: %v", err)
-	}
-
 	// Run clean
 	if err := pm.Clean(); err != nil {
 		t.Fatalf("Clean failed: %v", err)
@@ -576,11 +446,6 @@ func TestClean(t *testing.T) {
 	// Verify runtimeDir was removed
 	if _, err := os.Stat(pm.runtimeDir); !os.IsNotExist(err) {
 		t.Error("runtimeDir should be removed")
-	}
-
-	// Verify Python cache was cleaned
-	if _, err := os.Stat(pycacheDir); !os.IsNotExist(err) {
-		t.Error("__pycache__ should be removed")
 	}
 }
 
@@ -628,14 +493,8 @@ func TestConstants(t *testing.T) {
 	if operatorPIDFile == "" {
 		t.Error("operatorPIDFile should not be empty")
 	}
-	if g8eePIDFile == "" {
-		t.Error("g8eePIDFile should not be empty")
-	}
 	if operatorLogPath == "" {
 		t.Error("operatorLogPath should not be empty")
-	}
-	if g8eeLogPath == "" {
-		t.Error("g8eeLogPath should not be empty")
 	}
 	if shutdownTimeout == 0 {
 		t.Error("shutdownTimeout should not be zero")
@@ -645,12 +504,6 @@ func TestConstants(t *testing.T) {
 	}
 	if maxHealthChecks == 0 {
 		t.Error("maxHealthChecks should not be zero")
-	}
-	if defaultG8eeHost == "" {
-		t.Error("defaultG8eeHost should not be empty")
-	}
-	if defaultG8eePort == "" {
-		t.Error("defaultG8eePort should not be empty")
 	}
 }
 
@@ -881,23 +734,6 @@ func TestGetOperatorBinaryPath(t *testing.T) {
 	}
 }
 
-func TestResetWithNonExistentG8eeData(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
-	if err != nil {
-		t.Fatalf("NewProcessManager failed: %v", err)
-	}
-
-	if err := pm.ensureDirectories(); err != nil {
-		t.Fatalf("ensureDirectories failed: %v", err)
-	}
-
-	// Don't create g8ee data directory - it should not error
-	if err := pm.Reset(); err != nil {
-		t.Errorf("Reset should not error when g8ee data doesn't exist: %v", err)
-	}
-}
-
 func TestCleanWithNonExistentRuntime(t *testing.T) {
 	tmpDir := t.TempDir()
 	pm, err := NewProcessManager(tmpDir)
@@ -908,23 +744,5 @@ func TestCleanWithNonExistentRuntime(t *testing.T) {
 	// Don't create runtime directory - it should not error
 	if err := pm.Clean(); err != nil {
 		t.Errorf("Clean should not error when runtime doesn't exist: %v", err)
-	}
-}
-
-func TestCleanWalkErrorHandling(t *testing.T) {
-	tmpDir := t.TempDir()
-	pm, err := NewProcessManager(tmpDir)
-	if err != nil {
-		t.Fatalf("NewProcessManager failed: %v", err)
-	}
-
-	if err := pm.ensureDirectories(); err != nil {
-		t.Fatalf("ensureDirectories failed: %v", err)
-	}
-
-	// Create a file that cannot be removed (simulate permission error)
-	// This is hard to test without root, so we just verify the function doesn't panic
-	if err := pm.Clean(); err != nil {
-		// Error is acceptable, we just want to ensure it doesn't panic
 	}
 }

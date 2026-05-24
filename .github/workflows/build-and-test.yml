@@ -45,7 +45,7 @@ jobs:
       - name: Check for drift
         run: |
           # Only check for changes in generated proto files, ignore untracked files
-          CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$|^\s*M.*_pb2.*\.py$|^\s*M.*\.proto$" || true)
+          CHANGES=$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$|^\s*M.*\.proto$" || true)
           if [ -n "$CHANGES" ]; then
             echo "Error: Generated proto files are out of sync with protocol/proto/*.proto"
             echo "$CHANGES"
@@ -189,69 +189,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.14'
-
-      - name: Install project dependencies
-        run: |
-          pip install -e services/g8ee
-
       - name: Build CLI reference
         run: make docs-cli
 
       - name: Build documentation
         run: make docs-build
-
-  apps-g8ee:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: services/g8eo/go.mod
-          cache-dependency-path: services/g8eo/go.sum
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.14'
-
-      - name: Build unified g8eo binary
-        run: make build-cli
-
-      - name: Start Operator Gateway
-        run: ./g8e platform start
-
-      - name: Start g8ee adapter
-        run: ./g8e apps start g8ee
-
-      - name: Test g8ee adapter
-        run: >-
-          ./g8e test g8ee
-          -p gemini
-          -k "$G8E_LLM_PRIMARY_API_KEY"
-          -m gemini-3.1-pro-preview-customtools
-          -a gemini-3-flash-preview
-          -l gemini-3.1-flash-lite
-          -j auto
-          -- tests
-        env:
-          G8E_LLM_PRIMARY_API_KEY: ${{ secrets.G8E_LLM_PRIMARY_API_KEY }}
-
-      - name: Show app logs
-        if: failure()
-        run: |
-          tail -n 200 .g8e/logs/operator-listen.log || true
-          tail -n 200 .g8e/logs/g8ee.log || true
-
-      - name: Stop platform
-        if: always()
-        run: ./g8e platform stop
 

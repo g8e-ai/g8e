@@ -29,14 +29,10 @@ import (
 
 const (
 	operatorPIDFile     = "operator.pid"
-	g8eePIDFile         = "g8ee.pid"
 	operatorLogPath     = "operator.log"
-	g8eeLogPath         = "g8ee.log"
 	shutdownTimeout     = 10 * time.Second
 	healthCheckInterval = 500 * time.Millisecond
 	maxHealthChecks     = 20
-	defaultG8eeHost     = "0.0.0.0"
-	defaultG8eePort     = "8443"
 )
 
 type ProcessManager struct {
@@ -47,8 +43,6 @@ type ProcessManager struct {
 	dataDir     string
 	logDir      string
 	pidDir      string
-	g8eeHost    string
-	g8eePort    string
 }
 
 func NewProcessManager(projectRoot string) (*ProcessManager, error) {
@@ -67,8 +61,6 @@ func NewProcessManager(projectRoot string) (*ProcessManager, error) {
 		dataDir:     dataDir,
 		logDir:      logDir,
 		pidDir:      pidDir,
-		g8eeHost:    defaultG8eeHost,
-		g8eePort:    defaultG8eePort,
 	}, nil
 }
 
@@ -322,11 +314,6 @@ func (pm *ProcessManager) Reset() error {
 		return fmt.Errorf("failed to wipe secrets directory: %w", err)
 	}
 
-	g8eeDataDir := filepath.Join(pm.projectRoot, "services", "g8ee", "data")
-	if err := os.RemoveAll(g8eeDataDir); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to wipe g8ee data directory: %w", err)
-	}
-
 	if err := pm.ensureDirectories(); err != nil {
 		return fmt.Errorf("failed to recreate directories: %w", err)
 	}
@@ -334,136 +321,13 @@ func (pm *ProcessManager) Reset() error {
 	return nil
 }
 
-func (pm *ProcessManager) getG8eeBinary() (string, error) {
-	venvPython := filepath.Join(pm.projectRoot, ".venv", "bin", "python")
-	if _, err := os.Stat(venvPython); os.IsNotExist(err) {
-		return "", fmt.Errorf("g8ee venv not found at %s", venvPython)
-	}
-
-	checkCmd := exec.Command(venvPython, "-c", "import uvicorn; print('ok')")
-	if err := checkCmd.Run(); err != nil {
-		return "", fmt.Errorf("uvicorn not installed in g8ee venv: %w", err)
-	}
-
-	return venvPython, nil
-}
-
-func (pm *ProcessManager) StartG8ee() error {
-	if err := pm.ensureDirectories(); err != nil {
-		return err
-	}
-
-	pythonBin, err := pm.getG8eeBinary()
-	if err != nil {
-		return err
-	}
-
-	g8eeDir := filepath.Join(pm.projectRoot, "services", "g8ee")
-	logFile := filepath.Join(pm.logDir, g8eeLogPath)
-	logHandle, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
-	if err != nil {
-		return fmt.Errorf("failed to open log file: %w", err)
-	}
-
-	cmd := exec.Command(pythonBin, "-m", "uvicorn", "app.main:app", "--host", pm.g8eeHost, "--port", pm.g8eePort)
-	cmd.Dir = g8eeDir
-	cmd.Stdout = logHandle
-	cmd.Stderr = logHandle
-	cmd.Env = append(os.Environ(),
-		"G8E_RUNTIME_DIR="+pm.runtimeDir,
-		"G8E_PKI_DIR="+pm.pkiDir,
-		"G8E_SECRETS_DIR="+pm.secretsDir,
-	)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-	}
-
-	if err := cmd.Start(); err != nil {
-		logHandle.Close()
-		return fmt.Errorf("failed to start g8ee: %w", err)
-	}
-
-	if err := pm.writePID(g8eePIDFile, cmd.Process.Pid); err != nil {
-		cmd.Process.Kill()
-		logHandle.Close()
-		return fmt.Errorf("failed to write pid file: %w", err)
-	}
-
-	logHandle.Close()
-
-	time.Sleep(2 * time.Second)
-	if !pm.isProcessRunning(cmd.Process.Pid) {
-		pm.deletePID(g8eePIDFile)
-		return fmt.Errorf("g8ee failed to start, check %s", logFile)
-	}
-
-	return nil
-}
-
-func (pm *ProcessManager) StopG8ee() error {
-	pid, err := pm.readPID(g8eePIDFile)
-	if err != nil {
-		return err
-	}
-
-	if pid == 0 {
-		return nil
-	}
-
-	if err := pm.stopProcess(pid, "g8ee"); err != nil {
-		return err
-	}
-
-	return pm.deletePID(g8eePIDFile)
-}
-
-func (pm *ProcessManager) G8eeStatus() (bool, int, error) {
-	pid, err := pm.readPID(g8eePIDFile)
-	if err != nil {
-		return false, 0, err
-	}
-
-	if pid == 0 {
-		return false, 0, nil
-	}
-
-	running := pm.isProcessRunning(pid)
-	return running, pid, nil
-}
-
 func (pm *ProcessManager) Clean() error {
 	if err := pm.StopOperator(); err != nil {
 		return fmt.Errorf("failed to stop operator: %w", err)
 	}
 
-	if err := pm.StopG8ee(); err != nil {
-		return fmt.Errorf("failed to stop g8ee: %w", err)
-	}
-
 	if err := os.RemoveAll(pm.runtimeDir); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove runtime directory: %w", err)
-	}
-
-	if err := filepath.Walk(pm.projectRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if info.IsDir() && info.Name() == "__pycache__" {
-			if err := os.RemoveAll(path); err != nil {
-				return nil
-			}
-		}
-		if !info.IsDir() {
-			ext := filepath.Ext(path)
-			if ext == ".pyc" || ext == ".pyo" {
-				if err := os.Remove(path); err != nil {
-					return nil
-				}
-			}
-		}
-		return nil
-	}); err != nil {
-		return fmt.Errorf("failed to clean Python caches: %w", err)
 	}
 
 	return nil
