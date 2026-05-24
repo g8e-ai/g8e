@@ -14,6 +14,7 @@
 package governance
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"errors"
@@ -332,7 +333,7 @@ func NewTransactionVerifier(
 // 1. Stateless: Basic structural, hash, and L1 Doctrine checks that don't require external state.
 // 2. Stateful: Checks requiring external state (expiry, state root, and early nonce reservation).
 // 3. Posture: Governance posture-aware checks (L2 Consensus and L3 Notary proofs).
-func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*VerifiedTransaction, error) {
+func (tv *TransactionVerifier) VerifyEnvelope(ctx context.Context, envelope *uap.UAPEnvelope) (*VerifiedTransaction, error) {
 	if envelope == nil {
 		return nil, ErrInvalidEnvelope
 	}
@@ -410,7 +411,7 @@ func (tv *TransactionVerifier) VerifyEnvelope(envelope *uap.UAPEnvelope) (*Verif
 	}
 
 	// 4. Posture Validation (L2/L3)
-	l2Valid, l3Valid, err := tv.verifyPosture(envelope, computedHash)
+	l2Valid, l3Valid, err := tv.verifyPosture(ctx, envelope, computedHash)
 	if err != nil {
 		tv.logger.Error("Transaction rejected: POSTURE_VALIDATION_FAILED",
 			"nonce", envelope.Nonce,
@@ -453,19 +454,11 @@ func (tv *TransactionVerifier) releaseInFlight(nonce string) {
 }
 
 // isMutation returns true if the action type modifies system state.
-// MCP_CALL and A2A_CALL are mutations because the Gateway cannot reason
-// about the side effects of arbitrary downstream tools/skills - they must
-// pass the L3Notary human-presence gate just like any local mutation.
+// Uses the strongly-typed intrinsic property from the action definition.
+// Mutation classification is defined in protocol/constants/status.json via the _mutation field.
+// Actions marked as mutations require L3 Notary (human-presence) verification.
 func (tv *TransactionVerifier) isMutation(actionType constants.ActionType) bool {
-	switch actionType {
-	case constants.ActionTypeExecuteBash, constants.ActionTypeFileEdit, constants.ActionTypeRestoreFile, constants.ActionTypeShutdown,
-		constants.ActionTypeMcpCall, constants.ActionTypeA2aCall:
-		return true
-	case constants.ActionTypeEvalAnswer:
-		return false
-	default:
-		return false
-	}
+	return constants.IsMutation(actionType)
 }
 
 // verifyStateless performs basic structural, hash, and L1 Doctrine checks.
@@ -556,13 +549,13 @@ func (tv *TransactionVerifier) verifyStateful(envelope *uap.UAPEnvelope) (time.T
 }
 
 // verifyPosture performs governance posture-aware checks for L2 and L3.
-func (tv *TransactionVerifier) verifyPosture(envelope *uap.UAPEnvelope, computedHash string) (bool, bool, error) {
+func (tv *TransactionVerifier) verifyPosture(ctx context.Context, envelope *uap.UAPEnvelope, computedHash string) (bool, bool, error) {
 	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
 	if err != nil {
 		return false, false, err
 	}
 
-	l3Valid, err := tv.verifyL3Posture(envelope)
+	l3Valid, err := tv.verifyL3Posture(ctx, envelope)
 	if err != nil {
 		return l2Valid, false, err
 	}
@@ -615,7 +608,7 @@ func (tv *TransactionVerifier) verifyL2Posture(envelope *uap.UAPEnvelope, comput
 	return false, ErrL2SignatureInvalid
 }
 
-func (tv *TransactionVerifier) verifyL3Posture(envelope *uap.UAPEnvelope) (bool, error) {
+func (tv *TransactionVerifier) verifyL3Posture(ctx context.Context, envelope *uap.UAPEnvelope) (bool, error) {
 	actionType := constants.ActionType(envelope.ActionType)
 	if !tv.isMutation(actionType) {
 		return true, nil

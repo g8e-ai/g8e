@@ -567,7 +567,7 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 	// Strict transaction verification (P0: fail-closed gate before any dispatch)
 	if rs.transactionVerifier != nil {
 		var err error
-		verified, err = rs.transactionVerifier.VerifyEnvelope(env)
+		verified, err = rs.transactionVerifier.VerifyEnvelope(context.Background(), env)
 		if err != nil {
 			rs.logger.Error("Transaction verification failed - command rejected",
 				string(constants.ConnectionStateError), err,

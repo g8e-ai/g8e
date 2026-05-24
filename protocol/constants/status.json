@@ -30,6 +30,7 @@
     "action_type": {
       "A2A_CALL": {
         "_go_const": "ActionTypeA2aCall",
+        "_mutation": true,
         "_python_const": "A2A_CALL",
         "value": "A2A_CALL"
       },
@@ -40,6 +41,7 @@
       },
       "EXECUTE_BASH": {
         "_go_const": "ActionTypeExecuteBash",
+        "_mutation": true,
         "_python_const": "EXECUTE_BASH",
         "value": "EXECUTE_BASH"
       },
@@ -65,6 +67,7 @@
       },
       "FILE_EDIT": {
         "_go_const": "ActionTypeFileEdit",
+        "_mutation": true,
         "_python_const": "FILE_EDIT",
         "value": "FILE_EDIT"
       },
@@ -100,6 +103,7 @@
       },
       "MCP_CALL": {
         "_go_const": "ActionTypeMcpCall",
+        "_mutation": true,
         "_python_const": "MCP_CALL",
         "value": "MCP_CALL"
       },
@@ -130,6 +134,7 @@
       },
       "RESTORE_FILE": {
         "_go_const": "ActionTypeRestoreFile",
+        "_mutation": true,
         "_python_const": "RESTORE_FILE",
         "value": "RESTORE_FILE"
       },
@@ -140,6 +145,7 @@
       },
       "SHUTDOWN": {
         "_go_const": "ActionTypeShutdown",
+        "_mutation": true,
         "_python_const": "SHUTDOWN",
         "value": "SHUTDOWN"
       }

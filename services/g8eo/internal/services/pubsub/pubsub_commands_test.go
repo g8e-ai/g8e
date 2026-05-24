@@ -78,7 +78,7 @@ func TestNewPubSubCommandService_StartsWithoutTrustedSignersButRejectsL2(t *test
 	require.NoError(t, err)
 	env := unsignedSignerEnvelope(t, signerPriv)
 
-	_, err = svc.transactionVerifier.VerifyEnvelope(env)
+	_, err = svc.transactionVerifier.VerifyEnvelope(context.Background(), env)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, governance.ErrL2KeyNotConfigured), "expected missing L2 key error, got %v", err)
 }

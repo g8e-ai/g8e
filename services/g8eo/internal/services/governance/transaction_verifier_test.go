@@ -14,6 +14,7 @@
 package governance
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"errors"
@@ -176,7 +177,7 @@ func TestTransactionVerifier_AcceptsValidNonMutationUAPEnvelope(t *testing.T) {
 	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
 
-	verified, err := verifier.VerifyEnvelope(env)
+	verified, err := verifier.VerifyEnvelope(context.Background(), env)
 	if err != nil {
 		t.Fatalf("expected verification to pass, got %v", err)
 	}
@@ -190,7 +191,7 @@ func TestTransactionVerifier_AcceptsValidMutationUAPEnvelopeWithL3(t *testing.T)
 	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 
-	_, err := verifier.VerifyEnvelope(env)
+	_, err := verifier.VerifyEnvelope(context.Background(), env)
 	if err != nil {
 		t.Fatalf("expected verification to pass, got %v", err)
 	}
@@ -228,7 +229,7 @@ func TestTransactionVerifier_FailClosedProofs(t *testing.T) {
 			env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 			tc.mutate(env)
 
-			_, err := verifier.VerifyEnvelope(env)
+			_, err := verifier.VerifyEnvelope(context.Background(), env)
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("expected %v, got %v", tc.want, err)
 			}
@@ -243,10 +244,10 @@ func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
 		replayStore := testutil.NewStatefulMockReplayStore()
 		verifier, privKey := createStrictVerifier(t, replayStore, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
-		if _, err := verifier.VerifyEnvelope(env); err != nil {
+		if _, err := verifier.VerifyEnvelope(context.Background(), env); err != nil {
 			t.Fatalf("first verification failed: %v", err)
 		}
-		_, err := verifier.VerifyEnvelope(env)
+		_, err := verifier.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrTransactionReplay) {
 			t.Fatalf("expected replay rejection, got %v", err)
 		}
@@ -256,7 +257,7 @@ func TestTransactionVerifier_ReplayAndStateRootReject(t *testing.T) {
 		t.Parallel()
 		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("other-root"), testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
-		_, err := verifier.VerifyEnvelope(env)
+		_, err := verifier.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrStateRootMismatch) {
 			t.Fatalf("expected state root mismatch, got %v", err)
 		}
@@ -269,7 +270,7 @@ func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 		t.Parallel()
 		verifier, privKey := createStrictVerifier(t, nil, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
-		_, err := verifier.VerifyEnvelope(env)
+		_, err := verifier.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrReplayStoreMissing) {
 			t.Fatalf("expected replay store rejection, got %v", err)
 		}
@@ -279,7 +280,7 @@ func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 		t.Parallel()
 		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), nil, testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
-		_, err := verifier.VerifyEnvelope(env)
+		_, err := verifier.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrStateRootMissing) {
 			t.Fatalf("expected state root provider rejection, got %v", err)
 		}
@@ -289,7 +290,7 @@ func TestTransactionVerifier_MissingVerifierDependenciesReject(t *testing.T) {
 		t.Parallel()
 		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), nil)
 		env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
-		_, err := verifier.VerifyEnvelope(env)
+		_, err := verifier.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrL3NotaryNotConfigured) {
 			t.Fatalf("expected l3 notary rejection, got %v", err)
 		}
@@ -319,7 +320,7 @@ func TestTransactionVerifier_NonceRaceCondition(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := verifier.VerifyEnvelope(env)
+			_, err := verifier.VerifyEnvelope(context.Background(), env)
 			if err != nil {
 				errs <- err
 			} else {
@@ -415,7 +416,7 @@ func TestTransactionVerifier_AllActionTypesFromSSOT(t *testing.T) {
 
 			// signedEnvelope now adds L3 for mutation actions, so no manual adjustment needed
 
-			verified, err := verifier.VerifyEnvelope(env)
+			verified, err := verifier.VerifyEnvelope(context.Background(), env)
 			// HEARTBEAT has an empty protobuf message that marshals to empty bytes
 			// The verifier rejects empty payloads, so skip this special case
 			if actionType == constants.ActionTypeHeartbeat {
