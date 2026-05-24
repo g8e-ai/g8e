@@ -25,7 +25,7 @@ from app.services.service_factory import AllServices
 from app.constants import (
     ComponentName,
     InternalAPIPaths,
-    PROXY_USER_ID_HEADER,
+    X_PROXY_USER_ID,
 )
 from app.errors import (
     AuthenticationError,
@@ -404,7 +404,7 @@ async def get_g8ee_user_settings(
 
     # 3. Fallback to proxy headers
     if not user_id:
-        user_id = request.headers.get(PROXY_USER_ID_HEADER)
+        user_id = request.headers.get(X_PROXY_USER_ID)
 
     if not user_id:
         # We need to return G8eeUserSettings, so we'll get it via the service

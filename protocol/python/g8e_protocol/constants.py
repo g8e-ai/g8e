@@ -281,43 +281,5 @@ class TieBreakReason(StrEnum):
     SHORTEST = "shortest"
     EXCLUDED_NEMESIS = "excluded_nemesis"
 
-# HTTP headers - loaded from JSON (protocol/constants/headers.json)
-# Use HEADERS dict directly or access via these convenience constants
-HTTP_ACCEL_BUFFERING_HEADER = HEADERS.get("http.x-accel-buffering", "X-Accel-Buffering")
-HTTP_ACCEPT_HEADER = HEADERS.get("http.accept", "Accept")
-HTTP_ACCEPT_LANGUAGE_HEADER = HEADERS.get("http.accept-language", "Accept-Language")
-HTTP_ACCESS_CONTROL_ALLOW_CREDENTIALS = HEADERS.get("http.access-control-allow-creds", "Access-Control-Allow-Credentials")
-HTTP_ACCESS_CONTROL_ALLOW_ORIGIN = HEADERS.get("http.access-control-allow-origin", "Access-Control-Allow-Origin")
-HTTP_ACCESS_CONTROL_REQUEST_HEADERS = HEADERS.get("http.access-control-req-headers", "Access-Control-Request-Headers")
-HTTP_ACCESS_CONTROL_REQUEST_METHOD = HEADERS.get("http.access-control-req-method", "Access-Control-Request-Method")
-HTTP_CACHE_CONTROL_HEADER = HEADERS.get("http.cache-control", "Cache-Control")
-HTTP_CONTENT_LANGUAGE_HEADER = HEADERS.get("http.content-language", "Content-Language")
-HTTP_CONTENT_TYPE_HEADER = HEADERS.get("http.content-type", "Content-Type")
-HTTP_COOKIE_HEADER = HEADERS.get("http.cookie", "Cookie")
-HTTP_FORWARDED_FOR_HEADER = HEADERS.get("http.x-forwarded-for", "X-Forwarded-For")
-HTTP_LAST_EVENT_ID_HEADER = HEADERS.get("http.last-event-id", "Last-Event-ID")
-HTTP_PRAGMA_HEADER = HEADERS.get("http.pragma", "Pragma")
-HTTP_REQUESTED_WITH_HEADER = HEADERS.get("http.requested-with", "X-Requested-With")
-HTTP_SET_COOKIE_HEADER = HEADERS.get("http.set-cookie", "Set-Cookie")
-HTTP_USER_AGENT_HEADER = HEADERS.get("http.user-agent", "User-Agent")
-HTTP_DEVICE_TOKEN_HEADER = HEADERS.get("x-g8e.device-token", "X-G8E-Device-Token")
-
-# Session Headers - derived from headers.json
-HTTP_WEB_SESSION_ID_HEADER = HEADERS.get("x-g8e.web-session-id", "X-G8E-Web-Session-ID")
-HTTP_CLI_SESSION_ID_HEADER = HEADERS.get("http.x-session-id", "X-G8E-CLI-Session-ID")
-HTTP_OPERATOR_SESSION_ID_HEADER = HEADERS.get("x-g8e.operator-session-id", "X-G8E-Operator-Session-ID")
-HTTP_OPERATOR_ID_HEADER = HEADERS.get("x-g8e.operator-id", "X-G8E-Operator-ID")
-HTTP_SYSTEM_FINGERPRINT_HEADER = HEADERS.get("x-g8e.system-fingerprint", "X-G8E-System-Fingerprint")
-
-# Context Headers - derived from headers.json
-HTTP_PROXY_ORGANIZATION_ID_HEADER = HEADERS.get("http.x-proxy-organization-id", "X-Proxy-Organization-Id")
-HTTP_PROXY_USER_EMAIL_HEADER = HEADERS.get("http.x-proxy-user-email", "X-Proxy-User-Email")
-HTTP_PROXY_USER_ID_HEADER = HEADERS.get("http.x-proxy-user-id", "X-Proxy-User-Id")
-HTTP_CASE_ID_HEADER = HEADERS.get("x-g8e.case-id", "X-G8E-Case-ID")
-HTTP_USER_ID_HEADER = HEADERS.get("x-g8e.user-id", "X-G8E-User-ID")
-HTTP_ORGANIZATION_ID_HEADER = HEADERS.get("x-g8e.organization-id", "X-G8E-Organization-ID")
-HTTP_INVESTIGATION_ID_HEADER = HEADERS.get("x-g8e.investigation-id", "X-G8E-Investigation-ID")
-HTTP_TASK_ID_HEADER = HEADERS.get("x-g8e.task-id", "X-G8E-Task-ID")
-HTTP_BOUND_OPERATORS_HEADER = HEADERS.get("x-g8e.bound-operators", "X-G8E-Bound-Operators")
-HTTP_EXECUTION_ID_HEADER = HEADERS.get("x-g8e.request-id", "X-G8E-Request-ID")
-HTTP_COMPONENT_NAME_HEADER = HEADERS.get("x-g8e.source-component", "X-G8E-Source-Component")
+# HTTP headers are available via g8e_protocol.headers (generated from headers.json)
+# Import from g8e_protocol.headers for canonical header constants
