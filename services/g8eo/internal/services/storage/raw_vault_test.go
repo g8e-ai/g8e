@@ -199,7 +199,7 @@ func TestDualVaultIsolation(t *testing.T) {
 	require.NotNil(t, rawVault)
 	defer rawVault.Close()
 
-	scrubbedVault, err := NewLocalStoreService(scrubbedConfig, logger)
+	scrubbedVault, err := NewLocalStoreService(scrubbedConfig, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, scrubbedVault)
 	defer scrubbedVault.Close()
@@ -418,7 +418,7 @@ func TestDualVaultFileDiffIsolation(t *testing.T) {
 	require.NotNil(t, rawVault)
 	defer rawVault.Close()
 
-	scrubbedVault, err := NewLocalStoreService(scrubbedConfig, logger)
+	scrubbedVault, err := NewLocalStoreService(scrubbedConfig, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, scrubbedVault)
 	defer scrubbedVault.Close()

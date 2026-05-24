@@ -67,6 +67,11 @@ func NewSecretManager(db *sqliteutil.DB, secretsDir string, logger *slog.Logger)
 	}, nil
 }
 
+// GetKeystore returns the underlying Keystore instance.
+func (m *SecretManager) GetKeystore() *keystore.Keystore {
+	return m.keystore
+}
+
 // InitAppSettings creates secrets on first boot and validates them on later boots.
 func (m *SecretManager) InitAppSettings() error {
 	var exists bool

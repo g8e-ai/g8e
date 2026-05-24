@@ -66,9 +66,11 @@ generate: proto constants
 
 .PHONY: constants
 constants:
-	@echo "Building constants exporter from Go SSOT..."
-	@cd services/g8eo && go build -o ../../bin/g8e.exporter ./cmd/exporter
-	@./bin/g8e.exporter --root .
+	@echo "Generating Go constants from JSON source..."
+	@cd services/g8eo/internal/constants && go run generate_registry.go
+	@echo "Generating Python constants from JSON source..."
+	@cd services/g8ee/app/constants && python generate_constants.py
+	@echo "Constants generation complete."
 
 .PHONY: proto
 proto: buf-install
@@ -170,10 +172,11 @@ first-issues:
 .PHONY: clean-constants
 clean-constants:
 	@echo "Cleaning generated constants..."
-	@rm -rf protocol/constants/*.json
-	@rm -rf protocol/python/g8e_protocol/generated_*.py
-	@rm -rf services/g8ee/app/constants/generated_*.py
-	@rm -rf ./bin/g8e.exporter
+	@rm -rf services/g8eo/internal/constants/headers_generated.go
+	@rm -rf services/g8eo/internal/constants/status_generated.go
+	@rm -rf services/g8eo/internal/constants/registry.go
+	@rm -rf services/g8ee/app/constants/headers_generated.py
+	@rm -rf services/g8ee/app/constants/status_generated.py
 	@echo "Constants clean complete."
 
 .PHONY: clean

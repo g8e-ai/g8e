@@ -140,7 +140,7 @@ func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux.HandleFunc("/trust.sh", h.handleTrustScript)
 	mux.HandleFunc("/trust.ps1", h.handleTrustScriptPS1)
 	mux.HandleFunc("/trust.bat", h.handleTrustScriptBat)
-	mux.HandleFunc("/g8e", h.handleG8eDeploy)
+	mux.HandleFunc("/deploy", h.handleDeploy)
 
 	return h.pathTraversalGuard(mux)
 }
@@ -791,7 +791,7 @@ func (h *HTTPHandler) handleOperators(w http.ResponseWriter, r *http.Request) {
 	h.responder.JSON(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: slots})
 }
 
-func (h *HTTPHandler) handleG8eDeploy(w http.ResponseWriter, r *http.Request) {
+func (h *HTTPHandler) handleDeploy(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -806,7 +806,7 @@ func (h *HTTPHandler) handleG8eDeploy(w http.ResponseWriter, r *http.Request) {
 	if host == "" {
 		host = "localhost"
 	}
-	script := G8eDeployScript(host, h.cfg.Gateway.HTTPPort, h.cfg.Gateway.BootstrapPort)
+	script := DeployScript(host, h.cfg.Gateway.HTTPPort, h.cfg.Gateway.BootstrapPort)
 	w.Header().Set("Content-Type", "text/x-shellscript")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
@@ -1417,24 +1417,24 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Strictly verify that the caller is the G8EE app identity via mTLS peer certificate URI SAN
+	// Strictly verify that the caller is an app workload via mTLS peer certificate URI SAN
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 		h.logger.Warn("Unauthorized SSE push attempt: missing mTLS client certificate", "path", r.URL.Path)
 		h.responder.Error(w, http.StatusUnauthorized, "mTLS client certificate required")
 		return
 	}
 
-	wid := protocol.NewWorkloadIdentity()
 	cert := r.TLS.PeerCertificates[0]
-	isG8EE := false
+	isAppWorkload := false
 	for _, uri := range cert.URIs {
-		if wid.MatchesApp(uri.String(), marshaler.Status(constants.ComponentNameG8EE)) {
-			isG8EE = true
+		// Check if this is an app workload (spiffe://g8e.local/app/*)
+		if strings.HasPrefix(uri.String(), "spiffe://"+protocol.TrustDomain+"/app/") {
+			isAppWorkload = true
 			break
 		}
 	}
-	if !isG8EE {
-		h.logger.Warn("Unauthorized SSE push attempt: not G8EE app identity", "path", r.URL.Path, "uris", cert.URIs)
+	if !isAppWorkload {
+		h.logger.Warn("Unauthorized SSE push attempt: not app workload identity", "path", r.URL.Path, "uris", cert.URIs)
 		h.responder.Error(w, http.StatusForbidden, "unauthorized client identity")
 		return
 	}

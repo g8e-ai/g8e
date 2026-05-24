@@ -17,6 +17,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -203,6 +204,85 @@ func (k *Keystore) DecryptSecret(name string) (string, error) {
 	}
 
 	k.logger.Debug("[Keystore] Secret decrypted", "name", name)
+	return string(plaintext), nil
+}
+
+// Encrypt encrypts a plaintext value and returns a base64-encoded ciphertext string.
+// This is for in-memory encryption (e.g., SQLite values), not file-based secrets.
+func (k *Keystore) Encrypt(plaintext string) (string, error) {
+	key, err := k.backend.RetrieveMasterKey()
+	if err != nil {
+		return "", fmt.Errorf("retrieve master key for encryption: %w", err)
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", fmt.Errorf("create AES cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("create GCM mode: %w", err)
+	}
+
+	nonce := make([]byte, nonceSize)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", fmt.Errorf("generate nonce: %w", err)
+	}
+
+	ciphertext := gcm.Seal(nil, nonce, []byte(plaintext), nil)
+
+	enc := EncryptedSecret{
+		Version:    keyVersion,
+		Nonce:      nonce,
+		Ciphertext: ciphertext,
+	}
+
+	data, err := json.Marshal(enc)
+	if err != nil {
+		return "", fmt.Errorf("marshal encrypted value: %w", err)
+	}
+
+	return base64.StdEncoding.EncodeToString(data), nil
+}
+
+// Decrypt decrypts a base64-encoded ciphertext string and returns the plaintext.
+// This is for in-memory decryption (e.g., SQLite values), not file-based secrets.
+func (k *Keystore) Decrypt(encodedCiphertext string) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(encodedCiphertext)
+	if err != nil {
+		return "", fmt.Errorf("decode base64 ciphertext: %w", err)
+	}
+
+	var enc EncryptedSecret
+	if err := json.Unmarshal(data, &enc); err != nil {
+		return "", fmt.Errorf("unmarshal encrypted value: %w", err)
+	}
+
+	if enc.Version != keyVersion {
+		return "", fmt.Errorf("unsupported secret version %d, expected %d", enc.Version, keyVersion)
+	}
+
+	key, err := k.backend.RetrieveMasterKey()
+	if err != nil {
+		return "", fmt.Errorf("retrieve master key for decryption: %w", err)
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", fmt.Errorf("create AES cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("create GCM mode: %w", err)
+	}
+
+	plaintext, err := gcm.Open(nil, enc.Nonce, enc.Ciphertext, nil)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrInvalidCiphertext, err)
+	}
+
 	return string(plaintext), nil
 }
 

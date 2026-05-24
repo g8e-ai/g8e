@@ -35,7 +35,7 @@ func TestNewLocalStoreService(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = dbPath
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -53,7 +53,7 @@ func TestLocalStoreService_Disabled(t *testing.T) {
 		Enabled: false,
 	}
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	assert.NoError(t, err)
 	assert.Nil(t, ls)
 }
@@ -65,7 +65,7 @@ func TestLocalStoreService_StoreAndRetrieve(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_store.db")
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -107,7 +107,7 @@ func TestLocalStoreService_KVScanPrefix(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_kv_scan.db")
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -145,7 +145,7 @@ func TestLocalStoreService_KVScanPrefix_TTL(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_kv_scan_ttl.db")
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -179,7 +179,7 @@ func TestLocalStoreService_HashConsistency(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_hash.db")
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -202,7 +202,7 @@ func TestLocalStoreService_UpsertBehavior(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_upsert.db")
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -245,7 +245,7 @@ func TestLocalStoreService_NonExistentRecord(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_nonexistent.db")
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -290,7 +290,7 @@ func TestLocalStoreService_StoreAndRetrieveFileDiff(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_file_diff.db")
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -341,7 +341,7 @@ func TestLocalStoreService_GetFileDiffsBySession(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_file_diff_session.db")
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -391,7 +391,7 @@ func TestLocalStoreService_GetFileDiff_NotFound(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_file_diff_notfound.db")
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
@@ -415,7 +415,7 @@ func TestLocalStorePrune(t *testing.T) {
 		PruneIntervalMinutes: 60,
 	}
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	defer ls.Close()
 
@@ -509,7 +509,7 @@ func TestLocalStoreService_FileDiffUpsert(t *testing.T) {
 	config := DefaultLocalStoreConfig()
 	config.DBPath = filepath.Join(t.TempDir(), "test_file_diff_upsert.db")
 
-	ls, err := NewLocalStoreService(config, logger)
+	ls, err := NewLocalStoreService(config, logger, nil)
 	require.NoError(t, err)
 	require.NotNil(t, ls)
 	defer ls.Close()
