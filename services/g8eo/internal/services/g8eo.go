@@ -159,7 +159,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		PruneIntervalMinutes: 60,
 		Enabled:              true,
 	}
-	vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger, nil)
+	vs.localStore, err = storage.NewLocalStoreService(localStoreConfig, vs.logger, nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to initialize local store (required for replay protection): %w", err)
 	}
@@ -296,6 +296,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize command service: %w", err)
 	}
 	vs.sentinel = psConfig.Sentinel
+
+	// Wire Sentinel into LocalStoreService for AI data sovereignty scrubbing
+	// This must happen after Sentinel is created to break circular dependency
+	vs.localStore.SetScrubber(vs.sentinel)
+	vs.logger.Info("Sentinel wired to LocalStoreService for AI data sovereignty")
 
 	if err = vs.pubSubCommands.Start(vs.ctx); err != nil {
 		return fmt.Errorf("failed to start command service: %w", err)

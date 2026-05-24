@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/constants"
-	"github.com/g8e-ai/g8e/services/g8eo/internal/services/storage"
 )
 
 // Sentinel is a zero-trust security system that:
@@ -67,7 +66,7 @@ type Sentinel struct {
 	tokenSequence int
 
 	// Persistent storage for token maps (optional, for data sovereignty)
-	localStore *storage.LocalStoreService
+	tokenStore TokenStore
 }
 
 // ThreatSeverity represents the severity level of a detected threat
@@ -358,8 +357,17 @@ func NewSentinel(config *SentinelConfig, logger *slog.Logger) *Sentinel {
 	return NewSentinelWithStorage(config, logger, nil)
 }
 
+// TokenStore defines the interface for token persistence used by Sentinel.
+// This interface is defined in the storage package to avoid import cycles.
+type TokenStore interface {
+	IsEnabled() bool
+	KVSet(key, value string, ttlSeconds int) error
+	KVGet(key string) (string, bool)
+	KVScanPrefix(prefix string) (map[string]string, error)
+}
+
 // NewSentinelWithStorage creates a new Sentinel with persistent token storage
-func NewSentinelWithStorage(config *SentinelConfig, logger *slog.Logger, localStore *storage.LocalStoreService) *Sentinel {
+func NewSentinelWithStorage(config *SentinelConfig, logger *slog.Logger, tokenStore TokenStore) *Sentinel {
 	if config == nil {
 		config = DefaultSentinelConfig()
 	}
@@ -369,7 +377,7 @@ func NewSentinelWithStorage(config *SentinelConfig, logger *slog.Logger, localSt
 		logger:     logger,
 		tokenMap:   make(map[string]string),
 		reverseMap: make(map[string]string),
-		localStore: localStore,
+		tokenStore: tokenStore,
 	}
 
 	s.initializeScrubbers()
@@ -378,7 +386,7 @@ func NewSentinelWithStorage(config *SentinelConfig, logger *slog.Logger, localSt
 	s.LoadDoctrinesFromProtocol()
 
 	// Load persisted tokens if storage is available
-	if localStore != nil && localStore.IsEnabled() {
+	if s.tokenStore != nil && s.tokenStore.IsEnabled() {
 		s.loadPersistedTokens()
 	}
 
@@ -1710,7 +1718,7 @@ func (s *Sentinel) RehydrateText(input string) string {
 	s.tokenMu.RLock()
 	defer s.tokenMu.RUnlock()
 
-	if len(s.tokenMap) == 0 && (s.localStore == nil || !s.localStore.IsEnabled()) {
+	if len(s.tokenMap) == 0 && (s.tokenStore == nil || !s.tokenStore.IsEnabled()) {
 		return input
 	}
 
@@ -1721,7 +1729,7 @@ func (s *Sentinel) RehydrateText(input string) string {
 	}
 
 	// If LocalStore is available, check for any remaining tokens not in memory
-	if s.localStore != nil && s.localStore.IsEnabled() {
+	if s.tokenStore != nil && s.tokenStore.IsEnabled() {
 		// Find all {{UEI_N}} patterns in the result
 		tokenPattern := regexp.MustCompile(`\{\{UEI_\d+\}\}`)
 		matches := tokenPattern.FindAllString(result, -1)
@@ -1734,7 +1742,7 @@ func (s *Sentinel) RehydrateText(input string) string {
 
 			// Try to load from LocalStore
 			key := fmt.Sprintf("sentinel_token_%s", token)
-			if value, found := s.localStore.KVGet(key); found {
+			if value, found := s.tokenStore.KVGet(key); found {
 				// Add to in-memory cache for future use
 				s.tokenMap[token] = value
 				s.reverseMap[value] = token
@@ -1792,7 +1800,7 @@ func (s *Sentinel) GetTokenForValue(value string) string {
 	}
 
 	// Fail-closed: if persistence is required but unavailable, reject the operation
-	if s.config.RequirePersistence && (s.localStore == nil || !s.localStore.IsEnabled()) {
+	if s.config.RequirePersistence && (s.tokenStore == nil || !s.tokenStore.IsEnabled()) {
 		s.logger.Error("Token persistence required but LocalStore unavailable - failing closed to prevent data loss")
 		return ""
 	}
@@ -1810,10 +1818,10 @@ func (s *Sentinel) GetTokenForValue(value string) string {
 	s.reverseMap[value] = token
 
 	// Persist to storage if available (24 hour TTL)
-	if s.localStore != nil && s.localStore.IsEnabled() {
+	if s.tokenStore != nil && s.tokenStore.IsEnabled() {
 		const tokenTTLSeconds = 24 * 60 * 60
 		key := fmt.Sprintf("sentinel_token_%s", token)
-		if err := s.localStore.KVSet(key, value, tokenTTLSeconds); err != nil {
+		if err := s.tokenStore.KVSet(key, value, tokenTTLSeconds); err != nil {
 			s.logger.Error("Failed to persist token to local store - failing closed", "token", token, "error", err)
 			// Rollback the in-memory token since persistence failed
 			delete(s.tokenMap, token)
@@ -1833,12 +1841,12 @@ func (s *Sentinel) IsEnabled() bool {
 
 // loadPersistedTokens loads tokens from LocalStore on startup
 func (s *Sentinel) loadPersistedTokens() {
-	if s.localStore == nil || !s.localStore.IsEnabled() {
+	if s.tokenStore == nil || !s.tokenStore.IsEnabled() {
 		s.logger.Warn("LocalStore not available for token persistence")
 		return
 	}
 
-	tokens, err := s.localStore.KVScanPrefix("sentinel_token_")
+	tokens, err := s.tokenStore.KVScanPrefix("sentinel_token_")
 	if err != nil {
 		s.logger.Error("Failed to load persisted tokens from LocalStore", "error", err)
 		return
