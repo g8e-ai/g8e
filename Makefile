@@ -316,7 +316,7 @@ build: build-g8eo build-cli
 
 .PHONY: build-cli
 build-cli:
-	@echo "Building unified g8eo binary (includes CLI commands)..."
+	@echo "Building g8e binary (includes CLI commands)..."
 	@cd services/g8eo && go build -o ../../g8e ./cmd/g8eo
 	@echo "Unified binary built: ./g8e"
 
@@ -327,6 +327,7 @@ build-g8eo:
 .PHONY: build-g8eg
 build-g8eg:
 	@$(MAKE) -C services/g8eg build
+	@cp services/g8eo/build/linux-amd64/g8e ./g8e
 
 .PHONY: test-g8eo
 test-g8eo:
