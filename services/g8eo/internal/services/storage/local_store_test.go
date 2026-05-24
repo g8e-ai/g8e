@@ -536,3 +536,135 @@ func TestLocalStoreService_FileDiffUpsert(t *testing.T) {
 	require.NotNil(t, retrieved)
 	assert.Equal(t, "updated diff content", string(retrieved.DiffCompressed))
 }
+
+func TestLocalStoreService_TokenStore_IsEnabled(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	config := DefaultLocalStoreConfig()
+	config.DBPath = filepath.Join(t.TempDir(), "test_is_enabled.db")
+
+	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, ls)
+	defer ls.Close()
+
+	assert.True(t, ls.IsEnabled(), "LocalStoreService should be enabled when initialized")
+}
+
+func TestLocalStoreService_TokenStore_KVSet_KVGet(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	config := DefaultLocalStoreConfig()
+	config.DBPath = filepath.Join(t.TempDir(), "test_kv_set_get.db")
+
+	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, ls)
+	defer ls.Close()
+
+	t.Run("set and get with TTL", func(t *testing.T) {
+		key := "test-key-1"
+		value := "test-value-1"
+		ttl := 60
+
+		err := ls.KVSet(key, value, ttl)
+		require.NoError(t, err)
+
+		retrieved, found := ls.KVGet(key)
+		assert.True(t, found, "Key should be found after KVSet")
+		assert.Equal(t, value, retrieved, "Retrieved value should match stored value")
+	})
+
+	t.Run("get missing key", func(t *testing.T) {
+		_, found := ls.KVGet("non-existent-key")
+		assert.False(t, found, "Missing key should return false")
+	})
+
+	t.Run("set with zero TTL", func(t *testing.T) {
+		key := "test-key-no-ttl"
+		value := "test-value-no-ttl"
+
+		err := ls.KVSet(key, value, 0)
+		require.NoError(t, err)
+
+		retrieved, found := ls.KVGet(key)
+		assert.True(t, found, "Key with zero TTL should be found")
+		assert.Equal(t, value, retrieved, "Retrieved value should match")
+	})
+
+	t.Run("set with negative TTL", func(t *testing.T) {
+		key := "test-key-negative-ttl"
+		value := "test-value-negative-ttl"
+
+		err := ls.KVSet(key, value, -1)
+		require.NoError(t, err)
+
+		retrieved, found := ls.KVGet(key)
+		assert.True(t, found, "Key with negative TTL should be found")
+		assert.Equal(t, value, retrieved, "Retrieved value should match")
+	})
+
+	t.Run("update existing key", func(t *testing.T) {
+		key := "update-test-key"
+		value1 := "initial-value"
+		value2 := "updated-value"
+
+		err := ls.KVSet(key, value1, 60)
+		require.NoError(t, err)
+
+		err = ls.KVSet(key, value2, 60)
+		require.NoError(t, err, "Updating existing key should succeed")
+
+		retrieved, found := ls.KVGet(key)
+		assert.True(t, found)
+		assert.Equal(t, value2, retrieved, "Retrieved value should be the updated value")
+	})
+}
+
+func TestLocalStoreService_TokenStore_KVGet_TTLExpiry(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	config := DefaultLocalStoreConfig()
+	config.DBPath = filepath.Join(t.TempDir(), "test_kv_ttl_expiry.db")
+
+	ls, err := NewLocalStoreService(config, logger, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, ls)
+	defer ls.Close()
+
+	key := "expiry-test-key"
+	value := "expiry-test-value"
+
+	err = ls.KVSet(key, value, 1)
+	require.NoError(t, err)
+
+	retrieved, found := ls.KVGet(key)
+	assert.True(t, found, "Key should be found immediately after set")
+	assert.Equal(t, value, retrieved)
+
+	time.Sleep(2 * time.Second)
+
+	retrieved, found = ls.KVGet(key)
+	assert.False(t, found, "Key should not be found after TTL expires")
+	assert.Empty(t, retrieved, "Retrieved value should be empty when not found")
+}
+
+func TestLocalStoreService_TokenStore_NilSafety(t *testing.T) {
+	t.Parallel()
+	var ls *LocalStoreService
+
+	assert.False(t, ls.IsEnabled(), "Nil LocalStoreService should return false for IsEnabled")
+
+	err := ls.KVSet("key", "value", 60)
+	assert.NoError(t, err, "KVSet on nil should not error")
+
+	value, found := ls.KVGet("key")
+	assert.False(t, found, "KVGet on nil should return false")
+	assert.Empty(t, value, "KVGet on nil should return empty value")
+
+	_, err = ls.KVScanPrefix("prefix")
+	assert.Error(t, err, "KVScanPrefix on nil should return error")
+}
