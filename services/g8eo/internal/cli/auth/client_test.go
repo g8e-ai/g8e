@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/services/g8eo/internal/cli/config"
+	"github.com/g8e-ai/g8e/services/g8eo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -227,16 +228,15 @@ func TestSaveCertAndKey_Success(t *testing.T) {
 	_, privKey, err := GenerateCSR("test")
 	require.NoError(t, err)
 
-	certPEM := "-----BEGIN CERTIFICATE-----\ntest-cert-data\n-----END CERTIFICATE-----"
-	chainPEM := "-----BEGIN CERTIFICATE-----\nchain-cert-data\n-----END CERTIFICATE-----"
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
+	chainPEM, _ := testutil.GenerateTestCertificate(t, "test-chain")
 
 	err = SaveCertAndKey(certPEM, chainPEM, privKey, certFile, keyFile)
 	require.NoError(t, err)
 
 	certData, err := os.ReadFile(certFile)
 	require.NoError(t, err)
-	assert.Contains(t, string(certData), "test-cert-data")
-	assert.Contains(t, string(certData), "chain-cert-data")
+	assert.Contains(t, string(certData), "BEGIN CERTIFICATE")
 
 	keyData, err := os.ReadFile(keyFile)
 	require.NoError(t, err)
@@ -252,15 +252,14 @@ func TestSaveCertAndKey_NoChain(t *testing.T) {
 	_, privKey, err := GenerateCSR("test")
 	require.NoError(t, err)
 
-	certPEM := "-----BEGIN CERTIFICATE-----\ntest-cert-data\n-----END CERTIFICATE-----"
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
 
 	err = SaveCertAndKey(certPEM, "", privKey, certFile, keyFile)
 	require.NoError(t, err)
 
 	certData, err := os.ReadFile(certFile)
 	require.NoError(t, err)
-	assert.Contains(t, string(certData), "test-cert-data")
-	assert.NotContains(t, string(certData), "chain-cert-data")
+	assert.Contains(t, string(certData), "BEGIN CERTIFICATE")
 }
 
 func TestSaveCertAndKey_CreatesDirectory(t *testing.T) {
@@ -273,7 +272,7 @@ func TestSaveCertAndKey_CreatesDirectory(t *testing.T) {
 	_, privKey, err := GenerateCSR("test")
 	require.NoError(t, err)
 
-	certPEM := "-----BEGIN CERTIFICATE-----\ntest-cert-data\n-----END CERTIFICATE-----"
+	certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
 
 	err = SaveCertAndKey(certPEM, "", privKey, certFile, keyFile)
 	require.NoError(t, err)

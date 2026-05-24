@@ -35,7 +35,7 @@ from app.constants import (
     AUTHORIZATION,
     ComponentName,
     ErrorCode,
-    HTTP_CONTENT_TYPE_HEADER,
+    CONTENT_TYPE as HTTP_CONTENT_TYPE_HEADER,
     OPERATOR_API_KEY,
 )
 from app.errors import NetworkError
