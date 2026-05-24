@@ -785,7 +785,7 @@ func TestSentinel_TokenPersistence(t *testing.T) {
 		Enabled:       true,
 		RetentionDays: 30,
 	}
-	localStore, err := storage.NewLocalStoreService(storageConfig, logger, nil)
+	localStore, err := storage.NewLocalStoreService(storageConfig, logger, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, localStore)
 	defer localStore.Close()
@@ -849,7 +849,7 @@ func TestSentinel_TokenPersistence_TTL(t *testing.T) {
 		Enabled:       true,
 		RetentionDays: 30,
 	}
-	localStore, err := storage.NewLocalStoreService(storageConfig, logger, nil)
+	localStore, err := storage.NewLocalStoreService(storageConfig, logger, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, localStore)
 	defer localStore.Close()

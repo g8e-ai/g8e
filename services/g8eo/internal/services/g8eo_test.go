@@ -53,7 +53,6 @@ func TestNewG8eoService_InitialState(t *testing.T) {
 	assert.Nil(t, service.pubSubResults)
 	assert.Nil(t, service.pubSubClient)
 	assert.Nil(t, service.localStore)
-	assert.Nil(t, service.rawVault)
 	assert.Nil(t, service.auditVault)
 	assert.Nil(t, service.ledger)
 	assert.Nil(t, service.historyHandler)
