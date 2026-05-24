@@ -739,7 +739,7 @@ class TestCommandGenerationIntegration:
         blocks commands that violate whitelist constraints, ensuring the Auditor
         has the correct context to flag WHITELIST_VIOLATION reasons.
         """
-        from app.constants.status import Platform
+        from app.constants.generated_status import Platform
         from app.models.agent import OperatorContext
         from app.utils.safety import map_os_string_to_platform, validate_command_safety
 

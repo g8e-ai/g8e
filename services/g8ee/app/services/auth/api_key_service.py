@@ -18,8 +18,8 @@ import logging
 import secrets
 from typing import TYPE_CHECKING, Any
 
-from app.constants import DB_COLLECTION_API_KEYS, ApiKeyStatus
-from app.models.api_keys import ApiKeyDocument
+from app.constants import DB_COLLECTION_API_KEYS, APIKeyStatus
+from app.models.api_keys import APIKeyDocument
 from app.services.cache.cache_aside import CacheAsideService
 from app.utils.timestamp import now
 
@@ -32,9 +32,9 @@ logger = logging.getLogger(__name__)
 KEY_DERIVATION_ALGORITHM = "sha256"
 API_KEY_HASH_LENGTH = 32
 
-class ApiKeyService:
+class APIKeyService:
     """
-    ApiKeyService for g8ee.
+    APIKeyService for g8ee.
     Handles validation and lifecycle of API keys.
     """
 
@@ -55,7 +55,7 @@ class ApiKeyService:
         """
         return f"{prefix}{secrets.token_hex(32)}"
 
-    async def validate_key(self, raw_key: str, system_fingerprint: str | None = None) -> tuple[bool, ApiKeyDocument | None, str | None]:
+    async def validate_key(self, raw_key: str, system_fingerprint: str | None = None) -> tuple[bool, APIKeyDocument | None, str | None]:
         """Validate a raw API key."""
         if not raw_key:
             return False, None, "API key is required"
@@ -66,9 +66,9 @@ class ApiKeyService:
         if not data:
             return False, None, "API key not found"
 
-        doc = ApiKeyDocument.model_validate(data)
+        doc = APIKeyDocument.model_validate(data)
 
-        if doc.status != ApiKeyStatus.ACTIVE:
+        if doc.status != APIKeyStatus.ACTIVE:
             return False, doc, f"API key is {doc.status}"
 
         if doc.expires_at and doc.expires_at < now():
@@ -96,7 +96,7 @@ class ApiKeyService:
         operator_id: str | None = None,
         client_name: str = "operator",
         permissions: list[str] | None = None,
-        status: ApiKeyStatus = ApiKeyStatus.ACTIVE,
+        status: APIKeyStatus = APIKeyStatus.ACTIVE,
     ) -> bool:
         """Issue (create and store) a new API key."""
         try:
@@ -148,7 +148,7 @@ class ApiKeyService:
             await self.cache.update_document(
                 collection=self.collection,
                 document_id=doc_id,
-                data={"status": ApiKeyStatus.REVOKED, "revoked_at": now()},
+                data={"status": APIKeyStatus.REVOKED, "revoked_at": now()},
                 merge=True,
             )
             logger.info(
@@ -178,7 +178,7 @@ class ApiKeyService:
             operator_id=operator_id,
             client_name=client_name,
             permissions=permissions,
-            status=ApiKeyStatus.ACTIVE,
+            status=APIKeyStatus.ACTIVE,
         )
 
     async def rotate_operator_key(
@@ -236,7 +236,7 @@ class ApiKeyService:
             if not data:
                 return
 
-            doc = ApiKeyDocument.model_validate(data)
+            doc = APIKeyDocument.model_validate(data)
             updates: dict[str, Any] = {"last_used_at": now()}
 
             # Establish fingerprint if not already set (immutable thereafter)

@@ -36,6 +36,7 @@ const (
 	HeaderContentType = "Content-Type" // #nosec G101 - constant string, not credential
 	HeaderCookie = "Cookie" // #nosec G101 - constant string, not credential
 	HeaderDeviceToken = "X-G8E-Device-Token" // #nosec G101 - constant string, not credential
+	HeaderExecutionID = "X-G8E-Execution-ID" // #nosec G101 - constant string, not credential
 	HeaderInvestigationID = "X-G8E-Investigation-ID" // #nosec G101 - constant string, not credential
 	HeaderLastEventID = "Last-Event-ID" // #nosec G101 - constant string, not credential
 	HeaderOperatorAPIKey = "X-G8E-Operator-API-Key" // #nosec G101 - constant string, not credential

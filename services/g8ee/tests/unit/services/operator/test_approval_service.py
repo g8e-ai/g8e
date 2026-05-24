@@ -20,7 +20,7 @@ import pytest
 
 from app.constants.generated_events import EventType
 from app.constants.intents import CloudIntent
-from app.constants.status import FileOperation
+from app.constants.generated_status import FileOperation
 from app.models.http_context import RequestContext, G8eHttpContext
 from app.models.internal_api import OperatorApprovalResponse
 from app.models.investigations import ApprovalMetadata

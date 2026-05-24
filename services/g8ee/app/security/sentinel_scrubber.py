@@ -39,7 +39,7 @@ sensitive data from reaching the cloud AI.
 import logging
 import re
 
-from app.constants.status import ScrubberPriority
+from app.constants.generated_status import ScrubberPriority
 from app.models.base import G8eBaseModel
 
 logger = logging.getLogger(__name__)

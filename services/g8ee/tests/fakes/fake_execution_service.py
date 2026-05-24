@@ -15,7 +15,7 @@
 
 from typing import Any
 
-from app.constants.status import ExecutionStatus
+from app.constants.generated_status import ExecutionStatus
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import DirectCommandResult, OperatorDocument, TargetSystem

@@ -35,7 +35,7 @@ from app.constants import (
     TribunalAuditStatus,
     TribunalAuditMode,
 )
-from app.constants.status import CommandErrorType
+from app.constants.generated_status import CommandErrorType
 from app.llm.prompts import (
     build_tribunal_auditor_prompt,
     build_tribunal_auditor_context,

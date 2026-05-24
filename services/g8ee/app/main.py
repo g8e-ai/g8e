@@ -75,7 +75,6 @@ from .constants import (
     G8EE_APP_LICENSE_URL,
     G8EE_APP_TITLE,
     ComponentName,
-    G8eHeaders,
 )
 from .constants.generated_paths import PathConstants, PortConstants
 from .models.state import G8eeAppState
@@ -295,7 +294,7 @@ def _build_app() -> FastAPI:
             HTTP_CONTENT_LANGUAGE_HEADER, HTTP_CONTENT_TYPE_HEADER,
             HTTP_AUTHORIZATION_HEADER, HTTP_API_KEY_HEADER,
             HTTP_REQUESTED_WITH_HEADER,
-            G8eHeaders.EXECUTION_ID,
+            EXECUTION_ID,
             HTTP_CACHE_CONTROL_HEADER, HTTP_PRAGMA_HEADER,
             HTTP_COOKIE_HEADER, HTTP_SET_COOKIE_HEADER,
             HTTP_LAST_EVENT_ID_HEADER,

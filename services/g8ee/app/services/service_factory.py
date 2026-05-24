@@ -43,7 +43,7 @@ from app.services.infra.http_service import HTTPService
 from app.services.infra.internal_http_client import InternalHttpClient
 from app.services.infra.event_service import EventService
 from app.services.infra.settings_service import SettingsService
-from app.services.auth.api_key_service import ApiKeyService
+from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.auth_service import AuthService
 from app.services.auth.certificate_service import CertificateService
 from app.services.operator.operator_session_service import OperatorSessionService
@@ -126,7 +126,7 @@ class OperatorServices:
     operator_auth_service: OperatorAuthService
     auth_service: AuthService
     session_auth_listener: SessionAuthListener
-    api_key_service: ApiKeyService
+    api_key_service: APIKeyService
     certificate_service: CertificateService
 
 
@@ -173,7 +173,7 @@ class AllServices:
     operator_auth_service: OperatorAuthService
     auth_service: AuthService
     session_auth_listener: SessionAuthListener
-    api_key_service: ApiKeyService
+    api_key_service: APIKeyService
     certificate_service: CertificateService
 
 
@@ -304,7 +304,7 @@ class ServiceFactory:
         pubsub_client: PubSubClient | None = None,
     ) -> OperatorServices:
         """Create operator-specific services."""
-        api_key_service = ApiKeyService(cache_aside=cache_aside_service)
+        api_key_service = APIKeyService(cache_aside=cache_aside_service)
 
         operator_session_service = OperatorSessionService(cache_aside=cache_aside_service)
 
@@ -377,9 +377,9 @@ class ServiceFactory:
         domain_services = ServiceFactory.create_domain_services(settings, data_services)
         operator_services = ServiceFactory.create_operator_services(core_services, data_services, cache_aside_service, pubsub_client)
 
-        # Wire ApiKeyService into OperatorLifecycleService now that both exist.
+        # Wire APIKeyService into OperatorLifecycleService now that both exist.
         # OperatorLifecycleService is built in create_data_services (earlier phase),
-        # while ApiKeyService is built in create_operator_services. Setter injection
+        # while APIKeyService is built in create_operator_services. Setter injection
         # bridges the factory phase ordering. See operator_lifecycle_service.set_api_key_service.
         data_services.operator_lifecycle_service.set_api_key_service(  # type: ignore[union-attr]
             operator_services.api_key_service

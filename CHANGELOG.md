@@ -58,7 +58,7 @@ Special thanks to **@zhouzhou626** for their first contribution (PR #74) adding 
 - **RequestContext Body Migration:** Migrated business context (`web_session_id`, `user_id`, `source_component`, etc.) from HTTP headers to body-embedded `RequestContext` objects for improved security and contract stability.
 - **Directory Reorganization:** Renamed `components/` to `services/` and `shared/` to `protocol/` to align with the mandatory Gateway-first architecture.
 - **g8ed Decommissioning:** Completed the removal of `g8ed` (Dashboard) remnants; migrated all core logic to the `g8eo` operator.
-- **Auth Cleanup:** Refactored `ApiKeyService` and passkey authentication for better consistency and security across the Gateway.
+- **Auth Cleanup:** Refactored `APIKeyService` and passkey authentication for better consistency and security across the Gateway.
 - **CodeQL Refactor:** Optimized CodeQL workflows and addressed findings in `event_service`.
 - **Exit Code Handling:** Standardized exit code handling and improved path validation in `g8eo` execution services.
 - **Event Service:** Consolidated `client_event_service` into a unified `event_service` within `g8eo`.

@@ -55,7 +55,7 @@ type JSONFile struct {
 	Platform    map[string]JSONEntry            `json:"platform"`
 	Agents      map[string]string               `json:"agents"`
 	Timestamp   map[string]string               `json:"timestamp"`
-	ApiPaths    interface{}                     `json:"api_paths"`
+	APIPaths    interface{}                     `json:"api_paths"`
 }
 
 func main() {
@@ -147,8 +147,8 @@ func main() {
 		if fileData.Timestamp != nil {
 			allData.Timestamp = fileData.Timestamp
 		}
-		if fileData.ApiPaths != nil {
-			allData.ApiPaths = fileData.ApiPaths
+		if fileData.APIPaths != nil {
+			allData.APIPaths = fileData.APIPaths
 		}
 	}
 
@@ -246,7 +246,7 @@ func generateRegistry(data JSONFile) string {
 	sb.WriteString("\tPlatform    map[string]Entry    `json:\"platform\"`\n")
 	sb.WriteString("\tAgents      map[string]string   `json:\"agents\"`\n")
 	sb.WriteString("\tTimestamp   map[string]string   `json:\"timestamp\"`\n")
-	sb.WriteString("\tApiPaths    interface{}         `json:\"api_paths\"`\n")
+	sb.WriteString("\tAPIPaths    interface{}         `json:\"api_paths\"`\n")
 	sb.WriteString("}\n")
 	sb.WriteString("\n")
 	sb.WriteString("// Registry returns the complete constants snapshot.\n")
@@ -448,8 +448,8 @@ func generateRegistry(data JSONFile) string {
 		sb.WriteString("\t\t},\n")
 	}
 
-	// ApiPaths (placeholder for now)
-	sb.WriteString("\t\tApiPaths: nil,\n")
+	// APIPaths (placeholder for now)
+	sb.WriteString("\t\tAPIPaths: nil,\n")
 
 	sb.WriteString("\t}\n")
 	sb.WriteString("}\n")

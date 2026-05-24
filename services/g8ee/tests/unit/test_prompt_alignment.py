@@ -47,7 +47,7 @@ from pathlib import Path
 
 import pytest
 
-from app.constants.status import OperatorToolName
+from app.constants.generated_status import OperatorToolName
 from app.utils.agent_persona_loader import (
     get_agent_persona,
     get_tribunal_member,

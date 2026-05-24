@@ -32,7 +32,7 @@ import pytest
 from app.constants import (
     EventType,
 )
-from app.constants.status import CommandErrorType, ComponentName
+from app.constants.generated_status import CommandErrorType, ComponentName
 from app.errors import ValidationError
 from app.models.agent import ExecutorCommandArgs
 from app.models.base import G8eBaseModel

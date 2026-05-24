@@ -19,7 +19,7 @@ import pytest
 
 from app.constants import OperatorStatus
 from app.models.operators import OperatorDocument
-from app.services.auth.api_key_service import ApiKeyService
+from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.certificate_service import CertificateService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.operator.operator_auth_service import OperatorAuthService
@@ -31,7 +31,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 class TestOperatorAuthService:
     @pytest.fixture
     def mock_api_key_service(self):
-        return AsyncMock(spec=ApiKeyService)
+        return AsyncMock(spec=APIKeyService)
 
     @pytest.fixture
     def mock_session_service(self):

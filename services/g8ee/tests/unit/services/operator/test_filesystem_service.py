@@ -6,7 +6,7 @@ from app.services.operator.filesystem_service import OperatorFilesystemService
 from app.models.command_request_payloads import FsGrepRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.constants.status import ComponentName
+from app.constants.generated_status import ComponentName
 
 @pytest.mark.asyncio
 async def test_filesystem_service_grep_import_fix():

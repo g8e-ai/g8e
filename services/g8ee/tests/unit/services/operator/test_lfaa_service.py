@@ -18,7 +18,7 @@ from app.models.pubsub_messages import G8eMessage
 from app.models.command_request_payloads import DirectCommandAuditRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.constants.generated_events import EventType
-from app.constants.status import ComponentName, AITaskId
+from app.constants.generated_status import ComponentName, AITaskId
 
 @pytest.fixture
 def mock_pubsub_service():

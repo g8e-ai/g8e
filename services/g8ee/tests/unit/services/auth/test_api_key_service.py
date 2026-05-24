@@ -15,10 +15,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants import ApiKeyStatus
-from app.models.api_keys import ApiKeyDocument
+from app.constants import APIKeyStatus
+from app.models.api_keys import APIKeyDocument
 from app.services.auth.api_key_service import (
-    ApiKeyService,
+    APIKeyService,
 )
 
 
@@ -33,11 +33,11 @@ def mock_cache_aside():
 
 @pytest.fixture
 def api_key_service(mock_cache_aside):
-    return ApiKeyService(mock_cache_aside)
+    return APIKeyService(mock_cache_aside)
 
 
-class TestApiKeyService:
-    """Test ApiKeyService coordinator methods (issue, rotate, revoke)."""
+class TestAPIKeyService:
+    """Test APIKeyService coordinator methods (issue, rotate, revoke)."""
 
     async def test_issue_key_success(self, api_key_service, mock_cache_aside):
         """Test issuing a new API key successfully."""
@@ -50,7 +50,7 @@ class TestApiKeyService:
             operator_id="op-789",
             client_name="operator",
             permissions=["command:execute"],
-            status=ApiKeyStatus.ACTIVE,
+            status=APIKeyStatus.ACTIVE,
         )
 
         assert result is True
@@ -59,7 +59,7 @@ class TestApiKeyService:
         assert call_args[1]["collection"] == "api_keys"
         assert call_args[1]["data"]["user_id"] == "user-123"
         assert call_args[1]["data"]["operator_id"] == "op-789"
-        assert call_args[1]["data"]["status"] == ApiKeyStatus.ACTIVE
+        assert call_args[1]["data"]["status"] == APIKeyStatus.ACTIVE
 
     async def test_issue_key_failure(self, api_key_service, mock_cache_aside):
         """Test issuing a key when storage fails."""
@@ -74,7 +74,7 @@ class TestApiKeyService:
 
     async def test_revoke_key_success(self, api_key_service, mock_cache_aside):
         """Test revoking an API key successfully."""
-        mock_cache_aside.get_document_with_cache.return_value = {"status": ApiKeyStatus.ACTIVE}
+        mock_cache_aside.get_document_with_cache.return_value = {"status": APIKeyStatus.ACTIVE}
         mock_cache_aside.update_document.return_value = MagicMock(success=True)
 
         result = await api_key_service.revoke_key("g8e_test_key_12345")
@@ -82,7 +82,7 @@ class TestApiKeyService:
         assert result is True
         mock_cache_aside.update_document.assert_called_once()
         call_args = mock_cache_aside.update_document.call_args
-        assert call_args[1]["data"]["status"] == ApiKeyStatus.REVOKED
+        assert call_args[1]["data"]["status"] == APIKeyStatus.REVOKED
 
     async def test_revoke_key_not_found(self, api_key_service, mock_cache_aside):
         """Test revoking a key that doesn't exist (idempotent)."""
@@ -95,7 +95,7 @@ class TestApiKeyService:
 
     async def test_revoke_key_storage_failure(self, api_key_service, mock_cache_aside):
         """Test revoking a key when storage fails."""
-        mock_cache_aside.get_document_with_cache.return_value = {"status": ApiKeyStatus.ACTIVE}
+        mock_cache_aside.get_document_with_cache.return_value = {"status": APIKeyStatus.ACTIVE}
         mock_cache_aside.update_document.side_effect = Exception("Storage error")
 
         result = await api_key_service.revoke_key("g8e_test_key_12345")
@@ -166,7 +166,7 @@ class TestApiKeyService:
 
     async def test_revoke_operator_key_success(self, api_key_service, mock_cache_aside):
         """Test revoking an operator key."""
-        mock_cache_aside.get_document_with_cache.return_value = {"status": ApiKeyStatus.ACTIVE}
+        mock_cache_aside.get_document_with_cache.return_value = {"status": APIKeyStatus.ACTIVE}
         mock_cache_aside.update_document.return_value = MagicMock(success=True)
         mock_settings_service = AsyncMock()
 
@@ -179,7 +179,7 @@ class TestApiKeyService:
 
     async def test_revoke_operator_key_failure(self, api_key_service, mock_cache_aside):
         """Test revoking an operator key when storage fails."""
-        mock_cache_aside.get_document_with_cache.return_value = {"status": ApiKeyStatus.ACTIVE}
+        mock_cache_aside.get_document_with_cache.return_value = {"status": APIKeyStatus.ACTIVE}
         mock_cache_aside.update_document.side_effect = Exception("Storage error")
         mock_settings_service = AsyncMock()
 
@@ -192,10 +192,10 @@ class TestApiKeyService:
 
     async def test_validate_key_success(self, api_key_service, mock_cache_aside):
         """Test validating a valid API key."""
-        doc = ApiKeyDocument(
+        doc = APIKeyDocument(
             user_id="user-123",
             client_name="operator",
-            status=ApiKeyStatus.ACTIVE,
+            status=APIKeyStatus.ACTIVE,
             expires_at=None,
             permissions=[],
         )
@@ -220,10 +220,10 @@ class TestApiKeyService:
 
     async def test_validate_key_revoked(self, api_key_service, mock_cache_aside):
         """Test validating a revoked API key."""
-        doc = ApiKeyDocument(
+        doc = APIKeyDocument(
             user_id="user-123",
             client_name="operator",
-            status=ApiKeyStatus.REVOKED,
+            status=APIKeyStatus.REVOKED,
             expires_at=None,
             permissions=[],
         )
@@ -241,10 +241,10 @@ class TestApiKeyService:
         from app.utils.timestamp import now
 
         expired_time = now() - timedelta(days=1)
-        doc = ApiKeyDocument(
+        doc = APIKeyDocument(
             user_id="user-123",
             client_name="operator",
-            status=ApiKeyStatus.ACTIVE,
+            status=APIKeyStatus.ACTIVE,
             expires_at=expired_time,
             permissions=[],
         )

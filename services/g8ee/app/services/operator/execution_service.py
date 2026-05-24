@@ -21,7 +21,7 @@ import asyncio
 import logging
 
 from app.constants.generated_events import EventType
-from app.constants.status import (
+from app.constants.generated_status import (
     AITaskId,
     CommandErrorType,
     ComponentName,

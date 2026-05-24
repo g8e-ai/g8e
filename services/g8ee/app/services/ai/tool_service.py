@@ -32,7 +32,7 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
-from app.constants.status import (
+from app.constants.generated_status import (
     CommandErrorType,
     ComponentName,
     OperatorToolName,

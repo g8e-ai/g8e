@@ -23,7 +23,7 @@ from app.services.protocols import (
     InvestigationServiceProtocol,
     PubSubServiceProtocol,
 )
-from app.constants.status import (
+from app.constants.generated_status import (
     ComponentName,
     ExecutionStatus,
     AITaskId,

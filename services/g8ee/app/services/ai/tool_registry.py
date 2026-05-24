@@ -41,7 +41,7 @@ from dataclasses import dataclass
 import app.llm.llm_types as types
 from app.constants.prompts import AgentMode
 from app.constants.config import ToolDisplayCategory
-from app.constants.status import OperatorToolName, ToolScope
+from app.constants.generated_status import OperatorToolName, ToolScope
 from app.models.tool_results import ToolResult
 from app.services.ai.tools import (
     check_port,

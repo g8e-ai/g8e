@@ -35,15 +35,16 @@ from app.clients.http_client import (
     get_service_client,
 )
 from app.constants import (
+    CASE_ID,
     DEFAULT_HTTP_CLIENT_TIMEOUT as DEFAULT_TIMEOUT,
-)
-from app.constants import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_RETRY_BACKOFF_FACTOR,
+    EXECUTION_ID,
     HTTP_API_KEY_HEADER,
+    INVESTIGATION_ID,
+    TASK_ID,
     CircuitBreakerState,
     ComponentName,
-    G8eHeaders,
 )
 from app.errors import NetworkError, ValidationError
 from app.models.http_context import G8eHttpContext
@@ -95,27 +96,6 @@ async def authed_client():
     )
     yield c
     await c.close()
-
-
-# =============================================================================
-# G8eHeaders - COMPONENT_ID must not exist (regression guard)
-# =============================================================================
-
-class TestG8eHeaders:
-    """G8eHeaders contract: required headers present, COMPONENT_ID absent."""
-
-    def test_component_id_absent(self):
-        assert not hasattr(G8eHeaders, "COMPONENT_ID")
-
-    def test_required_headers_present_in_g8eheaders(self):
-        assert hasattr(G8eHeaders, "EXECUTION_ID")
-        assert hasattr(G8eHeaders, "WEB_SESSION_ID")
-        assert hasattr(G8eHeaders, "USER_ID")
-        assert hasattr(G8eHeaders, "SOURCE_COMPONENT")
-        assert hasattr(G8eHeaders, "ORGANIZATION_ID")
-        assert hasattr(G8eHeaders, "CASE_ID")
-        assert hasattr(G8eHeaders, "INVESTIGATION_ID")
-        assert hasattr(G8eHeaders, "TASK_ID")
 
 
 # =============================================================================
@@ -174,7 +154,7 @@ class TestRequestTrace:
 
     def test_from_headers_preserves_existing_request_id(self):
         trace = RequestTrace.from_headers(
-            {G8eHeaders.EXECUTION_ID: "exec-existing-123"}, component_id=ComponentName.G8EE
+            {EXECUTION_ID: "exec-existing-123"}, component_id=ComponentName.G8EE
         )
         assert trace.execution_id == "exec-existing-123"
 
@@ -182,9 +162,9 @@ class TestRequestTrace:
         # Context moved to request body - RequestTrace no longer extracts these from headers
         trace = RequestTrace.from_headers(
             {
-                G8eHeaders.CASE_ID: "case-1",
-                G8eHeaders.TASK_ID: "task-1",
-                G8eHeaders.INVESTIGATION_ID: "inv-1",
+                CASE_ID: "case-1",
+                TASK_ID: "task-1",
+                INVESTIGATION_ID: "inv-1",
             },
             component_id=ComponentName.G8EE,
         )
@@ -211,7 +191,7 @@ class TestRequestTrace:
     def test_as_headers_empty(self):
         # Context moved to request body - RequestTrace.as_headers is now empty
         trace = RequestTrace.from_headers(
-            {G8eHeaders.EXECUTION_ID: "req-abc"}, component_id=ComponentName.G8EE
+            {EXECUTION_ID: "req-abc"}, component_id=ComponentName.G8EE
         )
         headers = trace.as_headers
         assert headers == {}
@@ -221,8 +201,8 @@ class TestRequestTrace:
         trace = RequestTrace.from_headers({}, component_id=ComponentName.G8EE)
         headers = trace.as_headers
         assert headers == {}
-        assert G8eHeaders.TASK_ID not in headers
-        assert G8eHeaders.INVESTIGATION_ID not in headers
+        assert TASK_ID not in headers
+        assert INVESTIGATION_ID not in headers
 
 
 # =============================================================================

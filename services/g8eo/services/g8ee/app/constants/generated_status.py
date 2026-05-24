@@ -61,7 +61,7 @@ class AiTaskId(StrEnum):
     RECURSIVE_GREP = "ai.recursive_grep"
     RESTORE_FILE = "ai.restore.file"
 
-class ApiKeyStatus(StrEnum):
+class APIKeyStatus(StrEnum):
     """Generated from protocol/constants/status.json - api_key_status"""
     ACTIVE = "active"
     EXPIRED = "expired"
@@ -363,7 +363,7 @@ class InvestigationStatus(StrEnum):
     OPEN = "Open"
     RESOLVED = "Resolved"
 
-class LlmModels(StrEnum):
+class LLMs(StrEnum):
     """Generated from protocol/constants/status.json - llm_models"""
     ANTHROPIC_CLAUDE_4_5_HAIKU = "claude-haiku-4-5"
     ANTHROPIC_CLAUDE_4_6_OPUS = "claude-opus-4-6"

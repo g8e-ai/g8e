@@ -69,7 +69,7 @@ constants:
 	@echo "Generating Go constants from JSON source..."
 	@cd services/g8eo/internal/constants && go run generate_registry.go
 	@echo "Exporting constants to JSON and Python via Go exporter..."
-	@cd services/g8eo/cmd/exporter && go run main.go -root ../..
+	@cd services/g8eo/cmd/exporter && go run main.go -root $(PWD)
 	@echo "Constants generation complete."
 
 .PHONY: proto

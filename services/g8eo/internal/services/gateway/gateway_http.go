@@ -59,7 +59,7 @@ type HTTPHandlerDependencies struct {
 	Reg               *RegistrationService
 	Passkey           *PasskeyService
 	UserSvc           *UserService
-	APIKey            *ApiKeyService
+	APIKey            *APIKeyService
 	Responder         *responder.Responder
 	MCPGateway        *mcp.GatewayService
 	AppEnrollment     *AppEnrollmentService
@@ -84,7 +84,7 @@ type HTTPHandler struct {
 	reg               *RegistrationService
 	passkey           *PasskeyService
 	userSvc           *UserService
-	apiKey            *ApiKeyService
+	apiKey            *APIKeyService
 	responder         *responder.Responder
 	mcp               *mcp.GatewayService
 	appEnrollment     *AppEnrollmentService

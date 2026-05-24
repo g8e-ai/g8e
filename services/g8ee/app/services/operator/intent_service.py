@@ -25,7 +25,7 @@ from app.services.protocols import (
     InvestigationServiceProtocol,
     G8eClientProtocol,
 )
-from app.constants.status import (
+from app.constants.generated_status import (
     AITaskId,
     CommandErrorType,
     ComponentName,

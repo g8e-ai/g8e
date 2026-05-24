@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.constants.status import ComponentName, OperatorToolName
+from app.constants.generated_status import ComponentName, OperatorToolName
 from app.models.http_context import G8eHttpContext
 from app.models.operators import ApprovalResult
 from app.models.tool_args import StreamOperatorArgs

@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from app.constants.status import (
+from app.constants.generated_status import (
     ComponentName,
     OperatorHistoryEventType,
     OperatorStatus,
@@ -28,7 +28,7 @@ from app.services.protocols import OperatorDataServiceProtocol
 from app.utils.timestamp import now
 
 if TYPE_CHECKING:
-    from app.services.auth.api_key_service import ApiKeyService
+    from app.services.auth.api_key_service import APIKeyService
     from app.services.cache.cache_aside import CacheAsideService
 
 logger = logging.getLogger(__name__)
@@ -47,18 +47,18 @@ class OperatorLifecycleService:
         operator_data_service: OperatorDataServiceProtocol,
     ):
         self.operator_data_service = operator_data_service
-        self._api_key_service: ApiKeyService | None = None
+        self._api_key_service: APIKeyService | None = None
         # Access the underlying cache for direct document updates
         self._cache: CacheAsideService = operator_data_service.cache  # type: ignore
 
     @property
-    def api_key_service(self) -> ApiKeyService | None:
+    def api_key_service(self) -> APIKeyService | None:
         return self._api_key_service
 
-    def set_api_key_service(self, api_key_service: ApiKeyService) -> None:
-        """Inject ApiKeyService after construction.
+    def set_api_key_service(self, api_key_service: APIKeyService) -> None:
+        """Inject APIKeyService after construction.
 
-        ApiKeyService is created in a later factory phase than this service,
+        APIKeyService is created in a later factory phase than this service,
         so it is wired in via setter from ``ServiceFactory.create_all_services``
         once both objects exist.
         """

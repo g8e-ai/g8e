@@ -32,7 +32,7 @@ from app.services.protocols import (
     InvestigationDataServiceProtocol,
     OperatorDataServiceProtocol,
 )
-from app.constants.status import (
+from app.constants.generated_status import (
     FileOperation,
 )
 from app.constants.generated_events import (

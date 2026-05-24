@@ -25,7 +25,6 @@ from app.constants import (
     PROXY_USER_ID_HEADER,
     AuthMethod,
     ComponentName,
-    G8eHeaders,
 )
 from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser

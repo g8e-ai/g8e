@@ -33,7 +33,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from google.api_core.client_options import ClientOptions
 from google.api_core.exceptions import GoogleAPICallError, ResourceExhausted, ServiceUnavailable
-from google.auth.api_key import Credentials as ApiKeyCredentials
+from google.auth.api_key import Credentials as APIKeyCredentials
 from google.cloud import discoveryengine_v1 as discoveryengine
 
 from app.constants.config import GroundingSource
@@ -105,7 +105,7 @@ class WebSearchProvider:
             else None
         )
         self._client: SearchClientProtocol = discoveryengine.SearchServiceClient(
-            credentials=ApiKeyCredentials(api_key),
+            credentials=APIKeyCredentials(api_key),
             client_options=client_options,
         )
         logger.info("WebSearchProvider initialized (project=%s engine=%s)", project_id, engine_id)

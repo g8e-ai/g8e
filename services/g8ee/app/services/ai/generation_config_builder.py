@@ -31,7 +31,7 @@ from app.llm.llm_types import (
     LiteLLMSettings,
     PrimaryLLMSettings,
 )
-from app.models.model_configs import clamp_thinking_level, get_model_config, LLMModelConfig
+from app.models.model_configs import clamp_thinking_level, get_model_config, LLModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class AIGenerationConfigBuilder:
 
     @staticmethod
     def _get_effective_max_tokens(
-        model_config: LLMModelConfig | None,
+        model_config: LLModelConfig | None,
         max_tokens: int | None,
     ) -> int:
         """Get effective max_tokens value with fallback to model config or default."""
@@ -59,7 +59,7 @@ class AIGenerationConfigBuilder:
 
     @staticmethod
     def _get_effective_values(
-        model_config: LLMModelConfig | None,
+        model_config: LLModelConfig | None,
         max_tokens: int | None,
     ) -> tuple[int, int | None, float | None, list[str] | None]:
         """Get all effective values from model config with fallbacks.

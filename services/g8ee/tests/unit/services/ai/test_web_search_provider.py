@@ -38,7 +38,7 @@ from app.services.ai.grounding.web_search_provider import WebSearchProvider
 pytestmark = [pytest.mark.unit]
 
 _PATCH_CLIENT = "app.services.ai.grounding.web_search_provider.discoveryengine.SearchServiceClient"
-_PATCH_CREDENTIALS = "app.services.ai.grounding.web_search_provider.ApiKeyCredentials"
+_PATCH_CREDENTIALS = "app.services.ai.grounding.web_search_provider.APIKeyCredentials"
 _PATCH_TO_THREAD = "app.services.ai.grounding.web_search_provider.asyncio.to_thread"
 _PATCH_WAIT_FOR = "app.services.ai.grounding.web_search_provider.asyncio.wait_for"
 _PATCH_SLEEP = "app.services.ai.grounding.web_search_provider.asyncio.sleep"

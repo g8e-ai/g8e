@@ -1,14 +1,14 @@
 {
   "intents": {
+    "APIgatewayDiscovery": {
+      "_go_const": "IntentAPIgatewayDiscovery",
+      "_python_const": "APIGATEWAY_DISCOVERY",
+      "value": "apigateway_discovery"
+    },
     "AcmDiscovery": {
       "_go_const": "IntentAcmDiscovery",
       "_python_const": "ACM_DISCOVERY",
       "value": "acm_discovery"
-    },
-    "ApigatewayDiscovery": {
-      "_go_const": "IntentApigatewayDiscovery",
-      "_python_const": "APIGATEWAY_DISCOVERY",
-      "value": "apigateway_discovery"
     },
     "AthenaDiscovery": {
       "_go_const": "IntentAthenaDiscovery",

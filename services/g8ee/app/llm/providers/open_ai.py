@@ -163,7 +163,7 @@ class OpenAIProvider(LLMProvider):
 
         When a ThinkingConfig is supplied we translate its ThinkingLevel into
         the reasoning.effort field that GPT-5/o-series reasoning models accept.
-        Models that do not support reasoning effort (per LLMModelConfig)
+        Models that do not support reasoning effort (per LLModelConfig)
         receive no reasoning key.
         """
         kwargs = {

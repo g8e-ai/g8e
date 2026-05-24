@@ -20,7 +20,7 @@ import random
 from typing import Any
 
 from app.constants import DB_COLLECTION_USERS, DEFAULT_OPERATOR_CONFIG, OperatorStatus
-from app.services.auth.api_key_service import ApiKeyService
+from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.certificate_service import CertificateService
 from app.services.operator.operator_session_service import OperatorSessionService
 from app.services.operator.operator_data_service import OperatorDataService
@@ -40,7 +40,7 @@ class OperatorAuthService:
 
     def __init__(
         self,
-        api_key_service: ApiKeyService,
+        api_key_service: APIKeyService,
         session_service: OperatorSessionService,
         operator_data_service: OperatorDataService,
         lifecycle_service: OperatorLifecycleServiceProtocol,
@@ -55,7 +55,7 @@ class OperatorAuthService:
         self._cache = cache_aside
 
     @property
-    def api_key_service(self) -> ApiKeyService:
+    def api_key_service(self) -> APIKeyService:
         return self._api_key_service
 
     @property

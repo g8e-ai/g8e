@@ -194,7 +194,7 @@ class OperatorSlotClaimResponse(G8eBaseModel):
     error: str | None = None
 
 
-class OperatorUpdateApiKeyRequest(G8eBaseModel):
+class OperatorUpdateAPIKeyRequest(G8eBaseModel):
     """Request model for updating an operator's API key.
 
     Called by client to issue API keys for existing slots that were created without keys.
@@ -208,7 +208,7 @@ class OperatorUpdateApiKeyRequest(G8eBaseModel):
     api_key: str = Field(..., description="New API key")
 
 
-class OperatorUpdateApiKeyResponse(G8eBaseModel):
+class OperatorUpdateAPIKeyResponse(G8eBaseModel):
     """Response for updating an operator's API key."""
     success: bool
     error: str | None = None
@@ -408,7 +408,7 @@ class OperatorTerminateResponse(G8eBaseModel):
     error: str | None = None
 
 
-class ApiKeyGenerationRequest(G8eBaseModel):
+class APIKeyGenerationRequest(G8eBaseModel):
     """Request model for API key generation.
 
     Authority: g8ee.
@@ -416,7 +416,7 @@ class ApiKeyGenerationRequest(G8eBaseModel):
     prefix: str = Field(default="g8e_", description="API key prefix")
 
 
-class ApiKeyGenerationResponse(G8eBaseModel):
+class APIKeyGenerationResponse(G8eBaseModel):
     """Response model for API key generation."""
     success: bool
     api_key: str | None = None

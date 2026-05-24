@@ -37,13 +37,13 @@ from app.constants import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_RETRY_BACKOFF_FACTOR,
     DEFAULT_RETRY_JITTER,
+    EXECUTION_ID,
     HTTP_API_KEY_HEADER,
     HTTP_AUTHORIZATION_HEADER,
     HTTP_BEARER_PREFIX,
     CircuitBreakerState,
     ErrorCode,
     ErrorSeverity,
-    G8eHeaders,
 )
 from app.errors import (
     NetworkError,
@@ -69,7 +69,7 @@ QueryParams = Mapping[str, str | int | float | bool]
 DEFAULT_RETRY_METHODS: set[str] = {"GET", "PUT", "DELETE", "HEAD", "OPTIONS"}
 DEFAULT_RETRY_STATUS_CODES: set[int] = {408, 429, 500, 502, 503, 504}
 
-EXECUTION_ID_HEADER = G8eHeaders.EXECUTION_ID
+EXECUTION_ID_HEADER = EXECUTION_ID
 
 class RequestTrace(G8eBaseModel):
     """
