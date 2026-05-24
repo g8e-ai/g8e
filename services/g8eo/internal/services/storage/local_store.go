@@ -555,23 +555,26 @@ func (ls *LocalStoreService) KVScanPrefix(prefix string) (map[string]string, err
 	WHERE key LIKE ? AND (expires_at IS NULL OR expires_at > ?)
 	`
 	now := sqliteutil.FormatTimestamp(time.Now())
-	rows, err := ls.db.QueryWithRetry(query, prefix+"%", now)
+
+	type kvPair struct {
+		key   string
+		value string
+	}
+
+	pairs, err := sqliteutil.MaterializeRows(ls.db, query, []interface{}{prefix + "%", now}, func(rows *sql.Rows) (kvPair, error) {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return kvPair{}, fmt.Errorf("failed to scan row: %w", err)
+		}
+		return kvPair{key: key, value: value}, nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan keys: %w", err)
 	}
-	defer rows.Close()
 
 	result := make(map[string]string)
-	for rows.Next() {
-		var key, value string
-		if err := rows.Scan(&key, &value); err != nil {
-			return nil, fmt.Errorf("failed to scan row: %w", err)
-		}
-		result[key] = value
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating rows: %w", err)
+	for _, pair := range pairs {
+		result[pair.key] = pair.value
 	}
 
 	return result, nil
@@ -753,67 +756,71 @@ func (ls *LocalStoreService) GetFileDiffsBySession(operatorSessionID string, lim
 	LIMIT ?
 	`
 
-	rows, err := ls.db.QueryWithRetry(query, operatorSessionID, limit)
+	type fileDiffRow struct {
+		record       FileDiffRecord
+		hashBefore   sql.NullString
+		hashAfter    sql.NullString
+		webSessID    sql.NullString
+		userID       sql.NullString
+		caseID       sql.NullString
+		operatorID   sql.NullString
+		timestampStr string
+	}
+
+	rows, err := sqliteutil.MaterializeRows(ls.db, query, []interface{}{operatorSessionID, limit}, func(r *sql.Rows) (fileDiffRow, error) {
+		var row fileDiffRow
+		err := r.Scan(
+			&row.record.ID,
+			&row.timestampStr,
+			&row.record.FilePath,
+			&row.record.Operation,
+			&row.hashBefore,
+			&row.hashAfter,
+			&row.record.DiffStat,
+			&row.record.DiffHash,
+			&row.record.DiffSize,
+			&row.webSessID,
+			&row.userID,
+			&row.caseID,
+			&row.operatorID,
+		)
+		return row, err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to query file diffs: %w", err)
 	}
-	defer rows.Close()
 
 	var records []*FileDiffRecord
-	for rows.Next() {
-		var record FileDiffRecord
-		var hashBefore, hashAfter, webSessID, userID, caseID, operatorID sql.NullString
-
-		var timestampStr string
-		err := rows.Scan(
-			&record.ID,
-			&timestampStr,
-			&record.FilePath,
-			&record.Operation,
-			&hashBefore,
-			&hashAfter,
-			&record.DiffStat,
-			&record.DiffHash,
-			&record.DiffSize,
-			&webSessID,
-			&userID,
-			&caseID,
-			&operatorID,
-		)
-		if err != nil {
-			ls.logger.Warn("Failed to scan file diff row", string(constants.ConnectionStateError), err)
-			continue
-		}
-
-		ts, tsErr := sqliteutil.ParseTimestamp(timestampStr)
+	for _, row := range rows {
+		ts, tsErr := sqliteutil.ParseTimestamp(row.timestampStr)
 		if tsErr != nil {
-			ls.logger.Warn("Failed to parse file diff timestamp", "raw", timestampStr, string(constants.ConnectionStateError), tsErr)
+			ls.logger.Warn("Failed to parse file diff timestamp", "raw", row.timestampStr, string(constants.ConnectionStateError), tsErr)
 		}
-		record.TimestampUTC = ts
+		row.record.TimestampUTC = ts
 
-		if hashBefore.Valid {
-			record.LedgerHashBefore = hashBefore.String
+		if row.hashBefore.Valid {
+			row.record.LedgerHashBefore = row.hashBefore.String
 		}
-		if hashAfter.Valid {
-			record.LedgerHashAfter = hashAfter.String
+		if row.hashAfter.Valid {
+			row.record.LedgerHashAfter = row.hashAfter.String
 		}
-		if webSessID.Valid {
-			record.OperatorSessionID = webSessID.String
+		if row.webSessID.Valid {
+			row.record.OperatorSessionID = row.webSessID.String
 		}
-		if userID.Valid {
-			record.UserID = userID.String
+		if row.userID.Valid {
+			row.record.UserID = row.userID.String
 		}
-		if caseID.Valid {
-			record.CaseID = caseID.String
+		if row.caseID.Valid {
+			row.record.CaseID = row.caseID.String
 		}
-		if operatorID.Valid {
-			record.OperatorID = operatorID.String
+		if row.operatorID.Valid {
+			row.record.OperatorID = row.operatorID.String
 		}
 
-		records = append(records, &record)
+		records = append(records, &row.record)
 	}
 
-	return records, rows.Err()
+	return records, nil
 }
 
 // SuspendedTransaction represents a transaction awaiting L3 approval.
@@ -905,56 +912,57 @@ func (ls *LocalStoreService) ListSuspendedTransactions(userID string) ([]*Suspen
 		return nil, fmt.Errorf("local store not initialized")
 	}
 
-	var rows *sql.Rows
-	var err error
+	var query string
+	var args []interface{}
 
 	if userID != "" {
-		rows, err = ls.db.QueryWithRetry(
-			"SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC",
-			userID, sqliteutil.NowTimestamp(),
-		)
+		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC"
+		args = []interface{}{userID, sqliteutil.NowTimestamp()}
 	} else {
-		rows, err = ls.db.QueryWithRetry(
-			"SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC",
-			sqliteutil.NowTimestamp(),
-		)
+		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC"
+		args = []interface{}{sqliteutil.NowTimestamp()}
 	}
 
+	type suspendedTxRow struct {
+		txHash       sql.NullString
+		envelopeStr  sql.NullString
+		createdAtStr sql.NullString
+		expiresAtStr sql.NullString
+		toolName     sql.NullString
+		toolArgsStr  sql.NullString
+		userID       sql.NullString
+		operatorID   sql.NullString
+	}
+
+	rows, err := sqliteutil.MaterializeRows(ls.db, query, args, func(r *sql.Rows) (suspendedTxRow, error) {
+		var row suspendedTxRow
+		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID)
+		return row, err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to query suspended transactions: %w", err)
 	}
-	defer rows.Close()
 
 	var transactions []*SuspendedTransaction
-	for rows.Next() {
-		var txHash, envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID sql.NullString
-		if err := rows.Scan(&txHash, &envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID); err != nil {
-			ls.logger.Error("Failed to scan suspended transaction row", string(constants.ConnectionStateError), err)
-			continue
-		}
-
-		createdAt, _ := sqliteutil.ParseTimestamp(createdAtStr.String)
-		expiresAt, _ := sqliteutil.ParseTimestamp(expiresAtStr.String)
+	for _, row := range rows {
+		createdAt, _ := sqliteutil.ParseTimestamp(row.createdAtStr.String)
+		expiresAt, _ := sqliteutil.ParseTimestamp(row.expiresAtStr.String)
 
 		var toolArgs []byte
-		if toolArgsStr.Valid {
-			toolArgs = []byte(toolArgsStr.String)
+		if row.toolArgsStr.Valid {
+			toolArgs = []byte(row.toolArgsStr.String)
 		}
 
 		transactions = append(transactions, &SuspendedTransaction{
-			TransactionHash: txHash.String,
-			Envelope:        []byte(envelopeStr.String),
+			TransactionHash: row.txHash.String,
+			Envelope:        []byte(row.envelopeStr.String),
 			CreatedAt:       createdAt,
 			ExpiresAt:       expiresAt,
-			ToolName:        toolName.String,
+			ToolName:        row.toolName.String,
 			ToolArguments:   toolArgs,
-			UserID:          userID.String,
-			OperatorID:      operatorID.String,
+			UserID:          row.userID.String,
+			OperatorID:      row.operatorID.String,
 		})
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating suspended transactions: %w", err)
 	}
 
 	return transactions, nil

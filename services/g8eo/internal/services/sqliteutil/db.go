@@ -42,6 +42,15 @@ type DBConfig struct {
 	// SetFilePermissions controls whether to chmod the DB file to 0600 after creation.
 	// Default: true
 	SetFilePermissions bool
+
+	// MaxRetries is the maximum number of retry attempts for SQLITE_BUSY errors.
+	// Default: 10
+	MaxRetries int
+
+	// RetryBaseDelayMs is the base delay in milliseconds for retry backoff.
+	// Actual delay is (attempt + 1) * RetryBaseDelayMs.
+	// Default: 50
+	RetryBaseDelayMs int
 }
 
 // DefaultDBConfig returns a DBConfig with sensible defaults.
@@ -52,6 +61,8 @@ func DefaultDBConfig(path string) DBConfig {
 		CacheSizeMB:        64,
 		BusyTimeoutMs:      30000, // Increased to 30s for parallel test concurrency
 		SetFilePermissions: true,
+		MaxRetries:         10,
+		RetryBaseDelayMs:   50,
 	}
 }
 
@@ -60,6 +71,7 @@ type DB struct {
 	*sql.DB
 	logger *slog.Logger
 	path   string
+	config DBConfig
 }
 
 // OpenDB opens (or creates) a SQLite database with best-practice settings.
@@ -114,6 +126,7 @@ func OpenDB(cfg DBConfig, logger *slog.Logger) (*DB, error) {
 		DB:     sqlDB,
 		logger: logger,
 		path:   cfg.Path,
+		config: cfg,
 	}, nil
 }
 
@@ -158,7 +171,7 @@ func (db *DB) ExecWithRetry(query string, args ...interface{}) (sql.Result, erro
 	var result sql.Result
 	var err error
 
-	maxRetries := 10
+	maxRetries := db.config.MaxRetries
 	for i := 0; i < maxRetries; i++ {
 		result, err = db.Exec(query, args...)
 		if err == nil {
@@ -168,7 +181,7 @@ func (db *DB) ExecWithRetry(query string, args ...interface{}) (sql.Result, erro
 		// Check if it's a busy error
 		if isBusyError(err) {
 			db.logger.Debug("Database busy, retrying", "attempt", i+1, "max_retries", maxRetries)
-			time.Sleep(time.Duration(i+1) * 50 * time.Millisecond) // Exponential backoff
+			db.backoff(i)
 			continue
 		}
 
@@ -184,7 +197,7 @@ func (db *DB) QueryWithRetry(query string, args ...interface{}) (*sql.Rows, erro
 	var rows *sql.Rows
 	var err error
 
-	maxRetries := 10
+	maxRetries := db.config.MaxRetries
 	for i := 0; i < maxRetries; i++ {
 		rows, err = db.Query(query, args...)
 		if err == nil {
@@ -193,7 +206,7 @@ func (db *DB) QueryWithRetry(query string, args ...interface{}) (*sql.Rows, erro
 
 		if isBusyError(err) {
 			db.logger.Debug("Database busy, retrying query", "attempt", i+1, "max_retries", maxRetries)
-			time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
+			db.backoff(i)
 			continue
 		}
 
@@ -206,7 +219,7 @@ func (db *DB) QueryWithRetry(query string, args ...interface{}) (*sql.Rows, erro
 // QueryRowWithRetry executes a query that returns a single row with automatic retry on SQLITE_BUSY.
 // Returns the row, which will yield the error on .Scan() or .Err() if all retries fail.
 func (db *DB) QueryRowWithRetry(query string, args ...interface{}) *sql.Row {
-	maxRetries := 10
+	maxRetries := db.config.MaxRetries
 	var lastRow *sql.Row
 
 	for i := 0; i < maxRetries; i++ {
@@ -219,7 +232,7 @@ func (db *DB) QueryRowWithRetry(query string, args ...interface{}) *sql.Row {
 		lastRow = row
 		if isBusyError(err) {
 			db.logger.Debug("Database busy, retrying query row", "attempt", i+1, "max_retries", maxRetries)
-			time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
+			db.backoff(i)
 			continue
 		}
 
@@ -238,6 +251,18 @@ func isBusyError(err error) bool {
 	}
 	errStr := err.Error()
 	return contains(errStr, "database is locked") || contains(errStr, "SQLITE_BUSY")
+}
+
+// backoff implements exponential backoff with jitter to avoid thundering herd.
+// Delay = baseDelay * 2^attempt + random jitter (0-25% of delay)
+func (db *DB) backoff(attempt int) {
+	baseDelay := time.Duration(db.config.RetryBaseDelayMs) * time.Millisecond
+	exponentialDelay := baseDelay * (1 << uint(attempt))
+
+	// Add jitter: 0-25% of the delay to spread out retry attempts
+	jitter := time.Duration(float64(exponentialDelay) * 0.25 * (float64(time.Now().UnixNano()%1000) / 1000.0))
+
+	time.Sleep(exponentialDelay + jitter)
 }
 
 // contains is a simple string contains helper to avoid importing strings.
@@ -260,7 +285,7 @@ func findSubstring(s, substr string) bool {
 // If the function returns nil, the transaction is committed.
 // This handles SQLITE_BUSY errors at both the Begin() and Commit() stages.
 func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
-	maxRetries := 10
+	maxRetries := db.config.MaxRetries
 	var lastErr error
 
 	for i := 0; i < maxRetries; i++ {
@@ -268,7 +293,7 @@ func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
 		if err != nil {
 			if isBusyError(err) {
 				db.logger.Debug("Database busy, retrying transaction begin", "attempt", i+1, "max_retries", maxRetries)
-				time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
+				db.backoff(i)
 				lastErr = err
 				continue
 			}
@@ -280,7 +305,7 @@ func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
 			_ = tx.Rollback()
 			if isBusyError(err) {
 				db.logger.Debug("Database busy during transaction, retrying", "attempt", i+1, "max_retries", maxRetries)
-				time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
+				db.backoff(i)
 				lastErr = err
 				continue
 			}
@@ -290,7 +315,7 @@ func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
 		if err := tx.Commit(); err != nil {
 			if isBusyError(err) {
 				db.logger.Debug("Database busy during commit, retrying", "attempt", i+1, "max_retries", maxRetries)
-				time.Sleep(time.Duration(i+1) * 50 * time.Millisecond)
+				db.backoff(i)
 				lastErr = err
 				continue
 			}
@@ -301,4 +326,30 @@ func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
 	}
 
 	return fmt.Errorf("transaction failed after %d retries: %w", maxRetries, lastErr)
+}
+
+// MaterializeRows executes a query and immediately materializes all rows into memory,
+// closing the cursor before returning. This prevents long-held cursor locks that can
+// block WAL checkpoints and write transactions. The scan function is called for each row.
+func MaterializeRows[T any](db *DB, query string, args []interface{}, scan func(*sql.Rows) (T, error)) ([]T, error) {
+	rows, err := db.QueryWithRetry(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []T
+	for rows.Next() {
+		item, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }

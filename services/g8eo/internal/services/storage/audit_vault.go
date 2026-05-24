@@ -879,31 +879,31 @@ func (avs *AuditVaultService) ListActionReceipts(operatorSessionID string, limit
 	query.WriteString(" ORDER BY timestamp DESC LIMIT ? OFFSET ?")
 	args = append(args, limit, offset)
 
-	rows, err := avs.db.Query(query.String(), args...)
+	type receiptRow struct {
+		record       models.ActionReceiptRecord
+		executedAtMs int64
+		timestampStr string
+	}
+
+	rows, err := sqliteutil.MaterializeRows(avs.db, query.String(), args, func(r *sql.Rows) (receiptRow, error) {
+		var row receiptRow
+		err := r.Scan(
+			&row.record.TransactionID, &row.record.TransactionHash, &row.record.OperatorID, &row.record.OperatorSessionID,
+			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
+			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
+			&row.record.SignerKeyID, &row.record.Signature, &row.timestampStr,
+		)
+		return row, err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to query action receipts: %w", err)
 	}
-	defer rows.Close()
 
 	var results []*models.ActionReceiptRecord
-	for rows.Next() {
-		var r models.ActionReceiptRecord
-		var executedAtMs int64
-		var timestampStr string
-		err := rows.Scan(
-			&r.TransactionID, &r.TransactionHash, &r.OperatorID, &r.OperatorSessionID,
-			&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
-			&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
-			&r.SignerKeyID, &r.Signature, &timestampStr,
-		)
-		if err != nil {
-			avs.logger.Warn("Failed to scan receipt row", string(constants.ConnectionStateError), err)
-			continue
-		}
-
-		r.ExecutedAt = time.UnixMilli(executedAtMs)
-		r.Timestamp, _ = sqliteutil.ParseTimestamp(timestampStr)
-		results = append(results, &r)
+	for _, row := range rows {
+		row.record.ExecutedAt = time.UnixMilli(row.executedAtMs)
+		row.record.Timestamp, _ = sqliteutil.ParseTimestamp(row.timestampStr)
+		results = append(results, &row.record)
 	}
 
 	return results, nil
@@ -930,31 +930,31 @@ func (avs *AuditVaultService) ListActionReceiptsSince(since time.Time, limit int
 	LIMIT ?
 	`
 
-	rows, err := avs.db.Query(query, sqliteutil.FormatTimestamp(since), limit)
+	type receiptRow struct {
+		record       models.ActionReceiptRecord
+		executedAtMs int64
+		timestampStr string
+	}
+
+	rows, err := sqliteutil.MaterializeRows(avs.db, query, []interface{}{sqliteutil.FormatTimestamp(since), limit}, func(r *sql.Rows) (receiptRow, error) {
+		var row receiptRow
+		err := r.Scan(
+			&row.record.TransactionID, &row.record.TransactionHash, &row.record.OperatorID, &row.record.OperatorSessionID,
+			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
+			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
+			&row.record.SignerKeyID, &row.record.Signature, &row.timestampStr,
+		)
+		return row, err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to query action receipts since %v: %w", since, err)
 	}
-	defer rows.Close()
 
 	var results []*models.ActionReceiptRecord
-	for rows.Next() {
-		var r models.ActionReceiptRecord
-		var executedAtMs int64
-		var timestampStr string
-		err := rows.Scan(
-			&r.TransactionID, &r.TransactionHash, &r.OperatorID, &r.OperatorSessionID,
-			&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
-			&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
-			&r.SignerKeyID, &r.Signature, &timestampStr,
-		)
-		if err != nil {
-			avs.logger.Warn("Failed to scan receipt row", string(constants.ConnectionStateError), err)
-			continue
-		}
-
-		r.ExecutedAt = time.UnixMilli(executedAtMs)
-		r.Timestamp, _ = sqliteutil.ParseTimestamp(timestampStr)
-		results = append(results, &r)
+	for _, row := range rows {
+		row.record.ExecutedAt = time.UnixMilli(row.executedAtMs)
+		row.record.Timestamp, _ = sqliteutil.ParseTimestamp(row.timestampStr)
+		results = append(results, &row.record)
 	}
 
 	return results, nil
@@ -1002,97 +1002,100 @@ func (avs *AuditVaultService) GetEvents(operatorSessionID string, limit, offset 
 	LIMIT ? OFFSET ?
 	`
 
-	rows, err := avs.db.Query(query, operatorSessionID, limit, offset)
+	type eventRow struct {
+		event              Event
+		timestampStr       string
+		contentTextBytes   []byte
+		commandStdoutBytes []byte
+		commandStderrBytes []byte
+		commandRaw         sql.NullString
+		commandExitCode    sql.NullInt64
+		storedLocally      sql.NullBool
+		stdoutTruncated    sql.NullBool
+		stderrTruncated    sql.NullBool
+		encryptedFlag      int
+	}
+
+	rows, err := sqliteutil.MaterializeRows(avs.db, query, []interface{}{operatorSessionID, limit, offset}, func(r *sql.Rows) (eventRow, error) {
+		var row eventRow
+		err := r.Scan(
+			&row.event.ID,
+			&row.event.OperatorSessionID,
+			&row.timestampStr,
+			&row.event.Type,
+			&row.contentTextBytes,
+			&row.commandRaw,
+			&row.commandExitCode,
+			&row.commandStdoutBytes,
+			&row.commandStderrBytes,
+			&row.event.ExecutionDurationMs,
+			&row.storedLocally,
+			&row.stdoutTruncated,
+			&row.stderrTruncated,
+			&row.encryptedFlag,
+		)
+		return row, err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to query events: %w", err)
 	}
-	defer rows.Close()
 
 	var events []*Event
-	for rows.Next() {
-		var event Event
-		var timestampStr string
-		var contentTextBytes, commandStdoutBytes, commandStderrBytes []byte
-		var commandRaw sql.NullString
-		var commandExitCode sql.NullInt64
-		var storedLocally, stdoutTruncated, stderrTruncated sql.NullBool
-		var encryptedFlag int
+	for _, row := range rows {
+		row.event.Timestamp, _ = sqliteutil.ParseTimestamp(row.timestampStr)
 
-		err := rows.Scan(
-			&event.ID,
-			&event.OperatorSessionID,
-			&timestampStr,
-			&event.Type,
-			&contentTextBytes,
-			&commandRaw,
-			&commandExitCode,
-			&commandStdoutBytes,
-			&commandStderrBytes,
-			&event.ExecutionDurationMs,
-			&storedLocally,
-			&stdoutTruncated,
-			&stderrTruncated,
-			&encryptedFlag,
-		)
-		if err != nil {
-			avs.logger.Warn("Failed to scan event row", string(constants.ConnectionStateError), err)
-			continue
-		}
-
-		event.Timestamp, _ = sqliteutil.ParseTimestamp(timestampStr)
-
-		if encryptedFlag == 1 && avs.IsEncryptionEnabled() {
-			if len(contentTextBytes) > 0 {
-				decrypted, err := avs.decryptContent(contentTextBytes)
+		if row.encryptedFlag == 1 && avs.IsEncryptionEnabled() {
+			if len(row.contentTextBytes) > 0 {
+				decrypted, err := avs.decryptContent(row.contentTextBytes)
 				if err != nil {
-					avs.logger.Warn("Failed to decrypt content_text", "event_id", event.ID, string(constants.ConnectionStateError), err)
+					avs.logger.Warn("Failed to decrypt content_text", "event_id", row.event.ID, string(constants.ConnectionStateError), err)
 				} else {
-					event.ContentText = decrypted
+					row.event.ContentText = decrypted
 				}
 			}
-			if len(commandStdoutBytes) > 0 {
-				decrypted, err := avs.decryptContent(commandStdoutBytes)
+			if len(row.commandStdoutBytes) > 0 {
+				decrypted, err := avs.decryptContent(row.commandStdoutBytes)
 				if err != nil {
-					avs.logger.Warn("Failed to decrypt stdout", "event_id", event.ID, string(constants.ConnectionStateError), err)
+					avs.logger.Warn("Failed to decrypt stdout", "event_id", row.event.ID, string(constants.ConnectionStateError), err)
 				} else {
-					event.CommandStdout = decrypted
+					row.event.CommandStdout = decrypted
 				}
 			}
-			if len(commandStderrBytes) > 0 {
-				decrypted, err := avs.decryptContent(commandStderrBytes)
+			if len(row.commandStderrBytes) > 0 {
+				decrypted, err := avs.decryptContent(row.commandStderrBytes)
 				if err != nil {
-					avs.logger.Warn("Failed to decrypt stderr", "event_id", event.ID, string(constants.ConnectionStateError), err)
+					avs.logger.Warn("Failed to decrypt stderr", "event_id", row.event.ID, string(constants.ConnectionStateError), err)
 				} else {
-					event.CommandStderr = decrypted
+					row.event.CommandStderr = decrypted
 				}
 			}
 		} else {
-			event.ContentText = string(contentTextBytes)
-			event.CommandStdout = string(commandStdoutBytes)
-			event.CommandStderr = string(commandStderrBytes)
+			row.event.ContentText = string(row.contentTextBytes)
+			row.event.CommandStdout = string(row.commandStdoutBytes)
+			row.event.CommandStderr = string(row.commandStderrBytes)
 		}
 
-		if commandRaw.Valid {
-			event.CommandRaw = commandRaw.String
+		if row.commandRaw.Valid {
+			row.event.CommandRaw = row.commandRaw.String
 		}
-		if commandExitCode.Valid {
-			exitCode := int(commandExitCode.Int64)
-			event.CommandExitCode = &exitCode
+		if row.commandExitCode.Valid {
+			exitCode := int(row.commandExitCode.Int64)
+			row.event.CommandExitCode = &exitCode
 		}
-		if storedLocally.Valid {
-			event.StoredLocally = storedLocally.Bool
+		if row.storedLocally.Valid {
+			row.event.StoredLocally = row.storedLocally.Bool
 		}
-		if stdoutTruncated.Valid {
-			event.StdoutTruncated = stdoutTruncated.Bool
+		if row.stdoutTruncated.Valid {
+			row.event.StdoutTruncated = row.stdoutTruncated.Bool
 		}
-		if stderrTruncated.Valid {
-			event.StderrTruncated = stderrTruncated.Bool
+		if row.stderrTruncated.Valid {
+			row.event.StderrTruncated = row.stderrTruncated.Bool
 		}
 
-		events = append(events, &event)
+		events = append(events, &row.event)
 	}
 
-	return events, rows.Err()
+	return events, nil
 }
 
 // RecordFileMutation records a file mutation in the audit log
@@ -1139,45 +1142,46 @@ func (avs *AuditVaultService) GetFileMutations(eventID int64) ([]*FileMutationLo
 	WHERE event_id = ?
 	`
 
-	rows, err := avs.db.QueryWithRetry(query, eventID)
+	type mutationRow struct {
+		mutation   FileMutationLog
+		hashBefore sql.NullString
+		hashAfter  sql.NullString
+		diffStat   sql.NullString
+	}
+
+	rows, err := sqliteutil.MaterializeRows(avs.db, query, []interface{}{eventID}, func(r *sql.Rows) (mutationRow, error) {
+		var row mutationRow
+		err := r.Scan(
+			&row.mutation.ID,
+			&row.mutation.EventID,
+			&row.mutation.Filepath,
+			&row.mutation.Operation,
+			&row.hashBefore,
+			&row.hashAfter,
+			&row.diffStat,
+		)
+		return row, err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to query file mutations: %w", err)
 	}
-	defer rows.Close()
 
 	var mutations []*FileMutationLog
-	for rows.Next() {
-		var mutation FileMutationLog
-		var hashBefore, hashAfter, diffStat sql.NullString
-
-		err := rows.Scan(
-			&mutation.ID,
-			&mutation.EventID,
-			&mutation.Filepath,
-			&mutation.Operation,
-			&hashBefore,
-			&hashAfter,
-			&diffStat,
-		)
-		if err != nil {
-			avs.logger.Warn("Failed to scan file mutation row", string(constants.ConnectionStateError), err)
-			continue
+	for _, row := range rows {
+		if row.hashBefore.Valid {
+			row.mutation.LedgerHashBefore = row.hashBefore.String
+		}
+		if row.hashAfter.Valid {
+			row.mutation.LedgerHashAfter = row.hashAfter.String
+		}
+		if row.diffStat.Valid {
+			row.mutation.DiffStat = row.diffStat.String
 		}
 
-		if hashBefore.Valid {
-			mutation.LedgerHashBefore = hashBefore.String
-		}
-		if hashAfter.Valid {
-			mutation.LedgerHashAfter = hashAfter.String
-		}
-		if diffStat.Valid {
-			mutation.DiffStat = diffStat.String
-		}
-
-		mutations = append(mutations, &mutation)
+		mutations = append(mutations, &row.mutation)
 	}
 
-	return mutations, rows.Err()
+	return mutations, nil
 }
 
 // gitGetCurrentHash gets the current HEAD commit hash using native go-git

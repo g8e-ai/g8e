@@ -30,6 +30,8 @@ func TestDefaultDBConfig(t *testing.T) {
 	assert.Equal(t, 64, cfg.CacheSizeMB)
 	assert.Equal(t, 30000, cfg.BusyTimeoutMs)
 	assert.True(t, cfg.SetFilePermissions)
+	assert.Equal(t, 10, cfg.MaxRetries)
+	assert.Equal(t, 50, cfg.RetryBaseDelayMs)
 }
 
 func TestOpenDB_CreatesFile(t *testing.T) {
